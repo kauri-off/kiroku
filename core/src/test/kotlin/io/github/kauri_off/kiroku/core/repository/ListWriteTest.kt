@@ -45,7 +45,12 @@ class ListWriteTest {
     fun `mark watched follows W7 and stops at MAL's total`() {
         val completed = ListValues(ListStatus.Completed, 12, 8, earlier, day)
         assertEquals(completed, ListWrite.MarkWatched(anime, 12).applyTo(entry(watching(11)), today))
-        assertEquals(completed, ListWrite.MarkWatched(anime, 13).applyTo(entry(watching(11)), today))
+    }
+
+    @Test
+    fun `N9 mark watched never jumps over an unwatched episode`() {
+        assertEquals(watching(8), ListWrite.MarkWatched(anime, 10).applyTo(entry(watching(8)), today))
+        assertEquals(watching(11), ListWrite.MarkWatched(anime, 13).applyTo(entry(watching(11)), today))
     }
 
     @Test

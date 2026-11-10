@@ -51,7 +51,14 @@ sealed interface ListWrite {
         when (this) {
             is Save -> values
             is Remove -> null
-            is MarkWatched -> current?.let { it.values.markWatched(episode, it.anime.malEpisodes, today) }
+            is MarkWatched ->
+                current?.let {
+                    if (it.values.watchedEpisodes == episode - 1) {
+                        it.values.markWatched(episode, it.anime.malEpisodes, today)
+                    } else {
+                        it.values
+                    }
+                }
             is MarkNextWatched ->
                 current?.let { it.values.markWatched(it.values.watchedEpisodes + 1, it.anime.malEpisodes, today) }
         }
