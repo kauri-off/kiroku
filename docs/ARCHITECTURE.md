@@ -805,10 +805,15 @@ every image, and hands over the commit hash and the output directory.
   format check, Lint, the tests, the screenshots and a debug build, keeping the screenshots and the APK as
   artifacts, and a check that the pull request title is a conventional commit. The client id comes from a
   repository secret; pull requests from forks build without it.
-- **Release and distribution.** A version tag builds the release APK, with code and resource shrinking, signs it
-  with a key from repository secrets, and attaches it to a GitHub Release, where Obtainium can install it and keep
-  it up to date. Signing keys never enter the repository. F-Droid follows after 1.0. Kiroku is not published on
-  Google Play.
+- **Release and distribution.** A version tag builds the release APK, with code and resource shrinking, and
+  attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build job signs the
+  APK with a key made for that run; a separate job, the only one that sees the secrets of the `release`
+  environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no third-party code.
+  That environment is limited to `main` and version tags. Signing keys never enter the repository. F-Droid follows
+  after 1.0. Kiroku is not published on Google Play.
+- **Debug signing.** Debug builds from every checkout and worktree of the maintainer's machine are signed with
+  one shared debug key, so that each installs over the other without losing data. Elsewhere the build falls back
+  to the platform's default debug key.
 
 ## 13. External facts not yet verified
 

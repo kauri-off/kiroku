@@ -292,6 +292,9 @@ Not to forget:
   sentence is backed by code; `CONTRIBUTING.md` with the checks outside the queue; a README from which a clean
   checkout builds without guessing.
 - The system's per-app language screen lists English and Russian.
+- The release key exists and its four secrets (`KIROKU_ANDROID_KEYSTORE_B64`, `KIROKU_ANDROID_STORE_PASSWORD`,
+  `KIROKU_ANDROID_KEY_ALIAS`, `KIROKU_ANDROID_KEY_PASSWORD`) are in the `release` environment; the release
+  workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
 
 ---
 
