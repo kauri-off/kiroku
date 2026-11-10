@@ -11,14 +11,13 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 
 interface SessionRepository {
     fun observeSession(): Flow<Session>
 
     suspend fun signOut()
 }
-
-enum class WriteSource { App, NotificationAction }
 
 sealed interface ListWrite {
     val anime: Anime
@@ -31,12 +30,36 @@ sealed interface ListWrite {
     data class Remove(
         override val anime: Anime,
     ) : ListWrite
+
+    data class MarkWatched(
+        override val anime: Anime,
+        val episode: Int,
+    ) : ListWrite {
+        init {
+            require(episode > 0)
+        }
+    }
+
+    data class MarkNextWatched(
+        override val anime: Anime,
+    ) : ListWrite
+
+    fun applyTo(
+        current: ListEntry?,
+        today: LocalDate,
+    ): ListValues? =
+        when (this) {
+            is Save -> values
+            is Remove -> null
+            is MarkWatched -> current?.let { it.values.markWatched(episode, it.anime.malEpisodes, today) }
+            is MarkNextWatched ->
+                current?.let { it.values.markWatched(it.values.watchedEpisodes + 1, it.anime.malEpisodes, today) }
+        }
 }
 
 data class WriteFailure(
     val error: DataError,
     val retry: ListWrite,
-    val source: WriteSource,
 )
 
 interface ListRepository {
@@ -48,10 +71,9 @@ interface ListRepository {
 
     suspend fun sync(): Outcome<Unit>
 
-    suspend fun write(
-        write: ListWrite,
-        source: WriteSource = WriteSource.App,
-    )
+    suspend fun write(write: ListWrite)
+
+    suspend fun send(write: ListWrite): Outcome<Unit>
 }
 
 interface AnimeRepository {

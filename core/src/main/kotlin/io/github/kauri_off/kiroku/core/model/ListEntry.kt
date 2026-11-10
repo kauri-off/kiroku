@@ -38,12 +38,21 @@ data class ListValues(
                 copy(
                     status = ListStatus.Completed,
                     watchedEpisodes = watched,
-                    startDate = startDate ?: todayDate,
-                    finishDate = todayDate,
+                    startDate = if (status == ListStatus.Planned) startDate ?: todayDate else startDate,
+                    finishDate = finishDate ?: todayDate,
                 )
             status == ListStatus.Planned && watched > 0 ->
                 copy(status = ListStatus.Watching, watchedEpisodes = watched, startDate = startDate ?: todayDate)
             else -> copy(watchedEpisodes = watched)
         }
+    }
+
+    fun markWatched(
+        episode: Int,
+        malEpisodes: Int?,
+        today: LocalDate,
+    ): ListValues {
+        val target = if (malEpisodes == null) episode else minOf(episode, malEpisodes)
+        return if (target <= watchedEpisodes) this else withWatched(target, malEpisodes, today)
     }
 }

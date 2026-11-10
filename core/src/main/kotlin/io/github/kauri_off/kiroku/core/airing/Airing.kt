@@ -71,7 +71,7 @@ data class Airing(
 fun episodeTotal(
     anime: Anime,
     airing: Airing?,
-): Int? = airing?.total ?: anime.malEpisodes
+): Int? = anime.malEpisodes ?: airing?.total
 
 fun toWatch(
     entry: ListEntry,
@@ -110,6 +110,7 @@ sealed interface Premiere {
 fun premiereOf(
     anime: Anime,
     airing: Airing?,
+    today: LocalDate,
 ): Premiere? {
     if (anime.airingStatus == AiringStatus.Finished) return null
     when (val aired = airing?.aired) {
@@ -118,9 +119,11 @@ fun premiereOf(
     }
     airing?.nextEpisode?.takeIf { it.number == 1 }?.let { return Premiere.At(it.airsAt) }
     return when (val date = anime.startDate) {
-        is PartialDate.Day -> Premiere.OnDay(date.date)
-        is PartialDate.Month -> Premiere.InMonth(date.yearMonth)
-        is PartialDate.OnlyYear -> Premiere.InYear(date.value)
+        is PartialDate.Day -> if (date.date < today) Premiere.Unannounced else Premiere.OnDay(date.date)
+        is PartialDate.Month ->
+            if (date.yearMonth < YearMonth.from(today)) Premiere.Unannounced else Premiere.InMonth(date.yearMonth)
+        is PartialDate.OnlyYear ->
+            if (date.value < Year.from(today)) Premiere.Unannounced else Premiere.InYear(date.value)
         null -> Premiere.Unannounced
     }
 }

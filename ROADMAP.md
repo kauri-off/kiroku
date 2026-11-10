@@ -200,6 +200,14 @@ Not to forget:
   token or a client id.**
 - Related titles are requested with their media type, start date and the user's list status; caption 2 and the
   order of the Related strip need all three. One title is recorded with adult content on and off.
+- Mappers turn MAL's zero and empty values into absent ones, because the model refuses them: an episode count or
+  episode length of 0, an empty English or Japanese title or synonym, an empty synopsis, a list score of 0. A
+  recorded response holding each is in the mapper tests.
+- `Anime.genres` is null when a response did not include genres, and an upsert never replaces a stored value with
+  a missing one.
+- W7's date and status rules (`ListValues.withWatched`) are compared with what MAL's website does when a title is
+  completed with an empty start date, when a Completed title is stepped below its total, and when a completed title
+  already has a finish date; a difference goes to the owner.
 - The sign-in is tried by hand, including killing the app while the browser is open. This and the recorded
   responses settle items 1 to 3 of ARCHITECTURE section 13, which is corrected from them.
 - Before the Russian relation names are written, they are compared with the names Shikimori shows, read from the
@@ -224,6 +232,9 @@ Not to forget:
   section 13.
 - The rule that rows never move (section 9.3) is tested with airing data changing under a visible tab.
 - The calculator's result also carries "to watch" and the premiere, so no screen combines them on its own (A1).
+- A next episode beyond MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at
+  the total and there is no next episode beyond it, shown by a calculator test. An AniList episode numbered 0 or
+  below is dropped.
 
 ## M4. Reliable episode notifications
 

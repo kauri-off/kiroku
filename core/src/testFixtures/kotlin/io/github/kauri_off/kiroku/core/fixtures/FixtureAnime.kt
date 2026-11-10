@@ -121,12 +121,12 @@ object FixtureAnime {
     val unknownTotal =
         anime(
             id = 900007,
-            titles = Titles("Umi no Ou: Grand Voyage", "King of the Seas: Grand Voyage", "海の王 グランドヴォヤージュ"),
+            titles = Titles("Mugen Chizu no Tankentai", "Cartographers of the Endless Map", "無限地図の探検隊"),
             type = MediaType.Tv,
             status = AiringStatus.Airing,
             malEpisodes = null,
-            start = day("2004-10-03"),
-            broadcast = Broadcast(DayOfWeek.SUNDAY, LocalTime.of(23, 15)),
+            start = day("2004-10-02"),
+            broadcast = Broadcast(DayOfWeek.SATURDAY, LocalTime.of(18, 0)),
             score = 8.69,
             rank = 51,
             genres = listOf(G.action, G.adventure, G.comedy, G.fantasy, G.shounen, G.superPower),

@@ -326,7 +326,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included. A debug build
   without a client id starts in it. Demo data follows the device's date: the fixtures are shifted by the whole
   number of weeks since their reference moment, and demo mode runs on a clock that lags the device's by the rest
-  of that week, so every weekday, "today" and weekly slot in them stays what it claims.
+  of that week, so every weekday and weekly slot in them stays what it claims; every "today" does too on a device
+  between UTC−9 and UTC+8, which includes the fixtures' own zone.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
   (detekt's current line is alpha).
 - Also not used: a chart library (bars are `StatBar`), AppCompat, `kotlinx-datetime` (`java.time` is available), a
@@ -359,9 +360,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 7.3 Writes to the list
 
-Writes are optimistic: an edit is visible at once and sent in the background. A write returns once it is applied
-locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches the user
-after the screen that made the edit is gone and when the edit came from the notification action.
+Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
+is applied locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches
+the user after the screen that made the edit is gone; with nothing collecting it, it is dropped, as the entry is
+already back at the server's state. The notification action instead waits for the server's answer (N9). "+1" and
+"Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown.
@@ -379,8 +382,9 @@ after the screen that made the edit is gone and when the edit came from the noti
   syncs for good.
 - **W6.** One list sync runs at a time.
 - **W7. Automatic status changes match MAL's website.** When the watched count reaches MAL's total, the status
-  becomes Completed with today's finish date, in the same write. The first episode of a planned title sets
-  Watching and the start date.
+  becomes Completed and an empty finish date becomes today, in the same write. The first episode of a planned
+  title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
+  overwritten, and a Completed title stepped below its total stays Completed.
 - **W8.** There is no offline write queue in 1.0, except the notification action (N9).
 
 ## 8. Design system
@@ -708,7 +712,8 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   That test exists before the first screen is written.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
-  falls back to MAL's code written as words ("light_novel" as "Light novel"). Titles, alternative titles, synopses,
+  falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
+  This fallback is the only interface text not from the resources. Titles, alternative titles, synopses,
   user names and proper names (studios, producers) are content and are not translated.
 - Quantities use plural resources (Russian needs `one`, `few`, `many`, `other`). Sentences are never concatenated.
 - Dates and times follow the locale and the device's 12/24-hour setting, in the device's time zone.

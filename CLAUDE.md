@@ -82,7 +82,8 @@ queue, including short ones. Never call `./gradlew`, `gradle` or `emulator` dire
 ## Code conventions
 
 - Default to no code comments. Where one is needed, one short line at most.
-- No user-visible string outside `app/src/main/res`. Every string exists in English and Russian, in the feature's
+- No user-visible string outside `app/src/main/res`, except the fallback for a value from MAL the app does not
+  know (its code written as words, or a genre's MAL name). Every string exists in English and Russian, in the feature's
   own strings file, with the glossary's terms; quantities use plurals. Values from MAL that read as interface text
   (status, type, season, genre, relation) are translated too.
 - Screens are stateless: `XScreen(state, onEvent)` with fixture states. Only `XRoute` touches a view model or

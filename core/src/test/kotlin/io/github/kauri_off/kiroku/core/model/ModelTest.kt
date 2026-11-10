@@ -72,7 +72,21 @@ class ModelTest {
         val watching = ListValues(ListStatus.Watching, 11, 8, earlier, null)
         assertEquals(ListValues(ListStatus.Completed, 12, 8, earlier, day), watching.withWatched(12, 12, today))
         val onHold = ListValues(ListStatus.OnHold, 11, null, null, null)
-        assertEquals(ListValues(ListStatus.Completed, 12, null, day, day), onHold.withWatched(12, 12, today))
+        assertEquals(ListValues(ListStatus.Completed, 12, null, null, day), onHold.withWatched(12, 12, today))
+    }
+
+    @Test
+    fun `W7 completion never overwrites a date the user has`() {
+        val rewatched = ListValues(ListStatus.Watching, 11, null, earlier, earlier)
+        assertEquals(ListValues(ListStatus.Completed, 12, null, earlier, earlier), rewatched.withWatched(12, 12, today))
+    }
+
+    @Test
+    fun `W7 a completed title stepped below its total stays completed`() {
+        val completed = ListValues(ListStatus.Completed, 12, 9, earlier, earlier)
+        val lowered = completed.withWatched(11, 12, today)
+        assertEquals(completed.copy(watchedEpisodes = 11), lowered)
+        assertEquals(completed, lowered.withWatched(12, 12, today))
     }
 
     @Test

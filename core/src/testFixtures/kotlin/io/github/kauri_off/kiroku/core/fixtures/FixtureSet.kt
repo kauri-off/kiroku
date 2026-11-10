@@ -6,11 +6,9 @@ import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
-import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
-import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
@@ -26,13 +24,15 @@ data class FixtureSet(
     val anime: List<Anime>,
     val entries: List<ListEntry>,
     val schedules: Map<AnimeId, AiringSchedule>,
+    // Holds at the set's creation only; demo mode computes aired counts from schedules and its running clock.
     val airing: Map<AnimeId, Airing>,
     val details: Map<AnimeId, AnimeDetails>,
     val user: UserProfile,
     val userStatistics: UserStatistics,
     val otherUserName: String,
     val otherUserEntries: List<ListEntry>,
-    val otherUserStatistics: UserStatistics,
+    // A statistics layout state, independent of otherUserEntries.
+    val largeStatistics: UserStatistics,
 ) {
     val now: Instant get() = clock.instant()
 
@@ -46,15 +46,20 @@ data class FixtureSet(
         if (weeks == 0L) return this
         val shift = WeekShift(weeks)
         val entries = entries.map(shift::entry)
+        val anime = anime.map(shift::anime)
+        val shiftedById = anime.associateBy { it.id }
+        val today = now.atZone(FixtureTime.zone).toLocalDate()
+        val years = shift.date(today).year - today.year
         return copy(
-            anime = anime.map(shift::anime),
+            anime = anime,
             entries = entries,
             schedules = schedules.mapValues { shift.schedule(it.value) },
             airing = airing.mapValues { shift.airing(it.value) },
-            details = details.mapValues { shift.details(it.value) },
+            details = details.mapValues { (id, value) -> shift.details(value, shiftedById.getValue(id)) },
             user = user.copy(joined = user.joined?.plusWeeks(weeks)),
             userStatistics = userStatistics.copy(years = startYears(entries)),
             otherUserEntries = otherUserEntries.map(shift::entry),
+            largeStatistics = largeStatistics.copy(years = largeStatistics.years.mapKeys { it.key + years }),
         )
     }
 
@@ -84,8 +89,6 @@ private class WeekShift(
             is PartialDate.OnlyYear -> PartialDate.OnlyYear(Year.from(date(value.value.atDay(1))))
         }
 
-    fun season(value: AnimeSeason): AnimeSeason = FixtureDetails.seasonOf(date(LocalDate.of(value.year, value.season.firstMonth, 1)))
-
     fun anime(value: Anime): Anime = value.copy(startDate = value.startDate?.let(::date))
 
     fun entry(value: ListEntry): ListEntry =
@@ -109,13 +112,14 @@ private class WeekShift(
             latestAiredAt = value.latestAiredAt?.let(::instant),
         )
 
-    fun details(value: AnimeDetails): AnimeDetails =
+    fun details(
+        value: AnimeDetails,
+        anime: Anime,
+    ): AnimeDetails =
         value.copy(
             endDate = value.endDate?.let(::date),
-            season = value.season?.let(::season),
+            season = (anime.startDate as? PartialDate.Day)?.date?.let(FixtureDetails::seasonOf),
             related = value.related.map { RelatedAnime(anime(it.anime), it.relation) },
             recommendations = value.recommendations.map(::anime),
         )
 }
-
-private val Season.firstMonth: Int get() = ordinal * 3 + 1

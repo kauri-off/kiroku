@@ -62,16 +62,15 @@ object Fixtures {
             userStatistics = FixtureUser.statistics,
             otherUserName = "sample_viewer",
             otherUserEntries = FixtureUser.otherUserEntries,
-            otherUserStatistics = FixtureUser.otherUserStatistics,
+            largeStatistics = FixtureUser.largeStatistics,
         )
     }
 
     fun at(clock: Clock): FixtureSet {
-        val week = Duration.ofDays(7).seconds
-        val elapsed = Duration.between(FixtureTime.reference, clock.instant()).seconds
-        val weeks = Math.floorDiv(elapsed, week)
-        val remainder = Duration.ofSeconds(elapsed - weeks * week).plusNanos(clock.instant().nano.toLong())
-        return reference.shiftedBy(weeks).copy(clock = Clock.offset(clock, remainder.negated()))
+        val elapsed = Duration.between(FixtureTime.reference, clock.instant())
+        val weeks = Math.floorDiv(elapsed.seconds, Duration.ofDays(7).seconds)
+        val lag = elapsed.minusDays(7 * weeks)
+        return reference.shiftedBy(weeks).copy(clock = Clock.offset(clock, lag.negated()))
     }
 
     private val entries: List<ListEntry> =
@@ -123,7 +122,7 @@ object Fixtures {
             exactCaughtUp.id to AiringSchedule(weekly(9, japan("2026-01-15T00:00"), 1..12), 12),
             exactCaughtUpLater.id to AiringSchedule(weekly(1, japan("2025-12-29T23:00"), 1..12), 12),
             exactOnBreak.id to AiringSchedule(weekly(6, japan("2026-01-09T22:00"), 1..6), 13),
-            unknownTotal.id to AiringSchedule(weekly(1122, japan("2026-01-18T23:15"), 1115..1122), null),
+            unknownTotal.id to AiringSchedule(weekly(1122, japan("2026-01-17T18:00"), 1115..1122), null),
             longTitle.id to AiringSchedule(weekly(4, japan("2026-01-16T01:00"), 1..13), 13),
             premiereTimeSoon.id to AiringSchedule(weekly(1, japan("2026-01-18T00:30"), 1..12), 12),
             premiereTimeLater.id to AiringSchedule(weekly(1, japan("2026-01-28T21:00"), 1..10), 10),

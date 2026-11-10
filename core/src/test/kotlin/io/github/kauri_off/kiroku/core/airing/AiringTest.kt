@@ -18,6 +18,8 @@ import java.time.YearMonth
 class AiringTest {
     private val instant = Instant.parse("2026-01-17T14:30:00Z")
 
+    private val today = LocalDate.of(2026, 1, 14)
+
     private fun entry(
         anime: Anime,
         status: ListStatus,
@@ -102,13 +104,21 @@ class AiringTest {
         assertEquals(24, episodeTotal(noMalTotal, Airing(AiredCount.Exact(14), 24, null, instant)))
         assertEquals(24, episodeTotal(FixtureAnime.exactToWatch, null))
         assertNull(episodeTotal(noMalTotal, null))
+        val malTwelve = FixtureAnime.exactToWatch.copy(malEpisodes = 12)
+        assertEquals(12, episodeTotal(malTwelve, Airing(AiredCount.Exact(12), 13, null, instant)))
+    }
+
+    @Test
+    fun `a next episode beyond the total is refused, so a recap counted by AniList must be clamped first`() {
+        fails { Airing(AiredCount.Exact(12), 12, ScheduledEpisode(13, instant), instant) }
+        Airing(AiredCount.Exact(12), 12, null, instant)
     }
 
     @Test
     fun `a known first episode time replaces the date`() {
         val anime = FixtureAnime.premiereDate
         val airing = Airing(AiredCount.Exact(0), 12, ScheduledEpisode(1, instant), null)
-        assertEquals(Premiere.At(instant), premiereOf(anime, airing))
+        assertEquals(Premiere.At(instant), premiereOf(anime, airing, today))
     }
 
     @Test
@@ -116,50 +126,63 @@ class AiringTest {
         val anime = FixtureAnime.premiereDate
         assertEquals(
             Premiere.OnDay(LocalDate.of(2026, 4, 4)),
-            premiereOf(anime.copy(startDate = PartialDate.Day(LocalDate.of(2026, 4, 4))), null),
+            premiereOf(anime.copy(startDate = PartialDate.Day(LocalDate.of(2026, 4, 4))), null, today),
         )
         assertEquals(
             Premiere.InMonth(YearMonth.of(2026, 7)),
-            premiereOf(anime.copy(startDate = PartialDate.Month(YearMonth.of(2026, 7))), null),
+            premiereOf(anime.copy(startDate = PartialDate.Month(YearMonth.of(2026, 7))), null, today),
         )
         assertEquals(
             Premiere.InYear(Year.of(2027)),
-            premiereOf(anime.copy(startDate = PartialDate.OnlyYear(Year.of(2027))), null),
+            premiereOf(anime.copy(startDate = PartialDate.OnlyYear(Year.of(2027))), null, today),
         )
-        assertEquals(Premiere.Unannounced, premiereOf(anime.copy(startDate = null), null))
+        assertEquals(Premiere.Unannounced, premiereOf(anime.copy(startDate = null), null, today))
     }
 
     @Test
     fun `the premiere follows the aired count when MAL already says airing`() {
         val anime = FixtureAnime.premiereTimeSoon.copy(airingStatus = AiringStatus.Airing)
         val airing = Airing(AiredCount.Exact(0), 12, ScheduledEpisode(1, instant), null)
-        assertEquals(Premiere.At(instant), premiereOf(anime, airing))
+        assertEquals(Premiere.At(instant), premiereOf(anime, airing, today))
         val estimated = Airing(AiredCount.Estimated(0), 12, null, null)
-        assertEquals(Premiere.OnDay(LocalDate.of(2026, 1, 18)), premiereOf(anime, estimated))
+        assertEquals(Premiere.OnDay(LocalDate.of(2026, 1, 18)), premiereOf(anime, estimated, today))
     }
 
     @Test
     fun `there is no premiere once an episode has aired, even when MAL still says not yet aired`() {
         val anime = FixtureAnime.premiereTimeSoon
         assertEquals(AiringStatus.NotYetAired, anime.airingStatus)
-        assertNull(premiereOf(anime, Airing(AiredCount.Exact(1), 12, ScheduledEpisode(2, instant), instant)))
-        assertNull(premiereOf(anime, Airing(AiredCount.Estimated(1), 12, null, instant)))
+        assertNull(premiereOf(anime, Airing(AiredCount.Exact(1), 12, ScheduledEpisode(2, instant), instant), today))
+        assertNull(premiereOf(anime, Airing(AiredCount.Estimated(1), 12, null, instant), today))
     }
 
     @Test
     fun `MAL's status decides only when the count is unknown`() {
         val notYetAired = FixtureAnime.premiereDate
-        assertEquals(Premiere.OnDay(LocalDate.of(2026, 4, 4)), premiereOf(notYetAired, null))
+        assertEquals(Premiere.OnDay(LocalDate.of(2026, 4, 4)), premiereOf(notYetAired, null, today))
         assertEquals(
             Premiere.OnDay(LocalDate.of(2026, 4, 4)),
-            premiereOf(notYetAired, Airing(AiredCount.Unknown, null, null, null)),
+            premiereOf(notYetAired, Airing(AiredCount.Unknown, null, null, null), today),
         )
-        assertNull(premiereOf(FixtureAnime.airedUnknown, Airing(AiredCount.Unknown, null, null, null)))
+        assertNull(premiereOf(FixtureAnime.airedUnknown, Airing(AiredCount.Unknown, null, null, null), today))
     }
 
     @Test
     fun `only a title that has not aired has a premiere`() {
-        assertNull(premiereOf(FixtureAnime.exactToWatch, null))
-        assertNull(premiereOf(FixtureAnime.film, null))
+        assertNull(premiereOf(FixtureAnime.exactToWatch, null, today))
+        assertNull(premiereOf(FixtureAnime.film, null, today))
+    }
+
+    @Test
+    fun `a premiere whose whole period has passed is unannounced`() {
+        val anime = FixtureAnime.premiereDate
+
+        fun premiere(date: PartialDate) = premiereOf(anime.copy(startDate = date), null, today)
+        assertEquals(Premiere.Unannounced, premiere(PartialDate.Day(LocalDate.of(2026, 1, 13))))
+        assertEquals(Premiere.OnDay(today), premiere(PartialDate.Day(today)))
+        assertEquals(Premiere.Unannounced, premiere(PartialDate.Month(YearMonth.of(2025, 12))))
+        assertEquals(Premiere.InMonth(YearMonth.of(2026, 1)), premiere(PartialDate.Month(YearMonth.of(2026, 1))))
+        assertEquals(Premiere.Unannounced, premiere(PartialDate.OnlyYear(Year.of(2025))))
+        assertEquals(Premiere.InYear(Year.of(2026)), premiere(PartialDate.OnlyYear(Year.of(2026))))
     }
 }

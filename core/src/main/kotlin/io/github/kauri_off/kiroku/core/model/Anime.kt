@@ -20,7 +20,7 @@ data class Anime(
     val broadcast: Broadcast?,
     val meanScore: Double?,
     val rank: Int?,
-    val genres: List<Genre>,
+    val genres: List<Genre>?,
     val averageEpisodeDuration: Duration?,
 ) {
     init {

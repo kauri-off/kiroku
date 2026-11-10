@@ -110,9 +110,11 @@ object FixtureDetails {
                 ),
             A.unknownTotal.id to
                 Info(
-                    "Twenty years after the last king of the seas vanished, a boy who cannot swim sets out to " +
-                        "claim the title. His crew grows island by island, and so does the price on his head. " +
-                        "Every sea he crosses has a ruler who would rather he sank.",
+                    "Every night the continent of Hakkei redraws itself, and only the cartographers' guild can " +
+                        "tell by morning where a road will lead. Sora, who remembers every place he has ever " +
+                        "slept, is taken on as its youngest apprentice.\n\n" +
+                        "Each region the guild charts brings new towns, new rivals and a map that refuses to stay " +
+                        "finished.\n\n(Source: Studio Kumoji)",
                     Source.Manga,
                     listOf("Studio Kumoji"),
                     AgeRating.Teens13,
@@ -217,9 +219,9 @@ object FixtureDetails {
                     "The first train of the morning leaves a mountain station every day at 4:52. One winter it " +
                         "leaves with a passenger who bought her ticket thirty years ago and has not aged a day " +
                         "since. The young conductor on his first route has until dawn to find out where she " +
-                        "is going, before the line is closed for good and the station is taken off every map. " +
+                        "is going, before the line is closed for good and the station is taken off every map.\n\n" +
                         "Along the way the train stops at towns that no longer exist, and each of them asks him " +
-                        "for something in return.",
+                        "for something in return.\n\n[Written by MAL Rewrite]",
                     Source.Original,
                     listOf("Mizuiro Film"),
                     AgeRating.Teens13,
@@ -300,9 +302,9 @@ object FixtureDetails {
                     "The Land of Light has not seen a night in three hundred years, and its knights have " +
                         "forgotten what they were sworn to guard against. When a shadow falls across the capital, " +
                         "the youngest of them is sent beyond the border with an old map, a borrowed horse and an " +
-                        "order she does not understand. The dark she finds there is not empty: it is full of " +
+                        "order she does not understand.\n\nThe dark she finds there is not empty: it is full of " +
                         "people who were exiled from the light and who remember the war that the knights' own " +
-                        "histories leave out.",
+                        "histories leave out.\n\n[Written by MAL Rewrite]",
                     Source.Manga,
                     listOf("Kouyou Animation", "Studio Kumoji", "Tsubame Pictures"),
                     AgeRating.Violence17,

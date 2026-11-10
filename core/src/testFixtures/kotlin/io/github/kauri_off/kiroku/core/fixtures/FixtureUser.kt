@@ -68,7 +68,7 @@ object FixtureUser {
                 ),
         )
 
-    val otherUserStatistics: UserStatistics =
+    val largeStatistics: UserStatistics =
         UserStatistics(
             statuses = StatusCounts(watching = 17, completed = 2_384, onHold = 41, dropped = 163, planned = 9_807),
             daysWatched = 638.7,

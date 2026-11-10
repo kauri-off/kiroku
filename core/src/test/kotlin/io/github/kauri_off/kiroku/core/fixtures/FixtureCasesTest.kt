@@ -62,6 +62,8 @@ class FixtureCasesTest(
 
     private val entries = set.entries
 
+    private val today = set.now.atZone(FixtureTime.zone).toLocalDate()
+
     private fun airing(anime: Anime): Airing? = set.airing[anime.id]
 
     private fun tab(status: ListStatus) = entries.filter { it.status == status }
@@ -71,7 +73,7 @@ class FixtureCasesTest(
         if (entry.status == ListStatus.Completed) {
             return if (entry.values.score != null) RowCase.CompletedScored else RowCase.CompletedUnscored
         }
-        premiereOf(anime, airing(anime))?.let { return premiereCase(it) }
+        premiereOf(anime, airing(anime), today)?.let { return premiereCase(it) }
         if (anime.airingStatus == AiringStatus.Finished) return RowCase.Finished
         val airing = airing(anime) ?: error("no airing data for ${anime.titles.romaji}")
         val toWatch = toWatch(entry, airing)?.value ?: 0
@@ -98,7 +100,7 @@ class FixtureCasesTest(
 
     private fun airingBlockCase(anime: Anime): AiringBlockCase? {
         val airing = airing(anime) ?: return null
-        if (anime.airingStatus == AiringStatus.Finished || premiereOf(anime, airing) != null) return null
+        if (anime.airingStatus == AiringStatus.Finished || premiereOf(anime, airing, today) != null) return null
         val entry = set.entryFor(anime.id)
         val toWatch = entry?.let { toWatch(it, airing) }?.value ?: 0
         return when (airing.aired) {
@@ -127,7 +129,7 @@ class FixtureCasesTest(
 
     private fun premiereDays(): List<Long> =
         set.anime.mapNotNull { anime ->
-            (premiereOf(anime, airing(anime)) as? Premiere.At)?.let { daysFromToday(it.instant) }
+            (premiereOf(anime, airing(anime), today) as? Premiere.At)?.let { daysFromToday(it.instant) }
         }
 
     @Test
@@ -261,7 +263,7 @@ class FixtureCasesTest(
 
     @Test
     fun `a title whose media type MAL does not know`() {
-        assertTrue(entries.any { it.anime.mediaType == null && premiereOf(it.anime, airing(it.anime)) != null })
+        assertTrue(entries.any { it.anime.mediaType == null && premiereOf(it.anime, airing(it.anime), today) != null })
     }
 
     @Test
@@ -274,7 +276,7 @@ class FixtureCasesTest(
     fun `every premiere form of a not yet aired title`() {
         val forms =
             set.anime
-                .mapNotNull { premiereOf(it, airing(it)) }
+                .mapNotNull { premiereOf(it, airing(it), today) }
                 .map { it::class }
                 .toSet()
         assertEquals(
@@ -294,7 +296,7 @@ class FixtureCasesTest(
         val anime = set.anime(FixtureAnime.exactToWatch.id)
         val full = set.details.getValue(anime.id)
         assertNotNull(full.synopsis)
-        assertTrue(anime.genres.isNotEmpty())
+        assertTrue(!anime.genres.isNullOrEmpty())
         assertNotNull(full.source)
         assertNotNull(full.rating)
         assertNotNull(anime.averageEpisodeDuration)
@@ -373,7 +375,7 @@ class FixtureCasesTest(
         assertTrue(lengths.count { it > 400 } >= 2)
         assertTrue(set.details.values.none { it.synopsis?.contains("fixture", ignoreCase = true) == true })
         val notOnList = set.anime(FixtureAnime.notOnListAiring.id)
-        assertTrue(notOnList.genres.size >= 6)
+        assertTrue(notOnList.genres.orEmpty().size >= 6)
         assertTrue(
             set.details
                 .getValue(notOnList.id)
