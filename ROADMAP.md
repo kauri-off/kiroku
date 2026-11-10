@@ -45,7 +45,7 @@ needs GitHub is observed by the orchestrator after it pushes the branch.
 Goal: the owner installs a debug APK and sees the List and the title page in the final design, in Russian and
 English, light and dark, on demo data. No MAL client id is needed.
 
-- [ ] **M1-01 [A] Project skeleton.** A Gradle project with the modules `:core`, `:data` and `:app` that builds an
+- [x] **M1-01 [A] Project skeleton.** A Gradle project with the modules `:core`, `:data` and `:app` that builds an
   empty Compose app labelled "Kiroku", with the application ids of ARCHITECTURE section 3.1, the stack and platform
   levels of sections 6.4 and 12, one version catalog, and the format and Lint checks in place. Installs the SDK
   platform the build needs.
@@ -62,7 +62,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   afterwards no Kiroku emulator is running; the pull request states the measured peak memory of a `check` job, and
   two such jobs fit the machine.
 
-- [ ] **M1-03 [O] Repository published.** The orchestrator creates the public repository `kauri-off/kiroku`, pushes
+- [x] **M1-03 [O] Repository published.** The orchestrator creates the public repository `kauri-off/kiroku`, pushes
   `main`, sets squash merging as the only merge method, and adds the secret `MAL_CLIENT_ID`.
   **Needs:** M1-01.
   **Check:** `gh repo view kauri-off/kiroku` succeeds.
