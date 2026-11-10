@@ -703,8 +703,8 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   memory.** An agent can neither read the client id nor sign in, so responses that need only the client id are
   recorded by a build task that uses the id without printing it or any request header and is not part of any build
   or check, and responses that need the user's sign-in are recorded by the owner with a debug-only tool in the app.
-- **No committed fixture contains a user name, another personal value, a token or the client id.** The orchestrator
-  reads recorded files before they are committed.
+- **No committed fixture contains a real user's name, another personal value, a token or the client id.**
+  The orchestrator reads recorded files before they are committed.
 - Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
   itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another

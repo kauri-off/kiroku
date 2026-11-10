@@ -73,7 +73,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Check (after M1-03):** on the task's pull request the build check and the title check are green and the run
   offers the debug APK. Before M1-03 the reviewers read the workflow.
 
-- [ ] **M1-05 [A] Domain model and fixtures.** The domain types, typed errors and repository interfaces of `:core`,
+- [x] **M1-05 [A] Domain model and fixtures.** The domain types, typed errors and repository interfaces of `:core`,
   and the fixture set: about 30 list entries covering every status and every row case of section 9.3 (both
   estimated cases included), a very long title, a title with unknown episode count, a title one episode short of
   its total, a film, one title for each case of the airing block (section 9.4), one title for each premiere form
@@ -196,7 +196,7 @@ Not to forget:
   sign-in flow and the sign-in screen to work before the list is on real data. The recording adds and then removes
   one title that is not on the owner's list, and leaves the list as it was.
 - The owner supplies, outside the repository, two user names for recording: one with a public list of more than
-  1000 entries and one whose list is private. **No fixture contains a user name.**
+  1000 entries and one whose list is private. **No fixture contains either name.**
 - Related titles are requested with their media type, start date and the user's list status; caption 2 and the
   order of the Related strip need all three. One title is recorded with adult content on and off.
 - The sign-in is tried by hand, including killing the app while the browser is open. This and the recorded
