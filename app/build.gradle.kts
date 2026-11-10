@@ -97,6 +97,8 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.accessibility.check)
+    testImplementation(libs.coil.compose)
+    testImplementation(libs.coil.test)
 }
 
 val screenshotsRecorded =

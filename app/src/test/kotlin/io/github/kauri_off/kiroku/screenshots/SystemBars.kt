@@ -10,6 +10,10 @@ import androidx.core.view.WindowCompat
 
 object SystemBars {
     const val HEIGHT_DP = 24
+    const val KEYBOARD_DP = 300
+
+    private const val KEYBOARD_LIGHT = 0xFFDDE1E6.toInt()
+    private const val KEYBOARD_DARK = 0xFF2B2D31.toInt()
 
     private const val DARK_ICONS = 0xFF1F1F1F.toInt()
     private const val LIGHT_ICONS = 0xFFF2F2F2.toInt()
@@ -30,11 +34,21 @@ object SystemBars {
         canvas: Canvas,
         window: Window,
         density: Float,
+        keyboard: Boolean,
     ) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         drawStatusBar(canvas, density, if (controller.isAppearanceLightStatusBars) DARK_ICONS else LIGHT_ICONS)
-        drawGestureHandle(canvas, density, if (controller.isAppearanceLightNavigationBars) DARK_ICONS else LIGHT_ICONS)
+        if (keyboard) {
+            val night = window.context.resources.configuration.isNightModeActive
+            val paint = Paint().apply { color = keyboardColor(night) }
+            canvas.drawRect(0f, canvas.height - KEYBOARD_DP * density, canvas.width.toFloat(), canvas.height.toFloat(), paint)
+            drawGestureHandle(canvas, density, if (night) LIGHT_ICONS else DARK_ICONS)
+        } else {
+            drawGestureHandle(canvas, density, if (controller.isAppearanceLightNavigationBars) DARK_ICONS else LIGHT_ICONS)
+        }
     }
+
+    fun keyboardColor(night: Boolean): Int = if (night) KEYBOARD_DARK else KEYBOARD_LIGHT
 
     private fun drawStatusBar(
         canvas: Canvas,

@@ -1,11 +1,11 @@
 package io.github.kauri_off.kiroku.sample
 
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
-import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.ShowcaseRegistry
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 
-class SampleScreenshots : ScreenshotRegistry("sample") {
+class SampleScreenshots : ShowcaseRegistry() {
     override val cases =
         listOf(
             contentCase { SampleScreen(SampleFixtures.state, onEvent = {}) },
