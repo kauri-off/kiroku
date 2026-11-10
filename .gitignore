@@ -1,2 +1,6 @@
 .reference/
 clientid.txt
+local.properties
+build/
+.gradle/
+.kotlin/
