@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -67,6 +68,10 @@ android {
         compose = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
         warningsAsErrors = false
@@ -86,5 +91,46 @@ dependencies {
     implementation(libs.core.ktx)
     debugImplementation(libs.compose.ui.tooling)
 
+    testImplementation(testFixtures(project(":core")))
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.accessibility.check)
+}
+
+val screenshotsRecorded =
+    objects.property<Boolean>().convention(
+        providers.gradleProperty("roborazzi.test.record").map { it.toBoolean() }.orElse(false),
+    )
+gradle.taskGraph.whenReady {
+    if (hasTask(":app:recordRoborazziDebug")) screenshotsRecorded.set(true)
+}
+
+tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach {
+    val recorded = screenshotsRecorded
+    val outputDir = layout.buildDirectory.dir("outputs/roborazzi")
+    val intermediateDir = layout.buildDirectory.dir("intermediates/roborazzi")
+    val pendingMarker = layout.buildDirectory.file("tmp/roborazzi/RENDERED_AT")
+    val head = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText
+    val status = providers.exec { commandLine("git", "status", "--porcelain") }.standardOutput.asText
+    outputs.upToDateWhen { !recorded.get() }
+    outputs.cacheIf { !recorded.get() }
+    doFirst {
+        if (recorded.get()) {
+            outputDir.get().asFile.deleteRecursively()
+            intermediateDir.get().asFile.deleteRecursively()
+            val dirty = if (status.get().isBlank()) "" else " dirty"
+            pendingMarker
+                .get()
+                .asFile
+                .apply { parentFile.mkdirs() }
+                .writeText(head.get().trim() + dirty + "\n")
+        }
+    }
+    doLast {
+        if (recorded.get()) {
+            pendingMarker.get().asFile.copyTo(outputDir.get().file("RENDERED_AT").asFile, overwrite = true)
+        }
+    }
 }

@@ -83,7 +83,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-01.
   **Check:** a `:core` test asserts that each case named above is present in the fixtures.
 
-- [ ] **M1-06 [A] Screenshot harness.** The rendering of ARCHITECTURE section 11.2, a `sample` screen with a
+- [x] **M1-06 [A] Screenshot harness.** The rendering of ARCHITECTURE section 11.2, a `sample` screen with a
   scrolling list, and two deliberately bad versions of it for calibration: the cases `sample/calibration-noise`
   (repeated facts and decoration) and `sample/calibration-hierarchy` (competing primary actions). CI renders and
   keeps the screenshots.

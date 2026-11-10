@@ -759,7 +759,8 @@ code. Layout review works from these images.
   written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's, and remote images
   are flat colour blocks. Two renders of one commit on one machine are byte-identical.
 - The status bar and the gesture bar are drawn, with their insets, so content hidden under one is visible in
-  review.
+  review. Both are 24 dp; the gesture bar is a handle without a scrim, as on a phone with gesture navigation.
+  Robolectric renders at API 35, the highest it runs on JDK 17.
 - Each screen has one registry file that declares its **cases**: at least content, loading, empty and error, plus
   the cases its roadmap task names. A **gallery** case renders every component of section 8.4 in all its states.
 - An ordinary test run renders nothing; only a record run does.
@@ -781,7 +782,8 @@ code. Layout review works from these images.
 - `<case>__<variant>.png`: the viewport, as the user first sees it.
 - `<case>__<variant>__full.png`: the whole scrollable content at full height, whenever it is taller than the
   viewport. Without it the lower half of the title page would never be reviewed.
-- `<case>__bounds.png`, for the content case in `en-light`: the bounds of the components, for checking alignment.
+- `<case>__bounds.png`, for the content case in `en-light`: the viewport with the bounds of the components
+  outlined, for checking alignment.
 
 `__full` images are written for: **all variants**.
 
@@ -790,7 +792,9 @@ touch target under 48 dp or an unlabeled control.
 
 **The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and
 says "dirty" when the worktree had uncommitted changes. A render after any commit, including one that changes no
-source file, runs again and names that commit; it never comes from the build cache.
+source file, runs again and names that commit; it never comes from the build cache. Every record run first deletes
+all earlier images, so after rendering one screen only that screen's images exist, and `RENDERED_AT` is written
+only when the run succeeds.
 
 Screenshots are build output and are not committed, except the calibration set of the rubric; CI uploads the full
 set. Fonts rasterise differently between operating systems, so images are compared only when rendered on the same
