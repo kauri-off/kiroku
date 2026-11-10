@@ -41,8 +41,6 @@ jobs:
         run: ./gradlew --continue ktlintCheck lint test
 
       - name: Debug build
-        env:
-          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
         run: ./gradlew assembleDebug
 
       - name: Keep the debug APK

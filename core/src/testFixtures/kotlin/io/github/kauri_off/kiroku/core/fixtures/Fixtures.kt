@@ -62,6 +62,7 @@ object Fixtures {
             userStatistics = FixtureUser.statistics,
             otherUserName = "sample_viewer",
             otherUserEntries = FixtureUser.otherUserEntries,
+            privateUserName = "quiet_viewer",
             largeStatistics = FixtureUser.largeStatistics,
         )
     }

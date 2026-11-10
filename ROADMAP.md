@@ -158,7 +158,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-07; the review needs M1-07a.
   **Check:** rubric pass on `edit/*`.
 
-- [ ] **M1-13 [A] Wiring and demo mode.** The app's wiring, and demo mode (section 6.4): a debug build without a
+- [x] **M1-13 [A] Wiring and demo mode.** The app's wiring, and demo mode (section 6.4): a debug build without a
   client id runs on the fixtures in memory, writes included.
   **Needs:** M1-05.
   **Check:** a test shows that a "+1" made through the demo list reaches an observer of that list.
@@ -191,6 +191,7 @@ Not to forget:
 
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
   agent reads that file or the value, and only the orchestrator may check that no recorded file contains it.
+- The task that starts using the client id puts the secret `MAL_CLIENT_ID` back on CI's debug build step.
 - Mappers are written only against recorded responses (section 11.1), so recording comes first, and the responses
   for the signed-in user need **the owner to sign in once** in a debug build and run the recorder. That needs the
   sign-in flow and the sign-in screen to work before the list is on real data. The recording adds and then removes

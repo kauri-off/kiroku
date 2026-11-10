@@ -140,8 +140,9 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
 
 - In a public client the id can be read out of the APK, so it is not a secret, but it is **never committed**: every
   fork registers its own. Agents never read or print it.
-- The build takes it from the Gradle property `kiroku.malClientId` or the environment variable `MAL_CLIENT_ID`: on
-  the maintainer's machine from `~/.gradle/gradle.properties`, in CI from a repository secret.
+- The build takes it from the Gradle property `kiroku.malClientId`, else from the environment variable
+  `MAL_CLIENT_ID`; a blank value counts as absent. On the maintainer's machine it comes from
+  `~/.gradle/gradle.properties`.
 - A build without a client id succeeds. A **debug** build without one runs in demo mode (section 6.4); a
   **release** build without one shows the sign-in screen in its no-client-id form (section 9.2). Tests never need
   the id.
@@ -279,13 +280,14 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 | Module | Contains | Why separate |
 |---|---|---|
-| `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, repository interfaces, typed errors, the fixture set | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
+| `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, repository interfaces, typed errors; in its test fixtures, the fixture set and demo mode's in-memory repositories over it | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
 | `:data` (Android library) | The MAL and AniList clients, sign-in and token storage, the database, the repository implementations | Network and database types stay inside it, so the user interface depends only on `:core` types. |
 | `:app` (Android application) | Theme and components, screens and view models, navigation, notifications and background work, wiring | The only module that knows Compose. |
 
 - Dependencies point one way: `app → data → core` and `app → core`. The base package is
   `io.github.kauri_off.kiroku`. Failures cross a module boundary as typed errors, not exceptions.
-- The fixtures serve `:core` tests, previews, screenshot tests and demo mode. Release code cannot see them.
+- The fixtures and demo mode serve `:core` tests, previews, screenshot tests, view-model tests and debug builds.
+  Release code cannot see them, and a release build that would contain them fails.
 - One module per feature was rejected: with about ten screens it adds build configuration and no protection that
   three modules do not already give.
 
@@ -327,7 +329,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   without a client id starts in it. Demo data follows the device's date: the fixtures are shifted by the whole
   number of weeks since their reference moment, and demo mode runs on a clock that lags the device's by the rest
   of that week, so every weekday and weekly slot in them stays what it claims; every "today" does too on a device
-  between UTC−9 and UTC+8, which includes the fixtures' own zone.
+  between UTC−9 and UTC+8, which includes the fixtures' own zone. Its server is in memory too, so a new process
+  starts again from the fixtures.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
   (detekt's current line is alpha).
 - Also not used: a chart library (bars are `StatBar`), AppCompat, `kotlinx-datetime` (`java.time` is available), a
@@ -814,14 +817,15 @@ every image, and hands over the commit hash and the output directory.
   runs one test JVM at a time; the memory settings change only with a measurement. `CLAUDE.md` has the queue rules.
 - **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`: the
   format check, Lint, the tests, the screenshots, a debug build and the self-test of the queue wrappers, keeping
-  the screenshots and the APK as artifacts, and a check that the pull request title is a conventional commit. The
-  client id comes from a repository secret; pull requests from forks build without it.
-- **Release and distribution.** A version tag builds the release APK, with code and resource shrinking, and
-  attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build job signs the
-  APK with a key made for that run; a separate job, the only one that sees the secrets of the `release`
-  environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no third-party code.
-  That environment is limited to `main` and version tags. Signing keys never enter the repository. F-Droid follows
-  after 1.0. Kiroku is not published on Google Play.
+  the screenshots and the APK as artifacts, and a check that the pull request title is a conventional commit. Its
+  debug build has no client id, so the APK it keeps runs in demo mode.
+- **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
+  the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
+  secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
+  job signs the APK with a key made for that run; a separate job, the only one that sees the secrets of the
+  `release` environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no
+  third-party code. That environment is limited to `main` and version tags. Signing keys never enter the
+  repository. F-Droid follows after 1.0. Kiroku is not published on Google Play.
 - **Debug signing.** Debug builds from every checkout and worktree of the maintainer's machine are signed with
   one shared debug key, so that each installs over the other without losing data. Elsewhere the build falls back
   to the platform's default debug key.
