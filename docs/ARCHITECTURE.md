@@ -447,6 +447,36 @@ defaults, shimmer placeholders, text or badges drawn over images, chips that do 
 carousels, more than one floating action button (1.0 uses none), a tab row together with another navigation level
 for the same content, second-by-second countdowns.
 
+### 8.5 Motion
+
+Motion is functional and sparse. Stock Material 3 components keep their own motion. Anything beyond that needs a
+purpose stated in the pull request: feedback, showing where something came from or went, making a state change
+legible, or preventing a jump. Decoration is not a purpose.
+
+- **Not animated:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers counting up,
+  anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
+  bounce, no staggered lists, no custom press effect (the ripple is the feedback).
+- **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
+  one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
+  can overshoot move, resize and reshape; they are never used on opacity or colour.
+- **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
+  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
+  stable keys and use the list's item animation for add, remove and move. Content that finishes loading fades in.
+  One thing moves per change; a container that enters brings its content with it.
+- **Time.** An exit is shorter than the matching entrance. A change inside a component settles within 200 ms, a
+  component's entrance within 300 ms, a screen's entrance within 400 ms.
+- **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
+  reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back shows where
+  Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned off,
+  every screen is complete and correct immediately. An idle screen has no animation running.
+
+A task that adds or changes an animation shows, with tests on the test clock, that it settles within its time,
+that re-triggering it mid-flight ends in the right state, that the interaction is correct with animations off, and
+that the idle screen has nothing pending. It also renders the transition as a strip of four frames (start, one
+third, two thirds, end) next to the screen's screenshots: the first and last frames equal the static renders, and
+direction and pattern match this section. The hand-over names the transitions that changed. How a transition
+feels on a device, and predictive back under a finger, are judged by the owner from the installed app.
+
 ## 9. Per-screen information budgets
 
 ### 9.1 How a budget works
