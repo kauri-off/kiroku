@@ -375,7 +375,10 @@ class Shot private constructor(
             descendants()
                 .flatMap {
                     (it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()) +
-                        it.config.getOrNull(SemanticsProperties.Text).orEmpty().map { text -> text.text }
+                        it.config
+                            .getOrNull(SemanticsProperties.Text)
+                            .orEmpty()
+                            .map { text -> text.text }
                 }.joinToString(" ")
                 .visible()
                 .ifEmpty { "unlabeled control" }

@@ -74,7 +74,12 @@ fun wallClockReadings(): Map<String, String> {
         "Clock.systemUTC" to Clock.systemUTC().instant().toString(),
         "ZonedDateTime.now" to ZonedDateTime.now().toInstant().toString(),
         "OffsetDateTime.now" to OffsetDateTime.now(ZoneOffset.UTC).toInstant().toString(),
-        "LocalDateTime.now" to LocalDateTime.now().atZone(zone).toInstant().toString(),
+        "LocalDateTime.now" to
+            LocalDateTime
+                .now()
+                .atZone(zone)
+                .toInstant()
+                .toString(),
         "LocalDate.now" to LocalDate.now().toString(),
         "Calendar.getInstance" to Calendar.getInstance().toInstant().toString(),
         "DateUtils" to DateUtils.getRelativeTimeSpanString(FixtureTime.reference.minus(Duration.ofDays(3)).toEpochMilli()).toString(),
@@ -96,7 +101,13 @@ fun ClockProbe(onDisplayedMonth: (Long) -> Unit = {}) {
 
 @Composable
 fun SmallTarget(label: String) {
-    Box(Modifier.size(24.dp).background(MaterialTheme.colorScheme.error).semantics { contentDescription = label }.clickable {})
+    Box(
+        Modifier
+            .size(24.dp)
+            .background(MaterialTheme.colorScheme.error)
+            .semantics { contentDescription = label }
+            .clickable {},
+    )
 }
 
 @Composable
@@ -108,7 +119,12 @@ fun CentredSmallTarget() {
 fun LongListEndingInSmallTarget() {
     LazyColumn(Modifier.fillMaxSize()) {
         items((1..40).toList()) { ListItem(headlineContent = { Text("Row $it") }) }
-        item { Row { Text("Last row"); SmallTarget("below the fold") } }
+        item {
+            Row {
+                Text("Last row")
+                SmallTarget("below the fold")
+            }
+        }
     }
 }
 
@@ -120,7 +136,12 @@ fun DialogProbe(smallTarget: Boolean) {
             onDismissRequest = {},
             confirmButton = { TextButton(onClick = {}) { Text("OK") } },
             title = { Text("Dialog") },
-            text = { Row { Text("Text"); if (smallTarget) SmallTarget("in a dialog") } },
+            text = {
+                Row {
+                    Text("Text")
+                    if (smallTarget) SmallTarget("in a dialog")
+                }
+            },
         )
     }
 }

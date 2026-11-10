@@ -8,12 +8,22 @@ import java.lang.reflect.Modifier
 
 class RegistriesTest {
     private val registries: List<Class<*>> by lazy {
-        val root = File(RegistryBase::class.java.protectionDomain.codeSource.location.toURI())
+        val root =
+            File(
+                checkNotNull(RegistryBase::class.java.protectionDomain)
+                    .codeSource.location
+                    .toURI(),
+            )
         root
             .walk()
             .filter { it.isFile && it.name.endsWith(".class") && '$' !in it.name }
-            .map { it.relativeTo(root).path.removeSuffix(".class").replace(File.separatorChar, '.') }
-            .map { Class.forName(it, false, javaClass.classLoader) }
+            .map {
+                it
+                    .relativeTo(root)
+                    .path
+                    .removeSuffix(".class")
+                    .replace(File.separatorChar, '.')
+            }.map { Class.forName(it, false, javaClass.classLoader) }
             .filter { RegistryBase::class.java.isAssignableFrom(it) && !Modifier.isAbstract(it.modifiers) }
             .toList()
     }

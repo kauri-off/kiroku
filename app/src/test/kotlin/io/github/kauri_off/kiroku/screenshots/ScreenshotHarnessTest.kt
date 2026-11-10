@@ -88,7 +88,11 @@ class ScreenshotHarnessTest {
         val expected =
             readings.mapValues { (source, _) ->
                 when (source) {
-                    "LocalDate.now" -> FixtureTime.reference.atZone(FixtureTime.zone).toLocalDate().toString()
+                    "LocalDate.now" ->
+                        FixtureTime.reference
+                            .atZone(FixtureTime.zone)
+                            .toLocalDate()
+                            .toString()
                     "DateUtils" -> relative
                     else -> moment
                 }
@@ -100,7 +104,14 @@ class ScreenshotHarnessTest {
     fun datePickerOpensOnTheFixturesMonth() {
         var month = 0L
         Shot.launch(Variant.EnLight) { ClockProbe { month = it } }.use { }
-        assertEquals(LocalDate.of(2026, 1, 1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(), month)
+        assertEquals(
+            LocalDate
+                .of(2026, 1, 1)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli(),
+            month,
+        )
     }
 
     @Test
