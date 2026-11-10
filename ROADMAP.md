@@ -67,7 +67,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-01.
   **Check:** `gh repo view kauri-off/kiroku` succeeds.
 
-- [ ] **M1-04 CI workflow.** The pull-request and `main` checks of ARCHITECTURE section 12, without the
+- [x] **M1-04 CI workflow.** The pull-request and `main` checks of ARCHITECTURE section 12, without the
   screenshots, which M1-06 adds.
   **Needs:** M1-01. The check needs M1-03.
   **Check (after M1-03):** on the task's pull request the build check and the title check are green and the run
