@@ -4,3 +4,8 @@ local.properties
 build/
 .gradle/
 .kotlin/
+.idea/
+*.iml
+*.jks
+*.keystore
+keystore.properties
