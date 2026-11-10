@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+set -euo pipefail
+USAGE="usage: tools/emu run CMD [ARGS...]   boot Kiroku's emulator as a queue job, run CMD against it, shut it down
+       tools/emu smoke APK           install and launch APK; screenshots and logcat in build/emu/smoke/
+       tools/emu --wait ID           wait again for a job that is not finished
+       tools/emu ps                  list running Kiroku emulators (no job)
+CMD runs in the worktree with adb on PATH; adb reaches this job's emulator and nothing else.
+Waits up to 100 s, then prints the job's last 60 lines and the path of its full log.
+Exit: CMD's code (1 = failed); 69 no emulator could be started, 75 not finished, 76 stalled, 125 job stopped,
+2 refused (nothing ran)."
+. "$(dirname "$0")/queue.sh"
+
+IMAGE='system-images;android-36;google_apis;x86_64'
+AVD=kiroku
+SLOTS=2
+PORT_BASE=${HOOK[port_base]:-5600}
+K=${HOOK[avd_root]:-$(realpath -m -- "$HOME/.android")/kiroku}
+SLOT=
+PORT=
+RUN=
+emu_pid=
+cmd_pid=
+signalled=0
+
+kiroku_emulators() {
+  local p argv e
+  for p in /proc/[0-9]*; do
+    argv=$(tr '\0' ' ' < "$p/cmdline" 2> /dev/null) || continue
+    [[ $argv == *emulator* || $argv == *qemu-system* ]] || continue
+    [[ " $argv " == *" -avd $AVD "* ]] || continue
+    { mapfile -d '' -t e < "$p/environ"; } 2> /dev/null || continue
+    if [[ " ${e[*]} " == *" ANDROID_AVD_HOME=$K/"* ]]; then echo "${p#/proc/} $argv"; fi
+  done
+  return 0
+}
+
+nodevice() {
+  echo "NO DEVICE: $*" >&2
+  exit 69
+}
+
+alive() {
+  local s
+  { read -r s < "/proc/$1/stat"; } 2> /dev/null || return 1
+  s=${s##*) }
+  [[ ${s%% *} != Z ]]
+}
+
+pause() {
+  sleep "$1" &
+  wait $! 2> /dev/null || true
+}
+
+port_busy() {
+  [[ -n $(ss -Hltn "sport = :$1") ]]
+}
+
+# The slot the queue gave this job, checked, and this slot's private adb environment.
+slot_env() {
+  [[ ${QEMU_SLOT:-} =~ ^[0-9]$ ]] && ((QEMU_SLOT < SLOTS)) && [[ ${QEMU_PORT:-} == $((PORT_BASE + 20 * QEMU_SLOT)) ]] ||
+    die "QEMU_SLOT and QEMU_PORT are not a slot of the queue (${QEMU_SLOT:-unset}, ${QEMU_PORT:-unset})"
+  SLOT=$QEMU_SLOT
+  PORT=$QEMU_PORT
+  # shellcheck disable=SC2086
+  export ANDROID_SERIAL=emulator-$PORT ANDROID_ADB_SERVER_PORT=$((PORT + 10000)) $ADB_ISOLATION
+  # shellcheck disable=SC2086
+  unset $ADB_REDIRECTS
+}
+
+own_tree() {
+  [[ $K == /?* && ! -L $K ]] && mkdir -p -- "$K" && [[ $(realpath -e -- "$K") == "$K" ]]
+}
+
+# Removes $1/$2 only when $1 has no symlink in its path and $2 is a plain name that is not a symlink.
+rm_in() {
+  local dir=$1 name=$2
+  if [[ $dir == /?* && $name =~ ^[a-z0-9-]+$ && -d $dir && ! -L $dir/$name ]] &&
+    [[ $(realpath -e -- "$dir") == "$dir" ]]; then
+    rm -rf --one-file-system -- "${dir:?}/${name:?}"
+  else
+    echo "$(basename "$0"): refusing to remove $dir/$name" >&2
+    return 1
+  fi
+}
+
+run_pids() {
+  local p e
+  pids=()
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    ((p == $$)) && continue
+    { mapfile -d '' -t e < "/proc/$p/environ"; } 2> /dev/null || continue
+    if [[ " ${e[*]} " == *" KIROKU_RUN=$KIROKU_RUN "* ]]; then pids+=("$p"); fi
+  done
+}
+
+claim_run() {
+  local l name
+  exec 8> "$K/run-slot$SLOT.lock"
+  flock -w "${HOOK[lock_wait]:-10}" 8 ||
+    nodevice "processes of an earlier Kiroku run in slot $SLOT are still alive (tools/emu ps)"
+  for l in "$K"/run-slot[0-9].lock; do
+    name=$(basename "$l" .lock)
+    [[ -e $l && $name != "run-slot$SLOT" ]] || continue
+    (flock -n 7 && rm_in "$K" "$name") 7< "$l" || true
+  done
+  rm_in "$K" "run-slot$SLOT" || nodevice "the run directory of slot $SLOT cannot be cleared"
+  RUN=$K/run-slot$SLOT
+  mkdir -p "$RUN/home/.android" "$RUN/xdg" "$RUN/tmp" "$RUN/bin"
+  chmod 700 "$RUN" "$RUN/xdg"
+  export TMPDIR=$RUN/tmp
+}
+
+# adb for this run: its own key directory, and no option or command that reaches another server or device.
+adb_shim() {
+  cat > "$RUN/bin/adb" << EOF
+#!/usr/bin/env bash
+a=("\$@")
+while ((\${#a[@]})); do
+  case \${a[0]} in
+    -s | -t) a=("\${a[@]:2}") ;;
+    -H* | -P* | -L* | -a | connect | pair | mdns | kill-server)
+      echo "adb: \${a[0]} is not available inside tools/emu" >&2; exit 2 ;;
+    -*) a=("\${a[@]:1}") ;;
+    *) break ;;
+  esac
+done
+HOME=$(printf %q "$RUN/home") exec $(printf %q "$ANDROID_HOME/platform-tools/adb") "\$@"
+EOF
+  chmod +x "$RUN/bin/adb"
+}
+
+ensure_avd() {
+  local home=$K/avd-slot$SLOT
+  if [[ -L $home || ! -f $home/.complete ]]; then
+    [[ -d $ANDROID_HOME/${IMAGE//;//} ]] || { echo "system image missing: run sdkmanager \"$IMAGE\"" >&2; return 1; }
+    rm_in "$K" "avd-slot$SLOT" || return 1
+    mkdir -p "$home"
+    echo no | ANDROID_AVD_HOME=$home "$ANDROID_HOME"/cmdline-tools/latest/bin/avdmanager -s \
+      create avd -n "$AVD" -k "$IMAGE" -d pixel_7 > /dev/null || return 1
+    touch "$home/.complete"
+  fi
+  export ANDROID_AVD_HOME=$home
+}
+
+boot_completed() {
+  [[ $(timeout 3 adb shell getprop sys.boot_completed 2> /dev/null | tr -d '\r') == 1 ]]
+}
+
+boot() {
+  local timeout=${HOOK[boot_timeout]:-400} log=$ROOT/build/emu/emulator-$PORT.log p info
+  local deadline=$((SECONDS + timeout))
+  for p in "$PORT" $((PORT + 1)) "$ANDROID_ADB_SERVER_PORT"; do
+    if port_busy "$p"; then nodevice "port $p of slot $SLOT is in use by a process that is not this job's"; fi
+  done
+  claim_run
+  ensure_avd || nodevice "the AVD could not be prepared (see above)"
+  adb_shim
+  export PATH=$RUN/bin:$ANDROID_HOME/platform-tools:$PATH
+  adb start-server > /dev/null 2>&1 || nodevice "adb server did not start on port $ANDROID_ADB_SERVER_PORT"
+  mkdir -p "$(dirname "$log")"
+  HOME=$RUN/home ANDROID_EMULATOR_HOME=$RUN/home/.android XDG_RUNTIME_DIR=$RUN/xdg ANDROID_TMP=$RUN/tmp \
+    setsid env -u WAYLAND_DISPLAY "$ANDROID_HOME/emulator/emulator" -avd "$AVD" -port "$PORT" \
+    -read-only -no-snapshot -no-window -no-audio -no-boot-anim -no-metrics -gpu swiftshader_indirect \
+    > "$log" 2>&1 < /dev/null &
+  emu_pid=$!
+  echo "emulator $ANDROID_SERIAL booting (slot $SLOT, AVD $AVD, pid $emu_pid, log ${log#"$ROOT"/})"
+  until boot_completed; do
+    if ! alive "$emu_pid"; then
+      tail -20 "$log" >&2
+      nodevice "the emulator exited during boot; its log is ${log#"$ROOT"/}"
+    fi
+    ((SECONDS < deadline)) || nodevice "the emulator did not finish booting in $timeout s"
+    pause 1
+  done
+  adb shell 'settings put global window_animation_scale 0; settings put global transition_animation_scale 0;
+    settings put global animator_duration_scale 0' > /dev/null || nodevice "the emulator does not answer adb"
+  info=$(adb shell 'echo "API $(getprop ro.build.version.sdk), $(getprop ro.product.model), $(wm size)"' |
+    tr -d '\r' | sed 's/Physical size: //') || nodevice "the emulator does not answer adb"
+  echo "emulator $ANDROID_SERIAL ready: $info"
+}
+
+shut_down() {
+  local i
+  if [[ -n $cmd_pid ]]; then
+    kill -TERM -- "-$cmd_pid" "$cmd_pid" 2> /dev/null || true
+    for ((i = 0; i < 10 && !signalled; i++)); do kill -0 -- "-$cmd_pid" 2> /dev/null || break; sleep 0.5; done
+    kill -KILL -- "-$cmd_pid" 2> /dev/null || true
+  fi
+  if ((!signalled)) && [[ -n $emu_pid ]] && alive "$emu_pid"; then
+    timeout 10 adb emu kill > /dev/null 2>&1 || true
+    for ((i = 0; i < 40 && !signalled; i++)); do alive "$emu_pid" || break; sleep 0.5; done
+  fi
+  run_pids
+  if ((${#pids[@]})); then
+    kill -TERM "${pids[@]}" 2> /dev/null || true
+    for ((i = 0; i < (signalled ? 8 : 20); i++)); do
+      run_pids
+      ((${#pids[@]})) || break
+      sleep 0.5
+    done
+    if ((${#pids[@]})); then
+      kill -KILL "${pids[@]}" 2> /dev/null || true
+      sleep 0.5
+      run_pids
+    fi
+  fi
+  if ((${#pids[@]})); then
+    echo "emulator $ANDROID_SERIAL: processes of this run left: ${pids[*]}" >&2
+  elif rm_in "$K" "run-slot$SLOT"; then
+    [[ -z $emu_pid ]] || echo "emulator $ANDROID_SERIAL shut down; nothing of this run is left"
+  fi
+}
+
+finish() {
+  local rc=$1 peak
+  trap 'signalled=1' TERM HUP INT
+  if [[ -n $RUN ]]; then
+    shut_down
+    peak=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)/memory.peak
+    [[ ! -r $peak ]] || echo "tools/emu: memory peak of this job $(($(< "$peak") / 1048576)) MiB"
+  fi
+  exit "$rc"
+}
+
+smoke() {
+  local apk=$1 out=$ROOT/build/emu/smoke delay=${HOOK[smoke_delay]:-4} aapt2 badging pkg act start resumed
+  aapt2=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name aapt2 | sort -V | tail -1)
+  [[ -n $aapt2 ]] || smoke_fail "no aapt2 in $ANDROID_HOME/build-tools"
+  badging=$("$aapt2" dump badging "$apk") || smoke_fail "aapt2 cannot read $apk"
+  pkg=$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$badging")
+  act=$(sed -n "s/^launchable-activity: name='\([^']*\)'.*/\1/p" <<< "$badging" | head -1)
+  [[ -n $pkg && -n $act ]] || smoke_fail "no launchable activity in $apk"
+  mkdir -p "$ROOT/build/emu"
+  rm_in "$ROOT/build/emu" smoke || smoke_fail "build/emu/smoke cannot be cleared"
+  mkdir -p "$out"
+  echo "smoke: $apk, built $(date -r "$apk" '+%F %T')"
+  adb install -r -t "$apk" > "$out/install.txt" 2>&1 || { cat "$out/install.txt"; smoke_fail "adb install failed"; }
+  adb shell 'input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard' > /dev/null 2>&1 || true
+  adb logcat -c || smoke_fail "adb logcat failed"
+  start=$(adb shell am start -W -n "$pkg/$act" | tr -d '\r') || smoke_fail "adb shell am start failed"
+  echo "$start"
+  [[ $start == *"Status: ok"* ]] || smoke_fail "the launch of $pkg/$act did not complete"
+  sleep "$delay"
+  adb exec-out screencap -p > "$out/1-launch.png" || smoke_fail "screencap failed"
+  sleep "$delay"
+  adb exec-out screencap -p > "$out/2-settled.png" || smoke_fail "screencap failed"
+  adb logcat -d > "$out/logcat.txt" || smoke_fail "adb logcat failed"
+  adb logcat -d -b crash > "$out/crash.txt" || smoke_fail "adb logcat failed"
+  if grep -qF -- "$pkg" "$out/crash.txt"; then smoke_fail "$pkg crashed; see build/emu/smoke/crash.txt"; fi
+  if grep -qF -- "ANR in $pkg" "$out/logcat.txt"; then smoke_fail "$pkg is not responding (ANR)"; fi
+  adb shell pidof "$pkg" > /dev/null || smoke_fail "$pkg is not running"
+  resumed=$(adb shell dumpsys activity activities | tr -d '\r' | grep -E 'ResumedActivity') || resumed=
+  [[ $resumed == *" $pkg/"* ]] || smoke_fail "$pkg is not in the foreground: ${resumed:-no resumed activity}"
+  echo "smoke passed: $pkg/$act; screenshots: $(cd "$out" && echo ./*.png) in build/emu/smoke/"
+}
+
+smoke_fail() {
+  echo "SMOKE FAILED: $*" >&2
+  exit 1
+}
+
+job() {
+  ! in_emu_job || die "tools/emu cannot start an emulator inside an emu job"
+  slot_env
+  in_queue_unit || die "_job runs only inside an emu job of the queue: use tools/emu run or tools/emu smoke"
+  [[ ${1:-} == run && $# -ge 2 || ${1:-} == smoke && $# == 2 ]] || usage
+  own_tree || die "$K must be a directory that is not a symlink"
+  export KIROKU_RUN=kiroku-$SLOT-$$-$SRANDOM KIROKU_EMU_JOB=$$ ADB_REJECT_KILL_SERVER=1
+  unset ANDROID_AVD_HOME
+  trap 'finish $?' EXIT
+  trap 'signalled=1; exit 143' TERM HUP INT
+  boot
+  local rc=0
+  case $1 in
+    run) shift ;;
+    smoke) set -- "$SELF/tools/emu" _smoke "$2" ;;
+  esac
+  setsid "$@" &
+  cmd_pid=$!
+  wait "$cmd_pid" || rc=$?
+  echo "tools/emu: the command exited $rc"
+  alive "$emu_pid" || nodevice "the emulator exited while the command ran; its log is build/emu/emulator-$PORT.log"
+  case $rc in 2 | 69 | 75 | 76 | 125) echo "tools/emu: the command exited $rc, reported as 1"; rc=1 ;; esac
+  return "$rc"
+}
+
+case ${1:-} in
+  run | smoke) ! in_emu_job || die "tools/emu cannot start an emulator inside an emu job" ;;&
+  run) [[ $# -ge 2 ]] || usage; qsubmit emu emu "$SELF/tools/emu" _job "$@" ;;
+  smoke)
+    [[ $# == 2 ]] || usage
+    [[ -f $2 ]] || die "no file $2 (build the APK first: tools/gw assembleDebug)"
+    qsubmit emu emu "$SELF/tools/emu" _job smoke "$(realpath "$2")"
+    ;;
+  --wait) [[ $# == 2 ]] || usage; qwait emu "$2" ;;
+  ps)
+    list=$(kiroku_emulators)
+    if [[ -n $list ]]; then echo "$list"; else echo "no Kiroku emulator running"; fi
+    ;;
+  _job) shift; job "$@" ;;
+  _smoke)
+    in_emu_job || die "_smoke runs only inside tools/emu's own job: use tools/emu smoke APK"
+    slot_env
+    [[ $# == 2 ]] || usage
+    smoke "$2"
+    ;;
+  *) usage ;;
+esac

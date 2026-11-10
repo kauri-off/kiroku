@@ -53,7 +53,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Check:** through the queue, `ktlintCheck lint test assembleDebug` exits 0 and leaves a debug APK; the build
   reports the Kotlin Gradle plugin at the version the catalog pins, not the Android Gradle Plugin's default.
 
-- [ ] **M1-02 [A] Queue wrappers.** `tools/gw` and `tools/emu` with the behaviour `CLAUDE.md` describes, and
+- [x] **M1-02 [A] Queue wrappers.** `tools/gw` and `tools/emu` with the behaviour `CLAUDE.md` describes, and
   `tools/emu smoke <apk>` (install, launch, device screenshots). An emulator run uses the slot the queue assigns,
   never touches the other project's emulators or their snapshots, and always shuts its emulator down.
   **Needs:** M1-01.

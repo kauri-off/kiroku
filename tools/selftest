@@ -1,0 +1,462 @@
+#!/usr/bin/env bash
+# Tests tools/gw and tools/emu against a fake queue, SDK and Gradle; runs no Gradle, no emulator and no adb.
+set -uo pipefail
+SRC=$(cd "$(dirname "$0")" && pwd)
+T=$(cd "$(mktemp -d)" && pwd -P)
+F=$T/f
+W=$T/wt
+AVDR=$T/avd
+fails=0
+
+cleanup() {
+  local p e
+  for p in /proc/[0-9]*; do
+    [[ ${p#/proc/} == "$$" ]] && continue
+    { mapfile -d '' -t e < "$p/environ"; } 2> /dev/null || continue
+    if [[ " ${e[*]} " == *" FAKE=$F "* ]]; then kill -KILL "${p#/proc/}" 2> /dev/null; fi
+  done
+  kill -KILL $(cat "$T"/bg.* 2> /dev/null) 2> /dev/null
+  wait 2> /dev/null
+  rm -rf "$T"
+}
+trap cleanup EXIT
+
+ok() {
+  if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi
+}
+
+gone() {
+  local p s
+  for p; do
+    { read -r s < "/proc/$p/stat"; } 2> /dev/null || continue
+    s=${s##*) }
+    [[ ${s%% *} == Z ]] || return 1
+  done
+}
+
+all_gone() {
+  local files=("$@") f pids=()
+  for f in "${files[@]}"; do
+    [[ -s $F/$f ]] || { echo "  (no $f recorded)"; return 1; }
+    pids+=("$(< "$F/$f")")
+  done
+  for _ in {1..20}; do gone "${pids[@]}" && return 0; sleep 0.1; done
+  echo "  (alive: ${pids[*]})"
+  return 1
+}
+
+has() { grep -qxF -- "$2" "$F/$1"; }
+
+mkdir -p "$F" "$W/tools" "$T/bin" "$T/sdk/emulator" "$T/sdk/platform-tools" "$T/sdk/cmdline-tools/latest/bin" \
+  "$T/sdk/build-tools/36.0.0" "$T/sdk/system-images/android-36/google_apis/x86_64" "$T/other" "$W/app" \
+  "$T/real/tools" "$T/tracked/tools" "$T/home" "$T/logbin" "$T/victim"
+for d in "$W" "$T/real" "$T/tracked"; do
+  cp "$SRC/gw" "$SRC/emu" "$SRC/queue.sh" "$d/tools/"
+  git -C "$d" init -q
+done
+git -C "$T/other" init -q
+: > "$T/victim/keep"
+
+cat > "$W/gradlew" << 'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$FAKE/gradle.args"
+env > "$FAKE/gradle.env"
+pwd > "$FAKE/gradle.pwd"
+for i in $(seq 1 80); do echo "gradle line $i"; done
+exit "${FAKE_GRADLE_RC:-0}"
+EOF
+
+cat > "$T/bin/q" << 'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >> "$FAKE/q.calls"
+case $1 in
+  submit)
+    shift
+    kind=check dir=$PWD
+    while [[ $1 != -- ]]; do
+      case $1 in --kind) kind=$2 ;; -C) dir=$2 ;; esac
+      shift 2
+    done
+    shift
+    env > "$FAKE/submit.env"
+    printf '%s\n' "$@" > "$FAKE/submit.argv"
+    id=fake-$RANDOM
+    (
+      export J=${J:-4}
+      if [[ $kind == emu ]]; then export QEMU_SLOT=1 QEMU_PORT=$FAKE_PORT; fi
+      cd "$dir" && "$@" > "$FAKE/$id.out" 2>&1
+      echo $? > "$FAKE/$id.rc"
+    ) &
+    echo $! > "$FAKE/job.bgpid"
+    echo "$id"
+    ;;
+  wait)
+    id=$2 max=540 tail=40
+    shift 2
+    while (($#)); do
+      case $1 in --max) max=$2 ;; --tail) tail=$2 ;; esac
+      shift 2
+    done
+    echo "$max $tail" > "$FAKE/wait.args"
+    [[ $id == fake-* ]] || { echo "no job $id" >&2; exit 1; }
+    case ${FAKE_RC:-} in
+      err) echo "Traceback (most recent call last):" >&2; exit 1 ;;
+      75) echo "running for 3 s"; exit 75 ;;
+      76) printf 'STALLED: job %s out.log silent\n  not killed; `tools/q wait %s` again, `tools/q kill %s` to stop it\n' \
+        "$id" "$id" "$id"; exit 76 ;;
+      125) echo "job $id cancelled (killed), exit 125; full output: $FAKE/$id.out"; exit 125 ;;
+    esac
+    for _ in $(seq 1 300); do [[ -e $FAKE/$id.rc ]] && break; sleep 0.1; done
+    [[ -e $FAKE/$id.rc ]] || { echo "running"; exit 75; }
+    ((tail > 0)) && tail -n "$tail" "$FAKE/$id.out"
+    rc=$(< "$FAKE/$id.rc")
+    echo "job $id done, exit $rc; full output: $FAKE/$id.out"
+    exit "$rc"
+    ;;
+esac
+EOF
+
+cat > "$T/sdk/emulator/emulator" << 'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$FAKE/emu.argv"
+env > "$FAKE/emu.env"
+[[ -n ${FAKE_EMU_FAIL:-} ]] && { echo "fake emulator failure"; exit 1; }
+echo $$ > "$FAKE/emu.pid"
+: > "$TMPDIR/emulator-overlay.qcow2"
+sleep 1000 &
+echo $! > "$FAKE/emu.child"
+setsid sleep 1000 > /dev/null 2>&1 &
+echo $! > "$FAKE/emu.escaped"
+: > "$FAKE/emu.started"
+[[ -n ${FAKE_EMU_STUBBORN:-} ]] && trap '' TERM
+exec sleep 1000
+EOF
+
+cat > "$T/sdk/platform-tools/adb" << 'EOF'
+#!/usr/bin/env bash
+printf 'port=%s home=%s usb=%s mdns=%s max=%s serial=%s reject=%s :: %s\n' "${ANDROID_ADB_SERVER_PORT:-}" "$HOME" \
+  "${ADB_USB:-}" "${ADB_MDNS:-}" "${ADB_LOCAL_TRANSPORT_MAX_PORT:-}" "${ANDROID_SERIAL:-}" "${ADB_REJECT_KILL_SERVER:-}" \
+  "${*//$'\n'/ }" >> "$FAKE/adb.log"
+pkg=com.example.app
+case "$*" in
+  start-server)
+    setsid sleep 1000 > /dev/null 2>&1 < /dev/null &
+    echo $! > "$FAKE/adb.server"
+    ;;
+  kill-server) kill "$(< "$FAKE/adb.server")" 2> /dev/null ;;
+  "shell getprop sys.boot_completed") [[ ${FAKE_BOOT:-} == never ]] || ! kill -0 "$(< "$FAKE/emu.pid")" || echo 1 ;;
+  "shell echo"*) echo "API 36, fake, 1080x2400" ;;
+  "emu kill") [[ -n ${FAKE_EMU_NOKILL:-} ]] || kill "$(< "$FAKE/emu.pid")" ;;
+  "devices") printf 'List of devices attached\n%s\tdevice\n' "$ANDROID_SERIAL" ;;
+  install*) echo Success ;;
+  "shell am start"*) if [[ ${FAKE_SMOKE:-} == nostart ]]; then echo "Status: timeout"; else echo "Status: ok"; fi ;;
+  "exec-out screencap -p") echo PNG ;;
+  "logcat -d -b crash")
+    if [[ ${FAKE_SMOKE:-} == crash ]]; then echo "FATAL EXCEPTION: main Process: $pkg"; yes pad | head -c 300000; fi ;;
+  "logcat -d") [[ ${FAKE_SMOKE:-} != anr ]] || echo "ANR in $pkg" ;;
+  "shell pidof $pkg") [[ ${FAKE_SMOKE:-} != dead ]] || exit 1; echo 4321 ;;
+  "shell dumpsys activity activities")
+    if [[ ${FAKE_SMOKE:-} == behind ]]; then a=com.android.launcher/.Home; else a=$pkg/.MainActivity; fi
+    echo "  topResumedActivity=ActivityRecord{1 u0 $a t2}" ;;
+esac
+exit 0
+EOF
+
+cat > "$T/sdk/cmdline-tools/latest/bin/avdmanager" << 'EOF'
+#!/usr/bin/env bash
+[[ -z ${FAKE_AVD_FAIL:-} ]] || exit 1
+echo x >> "$FAKE/avdmanager.calls"
+mkdir -p "$ANDROID_AVD_HOME/kiroku.avd"
+echo "path=$ANDROID_AVD_HOME/kiroku.avd" > "$ANDROID_AVD_HOME/kiroku.ini"
+EOF
+
+cat > "$T/sdk/build-tools/36.0.0/aapt2" << 'EOF'
+#!/usr/bin/env bash
+echo "package: name='com.example.app' versionCode='1'"
+[[ ${FAKE_SMOKE:-} == noactivity ]] || echo "launchable-activity: name='com.example.app.MainActivity'  label=''"
+EOF
+chmod +x "$W/gradlew" "$T/bin/q" "$T/sdk/emulator/emulator" "$T/sdk/platform-tools/adb" \
+  "$T/sdk/cmdline-tools/latest/bin/avdmanager" "$T/sdk/build-tools/36.0.0/aapt2"
+: > "$T/app.apk"
+cp "$T/sdk/platform-tools/adb" "$T/logbin/adb"
+
+port=$(python3 -c '
+import random, socket
+def free(p):
+    s = socket.socket()
+    try: s.bind(("127.0.0.1", p)); return True
+    except OSError: return False
+    finally: s.close()
+while True:
+    p = random.randrange(30000, 50000, 2)
+    if all(free(x) for x in (p, p + 1, p + 10000)): print(p); break')
+aport=$((port + 10000))
+export FAKE=$F FAKE_PORT=$port
+
+hooks() {
+  printf '%s\n' "q=$T/bin/q" "avd_root=$AVDR" "port_base=$((port - 20))" "unit=." lock_wait=1 boot_timeout=20 \
+    smoke_delay=0 "$@" > "$W/tools/test-hooks"
+}
+hooks
+cd "$W" || exit 1
+
+run() {
+  rm -rf "${F:?}"/* "$W/build/emu/emulator-"*
+  out=$("$@" 2>&1)
+  rc=$?
+  [[ ! -e $F/job.bgpid ]] || wait "$(< "$F/job.bgpid")" 2> /dev/null
+}
+
+job() {
+  run env ANDROID_HOME="$T/sdk" QEMU_SLOT=1 QEMU_PORT="$port" "$W/tools/emu" _job "$@"
+}
+
+# tools/gw: arguments, kinds and what reaches the queue
+run tools/gw
+ok "gw without arguments prints usage and exits 2" '[[ $rc == 2 && $out == usage:* ]]'
+for k in full batch long emu; do
+  run tools/gw --kind $k assemble
+  ok "gw refuses kind $k" '[[ $rc == 2 && ! -e $F/q.calls ]]'
+done
+run tools/gw :core:test --kind check
+ok "gw refuses --kind after the Gradle arguments" '[[ $rc == 2 && $out == *"must come first"* && ! -e $F/q.calls ]]'
+run tools/gw -p /elsewhere build
+ok "gw refuses another project directory" '[[ $rc == 2 && $out == *"only its own worktree"* && ! -e $F/q.calls ]]'
+run tools/gw :app:installDebug
+ok "gw refuses a device task outside an emu job and names the right call" \
+  '[[ $rc == 2 && $out == *"tools/emu run tools/gw :app:installDebug"* && ! -e $F/q.calls ]]'
+run tools/gw --kind=check lint
+ok "gw accepts --kind=check" 'grep -qx check "$F/q.calls"'
+run env -u ANDROID_HOME -u ANDROID_SDK_ROOT J=99 ANDROID_SERIAL=phone QEMU_PORT=5600 ADB_SERVER_SOCKET=tcp:x:5037 \
+  ADB_VENDOR_KEYS=/k tools/gw :core:test --tests '*A B*' "-Pfoo=it's \"x\""
+ok "gw submits kind test by default, labelled, in its worktree" \
+  '[[ $(sed -n 2,7p "$F/q.calls" | tr "\n" " ") == "--kind test --label kiroku-"*" -C $W " ]]'
+ok "gw sets ANDROID_HOME for the job" 'grep -qx "ANDROID_HOME=$HOME/.local/share/android-sdk/Sdk" "$F/submit.env"'
+ok "gw switches the queue's emulator snapshots off" 'grep -qx QEMU_HYGIENE=0 "$F/submit.env"'
+ok "gw does not pass the caller's J, ANDROID_SERIAL, QEMU_PORT or adb redirections to the queue" \
+  '! grep -qE "^(J|ANDROID_SERIAL|QEMU_PORT|ADB_SERVER_SOCKET|ADB_VENDOR_KEYS)=" "$F/submit.env"'
+ok "gw passes every Gradle argument intact" \
+  '[[ $(tail -4 "$F/gradle.args" | tr "\n" "|") == ":core:test|--tests|*A B*|-Pfoo=it'"'"'s \"x\"|" ]]'
+ok "gw runs Gradle without a daemon with the queue's worker count" \
+  'has gradle.args --no-daemon && has gradle.args --max-workers=4'
+ok "gw hides every device from Gradle" 'has gradle.env ANDROID_SERIAL=kiroku-no-device &&
+  has gradle.env ANDROID_ADB_SERVER_PORT=15599 && has gradle.env ADB_USB=0 && has gradle.env ADB_MDNS=0 &&
+  has gradle.env ADB_LOCAL_TRANSPORT_MAX_PORT=5553'
+ok "gw waits 100 s and shows the last 60 lines" '[[ $(< "$F/wait.args") == "100 60" ]]'
+ok "gw prints the job id first, then Gradle's output" \
+  '[[ $rc == 0 && $(head -1 <<< "$out") == "job fake-"*" (kind test)"* && $out == *"gradle line 80"* ]]'
+FAKE_GRADLE_RC=1 run tools/gw :core:test
+ok "gw exits with Gradle's code" '[[ $rc == 1 ]]'
+FAKE_GRADLE_RC=75 run tools/gw :core:test
+ok "gw reports a reserved Gradle exit code as 1" '[[ $rc == 1 && $out == *"Gradle exited 75, reported as 1"* ]]'
+FAKE_RC=75 run tools/gw --wait fake-1
+ok "gw --wait exit 75 names the next command" '[[ $rc == 75 && $out == *"Next: tools/gw --wait fake-1"* ]]'
+FAKE_RC=76 run tools/gw :core:test
+ok "gw exit 76 says stalled and gives only commands that exist" \
+  '[[ $rc == 76 && $out == *STALLED*"$T/bin/q kill fake-"* && $out != *"\`tools/q "* ]]'
+FAKE_RC=125 run tools/gw --wait fake-1
+ok "gw exit 125 says the job was stopped" '[[ $rc == 125 && $out == *"STOPPED: job fake-1"* ]]'
+run tools/gw --wait nosuchjob
+ok "gw --wait of an unknown job exits 2" '[[ $rc == 2 && $out == *"no job"* ]]'
+FAKE_RC=err run tools/gw --wait fake-1
+ok "gw --wait the queue cannot answer exits 75 and says the job may still run" \
+  '[[ $rc == 75 && $out == *"QUEUE ERROR"*"may still be running"*"tools/gw --wait fake-1"* ]]'
+(cd "$T/other" && run "$W/tools/gw" :core:test && [[ $rc == 2 && ! -e $F/q.calls ]])
+ok "gw refuses to run from another checkout" '[[ $? == 0 ]]'
+run env KIROKU_EMU_JOB=$$ tools/gw :core:test
+ok "gw ignores a KIROKU_EMU_JOB that is not an emu job" 'grep -qx submit "$F/q.calls"'
+
+# tools/emu through the queue
+export ANDROID_HOME=$T/sdk
+run tools/emu run adb devices
+ok "emu run submits kind emu with the command intact" \
+  'grep -qx emu "$F/q.calls" && [[ $(tr "\n" " " < "$F/submit.argv") == "$W/tools/emu _job run adb devices " ]]'
+ok "emu switches the queue's emulator snapshots off" 'grep -qx QEMU_HYGIENE=0 "$F/submit.env"'
+ok "emu run reports the device and the command's output" \
+  '[[ $rc == 0 && $out == *"ready: API 36"* && $out == *"emulator-$port	device"* ]]'
+FAKE_RC=75 run tools/emu --wait fake-2
+ok "emu --wait exit 75 names tools/emu" '[[ $rc == 75 && $out == *"Next: tools/emu --wait fake-2"* ]]'
+run tools/emu smoke "$T/missing.apk"
+ok "emu smoke refuses a missing APK and says to build it" '[[ $rc == 2 && $out == *"no file"*assembleDebug* && ! -e $F/q.calls ]]'
+mkdir -p "$W/build/emu/smoke"
+: > "$W/build/emu/smoke/stale.png"
+run tools/emu smoke "$T/app.apk"
+ok "emu smoke passes and writes screenshots" \
+  '[[ $rc == 0 && $out == *"smoke passed"* && -s $W/build/emu/smoke/1-launch.png && -s $W/build/emu/smoke/2-settled.png ]]'
+ok "  removes the previous smoke output and dismisses the keyguard" \
+  '[[ ! -e $W/build/emu/smoke/stale.png ]] && grep -q "wm dismiss-keyguard" "$F/adb.log"'
+
+# internal entry points outside the queue: refused before any adb call or write
+refused() {
+  rm -rf "${F:?}"/*
+  out=$(cd "$1" && shift && env HOME="$T/home" ANDROID_HOME="$T/sdk" PATH="$T/logbin:$PATH" "$@" 2>&1)
+  rc=$?
+  [[ $rc == 2 && ! -e $F/adb.log && ! -e $T/home/.android && ! -e $T/victim/run-slot0 ]]
+}
+R=$T/real/tools/emu
+ok "_smoke called directly is refused" 'refused "$T/real" "$R" _smoke "$T/app.apk" && [[ $out == *"only inside"* ]]'
+ok "_smoke with a slot but outside an emu job is refused" \
+  'refused "$T/real" env KIROKU_EMU_JOB=$$ QEMU_SLOT=0 QEMU_PORT=5600 "$R" _smoke "$T/app.apk"'
+ok "_job without a slot is refused" 'refused "$T/real" "$R" _job run true'
+ok "_job with the queue's slot but outside a queue unit is refused" \
+  'refused "$T/real" env QEMU_SLOT=0 QEMU_PORT=5600 "$R" _job run true && [[ $out == *"only inside an emu job"* ]]'
+ok "_job with a slot that is a path is refused" \
+  'refused "$T/real" env QEMU_SLOT=0/../../../victim QEMU_PORT=5600 "$R" _job run true'
+for s in "2 5640" "1 5600" "01 5620" "-0 5600"; do
+  ok "_job with slot ${s% *} and port ${s#* } is refused" \
+    'refused "$T/real" env QEMU_SLOT=${s% *} QEMU_PORT=${s#* } "$R" _job run true'
+done
+cp "$W/tools/test-hooks" "$T/tracked/tools/"
+git -C "$T/tracked" add tools/emu
+ok "test settings are ignored where tools/ is tracked" \
+  'refused "$T/tracked" env QEMU_SLOT=0 QEMU_PORT=5600 "$T/tracked/tools/emu" _job run true'
+
+# tools/emu job: device, isolation, exit codes
+job run sh -c 'env > "$FAKE/cmd.env"; sleep 1000 & echo $! > "$FAKE/cmd.child"
+  setsid sleep 1000 > /dev/null 2>&1 & echo $! > "$FAKE/cmd.escaped"; exit 3'
+ok "emu job exits with the command's code" '[[ $rc == 3 && $out == *"ready: API 36"* ]]'
+ok "emu job boots a clean device" 'has emu.argv -read-only && has emu.argv -no-snapshot && has emu.argv -no-window'
+ok "emu job boots on the slot's port" 'grep -qx -- "-port" "$F/emu.argv" && has emu.argv "$port"'
+ok "emu job uses Kiroku's AVD home, which the queue maps to its slot" \
+  'has emu.env "ANDROID_AVD_HOME=$AVDR/avd-slot1" && has cmd.env "ANDROID_AVD_HOME=$AVDR/avd-slot1"'
+ok "each slot has its own AVD content" \
+  '[[ -e $AVDR/avd-slot1/.complete ]] && grep -qx "path=$AVDR/avd-slot1/kiroku.avd" "$AVDR/avd-slot1/kiroku.ini"'
+ok "emulator temp, runtime and home are private to the slot" 'has emu.env "TMPDIR=$AVDR/run-slot1/tmp" &&
+  has emu.env "HOME=$AVDR/run-slot1/home" &&
+  has emu.env "ANDROID_TMP=$AVDR/run-slot1/tmp" && has emu.env "XDG_RUNTIME_DIR=$AVDR/run-slot1/xdg" &&
+  has emu.env "ANDROID_EMULATOR_HOME=$AVDR/run-slot1/home/.android"'
+ok "emulator registers with the job's own adb server" 'has emu.env "ANDROID_ADB_SERVER_PORT=$aport"'
+ok "command sees this job's device and adb server only" 'has cmd.env "ANDROID_SERIAL=emulator-$port" &&
+  has cmd.env "ANDROID_ADB_SERVER_PORT=$aport" && has cmd.env ADB_USB=0 && has cmd.env ADB_MDNS=0 &&
+  has cmd.env ADB_LOCAL_TRANSPORT_MAX_PORT=5553 && has cmd.env "TMPDIR=$AVDR/run-slot1/tmp"'
+ok "every adb call goes to the job's own server and key directory, without USB, mDNS or port scan" \
+  '[[ -s $F/adb.log ]] && ! grep -v "^port=$aport home=$AVDR/run-slot1/home usb=0 mdns=0 max=5553 serial=emulator-$port reject=1 ::" "$F/adb.log"'
+ok "the job's adb server refuses kill-server" 'grep -qx "port=.* reject=1 :: start-server" "$F/adb.log"'
+ok "emu job stops the emulator, its children, the command and the adb server" \
+  'all_gone emu.pid emu.child emu.escaped cmd.child cmd.escaped adb.server'
+ok "emu job leaves nothing of the run on disk" '[[ ! -e $AVDR/run-slot1 ]]'
+job run sh -c 'for c in "connect 10.0.0.2:5555" "-P 5037 devices" "-H h devices" "-s x -L tcp:5037 devices" "pair h:1" \
+  "mdns services" kill-server; do adb $c > /dev/null 2>&1; echo "$? $c"; done > "$FAKE/shim.txt"; adb shell echo connect'
+ok "adb in an emu job refuses connect, pair, mdns, kill-server and other servers" \
+  '[[ $rc == 0 && $(grep -vc "^2 " "$F/shim.txt") == 0 && $(wc -l < "$F/shim.txt") == 7 ]] &&
+  ! grep -qE ":: (connect|pair|mdns|kill-server|-P|-H|-s x -L)" "$F/adb.log" && grep -q ":: shell echo connect" "$F/adb.log"'
+run env ANDROID_HOME="$T/sdk" QEMU_SLOT=1 QEMU_PORT="$port" ADB_SERVER_SOCKET=tcp:h:5037 ANDROID_ADB_SERVER_ADDRESS=h \
+  ADB_VENDOR_KEYS=/k ANDROID_ADB_LOG_PATH=/l "$W/tools/emu" _job run sh -c 'env > "$FAKE/cmd.env"'
+ok "emu job clears inherited adb redirections" \
+  '[[ $rc == 0 ]] && ! grep -qE "^(ADB_SERVER_SOCKET|ANDROID_ADB_SERVER_ADDRESS|ADB_VENDOR_KEYS|ANDROID_ADB_LOG_PATH)=" "$F/cmd.env"'
+job run sh -c 'exit 75'
+ok "emu job reports a reserved command exit code as 1" '[[ $rc == 1 && $out == *"reported as 1"* ]]'
+job run sh -c 'kill $(cat "$FAKE/emu.pid"); sleep 1'
+ok "emu job exits 69 when the emulator dies under the command" '[[ $rc == 69 && $out == *"NO DEVICE"* ]]'
+ok "  and still stops everything" 'all_gone emu.child emu.escaped adb.server && [[ ! -e $AVDR/run-slot1 ]]'
+FAKE_EMU_FAIL=1 job run true
+ok "emu job exits 69 when the emulator exits during boot" '[[ $rc == 69 && $out == *"NO DEVICE"*"exited during boot"* ]]'
+ok "  and stops the adb server" 'all_gone adb.server && [[ ! -e $AVDR/run-slot1 ]]'
+hooks boot_timeout=2
+FAKE_BOOT=never job run true
+hooks
+ok "emu job exits 69 when the emulator does not boot in time" '[[ $rc == 69 && $out == *"did not finish booting"* ]]'
+ok "  and stops the emulator" 'all_gone emu.pid emu.child emu.escaped adb.server'
+mv "$T/sdk/system-images" "$T/images"
+rm "$AVDR/avd-slot1/.complete"
+job run true
+ok "emu job exits 69 without a system image" '[[ $rc == 69 && $out == *"system image missing"* && ! -e $F/emu.pid ]]'
+mv "$T/images" "$T/sdk/system-images"
+FAKE_AVD_FAIL=1 job run true
+ok "emu job exits 69 when the AVD cannot be created" '[[ $rc == 69 && ! -e $F/emu.pid ]]'
+job run true
+ok "emu job recreates an incomplete AVD" '[[ $rc == 0 && -s $F/avdmanager.calls && -e $AVDR/avd-slot1/.complete ]]'
+mv "$AVDR/avd-slot1" "$T/avd-saved"
+ln -s "$T/victim" "$AVDR/avd-slot1"
+job run true
+ok "emu job does not use or remove an AVD directory that is a symlink" '[[ $rc == 69 && -e $T/victim/keep && ! -e $F/emu.pid ]]'
+rm "$AVDR/avd-slot1"
+mv "$T/avd-saved" "$AVDR/avd-slot1"
+ln -s "$T/victim" "$AVDR/run-slot1"
+job run true
+ok "emu job does not remove a run directory that is a symlink" '[[ $rc == 69 && -e $T/victim/keep && ! -e $F/emu.pid ]]'
+rm "$AVDR/run-slot1"
+ln -s "$T/victim" "$AVDR/run-slot0"
+: > "$AVDR/run-slot0.lock"
+job run true
+ok "emu job leaves another slot's symlink and its target alone" '[[ $rc == 0 && -e $T/victim/keep && -L $AVDR/run-slot0 ]]'
+rm "$AVDR/run-slot0"
+ln -s "$AVDR" "$T/avd-link"
+hooks "avd_root=$T/avd-link"
+job run true
+hooks
+ok "emu job refuses a Kiroku tree that is a symlink" '[[ $rc == 2 && $out == *"not a symlink"* && ! -e $F/adb.log ]]'
+python3 -c 'import socket,sys,time; s=socket.socket(); s.bind(("127.0.0.1",int(sys.argv[1]))); s.listen(); time.sleep(60)' \
+  "$port" &
+echo $! > "$T/bg.listener"
+for _ in {1..30}; do [[ -n $(ss -Hltn "sport = :$port") ]] && break; sleep 0.1; done
+mkdir -p "$AVDR/run-slot1"
+: > "$AVDR/run-slot1/keep"
+job run true
+kill "$(< "$T/bg.listener")"
+ok "emu job exits 69 when its port is taken, touching nothing" \
+  '[[ $rc == 69 && $out == *"port $port"* && ! -e $F/emu.pid && ! -e $F/adb.log && -e $AVDR/run-slot1/keep ]]'
+mkdir -p "$AVDR/run-slot0/tmp"
+: > "$AVDR/run-slot0/tmp/emulator-left.qcow2"
+: > "$AVDR/run-slot0.lock"
+mkdir -p "$AVDR/run-slot2/tmp"
+: > "$AVDR/run-slot2.lock"
+flock -o "$AVDR/run-slot2.lock" sleep 60 &
+echo $! > "$T/bg.holder"
+until ! flock -n "$AVDR/run-slot2.lock" true; do sleep 0.05; done
+job run true
+ok "emu job removes what a killed run left in another slot" '[[ $rc == 0 && ! -e $AVDR/run-slot0 ]]'
+ok "emu job keeps the files of a slot that is in use" '[[ -d $AVDR/run-slot2/tmp ]]'
+kill "$(< "$T/bg.holder")"
+flock -o "$AVDR/run-slot1.lock" sleep 30 &
+echo $! > "$T/bg.holder"
+until ! flock -n "$AVDR/run-slot1.lock" true; do sleep 0.05; done
+job run true
+kill "$(< "$T/bg.holder")"
+ok "emu job exits 69 while an earlier run in its slot is alive" '[[ $rc == 69 && $out == *"still alive"* ]]'
+job run sh -c 'cd app && ../tools/gw :app:connectedDebugAndroidTest'
+ok "gw inside an emu job runs Gradle in place, against this job's device" \
+  '[[ $rc == 0 && ! -e $F/q.calls ]] && has gradle.env "ANDROID_SERIAL=emulator-$port" &&
+  has gradle.env "ANDROID_ADB_SERVER_PORT=$aport"'
+ok "  in its own worktree, with two workers" '[[ $(< "$F/gradle.pwd") == "$W" ]] && has gradle.args --max-workers=2'
+job run tools/emu run true
+ok "emu cannot start another emulator inside an emu job" '[[ $rc == 1 && $out == *"inside an emu job"* && ! -e $F/q.calls ]]'
+
+# tools/emu job: stopped by a signal
+term_job() {
+  rm -rf "${F:?}"/*
+  env QEMU_SLOT=1 QEMU_PORT="$port" "$W/tools/emu" _job run "$@" > "$T/term.out" 2>&1 &
+  local pid=$! t0
+  for _ in {1..100}; do grep -qs -- "$wait_for" "$F/adb.log" "$T/term.out" && break; sleep 0.1; done
+  t0=$SECONDS
+  kill -TERM $pid
+  wait $pid
+  rc=$?
+  took=$((SECONDS - t0))
+  out=$(< "$T/term.out")
+}
+wait_for=cmd-started term_job sh -c 'sleep 1000 & echo $! > "$FAKE/cmd.child"; echo cmd-started; wait'
+ok "emu job exits on TERM during the command" '[[ $rc == 143 && $took -le 6 ]]'
+ok "  and stops the command, the emulator and the adb server" \
+  'all_gone cmd.child emu.pid emu.child emu.escaped adb.server && [[ ! -e $AVDR/run-slot1 ]]'
+FAKE_BOOT=never wait_for=sys.boot_completed term_job true
+ok "emu job exits on TERM during boot and stops the emulator" \
+  '[[ $rc == 143 ]] && all_gone emu.pid emu.child emu.escaped adb.server && [[ ! -e $AVDR/run-slot1 ]]'
+FAKE_EMU_STUBBORN=1 wait_for=cmd-started term_job sh -c 'sleep 1000 & echo $! > "$FAKE/cmd.child"; echo cmd-started; wait'
+ok "emu job kills an emulator that ignores TERM within the queue's grace" \
+  '[[ $rc == 143 && $took -le 8 ]] && all_gone emu.pid emu.child emu.escaped && [[ ! -e $AVDR/run-slot1 ]]'
+FAKE_EMU_NOKILL=1 wait_for=":: emu kill" term_job true
+ok "emu job on TERM during its shutdown finishes it quickly" \
+  '[[ $took -le 6 ]] && all_gone emu.pid emu.child emu.escaped adb.server && [[ ! -e $AVDR/run-slot1 ]]'
+
+# tools/emu smoke outcomes
+smoke() { job smoke "$T/app.apk"; }
+smoke
+ok "smoke passes when the app is in front and alive" '[[ $rc == 0 && $out == *"smoke passed: com.example.app/"* ]]'
+for c in crash anr dead behind nostart noactivity; do
+  FAKE_SMOKE=$c smoke
+  ok "smoke fails on $c" '[[ $rc == 1 && $out == *"SMOKE FAILED"* ]]'
+done
+
+echo "$fails failed"
+((fails == 0))
