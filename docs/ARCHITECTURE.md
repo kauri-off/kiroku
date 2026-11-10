@@ -175,7 +175,8 @@ the background.
   total by more than the one episode a recap explains, or when AniList appears to have stopped tracking the title.
 - **A6. The weekly estimate is bounded.** It is used only when MAL gives a full start date and a broadcast weekday
   and time, and the result cannot run away (the total is known, or the show started recently). Without it the
-  count is 0 for a title that has not started and unknown otherwise.
+  count is 0 for a title that has not started and unknown otherwise. A count of 0 is exact only when a stored
+  AniList schedule puts episode 1 in the future; a 0 that comes from MAL's date or status is an estimate.
 - **A7. Display.** An estimated count is prefixed with "~", and so is a "to watch" figure computed from it. An
   unknown count is not shown.
 - **A8. "To watch" belongs to Watching.** It exists only for a title whose list status is Watching, that has not
@@ -323,7 +324,10 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - **Wiring** is done by hand. Hilt was rejected: a plugin and an annotation processor in every module for a graph
   of roughly fifteen objects.
 - **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included. A debug build
-  without a client id starts in it.
+  without a client id starts in it. Demo data follows the device's date: the fixtures are shifted by the whole
+  number of weeks since their reference moment, and demo mode runs on a clock that lags the device's by the rest
+  of that week, so every weekday and weekly slot in them stays what it claims; every "today" does too on a device
+  between UTC−9 and UTC+8, which includes the fixtures' own zone.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
   (detekt's current line is alpha).
 - Also not used: a chart library (bars are `StatBar`), AppCompat, `kotlinx-datetime` (`java.time` is available), a
@@ -356,7 +360,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 7.3 Writes to the list
 
-Writes are optimistic: an edit is visible at once and sent in the background.
+Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
+is applied locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches
+the user after the screen that made the edit is gone; with nothing collecting it, it is dropped, as the entry is
+already back at the server's state. The notification action instead waits for the server's answer (N9). "+1" and
+"Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown.
@@ -373,9 +381,10 @@ Writes are optimistic: an edit is visible at once and sent in the background.
   last confirmed state at the next start, and the list is then synced whatever its age. No entry is left out of
   syncs for good.
 - **W6.** One list sync runs at a time.
-- **W7. Automatic status changes match MAL's website.** When the watched count reaches the total, the status
-  becomes Completed with today's finish date, in the same write. The first episode of a planned title sets
-  Watching and the start date.
+- **W7. Automatic status changes match MAL's website.** When the watched count reaches MAL's total, the status
+  becomes Completed and an empty finish date becomes today, in the same write. The first episode of a planned
+  title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
+  overwritten, and a Completed title stepped below its total stays Completed.
 - **W8.** There is no offline write queue in 1.0, except the notification action (N9).
 
 ## 8. Design system
@@ -703,8 +712,9 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   That test exists before the first screen is written.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
-  falls back to MAL's English text. Titles, alternative titles, synopses, user names and proper names (studios,
-  producers) are content and are not translated.
+  falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
+  This fallback is the only interface text not from the resources. Titles, alternative titles, synopses,
+  user names and proper names (studios, producers) are content and are not translated.
 - Quantities use plural resources (Russian needs `one`, `few`, `many`, `other`). Sentences are never concatenated.
 - Dates and times follow the locale and the device's 12/24-hour setting, in the device's time zone.
 - **An air time** is written as "today 17:30", "tomorrow 17:30", the short weekday with the time within the next
@@ -733,7 +743,7 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   memory.** An agent can neither read the client id nor sign in, so responses that need only the client id are
   recorded by a build task that uses the id without printing it or any request header and is not part of any build
   or check, and responses that need the user's sign-in are recorded by the owner with a debug-only tool in the app.
-- **No committed fixture contains a user name, another personal value, a token or the client id.** The orchestrator
+- **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
   reads recorded files before they are committed.
 - Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
   itself.
@@ -745,8 +755,9 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
 Screens are rendered on the JVM by Roborazzi on Robolectric, which draws Compose with the real Android rendering
 code. Layout review works from these images.
 
-- The stateless screen is rendered with fixture states. No view model, network, database or clock is involved, and
-  remote images are flat colour blocks. Two renders of one commit on one machine are byte-identical.
+- The stateless screen is rendered with fixture states. No view model, network or database is involved, times are
+  written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's, and remote images
+  are flat colour blocks. Two renders of one commit on one machine are byte-identical.
 - The status bar and the gesture bar are drawn, with their insets, so content hidden under one is visible in
   review.
 - Each screen has one registry file that declares its **cases**: at least content, loading, empty and error, plus

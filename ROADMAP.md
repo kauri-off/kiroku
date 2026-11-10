@@ -73,7 +73,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Check (after M1-03):** on the task's pull request the build check and the title check are green and the run
   offers the debug APK. Before M1-03 the reviewers read the workflow.
 
-- [ ] **M1-05 [A] Domain model and fixtures.** The domain types, typed errors and repository interfaces of `:core`,
+- [x] **M1-05 [A] Domain model and fixtures.** The domain types, typed errors and repository interfaces of `:core`,
   and the fixture set: about 30 list entries covering every status and every row case of section 9.3 (both
   estimated cases included), a very long title, a title with unknown episode count, a title one episode short of
   its total, a film, one title for each case of the airing block (section 9.4), one title for each premiere form
@@ -196,9 +196,18 @@ Not to forget:
   sign-in flow and the sign-in screen to work before the list is on real data. The recording adds and then removes
   one title that is not on the owner's list, and leaves the list as it was.
 - The owner supplies, outside the repository, two user names for recording: one with a public list of more than
-  1000 entries and one whose list is private. **No fixture contains a user name.**
+  1000 entries and one whose list is private. **No fixture contains a real user's name, another personal value, a
+  token or a client id.**
 - Related titles are requested with their media type, start date and the user's list status; caption 2 and the
   order of the Related strip need all three. One title is recorded with adult content on and off.
+- Mappers turn MAL's zero and empty values into absent ones, because the model refuses them: an episode count or
+  episode length of 0, an empty English or Japanese title or synonym, an empty synopsis, a list score of 0. A
+  recorded response holding each is in the mapper tests.
+- `Anime.genres` is null when a response did not include genres, and an upsert never replaces a stored value with
+  a missing one.
+- W7's date and status rules (`ListValues.withWatched`) are compared with what MAL's website does when a title is
+  completed with an empty start date, when a Completed title is stepped below its total, and when a completed title
+  already has a finish date; a difference goes to the owner.
 - The sign-in is tried by hand, including killing the app while the browser is open. This and the recorded
   responses settle items 1 to 3 of ARCHITECTURE section 13, which is corrected from them.
 - Before the Russian relation names are written, they are compared with the names Shikimori shows, read from the
@@ -222,6 +231,10 @@ Not to forget:
   rejected for their numbering (A4) and how many are only estimated (A5, A6). The counts settle item 4 of
   section 13.
 - The rule that rows never move (section 9.3) is tested with airing data changing under a visible tab.
+- The calculator's result also carries "to watch" and the premiere, so no screen combines them on its own (A1).
+- A next episode beyond MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at
+  the total and there is no next episode beyond it, shown by a calculator test. An AniList episode numbered 0 or
+  below is dropped.
 
 ## M4. Reliable episode notifications
 
