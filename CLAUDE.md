@@ -31,12 +31,13 @@ arguments, without `--kind …`. `tools/gw tasks` lists the tasks.
 | Domain tests | `tools/gw :core:test` |
 | Data tests | `tools/gw :data:testDebugUnitTest` |
 | App tests (screenshots are skipped) | `tools/gw :app:testDebugUnitTest` |
-| Screenshots of one screen | `tools/gw :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'` |
+| Screenshots of the changed screens | `tools/gw :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'`, one `--tests` per screen |
 | All screenshots | `tools/gw --kind check :app:recordRoborazziDebug` |
 | Format check / fix | `tools/gw ktlintCheck` / `tools/gw ktlintFormat` |
 | Everything before hand-off | `tools/gw --kind check ktlintCheck lint test assembleDebug` |
 
-Screenshots are written to `app/build/outputs/roborazzi/<screen>/`. They are not committed. The SDK platform the
+Screenshots are written to `app/build/outputs/roborazzi/<screen>/`. They are not committed. A render deletes the
+images of every screen it does not render, so render all changed screens in one command. The SDK platform the
 build needs is `platforms;android-37.2`; the client id is not needed for any check.
 
 ## The queue rule (the maintainer's machine)
@@ -48,7 +49,7 @@ job's emulator and nothing else. Never touch the other project's virtual devices
 jobs.
 
 - `tools/gw [--kind test|check] <gradle arguments>` runs Gradle as a job. The default kind is `test` (one module,
-  filtered tests, one screen); use `check` for whole-project runs. Gradle sees no device: a task that needs one
+  filtered tests, a few screens); use `check` for whole-project runs. Gradle sees no device: a task that needs one
   (`connected…`, `install…`) runs only as `tools/emu run tools/gw <task>`. Gradle managed devices are not used:
   they start emulators outside `tools/emu`.
 - `tools/emu run <command> [args…]` (several commands: `tools/emu run sh -c '…'`) boots Kiroku's own API 36

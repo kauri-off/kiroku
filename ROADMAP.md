@@ -83,7 +83,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-01.
   **Check:** a `:core` test asserts that each case named above is present in the fixtures.
 
-- [ ] **M1-06 [A] Screenshot harness.** The rendering of ARCHITECTURE section 11.2, a `sample` screen with a
+- [x] **M1-06 [A] Screenshot harness.** The rendering of ARCHITECTURE section 11.2, a `sample` screen with a
   scrolling list, and two deliberately bad versions of it for calibration: the cases `sample/calibration-noise`
   (repeated facts and decoration) and `sample/calibration-hierarchy` (competing primary actions). CI renders and
   keeps the screenshots.
@@ -103,7 +103,11 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-06.
   **Check:** rubric pass on `gallery/*` under the gallery weights of the rubric; in `ru-stress` and `ru-large` the
   strip card's captions «Продолжение» and «Запланировано» are whole, neither broken inside the word nor cut; the
-  string test fails on a planted literal and passes without it.
+  string test fails on a planted literal and passes without it; the screenshot harness renders every case inside
+  the app's theme and the app's window setup, with no theme or window code of its own, and with dynamic colour off:
+  the standard variants use the first fixed seed and `en-alt` the second; a harness test fails if a colour role
+  read inside a rendered case differs from the app theme's for that variant, light, dark and the second seed
+  included.
 
 - [ ] **M1-07a [O] First calibration set.** The owner scores, with the rubric, the gallery and the three `sample`
   cases of M1-06 (`content`, `calibration-noise`, `calibration-hierarchy`), listing each deduction with its size.

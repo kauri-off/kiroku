@@ -760,12 +760,23 @@ code. Layout review works from these images.
 
 - The stateless screen is rendered with fixture states. No view model, network or database is involved, times are
   written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's, and remote images
-  are flat colour blocks. Two renders of one commit on one machine are byte-identical.
+  are flat grey blocks in a colour no surface role uses, with a MAL poster's proportions where only one side is
+  set. Two renders of one commit on one machine are byte-identical.
+- Every wall clock the app's code, `:core` or the date picker can read gives the fixtures' moment: `System`,
+  `java.time`'s `now()` and system clocks, `Calendar` and Android's `DateUtils`. Three read the machine's clock, and
+  a test fails when the app's code uses one: the `Date()` and `GregorianCalendar()` constructors and Kotlin's
+  `Clock.System`.
 - The status bar and the gesture bar are drawn, with their insets, so content hidden under one is visible in
-  review.
-- Each screen has one registry file that declares its **cases**: at least content, loading, empty and error, plus
-  the cases its roadmap task names. A **gallery** case renders every component of section 8.4 in all its states.
-- An ordinary test run renders nothing; only a record run does.
+  review. Both are 24 dp; the gesture bar is a handle without a scrim, as on a phone with gesture navigation, and
+  a modal bottom sheet draws its container behind it. Robolectric renders at API 35, the highest it runs on JDK 17.
+- A case can declare the keyboard open. Every window then gets a 300 dp keyboard's insets (the gesture bar
+  included), and the image shows a flat block with the handle in its place.
+- Each screen has one registry file, `<Screen>Screenshots`, whose class name gives the screen's directory. It
+  declares its **cases**: content, loading, empty and error, plus the cases its roadmap task names. A screen that
+  has no loading, empty or error state says so with a reason of at least two words, which the render writes to
+  `<screen>/NOT_SHOWN.txt`; a placeholder such as "TODO" or "n/a" fails. Only `sample` and
+  `gallery` are exempt. A **gallery** case renders every component of section 8.4 in all its states.
+- An ordinary test run renders nothing, but checks every registry's structure; only a record run renders.
 
 **Variants.** Every case is rendered in the five standard variants. The content case of each screen gets two more.
 
@@ -783,20 +794,39 @@ code. Layout review works from these images.
 
 - `<case>__<variant>.png`: the viewport, as the user first sees it.
 - `<case>__<variant>__full.png`: the whole scrollable content at full height, whenever it is taller than the
-  viewport. Without it the lower half of the title page would never be reviewed.
-- `<case>__bounds.png`, for the content case in `en-light`: the bounds of the components, for checking alignment.
+  viewport. Without it the lower half of the title page would never be reviewed. With a sheet or dialog open, it
+  is made from the sheet's or dialog's own content, and there is none when that content does not scroll. A sheet
+  that opens half expanded is shown expanded, while the viewport image shows how it opens. If a sheet's or
+  dialog's content still reaches below the captured window, the render fails instead of writing a cut image. The
+  window is made taller to take it, so content that is centred, weighted or sized to the screen moves: positions
+  are judged in the viewport image.
+- `<case>__<variant>__strip-<n>.png`, for the content case: the `n`th horizontal strip from the top, stitched
+  from its pages so that every card shows. Magenta fills what a page did not cover because the strip was lower
+  there.
+- `<case>__bounds.png`, for the content case in `en-light`: the viewport with the bounds of the components
+  outlined, for checking alignment.
 
 `__full` images are written for: **all variants**.
 
-For every case in `en-light`, sheets and dialogs included, an automatic accessibility check fails the test on a
-touch target under 48 dp or an unlabeled control.
+For every case, sheets and dialogs included, an automatic accessibility check fails the test on a touch target
+under 48 dp in any variant, and on an unlabeled control in `en-light`. It runs where everything is composed: on the
+full-height render, and on every page of every horizontal strip. A touch target is the laid-out size of a clickable, toggleable or
+selectable element, not the larger area Compose accepts touches in. The 32 dp wide drag handle of the stock modal
+bottom sheet is the one exemption. A link inside a text is a touch target too, and is reported by its text.
+
+**What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines
+and sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset
+passes. The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales
+it at font scales above 1.03, non-linearly, on every Android version.
 
 **The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and
 says "dirty" when the worktree had uncommitted changes. A render after any commit, including one that changes no
-source file, runs again and names that commit; it never comes from the build cache.
+source file, runs again and names that commit; it never comes from the build cache. Every record run first deletes
+all earlier images, so after rendering one screen only that screen's images exist, and `RENDERED_AT` is written
+only when the run succeeds.
 
 Screenshots are build output and are not committed, except the calibration set of the rubric; CI uploads the full
-set. Fonts rasterise differently between operating systems, so images are compared only when rendered on the same
+set. On a pull request CI renders GitHub's merge commit, so its `RENDERED_AT` names that commit. Fonts rasterise differently between operating systems, so images are compared only when rendered on the same
 machine.
 
 **The review loop.** A layout task is finished when it passes `docs/LAYOUT_RUBRIC.md` with both reviewers (its

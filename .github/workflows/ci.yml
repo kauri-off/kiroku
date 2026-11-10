@@ -37,8 +37,17 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Format, Lint and tests
-        run: ./gradlew --continue ktlintCheck lint test
+      - name: Format, Lint, tests and screenshots
+        run: ./gradlew --continue ktlintCheck lint test recordRoborazziDebug
+
+      - name: Keep the screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshots
+          path: app/build/outputs/roborazzi/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Debug build
         run: ./gradlew assembleDebug
