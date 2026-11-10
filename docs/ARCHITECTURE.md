@@ -822,11 +822,10 @@ every image, and hands over the commit hash and the output directory.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
-  job signs the
-  APK with a key made for that run; a separate job, the only one that sees the secrets of the `release`
-  environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no third-party code.
-  That environment is limited to `main` and version tags. Signing keys never enter the repository. F-Droid follows
-  after 1.0. Kiroku is not published on Google Play.
+  job signs the APK with a key made for that run; a separate job, the only one that sees the secrets of the
+  `release` environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no
+  third-party code. That environment is limited to `main` and version tags. Signing keys never enter the
+  repository. F-Droid follows after 1.0. Kiroku is not published on Google Play.
 - **Debug signing.** Debug builds from every checkout and worktree of the maintainer's machine are signed with
   one shared debug key, so that each installs over the other without losing data. Elsewhere the build falls back
   to the platform's default debug key.
