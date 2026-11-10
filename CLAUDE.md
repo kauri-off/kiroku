@@ -23,8 +23,8 @@ its code, assets or credentials. `clientid.txt` is the owner's: never read, prin
 
 ## Build and checks
 
-Run these through `tools/gw` on the maintainer's machine (next section). Elsewhere, replace `tools/gw` with
-`./gradlew`.
+Run these through `tools/gw` on the maintainer's machine (next section). Elsewhere, run `./gradlew` with the same
+arguments, without `--kind …`. `tools/gw tasks` lists the tasks.
 
 | Purpose | Command |
 |---|---|
@@ -41,27 +41,41 @@ build needs is `platforms;android-37.2`; the client id is not needed for any che
 
 ## The queue rule (the maintainer's machine)
 
-This machine is shared with another project. Every Gradle run and every emulator run goes through the shared job
-queue, including short ones. Never call `./gradlew`, `gradle` or `emulator` directly.
+This machine is shared with another project. Every Gradle run, emulator run and `adb` call goes through the shared
+job queue by way of `tools/gw` and `tools/emu`, including short ones; run them from inside your worktree. Never call
+`./gradlew`, `gradle`, `emulator` or `adb` directly: `adb` is used only inside `tools/emu run`, where it reaches that
+job's emulator and nothing else. Never touch the other project's virtual devices (`~/.android/avd*`), snapshots or
+jobs.
 
-- `tools/gw [--kind test|check] <gradle arguments>` submits the build, prints the job id, and waits up to 100
-  seconds. The default kind is `test` (one module, filtered tests, one screen); use `check` for whole-project runs.
-- Exit code 75 means the job is still queued or running: run `tools/gw --wait <id>` again, as often as needed.
-  Exit code 76 means it is stalled: read the printed output; if it explains the wait, wait again; otherwise stop the
-  job with `/home/anon/Projects/th_08/tools/q kill <id>`.
-- `tools/emu <command>` does the same for emulator runs.
-- Before `tools/gw` exists (roadmap task M1-02), use the raw form. `ANDROID_HOME` must be set, because the queue
-  copies your environment and your shell does not define it:
+- `tools/gw [--kind test|check] <gradle arguments>` runs Gradle as a job. The default kind is `test` (one module,
+  filtered tests, one screen); use `check` for whole-project runs. Gradle sees no device: a task that needs one
+  (`connected…`, `install…`) runs only as `tools/emu run tools/gw <task>`. Gradle managed devices are not used:
+  they start emulators outside `tools/emu`.
+- `tools/emu run <command> [args…]` (several commands: `tools/emu run sh -c '…'`) boots Kiroku's own API 36
+  emulator from a clean state in the slot the queue assigns, runs the command in the worktree with `adb` on the
+  `PATH`, then stops the command and the emulator. A run takes a minute or more, so expect exit 75 at first. The
+  emulator's log is `build/emu/emulator-<port>.log`. The queue counts an emu job like a `check` job, but one that
+  runs Gradle needs about 3 GiB more for the emulator: build first (`tools/gw assembleDebug
+  assembleDebugAndroidTest`), then run only the device task, which Gradle runs there with two workers.
+- `tools/emu smoke <apk>` installs and launches the APK; it passes when the app reaches the foreground without a
+  crash or an ANR, and writes two screenshots, the logcat and the crash buffer to `build/emu/smoke/`.
+- `tools/emu ps` lists running Kiroku emulators. `tools/selftest` tests both wrappers against a fake queue and SDK.
 
-  ```
-  export ANDROID_HOME="$HOME/.local/share/android-sdk/Sdk"
-  Q=/home/anon/Projects/th_08/tools/q
-  ID=$($Q submit --kind test --label kiroku-<branch> -C "$PWD" -- sh -c './gradlew --max-workers=$J <arguments>')
-  echo "$ID"; $Q wait "$ID" --max 100     # repeat the wait while the exit code is 75
-  ```
+A call waits up to 100 seconds. When the job has ended, it prints the job's last 60 lines and the path of its full
+log, and exits with:
 
-- Do not start a Gradle daemon, do not change the memory settings in `gradle.properties` without a measurement, and
-  do not use the queue kinds `full`, `batch` or `long`.
+| Exit | Meaning | What to do |
+|---|---|---|
+| 0 | Passed | |
+| 1, other | Gradle's or the command's own code. If it was 2, 69, 75, 76 or 125, the wrapper reports 1 and prints "… exited <n>, reported as 1" | Read the output |
+| 2 | The wrapper refused the call (arguments, kind, unknown job id, worktree); nothing ran | Fix the call |
+| 69 | `tools/emu` only: no emulator could be started, or it died; the reason is printed | Not your command's result: run it once more; if it repeats, stop and report the reason |
+| 75 | The job is queued or running, or the queue could not report on it | Run the printed `--wait <id>` command again, as often as needed; do not start the job again |
+| 76 | The job is stalled | If the output explains the wait, wait again; otherwise stop it with `/home/anon/Projects/th_08/tools/q kill <id>` |
+| 125 | The job was stopped (`q kill`, or its worktree was removed) | Start it again if you still need the result |
+
+Do not start a Gradle daemon, do not change the memory settings in `gradle.properties` without a measurement, and do
+not use the queue kinds `full`, `batch` or `long`.
 
 ## The worktree rule
 
