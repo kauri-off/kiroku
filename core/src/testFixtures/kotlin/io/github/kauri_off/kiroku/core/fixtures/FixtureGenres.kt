@@ -1,0 +1,36 @@
+package io.github.kauri_off.kiroku.core.fixtures
+
+import io.github.kauri_off.kiroku.core.model.Genre
+
+object FixtureGenres {
+    val action = Genre(1, "Action")
+    val adventure = Genre(2, "Adventure")
+    val comedy = Genre(4, "Comedy")
+    val avantGarde = Genre(5, "Avant Garde")
+    val mythology = Genre(6, "Mythology")
+    val mystery = Genre(7, "Mystery")
+    val drama = Genre(8, "Drama")
+    val fantasy = Genre(10, "Fantasy")
+    val historical = Genre(13, "Historical")
+    val horror = Genre(14, "Horror")
+    val mecha = Genre(18, "Mecha")
+    val music = Genre(19, "Music")
+    val romance = Genre(22, "Romance")
+    val school = Genre(23, "School")
+    val sciFi = Genre(24, "Sci-Fi")
+    val shounen = Genre(27, "Shounen")
+    val space = Genre(29, "Space")
+    val sports = Genre(30, "Sports")
+    val superPower = Genre(31, "Super Power")
+    val sliceOfLife = Genre(36, "Slice of Life")
+    val supernatural = Genre(37, "Supernatural")
+    val military = Genre(38, "Military")
+    val detective = Genre(39, "Detective")
+    val psychological = Genre(40, "Psychological")
+    val suspense = Genre(41, "Suspense")
+    val seinen = Genre(42, "Seinen")
+    val awardWinning = Genre(46, "Award Winning")
+    val gourmet = Genre(47, "Gourmet")
+    val isekai = Genre(62, "Isekai")
+    val iyashikei = Genre(63, "Iyashikei")
+}

@@ -26,6 +26,15 @@ class AiringTest {
 
     private fun airing(aired: AiredCount) = Airing(aired, 24, null, null)
 
+    private fun fails(block: () -> Unit) {
+        try {
+            block()
+        } catch (expected: IllegalArgumentException) {
+            return
+        }
+        throw AssertionError("accepted")
+    }
+
     @Test
     fun `to watch is the aired count minus the watched episodes`() {
         val entry = entry(FixtureAnime.exactToWatch, ListStatus.Watching, 12)
@@ -70,6 +79,32 @@ class AiringTest {
     }
 
     @Test
+    fun `airing data that contradicts itself is refused`() {
+        fails { Airing(AiredCount.Exact(4), 24, ScheduledEpisode(4, instant), instant) }
+        fails { Airing(AiredCount.Exact(4), 12, ScheduledEpisode(13, instant), instant) }
+        fails { Airing(AiredCount.Unknown, null, null, instant) }
+        fails { Airing(AiredCount.Estimated(0), 12, null, instant) }
+        fails { ScheduledEpisode(0, instant) }
+        fails { Airing(AiredCount.Exact(3), 0, null, instant) }
+    }
+
+    @Test
+    fun `a count of 0 is exact only when the schedule puts episode 1 in the future`() {
+        fails { Airing(AiredCount.Exact(0), 12, null, null) }
+        fails { Airing(AiredCount.Exact(0), 12, ScheduledEpisode(2, instant), null) }
+        Airing(AiredCount.Exact(0), 12, ScheduledEpisode(1, instant), null)
+        Airing(AiredCount.Estimated(0), 12, null, null)
+    }
+
+    @Test
+    fun `A3 the total is MAL's, otherwise AniList's`() {
+        val noMalTotal = FixtureAnime.exactToWatch.copy(malEpisodes = null)
+        assertEquals(24, episodeTotal(noMalTotal, Airing(AiredCount.Exact(14), 24, null, instant)))
+        assertEquals(24, episodeTotal(FixtureAnime.exactToWatch, null))
+        assertNull(episodeTotal(noMalTotal, null))
+    }
+
+    @Test
     fun `a known first episode time replaces the date`() {
         val anime = FixtureAnime.premiereDate
         val airing = Airing(AiredCount.Exact(0), 12, ScheduledEpisode(1, instant), null)
@@ -92,6 +127,34 @@ class AiringTest {
             premiereOf(anime.copy(startDate = PartialDate.OnlyYear(Year.of(2027))), null),
         )
         assertEquals(Premiere.Unannounced, premiereOf(anime.copy(startDate = null), null))
+    }
+
+    @Test
+    fun `the premiere follows the aired count when MAL already says airing`() {
+        val anime = FixtureAnime.premiereTimeSoon.copy(airingStatus = AiringStatus.Airing)
+        val airing = Airing(AiredCount.Exact(0), 12, ScheduledEpisode(1, instant), null)
+        assertEquals(Premiere.At(instant), premiereOf(anime, airing))
+        val estimated = Airing(AiredCount.Estimated(0), 12, null, null)
+        assertEquals(Premiere.OnDay(LocalDate.of(2026, 1, 18)), premiereOf(anime, estimated))
+    }
+
+    @Test
+    fun `there is no premiere once an episode has aired, even when MAL still says not yet aired`() {
+        val anime = FixtureAnime.premiereTimeSoon
+        assertEquals(AiringStatus.NotYetAired, anime.airingStatus)
+        assertNull(premiereOf(anime, Airing(AiredCount.Exact(1), 12, ScheduledEpisode(2, instant), instant)))
+        assertNull(premiereOf(anime, Airing(AiredCount.Estimated(1), 12, null, instant)))
+    }
+
+    @Test
+    fun `MAL's status decides only when the count is unknown`() {
+        val notYetAired = FixtureAnime.premiereDate
+        assertEquals(Premiere.OnDay(LocalDate.of(2026, 4, 4)), premiereOf(notYetAired, null))
+        assertEquals(
+            Premiere.OnDay(LocalDate.of(2026, 4, 4)),
+            premiereOf(notYetAired, Airing(AiredCount.Unknown, null, null, null)),
+        )
+        assertNull(premiereOf(FixtureAnime.airedUnknown, Airing(AiredCount.Unknown, null, null, null)))
     }
 
     @Test

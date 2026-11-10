@@ -7,6 +7,8 @@ sealed interface DataError {
 
     data object Refused : DataError
 
+    data object InvalidRequest : DataError
+
     data object SessionExpired : DataError
 
     data object NotFound : DataError

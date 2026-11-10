@@ -9,9 +9,12 @@ import java.time.ZoneId
 
 object FixtureTime {
     val japan: ZoneId = ZoneId.of("Asia/Tokyo")
+
     val zone: ZoneId = ZoneId.of("Europe/Moscow")
-    val now: Instant = moscow("2026-01-14T12:00")
-    val clock: Clock = Clock.fixed(now, zone)
+
+    val reference: Instant = moscow("2026-01-14T12:00")
+
+    val clock: Clock = Clock.fixed(reference, zone)
 
     fun moscow(localDateTime: String): Instant = LocalDateTime.parse(localDateTime).atZone(zone).toInstant()
 

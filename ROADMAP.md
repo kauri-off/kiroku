@@ -196,7 +196,8 @@ Not to forget:
   sign-in flow and the sign-in screen to work before the list is on real data. The recording adds and then removes
   one title that is not on the owner's list, and leaves the list as it was.
 - The owner supplies, outside the repository, two user names for recording: one with a public list of more than
-  1000 entries and one whose list is private. **No fixture contains either name.**
+  1000 entries and one whose list is private. **No fixture contains a real user's name, another personal value, a
+  token or a client id.**
 - Related titles are requested with their media type, start date and the user's list status; caption 2 and the
   order of the Related strip need all three. One title is recorded with adult content on and off.
 - The sign-in is tried by hand, including killing the app while the browser is open. This and the recorded
@@ -222,6 +223,7 @@ Not to forget:
   rejected for their numbering (A4) and how many are only estimated (A5, A6). The counts settle item 4 of
   section 13.
 - The rule that rows never move (section 9.3) is tested with airing data changing under a visible tab.
+- The calculator's result also carries "to watch" and the premiere, so no screen combines them on its own (A1).
 
 ## M4. Reliable episode notifications
 

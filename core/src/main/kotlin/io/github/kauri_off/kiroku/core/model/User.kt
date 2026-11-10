@@ -26,7 +26,13 @@ data class UserStatistics(
     val genres: List<Counted<Genre>>,
     val mediaTypes: List<Counted<MediaType>>,
     val years: Map<Int, Int>,
-)
+) {
+    init {
+        require(daysWatched >= 0.0)
+        require(meanScore == null || meanScore in 1.0..10.0)
+        require(scores.keys.all { it in 1..10 })
+    }
+}
 
 data class Counted<out T>(
     val value: T,

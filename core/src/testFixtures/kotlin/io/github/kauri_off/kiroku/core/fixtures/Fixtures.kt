@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.droppedMovie
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.estimatedCaughtUp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.estimatedToWatch
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.exactCaughtUp
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.exactCaughtUpLater
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.exactOnBreak
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.exactToWatch
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.film
@@ -38,24 +39,46 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.japan
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.moscow
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.weekly
 import io.github.kauri_off.kiroku.core.model.Anime
-import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
-import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.UserProfile
-import io.github.kauri_off.kiroku.core.model.UserStatistics
+import java.time.Clock
+import java.time.Duration
 import java.time.LocalDate
 
 object Fixtures {
-    val anime: List<Anime> = FixtureAnime.all
+    val reference: FixtureSet by lazy {
+        FixtureSet(
+            clock = FixtureTime.clock,
+            anime = FixtureAnime.all,
+            entries = entries,
+            schedules = schedules,
+            airing = airing,
+            details = FixtureDetails.all.associateBy { it.id },
+            user = UserProfile(name = "kiroku_demo", pictureUrl = null, joined = LocalDate.of(2019, 3, 2)),
+            userStatistics = FixtureUser.statistics,
+            otherUserName = "sample_viewer",
+            otherUserEntries = FixtureUser.otherUserEntries,
+            otherUserStatistics = FixtureUser.otherUserStatistics,
+        )
+    }
 
-    val entries: List<ListEntry> =
+    fun at(clock: Clock): FixtureSet {
+        val week = Duration.ofDays(7).seconds
+        val elapsed = Duration.between(FixtureTime.reference, clock.instant()).seconds
+        val weeks = Math.floorDiv(elapsed, week)
+        val remainder = Duration.ofSeconds(elapsed - weeks * week).plusNanos(clock.instant().nano.toLong())
+        return reference.shiftedBy(weeks).copy(clock = Clock.offset(clock, remainder.negated()))
+    }
+
+    private val entries: List<ListEntry> =
         listOf(
-            entry(exactToWatch, ListStatus.Watching, 12, start = "2025-10-12", updated = "2026-01-11T21:40"),
+            entry(exactToWatch, ListStatus.Watching, 12, score = 8, start = "2025-10-12", updated = "2026-01-11T21:40"),
             entry(exactCaughtUp, ListStatus.Watching, 8, start = "2025-11-20", updated = "2026-01-08T22:10"),
+            entry(exactCaughtUpLater, ListStatus.Watching, 3, start = "2025-12-30", updated = "2026-01-13T08:05"),
             entry(exactOnBreak, ListStatus.Watching, 6, start = "2025-12-06", updated = "2026-01-10T20:05"),
             entry(estimatedToWatch, ListStatus.Watching, 7, start = "2025-11-06", updated = "2025-12-27T19:00"),
             entry(estimatedCaughtUp, ListStatus.Watching, 5, start = "2025-12-13", updated = "2026-01-12T18:30"),
@@ -94,10 +117,11 @@ object Fixtures {
             entry(droppedMovie, ListStatus.Dropped, 0, updated = "2023-07-01T11:00"),
         )
 
-    val schedules: Map<AnimeId, AiringSchedule> =
+    private val schedules: Map<AnimeId, AiringSchedule> =
         mapOf(
             exactToWatch.id to AiringSchedule(weekly(15, japan("2026-01-17T23:30"), 1..24), 24),
             exactCaughtUp.id to AiringSchedule(weekly(9, japan("2026-01-15T00:00"), 1..12), 12),
+            exactCaughtUpLater.id to AiringSchedule(weekly(1, japan("2025-12-29T23:00"), 1..12), 12),
             exactOnBreak.id to AiringSchedule(weekly(6, japan("2026-01-09T22:00"), 1..6), 13),
             unknownTotal.id to AiringSchedule(weekly(1122, japan("2026-01-18T23:15"), 1115..1122), null),
             longTitle.id to AiringSchedule(weekly(4, japan("2026-01-16T01:00"), 1..13), 13),
@@ -108,10 +132,11 @@ object Fixtures {
             notOnListAiring.id to AiringSchedule(weekly(8, japan("2026-01-18T22:00"), 1..12), 12),
         )
 
-    val airing: Map<AnimeId, Airing> =
+    private val airing: Map<AnimeId, Airing> =
         mapOf(
             exactToWatch.id to exact(exactToWatch, aired = 14, next = 15),
             exactCaughtUp.id to exact(exactCaughtUp, aired = 8, next = 9),
+            exactCaughtUpLater.id to exact(exactCaughtUpLater, aired = 3, next = 4),
             exactOnBreak.id to exact(exactOnBreak, aired = 6, next = null),
             unknownTotal.id to exact(unknownTotal, aired = 1121, next = 1122),
             longTitle.id to exact(longTitle, aired = 3, next = 4),
@@ -126,20 +151,6 @@ object Fixtures {
             airedUnknown.id to Airing(AiredCount.Unknown, null, null, null),
         )
 
-    val details: Map<AnimeId, AnimeDetails> = FixtureDetails.all.associateBy { it.id }
-
-    val user: UserProfile = UserProfile(name = "kiroku_demo", pictureUrl = null, joined = LocalDate.of(2019, 3, 2))
-
-    val session: Session = Session.SignedIn(user.name)
-
-    val userStatistics: UserStatistics = FixtureUser.statistics
-
-    val otherUserName: String = "sample_viewer"
-
-    val otherUserEntries: List<ListEntry> = FixtureUser.otherUserEntries
-
-    fun entryFor(id: AnimeId): ListEntry? = entries.firstOrNull { it.anime.id == id }
-
     private fun exact(
         anime: Anime,
         aired: Int,
@@ -149,7 +160,7 @@ object Fixtures {
         val episodes = schedule.episodes.associateBy { it.number }
         return Airing(
             aired = AiredCount.Exact(aired),
-            total = anime.episodes ?: schedule.totalEpisodes,
+            total = anime.malEpisodes ?: schedule.totalEpisodes,
             nextEpisode = next?.let(episodes::getValue),
             latestAiredAt = episodes[aired]?.airsAt,
         )

@@ -13,22 +13,45 @@ import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.flow.Flow
 
 interface SessionRepository {
-    val session: Flow<Session>
+    fun observeSession(): Flow<Session>
 
     suspend fun signOut()
 }
 
+enum class WriteSource { App, NotificationAction }
+
+sealed interface ListWrite {
+    val anime: Anime
+
+    data class Save(
+        override val anime: Anime,
+        val values: ListValues,
+    ) : ListWrite
+
+    data class Remove(
+        override val anime: Anime,
+    ) : ListWrite
+}
+
+data class WriteFailure(
+    val error: DataError,
+    val retry: ListWrite,
+    val source: WriteSource,
+)
+
 interface ListRepository {
     fun observeEntries(): Flow<List<ListEntry>>
 
+    fun observeEntry(id: AnimeId): Flow<ListEntry?>
+
+    fun observeWriteFailures(): Flow<WriteFailure>
+
     suspend fun sync(): Outcome<Unit>
 
-    suspend fun save(
-        anime: Anime,
-        values: ListValues,
-    ): Outcome<Unit>
-
-    suspend fun remove(id: AnimeId): Outcome<Unit>
+    suspend fun write(
+        write: ListWrite,
+        source: WriteSource = WriteSource.App,
+    )
 }
 
 interface AnimeRepository {
@@ -63,11 +86,13 @@ interface SearchRepository {
     suspend fun search(
         query: String,
         offset: Int,
+        includeAdult: Boolean,
     ): Outcome<Page<Anime>>
 
     suspend fun browse(
         list: BrowseList,
         offset: Int,
+        includeAdult: Boolean,
     ): Outcome<Page<Ranked<Anime>>>
 }
 
