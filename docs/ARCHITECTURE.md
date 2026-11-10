@@ -279,7 +279,7 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 | Module | Contains | Why separate |
 |---|---|---|
-| `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, repository interfaces, typed errors, the fixture set | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
+| `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, repository interfaces, typed errors, the fixture set and demo mode's in-memory repositories over it | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
 | `:data` (Android library) | The MAL and AniList clients, sign-in and token storage, the database, the repository implementations | Network and database types stay inside it, so the user interface depends only on `:core` types. |
 | `:app` (Android application) | Theme and components, screens and view models, navigation, notifications and background work, wiring | The only module that knows Compose. |
 

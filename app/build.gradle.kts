@@ -3,6 +3,14 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val malClientId =
+    providers
+        .gradleProperty("kiroku.malClientId")
+        .orElse(providers.environmentVariable("MAL_CLIENT_ID"))
+        .orElse("")
+        .get()
+        .trim()
+
 android {
     namespace = "io.github.kauri_off.kiroku"
     compileSdk {
@@ -32,6 +40,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         manifestPlaceholders["appLabel"] = "@string/app_name"
+        buildConfigField("String", "MAL_CLIENT_ID", "\"$malClientId\"")
     }
 
     signingConfigs {
@@ -65,6 +74,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     lint {
@@ -85,6 +95,51 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(testFixtures(project(":core")))
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
+
+abstract class VerifyReleaseHasNoFixtures : DefaultTask() {
+    @get:Input
+    abstract val capabilities: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val leaked = capabilities.get().filter { it.endsWith("-test-fixtures") }
+        check(leaked.isEmpty()) { "The release build must not depend on test fixtures: $leaked" }
+        report.get().asFile.writeText(capabilities.get().sorted().joinToString("\n"))
+    }
+}
+
+fun ResolvedComponentResult.capabilities(): Set<String> {
+    val seen = mutableSetOf<ResolvedComponentResult>()
+    val names = mutableSetOf<String>()
+    val queue = ArrayDeque(listOf(this))
+    while (queue.isNotEmpty()) {
+        val component = queue.removeFirst()
+        if (!seen.add(component)) continue
+        component.dependencies.filterIsInstance<ResolvedDependencyResult>().forEach { dependency ->
+            dependency.resolvedVariant.capabilities.forEach { names += "${it.group}:${it.name}" }
+            queue += dependency.selected
+        }
+    }
+    return names
+}
+
+val verifyReleaseHasNoFixtures =
+    tasks.register<VerifyReleaseHasNoFixtures>("verifyReleaseHasNoFixtures") {
+        capabilities.set(
+            configurations
+                .named("releaseRuntimeClasspath")
+                .flatMap { it.incoming.resolutionResult.rootComponent }
+                .map { it.capabilities() },
+        )
+        report.set(layout.buildDirectory.file("reports/release-dependencies.txt"))
+    }
+
+tasks.named { it == "test" || it == "assembleRelease" }.configureEach { dependsOn(verifyReleaseHasNoFixtures) }
