@@ -27,6 +27,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Queue wrapper self-test
+        run: tools/selftest
+
       - name: Install the SDK platform
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
 
@@ -47,8 +50,6 @@ jobs:
           retention-days: 14
 
       - name: Debug build
-        env:
-          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
         run: ./gradlew assembleDebug
 
       - name: Keep the debug APK
