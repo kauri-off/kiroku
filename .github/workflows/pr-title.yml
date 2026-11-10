@@ -19,7 +19,7 @@ jobs:
           types='feat|fix|docs|refactor|test|build|ci|chore'
           scopes='core|data|app|list|title|search|profile|settings|notify|auth|design'
           pattern="^($types)(\(($scopes)\))?: [^.[:space:]](.*[^.[:space:]])?$"
-          if [[ ! "$TITLE" =~ $pattern ]]; then
+          if [[ "$TITLE" == *[[:cntrl:]]* || ! "$TITLE" =~ $pattern ]]; then
             echo "::error::The title must read 'type(scope): subject' or 'type: subject', with a type from: ${types//|/, }; and a scope from: ${scopes//|/, }; no full stop or trailing space."
             exit 1
           fi
