@@ -65,8 +65,9 @@ internal class DemoListRepository(
     private val pending = mutableMapOf<AnimeId, Int>()
     private val touched = mutableMapOf<AnimeId, Long>()
     private var changes = 0L
-    private var inFlight: Request? = null
+    private val accepted = mutableListOf<Request>()
     private var running: Deferred<Outcome<Unit>>? = null
+    private var following: Deferred<Outcome<Unit>>? = null
     private val queue = Channel<Request>(Channel.UNLIMITED)
     private val failures =
         MutableSharedFlow<WriteFailure>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -76,13 +77,12 @@ internal class DemoListRepository(
         scope
             .launch {
                 for (request in queue) {
-                    synchronized(guard) { inFlight = request }
                     when (request) {
                         is Put -> send(request)
                         is Direct -> send(request)
                     }
                     synchronized(guard) {
-                        inFlight = null
+                        accepted.remove(request)
                         if (request is Put) pending[request.id] = (pending[request.id] ?: 1) - 1
                     }
                 }
@@ -101,10 +101,22 @@ internal class DemoListRepository(
         if (!signedIn.value) return Outcome.Failure(DataError.SessionExpired)
         val sync =
             synchronized(guard) {
-                running ?: scope.async(start = CoroutineStart.LAZY) { download() }.also { started ->
-                    running = started
-                    started.invokeOnCompletion { synchronized(guard) { if (running === started) running = null } }
+                following ?: run {
+                    val previous = running
+                    val started =
+                        scope.async(start = CoroutineStart.LAZY) {
+                            previous?.join()
+                            download()
+                        }
+                    if (previous == null) running = started else following = started
+                    started.invokeOnCompletion {
+                        synchronized(guard) {
+                            if (running === started) running = following.also { following = null }
+                            if (following === started) following = null
+                        }
+                    }
                     started.start()
+                    started
                 }
             }
         return try {
@@ -121,22 +133,31 @@ internal class DemoListRepository(
             return
         }
         synchronized(guard) {
+            check(!queue.isClosedForSend) { STOPPED }
             val id = write.anime.id
             val current = local.value[id]
             val values = write.applyTo(current, today())
             if (values == current?.values) return
             val anime = current?.anime ?: write.anime
-            queue.trySend(Put(anime, values, epochs[id] ?: 0)).getOrThrow()
             pending[id] = (pending[id] ?: 0) + 1
             set(id, values?.let { ListEntry(anime, it, clock.instant()) })
+            accept(Put(anime, values, epochs[id] ?: 0))
         }
     }
 
     override suspend fun send(write: ListWrite): Outcome<Unit> {
         if (!signedIn.value) return Outcome.Failure(DataError.SessionExpired)
         val result = CompletableDeferred<Outcome<Unit>>()
-        queue.trySend(Direct(write, result)).getOrThrow()
+        synchronized(guard) {
+            check(!queue.isClosedForSend) { STOPPED }
+            accept(Direct(write, result))
+        }
         return result.await()
+    }
+
+    private fun accept(request: Request) {
+        accepted += request
+        queue.trySend(request)
     }
 
     private suspend fun download(): Outcome<Unit> {
@@ -147,6 +168,7 @@ internal class DemoListRepository(
                 is Outcome.Success -> outcome.value.associateBy { it.anime.id }
             }
         synchronized(guard) {
+            if (!signedIn.value) return Outcome.Failure(DataError.SessionExpired)
             val next = local.value.toMutableMap()
             for (id in local.value.keys + remote.keys) {
                 if ((pending[id] ?: 0) > 0 || (touched[id] ?: 0) > since) continue
@@ -174,7 +196,7 @@ internal class DemoListRepository(
                 set(id, server.entry(id))
                 WriteFailure(outcome.error, shown?.let { ListWrite.Save(it.anime, it.values) } ?: ListWrite.Remove(put.anime))
             }
-        failures.tryEmit(failure)
+        if (signedIn.value) failures.tryEmit(failure)
     }
 
     private suspend fun send(direct: Direct) {
@@ -186,7 +208,19 @@ internal class DemoListRepository(
         }
         val confirmed = server.entry(id)
         val values = write.applyTo(confirmed, today())
+        val refusal =
+            when {
+                confirmed == null && (write is ListWrite.MarkWatched || write is ListWrite.MarkNextWatched) -> DataError.NotFound
+                write is ListWrite.MarkWatched && confirmed != null && confirmed.values.watchedEpisodes < write.episode - 1 ->
+                    DataError.InvalidRequest
+                else -> null
+            }
+        if (refusal != null) {
+            direct.result.complete(Outcome.Failure(refusal))
+            return
+        }
         if (values == confirmed?.values) {
+            synchronized(guard) { if ((pending[id] ?: 0) == 0 && local.value[id] != confirmed) set(id, confirmed) }
             direct.result.complete(Outcome.Success(Unit))
             return
         }
@@ -201,8 +235,8 @@ internal class DemoListRepository(
         val directs =
             synchronized(guard) {
                 queue.close()
-                val stopped = listOfNotNull(inFlight) + generateSequence { queue.tryReceive().getOrNull() }
-                inFlight = null
+                val stopped = accepted.toList()
+                accepted.clear()
                 for (id in stopped.filterIsInstance<Put>().map { it.id }.toSet()) {
                     epochs[id] = (epochs[id] ?: 0) + 1
                     pending.remove(id)

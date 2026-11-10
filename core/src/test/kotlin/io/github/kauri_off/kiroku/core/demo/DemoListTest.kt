@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -18,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -66,6 +68,8 @@ class DemoListTest {
         anime: Anime,
         watched: Int?,
     ) = server.editOnWebsite(anime, watched?.let { checkNotNull(server.entry(anime.id)).values.copy(watchedEpisodes = it) })
+
+    private fun TestScope.childScope() = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]))
 
     private fun TestScope.settle() {
         advanceTimeBy(1.minutes)
@@ -297,6 +301,7 @@ class DemoListTest {
 
             assertEquals(emptyList<ListRequest>(), demo.server.requests)
             assertEquals(13, demo.serverWatched(anime))
+            assertEquals(13, demo.shownWatched(anime))
         }
 
     @Test
@@ -400,18 +405,34 @@ class DemoListTest {
         }
 
     @Test
-    fun `W6 one list sync runs at a time`() =
+    fun `W6 one list sync runs at a time, and calls made while one runs share one follow-up`() =
         runTest {
             val demo = demo()
-            val first = async { demo.list.sync() }
-            val second = async { demo.list.sync() }
-            settle()
-            assertEquals(Outcome.Success(Unit), first.await())
-            assertEquals(Outcome.Success(Unit), second.await())
+            val syncs = List(3) { async { demo.list.sync() } }
+            advanceTimeBy(2500.milliseconds)
             assertEquals(1, demo.server.listDownloads)
+            settle()
+            syncs.forEach { assertEquals(Outcome.Success(Unit), it.await()) }
+            assertEquals(2, demo.server.listDownloads)
 
             assertEquals(Outcome.Success(Unit), demo.list.sync())
-            assertEquals(2, demo.server.listDownloads)
+            assertEquals(3, demo.server.listDownloads)
+        }
+
+    @Test
+    fun `a sync requested while one runs shows a website change made after the running one downloaded`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            val first = async { demo.list.sync() }
+            advanceTimeBy(1500.milliseconds)
+            assertEquals(1, demo.server.listDownloads)
+            demo.editOnWebsite(anime, 20)
+
+            assertEquals(Outcome.Success(Unit), demo.list.sync())
+
+            assertEquals(Outcome.Success(Unit), first.await())
+            assertEquals(20, demo.shownWatched(anime))
         }
 
     @Test
@@ -457,13 +478,15 @@ class DemoListTest {
         }
 
     @Test
-    fun `an edit waiting when the user signs out is not sent`() =
+    fun `an edit waiting when the user signs out is not sent and reports no failure`() =
         runTest {
             val demo = demo()
+            val failures = failures(demo)
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             demo.session.signOut()
             settle()
             assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(emptyList<WriteFailure>(), failures)
         }
 
     @Test
@@ -503,5 +526,110 @@ class DemoListTest {
             settle()
             assertEquals(DataError.Refused, failures.single().error)
             assertEquals(Outcome.Failure(DataError.Refused), demo.list.sync())
+        }
+
+    @Test
+    fun `an edit handed to an idle worker returns to the server's state when the scope ends`() =
+        runTest {
+            val scope = childScope()
+            val demo = Demo(fixtures, scope, latency = 1.seconds)
+            val failures = failures(demo)
+            val anime = FixtureAnime.exactToWatch
+            runCurrent()
+
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            scope.cancel()
+            runCurrent()
+
+            assertEquals(12, demo.shownWatched(anime))
+            assertEquals(12, demo.serverWatched(anime))
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(emptyList<WriteFailure>(), failures)
+        }
+
+    @Test
+    fun `a send handed to an idle worker fails when the scope ends`() =
+        runTest {
+            val scope = childScope()
+            val demo = Demo(fixtures, scope, latency = 1.seconds)
+            runCurrent()
+
+            val sent =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    runCatching { demo.list.send(ListWrite.MarkWatched(FixtureAnime.exactToWatch, 13)) }
+                }
+            scope.cancel()
+            runCurrent()
+
+            assertTrue(sent.isCompleted)
+            assertTrue(sent.await().exceptionOrNull() is IllegalStateException)
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `W2 under an unconfined dispatcher a failed write returns to the server's state`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val demo = Demo(fixtures, backgroundScope)
+            val failures = failures(demo)
+            val anime = FixtureAnime.exactToWatch
+            demo.server.failingWrites.value = true
+
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+
+            assertEquals(12, demo.shownWatched(anime))
+            assertEquals(12, demo.serverWatched(anime))
+            assertEquals(DataError.ServerError, failures.single().error)
+        }
+
+    @Test
+    fun `W5 under an unconfined dispatcher a successful write is not left out of later syncs`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val demo = Demo(fixtures, backgroundScope)
+            val anime = FixtureAnime.exactToWatch
+
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            assertEquals(13, demo.serverWatched(anime))
+            demo.editOnWebsite(anime, 20)
+
+            assertEquals(Outcome.Success(Unit), demo.list.sync())
+            assertEquals(20, demo.shownWatched(anime))
+        }
+
+    @Test
+    fun `N9 send fails for a title no longer on the list`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            demo.editOnWebsite(anime, null)
+
+            assertEquals(Outcome.Failure(DataError.NotFound), demo.list.send(ListWrite.MarkWatched(anime, 13)))
+            assertEquals(
+                Outcome.Failure(DataError.NotFound),
+                demo.list.send(ListWrite.MarkWatched(FixtureAnime.notOnListAiring, 1)),
+            )
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `N9 send fails rather than jump the count over unseen episodes`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.list.send(ListWrite.MarkWatched(anime, 15)))
+
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(12, demo.serverWatched(anime))
+            assertEquals(12, demo.shownWatched(anime))
+        }
+
+    @Test
+    fun `a sync running when the user signs out does not report success`() =
+        runTest {
+            val demo = demo()
+            val sync = async { demo.list.sync() }
+            advanceTimeBy(1500.milliseconds)
+            demo.session.signOut()
+            assertEquals(Outcome.Failure(DataError.SessionExpired), sync.await())
         }
 }

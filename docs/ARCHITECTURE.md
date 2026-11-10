@@ -819,7 +819,8 @@ every image, and hands over the commit hash and the output directory.
   format check, Lint, the tests, the screenshots and a debug build, keeping the screenshots and the APK as
   artifacts, and a check that the pull request title is a conventional commit. Its debug build has no client id,
   so the APK it keeps runs in demo mode.
-- **Release and distribution.** A version tag builds the release APK, with code and resource shrinking, and
+- **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
+  the MAL client id (section 3.3) taken from the secret `MAL_CLIENT_ID` of the `release` environment, and
   attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build job signs the
   APK with a key made for that run; a separate job, the only one that sees the secrets of the `release`
   environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no third-party code.
