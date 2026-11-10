@@ -10,14 +10,17 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.probe.ClockProbe
 import io.github.kauri_off.kiroku.probe.DialogProbe
 import io.github.kauri_off.kiroku.probe.KeyboardProbe
+import io.github.kauri_off.kiroku.probe.OverflowingSheet
 import io.github.kauri_off.kiroku.probe.RemoteImageProbe
 import io.github.kauri_off.kiroku.probe.STRIP_CARD_DP
 import io.github.kauri_off.kiroku.probe.SheetProbe
 import io.github.kauri_off.kiroku.probe.StripProbe
+import io.github.kauri_off.kiroku.probe.WidthOnlyPoster
 import io.github.kauri_off.kiroku.probe.wallClockReadings
 import io.github.kauri_off.kiroku.sample.SampleFixtures
 import io.github.kauri_off.kiroku.sample.SampleScreen
@@ -29,6 +32,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
 import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -46,6 +50,8 @@ class ScreenshotHarnessTest {
 
     private fun render(vararg cases: ScreenshotCase): List<String> =
         renderScreen("probe", cases.toList(), output.root, { listOf(Variant.EnLight) }) { bitmap, file -> written[file.name] = bitmap }
+
+    private fun Bitmap.hasColour(colour: Int): Boolean = (0 until height).any { getPixel(width / 2, it) == colour }
 
     private fun image(name: String): Bitmap = written[name] ?: error("$name was not written; written: ${written.keys}")
 
@@ -151,6 +157,29 @@ class ScreenshotHarnessTest {
     }
 
     @Test
+    fun fullHeightOfHalfExpandedSheetShowsItsEnd() {
+        var marker = 0
+        val problems =
+            render(contentCase { SheetProbe(rows = 30, rowsBehind = 0, skipPartiallyExpanded = false, onEndMarker = { marker = it }) })
+        assertEquals(emptyList<String>(), problems)
+        assertFalse(image("content__en-light.png").hasColour(marker))
+        assertTrue(image("content__en-light__full.png").hasColour(marker))
+    }
+
+    @Test
+    fun overlayRunningPastTheWindowFailsTheRender() {
+        val failure = runCatching { render(contentCase { OverflowingSheet() }) }.exceptionOrNull()
+        assertTrue(failure.toString(), failure is IllegalStateException && "past the window" in failure.message.orEmpty())
+        assertFalse("content__en-light__full.png" in written)
+    }
+
+    @Test
+    fun notShownReasonsAreWrittenNextToTheImages() {
+        renderScreen("probe", emptyList(), output.root, notShown = listOf("error" to "the sample has no network")) { _, _ -> }
+        assertEquals("error: the sample has no network\n", File(output.root, NOT_SHOWN_FILE).readText())
+    }
+
+    @Test
     fun dialogThatDoesNotScrollHasNoFullHeight() {
         render(contentCase { DialogProbe(smallTarget = false) })
         assertTrue(written.isNotEmpty())
@@ -176,6 +205,13 @@ class ScreenshotHarnessTest {
             assertTrue(fieldBottom > shot.windowHeightPx - keyboard - 1f)
             assertEquals(SystemBars.keyboardColor(night = false), image.getPixel(2, image.height - keyboard.toInt() / 2))
         }
+    }
+
+    @Test
+    fun posterSizedByWidthKeepsAPostersProportions() {
+        var size = IntSize.Zero
+        Shot.launch(Variant.EnLight) { WidthOnlyPoster { size = it } }.use { }
+        assertEquals(size.width * RemoteImages.POSTER_HEIGHT / RemoteImages.POSTER_WIDTH.toFloat(), size.height.toFloat(), 1f)
     }
 
     @Test

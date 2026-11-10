@@ -57,7 +57,9 @@ class RegistriesTest {
         assertTrue(shape(true, "title", emptyList(), emptyList()).single().startsWith("title is a screen"))
         assertTrue(shape(false, "title", listOf(case("loading") {}), emptyList()).single().contains("state case"))
         assertTrue(shape(false, "title", listOf(contentCase("other") {}), emptyList()).any { "content case" in it })
-        assertTrue(shape(false, "title", emptyList(), listOf("error" to " ")).single().contains("no reason"))
+        for (placeholder in listOf(" ", "-", "n/a", "TODO", "TODO later", "none")) {
+            assertTrue(placeholder, shape(false, "title", emptyList(), listOf("error" to placeholder)).single().contains("no reason"))
+        }
         assertTrue(shape(false, "", emptyList(), emptyList()).single().contains("Screenshots"))
     }
 

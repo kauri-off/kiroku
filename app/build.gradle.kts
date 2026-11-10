@@ -92,10 +92,6 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
-    }
-
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
         warningsAsErrors = false

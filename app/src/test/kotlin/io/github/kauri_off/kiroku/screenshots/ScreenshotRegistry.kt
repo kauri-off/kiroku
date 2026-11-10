@@ -10,6 +10,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class ScreenshotCase internal constructor(
     val name: String,
@@ -46,7 +47,7 @@ fun notShown(reason: String): StateCase = NotShown(reason)
 
 @RunWith(ScreenshotRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-abstract class RegistryBase internal constructor() {
+sealed class RegistryBase {
     val screen: String get() = screenName(javaClass)
 
     internal abstract fun shape(): RegistryShape
@@ -60,8 +61,7 @@ abstract class RegistryBase internal constructor() {
         val shape = shape()
         val structure = shape.problems()
         if (structure.isNotEmpty()) fail(structure.joinToString("\n"))
-        shape.notShown.forEach { (state, reason) -> println("$screen has no $state case: $reason") }
-        val problems = renderScreen(screen, shape.cases, File(outputRoot, screen))
+        val problems = renderScreen(screen, shape.cases, File(outputRoot, screen), notShown = shape.notShown)
         if (problems.isNotEmpty()) fail(problems.joinToString("\n"))
     }
 
@@ -118,7 +118,9 @@ internal class RegistryShape(
             if (cases.count { it.isContent } != 1) add("$screen declares ${cases.count { it.isContent }} content cases, not one")
             if (cases.map { it.name }.toSet().size != cases.size) add("$screen declares a case twice")
             cases.filterNot { caseName.matches(it.name) }.forEach { add("Case name '${it.name}' is not lower-case-with-hyphens") }
-            notShown.filter { it.second.isBlank() }.forEach { add("$screen gives no reason for having no ${it.first} case") }
+            for ((state, reason) in notShown.filterNot { isReason(it.second) }) {
+                add("$screen gives no reason for having no $state case: '$reason'")
+            }
         }
 
     companion object {
@@ -126,8 +128,15 @@ internal class RegistryShape(
         private val stateNames = setOf("loading", "empty", "error")
         private val caseName = Regex("[a-z0-9]+(-[a-z0-9]+)*")
         private val screenPattern = caseName
+        private val placeholder = Regex("""\b(todo|tbd|fixme|xxx|n/a)\b""", RegexOption.IGNORE_CASE)
+
+        // A sentence a reviewer can judge: at least two words and no placeholder.
+        fun isReason(text: String): Boolean =
+            text.split(Regex("""\s+""")).count { word -> word.count(Char::isLetter) >= 2 } >= 2 && !placeholder.containsMatchIn(text)
     }
 }
+
+const val NOT_SHOWN_FILE = "NOT_SHOWN.txt"
 
 internal fun screenName(registry: Class<*>): String {
     val base = registry.simpleName.removeSuffix("Screenshots")
@@ -140,16 +149,27 @@ internal fun renderScreen(
     cases: List<ScreenshotCase>,
     dir: File,
     variantsOf: (ScreenshotCase) -> List<Variant> = { Variant.forCase(it.isContent) },
+    notShown: List<Pair<String, String>> = emptyList(),
     write: (Bitmap, File) -> Unit = Shot::write,
 ): List<String> {
     dir.deleteRecursively()
+    if (notShown.isNotEmpty()) {
+        dir.mkdirs()
+        File(dir, NOT_SHOWN_FILE).writeText(notShown.joinToString("") { (state, reason) -> "$state: $reason\n" })
+    }
     val problems = mutableListOf<String>()
     val started = System.nanoTime()
     var images = 0
     for (case in cases) {
         for (variant in variantsOf(case)) {
             val prefix = "${case.name}__${variant.id}"
-            val finish = { shot: Shot ->
+            val finish = { shot: Shot, full: Boolean ->
+                val overflow = shot.overlayOverflowDp()
+                check(overflow < 1f) { "$screen/$prefix: the open sheet or dialog runs ${overflow.roundToInt()} dp past the window" }
+                if (full) {
+                    write(shot.image(), File(dir, "${prefix}__full.png"))
+                    images++
+                }
                 images += finishCase(shot, case, variant, File(dir, prefix), write) { problems += "$screen/${case.name}: $it" }
             }
             var extraDp = 0
@@ -160,16 +180,11 @@ internal fun renderScreen(
                     write(shot.boundsImage(), File(dir, "${case.name}__bounds.png"))
                     images++
                 }
+                val expanded = shot.expandSheets()
                 extraDp = shot.scrollRangeDp()
-                if (extraDp == 0) finish(shot)
+                if (extraDp == 0) finish(shot, expanded)
             }
-            if (extraDp > 0) {
-                renderFull(variant, variant.heightDp + extraDp, case) { shot ->
-                    write(shot.image(), File(dir, "${prefix}__full.png"))
-                    finish(shot)
-                }
-                images++
-            }
+            if (extraDp > 0) renderFull(variant, variant.heightDp + extraDp, case) { finish(it, true) }
         }
     }
     val seconds = (System.nanoTime() - started) / 1e9
@@ -177,7 +192,8 @@ internal fun renderScreen(
     return problems.distinct()
 }
 
-// Runs on the image that shows everything: the accessibility check in en-light, and each strip of the content case.
+// Runs on the shot that shows everything: the touch-target check in every variant, the label check in en-light,
+// and each strip, stitched for the content case.
 private fun finishCase(
     shot: Shot,
     case: ScreenshotCase,
@@ -186,12 +202,14 @@ private fun finishCase(
     write: (Bitmap, File) -> Unit,
     report: (String) -> Unit,
 ): Int {
-    val checked = variant == Variant.EnLight
-    if (checked) shot.accessibilityProblems().forEach(report)
+    val check = {
+        val found = if (variant == Variant.EnLight) shot.accessibilityProblems() else shot.touchTargetProblems()
+        found.forEach { report("${variant.id}: $it") }
+    }
+    check()
     var images = 0
-    if (!checked && !case.isContent) return images
     repeat(shot.stripCount()) { index ->
-        val stitched = shot.walkStrip(index, withImages = case.isContent) { if (checked) shot.accessibilityProblems().forEach(report) }
+        val stitched = shot.walkStrip(index, withImages = case.isContent, onPage = check)
         if (stitched != null) {
             write(stitched, File(prefix.parentFile, "${prefix.name}__strip-${index + 1}.png"))
             images++
@@ -211,6 +229,7 @@ private fun renderFull(
     repeat(3) {
         val rest =
             Shot.launch(variant, height, case.keyboard, case.content).use { shot ->
+                shot.expandSheets()
                 shot.scrollRangeDp().also { if (it == 0) finish(shot) }
             }
         if (rest == 0) return

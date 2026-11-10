@@ -93,25 +93,26 @@ class Shot private constructor(
         return bitmap
     }
 
-    fun accessibilityProblems(): List<String> {
+    fun accessibilityProblems(): List<String> = touchTargetProblems() + unlabeledProblems()
+
+    fun unlabeledProblems(): List<String> {
         settle()
-        val unlabeled =
-            fetchRobolectricWindowRoots().mapNotNull { root ->
-                try {
-                    Espresso
-                        .onView(ViewMatchers.isRoot())
-                        .inRoot(RootMatchers.withDecorView(Matchers.`is`(root.decorView)))
-                        .checkRoboAccessibility(accessibilityOptions, options)
-                    null
-                } catch (e: AccessibilityViewCheckException) {
-                    e.results.joinToString("\n") { "${it.sourceCheckClass.simpleName}: ${it.getMessage(Locale.ENGLISH)}" }
-                }
+        return fetchRobolectricWindowRoots().mapNotNull { root ->
+            try {
+                Espresso
+                    .onView(ViewMatchers.isRoot())
+                    .inRoot(RootMatchers.withDecorView(Matchers.`is`(root.decorView)))
+                    .checkRoboAccessibility(accessibilityOptions, options)
+                null
+            } catch (e: AccessibilityViewCheckException) {
+                e.results.joinToString("\n") { "${it.sourceCheckClass.simpleName}: ${it.getMessage(Locale.ENGLISH)}" }
             }
-        return touchTargetProblems() + unlabeled
+        }
     }
 
     // The laid-out size, not Compose's enlarged hit area. The stock sheet's 32 dp drag handle is the one exemption.
-    private fun touchTargetProblems(): List<String> {
+    fun touchTargetProblems(): List<String> {
+        settle()
         val minimum = TOUCH_TARGET_DP * density - 0.5f
         val dragHandle = activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description).visible()
         return windows().flatMap { decor ->
@@ -124,11 +125,54 @@ class Shot private constructor(
                     .map { node ->
                         val width = node.layoutInfo.width / density
                         val height = node.layoutInfo.height / density
-                        "TouchTargetSize: '${node.label()}' is ${"%.0f".format(Locale.ROOT, width)} × " +
+                        "TouchTargetSize: '${node.targetLabel()}' is ${"%.0f".format(Locale.ROOT, width)} × " +
                             "${"%.0f".format(Locale.ROOT, height)} dp, under $TOUCH_TARGET_DP dp"
                     }
             }
         }
+    }
+
+    // As a user drags it up: a sheet that opened half expanded is expanded, so all of it can be captured.
+    fun expandSheets(): Boolean {
+        val node = overlayNodes().firstOrNull { SemanticsActions.Expand in it.config } ?: return false
+        node.config[SemanticsActions.Expand].action?.invoke()
+        awaitOverlays()
+        check(overlayNodes().none { SemanticsActions.Expand in it.config }) { "A sheet stays half expanded" }
+        return true
+    }
+
+    // Draws until no open sheet or dialog moves: under Robolectric a sheet's animation advances only when drawn.
+    private fun awaitOverlays() {
+        var last = overlayNodes().map { it.positionInWindow }
+        var still = 0
+        var frames = 0
+        while (last.isNotEmpty() && still < STILL_FRAMES && frames++ < MAX_FRAMES) {
+            windows().forEach { it.draw(Canvas(scratch)) }
+            val now = overlayNodes().map { it.positionInWindow }
+            still = if (now == last) still + 1 else 0
+            last = now
+        }
+    }
+
+    // How far the open sheet's or dialog's content reaches below its window.
+    fun overlayOverflowDp(): Float {
+        val decor = windows().last()
+        if (decor === activity.window.decorView) return 0f
+        val bottom =
+            decor
+                .composeRoots()
+                .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
+                .filter { it.layoutInfo.isPlaced }
+                .maxOfOrNull { it.positionInWindow.y + it.size.height } ?: return 0f
+        return ((bottom - decor.height) / density).coerceAtLeast(0f)
+    }
+
+    private fun overlayNodes(): List<SemanticsNode> {
+        settle()
+        return windows()
+            .filter { it !== activity.window.decorView }
+            .flatMap { it.composeRoots() }
+            .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
     }
 
     // Measured in the topmost window: a sheet or dialog when one is open, otherwise the screen.
@@ -285,6 +329,8 @@ class Shot private constructor(
 
         private val FRAME = Duration.ofMillis(16)
         private const val MAX_FRAMES = 600
+        private const val STILL_FRAMES = 2
+        private val scratch = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         private const val BOUNDS_COLOR = 0xFFFF00FF.toInt()
 
         private val options = RoborazziOptions()
@@ -330,7 +376,10 @@ class Shot private constructor(
             return Shot(controller, keyboard) {
                 Locale.setDefault(locale)
                 TimeZone.setDefault(zone)
-            }.apply { settle() }
+            }.apply {
+                settle()
+                awaitOverlays()
+            }
         }
 
         private fun idle() {
@@ -381,7 +430,22 @@ class Shot private constructor(
                             .map { text -> text.text }
                 }.joinToString(" ")
                 .visible()
-                .ifEmpty { "unlabeled control" }
+                .ifEmpty { UNLABELED }
+
+        // A link inside a text has no label of its own, so it is named by its text.
+        private fun SemanticsNode.targetLabel(): String =
+            label().takeUnless { it == UNLABELED }
+                ?: parent?.ownText()?.takeIf { it.isNotEmpty() }?.let { "link in $it" }
+                ?: UNLABELED
+
+        private fun SemanticsNode.ownText(): String =
+            config
+                .getOrNull(SemanticsProperties.Text)
+                .orEmpty()
+                .joinToString(" ") { it.text }
+                .visible()
+
+        private const val UNLABELED = "unlabeled control"
 
         // Robolectric wraps some library strings in bidirectional marks.
         private fun String.visible(): String = filterNot { Character.getType(it) == Character.FORMAT.toInt() }

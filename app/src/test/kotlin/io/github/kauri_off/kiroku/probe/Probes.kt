@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -46,9 +47,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -152,20 +158,73 @@ fun SheetProbe(
     rows: Int,
     rowsBehind: Int,
     smallTarget: Boolean = false,
+    skipPartiallyExpanded: Boolean = true,
+    onEndMarker: (Int) -> Unit = {},
     onContainer: (Int) -> Unit = {},
 ) {
     Surface(Modifier.fillMaxSize()) {
         LazyColumn { items((1..rowsBehind).toList()) { ListItem(headlineContent = { Text("Behind $it") }) } }
         val container = BottomSheetDefaults.ContainerColor
         onContainer(container.toArgb())
-        ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        val marker = MaterialTheme.colorScheme.tertiary
+        onEndMarker(marker.toArgb())
+        ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded)) {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 repeat(rows) { Text("Sheet row ${it + 1}", Modifier.fillMaxWidth().height(56.dp)) }
                 Row {
                     Text("Sheet end")
                     if (smallTarget) SmallTarget("in a sheet")
                 }
+                Box(Modifier.fillMaxWidth().height(8.dp).background(marker))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OverflowingSheet() {
+    Surface(Modifier.fillMaxSize()) {
+        ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Column(Modifier.wrapContentHeight(Alignment.Top, unbounded = true)) {
+                repeat(60) { Text("Line ${it + 1}", Modifier.fillMaxWidth().height(56.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+fun SqueezedRow() {
+    val russian = LocalConfiguration.current.locales[0].language == "ru"
+    Surface(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth()) {
+            Text(if (russian) "Сейчас смотрю: Провожающая в последний путь Фрирен" else "Watching: Frieren")
+            IconButton(onClick = {}) { Text("+") }
+        }
+    }
+}
+
+@Composable
+fun InlineLinkProbe() {
+    Surface(Modifier.fillMaxSize()) {
+        Text(
+            buildAnnotatedString {
+                append("Report it on ")
+                withLink(LinkAnnotation.Url("https://example.org")) { append("the tracker") }
+            },
+        )
+    }
+}
+
+@Composable
+fun WidthOnlyPoster(onSize: (IntSize) -> Unit) {
+    Surface(Modifier.fillMaxSize()) {
+        Column {
+            AsyncImage(
+                model = "https://cdn.myanimelist.net/images/anime/1/1.jpg",
+                contentDescription = null,
+                modifier = Modifier.width(100.dp).onGloballyPositioned { onSize(it.size) },
+            )
         }
     }
 }
