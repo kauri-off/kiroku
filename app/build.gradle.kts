@@ -34,6 +34,18 @@ android {
         manifestPlaceholders["appLabel"] = "@string/app_name"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            val shared = providers.gradleProperty("kiroku.debugKeystore").orNull?.let(::file)
+            if (shared?.isFile == true) {
+                storeFile = shared
+                storePassword = "android"
+                keyAlias = "kirokudebug"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
