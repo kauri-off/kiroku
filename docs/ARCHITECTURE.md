@@ -484,8 +484,8 @@ legible, or preventing a jump. Decoration is not a purpose.
 
 A task that adds or changes an animation shows, with tests on the test clock, that it settles within its time,
 that re-triggering it mid-flight ends in the right state, that the interaction is correct with animations off, and
-that the idle screen has nothing pending. It also renders the transition as a strip of four frames (start, one
-third, two thirds, end) next to the screen's screenshots: the first and last frames equal the static renders, and
+that the idle screen has nothing pending. It also renders the transition as four frames in one image (start, one
+third, two thirds, end), `<case>__<variant>__frames.png`, next to the screen's screenshots: the first and last frames equal the static renders, and
 direction and pattern match this section. The hand-over names the transitions that changed. How a transition
 feels on a device, and predictive back under a finger, are judged by the owner from the installed app.
 

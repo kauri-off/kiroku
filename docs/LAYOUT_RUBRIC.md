@@ -22,6 +22,11 @@ For each changed screen the reviewer looks at, in `app/build/outputs/roborazzi/<
   full-height image `<case>__<variant>__full.png`. Everything below the first screen is judged from the `__full`
   image. `__full` images exist for the variants that `docs/ARCHITECTURE.md` section 11.2 names in its line
   "`__full` images are written for"; that is all variants unless the line says otherwise;
+- for the content case, each horizontal strip `<case>__<variant>__strip-<n>.png`, stitched so that every card
+  shows. Cards beyond the first screen width are judged from it. Magenta in it means the strip changed height
+  while scrolling, which breaks the rule that all cards of a strip have one height;
+- `NOT_SHOWN.txt`, when the screen has no loading, empty or error case: the stated reason is part of what is
+  scored, and a state missing without a reason is a missing image;
 - `<case>__bounds.png` of the content case, which shows component bounds, for alignment;
 - the result of the automatic accessibility check, which runs on every case, in the task's test output;
 - `app/build/outputs/roborazzi/RENDERED_AT`, which must name the commit under review and must not say "dirty";
@@ -35,8 +40,11 @@ the content case in all seven variants, with its `__full` images and the bounds 
 On such a screen only issues caused by the task's change are deducted. Issues that existed before go under
 "Optional", with the screen named. The task's own screens always get the full set.
 
-If an image is missing or `RENDERED_AT` does not match, the reviewer renders again
-(`tools/gw :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'`) before scoring. A reviewer never scores from a
+If an image is missing or `RENDERED_AT` does not match, the reviewer renders again before scoring, all changed
+screens in one command, because a render deletes the images of every screen it does not render:
+`tools/gw :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'`, with one
+`--tests '*<Screen>Screenshots*'` for each changed screen. When every screen is changed (the theme or a shared
+component), the command is `tools/gw --kind check :app:recordRoborazziDebug`. A reviewer never scores from a
 description or from the code.
 
 ## 2. Definitions
