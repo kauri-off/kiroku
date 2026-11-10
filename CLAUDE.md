@@ -72,9 +72,10 @@ queue, including short ones. Never call `./gradlew`, `gradle` or `emulator` dire
 
 ## Commits and pull requests
 
-- Conventional commits: `type(scope): subject`, lower case, imperative, no full stop. Types: `feat`, `fix`, `docs`,
-  `refactor`, `test`, `build`, `ci`, `chore`. Scopes: `core`, `data`, `app`, `list`, `title`, `search`, `profile`,
-  `settings`, `notify`, `auth`, `design`.
+- Conventional commits: `type(scope): subject`, or `type: subject` when no scope fits; the subject starts in
+  lower case, is imperative and has no full stop. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`,
+  `chore`. Scopes: `core`, `data`, `app`, `list`, `title`, `search`, `profile`, `settings`, `notify`, `auth`,
+  `design`. CI checks the pull request title against these lists.
 - Branches are squash-merged, so the pull request title is the commit message and follows the same format.
 - Tick the task's checkbox in `ROADMAP.md` in the same branch.
 
@@ -88,6 +89,8 @@ queue, including short ones. Never call `./gradlew`, `gradle` or `emulator` dire
   navigation. Each screen has its own screenshot registry file.
 - User interface code uses stock Material 3 components, theme colour roles, the `Spacing` tokens and the components
   listed in ARCHITECTURE section 8.4. No literal colours or dp values, no custom controls, no toasts.
+- Motion follows ARCHITECTURE section 8.5: sparse, from the theme's motion tokens only, with the tests and the
+  frame strip it asks for.
 - "Aired", "to watch" and what is notifiable are computed only in `:core`.
 - Versions are written only in `gradle/libs.versions.toml`. Adding a dependency needs a reason in the pull request.
 - Never commit secrets: no client id, no tokens, no signing keys.

@@ -1,0 +1,31 @@
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  title:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check that the title is a conventional commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|docs|refactor|test|build|ci|chore'
+          scopes='core|data|app|list|title|search|profile|settings|notify|auth|design'
+          pattern="^($types)(\(($scopes)\))?: [^.[:space:]](.*[^.[:space:]])?$"
+          if [[ "$TITLE" == *[[:cntrl:]]* || ! "$TITLE" =~ $pattern ]]; then
+            echo "::error::The title must read 'type(scope): subject' or 'type: subject', with a type from: ${types//|/, }; and a scope from: ${scopes//|/, }; no full stop or trailing space."
+            exit 1
+          fi
+          subject="${TITLE#*: }"
+          if [[ "${subject:0:1}" =~ [[:upper:]] ]]; then
+            echo "::error::The subject must start in lower case."
+            exit 1
+          fi
+          echo "Valid: $TITLE"

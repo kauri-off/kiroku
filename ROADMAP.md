@@ -67,7 +67,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-01.
   **Check:** `gh repo view kauri-off/kiroku` succeeds.
 
-- [ ] **M1-04 CI workflow.** The pull-request and `main` checks of ARCHITECTURE section 12, without the
+- [x] **M1-04 CI workflow.** The pull-request and `main` checks of ARCHITECTURE section 12, without the
   screenshots, which M1-06 adds.
   **Needs:** M1-01. The check needs M1-03.
   **Check (after M1-03):** on the task's pull request the build check and the title check are green and the run
@@ -292,6 +292,9 @@ Not to forget:
   sentence is backed by code; `CONTRIBUTING.md` with the checks outside the queue; a README from which a clean
   checkout builds without guessing.
 - The system's per-app language screen lists English and Russian.
+- The release key exists and its four secrets (`KIROKU_ANDROID_KEYSTORE_B64`, `KIROKU_ANDROID_STORE_PASSWORD`,
+  `KIROKU_ANDROID_KEY_ALIAS`, `KIROKU_ANDROID_KEY_PASSWORD`) are in the `release` environment; the release
+  workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
 
 ---
 
