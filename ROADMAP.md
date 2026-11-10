@@ -191,6 +191,7 @@ Not to forget:
 
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
   agent reads that file or the value, and only the orchestrator may check that no recorded file contains it.
+- The task that starts using the client id puts the secret `MAL_CLIENT_ID` back on CI's debug build step.
 - Mappers are written only against recorded responses (section 11.1), so recording comes first, and the responses
   for the signed-in user need **the owner to sign in once** in a debug build and run the recorder. That needs the
   sign-in flow and the sign-in screen to work before the list is on real data. The recording adds and then removes

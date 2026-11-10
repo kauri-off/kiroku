@@ -18,10 +18,9 @@ class Demo(
     val fixtures: FixtureSet,
     scope: CoroutineScope,
     latency: Duration = Duration.ZERO,
+    val clock: Clock = fixtures.clock,
 ) {
-    val clock: Clock get() = fixtures.clock
-
-    val server = DemoServer(fixtures.entries, latency)
+    val server = DemoServer(fixtures.entries, clock, latency)
 
     private val signedIn = MutableStateFlow(true)
 

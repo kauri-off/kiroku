@@ -80,7 +80,7 @@ class DemoTest {
         }
 
     @Test
-    fun `aired counts follow the running demo clock through the schedules`() =
+    fun `the schedules line up with the running demo clock`() =
         runTest {
             val device = DeviceClock(FixtureTime.reference.plus(Duration.ofDays(7 * 43 + 3)), FixtureTime.zone)
             val demo = Demo.startingAt(device, backgroundScope)
@@ -207,6 +207,74 @@ class DemoTest {
                     .value
             val ranks = (first.items + second.items).map { checkNotNull(it.item.rank) }
             assertEquals(ranks.sorted(), ranks)
-            assertEquals((1..ranks.size).toList(), (first.items + second.items).map { it.position })
+            assertEquals(ranks, (first.items + second.items).map { it.position })
+        }
+
+    @Test
+    fun `a query shorter than three characters or a negative offset is refused as invalid`() =
+        runTest {
+            val demo = demo()
+            for (query in listOf("", "   ", "ka", " ka ")) {
+                assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.search(query, 0, false))
+            }
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.search("kagetosho", -1, false))
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.browse(BrowseList.TopRated, -1, false))
+        }
+
+    @Test
+    fun `refused requests fail as refused`() =
+        runTest {
+            val demo = demo()
+            demo.server.refusing.value = true
+            assertEquals(Outcome.Failure(DataError.Refused), demo.search.search("kagetosho", 0, false))
+            assertEquals(Outcome.Failure(DataError.Refused), demo.anime.refresh(FixtureAnime.exactToWatch.id))
+            assertEquals(
+                UserListLoad.Failed(DataError.Refused),
+                demo.user
+                    .loadList(Fixtures.reference.otherUserName)
+                    .toList()
+                    .last(),
+            )
+        }
+
+    @Test
+    fun `a private list fails as private`() =
+        runTest {
+            val demo = demo()
+            assertEquals(
+                listOf(UserListLoad.Loading(0, null), UserListLoad.Failed(DataError.PrivateList)),
+                demo.user.loadList(Fixtures.reference.privateUserName).toList(),
+            )
+        }
+
+    @Test
+    fun `a list loads in steps that report progress`() =
+        runTest {
+            val demo = demo()
+            val entries = Fixtures.reference.entries
+            val loads = demo.user.loadList(Fixtures.reference.user.name).toList()
+            val steps = loads.filterIsInstance<UserListLoad.Loading>()
+            assertTrue(steps.size > 2)
+            assertEquals(steps.map { it.loaded }.sorted(), steps.map { it.loaded })
+            assertEquals(entries.size, steps.last().loaded)
+            assertTrue(steps.all { it.total == entries.size })
+            assertEquals(UserListLoad.Loaded(entries), loads.last())
+        }
+
+    @Test
+    fun `the demo stamps edits with the clock it is given`() =
+        runTest {
+            val clock = Clock.fixed(FixtureTime.reference.plus(Duration.ofHours(5)), FixtureTime.zone)
+            val demo = Demo(Fixtures.reference, backgroundScope, clock = clock)
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            assertEquals(
+                clock.instant(),
+                demo.list
+                    .observeEntry(FixtureAnime.exactToWatch.id)
+                    .first()
+                    ?.updatedAt,
+            )
+            assertEquals(clock.instant(), demo.server.entry(FixtureAnime.exactToWatch.id)?.updatedAt)
         }
 }

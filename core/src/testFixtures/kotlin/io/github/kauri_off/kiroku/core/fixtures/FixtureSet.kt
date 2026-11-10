@@ -24,13 +24,14 @@ data class FixtureSet(
     val anime: List<Anime>,
     val entries: List<ListEntry>,
     val schedules: Map<AnimeId, AiringSchedule>,
-    // Holds at the set's creation only; demo mode computes aired counts from schedules and its running clock.
+    // A snapshot at the set's creation; nothing recomputes it as a clock runs.
     val airing: Map<AnimeId, Airing>,
     val details: Map<AnimeId, AnimeDetails>,
     val user: UserProfile,
     val userStatistics: UserStatistics,
     val otherUserName: String,
     val otherUserEntries: List<ListEntry>,
+    val privateUserName: String,
     // A statistics layout state, independent of otherUserEntries.
     val largeStatistics: UserStatistics,
 ) {

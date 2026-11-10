@@ -87,6 +87,7 @@ internal class DemoSearchRepository(
     ): Outcome<Page<Anime>> {
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
         val text = query.trim()
+        if (text.length < MIN_QUERY || offset < 0) return Outcome.Failure(DataError.InvalidRequest)
         val found =
             fixtures.anime.filter { anime ->
                 with(anime.titles) { (listOfNotNull(romaji, english, japanese) + synonyms).any { it.contains(text, ignoreCase = true) } }
@@ -100,12 +101,15 @@ internal class DemoSearchRepository(
         includeAdult: Boolean,
     ): Outcome<Page<Ranked<Anime>>> {
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
+        if (offset < 0) return Outcome.Failure(DataError.InvalidRequest)
         val ranked =
             when (list) {
                 BrowseList.ThisSeason ->
                     fixtures.anime.filter { it.airingStatus != AiringStatus.Finished }.map { Ranked(null, it) }
-                BrowseList.TopAiring -> byRank(fixtures.anime.filter { it.airingStatus == AiringStatus.Airing })
-                BrowseList.TopRated -> byRank(fixtures.anime)
+                BrowseList.TopAiring ->
+                    byRank(fixtures.anime.filter { it.airingStatus == AiringStatus.Airing })
+                        .mapIndexed { index, it -> Ranked(index + 1, it) }
+                BrowseList.TopRated -> byRank(fixtures.anime).map { Ranked(it.rank, it) }
                 BrowseList.MostPopular ->
                     fixtures.anime
                         .sortedByDescending { fixtures.details[it.id]?.statistics?.members ?: 0 }
@@ -114,11 +118,7 @@ internal class DemoSearchRepository(
         return Outcome.Success(ranked.page(offset))
     }
 
-    private fun byRank(anime: List<Anime>): List<Ranked<Anime>> =
-        anime
-            .filter { it.rank != null }
-            .sortedBy { it.rank }
-            .mapIndexed { index, it -> Ranked(index + 1, it) }
+    private fun byRank(anime: List<Anime>): List<Anime> = anime.filter { it.rank != null }.sortedBy { it.rank }
 
     private fun <T> List<T>.page(offset: Int): Page<T> {
         val items = drop(offset).take(PAGE_SIZE)
@@ -128,6 +128,7 @@ internal class DemoSearchRepository(
 
     private companion object {
         const val PAGE_SIZE = 20
+        const val MIN_QUERY = 3
     }
 }
 
@@ -142,6 +143,7 @@ internal class DemoUserRepository(
 
     override fun loadList(userName: String): Flow<UserListLoad> =
         flow {
+            val private = userName.equals(fixtures.privateUserName, ignoreCase = true)
             val entries =
                 when {
                     userName.equals(fixtures.otherUserName, ignoreCase = true) -> fixtures.otherUserEntries
@@ -149,7 +151,22 @@ internal class DemoUserRepository(
                     else -> null
                 }
             emit(UserListLoad.Loading(0, entries?.size))
-            val error = server.load(needsSignIn = false) ?: DataError.UnknownUser.takeIf { entries == null }
-            emit(if (error != null) UserListLoad.Failed(error) else UserListLoad.Loaded(checkNotNull(entries)))
+            val error =
+                server.load(needsSignIn = false)
+                    ?: DataError.PrivateList.takeIf { private }
+                    ?: DataError.UnknownUser.takeIf { entries == null }
+            if (error != null || entries == null) {
+                emit(UserListLoad.Failed(error ?: DataError.UnknownUser))
+                return@flow
+            }
+            for ((index, page) in entries.chunked(PAGE_SIZE).withIndex()) {
+                if (index > 0) server.load(needsSignIn = false)?.let { return@flow emit(UserListLoad.Failed(it)) }
+                emit(UserListLoad.Loading(index * PAGE_SIZE + page.size, entries.size))
+            }
+            emit(UserListLoad.Loaded(entries))
         }
+
+    private companion object {
+        const val PAGE_SIZE = 10
+    }
 }

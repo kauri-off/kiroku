@@ -10,7 +10,11 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -22,6 +26,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,6 +52,20 @@ class DemoListTest {
     }
 
     private fun List<List<ListEntry>>.watched(anime: Anime) = last().single { it.anime.id == anime.id }.values.watchedEpisodes
+
+    private fun Demo.serverWatched(anime: Anime) = server.entry(anime.id)?.values?.watchedEpisodes
+
+    private suspend fun Demo.shownWatched(anime: Anime) =
+        list
+            .observeEntry(anime.id)
+            .first()
+            ?.values
+            ?.watchedEpisodes
+
+    private fun Demo.editOnWebsite(
+        anime: Anime,
+        watched: Int?,
+    ) = server.editOnWebsite(anime, watched?.let { checkNotNull(server.entry(anime.id)).values.copy(watchedEpisodes = it) })
 
     private fun TestScope.settle() {
         advanceTimeBy(1.minutes)
@@ -116,6 +135,7 @@ class DemoListTest {
     fun `W1 quick edits are sent in order and the server ends with the last value shown`() =
         runTest {
             val demo = demo()
+            demo.server.writeLatency = { if (it.values?.watchedEpisodes == 13) 5.seconds else 1.seconds }
             repeat(3) { demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch)) }
             settle()
             assertEquals(listOf(13, 14, 15), demo.server.requests.map { it.values?.watchedEpisodes })
@@ -246,5 +266,242 @@ class DemoListTest {
                     ?.watchedEpisodes,
             )
             assertTrue(demo.server.requests.isEmpty())
+        }
+
+    @Test
+    fun `N9 send never reports success for a step that a later failing edit only showed`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
+            val sent = async { demo.list.send(ListWrite.MarkWatched(anime, 13)) }
+            runCurrent()
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            demo.server.failingWrites.value = true
+
+            settle()
+
+            assertEquals(Outcome.Failure(DataError.ServerError), sent.await())
+            assertEquals(12, demo.serverWatched(anime))
+            assertEquals(12, demo.shownWatched(anime))
+        }
+
+    @Test
+    fun `N9 send compares with the server's confirmed state`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            demo.editOnWebsite(anime, 13)
+
+            assertEquals(Outcome.Success(Unit), demo.list.send(ListWrite.MarkWatched(anime, 13)))
+
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(13, demo.serverWatched(anime))
+        }
+
+    @Test
+    fun `N9 a sync that already brought the change does not raise the count again`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            demo.editOnWebsite(anime, 13)
+            assertEquals(Outcome.Success(Unit), demo.list.sync())
+            assertEquals(13, demo.shownWatched(anime))
+
+            assertEquals(Outcome.Success(Unit), demo.list.send(ListWrite.MarkWatched(anime, 13)))
+            assertEquals(Outcome.Success(Unit), demo.list.send(ListWrite.MarkWatched(anime, 13)))
+
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(13, demo.shownWatched(anime))
+        }
+
+    @Test
+    fun `a sync brings changes made on the website, removals included`() =
+        runTest {
+            val demo = demo()
+            val raised = FixtureAnime.exactToWatch
+            val removed = FixtureAnime.droppedMovie
+            val added = FixtureAnime.notOnListAiring
+            val values = checkNotNull(fixtures.entryFor(FixtureAnime.premiereDate.id)).values
+            demo.editOnWebsite(raised, 15)
+            demo.editOnWebsite(removed, null)
+            demo.server.editOnWebsite(added, values)
+            assertEquals(12, demo.shownWatched(raised))
+            assertEquals(fixtures.entryFor(removed.id), demo.list.observeEntry(removed.id).first())
+
+            assertEquals(Outcome.Success(Unit), demo.list.sync())
+
+            assertEquals(15, demo.shownWatched(raised))
+            assertNull(demo.list.observeEntry(removed.id).first())
+            assertEquals(
+                values,
+                demo.list
+                    .observeEntry(added.id)
+                    .first()
+                    ?.values,
+            )
+            assertEquals(
+                demo.server.entries().toSet(),
+                demo.list
+                    .observeEntries()
+                    .first()
+                    .toSet(),
+            )
+        }
+
+    @Test
+    fun `W4 a sync never reverts an edit made while it was running`() =
+        runTest {
+            val demo = demo()
+            val edited = FixtureAnime.exactToWatch
+            val added = FixtureAnime.notOnListAiring
+            val removed = FixtureAnime.droppedMovie
+            val other = FixtureAnime.exactCaughtUp
+            val values = checkNotNull(fixtures.entryFor(FixtureAnime.premiereDate.id)).values
+            demo.editOnWebsite(other, 9)
+
+            val sync = async { demo.list.sync() }
+            advanceTimeBy(500.milliseconds)
+            demo.list.write(ListWrite.MarkNextWatched(edited))
+            demo.list.write(ListWrite.Save(added, values))
+            demo.list.write(ListWrite.Remove(removed))
+            advanceTimeBy(1100.milliseconds)
+            assertEquals(13, demo.serverWatched(edited))
+
+            assertEquals(Outcome.Success(Unit), sync.await())
+            assertEquals(1, demo.server.listDownloads)
+            assertEquals(13, demo.shownWatched(edited))
+            assertEquals(
+                values,
+                demo.list
+                    .observeEntry(added.id)
+                    .first()
+                    ?.values,
+            )
+            assertNull(demo.list.observeEntry(removed.id).first())
+            assertEquals(9, demo.shownWatched(other))
+        }
+
+    @Test
+    fun `W4 a sync does not revert an earlier edit whose request completed while it ran`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            demo.server.writeLatency = { 2.seconds }
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            advanceTimeBy(100.milliseconds)
+
+            val sync = async { demo.list.sync() }
+            settle()
+
+            assertEquals(Outcome.Success(Unit), sync.await())
+            assertEquals(13, demo.serverWatched(anime))
+            assertEquals(13, demo.shownWatched(anime))
+        }
+
+    @Test
+    fun `W6 one list sync runs at a time`() =
+        runTest {
+            val demo = demo()
+            val first = async { demo.list.sync() }
+            val second = async { demo.list.sync() }
+            settle()
+            assertEquals(Outcome.Success(Unit), first.await())
+            assertEquals(Outcome.Success(Unit), second.await())
+            assertEquals(1, demo.server.listDownloads)
+
+            assertEquals(Outcome.Success(Unit), demo.list.sync())
+            assertEquals(2, demo.server.listDownloads)
+        }
+
+    @Test
+    fun `once the scope has ended, waiting calls fail and shown edits return to the server's state`() =
+        runTest {
+            val scope = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]))
+            val demo = Demo(fixtures, scope, latency = 1.seconds)
+            val anime = FixtureAnime.exactToWatch
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            val sent = async { runCatching { demo.list.send(ListWrite.MarkWatched(anime, 14)) } }
+            runCurrent()
+            assertEquals(13, demo.shownWatched(anime))
+
+            scope.cancel()
+            runCurrent()
+
+            assertTrue(sent.await().exceptionOrNull() is IllegalStateException)
+            assertEquals(12, demo.shownWatched(anime))
+            assertEquals(fixtures.entryFor(FixtureAnime.exactCaughtUp.id), demo.list.observeEntry(FixtureAnime.exactCaughtUp.id).first())
+            assertTrue(runCatching { demo.list.write(ListWrite.MarkNextWatched(anime)) }.exceptionOrNull() is IllegalStateException)
+            assertTrue(runCatching { demo.list.send(ListWrite.MarkWatched(anime, 13)) }.exceptionOrNull() is IllegalStateException)
+            assertTrue(runCatching { demo.list.sync() }.exceptionOrNull() is IllegalStateException)
+            assertTrue(runCatching { Demo(fixtures, scope) }.exceptionOrNull() is IllegalStateException)
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `signed out, writes and sends reach no server`() =
+        runTest {
+            val demo = demo()
+            val failures = failures(demo)
+            val anime = FixtureAnime.exactToWatch
+            demo.session.signOut()
+
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            assertEquals(Outcome.Failure(DataError.SessionExpired), demo.list.send(ListWrite.MarkWatched(anime, 13)))
+            assertEquals(Outcome.Failure(DataError.SessionExpired), demo.list.sync())
+            settle()
+
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(listOf(WriteFailure(DataError.SessionExpired, ListWrite.MarkNextWatched(anime))), failures)
+        }
+
+    @Test
+    fun `an edit waiting when the user signs out is not sent`() =
+        runTest {
+            val demo = demo()
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            demo.session.signOut()
+            settle()
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `a failed removal keeps the entry's place in the list`() =
+        runTest {
+            val demo = demo()
+            demo.server.offline.value = true
+            demo.list.write(ListWrite.Remove(FixtureAnime.exactCaughtUp))
+            settle()
+            assertEquals(fixtures.entries, demo.list.observeEntries().first())
+        }
+
+    @Test
+    fun `Undo of an edit whose request fails still reports the failure, with a Retry equal to the server's state`() =
+        runTest {
+            val demo = demo()
+            val failures = failures(demo)
+            val anime = FixtureAnime.exactToWatch
+            val before = checkNotNull(fixtures.entryFor(anime.id))
+            demo.server.failingWrites.value = true
+            demo.list.write(ListWrite.MarkNextWatched(anime))
+            demo.list.write(ListWrite.Save(anime, before.values))
+            settle()
+
+            assertEquals(listOf(WriteFailure(DataError.ServerError, ListWrite.Save(anime, before.values))), failures)
+            assertEquals(12, demo.shownWatched(anime))
+            assertEquals(listOf(13), demo.server.requests.map { it.values?.watchedEpisodes })
+        }
+
+    @Test
+    fun `refused writes fail like any other`() =
+        runTest {
+            val demo = demo()
+            val failures = failures(demo)
+            demo.server.refusing.value = true
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            assertEquals(DataError.Refused, failures.single().error)
+            assertEquals(Outcome.Failure(DataError.Refused), demo.list.sync())
         }
 }

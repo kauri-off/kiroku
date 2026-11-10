@@ -17,6 +17,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
 import java.time.Duration
+import java.time.ZoneId
+import java.util.TimeZone
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DebugGraphTest {
@@ -25,10 +27,27 @@ class DebugGraphTest {
     @Test
     fun `a debug build without a client id runs on the demo data of the device's week`() =
         runTest {
-            val graph = createGraph("", device, backgroundScope)
-            assertTrue(graph is DemoGraph)
-            assertEquals(Fixtures.at(device).entries, graph.list.observeEntries().first())
-            assertEquals(Fixtures.at(device).now, graph.clock.instant())
+            for (id in listOf("", "  ")) {
+                val graph = createGraph(id, device, backgroundScope)
+                assertTrue(graph is DemoGraph)
+                assertEquals(Fixtures.at(device).entries, graph.list.observeEntries().first())
+                assertEquals(Fixtures.at(device).now, graph.clock.instant())
+            }
+        }
+
+    @Test
+    fun `the demo clock follows the device's time zone`() =
+        runTest {
+            val original = TimeZone.getDefault()
+            try {
+                val graph = createGraph("", DeviceClock, backgroundScope)
+                TimeZone.setDefault(TimeZone.getTimeZone("Asia/Tokyo"))
+                assertEquals(ZoneId.of("Asia/Tokyo"), graph.clock.zone)
+                TimeZone.setDefault(TimeZone.getTimeZone("Europe/Lisbon"))
+                assertEquals(ZoneId.of("Europe/Lisbon"), graph.clock.zone)
+            } finally {
+                TimeZone.setDefault(original)
+            }
         }
 
     @Test

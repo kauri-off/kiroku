@@ -1,15 +1,25 @@
+import com.android.build.api.artifact.ScopedArtifact
+import com.android.build.api.variant.ScopedArtifacts
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
+fun Provider<String>.present(): Provider<String> = map { it.trim() }.filter { it.isNotEmpty() }
+
 val malClientId =
     providers
         .gradleProperty("kiroku.malClientId")
-        .orElse(providers.environmentVariable("MAL_CLIENT_ID"))
+        .present()
+        .orElse(providers.environmentVariable("MAL_CLIENT_ID").present())
         .orElse("")
         .get()
-        .trim()
+
+check(malClientId.matches(Regex("[A-Za-z0-9._-]*"))) {
+    "The MAL client id may contain only letters, digits, '.', '_' and '-'"
+}
 
 android {
     namespace = "io.github.kauri_off.kiroku"
@@ -77,6 +87,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
         warningsAsErrors = false
@@ -99,9 +113,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
 }
 
-abstract class VerifyReleaseHasNoFixtures : DefaultTask() {
+abstract class VerifyReleaseDependencies : DefaultTask() {
     @get:Input
     abstract val capabilities: SetProperty<String>
 
@@ -113,6 +128,47 @@ abstract class VerifyReleaseHasNoFixtures : DefaultTask() {
         val leaked = capabilities.get().filter { it.endsWith("-test-fixtures") }
         check(leaked.isEmpty()) { "The release build must not depend on test fixtures: $leaked" }
         report.get().asFile.writeText(capabilities.get().sorted().joinToString("\n"))
+    }
+}
+
+abstract class VerifyReleaseClasses : DefaultTask() {
+    @get:Input
+    abstract val forbidden: ListProperty<String>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val jars: ListProperty<RegularFile>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val directories: ListProperty<Directory>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val inJars =
+            jars.get().flatMap { jar ->
+                ZipFile(jar.asFile).use { zip ->
+                    zip
+                        .entries()
+                        .asSequence()
+                        .map { "${jar.asFile.name}!${it.name}" }
+                        .toList()
+                }
+            }
+        val inDirectories =
+            directories.get().flatMap { directory ->
+                directory.asFile
+                    .walk()
+                    .filter { it.isFile }
+                    .map { it.relativeTo(directory.asFile).invariantSeparatorsPath }
+                    .toList()
+            }
+        val leaked = (inJars + inDirectories).filter { entry -> forbidden.get().any { entry.substringAfter('!').startsWith(it) } }
+        check(leaked.isEmpty()) { "The release build must not contain demo or fixture classes: ${leaked.take(10)}" }
+        report.get().asFile.writeText("${inJars.size + inDirectories.size} entries checked\n")
     }
 }
 
@@ -131,8 +187,8 @@ fun ResolvedComponentResult.capabilities(): Set<String> {
     return names
 }
 
-val verifyReleaseHasNoFixtures =
-    tasks.register<VerifyReleaseHasNoFixtures>("verifyReleaseHasNoFixtures") {
+val verifyReleaseDependencies =
+    tasks.register<VerifyReleaseDependencies>("verifyReleaseDependencies") {
         capabilities.set(
             configurations
                 .named("releaseRuntimeClasspath")
@@ -142,4 +198,22 @@ val verifyReleaseHasNoFixtures =
         report.set(layout.buildDirectory.file("reports/release-dependencies.txt"))
     }
 
-tasks.named { it == "test" || it == "assembleRelease" }.configureEach { dependsOn(verifyReleaseHasNoFixtures) }
+val verifyReleaseClasses =
+    tasks.register<VerifyReleaseClasses>("verifyReleaseClasses") {
+        forbidden.set(listOf("io/github/kauri_off/kiroku/core/demo/", "io/github/kauri_off/kiroku/core/fixtures/"))
+        report.set(layout.buildDirectory.file("reports/release-classes.txt"))
+    }
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.artifacts
+            .forScope(ScopedArtifacts.Scope.ALL)
+            .use(verifyReleaseClasses)
+            .toGet(ScopedArtifact.CLASSES, VerifyReleaseClasses::jars, VerifyReleaseClasses::directories)
+    }
+}
+
+tasks.named { it == "preReleaseBuild" || it == "test" }.configureEach { dependsOn(verifyReleaseDependencies) }
+tasks.named { it == "packageRelease" || it == "packageReleaseBundle" || it == "test" }.configureEach {
+    dependsOn(verifyReleaseClasses)
+}

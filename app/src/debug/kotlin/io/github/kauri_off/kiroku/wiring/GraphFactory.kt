@@ -1,14 +1,8 @@
 package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.demo.Demo
-import kotlinx.coroutines.CoroutineScope
-import java.time.Clock
 
-internal fun createGraph(
-    clientId: String,
-    clock: Clock,
-    scope: CoroutineScope,
-): AppGraph = if (clientId.isEmpty()) DemoGraph(Demo.startingAt(clock, scope)) else LiveGraph(clock)
+internal val demoGraphFactory: DemoGraphFactory? = { clock, scope -> DemoGraph(Demo.startingAt(clock, scope)) }
 
 class DemoGraph(
     val demo: Demo,
