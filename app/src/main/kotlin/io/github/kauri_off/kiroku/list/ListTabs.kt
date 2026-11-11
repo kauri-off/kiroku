@@ -34,8 +34,10 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 // The tab row's place between two tabs, drawn from the pager: the finger's drag and the settle move the indicator,
 // the selection and the row's scroll with the page. A tap runs the page and the header on one animation.
@@ -44,7 +46,7 @@ class ListTabMotion(
     val pager: PagerState,
     private val scope: CoroutineScope,
 ) {
-    // The tab a tap is sliding to; while it runs, the header follows its own animation, not the pager's pre-jump.
+    // The tab a tap is sliding to; while it runs, the header follows the tap's animation.
     var tapTarget by mutableStateOf<Int?>(null)
         private set
 
@@ -53,32 +55,42 @@ class ListTabMotion(
 
     private val last: Float get() = (pager.pageCount - 1).toFloat()
 
+    private val pagerPosition: Float get() = pager.currentPage + pager.currentPageOffsetFraction
+
     // Fractional: 1.3 is a third of the way from the second tab to the third. Read it only in layout, draw or effects.
     val position: Float
-        get() =
-            (if (tapTarget != null) tapped.value else pager.currentPage + pager.currentPageOffsetFraction)
-                .coerceIn(0f, last)
+        get() = (if (tapTarget != null) tapped.value else pagerPosition).coerceIn(0f, last)
 
     // Flips half-way through a drag, and at once to a tapped tab.
     val selected: Int by derivedStateOf { tapTarget ?: pager.currentPage }
 
+    // One animation moves the header and the page together. A page further than one away first jumps next to the
+    // target, then slides the last page on the header's curve, so both arrive on the same frame.
     fun select(index: Int) {
         if (tapTarget == index || (tapTarget == null && !pager.isScrollInProgress && position == index.toFloat())) return
         val from = position
+        val target = index.toFloat()
         val token = Any()
         tap = token
         tapTarget = index
         scope.launch {
-            val header =
-                launch {
-                    tapped.snapTo(from)
-                    tapped.animateTo(index.toFloat(), Motion.componentEnter())
-                }
             try {
-                pager.animateScrollToPage(index, animationSpec = Motion.componentEnter())
-                header.join()
+                tapped.snapTo(from)
+                val size = (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing).toFloat()
+                var page = pagerPosition
+                val start = if (abs(target - page) > 1f) target - sign(target - page) else page
+                pager.scroll {
+                    scrollBy((start - page) * size)
+                    page = start
+                    tapped.animateTo(target, Motion.componentEnter()) {
+                        val way = if (target == from) 1f else (value - from) / (target - from)
+                        val next = start + (target - start) * way
+                        scrollBy((next - page) * size)
+                        page = next
+                    }
+                }
+                pager.scrollToPage(index)
             } finally {
-                header.cancel()
                 if (tap === token) {
                     tap = null
                     tapTarget = null

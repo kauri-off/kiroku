@@ -51,6 +51,16 @@ class ListTabMotionTest {
     private val events = mutableListOf<ListEvent>()
 
     private val watchingRow = FixtureAnime.estimatedCaughtUp.titles.romaji
+    private val plannedRow =
+        ListFixtureStates.planned.page!!
+            .rows
+            .first()
+            .title
+    private val droppedRow =
+        ListFixtureStates.dropped.page!!
+            .rows
+            .first()
+            .title
     private val completedRow =
         ListFixtureStates.completed.page!!
             .rows
@@ -198,6 +208,7 @@ class ListTabMotionTest {
     @Test
     fun `a tapped far tab is selected at once and the page and the header arrive together`() {
         show(ListFixtureStates.watching)
+        val rest = left(watchingRow)
         tab("Dropped").performClick()
         var elapsed = 0L
         while (elapsed < TAB_SWITCH_MS + FRAME) {
@@ -207,6 +218,7 @@ class ListTabMotionTest {
             listOf("Watching", "Planned", "Completed", "On hold").forEach { tab(it).assertIsNotSelected() }
         }
         assertIndicatorAt("Dropped", "Dropped", 0f)
+        assertEquals("the page has arrived with the header", rest, left(droppedRow), TOLERANCE)
         assertEquals(listOf(ListEvent.SelectTab(ListStatus.Dropped)), events)
         compose.mainClock.advanceTimeBy(SETTLED)
         assertIndicatorAt("Dropped", "Dropped", 0f)
@@ -214,23 +226,32 @@ class ListTabMotionTest {
         assertIdle()
     }
 
-    @Test
-    fun `on a tap the indicator and the page run one curve`() {
+    // A far page jumps next to its tab at once and slides the last page in.
+    private fun assertOneCurve(
+        tab: String,
+        row: String,
+    ) {
         show(ListFixtureStates.watching)
         val rest = left(watchingRow)
-        tab("Completed").performClick()
+        tab(tab).performClick()
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 3)
-        val page = pagePosition(watchingRow, rest) / 2
+        val page = (rest + pageWidth - left(row)) / pageWidth
         val a = label("Watching").left.value
-        val b = label("Completed").left.value
+        val b = label(tab).left.value
         val header = (indicator().left.value - a) / (b - a)
         assertTrue("part-way: $page", page in 0.1f..0.95f)
         assertTrue("the header at $header, the page at $page", abs(header - page) <= CURVE_TOLERANCE)
         compose.mainClock.advanceTimeBy(SETTLED)
-        assertIndicatorAt("Completed", "Completed", 0f)
+        assertIndicatorAt(tab, tab, 0f)
         assertIdle()
     }
+
+    @Test
+    fun `on a tap the indicator and the page run one curve`() = assertOneCurve("Planned", plannedRow)
+
+    @Test
+    fun `on a tap on a far tab the indicator and the last page run one curve`() = assertOneCurve("Dropped", droppedRow)
 
     @Test
     fun `tapping the selected tab moves nothing`() {

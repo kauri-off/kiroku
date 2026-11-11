@@ -483,7 +483,8 @@ legible, or preventing a jump. Decoration is not a purpose.
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
   settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance. The tab
-  indicator, the selected tab and the tab row's scroll are driven by the pager, on a tap by the page's own animation.
+  indicator, the selected tab and the tab row's scroll are driven by the pager; a tap moves them and the page on one
+  animation.
 - **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
   one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.
