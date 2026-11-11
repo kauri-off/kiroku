@@ -148,12 +148,17 @@ internal fun EditSheet(
         sheetState = sheetState,
     ) {
         val focusManager = LocalFocusManager.current
+        // A tap on another control ends typing, so the keyboard closes and Save shows again.
+        val edit = { event: EditSheetEvent ->
+            focusManager.clearFocus()
+            onEvent(event)
+        }
         Column(Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) {
                 // The gaps between groups look equal once the controls' own invisible margins are counted.
                 TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(Spacing.l))
-                StatusChips(state.draft.status) { onEvent(EditSheetEvent.StatusChosen(it)) }
+                StatusChips(state.draft.status) { edit(EditSheetEvent.StatusChosen(it)) }
                 Spacer(Modifier.height(Spacing.l))
                 Column(
                     Modifier.onPlaced {
@@ -165,13 +170,12 @@ internal fun EditSheet(
                     Spacer(Modifier.height(Spacing.xs))
                     EpisodeStepperLayout(
                         text = state.typed ?: state.draft.watchedEpisodes.toString(),
-                        current = if (state.countRefused) null else state.draft.watchedEpisodes,
+                        current = state.draft.watchedEpisodes,
                         total = state.total,
-                        refused = state.countRefused,
                         onTextChange = { onEvent(EditSheetEvent.WatchedTyped(it)) },
                         onDone = {
+                            focusManager.clearFocus()
                             onEvent(EditSheetEvent.TypingEnded)
-                            if (!state.countRefused) focusManager.clearFocus()
                         },
                         onFocusChange = {
                             countFocused = it
@@ -184,14 +188,14 @@ internal fun EditSheet(
                 }
                 if (focusCount) LaunchedEffect(Unit) { countFocus.requestFocus() }
                 Spacer(Modifier.height(Spacing.xl))
-                ScoreSlider(state.draft.score ?: 0) { onEvent(EditSheetEvent.ScoreChanged(it)) }
+                ScoreSlider(state.draft.score ?: 0) { edit(EditSheetEvent.ScoreChanged(it)) }
                 Spacer(Modifier.height(Spacing.xl))
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                    DateInput(DateField.Start, state.draft.startDate, onEvent)
-                    DateInput(DateField.Finish, state.draft.finishDate, onEvent)
+                    DateInput(DateField.Start, state.draft.startDate, edit)
+                    DateInput(DateField.Finish, state.draft.finishDate, edit)
                 }
             }
-            // Out of the scroll so Save is always on screen; hidden while typing, which Done or a tap elsewhere ends.
+            // Out of the scroll, so Save is on screen whenever the keyboard is closed.
             if (!WindowInsets.isImeVisible) {
                 Spacer(Modifier.height(Spacing.xl))
                 Actions(

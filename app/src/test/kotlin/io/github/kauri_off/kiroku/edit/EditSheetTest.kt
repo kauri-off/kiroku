@@ -158,7 +158,7 @@ class EditSheetTest {
         compose.waitForIdle()
         assertEquals(
             listOf(EditSheetEvent.WatchedTyped("24"), EditSheetEvent.StatusChosen(ListStatus.Dropped), EditSheetEvent.SaveClicked),
-            events.take(3),
+            events.filter { it != EditSheetEvent.TypingEnded }.take(3),
         )
         assertTrue(state.closing)
         assertEquals(shown, state.draft)
@@ -179,7 +179,7 @@ class EditSheetTest {
     }
 
     @Test
-    fun aTypedCountSurvivesRecreationWithoutFocus() {
+    fun aRestoredSheetSavesTheTypedCountWithoutFocus() {
         state = opened
         val restoration = StateRestorationTester(compose)
         restoration.setContent(content)
@@ -206,9 +206,12 @@ class EditSheetTest {
         assertEquals(saved.copy(watchedEpisodes = 17), state.draft)
     }
 
+    // One replacement per keystroke, as a real Backspace makes them.
     @Test
-    fun anEmptyCountCannotBeSavedAndLeavingTheFieldShowsTheCountAgain() {
+    fun clearingTheFieldAndLeavingItReturnsToTheCountFromBeforeTyping() {
         sheet()
+        field.performClick()
+        field.performTextReplacement("1")
         field.performTextReplacement("")
         compose.waitForIdle()
         save.assertIsNotEnabled()
@@ -216,23 +219,56 @@ class EditSheetTest {
         compose.waitForIdle()
         field.assertTextContains("12", substring = true)
         save.assertIsEnabled()
+        assertEquals(opened, state)
+    }
+
+    @Test
+    fun clearingTheFieldTakesBackTheStatusAndDateAKeystrokeChanged() {
+        sheet(EditSheetState.of(TITLE, null, total = 24, malEpisodes = 24, today))
+        field.performClick()
+        listOf("", "2", "26", "2", "").forEach { field.performTextReplacement(it) }
+        field.performImeAction()
+        compose.waitForIdle()
+        assertTheSheetShows(EditSheetState.newEntry)
+        assertFalse(state.hasChanges)
     }
 
     @Test
     fun aDisabledSaveWritesNothing() {
-        val refused = opened.after(EditSheetEvent.WatchedTyped("26"))
-        assertFalse(refused.after(EditSheetEvent.SaveClicked).closing)
+        val empty = opened.after(EditSheetEvent.WatchedTyped(""))
+        assertFalse(empty.after(EditSheetEvent.SaveClicked).closing)
     }
 
     @Test
-    fun aCountAboveTheTotalCannotBeSaved() {
+    fun aCountAboveTheTotalIsSavedAsShown() {
         sheet()
+        field.performTextReplacement("2")
         field.performTextReplacement("26")
         compose.waitForIdle()
-        save.assertIsNotEnabled()
-        field.performTextReplacement("24")
+        val shown = saved.copy(status = ListStatus.Completed, watchedEpisodes = 26, finishDate = PartialDate.Day(today))
+        assertTheSheetShows(shown)
+        compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled()
+        save.performClick()
         compose.waitForIdle()
-        save.assertIsEnabled()
+        assertTrue(state.closing)
+        assertEquals(shown, state.draft)
+    }
+
+    @Test
+    fun aTapOnAChipOrTheSliderEndsTyping() {
+        sheet()
+        field.performClick()
+        field.performTextReplacement("13")
+        compose.onNodeWithText("On hold").performClick()
+        compose.waitForIdle()
+        field.assertIsNotFocused()
+        assertEquals(null, state.typed)
+        field.performClick()
+        field.performTextReplacement("14")
+        compose.onNodeWithContentDescription("Score").performSemanticsAction(SemanticsActions.SetProgress) { it(9f) }
+        compose.waitForIdle()
+        field.assertIsNotFocused()
+        assertEquals(saved.copy(status = ListStatus.OnHold, watchedEpisodes = 14, score = 9), state.draft)
     }
 
     @Test
@@ -268,14 +304,25 @@ class EditSheetTest {
     }
 
     @Test
-    fun aCountBeingTypedIsAChange() {
+    fun aChangedCountBeingTypedIsAChange() {
+        sheet()
+        field.performTextReplacement("17")
+        compose.waitForIdle()
+        dragHandle.performSemanticsAction(SemanticsActions.Dismiss)
+        compose.waitForIdle()
+        assertEquals(EditSheetEvent.DismissAsked, events.last())
+        sheetIsOpen()
+    }
+
+    @Test
+    fun anEmptiedFieldWithNothingChangedSimplyCloses() {
         sheet()
         field.performTextReplacement("")
         compose.waitForIdle()
         dragHandle.performSemanticsAction(SemanticsActions.Dismiss)
         compose.waitForIdle()
-        assertEquals(listOf(EditSheetEvent.WatchedTyped(""), EditSheetEvent.DismissAsked), events)
-        sheetIsOpen()
+        assertEquals(EditSheetEvent.Dismissed, events.last())
+        assertFalse(EditSheetEvent.DismissAsked in events)
     }
 
     @Test

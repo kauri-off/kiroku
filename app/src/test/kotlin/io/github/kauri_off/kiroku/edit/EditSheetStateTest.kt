@@ -141,24 +141,71 @@ class EditSheetStateTest {
     }
 
     @Test
-    fun aRefusedOrEmptyCountIsPendingAndCannotBeSaved() {
+    fun anEmptyCountCannotBeSavedAndLosesNothing() {
         val opened = sheet(watching, 24)
-        val refused = opened.after(EditSheetEvent.WatchedTyped("26"))
-        assertEquals(watching, refused.draft)
-        assertTrue(refused.countRefused)
-        assertFalse(refused.canSave)
-        assertFalse(refused.mayLeave)
-        assertFalse(refused.after(EditSheetEvent.SaveClicked).closing)
-        assertEquals(refused, refused.after(EditSheetEvent.TypingEnded))
-
         val empty = opened.after(EditSheetEvent.WatchedTyped(""))
-        assertFalse(empty.countRefused)
+        assertEquals(watching, empty.draft)
+        assertTrue(empty.countEmpty)
         assertFalse(empty.canSave)
-        assertFalse(empty.mayLeave)
+        assertFalse(empty.after(EditSheetEvent.SaveClicked).closing)
+        assertTrue(empty.mayLeave)
         val ended = empty.after(EditSheetEvent.TypingEnded)
         assertNull(ended.typed)
         assertTrue(ended.canSave)
-        assertTrue(ended.mayLeave)
+    }
+
+    @Test
+    fun aCountAboveTheTotalIsAcceptedAndCompletesAsTheTotalDoes() {
+        val state = sheet(watching, 24).afterAll(EditSheetEvent.WatchedTyped("2"), EditSheetEvent.WatchedTyped("26"))
+        assertEquals(watching.copy(status = ListStatus.Completed, watchedEpisodes = 26, finishDate = PartialDate.Day(today)), state.draft)
+        assertTrue(state.canSave)
+        assertTrue(state.after(EditSheetEvent.SaveClicked).closing)
+        val stepped = sheet(watching.copy(watchedEpisodes = 24), 24).afterAll(EditSheetEvent.WatchedChanged(25))
+        assertEquals(ListStatus.Completed, stepped.draft.status)
+    }
+
+    // Each keystroke is its own event, as a real Backspace makes them.
+    @Test
+    fun clearingTheFieldReturnsToTheCountFromBeforeTyping() {
+        val opened = sheet(watching.copy(watchedEpisodes = 12), 24)
+        val cleared = opened.afterAll(EditSheetEvent.WatchedTyped("1"), EditSheetEvent.WatchedTyped(""))
+        assertEquals(opened.draft, cleared.draft)
+        assertFalse(cleared.hasChanges)
+        val left = cleared.after(EditSheetEvent.TypingEnded)
+        assertEquals(opened, left)
+    }
+
+    @Test
+    fun clearingTheFieldTakesBackWhatEarlierKeystrokesCaused() {
+        val planned = sheet(null, 24)
+        val typing = planned.afterAll(EditSheetEvent.WatchedTyped(""), EditSheetEvent.WatchedTyped("2"))
+        assertEquals(ListValues(ListStatus.Watching, 2, null, PartialDate.Day(today), null), typing.draft)
+        val above = typing.after(EditSheetEvent.WatchedTyped("26"))
+        assertEquals(ListValues(ListStatus.Completed, 26, null, PartialDate.Day(today), PartialDate.Day(today)), above.draft)
+        val cleared = above.afterAll(EditSheetEvent.WatchedTyped("2"), EditSheetEvent.WatchedTyped(""))
+        assertEquals(EditSheetState.newEntry, cleared.draft)
+        assertEquals(planned, cleared.after(EditSheetEvent.TypingEnded))
+
+        val twoEpisodes = sheet(watching.copy(watchedEpisodes = 0, startDate = null), 2)
+        val back =
+            twoEpisodes.afterAll(
+                EditSheetEvent.WatchedTyped(""),
+                EditSheetEvent.WatchedTyped("2"),
+                EditSheetEvent.WatchedTyped("20"),
+                EditSheetEvent.WatchedTyped("2"),
+                EditSheetEvent.WatchedTyped(""),
+                EditSheetEvent.TypingEnded,
+            )
+        assertEquals(twoEpisodes, back)
+    }
+
+    @Test
+    fun anotherEditEndsTyping() {
+        val state =
+            sheet(watching, 24).afterAll(EditSheetEvent.WatchedTyped("2"), EditSheetEvent.StatusChosen(ListStatus.OnHold))
+        assertNull(state.typed)
+        assertNull(state.typingFrom)
+        assertEquals(watching.copy(status = ListStatus.OnHold, watchedEpisodes = 2), state.draft)
     }
 
     @Test
@@ -169,12 +216,11 @@ class EditSheetStateTest {
     }
 
     @Test
-    fun theShownTotalBoundsTheCountAndMalsTotalCompletesIt() {
+    fun onlyMalsTotalCompletesTheTitle() {
         val onlyAniList = EditSheetState.of("Title", watching.copy(watchedEpisodes = 11), total = 12, malEpisodes = null, today)
         val stepped = onlyAniList.after(EditSheetEvent.WatchedChanged(12))
         assertEquals(watching.copy(watchedEpisodes = 12), stepped.draft)
-        assertEquals(watching.copy(watchedEpisodes = 12), onlyAniList.after(EditSheetEvent.WatchedTyped("12")).draft)
-        assertTrue(onlyAniList.after(EditSheetEvent.WatchedTyped("13")).countRefused)
+        assertEquals(watching.copy(watchedEpisodes = 13), onlyAniList.after(EditSheetEvent.WatchedTyped("13")).draft)
     }
 
     @Test

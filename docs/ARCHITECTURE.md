@@ -384,11 +384,14 @@ already back at the server's state. The notification action instead waits for th
   last confirmed state at the next start, and the list is then synced whatever its age. No entry is left out of
   syncs for good.
 - **W6.** One list sync runs at a time.
-- **W7. Automatic status changes match MAL's website.** When the watched count reaches MAL's total, the status
-  becomes Completed and an empty finish date becomes today, in the same write. The first episode of a planned
-  title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
+- **W7. Automatic status changes match MAL's website.** When the watched count reaches MAL's total, or is set above
+  it, the status becomes Completed and an empty finish date becomes today, in the same write. The first episode of a
+  planned title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
   overwritten, and a Completed title stepped below its total stays Completed.
 - **W8.** There is no offline write queue in 1.0, except the notification action (N9).
+- **W9. The watched count has no ceiling.** MAL's API sets none, and a user must be able to record what they
+  watched: every write ("+1", "Mark watched", the stepper, the edit sheet) accepts any count of zero or more, above
+  the aired count and the total included. "To watch" is then zero (A8).
 
 ## 8. Design system
 
@@ -451,7 +454,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke, except in the edit sheet, which writes nothing before Save and applies it as it is typed; a value above the total is refused with an inline error and not applied |
+| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke, except in the edit sheet, which writes nothing before Save and applies it as it is typed. The count has no ceiling (W9): "25 / 24" is a legal display, plus stays enabled at the total, and nothing is refused; only digits are taken, an empty field is not a count, and the length is limited |
 | `ScreenState` | `CircularProgressIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
 
@@ -644,10 +647,13 @@ A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet op
 edits; the status as five single-choice chips in a wrapping row (two rows in the base variants, more with larger
 text; chips are controls, not logical lines); an `EpisodeStepper` labelled "Episodes watched"; a score slider 0 to 10
 labelled "Score", with the score names of the glossary; start and finish dates; a text button "Remove from list"
-(asks for confirmation); "Save", always on screen without scrolling. Limit: nothing else. Nothing is written before
-"Save", and "Save" writes exactly what the sheet shows: a typed count takes effect in the sheet as it is typed, and
-"Save" is disabled while the count field is empty or holds a count above the total. The stepper's total is the
-displayed total (A3); the automatic status change is decided on MAL's total (W7). Dismissing the sheet with unsaved
+(asks for confirmation); "Save", on screen without scrolling whenever the keyboard is closed (while the keyboard is
+open, "Save" and "Remove from list" are hidden; Done, Back or a tap on another control closes it). Limit: nothing
+else. Nothing is written before "Save", and "Save" writes exactly what the sheet shows: a typed count takes effect in
+the sheet as it is typed, and an empty field shows and holds the values from before typing began, taking back any
+automatic change an earlier keystroke caused. "Save" is disabled only while the count field is empty. The stepper's
+total is the displayed total (A3) and does not bound the count (W9); the automatic status change is decided on MAL's
+total (W7). Dismissing the sheet with unsaved
 changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come after 1.0.
 
 ### 9.6 Search

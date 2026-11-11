@@ -21,10 +21,9 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.text.AnnotatedString
-import io.github.kauri_off.kiroku.design.component.EpisodeInput
 import io.github.kauri_off.kiroku.design.component.EpisodeStepper
-import io.github.kauri_off.kiroku.design.component.episodeInput
 import io.github.kauri_off.kiroku.design.component.episodeText
+import io.github.kauri_off.kiroku.design.component.typedCount
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -89,17 +88,13 @@ class EpisodeStepperTest {
     }
 
     @Test
-    fun aCountAboveTheTotalIsRefusedAndNotApplied() {
+    fun aCountAboveTheTotalIsAppliedLikeAnyOther() {
         stepper(12, 24)
         field.performTextReplacement("30")
         field.performImeAction()
-        assertEquals(emptyList<Int>(), changes)
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
-        field.assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
-        field.performTextReplacement("24")
-        field.performImeAction()
-        assertEquals(listOf(24), changes)
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
+        assertEquals(listOf(30), changes)
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
+        field.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
     }
 
     @Test
@@ -112,14 +107,15 @@ class EpisodeStepperTest {
     }
 
     @Test
-    fun buttonsStepByOneWithinTheTotal() {
+    fun buttonsStepByOneAndPlusPassesTheTotal() {
         stepper(23, 24)
         val plus = compose.onNodeWithContentDescription("Plus one episode")
         plus.performClick()
-        assertEquals(listOf(24), changes)
-        plus.assertIsNotEnabled()
+        plus.assertIsEnabled()
+        plus.performClick()
+        assertEquals(listOf(24, 25), changes)
         compose.onNodeWithContentDescription("Minus one episode").performClick()
-        assertEquals(listOf(24, 23), changes)
+        assertEquals(listOf(24, 25, 24), changes)
     }
 
     @Test
@@ -158,31 +154,22 @@ class EpisodeStepperTest {
         assertEquals(listOf(21, 4), changes)
     }
 
-    // The same typed count gives the same buttons before and after it is refused: neither can step from it.
     @Test
-    fun aCountAboveTheTotalDisablesBothButtons() {
+    fun aTypedCountAboveTheTotalStepsLikeAnyOther() {
         stepper(12, 24)
-        val minus = compose.onNodeWithContentDescription("Minus one episode")
-        val plus = compose.onNodeWithContentDescription("Plus one episode")
         field.performTextReplacement("30")
-        minus.assertIsNotEnabled()
-        plus.assertIsNotEnabled()
-        field.performImeAction()
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
-        minus.assertIsNotEnabled()
-        plus.assertIsNotEnabled()
-        assertEquals(emptyList<Int>(), changes)
-        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
-        field.performTextReplacement("3")
-        minus.assertIsEnabled()
-        plus.assertIsEnabled()
+        compose.onNodeWithContentDescription("Plus one episode").performClick()
+        assertEquals(listOf(31), changes)
+        field.performTextReplacement("26")
+        compose.onNodeWithContentDescription("Minus one episode").performClick()
+        assertEquals(listOf(31, 25), changes)
     }
 
     @Test
-    fun aTypedCountAtTheTotalDisablesPlusAndMinusStepsFromIt() {
+    fun aTypedCountAtTheTotalLeavesBothButtonsEnabled() {
         stepper(12, 24)
         field.performTextReplacement("24")
-        compose.onNodeWithContentDescription("Plus one episode").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled()
         compose.onNodeWithContentDescription("Minus one episode").performClick()
         assertEquals(listOf(23), changes)
     }
@@ -196,11 +183,9 @@ class EpisodeStepperTest {
                 EpisodeStepper(given, 24, onWatchedChange = { changes += it }, typed = "30")
             }
         }
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
         compose.runOnIdle { given = 13 }
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("13")))
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled()
         assertEquals(emptyList<Int>(), changes)
     }
 
@@ -229,21 +214,8 @@ class EpisodeStepperTest {
             }
         }
         field.performTextReplacement("30")
-        field.performImeAction()
         restoration.emulateSavedInstanceStateRestore()
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
-    }
-
-    @Test
-    fun editingClearsTheRefusal() {
-        stepper(12, 24)
-        field.performTextReplacement("30")
-        field.performImeAction()
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
-        field.performTextReplacement("3")
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
-        assertEquals(emptyList<Int>(), changes)
     }
 
     @Test
@@ -261,30 +233,26 @@ class EpisodeStepperTest {
     }
 
     @Test
-    fun aPasteIsRefusedOrNotTakenButNeverCut() {
+    fun aPasteOfTooManyDigitsIsNotTakenNorCut() {
         stepper(12, 24)
         field.performTextReplacement("123")
-        field.performImeAction()
-        assertEquals(emptyList<Int>(), changes)
-        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
-        field.performTextReplacement("12345")
+        field.performTextReplacement("123456")
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("123")))
+        field.performImeAction()
+        assertEquals(listOf(123), changes)
     }
 
     @Test
     fun inputRules() {
-        assertEquals(EpisodeInput.Apply(13), episodeInput("13", 12, 24))
-        assertEquals(EpisodeInput.Apply(7), episodeInput("007", 12, 24))
-        assertEquals(EpisodeInput.Keep, episodeInput("12", 12, 24))
-        assertEquals(EpisodeInput.Keep, episodeInput("", 12, 24))
-        assertEquals(EpisodeInput.Apply(24), episodeInput("24", 12, 24))
-        assertEquals(EpisodeInput.TooMany(24), episodeInput("25", 12, 24))
-        assertEquals(EpisodeInput.Apply(5000), episodeInput("5000", 12, null))
-        assertEquals("12", episodeText(" 12 ", 24))
-        assertEquals(null, episodeText("1a-2", 24))
-        assertEquals("999", episodeText("999", 24))
-        assertEquals(null, episodeText("9999", 24))
-        assertEquals("1234", episodeText("1234", null))
-        assertEquals(null, episodeText("12345", null))
+        assertEquals(13, typedCount("13", 12))
+        assertEquals(7, typedCount("007", 12))
+        assertEquals(null, typedCount("12", 12))
+        assertEquals(null, typedCount("", 12))
+        assertEquals(25, typedCount("25", 12))
+        assertEquals(99_999, typedCount("99999", 12))
+        assertEquals("12", episodeText(" 12 "))
+        assertEquals(null, episodeText("1a-2"))
+        assertEquals("99999", episodeText("99999"))
+        assertEquals(null, episodeText("123456"))
     }
 }

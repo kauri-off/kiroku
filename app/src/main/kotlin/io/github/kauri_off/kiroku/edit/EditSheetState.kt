@@ -21,9 +21,9 @@ sealed interface EditDialog {
     data object ConfirmDiscard : EditDialog
 }
 
-// [total] is shown and bounds the count (A3); [malEpisodes] is what W7 completes on. [saved] is null for a title not on
-// the list. [typed] is the count field's text while it differs from the draft's count's own text; [closing] lets the
-// sheet leave with values that differ from [saved].
+// [total] is only shown (A3), and the count may pass it; [malEpisodes] is what W7 completes on. [saved] is null for a
+// title not on the list. [typed] is the count field's text while the user types, and [typingFrom] the count from before
+// typing began; [closing] lets the sheet leave with values that differ from [saved].
 data class EditSheetState(
     val title: String,
     val total: Int?,
@@ -32,6 +32,7 @@ data class EditSheetState(
     val draft: ListValues,
     val today: LocalDate,
     val typed: String? = null,
+    val typingFrom: Int? = null,
     val dialog: EditDialog? = null,
     val closing: Boolean = false,
     val beforeAutomatic: ListValues? = null,
@@ -44,16 +45,13 @@ data class EditSheetState(
 
     val hasChanges: Boolean get() = draft != (saved ?: newEntry)
 
-    // The field holds a count above the total, refused and not in the draft.
-    val countRefused: Boolean get() = typed?.toIntOrNull()?.let { total != null && it > total } == true
-
-    // The field shows something other than the draft's count: an empty field or a refused count.
-    val countPending: Boolean get() = typed != null && typed.toIntOrNull() != draft.watchedEpisodes
+    // An empty field is not a count; the draft then holds the count from before typing.
+    val countEmpty: Boolean get() = typed?.isEmpty() == true
 
     // Save writes the draft, so it is allowed only while the sheet shows exactly the draft.
-    val canSave: Boolean get() = !countPending
+    val canSave: Boolean get() = !countEmpty
 
-    val mayLeave: Boolean get() = closing || (!hasChanges && !countPending)
+    val mayLeave: Boolean get() = closing || !hasChanges
 
     companion object {
         val newEntry = ListValues(ListStatus.Planned, watchedEpisodes = 0, score = null, startDate = null, finishDate = null)
@@ -134,9 +132,9 @@ sealed interface EditSheetEvent {
 fun EditSheetState.after(event: EditSheetEvent): EditSheetState =
     when (event) {
         is EditSheetEvent.StatusChosen -> edited(draft.copy(status = event.status))
-        is EditSheetEvent.WatchedChanged -> withWatched(event.watched).copy(typed = null)
+        is EditSheetEvent.WatchedChanged -> withWatched(event.watched).typingEnded()
         is EditSheetEvent.WatchedTyped -> typed(event.text)
-        EditSheetEvent.TypingEnded -> if (countRefused) this else copy(typed = null)
+        EditSheetEvent.TypingEnded -> typingEnded()
         is EditSheetEvent.ScoreChanged -> edited(draft.copy(score = event.score.takeIf { it > 0 }))
         is EditSheetEvent.DateOpened -> copy(dialog = EditDialog.PickDate(event.field))
         is EditSheetEvent.DatePicked -> edited(draft.withDate(event.field, PartialDate.Day(event.date))).copy(dialog = null)
@@ -150,11 +148,14 @@ fun EditSheetState.after(event: EditSheetEvent): EditSheetState =
         EditSheetEvent.Dismissed -> this
     }
 
-private fun EditSheetState.edited(values: ListValues) = copy(draft = values, beforeAutomatic = null)
+private fun EditSheetState.edited(values: ListValues) = typingEnded().copy(draft = values, beforeAutomatic = null)
 
+private fun EditSheetState.typingEnded() = copy(typed = null, typingFrom = null)
+
+// Text that holds no count returns to the count from before typing, and so takes back what earlier keystrokes caused.
 private fun EditSheetState.typed(text: String): EditSheetState {
-    val count = text.toIntOrNull()?.takeIf { total == null || it <= total } ?: return copy(typed = text)
-    return withWatched(count).copy(typed = text)
+    val from = typingFrom ?: draft.watchedEpisodes
+    return withWatched(text.toIntOrNull() ?: from).copy(typed = text, typingFrom = from)
 }
 
 // W7's automatic changes show before Save; a later count that no longer causes them takes them back.

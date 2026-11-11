@@ -31,7 +31,7 @@ class EditScreenshots : ScreenshotRegistry() {
             case("new-entry") { EditSheet(EditFixtures.newEntry, onEvent = {}) },
             case("unknown-total") { EditSheet(EditFixtures.unknownTotal, onEvent = {}) },
             case("keyboard-open", keyboard = true) { EditSheet(EditFixtures.typing, onEvent = {}, focusCount = true) },
-            case("over-total-error") { EditSheet(EditFixtures.overTotal, onEvent = {}) },
+            case("above-total") { EditSheet(EditFixtures.aboveTotal, onEvent = {}) },
             case("remove-confirm") { EditSheet(EditFixtures.existing.copy(dialog = EditDialog.ConfirmRemove), onEvent = {}) },
             case("discard-confirm") { EditSheet(EditFixtures.changed.copy(dialog = EditDialog.ConfirmDiscard), onEvent = {}) },
             case("partial-dates") { EditSheet(EditFixtures.partialDates, onEvent = {}) },
@@ -63,7 +63,7 @@ object EditFixtures {
 
     val typing = existing.after(EditSheetEvent.WatchedTyped(1.toString())).after(EditSheetEvent.WatchedTyped(14.toString()))
 
-    val overTotal = existing.after(EditSheetEvent.WatchedTyped(2.toString())).after(EditSheetEvent.WatchedTyped(26.toString()))
+    val aboveTotal = existing.after(EditSheetEvent.WatchedChanged(26))
 
     val partialDates =
         sheet(

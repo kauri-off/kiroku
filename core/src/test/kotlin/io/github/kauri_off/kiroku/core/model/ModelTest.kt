@@ -104,7 +104,16 @@ class ModelTest {
         assertEquals(watching.copy(watchedEpisodes = 4), watching.withWatched(4, 12, today))
         val completed = ListValues(ListStatus.Completed, 12, 9, earlier, earlier)
         assertEquals(completed, completed.withWatched(12, 12, today))
-        fails { watching.withWatched(13, 12, today) }
+    }
+
+    @Test
+    fun `W7 a count above MAL's total is accepted and completes the title as reaching it does`() {
+        val watching = ListValues(ListStatus.Watching, 11, 8, earlier, null)
+        assertEquals(ListValues(ListStatus.Completed, 13, 8, earlier, day), watching.withWatched(13, 12, today))
+        val planned = ListValues(ListStatus.Planned, 0, null, null, null)
+        assertEquals(ListValues(ListStatus.Completed, 30, null, day, day), planned.withWatched(30, 12, today))
+        val completed = ListValues(ListStatus.Completed, 12, 9, earlier, earlier)
+        assertEquals(completed.copy(watchedEpisodes = 14), completed.withWatched(14, 12, today))
     }
 
     @Test
