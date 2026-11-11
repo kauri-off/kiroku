@@ -608,8 +608,9 @@ One scrolling column in this fixed order. No tabs, no floating buttons.
    date and can differ from the device's by a day. An unknown total drops the "of 24" part: `14 aired`.
    The "to watch" part is in the `tertiary` colour. The list row and this block show the same numbers for the same
    title (A1), also for a title outside the tracked set (A12).
-5. **Synopsis:** line cap four, with "More" to expand in place. Under it one line of plain text with the genres
-   ("Action · Fantasy · Drama"), line cap one.
+5. **Synopsis:** a `SectionHeader` "Synopsis" over the text, line cap four, with "More" to expand in place. Under
+   it one line of plain text with the genres ("Action · Fantasy · Drama"), line cap one. Without a synopsis, the
+   genres line stands alone, with no header.
 6. **Related** (must show when the title has related anime): `SectionHeader` "Related". A horizontal strip of at
    most ten `PosterCard`s.
    - The card's title: line cap two.
@@ -622,7 +623,7 @@ One scrolling column in this fixed order. No tabs, no floating buttons.
    - "See all" is shown whenever anything is not in the strip. Related manga are not shown in 1.0.
 7. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
    percentages, and one line with the member count.
-8. **More:** rows that open sub-screens: "Details", "Recommendations".
+8. **More:** rows that open sub-screens: "Details", and "Recommendations" when MAL gives any.
 
 **Above the fold:** on a 411 × 891 dp screen the header, the list block and the airing block are visible without
 scrolling, for a title of up to two lines.

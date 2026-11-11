@@ -86,6 +86,7 @@ The edit sheet's slider shows the number with MAL's name for it.
 | Any other failure to load a title | Could not load this title | Не удалось загрузить тайтл | |
 | Related | Related | Связанное | |
 | Statistics | Statistics | Статистика | |
+| A share under one percent | <1% | <1 % | A non-zero count whose share rounds to 0 in a `StatBar`; spoken "less than 1 percent" / «менее 1 процента» |
 | Members | 1,234,567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
 | Details | Details | Подробности | |
 | Recommendations | Recommendations | Рекомендации | |
@@ -103,6 +104,46 @@ The edit sheet's slider shows the number with MAL's name for it.
 
 Roadmap milestone M2 compares the Russian relation names with the names Shikimori uses and puts the differences to
 the owner; a name changes only on the owner's answer.
+
+## Genres
+
+MAL's genres, themes and demographics, by MAL id. Russian names are nouns in the nominative, never adjectives or
+phrases, and two genres never share a name or a near-synonym. Japanese terms follow the Polivanov system: «Сёнэн»,
+«Сэйнэн», «Сёдзё», «Дзёсэй», «Исэкай». The table holds the genres the app has names for; a genre not in it is shown
+by its MAL name (ARCHITECTURE section 10). Milestone M2 completes it from recorded MAL responses.
+
+| MAL id | MAL name | English | Russian |
+|---|---|---|---|
+| 1 | Action | Action | Экшен |
+| 2 | Adventure | Adventure | Приключения |
+| 4 | Comedy | Comedy | Комедия |
+| 5 | Avant Garde | Avant garde | Авангард |
+| 6 | Mythology | Mythology | Мифология |
+| 7 | Mystery | Mystery | Тайна |
+| 8 | Drama | Drama | Драма |
+| 10 | Fantasy | Fantasy | Фэнтези |
+| 13 | Historical | Historical | История |
+| 14 | Horror | Horror | Ужасы |
+| 18 | Mecha | Mecha | Меха |
+| 19 | Music | Music | Музыка |
+| 22 | Romance | Romance | Романтика |
+| 23 | School | School | Школа |
+| 24 | Sci-Fi | Sci-fi | Фантастика |
+| 27 | Shounen | Shounen | Сёнэн |
+| 29 | Space | Space | Космос |
+| 30 | Sports | Sports | Спорт |
+| 31 | Super Power | Super power | Сверхспособности |
+| 36 | Slice of Life | Slice of life | Повседневность |
+| 37 | Supernatural | Supernatural | Мистика |
+| 38 | Military | Military | Война |
+| 39 | Detective | Detective | Детектив |
+| 40 | Psychological | Psychological | Психология |
+| 41 | Suspense | Suspense | Триллер |
+| 42 | Seinen | Seinen | Сэйнэн |
+| 46 | Award Winning | Award winning | Награды |
+| 47 | Gourmet | Gourmet | Кулинария |
+| 62 | Isekai | Isekai | Исэкай |
+| 63 | Iyashikei | Iyashikei | Иясикэй |
 
 ## Notifications
 

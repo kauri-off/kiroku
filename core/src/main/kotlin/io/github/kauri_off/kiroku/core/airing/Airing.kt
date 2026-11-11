@@ -127,3 +127,31 @@ fun premiereOf(
         null -> Premiere.Unannounced
     }
 }
+
+// What a title's airing block and a list row's airing lines show; null when the title shows none (A1).
+sealed interface AiringPhase {
+    data class NotYetAired(
+        val premiere: Premiere,
+    ) : AiringPhase
+
+    data class Aired(
+        val aired: AiredCount.Known,
+        // Present only when above zero.
+        val toWatch: AiredCount.Known?,
+        val next: ScheduledEpisode?,
+    ) : AiringPhase
+
+    data object CountUnknown : AiringPhase
+}
+
+fun airingPhase(
+    anime: Anime,
+    entry: ListEntry?,
+    airing: Airing?,
+    today: LocalDate,
+): AiringPhase? {
+    premiereOf(anime, airing, today)?.let { return AiringPhase.NotYetAired(it) }
+    if (anime.airingStatus == AiringStatus.Finished) return null
+    val aired = airing?.aired as? AiredCount.Known ?: return AiringPhase.CountUnknown
+    return AiringPhase.Aired(aired, entry?.let { toWatch(it, airing) }?.takeIf { it.value > 0 }, airing.nextEpisode)
+}

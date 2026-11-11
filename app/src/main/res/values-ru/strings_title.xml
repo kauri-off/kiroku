@@ -24,7 +24,6 @@
     <string name="title_to_watch">к\u00A0просмотру:\u00A0%d</string>
     <string name="title_to_watch_estimated">к\u00A0просмотру:\u00A0~%d</string>
     <string name="title_airing">Выходит</string>
-    <string name="title_next_episode">Серия\u00A0%1$d\u00A0· %2$s</string>
     <string name="title_premieres_at">Премьера: %s</string>
     <string name="title_premieres_on">Премьера %s</string>
     <string-array name="title_premieres_in_month">
@@ -43,8 +42,6 @@
     </string-array>
     <string name="title_premieres_in_year">Премьера в\u00A0%d\u00A0г.</string>
     <string name="title_not_yet_aired">Ещё не вышло</string>
-    <string name="title_today">сегодня %s</string>
-    <string name="title_tomorrow">завтра %s</string>
     <string name="title_synopsis">Описание</string>
     <string name="title_synopsis_more">Ещё</string>
     <string name="title_related">Связанное</string>
@@ -92,35 +89,4 @@
     <string name="title_relation_alt_setting">Альт. сеттинг</string>
     <string name="title_relation_alt_version">Альт. версия</string>
     <string name="title_relation_summary">Краткое изложение</string>
-
-    <string name="title_genre_action">Экшен</string>
-    <string name="title_genre_adventure">Приключения</string>
-    <string name="title_genre_comedy">Комедия</string>
-    <string name="title_genre_avant_garde">Авангард</string>
-    <string name="title_genre_mythology">Мифология</string>
-    <string name="title_genre_mystery">Детектив</string>
-    <string name="title_genre_drama">Драма</string>
-    <string name="title_genre_fantasy">Фэнтези</string>
-    <string name="title_genre_historical">Исторический</string>
-    <string name="title_genre_horror">Ужасы</string>
-    <string name="title_genre_mecha">Меха</string>
-    <string name="title_genre_music">Музыка</string>
-    <string name="title_genre_romance">Романтика</string>
-    <string name="title_genre_school">Школа</string>
-    <string name="title_genre_sci_fi">Фантастика</string>
-    <string name="title_genre_shounen">Сёнен</string>
-    <string name="title_genre_space">Космос</string>
-    <string name="title_genre_sports">Спорт</string>
-    <string name="title_genre_super_power">Суперсила</string>
-    <string name="title_genre_slice_of_life">Повседневность</string>
-    <string name="title_genre_supernatural">Сверхъестественное</string>
-    <string name="title_genre_military">Военное</string>
-    <string name="title_genre_detective">Расследование</string>
-    <string name="title_genre_psychological">Психологическое</string>
-    <string name="title_genre_suspense">Саспенс</string>
-    <string name="title_genre_seinen">Сэйнэн</string>
-    <string name="title_genre_award_winning">Отмечено наградами</string>
-    <string name="title_genre_gourmet">Гурман</string>
-    <string name="title_genre_isekai">Исэкай</string>
-    <string name="title_genre_iyashikei">Иясикэй</string>
 </resources>

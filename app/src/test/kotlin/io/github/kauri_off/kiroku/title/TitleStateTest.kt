@@ -1,60 +1,107 @@
 package io.github.kauri_off.kiroku.title
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
-import io.github.kauri_off.kiroku.core.airing.episodeTotal
-import io.github.kauri_off.kiroku.core.airing.premiereOf
-import io.github.kauri_off.kiroku.core.airing.toWatch
+import io.github.kauri_off.kiroku.core.airing.AiringPhase
+import io.github.kauri_off.kiroku.core.airing.Premiere
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
-import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.RELATED_STRIP_LIMIT
 import io.github.kauri_off.kiroku.core.model.relatedStrip
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Duration
+import java.time.LocalDate
+import java.time.Year
+import java.time.YearMonth
 
-// A1: the page shows :core's aired count, total, "to watch" and premiere, never values of its own.
 class TitleStateTest {
     private val set = Fixtures.reference
-    private val today = set.now.atZone(set.clock.zone).toLocalDate()
 
+    private fun japan(at: String) = FixtureTime.japan(at)
+
+    // Each case's airing block, written out: what the page shows, not how it is computed.
     @Test
-    fun theAiringBlockHoldsCoresValuesForEveryFixture() {
-        for (anime in set.anime) {
-            val entry = set.entryFor(anime.id)
-            val airing = set.airing[anime.id]
-            val state = TitleFixtures.of(anime)
-            assertEquals(anime.titles.romaji, episodeTotal(anime, airing), state.total)
-            val premiere = premiereOf(anime, airing, today)
-            when (val block = state.airing) {
-                null -> assertTrue(anime.titles.romaji, premiere == null && anime.airingStatus != AiringStatus.Airing)
-                is AiringBlock.Premieres -> assertEquals(anime.titles.romaji, premiere, block.premiere)
-                AiringBlock.CountUnknown -> assertFalse(anime.titles.romaji, airing?.aired is AiredCount.Known)
-                is AiringBlock.Aired -> {
-                    assertNull(premiere)
-                    assertEquals(anime.titles.romaji, airing?.aired, block.aired)
-                    assertEquals(anime.titles.romaji, episodeTotal(anime, airing), block.total)
-                    assertEquals(anime.titles.romaji, entry?.let { toWatch(it, airing) }?.takeIf { it.value > 0 }, block.toWatch)
-                    assertEquals(anime.titles.romaji, airing?.nextEpisode, block.next)
-                }
-            }
-        }
+    fun everyCaseShowsItsAiringBlock() {
+        val expected: Map<String, Pair<TitleState.Shown, AiringPhase?>> =
+            mapOf(
+                "airing-on-list" to
+                    (
+                        TitleFixtures.of(FixtureAnime.exactToWatch) to
+                            AiringPhase.Aired(AiredCount.Exact(14), AiredCount.Exact(2), ScheduledEpisode(15, japan("2026-01-17T23:30")))
+                    ),
+                "not-on-list" to
+                    (
+                        TitleFixtures.of(FixtureAnime.notOnListAiring) to
+                            AiringPhase.Aired(AiredCount.Exact(7), null, ScheduledEpisode(8, japan("2026-01-18T22:00")))
+                    ),
+                "airing-estimated" to
+                    (
+                        TitleFixtures.of(FixtureAnime.estimatedToWatch) to
+                            AiringPhase.Aired(AiredCount.Estimated(10), AiredCount.Estimated(3), null)
+                    ),
+                "airing-estimated-caught-up" to
+                    (TitleFixtures.of(FixtureAnime.estimatedCaughtUp) to AiringPhase.Aired(AiredCount.Estimated(5), null, null)),
+                "airing-unknown" to (TitleFixtures.of(FixtureAnime.airedUnknown) to AiringPhase.CountUnknown),
+                "finished" to (TitleFixtures.of(FixtureAnime.finishedPartWay) to null),
+                "film" to (TitleFixtures.of(FixtureAnime.film) to null),
+                "not-yet-aired" to
+                    (
+                        TitleFixtures.of(FixtureAnime.premiereTimeSoon) to
+                            AiringPhase.NotYetAired(Premiere.At(japan("2026-01-18T00:30")))
+                    ),
+                "not-yet-aired-date" to
+                    (TitleFixtures.of(FixtureAnime.premiereDate) to AiringPhase.NotYetAired(Premiere.OnDay(LocalDate.of(2026, 4, 4)))),
+                "not-yet-aired-month" to
+                    (TitleFixtures.of(FixtureAnime.premiereMonth) to AiringPhase.NotYetAired(Premiere.InMonth(YearMonth.of(2026, 7)))),
+                "not-yet-aired-year" to
+                    (TitleFixtures.of(FixtureAnime.premiereYear) to AiringPhase.NotYetAired(Premiere.InYear(Year.of(2027)))),
+                "not-yet-aired-nodate" to
+                    (TitleFixtures.of(FixtureAnime.premiereUnannounced) to AiringPhase.NotYetAired(Premiere.Unannounced)),
+                "no-related" to
+                    (
+                        TitleFixtures.of(FixtureAnime.exactCaughtUp) to
+                            AiringPhase.Aired(AiredCount.Exact(8), null, ScheduledEpisode(9, japan("2026-01-15T00:00")))
+                    ),
+                "long-title" to
+                    (
+                        TitleFixtures.of(FixtureAnime.longTitle) to
+                            AiringPhase.Aired(AiredCount.Exact(3), AiredCount.Exact(2), ScheduledEpisode(4, japan("2026-01-16T01:00")))
+                    ),
+                "no-score" to
+                    (
+                        TitleFixtures.of(FixtureAnime.premiereTimeLater) to
+                            AiringPhase.NotYetAired(Premiere.At(japan("2026-01-28T21:00")))
+                    ),
+                "first-episode-aired" to
+                    (
+                        TitleFixtures.firstEpisodeAired to
+                            AiringPhase.Aired(
+                                AiredCount.Exact(1),
+                                AiredCount.Exact(1),
+                                ScheduledEpisode(2, set.now.plus(Duration.ofDays(7)).minus(Duration.ofHours(1))),
+                            )
+                    ),
+            )
+        for ((case, pair) in expected) assertEquals(case, pair.second, pair.first.airing)
     }
 
     @Test
-    fun theCasesShowTheirAiringForms() {
-        val toWatch = TitleFixtures.of(FixtureAnime.exactToWatch).airing as AiringBlock.Aired
-        assertEquals(AiredCount.Exact(2), toWatch.toWatch)
-        val estimated = TitleFixtures.of(FixtureAnime.estimatedToWatch).airing as AiringBlock.Aired
-        assertEquals(AiredCount.Estimated(3), estimated.toWatch)
-        assertNull((TitleFixtures.of(FixtureAnime.estimatedCaughtUp).airing as AiringBlock.Aired).toWatch)
-        assertNull((TitleFixtures.of(FixtureAnime.notOnListAiring).airing as AiringBlock.Aired).toWatch)
-        assertEquals(AiringBlock.CountUnknown, TitleFixtures.of(FixtureAnime.airedUnknown).airing)
-        assertNull(TitleFixtures.of(FixtureAnime.finishedPartWay).airing)
-        assertNull(TitleFixtures.of(FixtureAnime.film).airing)
+    fun theTotalIsMalsOrElseTheSchedules() {
+        assertEquals(24, TitleFixtures.of(FixtureAnime.exactToWatch).total)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.airedUnknown).total)
+        assertEquals(1, TitleFixtures.of(FixtureAnime.film).total)
+    }
+
+    @Test
+    fun theStateCarriesTheClocksZone() {
+        val state = TitleFixtures.of(FixtureAnime.exactToWatch)
+        assertEquals(set.clock.zone, state.now.zone)
+        assertEquals(set.now, state.now.toInstant())
     }
 
     @Test

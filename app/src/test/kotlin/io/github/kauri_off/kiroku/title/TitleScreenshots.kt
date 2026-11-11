@@ -1,9 +1,25 @@
 package io.github.kauri_off.kiroku.title
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -15,6 +31,7 @@ import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
 import io.github.kauri_off.kiroku.screenshots.shown
+import java.time.Duration
 
 class TitleScreenshots : ScreenshotRegistry() {
     override val content = contentCase("airing-on-list") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch)) }
@@ -39,13 +56,33 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("long-title") { Screen(TitleFixtures.of(FixtureAnime.longTitle)) },
             case("details-loading") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(details = null)) },
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
+            case("planned-scored") { Screen(TitleFixtures.plannedScored) },
+            case("first-episode-aired") { Screen(TitleFixtures.firstEpisodeAired) },
             case("added-snackbar") { Screen(TitleFixtures.added) },
             case("completed-snackbar") { Screen(TitleFixtures.completed) },
         )
 }
 
 @Composable
-private fun Screen(state: TitleState) = TitleScreen(state, onEvent = {})
+private fun Screen(state: TitleState) = TitleInShell(state, onEvent = {})
+
+// The page as the shell shows it: the shell draws the one snackbar host, above the gesture bar.
+@Composable
+fun TitleInShell(
+    state: TitleState,
+    onEvent: (TitleEvent) -> Unit,
+    snackbars: SnackbarHostState = remember { SnackbarHostState() },
+) {
+    Box(Modifier.fillMaxSize()) {
+        TitleScreen(state, onEvent, snackbars)
+        SnackbarHost(
+            snackbars,
+            Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
+        )
+    }
+}
 
 object TitleFixtures {
     private val set = Fixtures.reference
@@ -53,16 +90,43 @@ object TitleFixtures {
     private val statuses: Map<AnimeId, ListStatus> =
         set.entries.associate { it.anime.id to it.status }
 
-    fun of(anime: Anime): TitleState.Shown =
+    fun of(
+        anime: Anime,
+        entry: ListEntry? = set.entryFor(anime.id),
+        airing: Airing? = set.airing[anime.id],
+    ): TitleState.Shown =
         titleState(
             anime = anime,
-            entry = set.entryFor(anime.id),
-            airing = set.airing[anime.id],
+            entry = entry,
+            airing = airing,
             details = set.details[anime.id],
             listStatuses = statuses,
             language = TitleLanguage.Romaji,
             clock = set.clock,
         )
+
+    // The longest status name beside the longest score text.
+    val plannedScored: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.exactToWatch
+            val entry = checkNotNull(set.entryFor(anime.id))
+            return of(anime, entry.copy(values = entry.values.copy(status = ListStatus.Planned, score = 10)))
+        }
+
+    // Episode 1 aired an hour ago and MAL still says "not yet aired": the stored count decides.
+    val firstEpisodeAired: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.NotYetAired)
+            val entry = ListEntry(anime, ListValues(ListStatus.Watching, 0, null, null, null), set.now)
+            val airing =
+                Airing(
+                    aired = AiredCount.Exact(1),
+                    total = anime.malEpisodes,
+                    nextEpisode = ScheduledEpisode(2, set.now.plus(Duration.ofDays(7)).minus(Duration.ofHours(1))),
+                    latestAiredAt = set.now.minus(Duration.ofHours(1)),
+                )
+            return of(anime, entry, airing)
+        }
 
     // "Add to list" was tapped: the title is Planned and the snackbar offers "Change".
     val added: TitleState.Shown

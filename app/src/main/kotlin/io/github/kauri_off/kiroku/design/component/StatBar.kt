@@ -32,8 +32,21 @@ fun StatBar(
     val percent = (fraction * PERCENT).roundToInt()
     val locale = LocalConfiguration.current.locales[0]
     val countText = NumberFormat.getIntegerInstance(locale).format(count)
-    val percentText = NumberFormat.getPercentInstance(locale).format(percent / PERCENT.toDouble())
-    val sentence = pluralStringResource(R.plurals.design_stat_bar_description, percent, label, countText, percent)
+    val percentFormat = NumberFormat.getPercentInstance(locale)
+    // A share that rounds to 0 but is not empty reads "<1%", so a count never sits beside "0%".
+    val underOne = count > 0 && percent == 0
+    val percentText =
+        if (underOne) {
+            stringResource(R.string.design_stat_bar_under_one, percentFormat.format(1.0 / PERCENT))
+        } else {
+            percentFormat.format(percent / PERCENT.toDouble())
+        }
+    val sentence =
+        if (underOne) {
+            stringResource(R.string.design_stat_bar_description_under_one, label, countText)
+        } else {
+            pluralStringResource(R.plurals.design_stat_bar_description, percent, label, countText, percent)
+        }
     Column(
         modifier
             .fillMaxWidth()

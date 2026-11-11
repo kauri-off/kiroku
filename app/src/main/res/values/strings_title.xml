@@ -23,7 +23,6 @@
     <string name="title_to_watch">%d\u00A0to\u00A0watch</string>
     <string name="title_to_watch_estimated">~%d\u00A0to\u00A0watch</string>
     <string name="title_airing">Airing</string>
-    <string name="title_next_episode">Episode\u00A0%1$d\u00A0· %2$s</string>
     <string name="title_premieres_at">Premieres %s</string>
     <string name="title_premieres_on">Premieres %s</string>
     <string-array name="title_premieres_in_month">
@@ -42,8 +41,6 @@
     </string-array>
     <string name="title_premieres_in_year">Premieres\u00A0%d</string>
     <string name="title_not_yet_aired">Not yet aired</string>
-    <string name="title_today">today %s</string>
-    <string name="title_tomorrow">tomorrow %s</string>
     <string name="title_synopsis">Synopsis</string>
     <string name="title_synopsis_more">More</string>
     <string name="title_related">Related</string>
@@ -89,35 +86,4 @@
     <string name="title_relation_alt_setting">Alt. setting</string>
     <string name="title_relation_alt_version">Alt. version</string>
     <string name="title_relation_summary">Summary</string>
-
-    <string name="title_genre_action">Action</string>
-    <string name="title_genre_adventure">Adventure</string>
-    <string name="title_genre_comedy">Comedy</string>
-    <string name="title_genre_avant_garde">Avant garde</string>
-    <string name="title_genre_mythology">Mythology</string>
-    <string name="title_genre_mystery">Mystery</string>
-    <string name="title_genre_drama">Drama</string>
-    <string name="title_genre_fantasy">Fantasy</string>
-    <string name="title_genre_historical">Historical</string>
-    <string name="title_genre_horror">Horror</string>
-    <string name="title_genre_mecha">Mecha</string>
-    <string name="title_genre_music">Music</string>
-    <string name="title_genre_romance">Romance</string>
-    <string name="title_genre_school">School</string>
-    <string name="title_genre_sci_fi">Sci-fi</string>
-    <string name="title_genre_shounen">Shounen</string>
-    <string name="title_genre_space">Space</string>
-    <string name="title_genre_sports">Sports</string>
-    <string name="title_genre_super_power">Super power</string>
-    <string name="title_genre_slice_of_life">Slice of life</string>
-    <string name="title_genre_supernatural">Supernatural</string>
-    <string name="title_genre_military">Military</string>
-    <string name="title_genre_detective">Detective</string>
-    <string name="title_genre_psychological">Psychological</string>
-    <string name="title_genre_suspense">Suspense</string>
-    <string name="title_genre_seinen">Seinen</string>
-    <string name="title_genre_award_winning">Award winning</string>
-    <string name="title_genre_gourmet">Gourmet</string>
-    <string name="title_genre_isekai">Isekai</string>
-    <string name="title_genre_iyashikei">Iyashikei</string>
 </resources>

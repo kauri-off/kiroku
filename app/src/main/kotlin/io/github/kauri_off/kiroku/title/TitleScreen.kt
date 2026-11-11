@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -30,10 +29,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -62,9 +61,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.Genre
@@ -83,22 +86,23 @@ import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.text.genreName
 
-// The title page of ARCHITECTURE section 9.4: one column in a fixed order, drawn from [state] alone.
+// The title page of ARCHITECTURE section 9.4: one column in a fixed order, drawn from [state] alone. Its snackbars go
+// to [snackbars], the host the caller draws.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TitleScreen(
     state: TitleState,
     onEvent: (TitleEvent) -> Unit,
+    snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val snackbarHost = remember { SnackbarHostState() }
-    TitleSnackbarEffect((state as? TitleState.Shown)?.snackbar, snackbarHost, onEvent)
+    TitleSnackbarEffect((state as? TitleState.Shown)?.snackbar, snackbars, onEvent)
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = { TitleTopBar(menu = state is TitleState.Shown, onEvent = onEvent, scrollBehavior = scrollBehavior) },
-        snackbarHost = { SnackbarHost(snackbarHost) },
     ) { padding ->
         when (state) {
             TitleState.Loading -> ScreenState(ScreenState.Loading, Modifier.padding(padding))
@@ -175,9 +179,10 @@ private fun TitleSnackbarEffect(
             null -> null
         }
     val events by rememberUpdatedState(onEvent)
+    // Shown again only after the state has passed through null, which follows SnackbarAction or SnackbarDismissed.
     LaunchedEffect(snackbar) {
         if (message == null) return@LaunchedEffect
-        val result = host.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Short)
+        val result = host.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Long)
         events(if (result == SnackbarResult.ActionPerformed) TitleEvent.SnackbarAction else TitleEvent.SnackbarDismissed)
     }
 }
@@ -201,9 +206,9 @@ private fun TitleContent(
                 PaddingValues(top = padding.calculateTopPadding() + Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
             item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(state) } }
-            item(key = Section.List) { Gap(Modifier.testTag(TitleTags.list)) { ListBlock(state.entry, state.total, onEvent) } }
-            state.airing?.let { block ->
-                item(key = Section.Airing) { Gap(Modifier.testTag(TitleTags.airing)) { AiringBlockText(block, state) } }
+            item(key = Section.List) { Gap(modifier = Modifier.testTag(TitleTags.list)) { ListBlock(state.entry, state.total, onEvent) } }
+            state.airing?.let { phase ->
+                item(key = Section.Airing) { Gap(modifier = Modifier.testTag(TitleTags.airing)) { AiringBlock(phase, state) } }
             }
             val details = state.details
             if (details == null) {
@@ -215,14 +220,15 @@ private fun TitleContent(
     }
 }
 
-// Separates two sections.
+// Separates two sections; [space] is less than xl where the section above already ends in blank room.
 @Composable
 private fun Gap(
+    space: Dp = Spacing.xl,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Column(modifier) {
-        Spacer(Modifier.height(Spacing.xl))
+        Spacer(Modifier.height(space))
         content()
     }
 }
@@ -236,7 +242,7 @@ private fun Header(state: TitleState.Shown) {
             TitleText(
                 state.title,
                 maxLines = Int.MAX_VALUE,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall.copy(lineBreak = LineBreak.Heading),
                 modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(Spacing.xs))
@@ -270,14 +276,24 @@ private fun ListBlock(
     total: Int?,
     onEvent: (TitleEvent) -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         if (entry == null) {
-            Button(onClick = { onEvent(TitleEvent.AddToList) }, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { onEvent(TitleEvent.AddToList) },
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.l)
+                        .fillMaxWidth(),
+            ) {
                 Text(stringResource(R.string.title_add_to_list))
             }
             return@Column
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(start = Spacing.l, end = ButtonEdge),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+        ) {
             FilledTonalButton(
                 onClick = { onEvent(TitleEvent.Edit) },
                 contentPadding = PaddingValues(start = Spacing.xl, end = Spacing.l),
@@ -290,36 +306,52 @@ private fun ListBlock(
                     modifier = Modifier.size(ButtonDefaults.IconSize),
                 )
             }
-            Spacer(Modifier.weight(1f))
-            val score = entry.score
-            if (score == null) {
-                TextButton(onClick = { onEvent(TitleEvent.Edit) }, modifier = Modifier.offset(x = Spacing.m)) {
-                    Text(stringResource(R.string.title_rate))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                val score = entry.score
+                if (score == null) {
+                    LabelButton(stringResource(R.string.title_rate)) { onEvent(TitleEvent.Edit) }
+                } else {
+                    Text(
+                        stringResource(R.string.title_your_score, score),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.padding(end = Spacing.m),
+                    )
                 }
-            } else {
-                Text(stringResource(R.string.title_your_score, score), style = MaterialTheme.typography.bodyMedium)
             }
         }
         EpisodeStepper(
             watched = entry.watchedEpisodes,
             total = total,
             onWatchedChange = { onEvent(TitleEvent.SetWatched(it)) },
-            modifier = Modifier.offset(x = -Spacing.l),
+            modifier = Modifier.padding(start = ButtonEdge),
         )
     }
 }
 
+// A text button as wide as its label and padding, at least a touch target, so the label sits at the padding.
 @Composable
-private fun AiringBlockText(
-    block: AiringBlock,
+private fun LabelButton(
+    label: String,
+    onClick: () -> Unit,
+) {
+    TextButton(onClick = onClick, modifier = Modifier.widthIn(min = LocalMinimumInteractiveComponentSize.current)) {
+        Text(label)
+    }
+}
+
+@Composable
+private fun AiringBlock(
+    phase: AiringPhase,
     state: TitleState.Shown,
 ) {
+    val times = rememberAirTimeText(state.now)
     val line1: AnnotatedString
     var line2: String? = null
-    when (block) {
-        is AiringBlock.Aired -> {
-            val aired = airedText(block)
-            val toWatch = block.toWatch?.let { toWatchText(it) }
+    when (phase) {
+        is AiringPhase.Aired -> {
+            val aired = airedText(phase.aired, state.total)
+            val toWatch = phase.toWatch?.let { toWatchText(it) }
             val separator = stringResource(R.string.title_separator)
             val emphasis = MaterialTheme.typography.labelLarge.fontWeight
             val tertiary = MaterialTheme.colorScheme.tertiary
@@ -331,10 +363,10 @@ private fun AiringBlockText(
                         withStyle(SpanStyle(color = tertiary, fontWeight = emphasis)) { append(toWatch) }
                     }
                 }
-            line2 = block.next?.let { stringResource(R.string.title_next_episode, it.number, airTime(it.airsAt, state.now)) }
+            line2 = phase.next?.let { times.nextEpisode(it) }
         }
-        AiringBlock.CountUnknown -> line1 = buildAnnotatedString { append(stringResource(R.string.title_airing)) }
-        is AiringBlock.Premieres -> line1 = buildAnnotatedString { append(premiereText(block.premiere, state.now)) }
+        AiringPhase.CountUnknown -> line1 = AnnotatedString(stringResource(R.string.title_airing))
+        is AiringPhase.NotYetAired -> line1 = AnnotatedString(premiereText(phase.premiere, times))
     }
     Column(Modifier.padding(horizontal = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Text(line1, style = MaterialTheme.typography.bodyMedium)
@@ -367,8 +399,13 @@ private fun LazyListScope.details(
     if (state.related.isNotEmpty()) {
         item(key = Section.Related) { Gap { Related(state, onEvent) } }
     }
-    details.statistics?.let { statistics -> item(key = Section.Statistics) { Gap { Statistics(statistics) } } }
-    item(key = Section.More) { Gap { More(details, onEvent) } }
+    details.statistics?.let { statistics ->
+        // The strip's cards end in their own blank room.
+        val space = if (state.related.isNotEmpty()) Spacing.s else Spacing.xl
+        item(key = Section.Statistics) { Gap(space) { Statistics(statistics) } }
+    }
+    // A list row starts with its own padding.
+    item(key = Section.More) { Gap(Spacing.s) { More(details, onEvent) } }
 }
 
 @Composable
@@ -379,35 +416,35 @@ private fun Synopsis(
     onEvent: (TitleEvent) -> Unit,
 ) {
     Column {
-        SectionHeader(stringResource(R.string.title_synopsis))
-        Column(Modifier.padding(horizontal = Spacing.l)) {
-            if (synopsis != null) {
-                var cut by remember(synopsis) { mutableStateOf(false) }
-                Text(
-                    synopsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = if (expanded) Int.MAX_VALUE else SYNOPSIS_LINES,
-                    overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { if (!expanded) cut = it.hasVisualOverflow },
-                )
-                if (cut && !expanded) {
-                    TextButton(onClick = { onEvent(TitleEvent.ExpandSynopsis) }, modifier = Modifier.offset(x = -Spacing.m)) {
-                        Text(stringResource(R.string.title_synopsis_more))
-                    }
-                } else if (genres.isNotEmpty()) {
-                    Spacer(Modifier.height(Spacing.s))
+        if (synopsis != null) {
+            SectionHeader(stringResource(R.string.title_synopsis))
+            var cut by remember(synopsis) { mutableStateOf(false) }
+            Text(
+                synopsis,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = if (expanded) Int.MAX_VALUE else SYNOPSIS_LINES,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (!expanded) cut = it.hasVisualOverflow },
+                modifier = Modifier.padding(horizontal = Spacing.l),
+            )
+            if (cut && !expanded) {
+                Box(Modifier.padding(start = ButtonEdge)) {
+                    LabelButton(stringResource(R.string.title_synopsis_more)) { onEvent(TitleEvent.ExpandSynopsis) }
                 }
+            } else if (genres.isNotEmpty()) {
+                Spacer(Modifier.height(Spacing.s))
             }
-            if (genres.isNotEmpty()) {
-                val names = genres.map { genreName(it) }
-                Text(
-                    names.joinToString(stringResource(R.string.title_separator)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        }
+        if (genres.isNotEmpty()) {
+            val names = genres.map { genreName(it) }
+            Text(
+                names.joinToString(stringResource(R.string.title_separator)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = Spacing.l),
+            )
         }
     }
 }
@@ -482,7 +519,11 @@ private fun MoreRow(
     ListItem(
         headlineContent = { Text(label) },
         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-        modifier = Modifier.clickable(onClick = onClick),
+        // Labelled on the row itself, so a row cut off at the screen's edge is labelled too.
+        modifier =
+            Modifier
+                .clickable(onClick = onClick)
+                .semantics { contentDescription = label },
     )
 }
 
@@ -495,6 +536,9 @@ private fun DataError.message(): Int =
     }
 
 private const val SYNOPSIS_LINES = 4
+
+// Where a button starts or ends so that its label or icon, Spacing.m inside it, lines up with the content edge.
+private val ButtonEdge = Spacing.l - Spacing.m
 private val STATISTICS_ORDER = listOf(ListStatus.Watching, ListStatus.Completed, ListStatus.OnHold, ListStatus.Dropped, ListStatus.Planned)
 
 // Tags of the blocks that must fit above the fold, for tests.

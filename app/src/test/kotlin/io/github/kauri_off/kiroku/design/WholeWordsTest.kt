@@ -78,7 +78,7 @@ class WholeWordsTest {
         }
         assertEquals(1, lines("Запланировано"))
         val stacked = compose.onNodeWithText("1,234,567 · 41%", useUnmergedTree = true).getBoundsInRoot()
-        val inline = compose.onNodeWithText("1,234 · 0%", useUnmergedTree = true).getBoundsInRoot()
+        val inline = compose.onNodeWithText("1,234 · <1%", useUnmergedTree = true).getBoundsInRoot()
         val label = compose.onNodeWithText("Запланировано", useUnmergedTree = true).getBoundsInRoot()
         assertTrue(stacked.top >= label.bottom)
         assertEquals(inline.right, stacked.right)
