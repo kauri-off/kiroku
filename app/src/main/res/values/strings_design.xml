@@ -19,4 +19,5 @@
         <item quantity="one">The title has\u00A0%d\u00A0episode</item>
         <item quantity="other">The title has\u00A0%d\u00A0episodes</item>
     </plurals>
+    <string name="design_list_separator">", "</string>
 </resources>

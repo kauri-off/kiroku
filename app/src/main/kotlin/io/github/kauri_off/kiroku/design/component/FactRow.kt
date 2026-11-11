@@ -2,15 +2,19 @@ package io.github.kauri_off.kiroku.design.component
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // A label and its value; the value takes at most three lines.
 @Composable
@@ -20,38 +24,46 @@ fun FactRow(
     modifier: Modifier = Modifier,
 ) = FactRow(label, listOf(value), modifier)
 
-// A label and a value made of several parts, such as alternative titles, each starting on its own line. The parts
-// share the three lines: a part cut short ends in an ellipsis and parts with no line left are not shown, so an
-// ellipsis never follows a part shown whole.
+// Parts on their own lines; those that do not fit whole share the last line, so a cut ends in an ellipsis.
 @Composable
 fun FactRow(
     label: String,
     values: List<String>,
     modifier: Modifier = Modifier,
 ) {
+    // Keeps the text as far from the row's edges for a tall value as for a one-line one.
     ListItem(
-        overlineContent = { Text(label) },
-        headlineContent = { Parts(values) },
+        overlineContent = { Text(label, Modifier.padding(top = Spacing.s)) },
+        headlineContent = { Parts(values, Modifier.padding(bottom = Spacing.s)) },
         modifier = modifier.semantics(mergeDescendants = true) {},
     )
 }
 
 @Composable
-private fun Parts(values: List<String>) {
+private fun Parts(
+    values: List<String>,
+    modifier: Modifier,
+) {
     val measurer = rememberTextMeasurer()
     val style = LocalTextStyle.current
-    BoxWithConstraints {
+    val separator = stringResource(R.string.design_list_separator)
+    BoxWithConstraints(modifier) {
         val width = constraints.maxWidth
+        val lines = values.map { measurer.measure(it, style, constraints = Constraints(maxWidth = width)).lineCount }
+        val whole =
+            if (lines.sum() <= VALUE_LINES) {
+                values.size
+            } else {
+                lines.runningReduce(Int::plus).indexOfFirst { it >= VALUE_LINES }
+            }
         Column {
-            var left = VALUE_LINES
-            for (value in values) {
-                if (left == 0) break
-                val lines =
-                    measurer
-                        .measure(value, style, constraints = Constraints(maxWidth = width))
-                        .lineCount
-                Text(value, maxLines = left, overflow = TextOverflow.Ellipsis)
-                left -= lines.coerceAtMost(left)
+            values.take(whole).forEach { Text(it) }
+            if (whole < values.size) {
+                Text(
+                    values.drop(whole).joinToString(separator),
+                    maxLines = VALUE_LINES - lines.take(whole).sum(),
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

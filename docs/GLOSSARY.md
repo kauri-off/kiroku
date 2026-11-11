@@ -91,7 +91,7 @@ The edit sheet's slider shows the number with MAL's name for it.
 | The same two, strip labels | Alt. setting / Alt. version | Альт. сеттинг / Альт. версия | Only as caption 1 of a `PosterCard` in the Related strip |
 | Summary / Other / Character | Summary / Other / Character | Краткое изложение / Прочее / Общий персонаж | |
 | Seasons | Winter, Spring, Summer, Fall 2024 | Зима, Весна, Лето, Осень 2024 | |
-| Media types | TV, Movie, OVA, ONA, Special, Music | ТВ, Фильм, OVA, ONA, Спешл, Клип | |
+| Media types | TV, TV special, Movie, OVA, ONA, Special, Music, Commercial, Promo video | ТВ, ТВ-спешл, Фильм, OVA, ONA, Спешл, Клип, Реклама, Промо | |
 
 Roadmap milestone M2 compares the Russian relation names with the names Shikimori uses and puts the differences to
 the owner; a name changes only on the owner's answer.
@@ -102,20 +102,21 @@ The facts of the "Details" sub-screen. Their values from MAL that read as interf
 
 | Concept | English | Russian | Notes |
 |---|---|---|---|
-| English title | English title | Английское название | One row per kind of alternative title |
+| Romaji title | Romaji title | Название на ромадзи | One row per kind of alternative title; the main title of "Title language" has none |
+| English title | English title | Английское название | |
 | Japanese title | Japanese title | Японское название | |
-| Synonyms | Synonyms | Другие названия | Each synonym on its own line |
+| Synonyms | Synonyms | Другие названия | Each synonym on its own line; those that do not fit share the last line and end in an ellipsis |
 | Start date / End date | Start date / End date | Дата начала / Дата окончания | The title's airing dates, by MAL's precision, with the year |
 | Source | Source | Первоисточник | |
-| Studio / Studios | Studio / Studios | Студия / Студии | By the number of studios |
+| Studio / Studios | Studio / Studios | Студия / Студии | A plural resource, by the number of studios |
 | Rating | Rating | Возрастной рейтинг | |
-| Episode length | Episode length | Длительность серии | `23 min`, `1 h 58 min` / `23 мин`, `1 ч 58 мин` |
-| Broadcast | Broadcast | Время показа | `Saturdays at 17:30` / `По субботам в 17:30`, in the device's zone |
+| Episode length | Episode length | Длительность серии | `23 min`, `1 h 58 min`, `30 s` / `23 мин`, `1 ч 58 мин`, `30 сек` |
+| Broadcast | Broadcast | Время показа | `Saturdays at 17:30` / `По субботам в 17:30`, in the device's zone; not shown for a finished title |
 | No details | MyAnimeList gives no details for this title | На MyAnimeList нет подробностей об этом тайтле | |
 | Could not load | Could not load this title | Не удалось загрузить тайтл | |
 | Back (spoken) | Back | Назад | The top app bar's navigation icon |
-| Sources | Original, Manga, 4-koma manga, Web manga, Digital manga, Novel, Light novel, Web novel, Visual novel, Game, Card game, Book, Picture book, Radio, Music, Mixed media, Other | Оригинал, Манга, Ёнкома, Веб-манга, Цифровая манга, Роман, Ранобэ, Веб-роман, Визуальная новелла, Игра, Карточная игра, Книга, Книжка с картинками, Радио, Музыка, Медиамикс, Прочее | |
-| Age ratings | G (all ages), PG (children), PG-13 (teens 13 or older), R (17+, violence and profanity), R+ (mild nudity), Rx (hentai) | G (для всех возрастов), PG (для детей), PG-13 (от 13 лет), R (17+, насилие и ненормативная лексика), R+ (лёгкая обнажённость), Rx (хентай) | |
+| Sources | Original, Manga, 4-koma manga, Web manga, Digital manga, Novel, Light novel, Web novel, Visual novel, Game, Card game, Book, Picture book, Radio, Music, Mixed media, Other | Оригинал, Манга, Ёнкома, Веб-манга, Цифровая манга, Роман, Ранобэ, Веб-новелла, Визуальная новелла, Игра, Карточная игра, Книга, Иллюстрированная книга, Радио, Музыка, Медиамикс, Прочее | |
+| Age ratings | G (all ages), PG (children), PG-13 (teens 13 or older), R (17+, violence and profanity), R+ (mild nudity), Rx (hentai) | G (для всех возрастов), PG (для детей), PG-13 (от 13 лет), R (17+, насилие и ненормативная лексика), R+ (частичная обнажённость), Rx (хентай) | |
 
 ## Notifications
 

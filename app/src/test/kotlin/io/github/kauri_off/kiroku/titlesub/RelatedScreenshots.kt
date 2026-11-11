@@ -31,8 +31,28 @@ object SubScreenFixtures {
         relatedState(
             related = set.details.getValue(anime.id).related,
             entries = set.entries.associate { it.anime.id to it.values },
+            airing = set.airing,
             language = TitleLanguage.Romaji,
         )
 
-    fun details(anime: Anime): DetailsState.Shown = detailsState(anime, set.details.getValue(anime.id), set.clock)
+    fun details(
+        anime: Anime,
+        language: TitleLanguage = TitleLanguage.Romaji,
+    ): DetailsState.Shown = detailsState(anime, set.details.getValue(anime.id), language, set.clock)
+
+    // More synonyms than three lines hold, as long-running titles often have.
+    val manySynonyms: Anime =
+        FixtureAnime.exactToWatch.copy(
+            titles =
+                FixtureAnime.exactToWatch.titles.copy(
+                    synonyms =
+                        listOf(
+                            "Kagetosho 2",
+                            "Heat Haze Library II",
+                            "The Library Where the Heat Haze Never Lifts: Second Year",
+                            "Kagerou Toshokan Dai-ni-ki",
+                            "KageTosho S2",
+                        ),
+                ),
+        )
 }

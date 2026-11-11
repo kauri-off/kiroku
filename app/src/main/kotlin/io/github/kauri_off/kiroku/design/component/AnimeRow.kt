@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -52,10 +53,10 @@ fun AnimeRow(
         supportingContent =
             lines.takeIf { it.isNotEmpty() }?.let {
                 {
-                    // Two lines' room keeps every row three-line, so text and trailing element sit alike in each.
-                    val twoLines = with(LocalDensity.current) { (MaterialTheme.typography.bodyMedium.lineHeight * 2).toDp() }
-                    Column(Modifier.heightIn(min = twoLines)) {
+                    // An empty second line keeps every row three-line, so text and poster align alike in each.
+                    Column {
                         it.forEach { line -> SupportingLine(line) }
+                        if (it.size == 1) SupportingLine(RowLine(""), Modifier.clearAndSetSemantics {})
                     }
                 }
             },
@@ -68,11 +69,14 @@ fun AnimeRow(
 const val MAX_SUPPORTING_LINES = 2
 
 @Composable
-private fun SupportingLine(line: RowLine) {
+private fun SupportingLine(
+    line: RowLine,
+    modifier: Modifier = Modifier,
+) {
     if (line.highlighted) {
-        Text(line.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+        Text(line.text, modifier, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
     } else {
-        Text(line.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(line.text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

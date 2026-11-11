@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.titlesub
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
@@ -16,5 +17,9 @@ class DetailsScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("sparse") { DetailsScreen(SubScreenFixtures.details(FixtureAnime.premiereUnannounced), onEvent = {}) },
+            case("english") {
+                DetailsScreen(SubScreenFixtures.details(FixtureAnime.exactToWatch, TitleLanguage.English), onEvent = {})
+            },
+            case("many-synonyms") { DetailsScreen(SubScreenFixtures.details(SubScreenFixtures.manySynonyms), onEvent = {}) },
         )
 }

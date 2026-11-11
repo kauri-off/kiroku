@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_separator">"\u00A0· "</string>
+    <string name="common_status_progress">%1$s\u00A0· %2$d\u00A0/\u00A0%3$d</string>
+    <string name="common_status_count">%1$s\u00A0· %2$d</string>
+    <string name="common_status_watching">Watching</string>
+    <string name="common_status_planned">Planned</string>
+    <string name="common_status_completed">Completed</string>
+    <string name="common_status_on_hold">On hold</string>
+    <string name="common_status_dropped">Dropped</string>
+    <string name="common_type_tv">TV</string>
+    <string name="common_type_tv_special">TV special</string>
+    <string name="common_type_movie">Movie</string>
+    <string name="common_type_ova">OVA</string>
+    <string name="common_type_ona">ONA</string>
+    <string name="common_type_special">Special</string>
+    <string name="common_type_music">Music</string>
+    <string name="common_type_commercial">Commercial</string>
+    <string name="common_type_promotional">Promo video</string>
+</resources>

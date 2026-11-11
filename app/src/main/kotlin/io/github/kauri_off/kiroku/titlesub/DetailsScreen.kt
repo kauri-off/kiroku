@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.titlesub
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.FactRow
@@ -34,6 +35,7 @@ fun DetailsScreen(
 @Composable
 private fun FactRowOf(fact: Fact) {
     when (fact) {
+        is Fact.RomajiTitle -> FactRow(stringResource(R.string.titlesub_romaji_title), fact.title)
         is Fact.EnglishTitle -> FactRow(stringResource(R.string.titlesub_english_title), fact.title)
         is Fact.JapaneseTitle -> FactRow(stringResource(R.string.titlesub_japanese_title), fact.title)
         is Fact.Synonyms -> FactRow(stringResource(R.string.titlesub_synonyms), fact.titles)
@@ -42,7 +44,7 @@ private fun FactRowOf(fact: Fact) {
         is Fact.SourceFact -> FactRow(stringResource(R.string.titlesub_source), sourceName(fact.source))
         is Fact.Studios ->
             FactRow(
-                stringResource(if (fact.names.size == 1) R.string.titlesub_studio else R.string.titlesub_studios),
+                pluralStringResource(R.plurals.titlesub_studios, fact.names.size),
                 fact.names.joinToString(stringResource(R.string.titlesub_list_separator)),
             )
         is Fact.Rating -> FactRow(stringResource(R.string.titlesub_rating), ratingName(fact.rating))

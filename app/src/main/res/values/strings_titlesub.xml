@@ -6,18 +6,18 @@
     <string name="titlesub_no_connection">No connection</string>
     <string name="titlesub_could_not_load">Could not load this title</string>
     <string name="titlesub_no_details">MyAnimeList gives no details for this title</string>
-    <string name="titlesub_separator">"\u00A0· "</string>
-    <string name="titlesub_status_progress">%1$s\u00A0· %2$d\u00A0/\u00A0%3$d</string>
-    <string name="titlesub_status_count">%1$s\u00A0· %2$d</string>
 
+    <string name="titlesub_romaji_title">Romaji title</string>
     <string name="titlesub_english_title">English title</string>
     <string name="titlesub_japanese_title">Japanese title</string>
     <string name="titlesub_synonyms">Synonyms</string>
     <string name="titlesub_start_date">Start date</string>
     <string name="titlesub_end_date">End date</string>
     <string name="titlesub_source">Source</string>
-    <string name="titlesub_studio">Studio</string>
-    <string name="titlesub_studios">Studios</string>
+    <plurals name="titlesub_studios">
+        <item quantity="one">Studio</item>
+        <item quantity="other">Studios</item>
+    </plurals>
     <string name="titlesub_rating">Rating</string>
     <string name="titlesub_episode_length">Episode length</string>
     <string name="titlesub_broadcast">Broadcast</string>
@@ -45,22 +45,6 @@
         <item>Saturdays</item>
         <item>Sundays</item>
     </string-array>
-
-    <string name="titlesub_status_watching">Watching</string>
-    <string name="titlesub_status_planned">Planned</string>
-    <string name="titlesub_status_completed">Completed</string>
-    <string name="titlesub_status_on_hold">On hold</string>
-    <string name="titlesub_status_dropped">Dropped</string>
-
-    <string name="titlesub_type_tv">TV</string>
-    <string name="titlesub_type_tv_special">TV special</string>
-    <string name="titlesub_type_movie">Movie</string>
-    <string name="titlesub_type_ova">OVA</string>
-    <string name="titlesub_type_ona">ONA</string>
-    <string name="titlesub_type_special">Special</string>
-    <string name="titlesub_type_music">Music</string>
-    <string name="titlesub_type_commercial">Commercial</string>
-    <string name="titlesub_type_promotional">Promo video</string>
 
     <string name="titlesub_relation_prequel">Prequel</string>
     <string name="titlesub_relation_sequel">Sequel</string>

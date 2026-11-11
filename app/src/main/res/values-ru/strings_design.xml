@@ -23,4 +23,5 @@
         <item quantity="many">В тайтле\u00A0%d\u00A0серий</item>
         <item quantity="other">В тайтле\u00A0%d\u00A0серии</item>
     </plurals>
+    <string name="design_list_separator">", "</string>
 </resources>

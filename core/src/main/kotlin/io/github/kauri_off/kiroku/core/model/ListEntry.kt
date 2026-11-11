@@ -56,3 +56,12 @@ data class ListValues(
         return if (target <= watchedEpisodes) this else withWatched(target, malEpisodes, today)
     }
 }
+
+// Whether the episode count follows the status where it is shown; it says nothing for Planned with none watched or
+// for Completed at the total.
+fun ListValues.showsCount(total: Int?): Boolean =
+    when (status) {
+        ListStatus.Planned -> watchedEpisodes > 0
+        ListStatus.Completed -> watchedEpisodes != total
+        ListStatus.Watching, ListStatus.OnHold, ListStatus.Dropped -> true
+    }

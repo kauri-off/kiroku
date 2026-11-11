@@ -1,18 +1,28 @@
 package io.github.kauri_off.kiroku.titlesub
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.TextLayoutResult
+import io.github.kauri_off.kiroku.common.statusLine
+import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.RelatedAnime
+import io.github.kauri_off.kiroku.core.model.RelationType
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -20,6 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -36,7 +47,7 @@ class SubScreenTest {
     fun aLongEnglishTitleLeavesTheJapaneseTitleAndSynonymsShown() {
         val english = "The Heat Haze Library Season 2: ".repeat(12).trim()
         val anime = FixtureAnime.exactToWatch.copy(titles = FixtureAnime.exactToWatch.titles.copy(english = english))
-        show { DetailsScreen(detailsState(anime, FixtureDetails.full, Fixtures.reference.clock), onEvent = {}) }
+        show { DetailsScreen(detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, Fixtures.reference.clock), onEvent = {}) }
         for (text in listOf("English title", "Japanese title", "陽炎図書館 第2期", "Synonyms", "Kagetosho 2", "Heat Haze Library II")) {
             compose.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed()
         }
@@ -45,13 +56,18 @@ class SubScreenTest {
     @Test
     fun theStatusLineStatesTheCountOnlyWhereItAddsSomething() {
         val lines = mutableListOf<String>()
+
+        fun values(
+            status: ListStatus,
+            watched: Int,
+        ) = ListValues(status, watched, null, null, null)
         show {
-            lines += statusLine(ListStatus.Watching, 5, 12)
-            lines += statusLine(ListStatus.Watching, 5, null)
-            lines += statusLine(ListStatus.Planned, 0, 12)
-            lines += statusLine(ListStatus.Planned, 2, 12)
-            lines += statusLine(ListStatus.Completed, 12, 12)
-            lines += statusLine(ListStatus.OnHold, 3, 12)
+            lines += statusLine(values(ListStatus.Watching, 5), 12)
+            lines += statusLine(values(ListStatus.Watching, 5), null)
+            lines += statusLine(values(ListStatus.Planned, 0), 12)
+            lines += statusLine(values(ListStatus.Planned, 2), 12)
+            lines += statusLine(values(ListStatus.Completed, 12), 12)
+            lines += statusLine(values(ListStatus.OnHold, 3), 12)
         }
         compose.waitForIdle()
         assertEquals(
@@ -65,6 +81,61 @@ class SubScreenTest {
             ),
             lines.take(6),
         )
+    }
+
+    @Test
+    fun aRelatedRowWithoutMalsCountShowsTheTotalFromTheAiringData() {
+        val anime = FixtureAnime.exactToWatch.copy(malEpisodes = null)
+        val state =
+            relatedState(
+                related = listOf(RelatedAnime(anime, RelationType.Sequel)),
+                entries = mapOf(anime.id to ListValues(ListStatus.Watching, 5, null, null, null)),
+                airing = mapOf(anime.id to Airing(AiredCount.Exact(6), 12, null, Instant.EPOCH)),
+                language = TitleLanguage.Romaji,
+            )
+        show { RelatedScreen(state, onEvent = {}) }
+        compose.onNodeWithText("Watching\u00A0· 5\u00A0/\u00A012", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun synonymsCutAtTheLineCapEndInAnEllipsisAndNoneIsLeftOut() {
+        show { DetailsScreen(SubScreenFixtures.details(SubScreenFixtures.manySynonyms), onEvent = {}) }
+        val synonyms = SubScreenFixtures.manySynonyms.titles.synonyms
+        val texts =
+            synonyms.map { synonym ->
+                compose.onNodeWithText(synonym, substring = true, useUnmergedTree = true).fetchSemanticsNode()
+            }
+        val last = texts.last()
+        val layout =
+            mutableListOf<TextLayoutResult>()
+                .also {
+                    last.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(
+                        it,
+                    )
+                }.single()
+        assertTrue(layout.isLineEllipsized(layout.lineCount - 1))
+        assertTrue(texts.map { it.id }.toSet().size < synonyms.size)
+    }
+
+    @Test
+    fun withEnglishTitlesDetailsShowTheRomajiTitle() {
+        show { DetailsScreen(SubScreenFixtures.details(FixtureAnime.exactToWatch, TitleLanguage.English), onEvent = {}) }
+        compose.onNodeWithText("Romaji title", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji, useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("English title", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun oneStudioIsLabelledInTheSingular() {
+        val details = FixtureDetails.full.copy(studios = listOf("Studio Hanamizuki"))
+        show {
+            DetailsScreen(
+                detailsState(FixtureAnime.exactToWatch, details, TitleLanguage.Romaji, Fixtures.reference.clock),
+                onEvent = {},
+            )
+        }
+        compose.onNodeWithText("Studio", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Studios", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test

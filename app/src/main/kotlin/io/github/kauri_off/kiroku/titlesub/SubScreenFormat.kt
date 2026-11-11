@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.titlesub
 
 import android.text.format.DateFormat
-import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
@@ -10,8 +9,6 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AgeRating
-import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Source
@@ -26,31 +23,6 @@ import java.util.Locale
 @Composable
 @ReadOnlyComposable
 private fun locale(): Locale = LocalConfiguration.current.locales[0]
-
-@Composable
-internal fun mediaTypeLabel(type: MediaType): String =
-    when (type) {
-        MediaType.Tv -> stringResource(R.string.titlesub_type_tv)
-        MediaType.TvSpecial -> stringResource(R.string.titlesub_type_tv_special)
-        MediaType.Movie -> stringResource(R.string.titlesub_type_movie)
-        MediaType.Ova -> stringResource(R.string.titlesub_type_ova)
-        MediaType.Ona -> stringResource(R.string.titlesub_type_ona)
-        MediaType.Special -> stringResource(R.string.titlesub_type_special)
-        MediaType.Music -> stringResource(R.string.titlesub_type_music)
-        MediaType.Commercial -> stringResource(R.string.titlesub_type_commercial)
-        MediaType.PromotionalVideo -> stringResource(R.string.titlesub_type_promotional)
-        is MediaType.Unrecognized -> malCodeAsText(type.malCode)
-    }
-
-@StringRes
-internal fun ListStatus.label(): Int =
-    when (this) {
-        ListStatus.Watching -> R.string.titlesub_status_watching
-        ListStatus.Planned -> R.string.titlesub_status_planned
-        ListStatus.Completed -> R.string.titlesub_status_completed
-        ListStatus.OnHold -> R.string.titlesub_status_on_hold
-        ListStatus.Dropped -> R.string.titlesub_status_dropped
-    }
 
 // The relation's full name, as a group header.
 @Composable

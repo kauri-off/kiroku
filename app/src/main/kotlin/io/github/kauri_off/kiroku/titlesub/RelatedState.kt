@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.titlesub
 
+import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.episodeTotal
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -51,6 +53,7 @@ sealed interface RelatedEvent {
 fun relatedState(
     related: List<RelatedAnime>,
     entries: Map<AnimeId, ListValues>,
+    airing: Map<AnimeId, Airing>,
     language: TitleLanguage,
 ): RelatedState.Shown =
     RelatedState.Shown(
@@ -65,7 +68,7 @@ fun relatedState(
                         posterUrl = anime.posterUrl,
                         mediaType = anime.mediaType,
                         year = anime.startDate?.year,
-                        total = anime.malEpisodes,
+                        total = episodeTotal(anime, airing[anime.id]),
                         entry = entries[anime.id],
                     )
                 },

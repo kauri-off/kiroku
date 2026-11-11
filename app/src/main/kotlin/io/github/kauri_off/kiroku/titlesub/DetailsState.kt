@@ -1,19 +1,18 @@
 package io.github.kauri_off.kiroku.titlesub
 
+import io.github.kauri_off.kiroku.core.airing.nextStart
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AgeRating
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.Source
-import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.temporal.TemporalAdjusters
 
 sealed interface DetailsState {
     data object Loading : DetailsState
@@ -29,6 +28,10 @@ sealed interface DetailsState {
 }
 
 sealed interface Fact {
+    data class RomajiTitle(
+        val title: String,
+    ) : Fact
+
     data class EnglishTitle(
         val title: String,
     ) : Fact
@@ -78,16 +81,21 @@ sealed interface DetailsEvent {
     data object Retry : DetailsEvent
 }
 
+// The titles other than the one "Title language" shows as the main title, then the facts MAL gives. A finished
+// title has no broadcast time, as its weekly slot no longer runs.
 fun detailsState(
     anime: Anime,
     details: AnimeDetails,
+    language: TitleLanguage,
     clock: Clock,
 ): DetailsState.Shown {
     val titles = anime.titles
+    val main = titles.shownLanguage(language)
     return DetailsState.Shown(
         listOfNotNull(
-            titles.english?.let(Fact::EnglishTitle),
-            titles.japanese?.let(Fact::JapaneseTitle),
+            titles.romaji.takeIf { main != TitleLanguage.Romaji }?.let(Fact::RomajiTitle),
+            titles.english?.takeIf { main != TitleLanguage.English }?.let(Fact::EnglishTitle),
+            titles.japanese?.takeIf { main != TitleLanguage.Japanese }?.let(Fact::JapaneseTitle),
             titles.synonyms.takeIf { it.isNotEmpty() }?.let(Fact::Synonyms),
             anime.startDate?.let(Fact::StartDate),
             details.endDate?.let(Fact::EndDate),
@@ -95,28 +103,14 @@ fun detailsState(
             details.studios.takeIf { it.isNotEmpty() }?.let(Fact::Studios),
             details.rating?.let(Fact::Rating),
             anime.averageEpisodeDuration?.let(Fact::EpisodeLength),
-            anime.broadcast?.let { broadcast ->
-                val time = broadcast.japanTime
-                if (time == null) {
+            anime.broadcast?.takeIf { anime.airingStatus != AiringStatus.Finished }?.let { broadcast ->
+                val start = broadcast.nextStart(clock.instant())?.atZone(clock.zone)
+                if (start == null) {
                     Fact.Broadcast(broadcast.dayOfWeek, null)
                 } else {
-                    val local = nextInJapan(broadcast.dayOfWeek, time, clock).withZoneSameInstant(clock.zone)
-                    Fact.Broadcast(local.dayOfWeek, local.toLocalTime())
+                    Fact.Broadcast(start.dayOfWeek, start.toLocalTime())
                 }
             },
         ),
     )
 }
-
-// The slot's next occurrence, so that a daylight-saving offset of the device's zone applies as it will next air.
-private fun nextInJapan(
-    day: DayOfWeek,
-    time: LocalTime,
-    clock: Clock,
-): ZonedDateTime {
-    val now = clock.instant().atZone(JAPAN)
-    val candidate = now.with(TemporalAdjusters.nextOrSame(day)).with(time)
-    return if (candidate.isBefore(now)) candidate.plusWeeks(1) else candidate
-}
-
-private val JAPAN: ZoneId = ZoneId.of(notShown("Asia/Tokyo"))
