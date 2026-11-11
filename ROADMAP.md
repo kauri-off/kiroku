@@ -115,15 +115,15 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Check:** rubric pass on `shell/*`. Tests show: tapping the current destination again pops it to its root; Back
   from the Search root goes to List; each destination keeps its stack.
 
-- [ ] **M1-09 [L] List screen.** The stateless List as budgeted in section 9.3, including the sort sheet and the
+- [x] **M1-09 [L] List screen.** The stateless List as budgeted in section 9.3, including the sort sheet and the
   read-only variant.
   **Cases:** `watching` (rows: episodes to watch; nothing to watch, with the next episode; estimated with episodes
   to watch; estimated with nothing to watch; finished; unknown total; a long title that takes two lines together
   with lines 2 and 3), `planned` (with not-yet-aired rows for a known first-episode time, a full date and no date),
   `completed`, `sort-sheet`, `filtering` (the text field in the top app bar, a query with two matches),
   `refreshing`, `undo-snackbar`, `completed-snackbar` ("+1" reached the total: the row is gone and the snackbar
-  says "Moved to Completed · Undo"), `offline-cached`, `loading`, `empty`, `error`, `signed-out`,
-  `session-expired`, `read-only`.
+  says "Moved to Completed · Undo"), `above-total` ("Watched 25 of 24"), `offline-cached`, `loading`, `empty`,
+  `error`, `signed-out`, `session-expired`, `read-only`; the frames of a row leaving and of a tab switch.
   **Needs:** M1-07.
   **Check:** rubric pass on `list/*`.
 

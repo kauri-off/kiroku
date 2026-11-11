@@ -142,7 +142,7 @@ private fun TitleTopBar(
         title = {},
         navigationIcon = {
             IconButton(onClick = { onEvent(TitleEvent.Back) }) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.title_back))
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
             }
         },
         actions = {
@@ -184,13 +184,13 @@ private fun TitleSnackbarEffect(
     val message =
         when (snackbar) {
             TitleSnackbar.AddedToPlanned -> stringResource(R.string.title_added_to_planned)
-            TitleSnackbar.MovedToCompleted -> stringResource(R.string.title_moved_to_completed)
+            TitleSnackbar.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
             null -> null
         }
     val action =
         when (snackbar) {
             TitleSnackbar.AddedToPlanned -> stringResource(R.string.title_change)
-            TitleSnackbar.MovedToCompleted -> stringResource(R.string.title_undo)
+            TitleSnackbar.MovedToCompleted -> stringResource(R.string.common_undo)
             null -> null
         }
     val events by rememberUpdatedState(onEvent)
@@ -628,8 +628,8 @@ private fun MoreRow(
 
 internal fun DataError.message(): Int =
     when (this) {
-        DataError.NoConnection -> R.string.title_no_connection
-        DataError.Refused -> R.string.title_refused
+        DataError.NoConnection -> R.string.common_no_connection
+        DataError.Refused -> R.string.common_refused
         DataError.NotFound -> R.string.title_not_found
         else -> R.string.title_could_not_load
     }

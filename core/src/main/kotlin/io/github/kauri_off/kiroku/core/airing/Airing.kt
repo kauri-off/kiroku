@@ -135,7 +135,8 @@ fun premiereOf(
     }
 }
 
-// What a title's airing block and a list row's airing lines show; null when the title shows none (A1).
+// What a title's airing block and a list row's airing lines show, the one decision both screens read; null when the
+// title shows none (A1).
 sealed interface AiringPhase {
     data class NotYetAired(
         val premiere: Premiere,
@@ -164,3 +165,12 @@ fun airingPhase(
     val toWatch = values?.let { toWatch(anime.airingStatus, it, airing) }?.takeIf { it.value > 0 }
     return AiringPhase.Aired(aired, toWatch, airing.nextEpisode)
 }
+
+// When the next episode airs, as the title shows it: the next episode, or a premiere whose time is known.
+val AiringPhase.nextAirsAt: Instant?
+    get() =
+        when (this) {
+            is AiringPhase.Aired -> next?.airsAt
+            is AiringPhase.NotYetAired -> (premiere as? Premiere.At)?.instant
+            AiringPhase.CountUnknown -> null
+        }

@@ -7,6 +7,14 @@ import javax.xml.parsers.DocumentBuilderFactory
 // a count formatted for the locale.
 private fun number(plural: Boolean) = if (plural) """(\d|%(\d+\$)?[ds])""" else """(\d|%(\d+\$)?d)"""
 
+// Strings whose number is labelled by the word before it ("Episode 13 watched"): the word after is not the number's,
+// so the space after the number may break.
+private val labelledBefore = setOf("list_episode_watched")
+
+// Strings that open with a verb before the count ("Watched 12 of 24"): the verb is not the number's word, so the
+// space before the number may break.
+private val verbBefore = setOf("list_progress", "list_progress_unknown_total", "gallery_progress")
+
 // An ordinary space between a number and the word, slash or colon next to it, where a line could break.
 fun numberSpaceProblems(
     name: String,
@@ -14,6 +22,7 @@ fun numberSpaceProblems(
     plural: Boolean = false,
 ): List<String> {
     val numberEnd = Regex(number(plural) + "$")
+    val joinedBefore = Regex("""\p{L}\u00A0~?""" + number(plural) + "$")
     val numberStart = Regex("^~?" + number(plural))
     return text.indices
         .filter { i ->
@@ -24,8 +33,16 @@ fun numberSpaceProblems(
                     val before = text.substring(0, i)
                     val after = text.substring(i + 1)
                     val joinsWord = { c: Char -> c.isLetter() || c == '/' }
-                    (numberEnd.containsMatchIn(before) && joinsWord(after[0])) ||
-                        (numberStart.containsMatchIn(after) && (joinsWord(before.last()) || before.last() == ':'))
+                    (
+                        numberEnd.containsMatchIn(before) &&
+                            !(name.substringAfterLast(' ') in labelledBefore && joinedBefore.containsMatchIn(before)) &&
+                            joinsWord(after[0])
+                    ) ||
+                        (
+                            numberStart.containsMatchIn(after) &&
+                                (joinsWord(before.last()) || before.last() == ':') &&
+                                !(name.substringAfterLast(' ') in verbBefore && !before.contains(' ') && !before.contains('\u00A0'))
+                        )
                 }
         }.map { "$name: a breaking space at ${it + 1} in \"$text\"; use \\u00A0" }
 }

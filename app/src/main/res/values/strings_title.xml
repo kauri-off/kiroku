@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="title_back">Back</string>
     <string name="title_more_options">More options</string>
     <string name="title_open_on_mal">Open on MyAnimeList</string>
     <string name="title_share">Share</string>
@@ -19,24 +18,6 @@
     <string name="title_to_watch">%d\u00A0to\u00A0watch</string>
     <string name="title_to_watch_estimated">~%d\u00A0to\u00A0watch</string>
     <string name="title_airing">Airing</string>
-    <string name="title_premieres_at">Premieres %s</string>
-    <string name="title_premieres_on">Premieres %s</string>
-    <string-array name="title_premieres_in_month">
-        <item>Premieres January\u00A0%d</item>
-        <item>Premieres February\u00A0%d</item>
-        <item>Premieres March\u00A0%d</item>
-        <item>Premieres April\u00A0%d</item>
-        <item>Premieres May\u00A0%d</item>
-        <item>Premieres June\u00A0%d</item>
-        <item>Premieres July\u00A0%d</item>
-        <item>Premieres August\u00A0%d</item>
-        <item>Premieres September\u00A0%d</item>
-        <item>Premieres October\u00A0%d</item>
-        <item>Premieres November\u00A0%d</item>
-        <item>Premieres December\u00A0%d</item>
-    </string-array>
-    <string name="title_premieres_in_year">Premieres\u00A0%d</string>
-    <string name="title_not_yet_aired">Not yet aired</string>
     <string name="title_synopsis">Synopsis</string>
     <string name="title_synopsis_more">More</string>
     <string name="title_synopsis_less">Less</string>
@@ -51,14 +32,10 @@
     <string name="title_details">Details</string>
     <string name="title_recommendations">Recommendations</string>
     <string name="title_loading_details">Loading details</string>
-    <string name="title_no_connection">No connection</string>
-    <string name="title_refused">MyAnimeList is refusing requests, try again later</string>
     <string name="title_not_found">This title is not on MyAnimeList</string>
     <string name="title_could_not_load">Could not load this title</string>
     <string name="title_added_to_planned">Added to Planned</string>
     <string name="title_change">Change</string>
-    <string name="title_moved_to_completed">Moved to Completed</string>
-    <string name="title_undo">Undo</string>
 
     <string name="title_relation_alt_setting">Alt. setting</string>
     <string name="title_relation_alt_version">Alt. version</string>

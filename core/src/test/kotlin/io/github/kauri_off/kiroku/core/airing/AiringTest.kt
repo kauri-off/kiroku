@@ -71,6 +71,52 @@ class AiringTest {
     }
 
     @Test
+    fun `the aired count is shown while known, until MAL says finished, whatever else MAL says`() {
+        AiringStatus.entries.forEach { status ->
+            val anime = FixtureAnime.exactToWatch.copy(airingStatus = status)
+            val phase = airingPhase(anime, null, airing(AiredCount.Exact(2)), today)
+            assertEquals(
+                status.name,
+                if (status ==
+                    AiringStatus.Finished
+                ) {
+                    null
+                } else {
+                    AiredCount.Exact(2)
+                },
+                (phase as? AiringPhase.Aired)?.aired,
+            )
+        }
+    }
+
+    @Test
+    fun `A1 the phase's to watch is the aired count it shows minus the watched episodes, only above zero`() {
+        val airings =
+            listOf(
+                Airing(AiredCount.Unknown, 24, null, null),
+                Airing(AiredCount.Exact(0), 24, ScheduledEpisode(1, instant), null),
+                Airing(AiredCount.Exact(2), 24, null, instant),
+                Airing(AiredCount.Estimated(2), 24, null, instant),
+            )
+        for (status in AiringStatus.entries) {
+            for (airing in airings) {
+                for (watched in 0..3) {
+                    val entry = entry(FixtureAnime.exactToWatch.copy(airingStatus = status), ListStatus.Watching, watched)
+                    val phase = airingPhase(entry.anime, entry.values, airing, today)
+                    val expected =
+                        (phase as? AiringPhase.Aired)
+                            ?.aired
+                            ?.value
+                            ?.minus(watched)
+                            ?.takeIf { it > 0 }
+                    assertEquals("$status $airing $watched", expected, (phase as? AiringPhase.Aired)?.toWatch?.value)
+                    if (phase !is AiringPhase.Aired) assertNull(toWatch(entry, airing)?.takeIf { it.value > 0 })
+                }
+            }
+        }
+    }
+
+    @Test
     fun `any non-negative count is accepted, whatever the aired count and the total, and leaves nothing to watch`() {
         val watching = ListValues(ListStatus.Watching, 12, null, null, null)
         val aired = airing(AiredCount.Exact(14))

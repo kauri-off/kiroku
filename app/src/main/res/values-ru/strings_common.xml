@@ -29,4 +29,26 @@
     <string name="common_relation_summary">Краткое изложение</string>
     <string name="common_relation_other">Прочее</string>
     <string name="common_relation_character">Общий персонаж</string>
+    <string name="common_premieres_on">Премьера %s</string>
+    <string-array name="common_premieres_in_month">
+        <item>Премьера в\u00A0январе\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0феврале\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0марте\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0апреле\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0мае\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0июне\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0июле\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0августе\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0сентябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0октябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0ноябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в\u00A0декабре\u00A0%d\u00A0г.</item>
+    </string-array>
+    <string name="common_premieres_in_year">Премьера в\u00A0%d\u00A0г.</string>
+    <string name="common_not_yet_aired">Ещё не вышло</string>
+    <string name="common_back">Назад</string>
+    <string name="common_undo">Отменить</string>
+    <string name="common_moved_to_completed">Перенесено в Просмотрено</string>
+    <string name="common_no_connection">Нет соединения</string>
+    <string name="common_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
 </resources>

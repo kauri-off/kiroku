@@ -29,4 +29,26 @@
     <string name="common_relation_summary">Summary</string>
     <string name="common_relation_other">Other</string>
     <string name="common_relation_character">Character</string>
+    <string name="common_premieres_on">Premieres %s</string>
+    <string-array name="common_premieres_in_month">
+        <item>Premieres January\u00A0%d</item>
+        <item>Premieres February\u00A0%d</item>
+        <item>Premieres March\u00A0%d</item>
+        <item>Premieres April\u00A0%d</item>
+        <item>Premieres May\u00A0%d</item>
+        <item>Premieres June\u00A0%d</item>
+        <item>Premieres July\u00A0%d</item>
+        <item>Premieres August\u00A0%d</item>
+        <item>Premieres September\u00A0%d</item>
+        <item>Premieres October\u00A0%d</item>
+        <item>Premieres November\u00A0%d</item>
+        <item>Premieres December\u00A0%d</item>
+    </string-array>
+    <string name="common_premieres_in_year">Premieres\u00A0%d</string>
+    <string name="common_not_yet_aired">Not yet aired</string>
+    <string name="common_back">Back</string>
+    <string name="common_undo">Undo</string>
+    <string name="common_moved_to_completed">Moved to Completed</string>
+    <string name="common_no_connection">No connection</string>
+    <string name="common_refused">MyAnimeList is refusing requests, try again later</string>
 </resources>

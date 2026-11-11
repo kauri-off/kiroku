@@ -84,12 +84,18 @@ class AirTimeTextTest {
     @Test
     @Config(qualifiers = "ru")
     fun `a next episode is written in one form`() {
-        assertEquals("Серия\u00A015 · сб\u00A017:30", text().nextEpisode(ScheduledEpisode(15, at(17, 17, 30))))
+        assertEquals("Серия\u00A015 ·\u00A0сб\u00A017:30", text().nextEpisode(ScheduledEpisode(15, at(17, 17, 30))))
+    }
+
+    @Test
+    @Config(qualifiers = "ru")
+    fun `a premiere at a known time has no colon`() {
+        assertEquals("Премьера сб\u00A017:30", text().premiere(at(17, 17, 30)))
     }
 
     @Test
     @Config(qualifiers = "en")
     fun `an english next episode`() {
-        assertEquals("Episode\u00A015 · today\u00A018:00", text().nextEpisode(ScheduledEpisode(15, at(14, 18))))
+        assertEquals("Episode\u00A015 ·\u00A0today\u00A018:00", text().nextEpisode(ScheduledEpisode(15, at(14, 18))))
     }
 }

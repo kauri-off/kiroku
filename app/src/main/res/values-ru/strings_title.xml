@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="title_back">Назад</string>
     <string name="title_more_options">Другие действия</string>
     <string name="title_open_on_mal">Открыть на MyAnimeList</string>
     <string name="title_share">Поделиться</string>
@@ -20,24 +19,6 @@
     <string name="title_to_watch">к\u00A0просмотру:\u00A0%d</string>
     <string name="title_to_watch_estimated">к\u00A0просмотру:\u00A0~%d</string>
     <string name="title_airing">Выходит</string>
-    <string name="title_premieres_at">Премьера: %s</string>
-    <string name="title_premieres_on">Премьера %s</string>
-    <string-array name="title_premieres_in_month">
-        <item>Премьера в январе\u00A0%d\u00A0г.</item>
-        <item>Премьера в феврале\u00A0%d\u00A0г.</item>
-        <item>Премьера в марте\u00A0%d\u00A0г.</item>
-        <item>Премьера в апреле\u00A0%d\u00A0г.</item>
-        <item>Премьера в мае\u00A0%d\u00A0г.</item>
-        <item>Премьера в июне\u00A0%d\u00A0г.</item>
-        <item>Премьера в июле\u00A0%d\u00A0г.</item>
-        <item>Премьера в августе\u00A0%d\u00A0г.</item>
-        <item>Премьера в сентябре\u00A0%d\u00A0г.</item>
-        <item>Премьера в октябре\u00A0%d\u00A0г.</item>
-        <item>Премьера в ноябре\u00A0%d\u00A0г.</item>
-        <item>Премьера в декабре\u00A0%d\u00A0г.</item>
-    </string-array>
-    <string name="title_premieres_in_year">Премьера в\u00A0%d\u00A0г.</string>
-    <string name="title_not_yet_aired">Ещё не вышло</string>
     <string name="title_synopsis">Описание</string>
     <string name="title_synopsis_more">Ещё</string>
     <string name="title_synopsis_less">Свернуть</string>
@@ -54,14 +35,10 @@
     <string name="title_details">Подробности</string>
     <string name="title_recommendations">Рекомендации</string>
     <string name="title_loading_details">Загрузка подробностей</string>
-    <string name="title_no_connection">Нет соединения</string>
-    <string name="title_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
     <string name="title_not_found">Этого тайтла нет на MyAnimeList</string>
     <string name="title_could_not_load">Не удалось загрузить тайтл</string>
     <string name="title_added_to_planned">Добавлено: Запланировано</string>
     <string name="title_change">Изменить</string>
-    <string name="title_moved_to_completed">Перенесено в Просмотрено</string>
-    <string name="title_undo">Отменить</string>
 
     <string name="title_relation_alt_setting">Альт. сеттинг</string>
     <string name="title_relation_alt_version">Альт. версия</string>

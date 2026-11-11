@@ -17,6 +17,16 @@ import java.time.YearMonth
 import io.github.kauri_off.kiroku.core.fixtures.FixtureGenres as G
 
 object FixtureAnime {
+    // A fixture title's poster address; nothing is served there, the debug build draws stand-in art for it.
+    const val POSTER_URL = "https://example.invalid/kiroku/poster/"
+
+    fun posterId(url: String): Long? =
+        url
+            .removePrefix(POSTER_URL)
+            .takeIf { it != url }
+            ?.substringBefore('.')
+            ?.toLongOrNull()
+
     val exactToWatch =
         anime(
             id = 900001,
@@ -707,7 +717,7 @@ object FixtureAnime {
     ) = Anime(
         id = AnimeId(id),
         titles = titles,
-        posterUrl = if (poster) "https://example.invalid/kiroku/poster/$id.jpg" else null,
+        posterUrl = if (poster) "$POSTER_URL$id.jpg" else null,
         mediaType = type,
         airingStatus = status,
         malEpisodes = malEpisodes,

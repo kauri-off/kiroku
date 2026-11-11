@@ -15,25 +15,28 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 
 enum class PosterSize(
     val width: Dp,
+    val height: Dp,
 ) {
-    Row(Sizes.posterRow),
-    Strip(Sizes.posterStrip),
-    Header(Sizes.posterHeader),
+    Row(Sizes.posterRow, Sizes.posterRowHeight),
+    Strip(Sizes.posterStrip, Sizes.posterStrip * 3 / 2),
+    Header(Sizes.posterHeader, Sizes.posterHeader * 3 / 2),
 }
 
 // A strip poster grows with the font scale, as its card does; the other two keep their size.
 @Composable
-internal fun PosterSize.scaledWidth(): Dp =
-    if (this == PosterSize.Strip) width * LocalDensity.current.fontScale.coerceAtLeast(1f) else width
+internal fun PosterSize.scale(): Float = if (this == PosterSize.Strip) LocalDensity.current.fontScale.coerceAtLeast(1f) else 1f
 
-// A 2:3 image with a surface-coloured placeholder while loading, on failure and when there is no image.
+@Composable
+internal fun PosterSize.scaledWidth(): Dp = width * scale()
+
+// An image cropped to its size, with a surface-coloured placeholder while loading, on failure and when there is none.
 @Composable
 fun Poster(
     url: String?,
     size: PosterSize,
     modifier: Modifier = Modifier,
 ) {
-    val width = size.scaledWidth()
+    val scale = size.scale()
     val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceContainerHighest)
     AsyncImage(
         model = url,
@@ -44,7 +47,7 @@ fun Poster(
         contentScale = ContentScale.Crop,
         modifier =
             modifier
-                .size(width, width * 3 / 2)
+                .size(size.width * scale, size.height * scale)
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     )

@@ -251,7 +251,13 @@ val verifyReleaseDependencies =
 
 val verifyReleaseClasses =
     tasks.register<VerifyReleaseClasses>("verifyReleaseClasses") {
-        forbidden.set(listOf("io/github/kauri_off/kiroku/core/demo/", "io/github/kauri_off/kiroku/core/fixtures/"))
+        forbidden.set(
+            listOf(
+                "io/github/kauri_off/kiroku/core/demo/",
+                "io/github/kauri_off/kiroku/core/fixtures/",
+                "io/github/kauri_off/kiroku/standin/",
+            ),
+        )
         report.set(layout.buildDirectory.file("reports/release-classes.txt"))
     }
 

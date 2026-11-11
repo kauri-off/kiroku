@@ -67,7 +67,7 @@ internal fun SubScreen(
                     title = { Text(title) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.title_back))
+                            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
                         }
                     },
                     scrollBehavior = scrollBehavior,

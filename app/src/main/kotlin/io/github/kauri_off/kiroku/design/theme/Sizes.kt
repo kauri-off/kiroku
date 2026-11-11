@@ -4,7 +4,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 object Sizes {
-    val posterRow: Dp = 56.dp
+    // A list row's poster, in a MAL poster's proportions, large enough to recognise its art.
+    val posterRow: Dp = 72.dp
+    val posterRowHeight: Dp = 104.dp
     val posterStrip: Dp = 104.dp
     val posterHeader: Dp = 120.dp
 
@@ -13,4 +15,7 @@ object Sizes {
 
     // Keeps a state message of a few words in one or two balanced lines on wide windows.
     val messageMaxWidth: Dp = 320.dp
+
+    // A tab carries its own padding, so a scrollable tab row with none starts its first label on the content edge.
+    val tabRowEdge: Dp = 0.dp
 }

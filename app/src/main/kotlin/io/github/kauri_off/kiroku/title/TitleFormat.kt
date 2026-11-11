@@ -5,7 +5,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.AiredCount
@@ -14,7 +13,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.text.AirTimeText
 import io.github.kauri_off.kiroku.text.currentLocale
-import io.github.kauri_off.kiroku.text.dateText
+import io.github.kauri_off.kiroku.text.premiereText
 import io.github.kauri_off.kiroku.text.relationName
 import io.github.kauri_off.kiroku.text.typeAndYear
 import java.text.NumberFormat
@@ -73,16 +72,7 @@ fun toWatchText(toWatch: AiredCount.Known): String =
 fun premiereText(
     premiere: Premiere,
     times: AirTimeText,
-): String =
-    when (premiere) {
-        is Premiere.At -> stringResource(R.string.title_premieres_at, times.airTime(premiere.instant))
-        is Premiere.OnDay -> stringResource(R.string.title_premieres_on, dateText(premiere.date))
-        is Premiere.InMonth ->
-            stringArrayResource(R.array.title_premieres_in_month)[premiere.yearMonth.monthValue - 1]
-                .format(currentLocale(), premiere.yearMonth.year)
-        is Premiere.InYear -> stringResource(R.string.title_premieres_in_year, premiere.year.value)
-        Premiere.Unannounced -> stringResource(R.string.title_not_yet_aired)
-    }
+): String = premiereText(LocalContext.current, times, premiere, withYear = true)
 
 // The page's air times, in the zone of the state's clock.
 @Composable

@@ -85,7 +85,7 @@ AniList (from live queries):
 
 | Source | Failure | What the user gets |
 |---|---|---|
-| MAL | Network or server error | Cached data stays, with a one-line "Could not refresh" snackbar. With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
+| MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
 | MAL | Refused when reading another user's list | "This list is private". Not treated as rate limiting. |
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and the foreground says "MyAnimeList is refusing requests, try again later". |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). |
@@ -433,8 +433,9 @@ colour outside the theme is a code-review finding.
 - Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
 - Content is at most 640 dp wide and centred on wider windows.
 - Every tappable element is at least 48 × 48 dp.
-- Posters are 2:3 with the theme's small corner shape, in three sizes: 56 × 84 dp in rows, 104 × 156 dp in strips
-  at font scale 1.0, 120 × 180 dp in the title header.
+- Posters have the theme's small corner shape and are cropped to their size, which is one of three named sizes:
+  72 × 104 dp, a MAL poster's proportions, in every `AnimeRow` (the List, search results, Related and the title
+  page's Sequel row); 104 × 156 dp (2:3) in strips at font scale 1.0; 120 × 180 dp (2:3) in the title header.
 - **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
   scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
   is a rule of the component, and a screen never passes a width.
@@ -451,7 +452,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | Component | Built from | Purpose |
 |---|---|---|
 | `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element |
+| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm: a row is as tall as its poster or its text and padding, never taller. "+1" is filled tonal while the row has episodes to watch and a standard icon button once the user has caught up, at the same size and place. An optional long press with haptic feedback, also offered as a custom accessibility action |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
@@ -479,6 +480,8 @@ legible, or preventing a jump. Decoration is not a purpose.
 - **Not animated:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers counting up,
   anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
+- **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
+  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance.
 - **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
   one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.
@@ -495,9 +498,10 @@ legible, or preventing a jump. Decoration is not a purpose.
 
 A task that adds or changes an animation shows, with tests on the test clock, that it settles within its time,
 that re-triggering it mid-flight ends in the right state, that the interaction is correct with animations off, and
-that the idle screen has nothing pending. It also renders the transition as four frames in one image (start, one
-third, two thirds, end), `<case>__<variant>__frames.png`, next to the screen's screenshots: the first and last frames equal the static renders, and
-direction and pattern match this section. The hand-over names the transitions that changed. How a transition
+that the idle screen has nothing pending. It also renders the transition as frames in one image (start, one third,
+two thirds, end; earlier moments for a transition that does most of its way early),
+`<case>__<variant>__frames.png`, next to the screen's screenshots: the first and last frames equal the static
+renders, the change shows within three frames, and direction and pattern match this section. The hand-over names the transitions that changed. How a transition
 feels on a device, and predictive back under a finger, are judged by the owner from the installed app.
 
 ## 9. Per-screen information budgets
@@ -532,27 +536,27 @@ disabled.
 ### 9.3 List (the start screen)
 
 - Top app bar: the title "My list", a filter-by-text icon, a sort icon.
-- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped. No counts.
+- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped. No counts. The tabs' pages can also be
+  switched by swiping the list sideways; each tab keeps its own scroll position.
 - Rows (`AnimeRow`), at most three logical lines and one action.
 
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
-tab, one "+1" tonal icon button. The three logical lines are the title, line 2 and line 3, so a row with a two-line
+tab, one "+1" icon button, tonal while the row has episodes to watch and quiet once the user has caught up. The three logical lines are the title, line 2 and line 3, so a row with a two-line
 title and both lines is within the limit.
 
 | Case | Line 2 | Line 3 |
 |---|---|---|
-| Airing, exact count, episodes to watch | `12 / 24 · 14 aired` | `2 to watch`, in the `tertiary` colour |
+| Airing, episodes to watch | `Watched 12 of 24` | `2 to watch` (`~2 to watch` when the aired count is estimated), in the `tertiary` colour |
 | Airing, exact count, nothing to watch | same | the next episode, `Episode 15 · Sat 17:30`; none when no next episode is known |
-| Airing, estimated count, episodes to watch | `12 / 24 · ~14 aired` | `~2 to watch`, in the `tertiary` colour |
 | Airing, estimated count, nothing to watch | same | none |
-| Finished, or aired count unknown | `12 / 24` | none |
+| Finished, or aired count unknown | same | none |
 | Not yet aired | `Premieres Sat 17:30` when the first episode's time is known, written by the air-time rule of section 10; otherwise MAL's date by its precision, `Premieres 4 Jan`; `Not yet aired` when there is neither | none |
 | Completed tab | `Score 8` (or `Not scored`) | none |
 
-"Episodes to watch" means a "to watch" figure above zero (A8), which only a title in Watching can have; in the other
-tabs an airing title is always a "nothing to watch" row. An unknown total is written without the slash part:
-`12 · 14 aired`. Line 3 restates a difference the user could compute from line 2; that is intentional, it is the
-one thing the screen exists to highlight.
+Line 2 is always words of one shape. An unknown total is left out: `Watched 212`. The count is written as it is,
+also above the total (`Watched 25 of 24`, W9). A row never shows the aired count: "to watch" carries it, and the
+title page shows it. "Episodes to watch" means a "to watch" figure above zero (A8), which only a title in Watching
+can have; in the other tabs an airing title is always a "nothing to watch" row.
 
 **Limits:** not in a row: MAL score, member count, genres, media type, studio, tags, a countdown, an edit button, a
 progress bar.
@@ -567,18 +571,25 @@ progress bar.
 Equal keys are ordered by title. The other tabs default to "Last updated". The sort chosen for each tab is
 remembered.
 
-**Rows never move under the user's finger.** The order of a tab is computed when the tab is shown (the List is
-opened or returned to, or the tab is selected), when its sort is changed, and on pull-to-refresh. It is not
-computed after each edit. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates
-rows in place without moving them: after "+1" a row stays where it is, under "Up next" and under "Last updated"
-alike. Two things do change the visible rows: a row whose title no longer belongs to the tab leaves at once, with
-the list's item animation (the usual case is a "+1" that completes a title, and Undo puts it back in the same
-place); a title that a sync adds to the tab appears at the end until the order is next computed.
+"Up next" groups a row only by what the row shows: its "to watch" line, or the time of its next episode or
+premiere. The List and the title page take what has aired, what is to watch and the next episode from one decision
+in `:core`, so a title says the same in both places.
 
-**Behind a tap:** the row opens the title page. Filter replaces the top app bar title with a text field that
-filters the current tab by title; Back or clearing the field ends it. Sort opens a bottom sheet with at most five
+**Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's
+sort is changed, and on pull-to-refresh, and only then does the tab's page start from the top. It is not computed
+after an edit, when the user switches tabs or comes back from a title page, so the List comes back with its rows in
+the same order and at the same scroll position. Starting or ending the filter keeps the unfiltered list where it
+was. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates rows in place
+without moving them: after "+1" a row stays where it is, under "Up next" and under "Last updated" alike. Two things
+do change the visible rows, both with the list's item animation: a row whose title no longer belongs to the tab
+leaves at once (the usual case is a "+1" that completes a title, and Undo puts it back in the same place); a title
+that joins the tab (a sync, or "+1" completing it) appears at the end until the order is next computed.
+
+**Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens
+the entry's edit sheet, with haptic feedback; screen readers get it as the row's "Edit" action. Filter replaces the top app bar title with a text field that
+filters every tab by title, so a swipe shows the next tab's matches; Back or clearing the field ends it. Sort opens a bottom sheet with at most five
 options (Up next, Title, Last updated, Score, Start date). "+1" answers with a snackbar "Episode 13 watched · Undo".
-When "+1" reaches the total, the title becomes Completed (W7): the row leaves Watching at once and the snackbar says
+"+1" works at and above the total (W9). When "+1" reaches MAL's total, the title becomes Completed (W7): the row leaves Watching at once and the snackbar says
 "Moved to Completed · Undo". Undo puts back the count, the status and the dates, and the row returns to its place.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
@@ -760,8 +771,8 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
   six days ("Sat 17:30", «сб 17:30»), and the date with the time beyond that ("14 Nov, 17:30"). It never has both a
   weekday and a date. An air time always follows other text, so "today", "tomorrow" and their Russian forms are in
   lower case. A next episode is written in one form everywhere, the list row and the airing block alike:
-  "Episode 15 · Sat 17:30", «Серия 15 · сб 17:30», "Episode 15 · today 17:30". A premiere whose time is known is
-  written the same way: "Premieres Sat 17:30", «Премьера: сб 17:30».
+  "Episode 15 · Sat 17:30", «Серия 15 · сб 17:30», "Episode 15 · today 17:30"; a wrap falls before the dot. A
+  premiere whose time is known is written the same way on both screens: "Premieres Sat 17:30", «Премьера сб 17:30».
 - **A date from MAL** is written by its precision: a full date as day and short month ("4 Jan", «4 янв.»), with the
   year added on the title page ("4 Jan 2027") and not in the list row; a year and month as "January 2027"
   («в январе 2027 г.» after «Премьера»); a year alone as "2027" («в 2027 г.» after «Премьера»).
@@ -795,9 +806,12 @@ Screens are rendered on the JVM by Roborazzi on Robolectric, which draws Compose
 code. Layout review works from these images.
 
 - The stateless screen is rendered with fixture states. No view model, network or database is involved, times are
-  written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's, and remote images
-  are flat grey blocks in a colour no surface role uses, with a MAL poster's proportions where only one side is
-  set. Two renders of one commit on one machine are byte-identical.
+  written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's. A fixture title's
+  poster is stand-in art drawn in code from its id (debug source set only, never an image from MAL or elsewhere),
+  loaded through `Poster` as a real image is, in the screenshots and the debug build alike; a fixture title without
+  a poster shows the placeholder. Any other remote image is a flat grey block in a colour no surface role uses, with
+  a MAL poster's proportions where only one side is set. Two renders of one commit on one machine are
+  byte-identical.
 - Every wall clock the app's code, `:core` or the date picker can read gives the fixtures' moment: `System`,
   `java.time`'s `now()` and system clocks, `Calendar` and Android's `DateUtils`. Three read the machine's clock, and
   a test fails when the app's code uses one: the `Date()` and `GregorianCalendar()` constructors and Kotlin's

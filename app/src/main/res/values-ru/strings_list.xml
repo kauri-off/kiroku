@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="list_title">Мой список</string>
+    <string name="list_title_other">Список %1$s</string>
+    <string name="list_filter">Фильтр по названию</string>
+    <string name="list_filter_clear">Очистить</string>
+    <string name="list_sort">Сортировка</string>
+    <string name="list_sort_by">Сортировка</string>
+    <string name="list_sort_up_next">На очереди</string>
+    <string name="list_sort_title">Название</string>
+    <string name="list_sort_last_updated">Последнее изменение</string>
+    <string name="list_sort_score">Оценка</string>
+    <string name="list_sort_start_date">Дата начала</string>
+    <string name="list_progress">Просмотрено %1$d\u00A0из\u00A0%2$d</string>
+    <string name="list_progress_unknown_total">Просмотрено %1$d</string>
+    <string name="list_to_watch">К просмотру:\u00A0%1$d</string>
+    <string name="list_to_watch_estimated">К просмотру:\u00A0~%1$d</string>
+    <string name="list_score">Оценка:\u00A0%1$d</string>
+    <string name="list_not_scored">Без оценки</string>
+    <string name="list_empty">В «%1$s» нет тайтлов</string>
+    <string name="list_empty_action">Поиск</string>
+    <string name="list_no_matches">Нет тайтлов с таким названием</string>
+    <string name="list_signed_out">Войдите через MyAnimeList, чтобы видеть здесь свой список</string>
+    <string name="list_sign_in">Войти</string>
+    <string name="list_failed">Не удалось загрузить список</string>
+    <string name="list_episode_watched">Серия\u00A0%1$d просмотрена</string>
+    <string name="list_could_not_refresh">Не удалось обновить</string>
+    <string name="list_edit">Изменить</string>
+</resources>

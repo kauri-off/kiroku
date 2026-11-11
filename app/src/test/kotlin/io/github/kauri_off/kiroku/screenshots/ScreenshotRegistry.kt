@@ -61,6 +61,9 @@ sealed class RegistryBase {
 
     internal abstract fun shape(): RegistryShape
 
+    // The transitions this screen animates, each rendered as a frames image next to its screenshots.
+    open val transitions: List<Transition> = emptyList()
+
     @Test
     fun structure() = assertEquals(emptyList<String>(), shape().problems())
 
@@ -70,7 +73,9 @@ sealed class RegistryBase {
         val shape = shape()
         val structure = shape.problems()
         if (structure.isNotEmpty()) fail(structure.joinToString("\n"))
-        val problems = renderScreen(screen, shape.cases, File(outputRoot, screen), notShown = shape.notShown)
+        val problems =
+            renderScreen(screen, shape.cases, File(outputRoot, screen), notShown = shape.notShown) +
+                transitions.flatMap { renderTransition(it, shape.cases, File(outputRoot, screen)) }
         if (problems.isNotEmpty()) fail(problems.joinToString("\n"))
     }
 

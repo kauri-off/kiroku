@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="list_title">My list</string>
+    <string name="list_title_other">%1$s\'s list</string>
+    <string name="list_filter">Filter by title</string>
+    <string name="list_filter_clear">Clear</string>
+    <string name="list_sort">Sort</string>
+    <string name="list_sort_by">Sort by</string>
+    <string name="list_sort_up_next">Up next</string>
+    <string name="list_sort_title">Title</string>
+    <string name="list_sort_last_updated">Last updated</string>
+    <string name="list_sort_score">Score</string>
+    <string name="list_sort_start_date">Start date</string>
+    <string name="list_progress">Watched %1$d\u00A0of\u00A0%2$d</string>
+    <string name="list_progress_unknown_total">Watched %1$d</string>
+    <string name="list_to_watch">%1$d\u00A0to watch</string>
+    <string name="list_to_watch_estimated">~%1$d\u00A0to watch</string>
+    <string name="list_score">Score\u00A0%1$d</string>
+    <string name="list_not_scored">Not scored</string>
+    <string name="list_empty">No titles in %1$s</string>
+    <string name="list_empty_action">Search</string>
+    <string name="list_no_matches">No titles match the filter</string>
+    <string name="list_signed_out">Sign in with MyAnimeList to see your list here</string>
+    <string name="list_sign_in">Sign in</string>
+    <string name="list_failed">Could not load the list</string>
+    <string name="list_episode_watched">Episode\u00A0%1$d watched</string>
+    <string name="list_could_not_refresh">Could not refresh</string>
+    <string name="list_edit">Edit</string>
+</resources>
