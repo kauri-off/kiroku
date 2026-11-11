@@ -28,13 +28,23 @@ fun AppRoute(
 ) {
     val messages = viewModel { ShellViewModel(graph) }.messages
     ShownMessages(messages, snackbars)
-    // "Change" from a screen without an edit sheet opens the title page, whose sheet takes the request.
+    // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
     val edit = messages.editRequest
     LaunchedEffect(edit) {
-        val top = navigator.stackOf(navigator.visible.last()).last()
-        if (edit != null && top !is ListRoot && top !is TitleKey) navigator.open(TitleKey(edit.value))
+        if (edit != null) navigator.showEditorOf(edit)
     }
     ShellRoute(navigator, snackbars, remember(graph, messages) { appEntries(graph, messages) })
+}
+
+private fun ShellNavigator.showEditorOf(id: AnimeId) {
+    val stack = stackOf(visible.last())
+    val page = TitleKey(id.value)
+    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) }
+    when {
+        stack.last() is ListRoot || stack.last() == page -> Unit
+        subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
+        else -> open(page)
+    }
 }
 
 fun appEntries(

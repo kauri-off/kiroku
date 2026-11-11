@@ -70,7 +70,7 @@ fun TitleRoute(
         },
         snackbars = snackbars,
     )
-    EditSheetRoute(editor, messages)
+    EditSheetRoute(editor, messages, takes = { it == id })
 }
 
 fun malUrl(id: AnimeId): String = notShown("https://myanimelist.net/anime/${id.value}")

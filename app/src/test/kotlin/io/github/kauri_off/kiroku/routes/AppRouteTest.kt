@@ -37,6 +37,7 @@ import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
+import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -418,6 +419,34 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Save")
         shows(added.titles.romaji)
+    }
+
+    private fun addAndThen(open: (ShellNavigator) -> Unit) {
+        app()
+        compose.runOnUiThread { navigator.open(TitleKey(FixtureAnime.notOnListAiring.id.value)) }
+        compose.waitForIdle()
+        click("Add to list")
+        compose.waitForIdle()
+        compose.runOnUiThread { open(navigator) }
+        compose.waitForIdle()
+        click("Change")
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `Change tapped on another title's page opens the added title's page with its sheet`() {
+        val added = FixtureAnime.notOnListAiring
+        addAndThen { it.open(TitleKey(kagerou.id.value)) }
+        assertEquals(listOf(TitleKey(added.id.value), TitleKey(kagerou.id.value), TitleKey(added.id.value)), navigator.stack.drop(1))
+        shows("Save")
+    }
+
+    @Test
+    fun `Change tapped on a sub-screen of the added title goes back to its page and opens the sheet there`() {
+        val added = FixtureAnime.notOnListAiring
+        addAndThen { it.open(DetailsKey(added.id.value)) }
+        assertEquals(listOf(TitleKey(added.id.value)), navigator.stack.drop(1))
+        shows("Save")
     }
 
     private fun watchingTitles(): List<String> =
