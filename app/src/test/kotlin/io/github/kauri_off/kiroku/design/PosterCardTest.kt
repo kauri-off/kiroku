@@ -64,6 +64,7 @@ class PosterCardTest {
         scale: Float,
     ) {
         assertFalse("$text is cut at $scale", layout.isLineEllipsized(layout.lineCount - 1) || layout.didOverflowHeight)
+        // Only a space counts as a break between words, so «Спин-офф» breaking after its hyphen would fail here too.
         for (line in 0 until layout.lineCount - 1) {
             val end = layout.getLineEnd(line)
             assertTrue("$text breaks inside a word at $scale", text[end - 1] == ' ' || text[end] == ' ')

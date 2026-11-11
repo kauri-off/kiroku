@@ -4,21 +4,38 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // A supporting line of a row; a highlighted line is the "to watch" figure, in the tertiary colour.
 data class RowLine(
     val text: String,
     val highlighted: Boolean = false,
 )
+
+// The one trailing element a row may have: a short value such as the MAL score, or the "+1" button.
+sealed interface RowTrailing {
+    data class Value(
+        val text: String,
+    ) : RowTrailing
+
+    data class PlusOne(
+        val onClick: () -> Unit,
+    ) : RowTrailing
+}
 
 // Poster, a title of at most two lines, up to two supporting lines and one optional trailing element.
 @Composable
@@ -28,11 +45,11 @@ fun AnimeRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     lines: List<RowLine> = emptyList(),
-    trailing: (@Composable () -> Unit)? = null,
+    trailing: RowTrailing? = null,
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
     ListItem(
-        headlineContent = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        headlineContent = { Text(shownTitle(title), maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent =
             lines.takeIf { it.isNotEmpty() }?.let {
                 {
@@ -44,7 +61,7 @@ fun AnimeRow(
                 }
             },
         leadingContent = { Poster(posterUrl, PosterSize.Row) },
-        trailingContent = trailing?.let { content -> { Trailing(content) } },
+        trailingContent = trailing?.let { { Trailing(it) } },
         modifier = modifier.clickable(onClick = onClick),
     )
 }
@@ -60,15 +77,24 @@ private fun SupportingLine(line: RowLine) {
     }
 }
 
-// A trailing text sits centred on the title's first line, in a caption role; a button keeps its own size.
+// A value sits centred on the title's first line, in a caption role. The button's visible edge, not its touch
+// target, ends on the content edge.
 @Composable
-private fun Trailing(content: @Composable () -> Unit) {
-    val line =
-        with(LocalDensity.current) {
-            MaterialTheme.typography.bodyLarge.lineHeight
-                .toDp()
+private fun Trailing(trailing: RowTrailing) {
+    when (trailing) {
+        is RowTrailing.Value -> {
+            val line =
+                with(LocalDensity.current) {
+                    MaterialTheme.typography.bodyLarge.lineHeight
+                        .toDp()
+                }
+            Box(Modifier.heightIn(min = line), contentAlignment = Alignment.Center) {
+                Text(trailing.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-    ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-        Box(Modifier.heightIn(min = line), contentAlignment = Alignment.Center) { content() }
+        is RowTrailing.PlusOne ->
+            FilledTonalIconButton(onClick = trailing.onClick, modifier = Modifier.offset(x = Spacing.xs)) {
+                Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.design_episode_plus))
+            }
     }
 }

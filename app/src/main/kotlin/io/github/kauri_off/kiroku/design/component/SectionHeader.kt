@@ -7,11 +7,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -24,42 +23,20 @@ fun SectionHeader(
     modifier: Modifier = Modifier,
     onSeeAll: (() -> Unit)? = null,
 ) {
-    Layout(
-        content = {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.semantics { heading() },
-            )
-            if (onSeeAll != null) {
-                TextButton(onClick = onSeeAll) { Text(stringResource(R.string.design_see_all)) }
-            }
-        },
+    val seeAllSpoken = stringResource(R.string.design_see_all_in, title)
+    LineOrStack(
+        gap = Spacing.s,
+        stackedEndInset = Spacing.l - Spacing.xs,
+        centred = true,
         modifier =
             modifier
                 .heightIn(min = MinHeight)
                 .padding(start = Spacing.l, end = if (onSeeAll == null) Spacing.l else Spacing.xs),
-    ) { measurables, constraints ->
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val button = measurables.getOrNull(1)?.measure(loose)
-        val buttonWidth = button?.width ?: 0
-        val titleWidth = measurables[0].maxIntrinsicWidth(constraints.maxHeight)
-        val inline = titleWidth + buttonWidth <= constraints.maxWidth
-        val titleSpace = if (inline) constraints.maxWidth - buttonWidth else constraints.maxWidth
-        val text = measurables[0].measure(Constraints(maxWidth = titleSpace))
-        val width = constraints.maxWidth
-        if (inline) {
-            val height = maxOf(text.height, button?.height ?: 0, constraints.minHeight)
-            layout(width, height) {
-                text.place(0, (height - text.height) / 2)
-                button?.place(width - buttonWidth, (height - button.height) / 2)
-            }
-        } else {
-            val buttonHeight = button?.height ?: 0
-            val height = maxOf(text.height + buttonHeight, constraints.minHeight)
-            layout(width, height) {
-                text.place(0, (height - buttonHeight - text.height) / 2)
-                button?.place(width - buttonWidth, height - buttonHeight)
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+        if (onSeeAll != null) {
+            TextButton(onClick = onSeeAll, modifier = Modifier.semantics { contentDescription = seeAllSpoken }) {
+                Text(stringResource(R.string.design_see_all))
             }
         }
     }

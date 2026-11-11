@@ -2,10 +2,11 @@ package io.github.kauri_off.kiroku.rules
 
 import java.io.File
 
-// A string literal of Kotlin source, without its template expressions, and the line it starts on.
+// A string literal of Kotlin source, without its template expressions; where it starts in the code and on which line.
 data class Literal(
     val text: String,
     val line: Int,
+    val offset: Int,
 )
 
 // Splits Kotlin source into code (comments and literals blanked out) and its string literals.
@@ -95,6 +96,7 @@ class KotlinSource(
 
     private fun string(raw: Boolean) {
         val start = line
+        val offset = out.length
         val text = StringBuilder()
         out.append('"')
         repeat(if (raw) 3 else 1) { i++ }
@@ -140,7 +142,7 @@ class KotlinSource(
         }
         repeat(if (raw) 3 else 1) { if (i < s.length) i++ }
         out.append('"')
-        literals += Literal(text.toString(), start)
+        literals += Literal(text.toString(), start, offset)
     }
 
     companion object {
@@ -152,9 +154,13 @@ class KotlinSource(
 val projectDir: File =
     generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
 
-// The app's Kotlin sources in every source set that ships or previews: main, debug and release.
+// The app's Kotlin sources in every source set that is not a test, under both kotlin/ and java/.
 fun appSources(): List<File> =
-    listOf("main", "debug", "release")
-        .map { File(projectDir, "app/src/$it/kotlin") }
+    File(projectDir, "app/src")
+        .listFiles()
+        .orEmpty()
+        .filter { it.isDirectory && !it.name.startsWith("test") && !it.name.startsWith("androidTest") }
+        .flatMap { set -> listOf(File(set, "kotlin"), File(set, "java")) }
         .filter { it.isDirectory }
         .flatMap { dir -> dir.walk().filter { it.isFile && it.extension == "kt" }.toList() }
+        .sorted()

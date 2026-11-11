@@ -431,9 +431,11 @@ finding.
 - **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
   scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
   is a rule of the component, and a screen never passes a width.
+- Cards of a strip are `m` apart.
+- **A title breaks after a hyphen, never inside a hyphenated segment**, wherever it is shown
+  ("Tenkuu-Toshi-Rondenia-no-" / "Kuuchuu-…").
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked
-  one per line (section 9.7); below it they are stacked too whenever a caption would otherwise break inside a word
-  («Просмотрено» does in `ru-stress`). Apart from that and the strip card, nothing depends on the font scale.
+  one per line (section 9.7). Nothing else depends on the font scale.
 
 ### 8.4 Components
 
@@ -445,7 +447,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
-| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1 234 567, 45 percent") |
+| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
 | `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke; a value above the total is refused with an inline error and not applied |
@@ -470,8 +472,8 @@ legible, or preventing a jump. Decoration is not a purpose.
 - **Not animated:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers counting up,
   anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
-- **One source.** Durations, easings and springs are Material 3's standard motion scheme and its duration and
-  easing tokens, written once in the theme's `Motion` (Compose Material 3 keeps its own scheme internal). A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
+- **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
+  one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
@@ -713,9 +715,10 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   The owner reviews the Russian text at the end of each milestone.
 - **No user-visible string exists outside the `:app` resources**, and strings are split into one file per feature,
   so parallel tasks do not edit the same file. The build fails on a missing or extra translation and on a missing
-  plural form, and a test fails on a string literal with a letter in user interface code (any app file that uses
-  Compose), outside an annotation, because Android Lint does not see Compose. That test exists before the first
-  screen is written.
+  plural form, and a test fails on a string literal in user interface code (Android Lint does not see Compose).
+  That test exists before the first screen is written.
+- A number and the word, unit or slash next to it are joined by a non-breaking space, so a line never ends with a
+  bare number or starts with its noun: `24 episodes`, `12 / 24`, `К просмотру: 2`.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
   falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
@@ -815,13 +818,17 @@ For every case, sheets and dialogs included, an automatic accessibility check fa
 under 48 dp in any variant, and on an unlabeled control in `en-light`. It runs where everything is composed: on the
 full-height render, and on every page of every horizontal strip. A touch target is the laid-out size of a clickable, toggleable or
 selectable element, not the larger area Compose accepts touches in. The 32 dp wide drag handle of the stock modal
-bottom sheet is the one exemption. A link inside a text is a touch target too, and is reported by its text.
+bottom sheet is the one exemption. A link inside a text is a touch target too, and is reported by its text. The
+check's result for a screen is written next to its images as `ACCESSIBILITY.txt`.
 
 **What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines
 and sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset
-passes. The keyboard is a block of fixed height, without keys or suggestions. A looping animation, such as an
-indeterminate progress indicator, is held at its first frame. Text scales the way Compose scales
+passes. The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales
 it at font scales above 1.03, non-linearly, on every Android version.
+
+**Looping animations.** The only looping animation a render accepts is a progress indicator's: the harness holds
+it at one fixed frame, where an indeterminate indicator shows a long arc and reads as a spinner. Any other looping
+animation fails the render.
 
 **The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and
 says "dirty" when the worktree had uncommitted changes. A render after any commit, including one that changes no

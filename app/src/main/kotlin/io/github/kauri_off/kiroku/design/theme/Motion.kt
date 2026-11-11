@@ -6,8 +6,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Easing as AnimationEasing
 
-// The one source of animation values: Material 3's standard motion scheme and its duration and easing tokens.
-// Spatial specs move, resize and reshape; effects specs change opacity and colour and never overshoot.
+// The one source of animation values: Material 3's standard motion scheme and its duration and easing tokens, which
+// Compose Material 3 keeps internal. Spatial specs move, resize and reshape; effects specs never overshoot.
 object Motion {
     fun <T> fastSpatial(): FiniteAnimationSpec<T> = spring(SPATIAL_DAMPING, FAST_SPATIAL)
 

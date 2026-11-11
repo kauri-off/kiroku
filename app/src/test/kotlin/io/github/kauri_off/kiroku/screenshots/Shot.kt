@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.ScrollAxisRange
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -63,6 +64,11 @@ class Shot private constructor(
 
     fun image(): Bitmap {
         settle()
+        val indicators = indeterminateIndicators()
+        check(LoopingAnimations.running <= indicators * LOOPS_PER_INDICATOR) {
+            "${LoopingAnimations.running} looping animations run with $indicators progress indicators: " +
+                "nothing but a progress indicator may loop (ARCHITECTURE section 8.5)"
+        }
         val screen = RoboComponent.Screen(fetchRobolectricWindowRoots(), options).image ?: error("Nothing was drawn")
         val bitmap = screen.copy(Bitmap.Config.ARGB_8888, true)
         SystemBars.draw(Canvas(bitmap), activity.window, density, keyboard)
@@ -188,6 +194,12 @@ class Shot private constructor(
     }
 
     fun stripCount(): Int = strips().size
+
+    private fun indeterminateIndicators(): Int =
+        windows()
+            .flatMap { it.composeRoots() }
+            .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
+            .count { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate }
 
     // Pages through one horizontal strip; with images, returns its pages stitched into one picture of every card.
     fun walkStrip(
@@ -320,12 +332,13 @@ class Shot private constructor(
         controller.pause().stop().destroy()
         idle()
         RemoteImages.reset()
-        StillAnimations.uninstall()
+        LoopingAnimations.uninstall()
         restore()
     }
 
     companion object {
         const val TOUCH_TARGET_DP = 48
+        const val LOOPS_PER_INDICATOR = 1
 
         private val FRAME = Duration.ofMillis(16)
         private const val MAX_FRAMES = 600
@@ -362,22 +375,29 @@ class Shot private constructor(
             val app = RuntimeEnvironment.getApplication()
             Shadows.shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, ComponentActivity::class.java))
             RemoteImages.install(app)
-            StillAnimations.install()
-
-            val controller = Robolectric.buildActivity(ComponentActivity::class.java).create()
-            val activity = controller.get()
-            activity.setKirokuContent(variant.themeSettings, variant.seed, content)
-            controller
-                .start()
-                .postCreate(null)
-                .resume()
-                .visible()
-            return Shot(controller, keyboard) {
+            LoopingAnimations.install()
+            val restore = {
                 Locale.setDefault(locale)
                 TimeZone.setDefault(zone)
-            }.apply {
-                settle()
-                awaitOverlays()
+            }
+            try {
+                val controller = Robolectric.buildActivity(ComponentActivity::class.java).create()
+                val activity = controller.get()
+                activity.setKirokuContent(variant.themeSettings, variant.seed, content)
+                controller
+                    .start()
+                    .postCreate(null)
+                    .resume()
+                    .visible()
+                return Shot(controller, keyboard, restore).apply {
+                    settle()
+                    awaitOverlays()
+                }
+            } catch (failure: Throwable) {
+                RemoteImages.reset()
+                LoopingAnimations.uninstall()
+                restore()
+                throw failure
             }
         }
 

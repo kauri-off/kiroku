@@ -13,15 +13,12 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.kauri_off.kiroku.R
@@ -34,6 +31,7 @@ import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterCard
 import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.RowTrailing
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
@@ -98,11 +96,7 @@ internal fun PosterSection() {
 
 @Composable
 internal fun AnimeRowSection() {
-    val plusOne: @Composable () -> Unit = {
-        FilledTonalIconButton(onClick = {}) {
-            Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.design_episode_plus))
-        }
-    }
+    val plusOne = RowTrailing.PlusOne {}
     Column {
         AnimeRow(
             title = FixtureAnime.exactToWatch.title(),
@@ -158,7 +152,7 @@ internal fun AnimeRowSection() {
                     RowLine(stringResource(R.string.gallery_facts)),
                     RowLine(stringResource(R.string.gallery_list_status)),
                 ),
-            trailing = { Text(decimal(8.73)) },
+            trailing = RowTrailing.Value(decimal(8.73)),
         )
     }
 }
@@ -166,6 +160,7 @@ internal fun AnimeRowSection() {
 private class Card(
     val anime: Anime,
     val relation: Int,
+    val title: String = anime.title(),
     val caption2: @Composable () -> String,
 )
 
@@ -182,11 +177,20 @@ internal fun PosterCardSection() {
             Card(FixtureAnime.relatedFullStory, R.string.gallery_full_story) { stringResource(R.string.gallery_dropped) },
             Card(FixtureAnime.relatedSpinOff, R.string.gallery_spin_off) { stringResource(R.string.gallery_tv_year, 2021) },
             Card(FixtureAnime.relatedAlternativeSetting, R.string.gallery_alt_setting) { stringResource(R.string.gallery_planned) },
+            Card(
+                FixtureAnime.onHoldAiring,
+                R.string.gallery_side_story,
+                title =
+                    FixtureAnime.onHoldAiring.titles.english
+                        .orEmpty(),
+            ) {
+                stringResource(R.string.gallery_on_hold)
+            },
         )
-    LazyRow(contentPadding = PaddingValues(horizontal = Spacing.l), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+    LazyRow(contentPadding = PaddingValues(horizontal = Spacing.l), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
         items(cards, key = { it.anime.id.value }) { card ->
             PosterCard(
-                title = card.anime.title(),
+                title = card.title,
                 caption1 = stringResource(card.relation),
                 caption2 = card.caption2(),
                 posterUrl = card.anime.posterUrl,
@@ -233,7 +237,11 @@ internal fun StatNumberSection() {
         StatNumber(decimal(1_234.5), stringResource(R.string.gallery_days_watched))
         StatNumber(decimal(7.45), stringResource(R.string.gallery_mean_score))
         StatNumber(decimal(8.73), stringResource(R.string.gallery_mal_score))
-        StatNumber(stringResource(R.string.gallery_no_value), stringResource(R.string.gallery_mal_score))
+        StatNumber(
+            stringResource(R.string.gallery_no_value),
+            stringResource(R.string.gallery_mal_score),
+            spokenValue = stringResource(R.string.gallery_no_score),
+        )
     }
 }
 
@@ -245,7 +253,7 @@ internal fun FactRowSection() {
         FactRow(stringResource(R.string.gallery_broadcast), stringResource(R.string.gallery_broadcast_value))
         FactRow(
             stringResource(R.string.gallery_alternative_titles),
-            listOfNotNull(long.english, long.japanese).plus(long.synonyms).joinToString("\n"),
+            listOfNotNull(long.english, long.japanese).plus(long.synonyms),
         )
     }
 }
@@ -258,7 +266,7 @@ internal fun EpisodeStepperSection() {
         EpisodeStepper(watched = 24, total = 24, onWatchedChange = {})
         EpisodeStepper(watched = 1088, total = 1122, onWatchedChange = {})
         EpisodeStepper(watched = 1093, total = null, onWatchedChange = {})
-        EpisodeStepper(watched = 12, total = 24, onWatchedChange = {}, draft = "30")
+        EpisodeStepper(watched = 12, total = 24, onWatchedChange = {}, typed = "30")
         EpisodeStepper(watched = 12, total = 24, onWatchedChange = {}, enabled = false)
     }
 }

@@ -12,14 +12,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
-// A card of a horizontal strip. Every card reserves the room of its full line caps, so all cards of a strip have
-// one height whatever their text, and it is as wide as its poster, which grows with the font scale.
+// A card of a horizontal strip. The title always takes its two lines, so the captions start at one height on every
+// card; every card reserves the room of its full line caps, so all cards of a strip have one height whatever their
+// text. It is as wide as its poster, which grows with the font scale.
 @Composable
 fun PosterCard(
     title: String,
@@ -29,10 +31,13 @@ fun PosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val width = PosterSize.Strip.scaledWidth()
+    val titleStyle = MaterialTheme.typography.bodyMedium
+    val captionStyle = MaterialTheme.typography.labelMedium
+    val titleColor = MaterialTheme.colorScheme.onSurface
+    val captionColor = MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier
-            .width(width)
+            .width(PosterSize.Strip.scaledWidth())
             .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {},
@@ -41,14 +46,14 @@ fun PosterCard(
         Spacer(Modifier.height(Spacing.s))
         Box {
             Column(Modifier.alpha(0f).clearAndSetSemantics {}) {
-                CardText("", titleStyle(), lines = TITLE_LINES)
-                CardText("", captionStyle(), lines = CAPTION1_LINES)
-                CardText("", captionStyle(), lines = CAPTION2_LINES)
+                CardText("", titleStyle, titleColor, TITLE_LINES, reserved = true)
+                CardText("", captionStyle, captionColor, CAPTION1_LINES, reserved = true)
+                CardText("", captionStyle, captionColor, CAPTION2_LINES, reserved = true)
             }
             Column {
-                CardText(title, titleStyle(), lines = TITLE_LINES, reserve = false)
-                CardText(caption1, captionStyle(), lines = CAPTION1_LINES, reserve = false)
-                CardText(caption2, captionStyle(), lines = CAPTION2_LINES, reserve = false)
+                CardText(shownTitle(title), titleStyle, titleColor, TITLE_LINES, reserved = true)
+                CardText(caption1, captionStyle, captionColor, CAPTION1_LINES, reserved = false)
+                CardText(caption2, captionStyle, captionColor, CAPTION2_LINES, reserved = false)
             }
         }
         Spacer(Modifier.height(Spacing.s))
@@ -56,24 +61,18 @@ fun PosterCard(
 }
 
 @Composable
-private fun titleStyle(): TextStyle = MaterialTheme.typography.bodyMedium
-
-@Composable
-private fun captionStyle(): TextStyle = MaterialTheme.typography.labelMedium
-
-@Composable
 private fun CardText(
     text: String,
     style: TextStyle,
+    color: Color,
     lines: Int,
-    reserve: Boolean = true,
+    reserved: Boolean,
 ) {
-    val color = if (style == titleStyle()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         text,
         style = style,
         color = color,
-        minLines = if (reserve) lines else 1,
+        minLines = if (reserved) lines else 1,
         maxLines = lines,
         overflow = TextOverflow.Ellipsis,
     )

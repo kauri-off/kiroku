@@ -137,6 +137,7 @@ internal class RegistryShape(
 }
 
 const val NOT_SHOWN_FILE = "NOT_SHOWN.txt"
+const val ACCESSIBILITY_FILE = "ACCESSIBILITY.txt"
 
 internal fun screenName(registry: Class<*>): String {
     val base = registry.simpleName.removeSuffix("Screenshots")
@@ -189,7 +190,16 @@ internal fun renderScreen(
     }
     val seconds = (System.nanoTime() - started) / 1e9
     println("Rendered $screen: $images images in ${"%.1f".format(Locale.ROOT, seconds)} s")
-    return problems.distinct()
+    val found = problems.distinct()
+    dir.mkdirs()
+    File(dir, ACCESSIBILITY_FILE).writeText(
+        if (found.isEmpty()) {
+            "passed; cases checked: ${cases.size}; touch targets in every variant, labels in en-light\n"
+        } else {
+            found.joinToString("\n", postfix = "\n")
+        },
+    )
+    return found
 }
 
 // Runs on the shot that shows everything: the touch-target check in every variant, the label check in en-light,

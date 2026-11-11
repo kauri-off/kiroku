@@ -14,14 +14,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
-// The loading, empty and error states of every screen. Each fills the space it is given and centres itself in it.
+// The loading, empty and error states of every screen. Each fills the space it is given and centres itself in it;
+// a message is announced when it appears.
 sealed interface ScreenState {
     data object Loading : ScreenState
 
@@ -64,11 +68,17 @@ private fun Message(
     action: StateAction?,
 ) {
     Column(
-        Modifier.widthIn(max = MessageWidth),
+        Modifier
+            .widthIn(max = MessageWidth)
+            .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.l),
     ) {
-        Text(message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading),
+            textAlign = TextAlign.Center,
+        )
         if (action != null) Button(onClick = action.onClick) { Text(action.label) }
     }
 }

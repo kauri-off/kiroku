@@ -27,15 +27,15 @@
     <string name="gallery_summary">Краткое изложение</string>
     <string name="gallery_tv_year">ТВ · %d</string>
     <string name="gallery_movie_year">Фильм · %d</string>
-    <string name="gallery_progress_aired">%1$d / %2$d · вышло %3$d</string>
-    <string name="gallery_progress_estimated">%1$d / %2$d · вышло ~%3$d</string>
-    <string name="gallery_to_watch">К просмотру: %d</string>
-    <string name="gallery_to_watch_estimated">К просмотру: ~%d</string>
-    <string name="gallery_next_episode">Серия 15 · сб 17:30</string>
-    <string name="gallery_score">Оценка: %d</string>
+    <string name="gallery_progress_aired">%1$d\u00A0/\u00A0%2$d · вышло\u00A0%3$d</string>
+    <string name="gallery_progress_estimated">%1$d\u00A0/\u00A0%2$d · вышло\u00A0~%3$d</string>
+    <string name="gallery_to_watch">К просмотру:\u00A0%d</string>
+    <string name="gallery_to_watch_estimated">К просмотру:\u00A0~%d</string>
+    <string name="gallery_next_episode">Серия\u00A015 · сб\u00A017:30</string>
+    <string name="gallery_score">Оценка:\u00A0%d</string>
     <string name="gallery_not_yet_aired">Ещё не вышло</string>
-    <string name="gallery_facts">ТВ · 2024 · 24 серии</string>
-    <string name="gallery_list_status">Смотрю · 12 / 24</string>
+    <string name="gallery_facts">ТВ · 2024 · 24\u00A0серии</string>
+    <string name="gallery_list_status">Смотрю · 12\u00A0/\u00A024</string>
     <string name="gallery_related">Связанное</string>
     <string name="gallery_statistics">Статистика</string>
     <string name="gallery_recommendations">Рекомендации</string>
@@ -46,8 +46,9 @@
     <string name="gallery_source">Источник</string>
     <string name="gallery_light_novel">Ранобэ</string>
     <string name="gallery_broadcast">Трансляция</string>
-    <string name="gallery_broadcast_value">По субботам в 17:30</string>
+    <string name="gallery_broadcast_value">По субботам в\u00A017:30</string>
     <string name="gallery_empty">В «Запланировано» нет тайтлов</string>
     <string name="gallery_sign_in">Войти</string>
     <string name="gallery_no_connection">Нет соединения</string>
+    <string name="gallery_no_score">Нет оценки</string>
 </resources>

@@ -2,8 +2,6 @@ package io.github.kauri_off.kiroku.design.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LinearProgressIndicator
@@ -21,8 +19,8 @@ import io.github.kauri_off.kiroku.design.theme.Spacing
 import java.text.NumberFormat
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
-// One static bar of a distribution: the label, the count and its share, read out as one sentence.
+// One static bar of a distribution: the label, the count and its share, read out as one sentence. The value ends
+// at the content edge, on the label's line or under it when both do not fit.
 @Composable
 fun StatBar(
     label: String,
@@ -43,9 +41,8 @@ fun StatBar(
             .clearAndSetSemantics { contentDescription = sentence },
         verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {
-        // The value moves under the label when both do not fit on one line, so the label never breaks inside a word.
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = Spacing.m))
+        LineOrStack(gap = Spacing.m, modifier = Modifier.fillMaxWidth()) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
             Text(
                 stringResource(R.string.design_stat_bar_value, countText, percentText),
                 style = MaterialTheme.typography.bodyMedium,

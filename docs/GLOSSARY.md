@@ -79,7 +79,7 @@ The edit sheet's slider shows the number with MAL's name for it.
 | Synopsis | Synopsis | Описание | |
 | Related | Related | Связанное | |
 | Statistics | Statistics | Статистика | |
-| Members | 1 234 567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
+| Members | 1,234,567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
 | Details | Details | Подробности | |
 | Recommendations | Recommendations | Рекомендации | |
 | Airing status: airing | Airing | Выходит | |
@@ -126,7 +126,7 @@ the owner; a name changes only on the owner's answer.
 | Settings | Settings | Настройки | |
 | Retry | Retry | Повторить | |
 | Loading (spoken by a screen reader) | Loading | Загрузка | |
-| See all | See all | Показать все | The button of a section header |
+| See all | See all | Показать все | The button of a section header. Spoken with its section: `See all: Related` / `Показать все: Связанное` |
 | Could not save | Could not save | Не удалось сохранить | |
 | Could not refresh | Could not refresh | Не удалось обновить | |
 | No connection | No connection | Нет соединения | |
