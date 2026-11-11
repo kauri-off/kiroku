@@ -22,12 +22,13 @@ M2 to M4 are the daily loop that replaces dailyAL for the owner; search and prof
 
 How to read a task:
 
-- `[ ]` becomes `[x]` in the pull request that completes the task. Each task is one agent, one git worktree and one
-  squash-merged pull request.
+- `[ ]` becomes `[x]` in the pull request that completes the task, which also cuts the entry down to its name: what
+  it built is in the code, and its check has become a test or has been run. Each task is one agent, one git worktree
+  and one squash-merged pull request.
 - **[A]** architectural task: done by the stronger model, because later tasks build on its choices.
 - **[L]** layout task: finished only when it passes [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) with both
   reviewers. It renders the **cases** it names, plus content, loading, empty and error where they exist, as
-  ARCHITECTURE section 11.2 requires.
+  ARCHITECTURE section 11.2 requires; the screen's registry file is the list of cases from then on.
 - **[O]** a step done by the orchestrator or the owner, not by a coding agent.
 - **Needs** lists what must be merged first. Tasks without a common dependency can run in parallel.
 - **Check** is what a reviewer or the owner runs or looks at, and what it shows. How the task is built, and what
@@ -44,121 +45,21 @@ needs GitHub is observed by the orchestrator after it pushes the branch.
 Goal: the owner installs a debug APK and sees the List and the title page in the final design, in Russian and
 English, light and dark, on demo data. No MAL client id is needed.
 
-- [x] **M1-01 [A] Project skeleton.** A Gradle project with the modules `:core`, `:data` and `:app` that builds an
-  empty Compose app labelled "Kiroku", with the application ids of ARCHITECTURE section 3.1, the stack and platform
-  levels of sections 6.4 and 12, one version catalog, and the format and Lint checks in place. Installs the SDK
-  platform the build needs.
-  **Needs:** nothing.
-  **Check:** through the queue, `ktlintCheck lint test assembleDebug` exits 0 and leaves a debug APK; the build
-  reports the Kotlin Gradle plugin at the version the catalog pins, not the Android Gradle Plugin's default.
+Built and merged (the code and its tests say what each one is):
 
-- [x] **M1-02 [A] Queue wrappers.** `tools/gw` and `tools/emu` with the behaviour `CLAUDE.md` describes, and
-  `tools/emu smoke <apk>` (install, launch, device screenshots). An emulator run uses the slot the queue assigns,
-  never touches the other project's emulators or their snapshots, and always shuts its emulator down.
-  **Needs:** M1-01.
-  **Check:** from a shell without `ANDROID_HOME`, `tools/gw :core:test` prints a job id and then the Gradle result,
-  and the queue lists the job with kind `test`; a command run through `tools/emu` reports an API 36 device, and
-  afterwards no Kiroku emulator is running; the pull request states the measured peak memory of a `check` job, and
-  two such jobs fit the machine.
-
-- [x] **M1-03 [O] Repository published.** The orchestrator creates the public repository `kauri-off/kiroku`, pushes
-  `main`, sets squash merging as the only merge method, and adds the secret `MAL_CLIENT_ID`.
-  **Needs:** M1-01.
-  **Check:** `gh repo view kauri-off/kiroku` succeeds.
-
-- [x] **M1-04 CI workflow.** The pull-request and `main` checks of ARCHITECTURE section 12, without the
-  screenshots, which M1-06 adds.
-  **Needs:** M1-01. The check needs M1-03.
-  **Check (after M1-03):** on the task's pull request the build check and the title check are green and the run
-  offers the debug APK. Before M1-03 the reviewers read the workflow.
-
-- [x] **M1-05 [A] Domain model and fixtures.** The domain types, typed errors and repository interfaces of `:core`,
-  and the fixture set: about 30 list entries covering every status and every row case of section 9.3 (both
-  estimated cases included), a very long title, a title with unknown episode count, a title one episode short of
-  its total, a film, one title for each case of the airing block (section 9.4), one title for each premiere form
-  of a not-yet-aired title (a known first-episode time, a full date, a year and month, a year alone, no date), one
-  fully described title with statistics and twelve related titles (every relation type, both alternative types
-  among them, and at least two that are on the user's list), one user with statistics.
-  **Needs:** M1-01.
-  **Check:** a `:core` test asserts that each case named above is present in the fixtures.
-
-- [x] **M1-06 [A] Screenshot harness.** The rendering of ARCHITECTURE section 11.2, a `sample` screen with a
-  scrolling list, and two deliberately bad versions of it for calibration: the cases `sample/calibration-noise`
-  (repeated facts and decoration) and `sample/calibration-hierarchy` (competing primary actions). CI renders and
-  keeps the screenshots.
-  **Needs:** M1-04, M1-05.
-  **Check:** rendering the sample screen writes, under `app/build/outputs/roborazzi/sample/`, the content case in
-  all seven variants, with the full-height images and the bounds image; two runs give byte-identical files;
-  `RENDERED_AT` names the current commit, and after an empty commit the same command renders again and names the
-  new one; both system bars are visible in the images and the sample's last row is clear of the gesture bar; a
-  test shows the accessibility check reporting a deliberately small button, without that button failing the record
-  run; an ordinary `:app` test run renders nothing and reports the screenshot tests as skipped; the whole-project
-  `test` still passes; the pull request states the time to render one screen.
-
-- [x] **M1-07 [L][A] Theme and components.** The theme (dynamic colour, the two fixed seeds, light and dark),
-  edge-to-edge, the `Spacing` tokens, the ten components of section 8.4 with previews, and the test that fails on
-  a string literal in user interface code (section 10), so that every later screen is written under it.
-  **Cases:** `gallery/all` showing every component in every state.
-  **Needs:** M1-06.
-  **Check:** rubric pass on `gallery/*` under the gallery weights of the rubric; in `ru-stress` and `ru-large` the
-  strip card's captions «Продолжение» and «Запланировано» are whole, neither broken inside the word nor cut; the
-  string test fails on a planted literal and passes without it; the screenshot harness renders every case inside
-  the app's theme and the app's window setup, with no theme or window code of its own, and with dynamic colour off:
-  the standard variants use the first fixed seed and `en-alt` the second; a harness test fails if a colour role
-  read inside a rendered case differs from the app theme's for that variant, light, dark and the second seed
-  included.
-
-- [x] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
-  Profile; placeholder screens in the shared empty state; the place for snackbars and for the session banner.
-  **Cases:** `shell/list-selected`, `shell/snackbar`, `shell/session-banner`, `shell/wide` (840 × 600 dp, rail).
-  **Needs:** M1-07.
-  **Check:** rubric pass on `shell/*`. Tests show: tapping the current destination again pops it to its root; Back
-  from the Search root goes to List; each destination keeps its stack.
-
-- [x] **M1-09 [L] List screen.** The stateless List as budgeted in section 9.3, including the sort sheet and the
-  read-only variant.
-  **Cases:** `watching` (rows: episodes to watch; nothing to watch, with the next episode; estimated with episodes
-  to watch; estimated with nothing to watch; finished; unknown total; a long title that takes two lines together
-  with lines 2 and 3), `planned` (with not-yet-aired rows for a known first-episode time, a full date and no date),
-  `completed`, `sort-sheet`, `filtering` (the text field in the top app bar, a query with two matches),
-  `refreshing`, `undo-snackbar`, `completed-snackbar` ("+1" reached the total: the row is gone and the snackbar
-  says "Moved to Completed · Undo"), `above-total` ("Watched 25 of 24"), `offline-cached`, `loading`, `empty`,
-  `error`, `signed-out`, `session-expired`, `read-only`; the frames of a row leaving and of a tab switch.
-  **Needs:** M1-07.
-  **Check:** rubric pass on `list/*`.
-
-- [x] **M1-10 [L] Title page.** The stateless title page as budgeted in section 9.4.
-  **Cases:** `airing-on-list` (episodes to watch; the content case), `not-on-list` (airing), `airing-estimated`
-  (episodes to watch), `airing-estimated-caught-up` (estimated, nothing to watch), `airing-unknown` (aired count
-  unknown), `finished`, `film` (the facts line without an episode count), `not-yet-aired` (the first episode's time
-  is known), `not-yet-aired-date` (a full date, no time), `not-yet-aired-month` (a year and month only),
-  `not-yet-aired-year` (a year only), `not-yet-aired-nodate`, `no-related`, `long-title`, `details-loading`,
-  `no-score` (also no rank), `planned-scored`, `first-episode-aired`, `finished-with-sequel` (the sequel row with
-  its list status), `related-see-all-only` (besides the sequel only "other" and "character" relations: "See all"
-  without a strip), `synopsis-expanded` ("Less"), `session-expired` (the banner), `added-snackbar`,
-  `completed-snackbar` (the stepper reached the total: the status button says Completed and the snackbar says "Moved
-  to Completed · Undo"), `above-total` (a count past the total: "14 / 12", Completed), `loading`, `error`.
-  **Needs:** M1-07.
-  **Check:** rubric pass on `title/*`, including the above-the-fold rule and the Related and Statistics sections in
-  the `__full` images; in `airing-on-list` the Related strip shows both short strip labels and a two-line
-  caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Предыстория» in the
-  strip and the «Продолжение» header of the sequel row each stay on one line and «Запланировано» has no ellipsis.
-
-- [x] **M1-11 [L] Title sub-screens.** "Related: see all" and "Details" (section 9.9).
-  **Cases:** `related/grouped`, `related/single`, `details/full`, `details/sparse`.
-  **Needs:** M1-07.
-  **Check:** rubric pass on `related/*` and `details/*`.
-
-- [x] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
-  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `above-total` (a count above the total,
-  "26 / 24", with the title completed), `remove-confirm`, `discard-confirm`, `partial-dates`, `date-picker`.
-  **Needs:** M1-07.
-  **Check:** rubric pass on `edit/*`.
-
-- [x] **M1-13 [A] Wiring and demo mode.** The app's wiring, and demo mode (section 6.4): a debug build without a
-  client id runs on the fixtures in memory, writes included.
-  **Needs:** M1-05.
-  **Check:** a test shows that a "+1" made through the demo list reaches an observer of that list.
+- [x] **M1-01 [A] Project skeleton.**
+- [x] **M1-02 [A] Queue wrappers.**
+- [x] **M1-03 [O] Repository published.**
+- [x] **M1-04 CI workflow.**
+- [x] **M1-05 [A] Domain model and fixtures.**
+- [x] **M1-06 [A] Screenshot harness.**
+- [x] **M1-07 [L][A] Theme and components.**
+- [x] **M1-08 [L] App shell.**
+- [x] **M1-09 [L] List screen.**
+- [x] **M1-10 [L] Title page.**
+- [x] **M1-11 [L] Title sub-screens.**
+- [x] **M1-12 [L] Edit sheet.**
+- [x] **M1-13 [A] Wiring and demo mode.**
 
 - [ ] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
   navigation between them.
@@ -169,11 +70,11 @@ English, light and dark, on demo data. No MAL client id is needed.
 
 - [ ] **M1-15 [O] Owner's look and calibration.** The owner installs the APK and checks: the app opens on the List
   with demo data; a row opens the title page; "+1" changes the progress and offers Undo; the phone's language and
-  theme change the app. The owner then scores three more rendered screenshots with the rubric: List `watching` and
+  theme change the app. The owner then reviews three more rendered screenshots with the rubric: List `watching` and
   Title `airing-on-list` in `en-light`, and List `watching` in `ru-large` as the example of the rubric's `ru-large`
   rule (its section 3), with each wrap marked as following from the font scale or not.
   **Needs:** M1-14.
-  **Check:** `docs/calibration/` holds the three images and their scores; the owner's remarks are filed as
+  **Check:** `docs/calibration/` holds the three images and their reviews; the owner's remarks are filed as
   tasks.
 
 ## M2. Sign-in, the real list, the real title page
