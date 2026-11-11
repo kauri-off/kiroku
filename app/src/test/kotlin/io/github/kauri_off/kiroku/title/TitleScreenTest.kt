@@ -7,9 +7,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -39,7 +42,7 @@ class TitleScreenTest {
     @get:Rule
     val rule: TestRule = registered(compose)
 
-    private var state by mutableStateOf<TitleState>(TitleState.Loading)
+    private var state by mutableStateOf<TitleState>(TitleState.Loading(Fixtures.reference.session))
     private val events = mutableListOf<TitleEvent>()
     private val snackbars = SnackbarHostState()
     private var started = false
@@ -106,10 +109,22 @@ class TitleScreenTest {
         compose.onNodeWithText(FixtureAnime.exactCaughtUpLater.titles.romaji).assertIsDisplayed()
     }
 
+    // W9: plus stays enabled at the total, and a count above the total is shown as it is.
+    @Test
+    fun theStepperHasNoCeiling() {
+        show(TitleFixtures.completed)
+        compose.onNode(hasSetTextAction() and hasText("12 /\u00A012", substring = true)).assertExists()
+        sends(TitleEvent.SetWatched(13)) { compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled().performClick() }
+        show(TitleFixtures.aboveTotal)
+        compose.onNode(hasSetTextAction() and hasText("14 /\u00A012")).assertIsDisplayed()
+        compose.onNodeWithText("Completed").assertIsDisplayed()
+        sends(TitleEvent.SetWatched(15)) { compose.onNodeWithContentDescription("Plus one episode").performClick() }
+    }
+
     @Test
     fun theSynopsisHeaderStandsOnlyOverASynopsis() {
-        val shown = TitleFixtures.of(FixtureAnime.exactToWatch)
-        show(shown.copy(details = shown.details?.copy(synopsis = null)))
+        val anime = FixtureAnime.exactToWatch
+        show(TitleFixtures.of(anime, details = Fixtures.reference.details[anime.id]?.copy(synopsis = null)))
         scrollTo("Related")
         compose.onNodeWithText("Synopsis").assertDoesNotExist()
         compose.onNodeWithText("Drama", substring = true).assertExists()
@@ -143,14 +158,14 @@ class TitleScreenTest {
         show(shown)
         scrollTo("More")
         sends(TitleEvent.ExpandSynopsis) { compose.onNodeWithText("More").performClick() }
-        show(shown.copy(synopsisExpanded = true))
+        show(shown.copy(moment = TitleMoment(synopsisExpanded = true)))
         scrollTo("Less")
         sends(TitleEvent.CollapseSynopsis) { compose.onNodeWithText("Less").performClick() }
         show(shown)
-        val sequel = checkNotNull(shown.sequel)
+        val sequel = checkNotNull(shown.page.sequel)
         scrollTo(sequel.title)
         sends(TitleEvent.OpenRelated(sequel.related.anime.id)) { compose.onNode(hasText(sequel.title) and hasClickAction()).performClick() }
-        val first = shown.related.first()
+        val first = shown.page.related.first()
         scrollTo("Statistics")
         sends(TitleEvent.OpenRelated(first.related.anime.id)) { compose.onNode(hasText(first.title) and hasClickAction()).performClick() }
         sends(
@@ -161,19 +176,34 @@ class TitleScreenTest {
         sends(TitleEvent.OpenRecommendations) { compose.onNodeWithText("Recommendations").performClick() }
     }
 
+    // Review M1: with no related title for the strip, the section is "See all" alone.
     @Test
-    fun theSessionBannerShowsOnlyForAnExpiredSessionAndSendsSignIn() {
-        show(TitleFixtures.of(FixtureAnime.exactToWatch))
-        compose.onNodeWithText("Session expired").assertDoesNotExist()
-        show(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired))
-        sends(TitleEvent.SignIn) { compose.onNodeWithText("Sign in").performClick() }
-        show(TitleState.Failed(DataError.SessionExpired, sessionExpired = true))
-        compose.onNodeWithText("Session expired").assertIsDisplayed()
+    fun seeAllIsReachableWhenNoRelatedTitleFitsTheStrip() {
+        show(TitleFixtures.relatedOutsideTheStrip)
+        scrollTo("Related")
+        compose.onNodeWithText("Related").assertIsDisplayed()
+        sends(TitleEvent.SeeAllRelated) { compose.onNode(hasText("See all") and hasClickAction()).performClick() }
+    }
+
+    @Test
+    fun theSessionBannerShowsInEveryStateOnlyForAnExpiredSessionAndSendsSignIn() {
+        val page = TitleFixtures.page(FixtureAnime.exactToWatch)
+        val states: (Session) -> List<TitleState> =
+            { listOf(TitleState.Loading(it), TitleState.Failed(DataError.NoConnection, it), TitleState.Shown(page, it)) }
+        for (shown in states(Fixtures.reference.session)) {
+            show(shown)
+            compose.onNodeWithText("Session expired").assertDoesNotExist()
+        }
+        for (shown in states(Session.Expired)) {
+            show(shown)
+            compose.onNodeWithText("Session expired").assertIsDisplayed()
+            sends(TitleEvent.SignIn) { compose.onNodeWithText("Sign in").performClick() }
+        }
     }
 
     @Test
     fun retryIsAnEvent() {
-        show(TitleState.Failed(DataError.NoConnection))
+        show(TitleState.Failed(DataError.NoConnection, Fixtures.reference.session))
         sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }
     }
 
@@ -184,7 +214,7 @@ class TitleScreenTest {
         val added = TitleFixtures.added
         show(added)
         sends(TitleEvent.SnackbarAction) { compose.onNodeWithText("Change").performClick() }
-        show(added.copy(snackbar = null))
+        show(added.copy(moment = TitleMoment()))
         show(added)
         compose.onNodeWithText("Added to Planned").assertIsDisplayed()
         sends(TitleEvent.SnackbarDismissed) { compose.runOnIdle { snackbars.currentSnackbarData?.dismiss() } }

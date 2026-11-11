@@ -21,10 +21,13 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.RelatedAnime
+import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -36,9 +39,9 @@ import java.time.Duration
 
 class TitleScreenshots : ScreenshotRegistry() {
     override val content = contentCase("airing-on-list") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch)) }
-    override val loading = shown { Screen(TitleState.Loading) }
+    override val loading = shown { Screen(TitleState.Loading(Fixtures.reference.session)) }
     override val empty = notShown("A title page always shows its title; a title that cannot be loaded is the error case.")
-    override val error = shown { Screen(TitleState.Failed(DataError.NoConnection)) }
+    override val error = shown { Screen(TitleState.Failed(DataError.NoConnection, Fixtures.reference.session)) }
 
     override val cases =
         listOf(
@@ -55,15 +58,19 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("not-yet-aired-nodate") { Screen(TitleFixtures.of(FixtureAnime.premiereUnannounced)) },
             case("no-related") { Screen(TitleFixtures.of(FixtureAnime.exactCaughtUp)) },
             case("long-title") { Screen(TitleFixtures.of(FixtureAnime.longTitle)) },
-            case("details-loading") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(details = null)) },
+            case("details-loading") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, details = null)) },
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
             case("planned-scored") { Screen(TitleFixtures.plannedScored) },
             case("first-episode-aired") { Screen(TitleFixtures.firstEpisodeAired) },
             case("finished-with-sequel") { Screen(TitleFixtures.of(FixtureAnime.prequel)) },
-            case("synopsis-expanded") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(synopsisExpanded = true)) },
+            case("related-see-all-only") { Screen(TitleFixtures.relatedOutsideTheStrip) },
+            case("synopsis-expanded") {
+                Screen(TitleFixtures.of(FixtureAnime.exactToWatch, moment = TitleMoment(synopsisExpanded = true)))
+            },
             case("session-expired") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired)) },
             case("added-snackbar") { Screen(TitleFixtures.added) },
             case("completed-snackbar") { Screen(TitleFixtures.completed) },
+            case("above-total") { Screen(TitleFixtures.aboveTotal) },
         )
 }
 
@@ -94,22 +101,30 @@ object TitleFixtures {
     private val statuses: Map<AnimeId, ListStatus> =
         set.entries.associate { it.anime.id to it.status }
 
+    fun page(
+        anime: Anime,
+        entry: ListEntry? = set.entryFor(anime.id),
+        airing: Airing? = set.airing[anime.id],
+        details: AnimeDetails? = set.details[anime.id],
+    ): TitlePage =
+        TitlePage.of(
+            anime = anime,
+            entry = entry,
+            airing = airing,
+            details = details,
+            listStatuses = statuses,
+            language = TitleLanguage.Romaji,
+            clock = set.clock,
+        )
+
     fun of(
         anime: Anime,
         entry: ListEntry? = set.entryFor(anime.id),
         airing: Airing? = set.airing[anime.id],
+        details: AnimeDetails? = set.details[anime.id],
         session: Session = set.session,
-    ): TitleState.Shown =
-        titleState(
-            anime = anime,
-            entry = entry,
-            airing = airing,
-            details = set.details[anime.id],
-            listStatuses = statuses,
-            language = TitleLanguage.Romaji,
-            session = session,
-            clock = set.clock,
-        )
+        moment: TitleMoment = TitleMoment(),
+    ): TitleState.Shown = TitleState.Shown(page(anime, entry, airing, details), session, moment)
 
     // The longest status name beside the longest score text.
     val plannedScored: TitleState.Shown
@@ -134,51 +149,43 @@ object TitleFixtures {
             return of(anime, entry, airing)
         }
 
+    // Besides the sequel, only relations the strip leaves out: the section is "See all" alone.
+    val relatedOutsideTheStrip: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.exactToWatch
+            val details = checkNotNull(set.details[anime.id])
+            val related =
+                listOf(
+                    RelatedAnime(FixtureAnime.premiereYear, RelationType.Sequel),
+                    RelatedAnime(FixtureAnime.relatedCharacter, RelationType.Character),
+                    RelatedAnime(FixtureAnime.relatedOther, RelationType.Other),
+                )
+            return of(anime, details = details.copy(related = related))
+        }
+
     // "Add to list" was tapped: the title is Planned and the snackbar offers "Change".
     val added: TitleState.Shown
         get() {
             val anime = FixtureAnime.notOnListAiring
-            val entry =
-                ListEntry(
-                    anime = anime,
-                    values =
-                        ListValues(
-                            status = ListStatus.Planned,
-                            watchedEpisodes = 0,
-                            score = null,
-                            startDate = null,
-                            finishDate = null,
-                        ),
-                    updatedAt = set.now,
-                )
-            return titleState(
-                anime,
-                entry,
-                set.airing[anime.id],
-                set.details[anime.id],
-                statuses,
-                TitleLanguage.Romaji,
-                set.session,
-                set.clock,
-            ).copy(snackbar = TitleSnackbar.AddedToPlanned)
+            val entry = ListEntry(anime, ListValues(ListStatus.Planned, 0, null, null, null), set.now)
+            return of(anime, entry, moment = TitleMoment(snackbar = TitleSnackbar.AddedToPlanned))
         }
 
     // The stepper reached the total: the title became Completed in the same write (W7).
     val completed: TitleState.Shown
-        get() {
-            val anime = FixtureAnime.oneShortOfTotal
-            val entry = checkNotNull(set.entryFor(anime.id))
-            val today = set.now.atZone(set.clock.zone).toLocalDate()
-            val stepped = entry.copy(values = entry.values.withWatched(entry.values.watchedEpisodes + 1, anime.malEpisodes, today))
-            return titleState(
-                anime,
-                stepped,
-                set.airing[anime.id],
-                set.details[anime.id],
-                statuses,
-                TitleLanguage.Romaji,
-                set.session,
-                set.clock,
-            ).copy(snackbar = TitleSnackbar.MovedToCompleted)
-        }
+        get() = stepped(FixtureAnime.oneShortOfTotal, by = 1)
+
+    // A count typed past MAL's total is kept as typed and completes the title as reaching the total does (W7, W9).
+    val aboveTotal: TitleState.Shown
+        get() = stepped(FixtureAnime.oneShortOfTotal, by = 3)
+
+    private fun stepped(
+        anime: Anime,
+        by: Int,
+    ): TitleState.Shown {
+        val entry = checkNotNull(set.entryFor(anime.id))
+        val today = set.now.atZone(set.clock.zone).toLocalDate()
+        val values = entry.values.withWatched(entry.values.watchedEpisodes + by, anime.malEpisodes, today)
+        return of(anime, entry.copy(values = values), moment = TitleMoment(snackbar = TitleSnackbar.MovedToCompleted))
+    }
 }

@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.DrawnTitleKey
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -46,7 +48,7 @@ class TitleAboveTheFoldTest {
                 },
             ).around(registered(compose))
 
-    private var state by mutableStateOf<TitleState>(TitleState.Loading)
+    private var state by mutableStateOf<TitleState>(TitleState.Loading(Fixtures.reference.session))
     private var gestureBarPx = -1
 
     private fun start() {
@@ -64,7 +66,7 @@ class TitleAboveTheFoldTest {
         compose.waitForIdle()
         val layout =
             compose
-                .onNodeWithText(shown.title)
+                .onNodeWithText(shown.page.title)
                 .fetchSemanticsNode()
                 .config[DrawnTitleKey]
                 .layout
@@ -74,23 +76,24 @@ class TitleAboveTheFoldTest {
     private fun overflows(shown: TitleState.Shown): List<String> {
         val gestureBar = with(compose.density) { gestureBarPx.toDp() }
         val fold = compose.onRoot().getUnclippedBoundsInRoot().bottom - gestureBar
-        val tags = listOfNotNull(TitleTags.header, TitleTags.list, TitleTags.airing.takeIf { shown.airing != null })
+        val tags = listOfNotNull(TitleTags.header, TitleTags.list, TitleTags.airing.takeIf { shown.page.airing != null })
         return tags.mapNotNull { tag ->
             val bottom = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().bottom
-            "${shown.title}: $tag ends at $bottom, below the fold at $fold".takeIf { bottom > fold }
+            "${shown.page.title} (${shown.session}): $tag ends at $bottom, below the fold at $fold".takeIf { bottom > fold }
         }
     }
 
-    // The worst case: on the list, two airing lines, a rank, and the longest title that still takes two lines.
+    // The worst case: the session banner, on the list, two airing lines, a rank, and the longest title that still takes
+    // two lines.
     private fun longestTwoLineTitle(): TitleState.Shown {
-        val base = TitleFixtures.of(FixtureAnime.exactToWatch)
+        val anime = FixtureAnime.exactToWatch
         val words =
             FixtureAnime.longTitle.titles.romaji
                 .split(" ")
         var longest: TitleState.Shown? = null
         for (count in 1..words.size) {
             val title = words.take(count).joinToString(" ")
-            val shown = base.copy(title = title)
+            val shown = TitleFixtures.of(anime.copy(titles = anime.titles.copy(romaji = title)), session = Session.Expired)
             val lines = show(shown)
             if (lines > 2) break
             if (lines == 2) longest = shown
@@ -118,6 +121,7 @@ class TitleAboveTheFoldTest {
                 TitleFixtures.plannedScored,
                 TitleFixtures.firstEpisodeAired,
                 TitleFixtures.added,
+                TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired),
             )
         val problems = mutableListOf<String>()
         var twoLineCases = 0

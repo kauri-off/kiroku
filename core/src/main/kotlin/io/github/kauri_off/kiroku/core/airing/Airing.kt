@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import java.time.Instant
 import java.time.LocalDate
@@ -76,11 +77,17 @@ fun episodeTotal(
 fun toWatch(
     entry: ListEntry,
     airing: Airing?,
+): AiredCount.Known? = toWatch(entry.anime.airingStatus, entry.values, airing)
+
+private fun toWatch(
+    airingStatus: AiringStatus,
+    values: ListValues,
+    airing: Airing?,
 ): AiredCount.Known? {
-    if (entry.status != ListStatus.Watching) return null
-    if (entry.anime.airingStatus == AiringStatus.Finished) return null
+    if (values.status != ListStatus.Watching) return null
+    if (airingStatus == AiringStatus.Finished) return null
     val aired = airing?.aired as? AiredCount.Known ?: return null
-    val count = (aired.value - entry.values.watchedEpisodes).coerceAtLeast(0)
+    val count = (aired.value - values.watchedEpisodes).coerceAtLeast(0)
     return when (aired) {
         is AiredCount.Exact -> AiredCount.Exact(count)
         is AiredCount.Estimated -> AiredCount.Estimated(count)
@@ -144,14 +151,16 @@ sealed interface AiringPhase {
     data object CountUnknown : AiringPhase
 }
 
+// Takes the user's values, not their entry, so the airing status is read from [anime] alone.
 fun airingPhase(
     anime: Anime,
-    entry: ListEntry?,
+    values: ListValues?,
     airing: Airing?,
     today: LocalDate,
 ): AiringPhase? {
     premiereOf(anime, airing, today)?.let { return AiringPhase.NotYetAired(it) }
     if (anime.airingStatus == AiringStatus.Finished) return null
     val aired = airing?.aired as? AiredCount.Known ?: return AiringPhase.CountUnknown
-    return AiringPhase.Aired(aired, entry?.let { toWatch(it, airing) }?.takeIf { it.value > 0 }, airing.nextEpisode)
+    val toWatch = values?.let { toWatch(anime.airingStatus, it, airing) }?.takeIf { it.value > 0 }
+    return AiringPhase.Aired(aired, toWatch, airing.nextEpisode)
 }

@@ -134,9 +134,10 @@ English, light and dark, on demo data. No MAL client id is needed.
   is known), `not-yet-aired-date` (a full date, no time), `not-yet-aired-month` (a year and month only),
   `not-yet-aired-year` (a year only), `not-yet-aired-nodate`, `no-related`, `long-title`, `details-loading`,
   `no-score` (also no rank), `planned-scored`, `first-episode-aired`, `finished-with-sequel` (the sequel row with
-  its list status), `synopsis-expanded` ("Less"), `session-expired` (the banner), `added-snackbar`,
+  its list status), `related-see-all-only` (besides the sequel only "other" and "character" relations: "See all"
+  without a strip), `synopsis-expanded` ("Less"), `session-expired` (the banner), `added-snackbar`,
   `completed-snackbar` (the stepper reached the total: the status button says Completed and the snackbar says "Moved
-  to Completed · Undo"), `loading`, `error`.
+  to Completed · Undo"), `above-total` (a count past the total: "14 / 12", Completed), `loading`, `error`.
   **Needs:** M1-07.
   **Check:** rubric pass on `title/*`, including the above-the-fold rule and the Related and Statistics sections in
   the `__full` images; in `airing-on-list` the Related strip shows both short strip labels and a two-line

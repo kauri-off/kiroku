@@ -590,7 +590,7 @@ One scrolling column in this fixed order. No tabs, no floating buttons. **Each f
 the episode total, the year and a related title appear in one place only, as the items below say.
 
 1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share". When the session has expired
-   (S6), the `SessionBanner` under it, from the page's own state.
+   (S6), the `SessionBanner` under it, from the page's own state, while loading and on error too.
 2. **Header.** Must show: the poster; the full title with no line cap; the facts line, "TV · 2024 · 24 episodes";
    a `StatNumber` with the MAL score and the caption "MAL score" ("—" when there is none); the rank as its own short
    line, "Ranked #12" (absent when MAL gives none). Limits: the facts line holds at most three facts (type, year,
@@ -602,8 +602,9 @@ the episode total, the year and a related title appear in one place only, as the
    show, as one block: the status as a tonal button across the content width (where "Add to list" stands otherwise)
    that opens the edit sheet; under it, side by side and each under its own label, the `EpisodeStepper` under
    "Episodes watched", whose changes are written at once, and the user's score under "Your score", or a "Rate" text
-   button (both open the edit sheet). With large text the score may move under the stepper. A stepper change that
-   completes the title (W7) shows the snackbar "Moved to Completed · Undo", as on the List; other changes show no
+   button (both open the edit sheet). The score's column starts at the same place on every title; with large text it
+   may move under the stepper. The stepper has no ceiling (W9). A stepper change that reaches or passes MAL's total
+   completes the title (W7) and shows the snackbar "Moved to Completed · Undo", as on the List; other changes show no
    snackbar.
 4. **Airing block** (must show for titles that are airing or not yet aired; absent otherwise). Limit: two logical
    lines, as in this table.
@@ -631,7 +632,8 @@ the episode total, the year and a related title appear in one place only, as the
    it one line of plain text with the genres ("Action · Fantasy · Drama"), line cap one. Without a synopsis, the
    genres line stands alone, with no header.
 7. **Related** (must show when the title has related anime other than the sequel): `SectionHeader` "Related". A horizontal strip of at
-   most ten `PosterCard`s.
+   most ten `PosterCard`s. When none of them fits the strip (only "other" and "character"), the header with "See all"
+   stands alone.
    - The card's title: line cap two.
    - Caption 1 is the relation ("Sequel"), line cap two. The two longest names use the short strip labels of the
      glossary ("Alt. version", "Alt. setting"); the full names are used on "See all".

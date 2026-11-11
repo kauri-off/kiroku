@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -105,34 +106,27 @@ fun TitleScreen(
     modifier: Modifier = Modifier,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    TitleSnackbarEffect((state as? TitleState.Shown)?.snackbar, snackbars, onEvent)
+    TitleSnackbarEffect((state as? TitleState.Shown)?.moment?.snackbar, snackbars, onEvent)
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             Column {
                 TitleTopBar(menu = state is TitleState.Shown, onEvent = onEvent, scrollBehavior = scrollBehavior)
-                if (state.sessionExpired()) SessionBanner(onSignIn = { onEvent(TitleEvent.SignIn) })
+                if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(TitleEvent.SignIn) })
             }
         },
     ) { padding ->
         when (state) {
-            TitleState.Loading -> ScreenState(ScreenState.Loading, Modifier.padding(padding))
+            is TitleState.Loading -> ScreenState(ScreenState.Loading, Modifier.padding(padding))
             is TitleState.Failed ->
                 ScreenState(
                     ScreenState.Error(stringResource(state.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
                     Modifier.padding(padding),
                 )
-            is TitleState.Shown -> TitleContent(state, onEvent, padding)
+            is TitleState.Shown -> TitleContent(state.page, state.moment, onEvent, padding)
         }
     }
 }
-
-private fun TitleState.sessionExpired(): Boolean =
-    when (this) {
-        TitleState.Loading -> false
-        is TitleState.Failed -> sessionExpired
-        is TitleState.Shown -> sessionExpired
-    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,7 +201,8 @@ private fun TitleSnackbarEffect(
 
 @Composable
 private fun TitleContent(
-    state: TitleState.Shown,
+    page: TitlePage,
+    moment: TitleMoment,
     onEvent: (TitleEvent) -> Unit,
     padding: PaddingValues,
 ) {
@@ -223,16 +218,16 @@ private fun TitleContent(
             contentPadding =
                 PaddingValues(top = padding.calculateTopPadding() + Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
-            item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(state) } }
-            item(key = Section.List) { Gap(modifier = Modifier.testTag(TitleTags.list)) { ListBlock(state.entry, state.total, onEvent) } }
-            state.airing?.let { phase ->
-                item(key = Section.Airing) { Gap(modifier = Modifier.testTag(TitleTags.airing)) { AiringBlock(phase, state) } }
+            item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(page) } }
+            item(key = Section.List) { Gap(modifier = Modifier.testTag(TitleTags.list)) { ListBlock(page.entry, page.total, onEvent) } }
+            page.airing?.let { phase ->
+                item(key = Section.Airing) { Gap(modifier = Modifier.testTag(TitleTags.airing)) { AiringBlock(phase, page) } }
             }
-            val details = state.details
+            val details = page.details
             if (details == null) {
                 item(key = Section.Loading) { Gap { DetailsLoading() } }
             } else {
-                details(details, state, onEvent)
+                details(details, page, moment.synopsisExpanded, onEvent)
             }
         }
     }
@@ -252,18 +247,18 @@ private fun Gap(
 }
 
 @Composable
-private fun Header(state: TitleState.Shown) {
-    val anime = state.anime
+private fun Header(page: TitlePage) {
+    val anime = page.anime
     Row(Modifier.padding(horizontal = Spacing.l), horizontalArrangement = Arrangement.spacedBy(Spacing.l)) {
         Poster(anime.posterUrl, PosterSize.Header)
         Column(Modifier.weight(1f)) {
             TitleText(
-                state.title,
+                page.title,
                 maxLines = Int.MAX_VALUE,
                 style = MaterialTheme.typography.headlineSmall.copy(lineBreak = LineBreak.Heading),
                 modifier = Modifier.semantics { heading() },
             )
-            val facts = factsLine(state.facts)
+            val facts = factsLine(page.facts)
             if (facts.isNotEmpty()) {
                 Spacer(Modifier.height(Spacing.xs))
                 Text(facts, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -319,9 +314,10 @@ private fun OnList(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
         StatusButton(entry.status, onEvent, Modifier.padding(horizontal = Spacing.l).fillMaxWidth())
-        // Each column places itself from the content edge, so the score lines up there too when it wraps under the stepper.
+        // The score column starts on the block's centre line on every title, and on the content edge when it wraps
+        // under the stepper.
         FlowRow(Modifier.padding(end = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
-            Column {
+            Column(Modifier.toCentre(endPadding = Spacing.l)) {
                 FieldLabel(stringResource(R.string.title_episodes_watched), Modifier.padding(start = Spacing.l))
                 EpisodeStepper(
                     watched = entry.watchedEpisodes,
@@ -401,9 +397,9 @@ private fun LabelButton(
 @Composable
 private fun AiringBlock(
     phase: AiringPhase,
-    state: TitleState.Shown,
+    page: TitlePage,
 ) {
-    val times = rememberAirTimeText(state.now)
+    val times = rememberAirTimeText(page.now)
     val line1: AnnotatedString
     var line2: String? = null
     when (phase) {
@@ -445,29 +441,33 @@ private fun DetailsLoading() {
 
 private fun LazyListScope.details(
     details: AnimeDetails,
-    state: TitleState.Shown,
+    page: TitlePage,
+    synopsisExpanded: Boolean,
     onEvent: (TitleEvent) -> Unit,
 ) {
-    state.sequel?.let { sequel ->
+    page.sequel?.let { sequel ->
         item(key = Section.Sequel) { Gap { Sequel(sequel, onEvent) } }
     }
     // The sequel's row ends in its own padding.
-    val afterSequel = if (state.sequel != null) Spacing.l else Spacing.xl
-    val genres = state.anime.genres.orEmpty()
+    val afterSequel = if (page.sequel != null) Spacing.l else Spacing.xl
+    val genres = page.anime.genres.orEmpty()
     val synopsis = details.synopsis != null || genres.isNotEmpty()
     if (synopsis) {
         item(key = Section.Synopsis) {
-            Gap(afterSequel) { Synopsis(details.synopsis, state.synopsisExpanded, genres, onEvent) }
+            Gap(afterSequel) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
         }
     }
-    if (state.related.isNotEmpty()) {
-        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterSequel) { Related(state, onEvent) } }
+    // Drawn whenever there is something to open from it: the strip, or only "See all" when no related title fits it.
+    val related = page.related.isNotEmpty() || page.moreRelated
+    if (related) {
+        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterSequel) { Related(page, onEvent) } }
     }
     details.statistics?.let { statistics ->
         // The strip's cards end in their own blank room.
         val space =
             when {
-                state.related.isNotEmpty() -> Spacing.s
+                page.related.isNotEmpty() -> Spacing.s
+                related -> Spacing.xl
                 synopsis -> Spacing.xl
                 else -> afterSequel
             }
@@ -524,19 +524,20 @@ private fun Synopsis(
 
 @Composable
 private fun Related(
-    state: TitleState.Shown,
+    page: TitlePage,
     onEvent: (TitleEvent) -> Unit,
 ) {
     Column {
         SectionHeader(
             stringResource(R.string.title_related),
-            onSeeAll = if (state.moreRelated) ({ onEvent(TitleEvent.SeeAllRelated) }) else null,
+            onSeeAll = if (page.moreRelated) ({ onEvent(TitleEvent.SeeAllRelated) }) else null,
         )
+        if (page.related.isEmpty()) return@Column
         LazyRow(
             contentPadding = PaddingValues(horizontal = Spacing.l),
             horizontalArrangement = Arrangement.spacedBy(Spacing.m),
         ) {
-            items(state.related, key = { it.related.anime.id.value }) { card ->
+            items(page.related, key = { it.related.anime.id.value }) { card ->
                 val anime = card.related.anime
                 PosterCard(
                     title = card.title,
@@ -564,6 +565,7 @@ private fun Sequel(
         SectionHeader(stringResource(R.string.title_relation_sequel))
         val anime = sequel.related.anime
         AnimeRow(
+            modifier = Modifier.trimTop(ListItemTop),
             title = sequel.title,
             posterUrl = anime.posterUrl,
             onClick = { onEvent(TitleEvent.OpenRelated(anime.id)) },
@@ -631,6 +633,25 @@ private fun DataError.message(): Int =
     }
 
 private const val SYNOPSIS_LINES = 4
+
+// A three-line list item's own top padding, which the room under a section header already provides.
+private val ListItemTop = Spacing.m
+
+// Leaves out the top [amount] of the content's own padding, so it sits as close to the header above as plain text does.
+private fun Modifier.trimTop(amount: Dp) =
+    layout { measurable, constraints ->
+        val trim = amount.roundToPx()
+        val placeable = measurable.measure(constraints)
+        layout(placeable.width, (placeable.height - trim).coerceAtLeast(0)) { placeable.place(0, -trim) }
+    }
+
+// At least as wide as the part of the block before its centre line, so the next column starts on that line.
+private fun Modifier.toCentre(endPadding: Dp) =
+    layout { measurable, constraints ->
+        val half = ((constraints.maxWidth + endPadding.roundToPx()) / 2).coerceAtMost(constraints.maxWidth)
+        val placeable = measurable.measure(constraints.copy(minWidth = maxOf(constraints.minWidth, half)))
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
 
 // Where a button starts or ends so that its label or icon, Spacing.m inside it, lines up with the content edge.
 private val ButtonEdge = Spacing.l - Spacing.m

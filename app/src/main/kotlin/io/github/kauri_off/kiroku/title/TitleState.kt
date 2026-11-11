@@ -21,34 +21,100 @@ import io.github.kauri_off.kiroku.core.model.sequelOf
 import java.time.Clock
 import java.time.ZonedDateTime
 
+// The page is rebuilt from stored data with TitlePage.of whenever any of it changes; the moment is carried over.
 sealed interface TitleState {
+    // Every state has the top bar, so every state shows the session banner while the session is expired (S6).
+    val session: Session
+
     // Opened with no data at all, as from a deep link.
-    data object Loading : TitleState
+    data class Loading(
+        override val session: Session,
+    ) : TitleState
 
     data class Failed(
         val error: DataError,
-        val sessionExpired: Boolean = false,
+        override val session: Session,
     ) : TitleState
 
     data class Shown(
-        val anime: Anime,
-        val title: String,
-        val total: Int?,
-        val facts: HeaderFacts,
-        val entry: ListValues?,
-        val airing: AiringPhase?,
-        // Null while the details are loading.
-        val details: AnimeDetails?,
-        val sequel: RelatedCard?,
-        // The strip leaves out the sequel, which has its own row.
-        val related: List<RelatedCard>,
-        val moreRelated: Boolean,
-        // The clock's instant in its zone; every day and time on the page is computed in this zone.
-        val now: ZonedDateTime,
-        val sessionExpired: Boolean,
-        val synopsisExpanded: Boolean = false,
-        val snackbar: TitleSnackbar? = null,
+        val page: TitlePage,
+        override val session: Session,
+        val moment: TitleMoment = TitleMoment(),
     ) : TitleState
+}
+
+val TitleState.sessionExpired: Boolean get() = session == Session.Expired
+
+// What the page shows from stored data. Only [of] builds it and it has no public copy, so a derived value cannot
+// disagree with its source.
+@ConsistentCopyVisibility
+data class TitlePage private constructor(
+    val anime: Anime,
+    val title: String,
+    val total: Int?,
+    val facts: HeaderFacts,
+    val entry: ListValues?,
+    val airing: AiringPhase?,
+    // Null while the details are loading.
+    val details: AnimeDetails?,
+    val sequel: RelatedCard?,
+    // The strip leaves out the sequel, which has its own row.
+    val related: List<RelatedCard>,
+    // True when the title has a related title that neither the sequel row nor the strip shows.
+    val moreRelated: Boolean,
+    // The clock's instant in its zone; every day and time on the page is computed in this zone.
+    val now: ZonedDateTime,
+) {
+    companion object {
+        // The total and the whole airing block come from :core.
+        fun of(
+            anime: Anime,
+            entry: ListEntry?,
+            airing: Airing?,
+            details: AnimeDetails?,
+            listStatuses: Map<AnimeId, ListStatus>,
+            language: TitleLanguage,
+            clock: Clock,
+        ): TitlePage {
+            require(entry == null || entry.anime.id == anime.id)
+            val now = ZonedDateTime.now(clock)
+            val total = episodeTotal(anime, airing)
+            val phase = airingPhase(anime, entry?.values, airing, now.toLocalDate())
+            val related = details?.related.orEmpty()
+            val sequel = sequelOf(related)
+            val strip = relatedStrip(related - listOfNotNull(sequel).toSet())
+
+            fun card(it: RelatedAnime) = RelatedCard(it, it.anime.titles.preferred(language), listStatuses[it.anime.id])
+            return TitlePage(
+                anime = anime,
+                title = anime.titles.preferred(language),
+                total = total,
+                facts = headerFacts(anime, total, onList = entry != null, phase),
+                entry = entry?.values,
+                airing = phase,
+                details = details,
+                sequel = sequel?.let(::card),
+                related = strip.map(::card),
+                moreRelated = related.size > strip.size + listOfNotNull(sequel).size,
+                now = now,
+            )
+        }
+    }
+}
+
+// What belongs to the user's moment on the page rather than to the data: it survives every rebuild of the page.
+data class TitleMoment(
+    val synopsisExpanded: Boolean = false,
+    val snackbar: TitleSnackbar? = null,
+) {
+    // The part of an event that concerns the moment; every other event leaves it as it is.
+    fun after(event: TitleEvent): TitleMoment =
+        when (event) {
+            TitleEvent.ExpandSynopsis -> copy(synopsisExpanded = true)
+            TitleEvent.CollapseSynopsis -> copy(synopsisExpanded = false)
+            TitleEvent.SnackbarAction, TitleEvent.SnackbarDismissed -> copy(snackbar = null)
+            else -> this
+        }
 }
 
 // The header's facts line. Each fact the page states elsewhere is left out: the episode count when the list block
@@ -104,41 +170,6 @@ sealed interface TitleEvent {
     data object SnackbarAction : TitleEvent
 
     data object SnackbarDismissed : TitleEvent
-}
-
-// The page's state from stored data; the total and the whole airing block come from :core.
-fun titleState(
-    anime: Anime,
-    entry: ListEntry?,
-    airing: Airing?,
-    details: AnimeDetails?,
-    listStatuses: Map<AnimeId, ListStatus>,
-    language: TitleLanguage,
-    session: Session,
-    clock: Clock,
-): TitleState.Shown {
-    val now = ZonedDateTime.now(clock)
-    val total = episodeTotal(anime, airing)
-    val phase = airingPhase(anime, entry, airing, now.toLocalDate())
-    val related = details?.related.orEmpty()
-    val sequel = sequelOf(related)
-    val strip = relatedStrip(related - listOfNotNull(sequel).toSet())
-
-    fun card(it: RelatedAnime) = RelatedCard(it, it.anime.titles.preferred(language), listStatuses[it.anime.id])
-    return TitleState.Shown(
-        anime = anime,
-        title = anime.titles.preferred(language),
-        total = total,
-        facts = headerFacts(anime, total, onList = entry != null, phase),
-        entry = entry?.values,
-        airing = phase,
-        details = details,
-        sequel = sequel?.let(::card),
-        related = strip.map(::card),
-        moreRelated = related.size > strip.size + listOfNotNull(sequel).size,
-        now = now,
-        sessionExpired = session == Session.Expired,
-    )
 }
 
 private fun headerFacts(
