@@ -8,9 +8,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -20,6 +24,9 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
@@ -28,6 +35,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Motion
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -66,7 +74,8 @@ class ListScreenTest {
 
     @Test
     fun `plus one is on each watching row and sends that row's title`() {
-        val state = ListFixtureStates.watching.copy(content = ListContent.Rows(ListFixtureStates.rows(ListStatus.Watching).take(2)))
+        val rows = ListFixtureStates.rows(ListStatus.Watching).take(2)
+        val state = ListFixtureStates.watching.copy(content = ListFixtureStates.tabs(override = ListFixtureStates.watchingPage(rows)))
         show(state)
         compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(2)
         compose.onAllNodesWithContentDescription(plusOne)[1].performClick()
@@ -95,6 +104,86 @@ class ListScreenTest {
         compose.onNodeWithContentDescription("Sort").performClick()
         compose.onNodeWithText("Planned").performClick()
         assertEquals(listOf(ListEvent.StartFilter, ListEvent.OpenSort, ListEvent.SelectTab(ListStatus.Planned)), events)
+    }
+
+    // Shows [state] and follows its tab as a view model would.
+    private fun showFollowing(state: ListState) {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                shown?.let {
+                    HostedListScreen(it) { e ->
+                        events += e
+                        if (e is ListEvent.SelectTab) shown = shown?.copy(tab = e.status)
+                    }
+                }
+            }
+        }
+        shown = state
+        compose.waitForIdle()
+    }
+
+    private fun swipe(left: Boolean) {
+        compose.onRoot().performTouchInput { if (left) swipeLeft() else swipeRight() }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `a swipe selects the next or previous tab`() {
+        showFollowing(ListFixtureStates.watching)
+        swipe(left = true)
+        compose
+            .onNodeWithText(
+                ListFixtureStates.planned.page!!
+                    .rows
+                    .first()
+                    .title,
+            ).assertIsDisplayed()
+        swipe(left = false)
+        assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned), ListEvent.SelectTab(ListStatus.Watching)), events)
+    }
+
+    @Test
+    fun `each tab keeps its scroll position`() {
+        showFollowing(ListFixtureStates.watching)
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        val title =
+            ListFixtureStates.watching.page!!
+                .rows
+                .last()
+                .title
+        val top = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
+        swipe(left = true)
+        swipe(left = false)
+        assertEquals(ListStatus.Watching, shown?.tab)
+        assertEquals(top, compose.onNodeWithText(title).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun `a swipe while filtering shows the next tab filtered`() {
+        showFollowing(ListFixtureStates.filtering)
+        swipe(left = true)
+        compose.onNodeWithText("No titles match the filter").assertIsDisplayed()
+        assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned)), events)
+    }
+
+    @Test
+    fun `a page with rows can be pulled to refresh`() {
+        show(ListFixtureStates.planned)
+        compose.onRoot().performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        compose.waitForIdle()
+        assertEquals(listOf(ListEvent.Refresh), events)
+    }
+
+    @Test
+    fun `W9 a count above the total is written as it is and keeps plus one`() {
+        val rows =
+            ListFixtureStates.aboveTotal.page!!
+                .rows
+                .filter { it.id == FixtureAnime.finishedPartWay.id }
+        show(ListFixtureStates.aboveTotal.copy(content = ListFixtureStates.tabs(override = ListFixtureStates.watchingPage(rows))))
+        compose.onNodeWithText("Watched 25\u00A0of\u00A024").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription(plusOne).assertAll(isEnabled())
     }
 
     @Test
@@ -163,7 +252,7 @@ class ListScreenTest {
 }
 
 // The row a "+1" completes leaves with the list's item animation, a change inside the list (ARCHITECTURE 8.5); a
-// new order, a filter or another tab replaces the rows at once.
+// new order or a filter replaces the rows at once; another tab's page slides in, an entrance.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h2000dp")
@@ -177,6 +266,16 @@ class ListMotionTest {
 
     private val leaving = FixtureAnime.oneShortOfTotal.titles.romaji
     private val following = FixtureAnime.estimatedCaughtUp.titles.romaji
+    private val planned =
+        ListFixtureStates.planned.page!!
+            .rows
+            .first()
+            .title
+    private val completed =
+        ListFixtureStates.completed.page!!
+            .rows
+            .first()
+            .title
 
     private fun top(title: String): Dp = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
 
@@ -194,7 +293,7 @@ class ListMotionTest {
 
     private fun complete() = set(ListFixtureStates.completedSnackbar.copy(message = null))
 
-    private fun ListState.titles(): List<String> = (content as ListContent.Rows).rows.map { it.title }
+    private fun ListState.titles(): List<String> = page!!.rows.map { it.title }
 
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
 
@@ -236,8 +335,9 @@ class ListMotionTest {
     @Test
     fun `a refresh that orders the rows again does not animate`() {
         val watching = ListFixtureStates.watching
-        val rows = (watching.content as ListContent.Rows).rows
-        assertInstant(watching, watching.copy(ordering = watching.ordering + 1, content = ListContent.Rows(rows.reversed())))
+        val page = watching.page!!
+        val reordered = page.copy(rows = page.rows.reversed(), ordering = page.ordering + 1)
+        assertInstant(watching, watching.copy(content = ListFixtureStates.tabs(override = mapOf(ListStatus.Watching to reordered))))
     }
 
     @Test
@@ -245,17 +345,64 @@ class ListMotionTest {
         assertInstant(
             ListFixtureStates.watching,
             ListFixtureStates.watching.copy(
-                sort = ListSort.Title,
-                ordering = ListFixtureStates.watching.ordering + 1,
-                content = ListContent.Rows(ListFixtureStates.rows(ListStatus.Watching, ListSort.Title)),
+                content =
+                    ListFixtureStates.tabs(
+                        override =
+                            ListFixtureStates.watchingPage(
+                                ListFixtureStates.rows(ListStatus.Watching, ListSort.Title),
+                                ListSort.Title,
+                            ),
+                    ),
             ),
         )
     }
 
     @Test
-    fun `switching tabs does not animate`() {
-        assertInstant(ListFixtureStates.watching, ListFixtureStates.planned)
+    fun `a selected tab slides its page in and settles within 300 ms`() {
+        showAndSettle()
+        val watchingLeft = left(following)
+        set(ListFixtureStates.planned)
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 3)
+        assertTrue("the watching page is on its way out", left(following) < watchingLeft)
+        assertTrue("the planned page is on its way in", left(planned) > watchingLeft)
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS)
+        assertEquals(watchingLeft, left(planned))
+        assertFalse(exists(following))
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertIdle()
     }
+
+    @Test
+    fun `a tab selected mid-flight ends on that tab`() {
+        showAndSettle()
+        val watchingLeft = left(following)
+        set(ListFixtureStates.planned)
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 3)
+        set(ListFixtureStates.completed)
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(watchingLeft, left(completed))
+        assertFalse(exists(planned))
+        assertFalse(exists(following))
+        assertIdle()
+    }
+
+    @Test
+    fun `a swipe settles on the next tab within 300 ms of letting go and selects it`() {
+        val events = mutableListOf<ListEvent>()
+        state = ListFixtureStates.watching
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) { events += it } } }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        val watchingLeft = left(following)
+        compose.onNodeWithText(following).performTouchInput { swipeLeft(durationMillis = TAB_SWITCH_MS) }
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS)
+        assertEquals(watchingLeft, left(planned))
+        assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned)), events)
+        assertIdle()
+    }
+
+    private fun left(title: String): Dp = compose.onNodeWithText(title).getUnclippedBoundsInRoot().left
 
     // One frame after the change, rows that left are gone and every row is where it settles.
     private fun assertInstant(
@@ -284,6 +431,7 @@ class ListMotionTest {
 
     private companion object {
         val COMPONENT_CHANGE_MS = Motion.Duration.SHORT4.toLong()
+        val TAB_SWITCH_MS = Motion.Duration.MEDIUM2.toLong()
         const val SETTLED = 2_000L
     }
 }
@@ -319,4 +467,38 @@ class ListMotionOffTest {
         compose.onNodeWithText(FixtureAnime.oneShortOfTotal.titles.romaji).assertDoesNotExist()
         assertEquals(leavingTop, compose.onNodeWithText(FixtureAnime.estimatedCaughtUp.titles.romaji).getUnclippedBoundsInRoot().top)
     }
+
+    @Test
+    fun `another tab is shown at once`() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) } }
+        compose.mainClock.advanceTimeByFrame()
+        val left = compose.onNodeWithText(FixtureAnime.estimatedCaughtUp.titles.romaji).getUnclippedBoundsInRoot().left
+        compose.runOnUiThread { state = ListFixtureStates.planned }
+        Snapshot.sendApplyNotifications()
+        repeat(OFF_FRAMES) { compose.mainClock.advanceTimeByFrame() }
+        val planned =
+            ListFixtureStates.planned.page!!
+                .rows
+                .first()
+                .title
+        assertEquals(left, compose.onNodeWithText(planned).getUnclippedBoundsInRoot().left)
+        compose.onNodeWithText(FixtureAnime.estimatedCaughtUp.titles.romaji).assertIsNotDisplayed()
+        val first = compose.onRoot().captureToImage().toPixelMap()
+        compose.mainClock.advanceTimeBy(OFF_SETTLED)
+        assertTrue(
+            "nothing moves after that",
+            first.buffer.contentEquals(
+                compose
+                    .onRoot()
+                    .captureToImage()
+                    .toPixelMap()
+                    .buffer,
+            ),
+        )
+    }
 }
+
+// With animations off, a change that shows within these frames of the state changing is complete at once.
+private const val OFF_FRAMES = 3
+private const val OFF_SETTLED = 2_000L

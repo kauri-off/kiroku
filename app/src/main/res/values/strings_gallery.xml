@@ -27,8 +27,7 @@
     <string name="gallery_summary">Summary</string>
     <string name="gallery_tv_year">TV · %d</string>
     <string name="gallery_movie_year">Movie · %d</string>
-    <string name="gallery_progress_aired">%1$d\u00A0/\u00A0%2$d · %3$d\u00A0aired</string>
-    <string name="gallery_progress_estimated">%1$d\u00A0/\u00A0%2$d · ~%3$d\u00A0aired</string>
+    <string name="gallery_progress">Watched %1$d\u00A0of\u00A0%2$d</string>
     <string name="gallery_to_watch">%d\u00A0to watch</string>
     <string name="gallery_to_watch_estimated">~%d\u00A0to watch</string>
     <string name="gallery_next_episode">Episode\u00A015 · Sat\u00A017:30</string>

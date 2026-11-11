@@ -20,19 +20,17 @@ data class ListState(
     val owner: ListOwner,
     val content: ListContent,
     val tab: ListStatus = ListStatus.Watching,
-    val sort: ListSort,
-    val sorts: List<ListSort>,
-    // Changes whenever the tab's order is computed again; rows animate only between states with the same value.
-    val ordering: Int = 0,
     val sortSheetOpen: Boolean = false,
-    // The text typed into the filter field; null when the list is not being filtered.
+    // The text typed into the filter field, which filters every tab; null when the list is not being filtered.
     val filter: String? = null,
     val refreshing: Boolean = false,
     val sessionExpired: Boolean = false,
     val message: ListMessage? = null,
     // The moment air times are written against: "today", "tomorrow", a weekday or a date.
     val now: Instant,
-)
+) {
+    val page: ListPage? get() = (content as? ListContent.Tabs)?.pages?.get(tab)
+}
 
 sealed interface ListOwner {
     data object Me : ListOwner
@@ -51,11 +49,25 @@ sealed interface ListContent {
         val failure: ListFailure,
     ) : ListContent
 
-    // The rows of the current tab, filtered when a filter is typed, in the order last computed.
-    data class Rows(
-        val rows: List<ListRow>,
-    ) : ListContent
+    // Every tab's page, so that a swipe shows the next tab's rows as they come in.
+    data class Tabs(
+        val pages: Map<ListStatus, ListPage>,
+    ) : ListContent {
+        init {
+            require(pages.keys == ListStatus.entries.toSet())
+        }
+    }
 }
+
+// One tab: its rows, filtered when a filter is typed, in the order last computed for [sort].
+data class ListPage(
+    val sort: ListSort,
+    val sorts: List<ListSort>,
+    val rows: List<ListRow>,
+    // Changes whenever the tab's order is computed again, which starts the page from the top; rows animate only
+    // between states with the same value. A tab switch does not change it.
+    val ordering: Int = 0,
+)
 
 enum class ListFailure { NoConnection, Refused, Other }
 
@@ -87,11 +99,10 @@ data class ListRow(
 )
 
 sealed interface Line2 {
-    // `12 / 24 · 14 aired`; the aired part is :core's shownAired.
+    // `Watched 12 of 24`, or `Watched 212` with no known total; never capped by the total.
     data class Progress(
         val watched: Int,
         val total: Int?,
-        val aired: AiredCount.Known?,
     ) : Line2
 
     data class Premieres(
@@ -179,7 +190,7 @@ fun listRow(
         when {
             entry.status == ListStatus.Completed -> Line2.Score(values.score)
             premiere != null -> Line2.Premieres(premiere)
-            else -> Line2.Progress(values.watchedEpisodes, episodeTotal(anime, airing), aired)
+            else -> Line2.Progress(values.watchedEpisodes, episodeTotal(anime, airing))
         }
     val toWatch = episodesToWatch(entry, ownAiring)
     val next = ownAiring?.nextEpisode

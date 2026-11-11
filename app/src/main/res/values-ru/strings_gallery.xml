@@ -27,8 +27,7 @@
     <string name="gallery_summary">Краткое изложение</string>
     <string name="gallery_tv_year">ТВ · %d</string>
     <string name="gallery_movie_year">Фильм · %d</string>
-    <string name="gallery_progress_aired">%1$d\u00A0/\u00A0%2$d · вышло\u00A0%3$d</string>
-    <string name="gallery_progress_estimated">%1$d\u00A0/\u00A0%2$d · вышло\u00A0~%3$d</string>
+    <string name="gallery_progress">Просмотрено %1$d\u00A0из\u00A0%2$d</string>
     <string name="gallery_to_watch">К просмотру:\u00A0%d</string>
     <string name="gallery_to_watch_estimated">К просмотру:\u00A0~%d</string>
     <string name="gallery_next_episode">Серия\u00A015 · сб\u00A017:30</string>

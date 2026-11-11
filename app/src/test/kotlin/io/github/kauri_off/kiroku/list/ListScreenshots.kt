@@ -27,6 +27,7 @@ class ListScreenshots : ScreenshotRegistry() {
             case("completed-snackbar", content = screen(ListFixtureStates.completedSnackbar)),
             case("last-updated", content = screen(ListFixtureStates.lastUpdated)),
             case("completed-row", content = screen(ListFixtureStates.completedRow)),
+            case("above-total", content = screen(ListFixtureStates.aboveTotal)),
             case("offline-cached", content = screen(ListFixtureStates.offlineCached)),
             case("signed-out", content = screen(ListFixtureStates.signedOut)),
             case("session-expired", content = screen(ListFixtureStates.sessionExpired)),
@@ -38,6 +39,10 @@ class ListScreenshots : ScreenshotRegistry() {
         listOf(
             Transition("completed-row", start = "last-updated", millis = Motion.Duration.SHORT4.toLong()) { changed ->
                 HostedListScreen(if (changed) ListFixtureStates.completedRow else ListFixtureStates.lastUpdated)
+            },
+            // A tapped tab slides its page in.
+            Transition("planned", start = "watching", millis = Motion.Duration.MEDIUM2.toLong()) { changed ->
+                HostedListScreen(if (changed) ListFixtureStates.planned else ListFixtureStates.watching)
             },
         )
 }

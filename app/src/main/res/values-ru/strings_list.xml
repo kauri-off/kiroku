@@ -17,14 +17,12 @@
     <string name="list_sort_last_updated">Последнее изменение</string>
     <string name="list_sort_score">Оценка</string>
     <string name="list_sort_start_date">Дата начала</string>
-    <string name="list_progress">%1$d\u00A0/\u00A0%2$d</string>
-    <string name="list_progress_unknown_total">%1$d</string>
-    <string name="list_progress_aired">%1$s ·\u00A0вышло\u00A0%2$d</string>
-    <string name="list_progress_aired_estimated">%1$s ·\u00A0вышло\u00A0~%2$d</string>
+    <string name="list_progress">Просмотрено %1$d\u00A0из\u00A0%2$d</string>
+    <string name="list_progress_unknown_total">Просмотрено %1$d</string>
     <string name="list_to_watch">К просмотру:\u00A0%1$d</string>
     <string name="list_to_watch_estimated">К просмотру:\u00A0~%1$d</string>
     <string name="list_next_episode">Серия\u00A0%1$d ·\u00A0%2$s</string>
-    <string name="list_premieres_at">Премьера: %1$s</string>
+    <string name="list_premieres_at">Премьера %1$s</string>
     <string name="list_premieres_day">Премьера %1$s</string>
     <string name="list_premieres_month">Премьера в\u00A0%1$s\u00A0%2$d\u00A0г.</string>
     <string name="list_premieres_year">Премьера в\u00A0%1$d\u00A0г.</string>

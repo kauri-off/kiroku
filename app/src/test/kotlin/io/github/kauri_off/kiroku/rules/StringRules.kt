@@ -11,6 +11,10 @@ private fun number(plural: Boolean) = if (plural) """(\d|%(\d+\$)?[ds])""" else 
 // so the space after the number may break.
 private val labelledBefore = setOf("list_episode_watched")
 
+// Strings that open with a verb before the count ("Watched 12 of 24"): the verb is not the number's word, so the
+// space before the number may break.
+private val verbBefore = setOf("list_progress", "list_progress_unknown_total", "gallery_progress")
+
 // An ordinary space between a number and the word, slash or colon next to it, where a line could break.
 fun numberSpaceProblems(
     name: String,
@@ -34,7 +38,11 @@ fun numberSpaceProblems(
                             !(name.substringAfterLast(' ') in labelledBefore && joinedBefore.containsMatchIn(before)) &&
                             joinsWord(after[0])
                     ) ||
-                        (numberStart.containsMatchIn(after) && (joinsWord(before.last()) || before.last() == ':'))
+                        (
+                            numberStart.containsMatchIn(after) &&
+                                (joinsWord(before.last()) || before.last() == ':') &&
+                                !(name.substringAfterLast(' ') in verbBefore && !before.contains(' ') && !before.contains('\u00A0'))
+                        )
                 }
         }.map { "$name: a breaking space at ${it + 1} in \"$text\"; use \\u00A0" }
 }

@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.BottomSheetDefaults
@@ -38,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -73,13 +77,13 @@ fun ListScreen(
 ) {
     Messages(state.message, snackbars, onEvent)
     BackHandler(enabled = state.filter != null) { onEvent(ListEvent.EndFilter) }
-    val rows = state.content as? ListContent.Rows
+    val tabs = state.content as? ListContent.Tabs
     Scaffold(
         modifier = modifier,
         topBar = {
             Column {
-                TopBar(state, showActions = rows != null, onEvent = onEvent)
-                if (rows != null) Tabs(state.tab, onEvent)
+                TopBar(state, showActions = tabs != null, onEvent = onEvent)
+                if (tabs != null) Tabs(state.tab, onEvent)
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
         },
@@ -97,38 +101,74 @@ fun ListScreen(
                 )
             is ListContent.Failed ->
                 ScreenState(ScreenState.Error(stringResource(content.failure.messageRes())) { onEvent(ListEvent.Retry) }, body)
-            is ListContent.Rows ->
+            is ListContent.Tabs ->
                 PullToRefreshBox(
                     isRefreshing = state.refreshing,
                     onRefresh = { onEvent(ListEvent.Refresh) },
                     modifier = body.fillMaxSize(),
                 ) {
-                    if (content.rows.isEmpty()) {
-                        // A list, so that an empty tab can be pulled to refresh too.
-                        val empty = emptyState(state, onEvent)
-                        LazyColumn(Modifier.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
-                    } else {
-                        // A new order, a filter or another tab replaces the rows at once; only rows leaving or
-                        // returning within one order animate (ARCHITECTURE 8.5).
-                        key(state.tab, state.sort, state.filter, state.ordering) {
-                            Rows(state, content.rows, PaddingValues(bottom = padding.calculateBottomPadding()), onEvent)
-                        }
-                    }
+                    Pages(state, content, PaddingValues(bottom = padding.calculateBottomPadding()), onEvent)
                 }
         }
     }
-    if (state.sortSheetOpen) SortSheet(state.sort, state.sorts, onEvent)
+    val page = state.page
+    if (state.sortSheetOpen && page != null) SortSheet(page.sort, page.sorts, onEvent)
+}
+
+// One page per tab, each with its own scroll position. A swipe follows the finger and selects the tab it settles on;
+// a tapped tab slides its page in, a component's entrance.
+@Composable
+private fun Pages(
+    state: ListState,
+    tabs: ListContent.Tabs,
+    padding: PaddingValues,
+    onEvent: (ListEvent) -> Unit,
+) {
+    val statuses = ListStatus.entries
+    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
+    val events = rememberUpdatedState(onEvent)
+    val tab = rememberUpdatedState(state.tab)
+    LaunchedEffect(pager) {
+        snapshotFlow { pager.settledPage }.collect { index ->
+            if (statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
+        }
+    }
+    LaunchedEffect(state.tab) {
+        val target = statuses.indexOf(state.tab)
+        if (pager.currentPage != target || pager.currentPageOffsetFraction != 0f) {
+            pager.animateScrollToPage(target, animationSpec = Motion.componentEnter())
+        }
+    }
+    HorizontalPager(
+        pager,
+        Modifier.fillMaxSize(),
+        key = { statuses[it] },
+        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = Motion.fastSpatial()),
+    ) { index ->
+        val status = statuses[index]
+        val page = tabs.pages.getValue(status)
+        if (page.rows.isEmpty()) {
+            // A list, so that an empty tab can be pulled to refresh too.
+            val empty = emptyState(state, status, onEvent)
+            LazyColumn(Modifier.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
+        } else {
+            // A new order or a filter replaces the rows at once, from the top; only rows leaving or returning within
+            // one order animate (ARCHITECTURE 8.5).
+            key(page.sort, state.filter, page.ordering) { Rows(state, page.rows, padding, onEvent) }
+        }
+    }
 }
 
 @Composable
 private fun emptyState(
     state: ListState,
+    status: ListStatus,
     onEvent: (ListEvent) -> Unit,
 ): ScreenState =
     if (state.filter.isNullOrEmpty()) {
         val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
         ScreenState.Empty(
-            stringResource(R.string.list_empty, stringResource(state.tab.labelRes())),
+            stringResource(R.string.list_empty, stringResource(status.labelRes())),
             search.takeIf { state.owner == ListOwner.Me },
         )
     } else {

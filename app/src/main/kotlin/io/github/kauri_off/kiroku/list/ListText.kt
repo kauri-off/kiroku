@@ -25,19 +25,12 @@ class ListText(
 
     fun line2(line: Line2): String =
         when (line) {
-            is Line2.Progress -> {
-                val progress =
-                    if (line.total == null) {
-                        context.getString(R.string.list_progress_unknown_total, line.watched)
-                    } else {
-                        context.getString(R.string.list_progress, line.watched, line.total)
-                    }
-                when (val aired = line.aired) {
-                    null -> progress
-                    is AiredCount.Exact -> context.getString(R.string.list_progress_aired, progress, aired.value)
-                    is AiredCount.Estimated -> context.getString(R.string.list_progress_aired_estimated, progress, aired.value)
+            is Line2.Progress ->
+                if (line.total == null) {
+                    context.getString(R.string.list_progress_unknown_total, line.watched)
+                } else {
+                    context.getString(R.string.list_progress, line.watched, line.total)
                 }
-            }
             is Line2.Premieres -> premiere(line.premiere)
             is Line2.Score ->
                 line.score?.let { context.getString(R.string.list_score, it) } ?: context.getString(R.string.list_not_scored)

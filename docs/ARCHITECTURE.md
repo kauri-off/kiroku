@@ -472,6 +472,8 @@ legible, or preventing a jump. Decoration is not a purpose.
 - **Not animated:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers counting up,
   anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
+- **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
+  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance.
 - **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
   one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.
@@ -525,7 +527,8 @@ disabled.
 ### 9.3 List (the start screen)
 
 - Top app bar: the title "My list", a filter-by-text icon, a sort icon.
-- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped. No counts.
+- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped. No counts. The tabs' pages can also be
+  switched by swiping the list sideways; each tab keeps its own scroll position.
 - Rows (`AnimeRow`), at most three logical lines and one action.
 
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
@@ -534,18 +537,17 @@ title and both lines is within the limit.
 
 | Case | Line 2 | Line 3 |
 |---|---|---|
-| Airing, exact count, episodes to watch | `12 / 24 · 14 aired` | `2 to watch`, in the `tertiary` colour |
+| Airing, episodes to watch | `Watched 12 of 24` | `2 to watch` (`~2 to watch` when the aired count is estimated), in the `tertiary` colour |
 | Airing, exact count, nothing to watch | same | the next episode, `Episode 15 · Sat 17:30`; none when no next episode is known |
-| Airing, estimated count, episodes to watch | `12 / 24 · ~14 aired` | `~2 to watch`, in the `tertiary` colour |
 | Airing, estimated count, nothing to watch | same | none |
-| Finished, or aired count unknown | `12 / 24` | none |
+| Finished, or aired count unknown | same | none |
 | Not yet aired | `Premieres Sat 17:30` when the first episode's time is known, written by the air-time rule of section 10; otherwise MAL's date by its precision, `Premieres 4 Jan`; `Not yet aired` when there is neither | none |
 | Completed tab | `Score 8` (or `Not scored`) | none |
 
-"Episodes to watch" means a "to watch" figure above zero (A8), which only a title in Watching can have; in the other
-tabs an airing title is always a "nothing to watch" row. An unknown total is written without the slash part:
-`12 · 14 aired`. Line 3 restates a difference the user could compute from line 2; that is intentional, it is the
-one thing the screen exists to highlight.
+Line 2 is always words of one shape. An unknown total is left out: `Watched 212`. The count is written as it is,
+also above the total (`Watched 25 of 24`, W9). A row never shows the aired count: "to watch" carries it, and the
+title page shows it. "Episodes to watch" means a "to watch" figure above zero (A8), which only a title in Watching
+can have; in the other tabs an airing title is always a "nothing to watch" row.
 
 **Limits:** not in a row: MAL score, member count, genres, media type, studio, tags, a countdown, an edit button, a
 progress bar.
@@ -560,18 +562,19 @@ progress bar.
 Equal keys are ordered by title. The other tabs default to "Last updated". The sort chosen for each tab is
 remembered.
 
-**Rows never move under the user's finger.** The order of a tab is computed when the tab is shown (the List is
-opened or returned to, or the tab is selected), when its sort is changed, and on pull-to-refresh. It is not
-computed after each edit. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates
+**Rows never move under the user's finger.** The order of a tab is computed when the List is opened or returned
+to, when the tab's sort is changed, and on pull-to-refresh, and the tab's page then starts from the top. It is not
+computed after each edit, nor when the user switches tabs, so a tab comes back as it was left. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates
 rows in place without moving them: after "+1" a row stays where it is, under "Up next" and under "Last updated"
 alike. Two things do change the visible rows: a row whose title no longer belongs to the tab leaves at once, with
 the list's item animation (the usual case is a "+1" that completes a title, and Undo puts it back in the same
-place); a title that a sync adds to the tab appears at the end until the order is next computed.
+place); a title that joins the tab (a sync, or "+1" completing it) appears at the end until the order is next
+computed.
 
 **Behind a tap:** the row opens the title page. Filter replaces the top app bar title with a text field that
-filters the current tab by title; Back or clearing the field ends it. Sort opens a bottom sheet with at most five
+filters every tab by title, so a swipe shows the next tab's matches; Back or clearing the field ends it. Sort opens a bottom sheet with at most five
 options (Up next, Title, Last updated, Score, Start date). "+1" answers with a snackbar "Episode 13 watched · Undo".
-When "+1" reaches the total, the title becomes Completed (W7): the row leaves Watching at once and the snackbar says
+"+1" works at and above the total (W9). When "+1" reaches MAL's total, the title becomes Completed (W7): the row leaves Watching at once and the snackbar says
 "Moved to Completed · Undo". Undo puts back the count, the status and the dates, and the row returns to its place.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
@@ -730,7 +733,7 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   weekday and a date. An air time always follows other text, so "today", "tomorrow" and their Russian forms are in
   lower case. A next episode is written in one form everywhere, the list row and the airing block alike:
   "Episode 15 · Sat 17:30", «Серия 15 · сб 17:30», "Episode 15 · today 17:30". A premiere whose time is known is
-  written the same way: "Premieres Sat 17:30", «Премьера: сб 17:30».
+  written the same way: "Premieres Sat 17:30", «Премьера сб 17:30».
 - **A date from MAL** is written by its precision: a full date as day and short month ("4 Jan", «4 янв.»), with the
   year added on the title page ("4 Jan 2027") and not in the list row; a year and month as "January 2027"
   («в январе 2027 г.» after «Премьера»); a year alone as "2027" («в 2027 г.» after «Премьера»).

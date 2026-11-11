@@ -104,7 +104,7 @@ internal fun AnimeRowSection() {
             onClick = {},
             lines =
                 listOf(
-                    RowLine(stringResource(R.string.gallery_progress_aired, 12, 24, 14)),
+                    RowLine(stringResource(R.string.gallery_progress, 12, 24)),
                     RowLine(stringResource(R.string.gallery_to_watch, 2), highlighted = true),
                 ),
             trailing = plusOne,
@@ -115,7 +115,7 @@ internal fun AnimeRowSection() {
             onClick = {},
             lines =
                 listOf(
-                    RowLine(stringResource(R.string.gallery_progress_estimated, 1088, 1122, 1094)),
+                    RowLine(stringResource(R.string.gallery_progress, 1088, 1122)),
                     RowLine(stringResource(R.string.gallery_to_watch_estimated, 6), highlighted = true),
                 ),
             trailing = plusOne,
@@ -126,7 +126,7 @@ internal fun AnimeRowSection() {
             onClick = {},
             lines =
                 listOf(
-                    RowLine(stringResource(R.string.gallery_progress_aired, 14, 24, 14)),
+                    RowLine(stringResource(R.string.gallery_progress, 14, 24)),
                     RowLine(stringResource(R.string.gallery_next_episode)),
                 ),
             trailing = plusOne,

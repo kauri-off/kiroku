@@ -44,6 +44,14 @@ class StringRulesTest {
             numberSpaceProblems("values-ru/strings_list.xml list_episode_watched", "Серия\u00A0%1\$d просмотрена"),
         )
         assertTrue(numberSpaceProblems("values/strings_list.xml list_episode_watched", "Episode %1\$d watched").isNotEmpty())
+        assertEquals(
+            emptyList<String>(),
+            numberSpaceProblems("values-ru/strings_list.xml list_progress", "Просмотрено %1\$d\u00A0из\u00A0%2\$d"),
+        )
+        for (planted in listOf("Просмотрено %1\$d из %2\$d", "Seen by %1\$d of %2\$d")) {
+            assertTrue(planted, numberSpaceProblems("values/strings_list.xml list_progress", planted).isNotEmpty())
+        }
+        assertTrue(numberSpaceProblems("values/strings_list.xml a", "Watched %1\$d").isNotEmpty())
         for (planted in listOf("%1\$s members", "%s участников", "%1\$s / %2\$s")) {
             assertTrue(planted, numberSpaceProblems("a", planted, plural = true).isNotEmpty())
         }

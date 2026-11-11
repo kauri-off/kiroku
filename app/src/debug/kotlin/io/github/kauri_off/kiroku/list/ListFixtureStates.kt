@@ -34,30 +34,52 @@ object ListFixtureStates {
             .map { listRow(it, airing[it.anime.id], today, TitleLanguage.Romaji, readOnly) }
     }
 
+    // Every tab's page by its default sort; [override] replaces some of them.
+    fun tabs(
+        entries: List<ListEntry> = set.entries,
+        readOnly: Boolean = false,
+        filter: String? = null,
+        override: Map<ListStatus, ListPage> = emptyMap(),
+    ): ListContent.Tabs =
+        ListContent.Tabs(
+            ListStatus.entries.associateWith { status ->
+                val sort = defaultSort(status, withAiring = !readOnly)
+                val page =
+                    override[status]
+                        ?: ListPage(sort, sortsFor(status, withAiring = !readOnly), rows(status, sort, entries, readOnly = readOnly))
+                page.copy(rows = page.rows.filter { filter == null || it.title.contains(filter, ignoreCase = true) })
+            },
+        )
+
+    fun watchingPage(
+        rows: List<ListRow>,
+        sort: ListSort = defaultSort(ListStatus.Watching, withAiring = true),
+    ) = mapOf(ListStatus.Watching to ListPage(sort, sortsFor(ListStatus.Watching, withAiring = true), rows))
+
     private fun state(
         status: ListStatus = ListStatus.Watching,
-        content: ListContent = ListContent.Rows(rows(status)),
-    ) = ListState(
-        owner = ListOwner.Me,
-        content = content,
-        tab = status,
-        sort = defaultSort(status, withAiring = true),
-        sorts = sortsFor(status, withAiring = true),
-        now = set.now,
-    )
+        content: ListContent = tabs(),
+    ) = ListState(owner = ListOwner.Me, content = content, tab = status, now = set.now)
 
     private fun after(
         anime: Anime,
         write: (Anime) -> ListWrite,
     ): List<ListEntry> =
-        set.entries.map { entry ->
-            if (entry.anime.id != anime.id) {
-                entry
-            } else {
-                val values = write(anime).applyTo(entry, today) ?: entry.values
-                entry.copy(values = values, updatedAt = set.now)
-            }
+        edited(anime) { entry ->
+            val values = write(anime).applyTo(entry, today) ?: entry.values
+            entry.copy(values = values, updatedAt = set.now)
         }
+
+    private fun edited(
+        anime: Anime,
+        edit: (ListEntry) -> ListEntry,
+    ): List<ListEntry> = set.entries.map { if (it.anime.id == anime.id) edit(it) else it }
+
+    // Watching in the order computed for [sort] from the fixtures, showing the entries as they are in [shown].
+    private fun watchingShown(
+        sort: ListSort = defaultSort(ListStatus.Watching, withAiring = true),
+        shown: List<ListEntry> = set.entries,
+    ): ListContent.Tabs = tabs(override = watchingPage(rows(ListStatus.Watching, sort, shown = shown), sort))
 
     val watching = state()
 
@@ -72,46 +94,37 @@ object ListFixtureStates {
         FixtureAnime.estimatedCaughtUp.titles.romaji
             .substringBefore(' ')
 
-    val filtering =
-        watching.copy(
-            filter = query,
-            content = ListContent.Rows(rows(ListStatus.Watching).filter { it.title.contains(query, ignoreCase = true) }),
-        )
+    val filtering = watching.copy(filter = query, content = tabs(filter = query))
 
     val refreshing = watching.copy(refreshing = true)
 
     val undoSnackbar =
         watching.copy(
-            content =
-                ListContent.Rows(
-                    rows(ListStatus.Watching, shown = after(FixtureAnime.exactToWatch) { ListWrite.MarkNextWatched(it) }),
-                ),
+            content = watchingShown(shown = after(FixtureAnime.exactToWatch) { ListWrite.MarkNextWatched(it) }),
             message = ListMessage(ListMessage.Kind.EpisodeWatched(13), serial = 1),
         )
 
     val completedSnackbar =
         watching.copy(
-            content =
-                ListContent.Rows(
-                    rows(ListStatus.Watching, shown = after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) }),
-                ),
+            content = watchingShown(shown = after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) }),
             message = ListMessage(ListMessage.Kind.MovedToCompleted, serial = 1),
         )
 
     // Watching by "Last updated", with the title "+1" is about to complete on top.
-    val lastUpdated =
-        watching.copy(sort = ListSort.LastUpdated, content = ListContent.Rows(rows(ListStatus.Watching, ListSort.LastUpdated)))
+    val lastUpdated = watching.copy(content = watchingShown(ListSort.LastUpdated))
 
     // The same after "+1" completed the top title, before any message: the row is gone and the rest closed up.
     val completedRow =
         lastUpdated.copy(
+            content = watchingShown(ListSort.LastUpdated, after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) }),
+        )
+
+    // A count above the total is recorded and shown as it is (W9): "Watched 25 of 24".
+    val aboveTotal =
+        watching.copy(
             content =
-                ListContent.Rows(
-                    rows(
-                        ListStatus.Watching,
-                        ListSort.LastUpdated,
-                        shown = after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) },
-                    ),
+                watchingShown(
+                    shown = edited(FixtureAnime.finishedPartWay) { it.copy(values = it.values.copy(watchedEpisodes = 25)) },
                 ),
         )
 
@@ -119,7 +132,21 @@ object ListFixtureStates {
 
     val loading = state(content = ListContent.Loading)
 
-    val empty = state(ListStatus.OnHold, ListContent.Rows(emptyList()))
+    val empty =
+        state(
+            ListStatus.OnHold,
+            tabs(
+                override =
+                    mapOf(
+                        ListStatus.OnHold to
+                            ListPage(
+                                defaultSort(ListStatus.OnHold, withAiring = true),
+                                sortsFor(ListStatus.OnHold, withAiring = true),
+                                emptyList(),
+                            ),
+                    ),
+            ),
+        )
 
     val error = state(content = ListContent.Failed(ListFailure.NoConnection))
 
@@ -130,12 +157,7 @@ object ListFixtureStates {
     val readOnly =
         ListState(
             owner = ListOwner.Other(set.otherUserName),
-            content =
-                ListContent.Rows(
-                    rows(ListStatus.Watching, defaultSort(ListStatus.Watching, withAiring = false), set.otherUserEntries, readOnly = true),
-                ),
-            sort = defaultSort(ListStatus.Watching, withAiring = false),
-            sorts = sortsFor(ListStatus.Watching, withAiring = false),
+            content = tabs(set.otherUserEntries, readOnly = true),
             now = set.now,
         )
 }
