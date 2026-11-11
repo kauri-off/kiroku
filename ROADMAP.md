@@ -156,7 +156,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-07; the review needs M1-07a.
   **Check:** rubric pass on `related/*` and `details/*`.
 
-- [ ] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
+- [x] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
   **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `over-total-error` (a typed value above the
   total, refused inline), `remove-confirm`, `discard-confirm`.
   **Needs:** M1-07; the review needs M1-07a.

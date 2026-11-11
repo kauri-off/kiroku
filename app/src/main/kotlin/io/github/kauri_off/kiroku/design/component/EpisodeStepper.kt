@@ -16,13 +16,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -61,7 +65,7 @@ fun EpisodeStepper(
     enabled: Boolean = true,
 ) = EpisodeStepper(watched, total, onWatchedChange, modifier, enabled, typed = null)
 
-// [typed] stands for text the user has typed but not yet confirmed.
+// [typed] stands for text the user has typed but not yet confirmed; [onTyping] hears the unconfirmed text, or null.
 @Composable
 internal fun EpisodeStepper(
     watched: Int,
@@ -70,8 +74,12 @@ internal fun EpisodeStepper(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     typed: String?,
+    onTyping: (String?) -> Unit = {},
+    fieldFocus: FocusRequester? = null,
 ) {
     var draft by rememberSaveable { mutableStateOf(typed) }
+    val typingListener by rememberUpdatedState(onTyping)
+    LaunchedEffect(draft) { typingListener(draft) }
     var refused by rememberSaveable { mutableStateOf(typed != null && episodeInput(typed, watched, total) is EpisodeInput.TooMany) }
     var focused by remember { mutableStateOf(false) }
     var given by remember { mutableStateOf(watched to total) }
@@ -143,6 +151,7 @@ internal fun EpisodeStepper(
                     Modifier
                         .weight(1f, fill = false)
                         .width(fieldWidth(total))
+                        .then(fieldFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
                         .onFocusChanged {
                             if (focused && !it.isFocused) commit()
                             focused = it.isFocused
