@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:name=".KirokuApplication"
         android:label="${appLabel}"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
         android:supportsRtl="true"
         android:theme="@style/Theme.Kiroku">
         <activity

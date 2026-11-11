@@ -776,6 +776,8 @@ code. Layout review works from these images.
   a modal bottom sheet draws its container behind it. Robolectric renders at API 35, the highest it runs on JDK 17.
 - A case can declare the keyboard open. Every window then gets a 300 dp keyboard's insets (the gesture bar
   included), and the image shows a flat block with the handle in its place.
+- A case can declare its own window size, such as the shell's wide window; it then replaces the variant's screen
+  size, and the variant keeps its language, theme and font scale.
 - Each screen has one registry file, `<Screen>Screenshots`, whose class name gives the screen's directory. It
   declares its **cases**: content, loading, empty and error, plus the cases its roadmap task names. A screen that
   has no loading, empty or error state says so with a reason of at least two words, which the render writes to

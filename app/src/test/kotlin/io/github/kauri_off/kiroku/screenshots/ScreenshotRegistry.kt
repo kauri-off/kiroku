@@ -16,20 +16,29 @@ class ScreenshotCase internal constructor(
     val name: String,
     val isContent: Boolean,
     val keyboard: Boolean,
+    val window: WindowSize?,
     val content: @Composable () -> Unit,
+)
+
+// A window size that replaces the variant's own, such as a wide window; language, theme and font scale stay.
+data class WindowSize(
+    val widthDp: Int,
+    val heightDp: Int,
 )
 
 fun contentCase(
     name: String = "content",
     keyboard: Boolean = false,
+    window: WindowSize? = null,
     content: @Composable () -> Unit,
-) = ScreenshotCase(name, isContent = true, keyboard, content)
+) = ScreenshotCase(name, isContent = true, keyboard, window, content)
 
 fun case(
     name: String,
     keyboard: Boolean = false,
+    window: WindowSize? = null,
     content: @Composable () -> Unit,
-) = ScreenshotCase(name, isContent = false, keyboard, content)
+) = ScreenshotCase(name, isContent = false, keyboard, window, content)
 
 sealed interface StateCase
 
@@ -174,7 +183,9 @@ internal fun renderScreen(
                 images += finishCase(shot, case, variant, File(dir, prefix), write) { problems += "$screen/${case.name}: $it" }
             }
             var extraDp = 0
-            Shot.launch(variant, keyboard = case.keyboard, content = case.content).use { shot ->
+            val widthDp = case.window?.widthDp ?: variant.widthDp
+            val heightDp = case.window?.heightDp ?: variant.heightDp
+            Shot.launch(variant, heightDp, case.keyboard, widthDp, case.content).use { shot ->
                 write(shot.image(), File(dir, "$prefix.png"))
                 images++
                 if (variant == Variant.EnLight && case.isContent) {
@@ -185,7 +196,7 @@ internal fun renderScreen(
                 extraDp = shot.scrollRangeDp()
                 if (extraDp == 0) finish(shot, expanded)
             }
-            if (extraDp > 0) renderFull(variant, variant.heightDp + extraDp, case) { finish(it, true) }
+            if (extraDp > 0) renderFull(variant, widthDp, heightDp + extraDp, case) { finish(it, true) }
         }
     }
     val seconds = (System.nanoTime() - started) / 1e9
@@ -231,6 +242,7 @@ private fun finishCase(
 // Grows the window until nothing is left to scroll, then hands over the shot that shows everything.
 private fun renderFull(
     variant: Variant,
+    widthDp: Int,
     heightDp: Int,
     case: ScreenshotCase,
     finish: (Shot) -> Unit,
@@ -238,7 +250,7 @@ private fun renderFull(
     var height = heightDp
     repeat(3) {
         val rest =
-            Shot.launch(variant, height, case.keyboard, case.content).use { shot ->
+            Shot.launch(variant, height, case.keyboard, widthDp, case.content).use { shot ->
                 shot.expandSheets()
                 shot.scrollRangeDp().also { if (it == 0) finish(shot) }
             }

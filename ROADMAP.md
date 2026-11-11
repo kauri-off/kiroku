@@ -118,7 +118,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   cases fail, each with at least one deduction marked Noticeable or Structural; the owner's remarks on the look are
   filed as tasks before M1-08 to M1-12 are reviewed.
 
-- [ ] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
+- [x] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
   Profile; placeholder screens in the shared empty state; the place for snackbars and for the session banner.
   **Cases:** `shell/list-selected`, `shell/snackbar`, `shell/session-banner`, `shell/wide` (840 × 600 dp, rail).
   **Needs:** M1-07; the review needs M1-07a.

@@ -5,6 +5,7 @@ import java.util.zip.ZipFile
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.roborazzi)
 }
 
@@ -106,6 +107,9 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material3.adaptive.navigation.suite)
+    implementation(libs.navigation3.runtime)
+    implementation(libs.navigation3.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)

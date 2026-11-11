@@ -27,8 +27,10 @@ enum class Variant(
 
     val seed: Seed get() = if (altSeed) Seed.Amber else Seed.Teal
 
-    fun qualifiers(heightDp: Int = this.heightDp): String =
-        "$language-w${widthDp}dp-h${heightDp}dp-${if (dark) "night" else "notnight"}-xhdpi"
+    fun qualifiers(
+        heightDp: Int = this.heightDp,
+        widthDp: Int = this.widthDp,
+    ): String = "$language-w${widthDp}dp-h${heightDp}dp-${if (dark) "night" else "notnight"}-xhdpi"
 
     companion object {
         fun forCase(isContent: Boolean): List<Variant> = entries.filter { isContent || !it.contentOnly }
