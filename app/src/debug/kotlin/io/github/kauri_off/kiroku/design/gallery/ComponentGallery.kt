@@ -266,7 +266,7 @@ internal fun EpisodeStepperSection() {
         EpisodeStepper(watched = 24, total = 24, onWatchedChange = {})
         EpisodeStepper(watched = 1088, total = 1122, onWatchedChange = {})
         EpisodeStepper(watched = 1093, total = null, onWatchedChange = {})
-        EpisodeStepper(watched = 12, total = 24, onWatchedChange = {}, typed = "30")
+        EpisodeStepper(watched = 12, total = 24, onWatchedChange = {}, typed = 30.toString())
         EpisodeStepper(watched = 12, total = 24, onWatchedChange = {}, enabled = false)
     }
 }

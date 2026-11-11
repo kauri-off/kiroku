@@ -3,15 +3,19 @@ package io.github.kauri_off.kiroku.rules
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
-private val numberEnd = Regex("""(\d|%(\d+\$)?d)$""")
-private val numberStart = Regex("""^~?(\d|%(\d+\$)?d)""")
+// A number: digits or a %d argument; in a plural item, whose arguments are counts, a %s argument too, which carries
+// a count formatted for the locale.
+private fun number(plural: Boolean) = if (plural) """(\d|%(\d+\$)?[ds])""" else """(\d|%(\d+\$)?d)"""
 
 // An ordinary space between a number and the word, slash or colon next to it, where a line could break.
 fun numberSpaceProblems(
     name: String,
     text: String,
-): List<String> =
-    text.indices
+    plural: Boolean = false,
+): List<String> {
+    val numberEnd = Regex(number(plural) + "$")
+    val numberStart = Regex("^~?" + number(plural))
+    return text.indices
         .filter { i ->
             text[i] == ' ' &&
                 i > 0 &&
@@ -24,9 +28,16 @@ fun numberSpaceProblems(
                         (numberStart.containsMatchIn(after) && (joinsWord(before.last()) || before.last() == ':'))
                 }
         }.map { "$name: a breaking space at ${it + 1} in \"$text\"; use \\u00A0" }
+}
+
+data class StringResource(
+    val name: String,
+    val text: String,
+    val plural: Boolean,
+)
 
 // Every string and plural item of the app's resources, as the app reads it.
-fun stringResources(): List<Pair<String, String>> =
+fun stringResources(): List<StringResource> =
     File(projectDir, "app/src/main/res")
         .walk()
         .filter { it.isFile && it.parentFile.name.startsWith("values") && it.name.startsWith("strings") }
@@ -41,7 +52,7 @@ fun stringResources(): List<Pair<String, String>> =
                         node.attributes.getNamedItem("name")?.nodeValue ?: node.parentNode.attributes
                             .getNamedItem("name")
                             .nodeValue
-                    "${file.parentFile.name}/${file.name} $key" to unescape(node.textContent)
+                    StringResource("${file.parentFile.name}/${file.name} $key", unescape(node.textContent), tag == "item")
                 }
             }
         }.toList()

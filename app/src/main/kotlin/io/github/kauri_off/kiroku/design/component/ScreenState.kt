@@ -20,8 +20,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // The loading, empty and error states of every screen. Each fills the space it is given and centres itself in it;
@@ -69,7 +69,7 @@ private fun Message(
 ) {
     Column(
         Modifier
-            .widthIn(max = MessageWidth)
+            .widthIn(max = Sizes.messageMaxWidth)
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.l),
@@ -82,6 +82,3 @@ private fun Message(
         if (action != null) Button(onClick = action.onClick) { Text(action.label) }
     }
 }
-
-// Keeps a message of a few words in one or two balanced lines on wide windows.
-private val MessageWidth = 320.dp

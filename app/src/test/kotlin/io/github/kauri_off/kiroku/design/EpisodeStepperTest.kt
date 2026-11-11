@@ -12,6 +12,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -157,23 +158,81 @@ class EpisodeStepperTest {
         assertEquals(listOf(21, 4), changes)
     }
 
+    // The same typed count gives the same buttons before and after it is refused: neither can step from it.
     @Test
-    fun aButtonDoesNotStepPastARefusedCount() {
+    fun aCountAboveTheTotalDisablesBothButtons() {
         stepper(12, 24)
+        val minus = compose.onNodeWithContentDescription("Minus one episode")
+        val plus = compose.onNodeWithContentDescription("Plus one episode")
         field.performTextReplacement("30")
-        compose.onNodeWithContentDescription("Minus one episode").performClick()
-        assertEquals(emptyList<Int>(), changes)
+        minus.assertIsNotEnabled()
+        plus.assertIsNotEnabled()
+        field.performImeAction()
         compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        minus.assertIsNotEnabled()
+        plus.assertIsNotEnabled()
+        assertEquals(emptyList<Int>(), changes)
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
+        field.performTextReplacement("3")
+        minus.assertIsEnabled()
+        plus.assertIsEnabled()
     }
 
     @Test
-    fun aTypedCountAtTheTotalIsAppliedByPlus() {
+    fun aTypedCountAtTheTotalDisablesPlusAndMinusStepsFromIt() {
         stepper(12, 24)
         field.performTextReplacement("24")
         compose.onNodeWithContentDescription("Plus one episode").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Minus one episode").performClick()
         assertEquals(listOf(23), changes)
+    }
+
+    @Test
+    fun aCountChangedFromOutsideDropsAnUnconfirmedOne() {
+        var given by mutableIntStateOf(12)
+        compose.setContent {
+            focus = LocalFocusManager.current
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(given, 24, onWatchedChange = { changes += it }, typed = "30")
+            }
+        }
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        compose.runOnIdle { given = 13 }
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("13")))
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled()
+        assertEquals(emptyList<Int>(), changes)
+    }
+
+    @Test
+    fun aCountChangedFromOutsideKeepsTheOneBeingTyped() {
+        var given by mutableIntStateOf(12)
+        compose.setContent {
+            focus = LocalFocusManager.current
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(given, 24, onWatchedChange = { changes += it })
+            }
+        }
+        field.performTextReplacement("20")
+        compose.runOnIdle { given = 13 }
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("20")))
+        field.performImeAction()
+        assertEquals(listOf(20), changes)
+    }
+
+    @Test
+    fun anUnconfirmedCountSurvivesRecreation() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(12, 24, onWatchedChange = { changes += it })
+            }
+        }
+        field.performTextReplacement("30")
+        field.performImeAction()
+        restoration.emulateSavedInstanceStateRestore()
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
     }
 
     @Test

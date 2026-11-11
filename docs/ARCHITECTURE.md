@@ -420,8 +420,8 @@ The default Material 3 type scale with the system font. Screens use only these r
 ### 8.3 Spacing and shape
 
 A 4 dp grid with the `Spacing` tokens `xs` 4, `s` 8, `m` 12, `l` 16, `xl` 24, `xxl` 32. Layout code uses only these
-tokens and component defaults; a literal dp value or colour outside the theme and the components is a code-review
-finding.
+tokens, the theme's named sizes and component defaults. A literal dp value outside the theme fails a test; a literal
+colour outside the theme is a code-review finding.
 
 - Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
 - Content is at most 640 dp wide and centred on wider windows.
@@ -432,8 +432,8 @@ finding.
   scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
   is a rule of the component, and a screen never passes a width.
 - Cards of a strip are `m` apart.
-- **A title breaks after a hyphen, never inside a hyphenated segment**, wherever it is shown
-  ("Tenkuu-Toshi-Rondenia-no-" / "Kuuchuu-…").
+- **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
+  shown ("Tenkuu-Toshi-Rondenia-no-" / "Kuuchuu-…"), unless the segment alone is wider than the line.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked
   one per line (section 9.7). Nothing else depends on the font scale.
 
@@ -717,8 +717,7 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   so parallel tasks do not edit the same file. The build fails on a missing or extra translation and on a missing
   plural form, and a test fails on a string literal in user interface code (Android Lint does not see Compose).
   That test exists before the first screen is written.
-- A number and the word, unit or slash next to it are joined by a non-breaking space, so a line never ends with a
-  bare number or starts with its noun: `24 episodes`, `12 / 24`, `К просмотру: 2`.
+- A line never breaks between a number and its word, unit or slash: `24 episodes`, `12 / 24`, `К просмотру: 2`.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
   falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
@@ -826,9 +825,10 @@ and sub-dp rounding differ. The status bar is always 24 dp, so a top padding wri
 passes. The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales
 it at font scales above 1.03, non-linearly, on every Android version.
 
-**Looping animations.** The only looping animation a render accepts is a progress indicator's: the harness holds
-it at one fixed frame, where an indeterminate indicator shows a long arc and reads as a spinner. Any other looping
-animation fails the render.
+**Looping animations.** The harness holds every infinite transition and infinite repeatable animation at one fixed
+frame, where an indeterminate progress indicator shows a long arc and reads as a spinner, and fails the render when
+more of them run than the progress indicators on screen account for. A loop written by hand (an animation restarted
+in a `while` loop, a blink on `delay`) is not detected: it stops at its first frame.
 
 **The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and
 says "dirty" when the worktree had uncommitted changes. A render after any commit, including one that changes no

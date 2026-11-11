@@ -51,7 +51,7 @@ fun PosterCard(
                 CardText("", captionStyle, captionColor, CAPTION2_LINES, reserved = true)
             }
             Column {
-                CardText(shownTitle(title), titleStyle, titleColor, TITLE_LINES, reserved = true)
+                TitleText(title, TITLE_LINES, minLines = TITLE_LINES, style = titleStyle, color = titleColor)
                 CardText(caption1, captionStyle, captionColor, CAPTION1_LINES, reserved = false)
                 CardText(caption2, captionStyle, captionColor, CAPTION2_LINES, reserved = false)
             }

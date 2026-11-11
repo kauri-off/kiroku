@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.design.component
 
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -11,7 +12,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -30,7 +30,7 @@ fun SectionHeader(
         centred = true,
         modifier =
             modifier
-                .heightIn(min = MinHeight)
+                .heightIn(min = LocalMinimumInteractiveComponentSize.current)
                 .padding(start = Spacing.l, end = if (onSeeAll == null) Spacing.l else Spacing.xs),
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
@@ -41,5 +41,3 @@ fun SectionHeader(
         }
     }
 }
-
-private val MinHeight = 48.dp

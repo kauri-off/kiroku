@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -49,7 +48,7 @@ fun AnimeRow(
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
     ListItem(
-        headlineContent = { Text(shownTitle(title), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        headlineContent = { TitleText(title, maxLines = 2) },
         supportingContent =
             lines.takeIf { it.isNotEmpty() }?.let {
                 {

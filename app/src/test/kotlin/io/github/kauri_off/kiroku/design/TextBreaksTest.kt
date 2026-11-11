@@ -10,15 +10,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.DrawnTitleKey
 import io.github.kauri_off.kiroku.design.component.FactRow
 import io.github.kauri_off.kiroku.design.component.PosterCard
 import io.github.kauri_off.kiroku.design.component.RowLine
-import io.github.kauri_off.kiroku.design.component.shownTitle
+import io.github.kauri_off.kiroku.design.component.breakableTitle
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -80,23 +84,45 @@ class TextBreaksTest {
         }
     }
 
+    private fun drawnTitle(): TextLayoutResult =
+        compose
+            .onNodeWithText(HYPHENATED, useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config[DrawnTitleKey]
+            .layout!!
+
     @Test
     fun aRowTitleBreaksAfterAHyphen() {
         show { AnimeRow(HYPHENATED, posterUrl = null, onClick = {}, lines = listOf(RowLine("12 / 24"))) }
         eachSize { where ->
-            val layout = compose.onNodeWithText(shownTitle(HYPHENATED), useUnmergedTree = true).layout()
+            val layout = drawnTitle()
             assertTrue(layout.lineCount > 1)
-            assertBreaksAfterHyphens(shownTitle(HYPHENATED), layout, where)
+            assertBreaksAfterHyphens(breakableTitle(HYPHENATED), layout, where)
         }
     }
 
     @Test
     fun aCardTitleBreaksAfterAHyphen() {
         show { PosterCard(HYPHENATED, "Sequel", "Completed", posterUrl = null, onClick = {}) }
-        eachSize { where ->
-            val layout = compose.onNodeWithText(shownTitle(HYPHENATED), useUnmergedTree = true).layout()
-            assertBreaksAfterHyphens(shownTitle(HYPHENATED), layout, where)
+        eachSize { where -> assertBreaksAfterHyphens(breakableTitle(HYPHENATED), drawnTitle(), where) }
+    }
+
+    // Screen readers, copy, search and tests read the title as it is; only the drawn text has break opportunities.
+    @Test
+    fun theTitleThatIsReadIsTheModelTitle() {
+        shown = 1f to 411
+        show {
+            androidx.compose.foundation.layout.Column {
+                AnimeRow(HYPHENATED, posterUrl = null, onClick = {})
+                PosterCard(HYPHENATED, "Sequel", "Completed", posterUrl = null, onClick = {})
+            }
         }
+        val read = compose.onAllNodesWithText(HYPHENATED).fetchSemanticsNodes()
+        assertTrue(read.size == 2)
+        compose.onAllNodesWithText(breakableTitle(HYPHENATED), substring = true, useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText(HYPHENATED)[0].assertTextEquals(HYPHENATED)
+        compose.onAllNodesWithText(HYPHENATED)[1].assertTextEquals(HYPHENATED, "Sequel", "Completed")
+        assertTrue(breakableTitle(HYPHENATED) != HYPHENATED)
     }
 
     @Test
@@ -123,7 +149,7 @@ class TextBreaksTest {
 
     companion object {
         private const val HYPHENATED = "Tenkuu-Toshi-Rondenia-no-Kuuchuu-Teien-to-Mahoutsukai-tachi"
-        private val BREAKS = setOf('​', ' ')
+        private val BREAKS = setOf('\u200B', ' ')
         private val TITLES =
             listOf(
                 "I Was Reincarnated as the Vampire Goddess, So I'll Live Leisurely in a Corner of Another World",

@@ -35,6 +35,6 @@ class StatBarTest {
     @Config(qualifiers = "ru")
     fun isReadAsOneSentenceInRussian() {
         bar()
-        compose.onNodeWithContentDescription("Completed, 1 234 567, 45\u00A0процентов").assertExists()
+        compose.onNodeWithContentDescription("Completed, 1\u00A0234\u00A0567, 45\u00A0процентов").assertExists()
     }
 }

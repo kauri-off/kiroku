@@ -10,15 +10,15 @@ import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import io.github.kauri_off.kiroku.design.theme.Sizes
 
 enum class PosterSize(
     val width: Dp,
 ) {
-    Row(56.dp),
-    Strip(104.dp),
-    Header(120.dp),
+    Row(Sizes.posterRow),
+    Strip(Sizes.posterStrip),
+    Header(Sizes.posterHeader),
 }
 
 // A strip poster grows with the font scale, as its card does; the other two keep their size.

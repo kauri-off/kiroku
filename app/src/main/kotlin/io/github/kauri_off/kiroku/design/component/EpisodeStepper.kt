@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -18,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,13 +45,13 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // Minus, the watched count as a numeric field with "/ total", plus. A typed count is applied when the user
 // confirms it, leaves the field or presses a button, which then steps from the typed count; a count above the total
-// is refused with an inline error and not applied. The field shows [watched] whenever nothing is being typed.
+// is refused with an inline error, not applied, and disables both buttons. The field shows [watched] whenever nothing
+// is being typed; a count changed from outside drops an unconfirmed one unless the field has focus.
 @Composable
 fun EpisodeStepper(
     watched: Int,
@@ -69,9 +71,17 @@ internal fun EpisodeStepper(
     enabled: Boolean = true,
     typed: String?,
 ) {
-    var draft by remember { mutableStateOf(typed) }
-    var refused by remember { mutableStateOf(typed != null && episodeInput(typed, watched, total) is EpisodeInput.TooMany) }
+    var draft by rememberSaveable { mutableStateOf(typed) }
+    var refused by rememberSaveable { mutableStateOf(typed != null && episodeInput(typed, watched, total) is EpisodeInput.TooMany) }
     var focused by remember { mutableStateOf(false) }
+    var given by remember { mutableStateOf(watched to total) }
+    if (given != (watched to total)) {
+        given = watched to total
+        if (!focused) {
+            draft = null
+            refused = false
+        }
+    }
     val focusManager = LocalFocusManager.current
 
     // Applies or drops the draft; false when the draft is refused and stays.
@@ -87,26 +97,24 @@ internal fun EpisodeStepper(
         return true
     }
 
+    val typedInput = draft?.let { episodeInput(it, watched, total) }
+    val tooMany = typedInput is EpisodeInput.TooMany
+    val current = (typedInput as? EpisodeInput.Apply)?.value ?: watched
+
     fun step(delta: Int) {
-        val input = draft?.let { episodeInput(it, watched, total) }
-        if (input is EpisodeInput.TooMany) {
-            refused = true
-            return
-        }
-        val base = (input as? EpisodeInput.Apply)?.value ?: watched
+        if (tooMany) return
         draft = null
         refused = false
-        onWatchedChange((base + delta).coerceIn(0, total ?: Int.MAX_VALUE))
+        onWatchedChange((current + delta).coerceIn(0, total ?: Int.MAX_VALUE))
     }
 
-    val current = draft?.toIntOrNull()?.takeIf { refused.not() } ?: watched
     val minus = stringResource(R.string.design_episode_minus)
     val plus = stringResource(R.string.design_episode_plus)
     val fieldLabel = stringResource(R.string.design_episodes_watched)
     val refusal = total?.let { pluralStringResource(R.plurals.design_episode_too_many, it, it) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            IconButton(onClick = { step(-1) }, enabled = enabled && current > 0) {
+            IconButton(onClick = { step(-1) }, enabled = enabled && !tooMany && current > 0) {
                 Icon(painterResource(R.drawable.ic_remove), contentDescription = minus)
             }
             OutlinedTextField(
@@ -143,7 +151,7 @@ internal fun EpisodeStepper(
                             if (refused && refusal != null) error(refusal)
                         },
             )
-            IconButton(onClick = { step(1) }, enabled = enabled && (total == null || current < total)) {
+            IconButton(onClick = { step(1) }, enabled = enabled && !tooMany && (total == null || current < total)) {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = plus)
             }
         }
@@ -153,7 +161,7 @@ internal fun EpisodeStepper(
                 refusal,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = ButtonWidth + Spacing.xs + FieldPadding),
+                modifier = Modifier.padding(start = LocalMinimumInteractiveComponentSize.current + Spacing.xs + FieldPadding),
             )
         }
     }
@@ -233,14 +241,15 @@ private fun fieldWidth(total: Int?): Dp {
     val style = LocalTextStyle.current
     val widest =
         AnnotatedString(
-            ZERO.repeat(maxDigits(total)) + (total?.let { stringResource(R.string.design_episode_total, it) } ?: ""),
+            ZERO.toString().repeat(maxDigits(total)) + (total?.let { stringResource(R.string.design_episode_total, it) } ?: ""),
         )
     val width = measurer.measure(widest, style, softWrap = false).size.width
     return with(LocalDensity.current) { width.toDp() } + FieldPadding * 2 + CursorRoom
 }
 
 private const val UNKNOWN_TOTAL_DIGITS = 4
-private const val ZERO = "0"
-private val FieldPadding = 16.dp
-private val ButtonWidth = 48.dp
-private val CursorRoom = 4.dp
+private const val ZERO = '0'
+
+// A text field's own start and end padding, and room for the cursor after the last digit.
+private val FieldPadding = Spacing.l
+private val CursorRoom = Spacing.xs

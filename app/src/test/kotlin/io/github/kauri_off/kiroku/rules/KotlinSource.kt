@@ -7,6 +7,7 @@ data class Literal(
     val text: String,
     val line: Int,
     val offset: Int,
+    val templated: Boolean = false,
 )
 
 // Splits Kotlin source into code (comments and literals blanked out) and its string literals.
@@ -98,6 +99,7 @@ class KotlinSource(
         val start = line
         val offset = out.length
         val text = StringBuilder()
+        var templated = false
         out.append('"')
         repeat(if (raw) 3 else 1) { i++ }
         while (i < s.length) {
@@ -125,12 +127,14 @@ class KotlinSource(
                     )
                 }
                 s.startsWith("\${", i) -> {
+                    templated = true
                     out.append("\${")
                     i += 2
                     while (i < s.length && !codeStep(stopAtBrace = true)) Unit
                     if (i < s.length) emit('}')
                 }
                 s[i] == '$' && i + 1 < s.length && s[i + 1].isJavaIdentifierStart() -> {
+                    templated = true
                     blank()
                     skipWhile { s[i].isJavaIdentifierPart() }
                 }
@@ -142,7 +146,7 @@ class KotlinSource(
         }
         repeat(if (raw) 3 else 1) { if (i < s.length) i++ }
         out.append('"')
-        literals += Literal(text.toString(), start, offset)
+        literals += Literal(text.toString(), start, offset, templated)
     }
 
     companion object {
