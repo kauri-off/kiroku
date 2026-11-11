@@ -167,7 +167,7 @@ internal fun EditSheet(
                         countSpan = top until top + it.size.height
                     },
                 ) {
-                    Label(stringResource(R.string.edit_episodes))
+                    Label(stringResource(R.string.design_episodes_watched))
                     Spacer(Modifier.height(Spacing.xs))
                     EpisodeStepperLayout(
                         text = state.typed ?: state.draft.watchedEpisodes.toString(),

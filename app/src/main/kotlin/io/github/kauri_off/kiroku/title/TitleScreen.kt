@@ -85,6 +85,7 @@ import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterCard
 import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
@@ -118,6 +119,7 @@ fun TitleScreen(
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(TitleEvent.SignIn) })
             }
         },
+        snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
         when (state) {
             is TitleState.Loading -> ScreenState(ScreenState.Loading, Modifier.padding(padding))
@@ -321,7 +323,7 @@ private fun OnList(
         // under the stepper.
         FlowRow(Modifier.padding(end = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
             Column(Modifier.toCentre(endPadding = Spacing.l)) {
-                FieldLabel(stringResource(R.string.title_episodes_watched), Modifier.padding(start = Spacing.l))
+                FieldLabel(stringResource(R.string.design_episodes_watched), Modifier.padding(start = Spacing.l))
                 EpisodeStepper(
                     watched = entry.watchedEpisodes,
                     total = total,

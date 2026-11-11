@@ -160,7 +160,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-05.
   **Check:** a test shows that a "+1" made through the demo list reaches an observer of that list.
 
-- [ ] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
+- [x] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
   navigation between them.
   **Needs:** M1-08, M1-09, M1-10, M1-11, M1-12, M1-13, M1-02.
   **Check:** tests cover every event of the three view models; the edit sheet's state is updated on every keystroke

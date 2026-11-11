@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.repository
 
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -93,6 +94,9 @@ interface AnimeRepository {
 
 interface AiringRepository {
     fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
+
+    // Section 4's result for every title with stored airing data, the one source of every screen's airing lines.
+    fun observeAiring(): Flow<Map<AnimeId, Airing>>
 
     suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit>
 

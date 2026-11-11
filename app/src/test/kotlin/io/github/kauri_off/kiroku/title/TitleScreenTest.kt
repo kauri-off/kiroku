@@ -219,4 +219,13 @@ class TitleScreenTest {
         compose.onNodeWithText("Added to Planned").assertIsDisplayed()
         sends(TitleEvent.SnackbarDismissed) { compose.runOnIdle { snackbars.currentSnackbarData?.dismiss() } }
     }
+
+    // ARCHITECTURE 6.2: the screen itself draws the host the shell hands it.
+    @Test
+    fun theScreenDrawsTheSnackbarHostItIsGiven() {
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { TitleScreen(TitleFixtures.added, {}, snackbars) } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Added to Planned").assertIsDisplayed()
+        compose.onNodeWithText("Change").assertIsDisplayed()
+    }
 }

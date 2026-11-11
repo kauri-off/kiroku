@@ -1,18 +1,8 @@
 package io.github.kauri_off.kiroku.title
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
@@ -77,23 +67,13 @@ class TitleScreenshots : ScreenshotRegistry() {
 @Composable
 private fun Screen(state: TitleState) = TitleInShell(state, onEvent = {})
 
-// The page as the shell shows it: the shell draws the one snackbar host, above the gesture bar.
+// The page with a snackbar host of its own, as the shell hands it one; the screen draws it.
 @Composable
 fun TitleInShell(
     state: TitleState,
     onEvent: (TitleEvent) -> Unit,
     snackbars: SnackbarHostState = remember { SnackbarHostState() },
-) {
-    Box(Modifier.fillMaxSize()) {
-        TitleScreen(state, onEvent, snackbars)
-        SnackbarHost(
-            snackbars,
-            Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
-        )
-    }
-}
+) = TitleScreen(state, onEvent, snackbars)
 
 object TitleFixtures {
     private val set = Fixtures.reference

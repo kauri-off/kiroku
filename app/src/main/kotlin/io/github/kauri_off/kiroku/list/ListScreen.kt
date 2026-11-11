@@ -27,7 +27,6 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
@@ -61,6 +60,7 @@ import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowLongPress
 import io.github.kauri_off.kiroku.design.component.RowTrailing
+import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
@@ -91,7 +91,7 @@ fun ListScreen(
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
         },
-        snackbarHost = { SnackbarHost(snackbars) },
+        snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
         val body = Modifier.padding(top = padding.calculateTopPadding())
         when (val content = state.content) {
