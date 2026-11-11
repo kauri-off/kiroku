@@ -31,10 +31,9 @@ data class ListValues(
         today: LocalDate,
     ): ListValues {
         require(watched >= 0)
-        require(malEpisodes == null || watched <= malEpisodes)
         val todayDate = PartialDate.Day(today)
         return when {
-            malEpisodes != null && watched == malEpisodes && status != ListStatus.Completed ->
+            malEpisodes != null && watched >= malEpisodes && status != ListStatus.Completed ->
                 copy(
                     status = ListStatus.Completed,
                     watchedEpisodes = watched,
@@ -51,10 +50,7 @@ data class ListValues(
         episode: Int,
         malEpisodes: Int?,
         today: LocalDate,
-    ): ListValues {
-        val target = if (malEpisodes == null) episode else minOf(episode, malEpisodes)
-        return if (target <= watchedEpisodes) this else withWatched(target, malEpisodes, today)
-    }
+    ): ListValues = if (episode <= watchedEpisodes) this else withWatched(episode, malEpisodes, today)
 }
 
 // Whether the episode count follows the status where it is shown; it says nothing for Planned with none watched or

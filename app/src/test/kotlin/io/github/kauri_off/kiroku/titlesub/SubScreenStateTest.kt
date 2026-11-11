@@ -65,6 +65,7 @@ class SubScreenStateTest {
                 entries = mapOf(airing.id to ListValues(ListStatus.Watching, 5, null, null, null)),
                 airing = mapOf(airing.id to Airing(AiredCount.Exact(6), 12, null, Instant.EPOCH)),
                 language = TitleLanguage.Romaji,
+                session = set.session,
             )
         assertEquals(
             12,
@@ -74,7 +75,8 @@ class SubScreenStateTest {
                 .single()
                 .total,
         )
-        val unknown = relatedState(listOf(RelatedAnime(airing, RelationType.Sequel)), emptyMap(), emptyMap(), TitleLanguage.Romaji)
+        val unknown =
+            relatedState(listOf(RelatedAnime(airing, RelationType.Sequel)), emptyMap(), emptyMap(), TitleLanguage.Romaji, set.session)
         assertEquals(
             null,
             unknown.groups
@@ -89,7 +91,7 @@ class SubScreenStateTest {
     fun aRowUsesTheChosenTitleLanguage() {
         val related = listOf(RelatedAnime(FixtureAnime.prequel, RelationType.Prequel))
         val english =
-            relatedState(related, emptyMap(), emptyMap(), TitleLanguage.English)
+            relatedState(related, emptyMap(), emptyMap(), TitleLanguage.English, set.session)
                 .groups
                 .single()
                 .rows
@@ -101,7 +103,7 @@ class SubScreenStateTest {
     fun eachAlternativeTitleHasItsOwnFactSoNoneIsDropped() {
         val long = "A".repeat(400)
         val anime = FixtureAnime.exactToWatch.copy(titles = FixtureAnime.exactToWatch.titles.copy(english = long))
-        val facts = detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, set.clock).facts
+        val facts = detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, set.session, set.clock).facts
         assertEquals(Fact.EnglishTitle(long), facts[0])
         assertEquals(Fact.JapaneseTitle("陽炎図書館 第2期"), facts[1])
         assertEquals(Fact.Synonyms(listOf("Kagetosho 2", "Heat Haze Library II")), facts[2])
@@ -125,7 +127,7 @@ class SubScreenStateTest {
         language: TitleLanguage,
         anime: Anime = FixtureAnime.exactToWatch,
     ): List<Fact> =
-        detailsState(anime, FixtureDetails.full, language, set.clock).facts.filter {
+        detailsState(anime, FixtureDetails.full, language, set.session, set.clock).facts.filter {
             it is Fact.RomajiTitle || it is Fact.EnglishTitle || it is Fact.JapaneseTitle || it is Fact.Synonyms
         }
 
@@ -155,13 +157,13 @@ class SubScreenStateTest {
         assertEquals(listOf(Fact.JapaneseTitle("魔法少女ことね 新シリーズ"), Fact.SourceFact(FixtureDetails.sparse.source!!)), facts)
         val bare = FixtureAnime.premiereUnannounced.copy(titles = Titles("Romaji only"))
         val none = FixtureDetails.sparse.copy(source = null)
-        assertEquals(emptyList<Fact>(), detailsState(bare, none, TitleLanguage.Romaji, set.clock).facts)
+        assertEquals(emptyList<Fact>(), detailsState(bare, none, TitleLanguage.Romaji, set.session, set.clock).facts)
     }
 
     @Test
     fun aFinishedTitleHasNoBroadcastTime() {
         val finished = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.Finished)
-        val facts = detailsState(finished, FixtureDetails.full, TitleLanguage.Romaji, set.clock).facts
+        val facts = detailsState(finished, FixtureDetails.full, TitleLanguage.Romaji, set.session, set.clock).facts
         assertEquals(emptyList<Fact>(), facts.filterIsInstance<Fact.Broadcast>())
     }
 
@@ -203,6 +205,9 @@ class SubScreenStateTest {
     ): Fact? {
         val anime = FixtureAnime.exactToWatch.copy(broadcast = Broadcast(day, japanTime))
         val clock = Clock.fixed(now, ZoneId.of(zone))
-        return detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, clock).facts.filterIsInstance<Fact.Broadcast>().single()
+        return detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, set.session, clock)
+            .facts
+            .filterIsInstance<Fact.Broadcast>()
+            .single()
     }
 }

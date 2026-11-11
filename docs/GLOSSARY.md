@@ -21,7 +21,7 @@ The owner is the final authority on the Russian column.
 | Progress | `12 / 24` | `12 / 24` | Digits and a slash; no words |
 | Aired count | `14 aired` | `вышло 14` | |
 | Estimated aired count | `~14 aired` | `вышло ~14` | |
-| Aired count on the title page | `14 of 24 aired` / `14 aired` | `Вышло 14 из 24` / `Вышло 14` | The second form when the total is unknown. Estimated: `~14 of 24 aired` / `Вышло ~14 из 24` |
+| Aired count on the title page | `14 aired` | `Вышло 14` | Written without the total, which the page states once elsewhere. Estimated: `~14 aired` / `Вышло ~14` |
 | Episodes to watch | `2 to watch` | `К просмотру: 2` | Colon form avoids a plural. Lower case after «·»: `· к просмотру: 2` |
 | Episodes to watch, estimated | `~2 to watch` | `К просмотру: ~2` | |
 | Next episode | `Episode 15 · Sat 17:30` | `Серия 15 · сб 17:30` | One form in the list row and the airing block. Time by ARCHITECTURE section 10: today / сегодня, tomorrow / завтра, the weekday within six days, then the date (`14 Nov, 17:30` / `14 нояб., 17:30`). The time words are in lower case, because an air time always follows other text: `Episode 15 · today 17:30` / `Серия 15 · сегодня 17:30` |
@@ -30,7 +30,7 @@ The owner is the final authority on the Russian column.
 | Premiere, month known | Premieres January 2027 | Премьера в январе 2027 г. | |
 | Premiere, year known | Premieres 2027 | Премьера в 2027 г. | |
 | Not yet aired | Not yet aired | Ещё не вышло | When neither a time nor a date is known |
-| The user's score | Your score 8 / Score 8 | Ваша оценка: 8 / Оценка: 8 | The first on the title page, the second in the Completed tab |
+| The user's score | Your score / Score 8 | Ваша оценка / Оценка: 8 | The first labels the score on the title page, the second is the Completed tab's line |
 | No score | Not scored | Без оценки | |
 | Rate | Rate | Оценить | |
 | Add to list | Add to list | Добавить в список | |
@@ -39,10 +39,13 @@ The owner is the final authority on the Russian column.
 | Snackbar after "+1" | Episode 13 watched · Undo | Серия 13 просмотрена · Отменить | |
 | Snackbar when a change completes the title | Moved to Completed · Undo | Перенесено в Просмотрено · Отменить | On the List after "+1" and on the title page after the stepper. The status name is not declined. A bare «Просмотрено» would read as "the episode is watched" |
 | Snackbar after "Add to list" | Added to Planned · Change | Добавлено: Запланировано · Изменить | Status names are not declined, hence the colon |
-| The episode stepper's field (spoken) | Episodes watched | Просмотрено серий | Its buttons: Minus one episode / Plus one episode, «Минус одна серия» / «Плюс одна серия» |
-| A typed count above the total | The title has 24 episodes | В тайтле 24 серии | Plural: серия, серии, серий |
+| The episode stepper's field | Episodes watched | Просмотрено серий | Its label on the title page and in the edit sheet, and what a screen reader says for it. Its buttons: Minus one episode / Plus one episode, «Минус одна серия» / «Плюс одна серия» |
 | Discard confirmation | Discard changes? | Не сохранять изменения? | Buttons: Discard / Keep editing, «Не сохранять» / «Вернуться». Not «Отменить», which is Undo |
 | Save | Save | Сохранить | |
+| Edit sheet: dates | Start date / Finish date | Дата начала / Дата окончания | Field labels, and the date picker's title. Spoken: `Clear the start date` / «Очистить дату начала», `Choose a date` / «Выбрать дату» |
+| Edit sheet: score | 8 · Very good / Not scored | 8 · Очень хорошо / Без оценки | The slider's value, with the score names below |
+| Remove confirmation | Remove from list? | Удалить из списка? | Text: Progress, score and dates will be lost / «Прогресс, оценка и даты будут потеряны». Buttons: Remove / Cancel, «Удалить» / «Отмена» |
+| Date picker buttons | OK / Cancel | ОК / Отмена | «Отмена» dismisses; it is not «Отменить», which is Undo |
 | Filter the list by title | Filter by title | Фильтр по названию | The icon's label and the field's placeholder |
 | Sort "Up next" | Up next | На очереди | |
 | Sort by title | Title | Название | |
@@ -77,24 +80,74 @@ The edit sheet's slider shows the number with MAL's name for it.
 | Rank | Ranked #12 | №12 в рейтинге | Never the bare number, except in front of the title in a ranked browse list (`1.`) |
 | Facts line | TV · 2024 · 24 episodes / Movie · 2024 | ТВ · 2024 · 24 серии / Фильм · 2024 | The episode count is a plural and is left out when it is 1 or unknown |
 | Synopsis | Synopsis | Описание | |
+| Expand / collapse the synopsis | More / Less | Ещё / Свернуть | The text buttons under a synopsis cut at four lines |
+| Overflow menu (spoken) | More options | Другие действия | |
+| Open the title on MAL | Open on MyAnimeList | Открыть на MyAnimeList | |
+| Share | Share | Поделиться | |
+| Loading details (spoken) | Loading details | Загрузка подробностей | The progress line that stands in for the lower half of the title page |
+| A title MAL does not know | This title is not on MyAnimeList | Этого тайтла нет на MyAnimeList | |
+| Any other failure to load a title | Could not load this title | Не удалось загрузить тайтл | |
 | Related | Related | Связанное | |
 | Statistics | Statistics | Статистика | |
+| A share under one percent | <1% | <1 % | A non-zero count whose share rounds to 0 in a `StatBar`; spoken "less than 1 percent" / «менее 1 процента» |
 | Members | 1,234,567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
 | Details | Details | Подробности | |
 | Recommendations | Recommendations | Рекомендации | |
 | Airing status: airing | Airing | Выходит | |
 | Airing status: finished | Finished | Завершено | |
-| Sequel / Prequel | Sequel / Prequel | Продолжение / Предыстория | |
+| Sequel / Prequel | Sequel / Prequel | Продолжение / Предыстория | "Sequel" is also the header of the title page's sequel row |
 | Side story / Spin-off | Side story / Spin-off | Побочная история / Спин-офф | |
 | Parent story / Full story | Parent story / Full story | Основная история / Полная версия | |
 | Alternative setting / version | Alternative setting / Alternative version | Альтернативный сеттинг / Альтернативная версия | On "See all" |
 | The same two, strip labels | Alt. setting / Alt. version | Альт. сеттинг / Альт. версия | Only as caption 1 of a `PosterCard` in the Related strip |
 | Summary / Other / Character | Summary / Other / Character | Краткое изложение / Прочее / Общий персонаж | |
 | Seasons | Winter, Spring, Summer, Fall 2024 | Зима, Весна, Лето, Осень 2024 | |
-| Media types | TV, TV special, Movie, OVA, ONA, Special, Music, Commercial, Promo video | ТВ, ТВ-спешл, Фильм, OVA, ONA, Спешл, Клип, Реклама, Промо | |
+| Media types | TV, Movie, OVA, ONA, Special, Music | ТВ, Фильм, OVA, ONA, Спешл, Клип | |
+| Rarer media types | TV special, Commercial, Promo video | ТВ-спешл, Реклама, Промо | |
 
 Roadmap milestone M2 compares the Russian relation names with the names Shikimori uses and puts the differences to
 the owner; a name changes only on the owner's answer.
+
+## Genres
+
+MAL's genres, themes and demographics, by MAL id. Russian names are the ones Russian anime sites use, as Shikimori
+names them («Сверхъестественное», «Психологическое», «Сёнен», «Сэйнэн»), with one exception: MAL keeps Mystery and
+Detective apart, so Mystery is «Тайна» and Detective «Детектив». The table holds the genres the app has names for; a
+genre not in it is shown by its MAL name (ARCHITECTURE section 10). Milestone M2 completes it from recorded MAL
+responses.
+
+| MAL id | MAL name | English | Russian |
+|---|---|---|---|
+| 1 | Action | Action | Экшен |
+| 2 | Adventure | Adventure | Приключения |
+| 4 | Comedy | Comedy | Комедия |
+| 5 | Avant Garde | Avant garde | Авангард |
+| 6 | Mythology | Mythology | Мифология |
+| 7 | Mystery | Mystery | Тайна |
+| 8 | Drama | Drama | Драма |
+| 10 | Fantasy | Fantasy | Фэнтези |
+| 13 | Historical | Historical | Исторический |
+| 14 | Horror | Horror | Ужасы |
+| 18 | Mecha | Mecha | Меха |
+| 19 | Music | Music | Музыка |
+| 22 | Romance | Romance | Романтика |
+| 23 | School | School | Школа |
+| 24 | Sci-Fi | Sci-fi | Фантастика |
+| 27 | Shounen | Shounen | Сёнен |
+| 29 | Space | Space | Космос |
+| 30 | Sports | Sports | Спорт |
+| 31 | Super Power | Super power | Суперсила |
+| 36 | Slice of Life | Slice of life | Повседневность |
+| 37 | Supernatural | Supernatural | Сверхъестественное |
+| 38 | Military | Military | Военное |
+| 39 | Detective | Detective | Детектив |
+| 40 | Psychological | Psychological | Психологическое |
+| 41 | Suspense | Suspense | Триллер |
+| 42 | Seinen | Seinen | Сэйнэн |
+| 46 | Award Winning | Award winning | Удостоено наград |
+| 47 | Gourmet | Gourmet | Гурман |
+| 62 | Isekai | Isekai | Исэкай |
+| 63 | Iyashikei | Iyashikei | Иясикэй |
 
 ## Title details
 
@@ -113,8 +166,6 @@ The facts of the "Details" sub-screen. Their values from MAL that read as interf
 | Episode length | Episode length | Длительность серии | `23 min`, `1 h 58 min`, `30 s` / `23 мин`, `1 ч 58 мин`, `30 сек` |
 | Broadcast | Broadcast | Время показа | `Saturdays at 17:30` / `По субботам в 17:30`, in the device's zone; not shown for a finished title |
 | No details | MyAnimeList gives no details for this title | На MyAnimeList нет подробностей об этом тайтле | |
-| Could not load | Could not load this title | Не удалось загрузить тайтл | |
-| Back (spoken) | Back | Назад | The top app bar's navigation icon |
 | Sources | Original, Manga, 4-koma manga, Web manga, Digital manga, Novel, Light novel, Web novel, Visual novel, Game, Card game, Book, Picture book, Radio, Music, Mixed media, Other | Оригинал, Манга, Ёнкома, Веб-манга, Цифровая манга, Роман, Ранобэ, Веб-новелла, Визуальная новелла, Игра, Карточная игра, Книга, Иллюстрированная книга, Радио, Музыка, Медиамикс, Прочее | |
 | Age ratings | G (all ages), PG (children), PG-13 (teens 13 or older), R (17+, violence and profanity), R+ (mild nudity), Rx (hentai) | G (для всех возрастов), PG (для детей), PG-13 (от 13 лет), R (17+, насилие и ненормативная лексика), R+ (частичная обнажённость), Rx (хентай) | |
 
@@ -147,6 +198,8 @@ The facts of the "Details" sub-screen. Their values from MAL that read as interf
 | Profile | Profile | Профиль | |
 | Settings | Settings | Настройки | |
 | Retry | Retry | Повторить | |
+| Back (spoken) | Back | Назад | The top app bar's navigation icon |
+| Refused by MAL | MyAnimeList is refusing requests, try again later | MyAnimeList отклоняет запросы, попробуйте позже | |
 | Loading (spoken by a screen reader) | Loading | Загрузка | |
 | See all | See all | Показать все | The button of a section header. Spoken with its section: `See all: Related` / `Показать все: Связанное` |
 | Could not save | Could not save | Не удалось сохранить | |

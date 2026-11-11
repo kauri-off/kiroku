@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="edit_episodes">Episodes watched</string>
+    <string name="edit_score">Score</string>
+    <string name="edit_score_value">%1$d · %2$s</string>
+    <string name="edit_score_0">Not scored</string>
+    <string name="edit_score_1">Appalling</string>
+    <string name="edit_score_2">Horrible</string>
+    <string name="edit_score_3">Very bad</string>
+    <string name="edit_score_4">Bad</string>
+    <string name="edit_score_5">Average</string>
+    <string name="edit_score_6">Fine</string>
+    <string name="edit_score_7">Good</string>
+    <string name="edit_score_8">Very good</string>
+    <string name="edit_score_9">Great</string>
+    <string name="edit_score_10">Masterpiece</string>
+    <string name="edit_start_date">Start date</string>
+    <string name="edit_finish_date">Finish date</string>
+    <string name="edit_choose_date">Choose a date</string>
+    <string name="edit_clear_start_date">Clear the start date</string>
+    <string name="edit_clear_finish_date">Clear the finish date</string>
+    <string name="edit_remove">Remove from list</string>
+    <string name="edit_save">Save</string>
+    <string name="edit_remove_title">Remove from list?</string>
+    <string name="edit_remove_text">Progress, score and dates will be lost</string>
+    <string name="edit_remove_confirm">Remove</string>
+    <string name="edit_cancel">Cancel</string>
+    <string name="edit_ok">OK</string>
+    <string name="edit_discard_title">Discard changes?</string>
+    <string name="edit_discard_confirm">Discard</string>
+    <string name="edit_keep_editing">Keep editing</string>
+</resources>

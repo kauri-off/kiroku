@@ -55,6 +55,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.TimeZone
+import kotlin.io.path.createTempDirectory
 
 @RunWith(ScreenshotRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -306,6 +307,18 @@ class ScreenshotHarnessTest {
             assertTrue(fieldBottom > shot.windowHeightPx - keyboard - 1f)
             assertEquals(SystemBars.keyboardColor(night = false), image.getPixel(2, image.height - keyboard.toInt() / 2))
         }
+    }
+
+    @Test
+    fun aCasesWindowReplacesTheVariantsScreenOnly() {
+        val images = mutableListOf<Bitmap>()
+        var fontScale = 0f
+        val wide = case("wide", window = WindowSize(widthDp = 840, heightDp = 600)) { fontScale = LocalDensity.current.fontScale }
+        val dir = createTempDirectory().toFile()
+        renderScreen("probe", listOf(wide), dir, variantsOf = { listOf(Variant.RuStress) }) { image, _ -> images += image }
+        dir.deleteRecursively()
+        assertEquals(listOf(IntSize((840 * DENSITY).toInt(), (600 * DENSITY).toInt())), images.map { IntSize(it.width, it.height) })
+        assertEquals(Variant.RuStress.fontScale, fontScale)
     }
 
     @Test

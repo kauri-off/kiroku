@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="titlesub_back">Назад</string>
-    <string name="titlesub_related">Связанное</string>
-    <string name="titlesub_details">Подробности</string>
-    <string name="titlesub_no_connection">Нет соединения</string>
-    <string name="titlesub_could_not_load">Не удалось загрузить тайтл</string>
     <string name="titlesub_no_details">На MyAnimeList нет подробностей об этом тайтле</string>
 
     <string name="titlesub_romaji_title">Название на ромадзи</string>
@@ -24,7 +19,6 @@
     <string name="titlesub_rating">Возрастной рейтинг</string>
     <string name="titlesub_episode_length">Длительность серии</string>
     <string name="titlesub_broadcast">Время показа</string>
-    <string name="titlesub_list_separator">", "</string>
 
     <string name="titlesub_minutes">%d\u00A0мин</string>
     <string name="titlesub_hours">%d\u00A0ч</string>
@@ -48,18 +42,6 @@
         <item>По субботам</item>
         <item>По воскресеньям</item>
     </string-array>
-
-    <string name="titlesub_relation_prequel">Предыстория</string>
-    <string name="titlesub_relation_sequel">Продолжение</string>
-    <string name="titlesub_relation_parent_story">Основная история</string>
-    <string name="titlesub_relation_full_story">Полная версия</string>
-    <string name="titlesub_relation_side_story">Побочная история</string>
-    <string name="titlesub_relation_spin_off">Спин-офф</string>
-    <string name="titlesub_relation_alternative_setting">Альтернативный сеттинг</string>
-    <string name="titlesub_relation_alternative_version">Альтернативная версия</string>
-    <string name="titlesub_relation_summary">Краткое изложение</string>
-    <string name="titlesub_relation_other">Прочее</string>
-    <string name="titlesub_relation_character">Общий персонаж</string>
 
     <string name="titlesub_source_original">Оригинал</string>
     <string name="titlesub_source_manga">Манга</string>

@@ -1,9 +1,13 @@
 package io.github.kauri_off.kiroku.titlesub
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
@@ -12,33 +16,43 @@ import io.github.kauri_off.kiroku.screenshots.notShown
 import io.github.kauri_off.kiroku.screenshots.shown
 
 class RelatedScreenshots : ScreenshotRegistry() {
-    override val content = contentCase("grouped") { RelatedScreen(SubScreenFixtures.related(FixtureAnime.exactToWatch), onEvent = {}) }
-    override val loading = shown { RelatedScreen(RelatedState.Loading, onEvent = {}) }
+    override val content = contentCase("grouped") { Screen(SubScreenFixtures.related(FixtureAnime.exactToWatch)) }
+    override val loading = shown { Screen(RelatedState.Loading(SubScreenFixtures.session)) }
     override val empty =
         notShown("See all is offered only for a title with related anime, so the list always has at least one row.")
-    override val error = shown { RelatedScreen(RelatedState.Failed(DataError.NoConnection), onEvent = {}) }
+    override val error = shown { Screen(RelatedState.Failed(DataError.NoConnection, SubScreenFixtures.session)) }
 
     override val cases =
         listOf(
-            case("single") { RelatedScreen(SubScreenFixtures.related(FixtureAnime.premiereYear), onEvent = {}) },
+            case("single") { Screen(SubScreenFixtures.related(FixtureAnime.premiereYear)) },
+            case("session-expired") { Screen(SubScreenFixtures.related(FixtureAnime.premiereYear, Session.Expired)) },
         )
 }
+
+@Composable
+private fun Screen(state: RelatedState) = RelatedScreen(state, onEvent = {}, snackbars = remember { SnackbarHostState() })
 
 object SubScreenFixtures {
     private val set = Fixtures.reference
 
-    fun related(anime: Anime): RelatedState.Shown =
+    val session: Session = set.session
+
+    fun related(
+        anime: Anime,
+        session: Session = set.session,
+    ): RelatedState.Shown =
         relatedState(
             related = set.details.getValue(anime.id).related,
             entries = set.entries.associate { it.anime.id to it.values },
             airing = set.airing,
             language = TitleLanguage.Romaji,
+            session = session,
         )
 
     fun details(
         anime: Anime,
         language: TitleLanguage = TitleLanguage.Romaji,
-    ): DetailsState.Shown = detailsState(anime, set.details.getValue(anime.id), language, set.clock)
+    ): DetailsState.Shown = detailsState(anime, set.details.getValue(anime.id), language, set.session, set.clock)
 
     // More synonyms than three lines hold, as long-running titles often have.
     val manySynonyms: Anime =

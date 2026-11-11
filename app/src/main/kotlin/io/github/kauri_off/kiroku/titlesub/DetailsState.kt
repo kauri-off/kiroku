@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.Source
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import java.time.Clock
@@ -14,18 +15,27 @@ import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
 
+// Every state has the top bar, so every state shows the session banner while the session is expired (S6).
 sealed interface DetailsState {
-    data object Loading : DetailsState
+    val session: Session
+
+    data class Loading(
+        override val session: Session,
+    ) : DetailsState
 
     data class Failed(
         val error: DataError,
+        override val session: Session,
     ) : DetailsState
 
     // Facts in the order of ARCHITECTURE section 9.9; a fact MAL does not give is absent.
     data class Shown(
         val facts: List<Fact>,
+        override val session: Session,
     ) : DetailsState
 }
+
+val DetailsState.sessionExpired: Boolean get() = session == Session.Expired
 
 sealed interface Fact {
     data class RomajiTitle(
@@ -79,6 +89,8 @@ sealed interface DetailsEvent {
     data object Back : DetailsEvent
 
     data object Retry : DetailsEvent
+
+    data object SignIn : DetailsEvent
 }
 
 // The titles other than the one "Title language" shows as the main title, then the facts MAL gives. A finished
@@ -87,6 +99,7 @@ fun detailsState(
     anime: Anime,
     details: AnimeDetails,
     language: TitleLanguage,
+    session: Session,
     clock: Clock,
 ): DetailsState.Shown {
     val titles = anime.titles
@@ -112,5 +125,6 @@ fun detailsState(
                 }
             },
         ),
+        session,
     )
 }

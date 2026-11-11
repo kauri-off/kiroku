@@ -7,6 +7,8 @@
     <string name="design_session_expired">Сессия истекла</string>
     <string name="design_sign_in">Войти</string>
     <string name="design_stat_bar_value">%1$s · %2$s</string>
+    <string name="design_stat_bar_under_one">&lt;%1$s</string>
+    <string name="design_stat_bar_description_under_one">%1$s, %2$s, менее\u00A01\u00A0процента</string>
     <plurals name="design_stat_bar_description">
         <item quantity="one">%1$s, %2$s, %3$d\u00A0процент</item>
         <item quantity="few">%1$s, %2$s, %3$d\u00A0процента</item>
@@ -17,11 +19,4 @@
     <string name="design_episode_minus">Минус одна серия</string>
     <string name="design_episode_plus">Плюс одна серия</string>
     <string name="design_episode_total">" /\u00A0%d"</string>
-    <plurals name="design_episode_too_many">
-        <item quantity="one">В тайтле\u00A0%d\u00A0серия</item>
-        <item quantity="few">В тайтле\u00A0%d\u00A0серии</item>
-        <item quantity="many">В тайтле\u00A0%d\u00A0серий</item>
-        <item quantity="other">В тайтле\u00A0%d\u00A0серии</item>
-    </plurals>
-    <string name="design_list_separator">", "</string>
 </resources>

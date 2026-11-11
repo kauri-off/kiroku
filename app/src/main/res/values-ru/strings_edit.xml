@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="edit_episodes">Просмотрено серий</string>
+    <string name="edit_score">Оценка</string>
+    <string name="edit_score_value">%1$d · %2$s</string>
+    <string name="edit_score_0">Без оценки</string>
+    <string name="edit_score_1">Отвратительно</string>
+    <string name="edit_score_2">Ужасно</string>
+    <string name="edit_score_3">Очень плохо</string>
+    <string name="edit_score_4">Плохо</string>
+    <string name="edit_score_5">Средне</string>
+    <string name="edit_score_6">Неплохо</string>
+    <string name="edit_score_7">Хорошо</string>
+    <string name="edit_score_8">Очень хорошо</string>
+    <string name="edit_score_9">Великолепно</string>
+    <string name="edit_score_10">Шедевр</string>
+    <string name="edit_start_date">Дата начала</string>
+    <string name="edit_finish_date">Дата окончания</string>
+    <string name="edit_choose_date">Выбрать дату</string>
+    <string name="edit_clear_start_date">Очистить дату начала</string>
+    <string name="edit_clear_finish_date">Очистить дату окончания</string>
+    <string name="edit_remove">Удалить из списка</string>
+    <string name="edit_save">Сохранить</string>
+    <string name="edit_remove_title">Удалить из списка?</string>
+    <string name="edit_remove_text">Прогресс, оценка и даты будут потеряны</string>
+    <string name="edit_remove_confirm">Удалить</string>
+    <string name="edit_cancel">Отмена</string>
+    <string name="edit_ok">ОК</string>
+    <string name="edit_discard_title">Не сохранять изменения?</string>
+    <string name="edit_discard_confirm">Не сохранять</string>
+    <string name="edit_keep_editing">Вернуться</string>
+</resources>

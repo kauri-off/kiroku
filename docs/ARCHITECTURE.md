@@ -298,6 +298,9 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - A view model builds that state from database flows and handles the events. A thin `XRoute` connects the view
   model to the screen and to navigation, and is the only place that knows either.
 - There is no MVI framework and no event bus.
+- Snackbars share one state, owned by the shell and handed to every screen as a parameter; the screen on top
+  draws it, so a message that outlives its screen still shows. The session banner (S6) is part of each
+  signed-in screen's own state.
 
 ### 6.3 Navigation
 
@@ -384,11 +387,14 @@ already back at the server's state. The notification action instead waits for th
   last confirmed state at the next start, and the list is then synced whatever its age. No entry is left out of
   syncs for good.
 - **W6.** One list sync runs at a time.
-- **W7. Automatic status changes match MAL's website.** When the watched count reaches MAL's total, the status
-  becomes Completed and an empty finish date becomes today, in the same write. The first episode of a planned
-  title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
+- **W7. Automatic status changes match MAL's website.** When the watched count reaches MAL's total, or is set above
+  it, the status becomes Completed and an empty finish date becomes today, in the same write. The first episode of a
+  planned title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
   overwritten, and a Completed title stepped below its total stays Completed.
 - **W8.** There is no offline write queue in 1.0, except the notification action (N9).
+- **W9. The watched count has no ceiling.** MAL's API sets none, and a user must be able to record what they
+  watched: every write ("+1", "Mark watched", the stepper, the edit sheet) accepts any count of zero or more, above
+  the aired count and the total included. "To watch" is then zero (A8).
 
 ## 8. Design system
 
@@ -413,7 +419,8 @@ restyled into something else.
 
 The default Material 3 type scale with the system font. Screens use only these roles:
 
-- `headlineSmall`: the title on the title page. `titleMedium`: section headers and the number in `StatNumber`.
+- `headlineSmall`: the title on the title page. `titleMedium`: section headers, the title in the edit sheet and the
+  number in `StatNumber`.
 - `bodyMedium`: body text and supporting lines. `labelLarge` and `labelMedium`: captions.
 - Top app bar titles, row headlines, buttons and chips keep the role their component sets.
 
@@ -450,7 +457,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke; a value above the total is refused with an inline error and not applied |
+| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke, except in the edit sheet, which writes nothing before Save and applies it as it is typed. The count has no ceiling (W9): "25 / 24" is a legal display, plus stays enabled at the total, and nothing is refused; only digits are taken, an empty field is not a count, and the length is limited |
 | `ScreenState` | `CircularProgressIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
 
@@ -579,39 +586,54 @@ progress or score; there is no line 3 and no "+1", because no airing data is fet
 
 ### 9.4 Title page
 
-One scrolling column in this fixed order. No tabs, no floating buttons.
+One scrolling column in this fixed order. No tabs, no floating buttons. **Each fact is stated once on the page**:
+the episode total, the year and a related title appear in one place only, as the items below say.
 
-1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share".
+1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share". When the session has expired
+   (S6), the `SessionBanner` under it, from the page's own state, while loading and on error too.
 2. **Header.** Must show: the poster; the full title with no line cap; the facts line, "TV · 2024 · 24 episodes";
    a `StatNumber` with the MAL score and the caption "MAL score" ("—" when there is none); the rank as its own short
    line, "Ranked #12" (absent when MAL gives none). Limits: the facts line holds at most three facts (type, year,
-   episode count); the episode count is left out when it is 1 or unknown, so a film reads "Movie · 2024"; the header
-   holds nothing besides these five elements.
-3. **List block.** Not on the list: one filled button "Add to list". It adds the title as Planned and shows the
-   snackbar "Added to Planned · Change", where "Change" opens the edit sheet. On the list, must show: the status as a
-   tonal button that opens the edit sheet; an `EpisodeStepper`, whose changes are written at once; "Your score 8" or
-   a "Rate" text button. A stepper change that completes the title (W7) shows the snackbar "Moved to Completed ·
-   Undo", as on the List; other changes show no snackbar.
+   episode count). The episode count is left out when it is 1 or unknown (a film reads "Movie · 2024") and when the
+   title is on the list, whose progress states it; the year is left out when the airing block's premiere states it.
+   The header holds nothing besides these five elements.
+3. **List block.** Not on the list: one filled button "Add to list" across the content width. It adds the title as
+   Planned and shows the snackbar "Added to Planned · Change", where "Change" opens the edit sheet. On the list, must
+   show, as one block: the status as a tonal button across the content width (where "Add to list" stands otherwise)
+   that opens the edit sheet; under it, side by side and each under its own label, the `EpisodeStepper` under
+   "Episodes watched", whose changes are written at once, and the user's score under "Your score", or a "Rate" text
+   button (both open the edit sheet). The score's column starts at the same place on every title; with large text it
+   may move under the stepper. The stepper has no ceiling (W9). A stepper change that reaches or passes MAL's total
+   completes the title (W7) and shows the snackbar "Moved to Completed · Undo", as on the List; other changes show no
+   snackbar.
 4. **Airing block** (must show for titles that are airing or not yet aired; absent otherwise). Limit: two logical
    lines, as in this table.
 
    | Case | Line 1 | Line 2 |
    |---|---|---|
-   | Airing, exact count, episodes to watch | `14 of 24 aired · 2 to watch` | the next episode, `Episode 15 · Sat 17:30`; none when no next episode is known |
-   | Airing, exact count, nothing to watch or not on the list | `14 of 24 aired` | same |
-   | Airing, estimated count, episodes to watch | `~14 of 24 aired · ~2 to watch` | none |
-   | Airing, estimated count, nothing to watch or not on the list | `~14 of 24 aired` | none |
+   | Airing, exact count, episodes to watch | `14 aired · 2 to watch` | the next episode, `Episode 15 · Sat 17:30`; none when no next episode is known |
+   | Airing, exact count, nothing to watch or not on the list | `14 aired` | same |
+   | Airing, estimated count, episodes to watch | `~14 aired · ~2 to watch` | none |
+   | Airing, estimated count, nothing to watch or not on the list | `~14 aired` | none |
    | Airing, aired count unknown | `Airing` | none |
    | Not yet aired | `Premieres Sat 17:30` (beyond six days `Premieres 4 Jan, 17:30`) when the first episode's time is known, by the air-time rule of section 10; otherwise `Premieres 4 Jan 2027`, `Premieres January 2027` or `Premieres 2027` by the precision of MAL's date (section 10); `Not yet aired` when there is neither | none |
 
    The premiere is stated once: when AniList's time is known it replaces MAL's date, which is a Japanese calendar
-   date and can differ from the device's by a day. An unknown total drops the "of 24" part: `14 aired`.
+   date and can differ from the device's by a day. The aired count is written without the total, which the list
+   block or the header states.
    The "to watch" part is in the `tertiary` colour. The list row and this block show the same numbers for the same
    title (A1), also for a title outside the tracked set (A12).
-5. **Synopsis:** line cap four, with "More" to expand in place. Under it one line of plain text with the genres
-   ("Action · Fantasy · Drama"), line cap one.
-6. **Related** (must show when the title has related anime): `SectionHeader` "Related". A horizontal strip of at
-   most ten `PosterCard`s.
+5. **Sequel** (must show when the title has a direct sequel; absent otherwise): a `SectionHeader` "Sequel" over one
+   `AnimeRow` that opens it: its title, "TV · 2026", and the user's list status for it when it is on their list.
+   Which sequel is decided in `:core` from the related titles: of several, the one that starts first. It is not
+   repeated in the Related strip. Following the chain of sequels across titles is not on the page in 1.0.
+6. **Synopsis:** a `SectionHeader` "Synopsis" over the text, line cap four, with "More" to expand in place and
+   "Less" to collapse it again. Under
+   it one line of plain text with the genres ("Action · Fantasy · Drama"), line cap one. Without a synopsis, the
+   genres line stands alone, with no header.
+7. **Related** (must show when the title has related anime other than the sequel): `SectionHeader` "Related". A horizontal strip of at
+   most ten `PosterCard`s. When none of them fits the strip (only "other" and "character"), the header with "See all"
+   stands alone.
    - The card's title: line cap two.
    - Caption 1 is the relation ("Sequel"), line cap two. The two longest names use the short strip labels of the
      glossary ("Alt. version", "Alt. setting"); the full names are used on "See all".
@@ -619,30 +641,37 @@ One scrolling column in this fixed order. No tabs, no floating buttons.
      it is on their list; otherwise "TV · 2019".
    - Order: prequel, sequel, parent story, full story, side story, spin-off, alternative setting, alternative
      version, summary; within a type by start date. The types "other" and "character" appear only on "See all".
-   - "See all" is shown whenever anything is not in the strip. Related manga are not shown in 1.0.
-7. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
+   - "See all" is shown whenever anything other than the sequel row's title is not in the strip. Related manga are not shown in 1.0.
+8. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
    percentages, and one line with the member count.
-8. **More:** rows that open sub-screens: "Details", "Recommendations".
+9. **More:** rows that open sub-screens: "Details", and "Recommendations" when MAL gives any.
 
 **Above the fold:** on a 411 × 891 dp screen the header, the list block and the airing block are visible without
 scrolling, for a title of up to two lines.
 
 **Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing
-block render at once, and one linear progress indicator under them stands in for items 5 to 8 until the details
+block render at once, and one linear progress indicator under them stands in for items 5 to 9 until the details
 arrive. Only a page opened with no data at all (a deep link) uses the full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 
 **Adding a section later.** A new section starts as a row in "More" and opens a sub-screen. It is promoted onto the
 page, between Statistics and More, only through the procedure of section 9.1, with its own Must show and limit.
-The order of items 2 to 7 does not change, and the above-the-fold rule stays.
+The order of items 2 to 8 does not change, and the above-the-fold rule stays.
 
 ### 9.5 Edit sheet
 
-A modal bottom sheet. Must show: the status as five single-choice chips in a wrapping row (two rows in the base
-variants, more with larger text; chips are controls, not logical lines); an `EpisodeStepper`; a score slider 0 to 10
-with the score names of the glossary; start and finish dates; a text button "Remove from list" (asks for
-confirmation); "Save". Limit: nothing else. Nothing is written before "Save". Dismissing the sheet with unsaved
+A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
+edits; the status as five single-choice chips in a wrapping row (two rows in the base variants, more with larger
+text; chips are controls, not logical lines); an `EpisodeStepper` labelled "Episodes watched"; a score slider 0 to 10
+labelled "Score", with the score names of the glossary; start and finish dates; a text button "Remove from list"
+(asks for confirmation); "Save", on screen without scrolling whenever the keyboard is closed (while the keyboard is
+open, "Save" and "Remove from list" are hidden; Done, Back or a tap on another control closes it). Limit: nothing
+else. Nothing is written before "Save", and "Save" writes exactly what the sheet shows: a typed count takes effect in
+the sheet as it is typed, and an empty field shows and holds the values from before typing began, taking back any
+automatic change an earlier keystroke caused. "Save" is disabled only while the count field is empty. The stepper's
+total is the displayed total (A3) and does not bound the count (W9); the automatic status change is decided on MAL's
+total (W7). Dismissing the sheet with unsaved
 changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come after 1.0.
 
 ### 9.6 Search
@@ -700,7 +729,8 @@ section 9.1.
 
 ### 9.9 Sub-screens
 
-Each is a top app bar with Back and one list. Limit for all: nothing but the list and its group headers.
+Each is a top app bar with Back and one list, with the `SessionBanner` under the bar while the session is expired
+(S6), in every state. Limit for all: nothing but the list and its group headers.
 
 | Sub-screen | Must show | Row limits |
 |---|---|---|
@@ -777,6 +807,8 @@ code. Layout review works from these images.
   a modal bottom sheet draws its container behind it. Robolectric renders at API 35, the highest it runs on JDK 17.
 - A case can declare the keyboard open. Every window then gets a 300 dp keyboard's insets (the gesture bar
   included), and the image shows a flat block with the handle in its place.
+- A case can declare its own window size, such as the shell's wide window; it then replaces the variant's screen
+  size, and the variant keeps its language, theme and font scale.
 - Each screen has one registry file, `<Screen>Screenshots`, whose class name gives the screen's directory. It
   declares its **cases**: content, loading, empty and error, plus the cases its roadmap task names. A screen that
   has no loading, empty or error state says so with a reason of at least two words, which the render writes to

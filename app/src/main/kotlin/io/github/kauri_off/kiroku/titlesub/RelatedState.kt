@@ -8,20 +8,30 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.relatedGroups
 
+// Every state has the top bar, so every state shows the session banner while the session is expired (S6).
 sealed interface RelatedState {
-    data object Loading : RelatedState
+    val session: Session
+
+    data class Loading(
+        override val session: Session,
+    ) : RelatedState
 
     data class Failed(
         val error: DataError,
+        override val session: Session,
     ) : RelatedState
 
     data class Shown(
         val groups: List<RelatedGroup>,
+        override val session: Session,
     ) : RelatedState
 }
+
+val RelatedState.sessionExpired: Boolean get() = session == Session.Expired
 
 data class RelatedGroup(
     val relation: RelationType,
@@ -44,6 +54,8 @@ sealed interface RelatedEvent {
 
     data object Retry : RelatedEvent
 
+    data object SignIn : RelatedEvent
+
     data class Open(
         val id: AnimeId,
     ) : RelatedEvent
@@ -55,6 +67,7 @@ fun relatedState(
     entries: Map<AnimeId, ListValues>,
     airing: Map<AnimeId, Airing>,
     language: TitleLanguage,
+    session: Session,
 ): RelatedState.Shown =
     RelatedState.Shown(
         relatedGroups(related).map { (relation, items) ->
@@ -74,4 +87,5 @@ fun relatedState(
                 },
             )
         },
+        session,
     )

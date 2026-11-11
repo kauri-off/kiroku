@@ -1,15 +1,20 @@
 package io.github.kauri_off.kiroku.titlesub
 
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
-import io.github.kauri_off.kiroku.common.statusLine
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -17,10 +22,12 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.text.statusLine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -41,13 +48,16 @@ class SubScreenTest {
     @get:Rule
     val rule: TestRule = registered(compose)
 
+    private val snackbars = SnackbarHostState()
+
     private fun show(content: @Composable () -> Unit) = compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { content() } }
 
     @Test
     fun aLongEnglishTitleLeavesTheJapaneseTitleAndSynonymsShown() {
         val english = "The Heat Haze Library Season 2: ".repeat(12).trim()
         val anime = FixtureAnime.exactToWatch.copy(titles = FixtureAnime.exactToWatch.titles.copy(english = english))
-        show { DetailsScreen(detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, Fixtures.reference.clock), onEvent = {}) }
+        val state = detailsState(anime, FixtureDetails.full, TitleLanguage.Romaji, SubScreenFixtures.session, Fixtures.reference.clock)
+        show { DetailsScreen(state, onEvent = {}, snackbars = snackbars) }
         for (text in listOf("English title", "Japanese title", "陽炎図書館 第2期", "Synonyms", "Kagetosho 2", "Heat Haze Library II")) {
             compose.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed()
         }
@@ -92,14 +102,15 @@ class SubScreenTest {
                 entries = mapOf(anime.id to ListValues(ListStatus.Watching, 5, null, null, null)),
                 airing = mapOf(anime.id to Airing(AiredCount.Exact(6), 12, null, Instant.EPOCH)),
                 language = TitleLanguage.Romaji,
+                session = SubScreenFixtures.session,
             )
-        show { RelatedScreen(state, onEvent = {}) }
+        show { RelatedScreen(state, onEvent = {}, snackbars = snackbars) }
         compose.onNodeWithText("Watching\u00A0· 5\u00A0/\u00A012", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
     fun synonymsCutAtTheLineCapEndInAnEllipsisAndNoneIsLeftOut() {
-        show { DetailsScreen(SubScreenFixtures.details(SubScreenFixtures.manySynonyms), onEvent = {}) }
+        show { DetailsScreen(SubScreenFixtures.details(SubScreenFixtures.manySynonyms), onEvent = {}, snackbars = snackbars) }
         val synonyms = SubScreenFixtures.manySynonyms.titles.synonyms
         val texts =
             synonyms.map { synonym ->
@@ -119,7 +130,8 @@ class SubScreenTest {
 
     @Test
     fun withEnglishTitlesDetailsShowTheRomajiTitle() {
-        show { DetailsScreen(SubScreenFixtures.details(FixtureAnime.exactToWatch, TitleLanguage.English), onEvent = {}) }
+        val state = SubScreenFixtures.details(FixtureAnime.exactToWatch, TitleLanguage.English)
+        show { DetailsScreen(state, onEvent = {}, snackbars = snackbars) }
         compose.onNodeWithText("Romaji title", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("English title", useUnmergedTree = true).assertDoesNotExist()
@@ -130,8 +142,9 @@ class SubScreenTest {
         val details = FixtureDetails.full.copy(studios = listOf("Studio Hanamizuki"))
         show {
             DetailsScreen(
-                detailsState(FixtureAnime.exactToWatch, details, TitleLanguage.Romaji, Fixtures.reference.clock),
+                detailsState(FixtureAnime.exactToWatch, details, TitleLanguage.Romaji, SubScreenFixtures.session, Fixtures.reference.clock),
                 onEvent = {},
+                snackbars = snackbars,
             )
         }
         compose.onNodeWithText("Studio", useUnmergedTree = true).assertIsDisplayed()
@@ -141,7 +154,7 @@ class SubScreenTest {
     @Test
     fun aRelatedRowShowsItsFactsAndStatusAndOpensTheTitle() {
         val events = mutableListOf<RelatedEvent>()
-        show { RelatedScreen(SubScreenFixtures.related(FixtureAnime.premiereYear), onEvent = { events += it }) }
+        show { RelatedScreen(SubScreenFixtures.related(FixtureAnime.premiereYear), onEvent = { events += it }, snackbars = snackbars) }
         compose.onNodeWithText("Prequel").assertIsDisplayed()
         compose.onNodeWithText("TV\u00A0· 2025", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Watching\u00A0· 12\u00A0/\u00A024", useUnmergedTree = true).assertIsDisplayed()
@@ -152,16 +165,69 @@ class SubScreenTest {
 
     @Test
     fun detailsWithNoFactShowTheEmptyState() {
-        show { DetailsScreen(DetailsState.Shown(emptyList()), onEvent = {}) }
+        show { DetailsScreen(DetailsState.Shown(emptyList(), SubScreenFixtures.session), onEvent = {}, snackbars = snackbars) }
         compose.onNodeWithText("MyAnimeList gives no details for this title").assertIsDisplayed()
     }
 
     @Test
     @Config(qualifiers = "ru-w411dp-h891dp-xhdpi")
     fun theBroadcastAndDatesFollowTheLocale() {
-        show { DetailsScreen(SubScreenFixtures.details(FixtureAnime.exactToWatch), onEvent = {}) }
+        show { DetailsScreen(SubScreenFixtures.details(FixtureAnime.exactToWatch), onEvent = {}, snackbars = snackbars) }
         compose.onNodeWithText("По субботам в\u00A017:30", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("окт.", substring = true, useUnmergedTree = true).assertExists()
         compose.onNodeWithText("23\u00A0мин", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun theSessionBannerShowsInEveryStateOnlyForAnExpiredSessionAndSendsSignIn() {
+        val related: (Session) -> List<RelatedState> = {
+            listOf(
+                RelatedState.Loading(it),
+                RelatedState.Failed(DataError.NoConnection, it),
+                SubScreenFixtures.related(FixtureAnime.premiereYear, it),
+            )
+        }
+        val details: (Session) -> List<DetailsState> = {
+            listOf(
+                DetailsState.Loading(it),
+                DetailsState.Failed(DataError.NoConnection, it),
+                SubScreenFixtures.details(FixtureAnime.exactToWatch).copy(session = it),
+            )
+        }
+        var screen: @Composable () -> Unit by mutableStateOf({})
+        show { screen() }
+        for (session in listOf(SubScreenFixtures.session, Session.Expired)) {
+            val expired = session == Session.Expired
+            related(session).forEach { state ->
+                val events = mutableListOf<RelatedEvent>()
+                screen = { RelatedScreen(state, onEvent = { events += it }, snackbars = snackbars) }
+                assertBanner(expired)
+                assertEquals(if (expired) listOf(RelatedEvent.SignIn) else emptyList<RelatedEvent>(), events)
+            }
+            details(session).forEach { state ->
+                val events = mutableListOf<DetailsEvent>()
+                screen = { DetailsScreen(state, onEvent = { events += it }, snackbars = snackbars) }
+                assertBanner(expired)
+                assertEquals(if (expired) listOf(DetailsEvent.SignIn) else emptyList<DetailsEvent>(), events)
+            }
+        }
+    }
+
+    private fun assertBanner(expired: Boolean) {
+        if (expired) {
+            compose.onNodeWithText("Session expired").assertIsDisplayed()
+            compose.onNodeWithText("Sign in").performClick()
+        } else {
+            compose.onNodeWithText("Session expired").assertDoesNotExist()
+        }
+    }
+
+    @Test
+    fun aSubScreenDrawsTheShellsSnackbarHost() {
+        show {
+            LaunchedEffect(Unit) { snackbars.showSnackbar("Could not save") }
+            DetailsScreen(SubScreenFixtures.details(FixtureAnime.exactToWatch), onEvent = {}, snackbars = snackbars)
+        }
+        compose.onNodeWithText("Could not save").assertIsDisplayed()
     }
 }

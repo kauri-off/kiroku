@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.titlesub
 
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -8,17 +9,19 @@ import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.FactRow
 import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.text.dateText
 
 // "Details" of section 9.9: one FactRow per fact MAL gives.
 @Composable
 fun DetailsScreen(
     state: DetailsState,
     onEvent: (DetailsEvent) -> Unit,
+    snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
     val body =
         when (state) {
-            DetailsState.Loading -> SubScreenBody.State(ScreenState.Loading)
+            is DetailsState.Loading -> SubScreenBody.State(ScreenState.Loading)
             is DetailsState.Failed -> SubScreenBody.State(errorState(state.error) { onEvent(DetailsEvent.Retry) })
             is DetailsState.Shown ->
                 if (state.facts.isEmpty()) {
@@ -29,7 +32,15 @@ fun DetailsScreen(
                     }
                 }
         }
-    SubScreen(stringResource(R.string.titlesub_details), onBack = { onEvent(DetailsEvent.Back) }, body = body, modifier = modifier)
+    SubScreen(
+        title = stringResource(R.string.title_details),
+        sessionExpired = state.sessionExpired,
+        onBack = { onEvent(DetailsEvent.Back) },
+        onSignIn = { onEvent(DetailsEvent.SignIn) },
+        snackbars = snackbars,
+        body = body,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -45,7 +56,7 @@ private fun FactRowOf(fact: Fact) {
         is Fact.Studios ->
             FactRow(
                 pluralStringResource(R.plurals.titlesub_studios, fact.names.size),
-                fact.names.joinToString(stringResource(R.string.titlesub_list_separator)),
+                fact.names.joinToString(stringResource(R.string.common_list_separator)),
             )
         is Fact.Rating -> FactRow(stringResource(R.string.titlesub_rating), ratingName(fact.rating))
         is Fact.EpisodeLength -> FactRow(stringResource(R.string.titlesub_episode_length), lengthText(fact.length))

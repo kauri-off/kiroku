@@ -107,7 +107,16 @@ class ModelTest {
         assertEquals(watching.copy(watchedEpisodes = 4), watching.withWatched(4, 12, today))
         val completed = ListValues(ListStatus.Completed, 12, 9, earlier, earlier)
         assertEquals(completed, completed.withWatched(12, 12, today))
-        fails { watching.withWatched(13, 12, today) }
+    }
+
+    @Test
+    fun `W7 a count above MAL's total is accepted and completes the title as reaching it does`() {
+        val watching = ListValues(ListStatus.Watching, 11, 8, earlier, null)
+        assertEquals(ListValues(ListStatus.Completed, 13, 8, earlier, day), watching.withWatched(13, 12, today))
+        val planned = ListValues(ListStatus.Planned, 0, null, null, null)
+        assertEquals(ListValues(ListStatus.Completed, 30, null, day, day), planned.withWatched(30, 12, today))
+        val completed = ListValues(ListStatus.Completed, 12, 9, earlier, earlier)
+        assertEquals(completed.copy(watchedEpisodes = 14), completed.withWatched(14, 12, today))
     }
 
     @Test
@@ -142,9 +151,24 @@ class ModelTest {
         assertEquals(true, shows(ListStatus.Planned, 3, 12))
         assertEquals(false, shows(ListStatus.Completed, 12, 12))
         assertEquals(true, shows(ListStatus.Completed, 10, 12))
+        assertEquals(true, shows(ListStatus.Completed, 14, 12))
         assertEquals(true, shows(ListStatus.Completed, 12, null))
         assertEquals(true, shows(ListStatus.Watching, 0, 12))
         assertEquals(true, shows(ListStatus.OnHold, 3, null))
         assertEquals(true, shows(ListStatus.Dropped, 0, 12))
+    }
+
+    @Test
+    fun `the sequel is the direct sequel that starts first, and none without one`() {
+        val film = RelatedAnime(FixtureAnime.film, RelationType.Sequel)
+        val season = RelatedAnime(FixtureAnime.exactToWatch, RelationType.Sequel)
+        val undated = RelatedAnime(FixtureAnime.premiereUnannounced, RelationType.Sequel)
+        val prequel = RelatedAnime(FixtureAnime.prequel, RelationType.Prequel)
+        val sideStory = RelatedAnime(FixtureAnime.relatedSideStoryOva, RelationType.SideStory)
+        assertEquals(film, sequelOf(listOf(undated, season, prequel, film)))
+        assertEquals(season, sequelOf(listOf(undated, season)))
+        assertEquals(undated, sequelOf(listOf(prequel, undated)))
+        assertEquals(null, sequelOf(listOf(prequel, sideStory)))
+        assertEquals(null, sequelOf(emptyList()))
     }
 }

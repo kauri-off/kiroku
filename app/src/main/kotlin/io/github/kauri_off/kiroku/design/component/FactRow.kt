@@ -46,7 +46,7 @@ private fun Parts(
 ) {
     val measurer = rememberTextMeasurer()
     val style = LocalTextStyle.current
-    val separator = stringResource(R.string.design_list_separator)
+    val separator = stringResource(R.string.common_list_separator)
     BoxWithConstraints(modifier) {
         val width = constraints.maxWidth
         val lines = values.map { measurer.measure(it, style, constraints = Constraints(maxWidth = width)).lineCount }

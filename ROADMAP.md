@@ -108,7 +108,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   read inside a rendered case differs from the app theme's for that variant, light, dark and the second seed
   included.
 
-- [ ] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
+- [x] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
   Profile; placeholder screens in the shared empty state; the place for snackbars and for the session banner.
   **Cases:** `shell/list-selected`, `shell/snackbar`, `shell/session-banner`, `shell/wide` (840 × 600 dp, rail).
   **Needs:** M1-07.
@@ -127,28 +127,31 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-07.
   **Check:** rubric pass on `list/*`.
 
-- [ ] **M1-10 [L] Title page.** The stateless title page as budgeted in section 9.4.
+- [x] **M1-10 [L] Title page.** The stateless title page as budgeted in section 9.4.
   **Cases:** `airing-on-list` (episodes to watch; the content case), `not-on-list` (airing), `airing-estimated`
   (episodes to watch), `airing-estimated-caught-up` (estimated, nothing to watch), `airing-unknown` (aired count
   unknown), `finished`, `film` (the facts line without an episode count), `not-yet-aired` (the first episode's time
   is known), `not-yet-aired-date` (a full date, no time), `not-yet-aired-month` (a year and month only),
   `not-yet-aired-year` (a year only), `not-yet-aired-nodate`, `no-related`, `long-title`, `details-loading`,
-  `no-score` (also no rank), `added-snackbar`, `completed-snackbar` (the stepper reached the total: the status
-  button says Completed and the snackbar says "Moved to Completed · Undo"), `loading`, `error`.
+  `no-score` (also no rank), `planned-scored`, `first-episode-aired`, `finished-with-sequel` (the sequel row with
+  its list status), `related-see-all-only` (besides the sequel only "other" and "character" relations: "See all"
+  without a strip), `synopsis-expanded` ("Less"), `session-expired` (the banner), `added-snackbar`,
+  `completed-snackbar` (the stepper reached the total: the status button says Completed and the snackbar says "Moved
+  to Completed · Undo"), `above-total` (a count past the total: "14 / 12", Completed), `loading`, `error`.
   **Needs:** M1-07.
   **Check:** rubric pass on `title/*`, including the above-the-fold rule and the Related and Statistics sections in
   the `__full` images; in `airing-on-list` the Related strip shows both short strip labels and a two-line
-  caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Продолжение» and
-  «Предыстория» each stay on one line and «Запланировано» has no ellipsis.
+  caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Предыстория» in the
+  strip and the «Продолжение» header of the sequel row each stay on one line and «Запланировано» has no ellipsis.
 
 - [x] **M1-11 [L] Title sub-screens.** "Related: see all" and "Details" (section 9.9).
   **Cases:** `related/grouped`, `related/single`, `details/full`, `details/sparse`.
   **Needs:** M1-07.
   **Check:** rubric pass on `related/*` and `details/*`.
 
-- [ ] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
-  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `over-total-error` (a typed value above the
-  total, refused inline), `remove-confirm`, `discard-confirm`.
+- [x] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
+  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `above-total` (a count above the total,
+  "26 / 24", with the title completed), `remove-confirm`, `discard-confirm`, `partial-dates`, `date-picker`.
   **Needs:** M1-07.
   **Check:** rubric pass on `edit/*`.
 
@@ -160,7 +163,8 @@ English, light and dark, on demo data. No MAL client id is needed.
 - [ ] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
   navigation between them.
   **Needs:** M1-08, M1-09, M1-10, M1-11, M1-12, M1-13, M1-02.
-  **Check:** tests cover every event of the three view models; `tools/emu smoke` on the debug APK exits 0 and its
+  **Check:** tests cover every event of the three view models; the edit sheet's state is updated on every keystroke
+  synchronously, in `onEvent` itself, and a test types "24" quickly through the real route; `tools/emu smoke` on the debug APK exits 0 and its
   device screenshots show the List with demo data.
 
 - [ ] **M1-15 [O] Owner's look and calibration.** The owner installs the APK and checks: the app opens on the List
