@@ -433,8 +433,9 @@ colour outside the theme is a code-review finding.
 - Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
 - Content is at most 640 dp wide and centred on wider windows.
 - Every tappable element is at least 48 × 48 dp.
-- Posters are 2:3 with the theme's small corner shape, in three sizes: 56 × 84 dp in rows, 104 × 156 dp in strips
-  at font scale 1.0, 120 × 180 dp in the title header.
+- Posters have the theme's small corner shape and are cropped to their size, which is one of three named sizes:
+  72 × 104 dp, a MAL poster's proportions, in every `AnimeRow` (the List, search results, Related and the title
+  page's Sequel row); 104 × 156 dp (2:3) in strips at font scale 1.0; 120 × 180 dp (2:3) in the title header.
 - **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
   scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
   is a rule of the component, and a screen never passes a width.
@@ -805,9 +806,12 @@ Screens are rendered on the JVM by Roborazzi on Robolectric, which draws Compose
 code. Layout review works from these images.
 
 - The stateless screen is rendered with fixture states. No view model, network or database is involved, times are
-  written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's, and remote images
-  are flat grey blocks in a colour no surface role uses, with a MAL poster's proportions where only one side is
-  set. Two renders of one commit on one machine are byte-identical.
+  written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's. A fixture title's
+  poster is stand-in art drawn in code from its id (debug source set only, never an image from MAL or elsewhere),
+  loaded through `Poster` as a real image is, in the screenshots and the debug build alike; a fixture title without
+  a poster shows the placeholder. Any other remote image is a flat grey block in a colour no surface role uses, with
+  a MAL poster's proportions where only one side is set. Two renders of one commit on one machine are
+  byte-identical.
 - Every wall clock the app's code, `:core` or the date picker can read gives the fixtures' moment: `System`,
   `java.time`'s `now()` and system clocks, `Calendar` and Android's `DateUtils`. Three read the machine's clock, and
   a test fails when the app's code uses one: the `Date()` and `GregorianCalendar()` constructors and Kotlin's

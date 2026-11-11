@@ -9,9 +9,12 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.Poster
+import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowTrailing
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Sizes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -58,12 +61,38 @@ class AnimeRowTest {
             buttons[1].getUnclippedBoundsInRoot().top - two.top,
         )
     }
+
+    @Test
+    fun `a row is as tall as its poster of the theme's row size, with its title level with the poster's top`() {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                Column {
+                    Poster("poster", PosterSize.Row, Modifier.testTag("poster"))
+                    AnimeRow("One", "poster", {}, Modifier.testTag("one"), listOf(RowLine("Score 7")), RowTrailing.Value("8.1"))
+                    AnimeRow("Two", "poster", {}, Modifier.testTag("two"), listOf(RowLine("TV · 2019"), RowLine("Watching")))
+                }
+            }
+        }
+        val poster = compose.onNodeWithTag("poster").getUnclippedBoundsInRoot()
+        assertEquals(Sizes.posterRow, poster.right - poster.left)
+        assertEquals(Sizes.posterRowHeight, poster.bottom - poster.top)
+        for (tag in listOf("one", "two")) {
+            val row = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot()
+            assertEquals(Sizes.posterRowHeight + ListItemTop * 2, row.bottom - row.top)
+            val heading = compose.onNodeWithText(if (tag == "one") "One" else "Two", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            assertEquals(row.top + ListItemTop, heading.top)
+        }
+    }
+
+    private companion object {
+        val ListItemTop = 12.dp
+    }
 }
 
 // At large text a row is as tall as its text and the list item's padding, with no empty line under one supporting line.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = "en-w360dp-h800dp", fontScale = 1.3f)
+@Config(qualifiers = "en-w411dp-h891dp", fontScale = 2.0f)
 class AnimeRowLargeTextTest {
     private val compose = composeRule()
 
@@ -83,6 +112,7 @@ class AnimeRowLargeTextTest {
         val line = compose.onNodeWithText("Score 7", useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertTrue("the title wraps", heading.bottom - heading.top > line.bottom - line.top)
         val padding = ListItemTop * 2
+        assertTrue("the text is taller than the poster", line.bottom - heading.top > Sizes.posterRowHeight)
         assertTrue("$row, $heading, $line", row.bottom - row.top <= line.bottom - heading.top + padding + 1.dp)
     }
 
