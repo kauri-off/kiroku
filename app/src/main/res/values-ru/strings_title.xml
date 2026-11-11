@@ -15,10 +15,7 @@
     <string name="title_no_score">Без оценки</string>
     <string name="title_ranked">№%1$s в рейтинге</string>
     <string name="title_add_to_list">Добавить в список</string>
-    <string name="title_your_score">Ваша оценка:\u00A0%d</string>
     <string name="title_rate">Оценить</string>
-    <string name="title_aired_of">Вышло\u00A0%1$d\u00A0из\u00A0%2$d</string>
-    <string name="title_aired_of_estimated">Вышло\u00A0~%1$d\u00A0из\u00A0%2$d</string>
     <string name="title_aired">Вышло\u00A0%d</string>
     <string name="title_aired_estimated">Вышло\u00A0~%d</string>
     <string name="title_to_watch">к\u00A0просмотру:\u00A0%d</string>
@@ -44,6 +41,9 @@
     <string name="title_not_yet_aired">Ещё не вышло</string>
     <string name="title_synopsis">Описание</string>
     <string name="title_synopsis_more">Ещё</string>
+    <string name="title_synopsis_less">Свернуть</string>
+    <string name="title_episodes_watched">Просмотрено серий</string>
+    <string name="title_your_score_label">Ваша оценка</string>
     <string name="title_related">Связанное</string>
     <string name="title_statistics">Статистика</string>
     <plurals name="title_members">

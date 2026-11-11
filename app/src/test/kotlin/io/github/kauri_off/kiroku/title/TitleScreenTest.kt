@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -72,14 +73,25 @@ class TitleScreenTest {
     @Test
     fun theAiringBlockWritesCoresFigures() {
         show(TitleFixtures.of(FixtureAnime.exactToWatch))
-        compose.onNodeWithText("14\u00A0of\u00A024\u00A0aired\u00A0· 2\u00A0to\u00A0watch").assertIsDisplayed()
+        compose.onNodeWithText("14\u00A0aired\u00A0· 2\u00A0to\u00A0watch").assertIsDisplayed()
         compose.onNodeWithText("Episode\u00A015 · Sat\u00A05:30", substring = true).assertIsDisplayed()
         show(TitleFixtures.of(FixtureAnime.estimatedToWatch))
-        compose.onNodeWithText("~10\u00A0of\u00A012\u00A0aired\u00A0· ~3\u00A0to\u00A0watch").assertIsDisplayed()
+        compose.onNodeWithText("~10\u00A0aired\u00A0· ~3\u00A0to\u00A0watch").assertIsDisplayed()
         show(TitleFixtures.of(FixtureAnime.estimatedCaughtUp))
-        compose.onNodeWithText("~5\u00A0of\u00A012\u00A0aired").assertIsDisplayed()
+        compose.onNodeWithText("~5\u00A0aired").assertIsDisplayed()
         show(TitleFixtures.firstEpisodeAired)
-        compose.onNodeWithText("1\u00A0of\u00A024\u00A0aired\u00A0· 1\u00A0to\u00A0watch").assertIsDisplayed()
+        compose.onNodeWithText("1\u00A0aired\u00A0· 1\u00A0to\u00A0watch").assertIsDisplayed()
+    }
+
+    @Test
+    fun theTotalIsWrittenInTheHeaderOnlyForATitleNotOnTheList() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        compose.onNodeWithText("TV\u00A0· 2025").assertIsDisplayed()
+        compose.onNodeWithText("episodes", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        show(TitleFixtures.of(FixtureAnime.notOnListAiring))
+        compose.onNodeWithText("episodes", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Episodes watched").assertDoesNotExist()
     }
 
     @Test
@@ -131,8 +143,15 @@ class TitleScreenTest {
         show(shown)
         scrollTo("More")
         sends(TitleEvent.ExpandSynopsis) { compose.onNodeWithText("More").performClick() }
+        show(shown.copy(synopsisExpanded = true))
+        scrollTo("Less")
+        sends(TitleEvent.CollapseSynopsis) { compose.onNodeWithText("Less").performClick() }
+        show(shown)
+        val sequel = checkNotNull(shown.sequel)
+        scrollTo(sequel.title)
+        sends(TitleEvent.OpenRelated(sequel.related.anime.id)) { compose.onNode(hasText(sequel.title) and hasClickAction()).performClick() }
         val first = shown.related.first()
-        scrollTo("See all")
+        scrollTo("Statistics")
         sends(TitleEvent.OpenRelated(first.related.anime.id)) { compose.onNode(hasText(first.title) and hasClickAction()).performClick() }
         sends(
             TitleEvent.SeeAllRelated,
@@ -140,6 +159,16 @@ class TitleScreenTest {
         scrollTo("Recommendations")
         sends(TitleEvent.OpenDetails) { compose.onNodeWithText("Details").performClick() }
         sends(TitleEvent.OpenRecommendations) { compose.onNodeWithText("Recommendations").performClick() }
+    }
+
+    @Test
+    fun theSessionBannerShowsOnlyForAnExpiredSessionAndSendsSignIn() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        compose.onNodeWithText("Session expired").assertDoesNotExist()
+        show(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired))
+        sends(TitleEvent.SignIn) { compose.onNodeWithText("Sign in").performClick() }
+        show(TitleState.Failed(DataError.SessionExpired, sessionExpired = true))
+        compose.onNodeWithText("Session expired").assertIsDisplayed()
     }
 
     @Test

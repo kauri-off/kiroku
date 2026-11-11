@@ -29,20 +29,18 @@ import java.util.Locale
 @ReadOnlyComposable
 private fun locale(): Locale = LocalConfiguration.current.locales[0]
 
-// "TV · 2024 · 24 episodes": type, year and an episode count other than 1.
+// "TV · 2024 · 24 episodes", from the facts the state chose.
 @Composable
-fun factsLine(
-    anime: Anime,
-    total: Int?,
-): String {
-    val facts =
-        listOfNotNull(
-            anime.mediaType?.let { mediaTypeLabel(it) },
-            anime.startDate?.year?.toString(),
-            total?.takeIf { it > 1 }?.let { pluralStringResource(R.plurals.title_episodes, it, it) },
-        )
-    return facts.joinToString(stringResource(R.string.title_separator))
-}
+fun factsLine(facts: HeaderFacts): String =
+    listOfNotNull(
+        facts.type?.let { mediaTypeLabel(it) },
+        facts.year?.toString(),
+        facts.episodes?.let { pluralStringResource(R.plurals.title_episodes, it, it) },
+    ).joinToString(stringResource(R.string.title_separator))
+
+// "TV · 2019", for a related title.
+@Composable
+fun typeAndYear(anime: Anime): String = factsLine(HeaderFacts(anime.mediaType, anime.startDate?.year, episodes = null))
 
 @Composable
 fun mediaTypeLabel(type: MediaType): String =
@@ -97,20 +95,13 @@ fun scoreText(score: Double): String =
 @Composable
 fun countText(value: Int): String = NumberFormat.getIntegerInstance(locale()).format(value)
 
-// Line 1 of the airing block without its "to watch" part: "14 of 24 aired", "~14 aired".
+// Line 1 of the airing block without its "to watch" part: "14 aired", "~14 aired". The total is stated elsewhere.
 @Composable
-fun airedText(
-    aired: AiredCount.Known,
-    total: Int?,
-): String {
-    val estimated = aired is AiredCount.Estimated
-    return when {
-        total == null && estimated -> stringResource(R.string.title_aired_estimated, aired.value)
-        total == null -> stringResource(R.string.title_aired, aired.value)
-        estimated -> stringResource(R.string.title_aired_of_estimated, aired.value, total)
-        else -> stringResource(R.string.title_aired_of, aired.value, total)
+fun airedText(aired: AiredCount.Known): String =
+    when (aired) {
+        is AiredCount.Estimated -> stringResource(R.string.title_aired_estimated, aired.value)
+        is AiredCount.Exact -> stringResource(R.string.title_aired, aired.value)
     }
-}
 
 @Composable
 fun toWatchText(toWatch: AiredCount.Known): String =

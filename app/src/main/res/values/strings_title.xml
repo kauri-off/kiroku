@@ -14,10 +14,7 @@
     <string name="title_no_score">No score</string>
     <string name="title_ranked">Ranked #%1$s</string>
     <string name="title_add_to_list">Add to list</string>
-    <string name="title_your_score">Your score\u00A0%d</string>
     <string name="title_rate">Rate</string>
-    <string name="title_aired_of">%1$d\u00A0of\u00A0%2$d\u00A0aired</string>
-    <string name="title_aired_of_estimated">~%1$d\u00A0of\u00A0%2$d\u00A0aired</string>
     <string name="title_aired">%d\u00A0aired</string>
     <string name="title_aired_estimated">~%d\u00A0aired</string>
     <string name="title_to_watch">%d\u00A0to\u00A0watch</string>
@@ -43,6 +40,9 @@
     <string name="title_not_yet_aired">Not yet aired</string>
     <string name="title_synopsis">Synopsis</string>
     <string name="title_synopsis_more">More</string>
+    <string name="title_synopsis_less">Less</string>
+    <string name="title_episodes_watched">Episodes watched</string>
+    <string name="title_your_score_label">Your score</string>
     <string name="title_related">Related</string>
     <string name="title_statistics">Statistics</string>
     <plurals name="title_members">

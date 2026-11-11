@@ -127,4 +127,18 @@ class ModelTest {
             relatedGroups(related).map { it.first },
         )
     }
+
+    @Test
+    fun `the sequel is the direct sequel that starts first, and none without one`() {
+        val film = RelatedAnime(FixtureAnime.film, RelationType.Sequel)
+        val season = RelatedAnime(FixtureAnime.exactToWatch, RelationType.Sequel)
+        val undated = RelatedAnime(FixtureAnime.premiereUnannounced, RelationType.Sequel)
+        val prequel = RelatedAnime(FixtureAnime.prequel, RelationType.Prequel)
+        val sideStory = RelatedAnime(FixtureAnime.relatedSideStoryOva, RelationType.SideStory)
+        assertEquals(film, sequelOf(listOf(undated, season, prequel, film)))
+        assertEquals(season, sequelOf(listOf(undated, season)))
+        assertEquals(undated, sequelOf(listOf(prequel, undated)))
+        assertEquals(null, sequelOf(listOf(prequel, sideStory)))
+        assertEquals(null, sequelOf(emptyList()))
+    }
 }

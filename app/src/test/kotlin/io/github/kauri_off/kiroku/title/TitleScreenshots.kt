@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
@@ -58,6 +59,9 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
             case("planned-scored") { Screen(TitleFixtures.plannedScored) },
             case("first-episode-aired") { Screen(TitleFixtures.firstEpisodeAired) },
+            case("finished-with-sequel") { Screen(TitleFixtures.of(FixtureAnime.prequel)) },
+            case("synopsis-expanded") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(synopsisExpanded = true)) },
+            case("session-expired") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired)) },
             case("added-snackbar") { Screen(TitleFixtures.added) },
             case("completed-snackbar") { Screen(TitleFixtures.completed) },
         )
@@ -94,6 +98,7 @@ object TitleFixtures {
         anime: Anime,
         entry: ListEntry? = set.entryFor(anime.id),
         airing: Airing? = set.airing[anime.id],
+        session: Session = set.session,
     ): TitleState.Shown =
         titleState(
             anime = anime,
@@ -102,6 +107,7 @@ object TitleFixtures {
             details = set.details[anime.id],
             listStatuses = statuses,
             language = TitleLanguage.Romaji,
+            session = session,
             clock = set.clock,
         )
 
@@ -145,8 +151,16 @@ object TitleFixtures {
                         ),
                     updatedAt = set.now,
                 )
-            return titleState(anime, entry, set.airing[anime.id], set.details[anime.id], statuses, TitleLanguage.Romaji, set.clock)
-                .copy(snackbar = TitleSnackbar.AddedToPlanned)
+            return titleState(
+                anime,
+                entry,
+                set.airing[anime.id],
+                set.details[anime.id],
+                statuses,
+                TitleLanguage.Romaji,
+                set.session,
+                set.clock,
+            ).copy(snackbar = TitleSnackbar.AddedToPlanned)
         }
 
     // The stepper reached the total: the title became Completed in the same write (W7).
@@ -156,7 +170,15 @@ object TitleFixtures {
             val entry = checkNotNull(set.entryFor(anime.id))
             val today = set.now.atZone(set.clock.zone).toLocalDate()
             val stepped = entry.copy(values = entry.values.withWatched(entry.values.watchedEpisodes + 1, anime.malEpisodes, today))
-            return titleState(anime, stepped, set.airing[anime.id], set.details[anime.id], statuses, TitleLanguage.Romaji, set.clock)
-                .copy(snackbar = TitleSnackbar.MovedToCompleted)
+            return titleState(
+                anime,
+                stepped,
+                set.airing[anime.id],
+                set.details[anime.id],
+                statuses,
+                TitleLanguage.Romaji,
+                set.session,
+                set.clock,
+            ).copy(snackbar = TitleSnackbar.MovedToCompleted)
         }
 }

@@ -143,13 +143,15 @@ English, light and dark, on demo data. No MAL client id is needed.
   unknown), `finished`, `film` (the facts line without an episode count), `not-yet-aired` (the first episode's time
   is known), `not-yet-aired-date` (a full date, no time), `not-yet-aired-month` (a year and month only),
   `not-yet-aired-year` (a year only), `not-yet-aired-nodate`, `no-related`, `long-title`, `details-loading`,
-  `no-score` (also no rank), `added-snackbar`, `completed-snackbar` (the stepper reached the total: the status
-  button says Completed and the snackbar says "Moved to Completed · Undo"), `loading`, `error`.
+  `no-score` (also no rank), `planned-scored`, `first-episode-aired`, `finished-with-sequel` (the sequel row with
+  its list status), `synopsis-expanded` ("Less"), `session-expired` (the banner), `added-snackbar`,
+  `completed-snackbar` (the stepper reached the total: the status button says Completed and the snackbar says "Moved
+  to Completed · Undo"), `loading`, `error`.
   **Needs:** M1-07; the review needs M1-07a.
   **Check:** rubric pass on `title/*`, including the above-the-fold rule and the Related and Statistics sections in
   the `__full` images; in `airing-on-list` the Related strip shows both short strip labels and a two-line
-  caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Продолжение» and
-  «Предыстория» each stay on one line and «Запланировано» has no ellipsis.
+  caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Предыстория» in the
+  strip and the «Продолжение» header of the sequel row each stay on one line and «Запланировано» has no ellipsis.
 
 - [ ] **M1-11 [L] Title sub-screens.** "Related: see all" and "Details" (section 9.9).
   **Cases:** `related/grouped`, `related/single`, `details/full`, `details/sparse`.

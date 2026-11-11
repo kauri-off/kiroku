@@ -8,7 +8,9 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RELATED_STRIP_LIMIT
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.relatedStrip
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,15 +107,63 @@ class TitleStateTest {
     }
 
     @Test
-    fun theStripIsCoresAndSeeAllCoversTheRest() {
+    fun theStripIsCoresWithoutTheSequelAndSeeAllCoversTheRest() {
         val state = TitleFixtures.of(FixtureAnime.exactToWatch)
         val details = checkNotNull(state.details)
-        assertEquals(relatedStrip(details.related), state.related.map { it.related })
+        val sequel = checkNotNull(state.sequel)
+        assertEquals(relatedStrip(details.related - sequel.related), state.related.map { it.related })
+        assertFalse(state.related.any { it.related.anime.id == sequel.related.anime.id })
         assertTrue(state.related.size <= RELATED_STRIP_LIMIT)
         assertTrue(state.moreRelated)
         state.related.forEach { assertEquals(set.entryFor(it.related.anime.id)?.status, it.status) }
-        assertTrue(state.related.count { it.status != null } >= 2)
+        assertTrue(state.related.any { it.status != null })
         assertFalse(TitleFixtures.of(FixtureAnime.exactCaughtUp).moreRelated)
+    }
+
+    @Test
+    fun theSequelRowHoldsTheDirectSequelWithItsListStatus() {
+        val content = TitleFixtures.of(FixtureAnime.exactToWatch)
+        assertEquals(
+            FixtureAnime.premiereYear.id,
+            content.sequel
+                ?.related
+                ?.anime
+                ?.id,
+        )
+        val finished = TitleFixtures.of(FixtureAnime.prequel)
+        assertEquals(
+            FixtureAnime.exactToWatch.id,
+            finished.sequel
+                ?.related
+                ?.anime
+                ?.id,
+        )
+        assertEquals(ListStatus.Watching, finished.sequel?.status)
+        assertTrue(finished.related.isEmpty())
+        assertFalse(finished.moreRelated)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.premiereYear).sequel)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.notOnListAiring).sequel)
+    }
+
+    // The total is stated once: by the progress when the title is on the list, by the header otherwise.
+    @Test
+    fun theHeaderLeavesOutWhatThePageStatesElsewhere() {
+        assertEquals(HeaderFacts(MediaType.Tv, 2025, null), TitleFixtures.of(FixtureAnime.exactToWatch).facts)
+        val notOnList = TitleFixtures.of(FixtureAnime.notOnListAiring)
+        assertEquals(null, notOnList.entry)
+        assertEquals(notOnList.total, notOnList.facts.episodes)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.film).facts.episodes)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.premiereDate).facts.year)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.premiereMonth).facts.year)
+        assertEquals(null, TitleFixtures.of(FixtureAnime.premiereYear).facts.year)
+        assertEquals(2026, TitleFixtures.of(FixtureAnime.premiereTimeSoon).facts.year)
+    }
+
+    @Test
+    fun anExpiredSessionShowsTheBanner() {
+        assertTrue(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired).sessionExpired)
+        assertFalse(TitleFixtures.of(FixtureAnime.exactToWatch).sessionExpired)
+        assertFalse(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.SignedOut).sessionExpired)
     }
 
     @Test
