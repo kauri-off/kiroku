@@ -14,6 +14,8 @@ fun numberSpaceProblems(
     plural: Boolean = false,
 ): List<String> {
     val numberEnd = Regex(number(plural) + "$")
+    // A number already joined to the word before it ("Episode 13") has its word; the space after it may break.
+    val joinedBefore = Regex("""\p{L}\u00A0~?""" + number(plural) + "$")
     val numberStart = Regex("^~?" + number(plural))
     return text.indices
         .filter { i ->
@@ -24,7 +26,7 @@ fun numberSpaceProblems(
                     val before = text.substring(0, i)
                     val after = text.substring(i + 1)
                     val joinsWord = { c: Char -> c.isLetter() || c == '/' }
-                    (numberEnd.containsMatchIn(before) && joinsWord(after[0])) ||
+                    (numberEnd.containsMatchIn(before) && !joinedBefore.containsMatchIn(before) && joinsWord(after[0])) ||
                         (numberStart.containsMatchIn(after) && (joinsWord(before.last()) || before.last() == ':'))
                 }
         }.map { "$name: a breaking space at ${it + 1} in \"$text\"; use \\u00A0" }

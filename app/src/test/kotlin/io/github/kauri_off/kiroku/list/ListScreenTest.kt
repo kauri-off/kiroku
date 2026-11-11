@@ -115,7 +115,7 @@ class ListScreenTest {
     @Test
     fun `undo in the snackbar is sent with its message`() {
         show(ListFixtureStates.undoSnackbar)
-        compose.onNodeWithText("Episode\u00A013\u00A0watched").assertExists()
+        compose.onNodeWithText("Episode\u00A013 watched").assertExists()
         compose.onNodeWithText("Undo").performClick()
         compose.waitForIdle()
         assertEquals(listOf(ListEvent.Undo(ListFixtureStates.undoSnackbar.message!!)), events)

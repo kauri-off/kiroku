@@ -22,6 +22,7 @@ class StringRulesTest {
             "К просмотру: %d",
             "Episode 15",
             "%d to watch",
+            "Episode %1\$d watched",
             "Saturdays at 17:30",
         )) {
             assertTrue(planted, numberSpaceProblems("a", planted).isNotEmpty())
@@ -32,6 +33,8 @@ class StringRulesTest {
             "%1\$d\u00A0/\u00A0%2\$d · вышло\u00A0~%3\$d",
             "%1\$s, %2\$s",
             "See all: %1\$s",
+            "Episode\u00A0%1\$d watched",
+            "Серия\u00A0%1\$d просмотрена",
         )) {
             assertEquals(clean, emptyList<String>(), numberSpaceProblems("a", clean))
         }
