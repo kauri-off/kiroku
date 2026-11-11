@@ -53,8 +53,11 @@ class ShellNavigator(
         }
     }
 
-    // Back at a root other than List's, which NavDisplay does not handle because nothing is under it.
-    val backLeavesRoot: Boolean get() = stack.size == 1 && current != Destination.List
+    // The stacks Back walks through, top last: the List's, then the current destination's when that is not List.
+    val visible: List<Destination>
+        get() = if (current == Destination.List) listOf(Destination.List) else listOf(Destination.List, current)
+
+    val backStack: List<NavKey> get() = visible.flatMap { stackOf(it) }
 
     private fun MutableList<NavKey>.popTo(size: Int) {
         while (this.size > size) removeAt(lastIndex)

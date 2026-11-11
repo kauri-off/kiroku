@@ -22,7 +22,7 @@ class ShellScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("snackbar") { Shell(ShellState(Destination.List), snackbar = true) },
-            case("session-banner") { Shell(ShellState(Destination.List, sessionExpired = true)) },
+            case("session-banner") { Shell(ShellState(Destination.List), sessionExpired = true) },
             case("wide", window = WindowSize(widthDp = 840, heightDp = 600)) { Shell(ShellState(Destination.List)) },
         )
 }
@@ -30,6 +30,7 @@ class ShellScreenshots : ScreenshotRegistry() {
 @Composable
 private fun Shell(
     state: ShellState,
+    sessionExpired: Boolean = false,
     snackbar: Boolean = false,
 ) {
     val snackbars = remember { SnackbarHostState() }
@@ -38,5 +39,5 @@ private fun Shell(
         val retry = stringResource(R.string.design_retry)
         LaunchedEffect(Unit) { snackbars.showSnackbar(message, actionLabel = retry) }
     }
-    ShellScreen(state, onEvent = {}, snackbars = snackbars) { PlaceholderScreen(state.selected) }
+    ShellScreen(state, onEvent = {}) { PlaceholderScreen(PlaceholderState(state.selected, sessionExpired), onEvent = {}, snackbars) }
 }

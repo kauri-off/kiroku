@@ -66,10 +66,20 @@ class ShellNavigatorTest {
     fun backFromTheSearchRootGoesToList() {
         navigator.open(Page(1))
         navigator.select(Destination.Search)
-        assertTrue(navigator.backLeavesRoot)
+        assertEquals(listOf(ListRoot, Page(1), SearchRoot), navigator.backStack)
         assertTrue(navigator.back())
         assertEquals(Destination.List, navigator.current)
         assertEquals(listOf(ListRoot, Page(1)), navigator.stack)
+    }
+
+    @Test
+    fun theBackStackIsTheListsStackUnderTheCurrentOne() {
+        navigator.open(Page(1))
+        assertEquals(listOf(ListRoot, Page(1)), navigator.backStack)
+        navigator.select(Destination.Profile)
+        navigator.open(Page(2))
+        assertEquals(listOf(ListRoot, Page(1), ProfileRoot, Page(2)), navigator.backStack)
+        assertEquals(listOf(SearchRoot), navigator.stackOf(Destination.Search))
     }
 
     @Test
@@ -81,7 +91,7 @@ class ShellNavigatorTest {
 
     @Test
     fun backFromTheListRootLeavesTheApp() {
-        assertFalse(navigator.backLeavesRoot)
+        assertEquals(listOf(ListRoot), navigator.backStack)
         assertFalse(navigator.back())
         assertEquals(Destination.List, navigator.current)
         assertEquals(listOf(ListRoot), navigator.stack)

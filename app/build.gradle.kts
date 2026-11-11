@@ -110,6 +110,7 @@ dependencies {
     implementation(libs.compose.material3.adaptive.navigation.suite)
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
+    implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
@@ -127,6 +128,7 @@ dependencies {
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.coil.test)
+    testImplementation(libs.lifecycle.viewmodel.compose)
 }
 
 val screenshotsRecorded =

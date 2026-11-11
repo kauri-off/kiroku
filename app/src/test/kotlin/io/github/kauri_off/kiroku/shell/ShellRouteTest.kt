@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.shell
 
+import androidx.activity.BackEventCompat
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
@@ -19,6 +20,7 @@ import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import kotlinx.serialization.Serializable
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -41,7 +43,7 @@ class ShellRouteTest {
         val n: Int,
     ) : NavKey
 
-    private val entries: ShellEntries = { navigator ->
+    private val entries: ShellEntries = { navigator, _ ->
         entry<ListRoot> { Root("List root", navigator, Page(1)) }
         entry<SearchRoot> { Root("Search root", navigator, Page(2)) }
         entry<ProfileRoot> { Root("Profile root", navigator, Page(3)) }
@@ -64,9 +66,10 @@ class ShellRouteTest {
         Button(onClick = { taps++ }) { Text("$name, $taps taps") }
     }
 
-    private fun shell() = compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(entries = entries) } }
+    private fun shell(entries: ShellEntries = this.entries) =
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(entries = entries) } }
 
-    private fun tab(label: String) = compose.onNode(hasText(label) and hasClickAction() and hasText("root").not())
+    private fun tab(label: String) = compose.onNode(hasText(label) and hasClickAction())
 
     private fun back() {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
@@ -74,6 +77,8 @@ class ShellRouteTest {
     }
 
     private fun shows(text: String) = compose.onNodeWithText(text).assertExists()
+
+    private fun hides(text: String) = compose.onNodeWithText(text).assertDoesNotExist()
 
     @Test
     fun tappingTheCurrentDestinationAgainPopsItToItsRoot() {
@@ -92,6 +97,27 @@ class ShellRouteTest {
         back()
         shows("List root")
         tab("List").assertIsSelected()
+    }
+
+    @Test
+    fun backFromTheSearchRootPreviewsTheListAndACancelledGestureRestoresSearch() {
+        shell()
+        compose.onNodeWithText("Open").performClick()
+        tab("Search").performClick()
+        hides("Page 1, 0 taps")
+        val dispatcher = compose.activity.onBackPressedDispatcher
+        compose.runOnUiThread {
+            dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT))
+            dispatcher.dispatchOnBackProgressed(BackEventCompat(0f, 0f, 0.5f, BackEventCompat.EDGE_LEFT))
+        }
+        compose.waitForIdle()
+        shows("Page 1, 0 taps")
+        shows("Search root")
+        compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+        compose.waitForIdle()
+        hides("Page 1, 0 taps")
+        shows("Search root")
+        tab("Search").assertIsSelected()
     }
 
     @Test
@@ -132,14 +158,37 @@ class ShellRouteTest {
     }
 
     @Test
-    fun theStacksSurviveRecreation() {
+    fun theStacksAndTheScreensStateSurviveRecreation() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(entries = entries) } }
         compose.onNodeWithText("Open").performClick()
+        compose.onNodeWithText("Page 1, 0 taps").performClick()
         tab("Search").performClick()
         restoration.emulateSavedInstanceStateRestore()
         shows("Search root")
         tab("List").performClick()
-        shows("Page 1, 0 taps")
+        shows("Page 1, 1 taps")
+    }
+
+    // S6: every signed-in screen shows "Session expired · Sign in", and Sign in reaches the route.
+    @Test
+    fun everyDestinationShowsTheSessionBannerWhileTheSessionIsExpired() {
+        var signIns = 0
+        shell(placeholderEntries(sessionExpired = true, onSignIn = { signIns++ }))
+        Destination.entries.forEachIndexed { index, destination ->
+            tab(compose.activity.getString(destination.label)).performClick()
+            shows("Session expired")
+            compose.onNode(hasText("Sign in") and hasClickAction()).performClick()
+            assertEquals(destination.name, index + 1, signIns)
+        }
+    }
+
+    @Test
+    fun noDestinationShowsTheBannerWhileSignedIn() {
+        shell(placeholderEntries(sessionExpired = false))
+        Destination.entries.forEach { destination ->
+            tab(compose.activity.getString(destination.label)).performClick()
+            hides("Session expired")
+        }
     }
 }

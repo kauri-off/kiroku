@@ -298,6 +298,9 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - A view model builds that state from database flows and handles the events. A thin `XRoute` connects the view
   model to the screen and to navigation, and is the only place that knows either.
 - There is no MVI framework and no event bus.
+- The app has one snackbar host. The shell owns it and hands it to every screen as a parameter, and the screen's
+  scaffold draws it, so a message that outlives its screen still shows. The session banner (S6) is part of each
+  signed-in screen's own state.
 
 ### 6.3 Navigation
 
