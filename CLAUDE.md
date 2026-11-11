@@ -3,9 +3,20 @@
 Kiroku is an unofficial Android client for MyAnimeList: Kotlin, Jetpack Compose, Material 3, GPL-3.0-or-later. The
 product name is "Kiroku"; lowercase `kiroku` is used only for identifiers.
 
-Read before working: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (decisions, constraints, invariants and the screen
-budgets), [ROADMAP.md](ROADMAP.md) (your task, its dependencies and its check), [docs/GLOSSARY.md](docs/GLOSSARY.md)
-(for any string), [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) (for layout tasks).
+Read before working: your task in [ROADMAP.md](ROADMAP.md), and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) the
+opening and the sections your task and your brief name. Beyond those, by what you touch:
+
+| You touch | Read |
+|---|---|
+| Any user interface code | ARCHITECTURE sections 6.2 and 8 |
+| A screen's layout | Its budget in ARCHITECTURE section 9, and [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) |
+| Any string | ARCHITECTURE section 10 and [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| The list, airing data, writes or notifications | ARCHITECTURE sections 4, 5 and 7 |
+| MAL, AniList or sign-in | ARCHITECTURE sections 2, 3 and 11.1 |
+| Tests and screenshots | ARCHITECTURE section 11 |
+| The build, CI or a dependency | ARCHITECTURE sections 6.4 and 12 |
+
+The rest of the documents is not needed for your task.
 
 ## Ground rules
 
@@ -13,7 +24,11 @@ budgets), [ROADMAP.md](ROADMAP.md) (your task, its dependencies and its check), 
 - Code and tests are the source of truth for how things work. When the code or a device shows a document to be
   wrong, correct the document in the same pull request, by shortening or restating it, not by describing the
   implementation.
+- A document does not repeat what the code or a test states. When your task makes a sentence redundant (a value
+  that is now a constant, a case list that is now a registry, a rule that is now a test), delete the sentence.
 - Decisions and invariants are the owner's. If you need to depart from one, do not do it silently: stop and report.
+  A change to a budget, an invariant or a decision is the owner's too: propose it in the hand-off, do not write it
+  into the document as decided.
 - Every invariant your task touches gets a test that would fail if it were broken.
 - Tracked files and commit messages describe the current state, never how it was reached: no mention of reviews,
   revisions, earlier versions or questions to the owner.
@@ -92,7 +107,7 @@ not use the queue kinds `full`, `batch` or `long`.
   `chore`. Scopes: `core`, `data`, `app`, `list`, `title`, `search`, `profile`, `settings`, `notify`, `auth`,
   `design`. CI checks the pull request title against these lists.
 - Branches are squash-merged, so the pull request title is the commit message and follows the same format.
-- Tick the task's checkbox in `ROADMAP.md` in the same branch.
+- Tick the task's checkbox in `ROADMAP.md` in the same branch, and cut its entry down to its name.
 
 ## Code conventions
 
