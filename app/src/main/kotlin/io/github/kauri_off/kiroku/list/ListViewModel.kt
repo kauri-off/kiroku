@@ -21,6 +21,8 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -32,6 +34,7 @@ import java.time.LocalDate
 class ListViewModel(
     private val graph: AppGraph,
     private val saved: SavedStateHandle,
+    private val messages: ShellMessages,
 ) : ViewModel() {
     private var entries by mutableStateOf<Map<AnimeId, ListEntry>>(emptyMap())
     private var airing by mutableStateOf<Map<AnimeId, Airing>>(emptyMap())
@@ -53,9 +56,6 @@ class ListViewModel(
     private var filter by mutableStateOf(saved.get<String>(FILTER))
     private var sortSheetOpen by mutableStateOf(false)
     private var refreshing by mutableStateOf(false)
-    private var message by mutableStateOf<ListMessage?>(null)
-    private var serial = 0L
-    private val undo = mutableMapOf<Long, ListWrite>()
 
     val state: State<ListState> = derivedStateOf { build() }
 
@@ -90,14 +90,6 @@ class ListViewModel(
             is ListEvent.SelectSort -> selectSort(event.sort)
             ListEvent.Refresh -> viewModelScope.launch { sync(fromUser = true) }
             ListEvent.Retry -> viewModelScope.launch { sync(fromUser = false) }
-            is ListEvent.Undo -> {
-                undo.remove(event.message.serial)?.let { write -> viewModelScope.launch { graph.list.write(write) } }
-                clear(event.message)
-            }
-            is ListEvent.MessageDismissed -> {
-                undo.remove(event.message.serial)
-                clear(event.message)
-            }
             is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
     }
@@ -118,7 +110,6 @@ class ListViewModel(
             filter = filter,
             refreshing = refreshing,
             sessionExpired = session == Session.Expired,
-            message = message,
             now = graph.clock.instant(),
         )
     }
@@ -178,53 +169,52 @@ class ListViewModel(
         saved[FILTER] = text
     }
 
-    private fun clear(shown: ListMessage) {
-        if (message == shown) message = null
-    }
-
+    // One more episode, applied to the entry as it is when the write runs; the message and its Undo come from what
+    // that write changed, so quick taps each count and each Undo takes back its own step (W3).
     private fun plusOne(id: AnimeId) {
+        val anime = entries[id]?.anime ?: return
         viewModelScope.launch {
-            val before = graph.list.observeEntry(id).first() ?: return@launch
-            graph.list.write(ListWrite.MarkNextWatched(before.anime))
-            val after = graph.list.observeEntry(id).first() ?: return@launch
-            if (after.values == before.values) return@launch
-            val kind =
-                if (after.status == ListStatus.Completed && before.status != ListStatus.Completed) {
-                    ListMessage.Kind.MovedToCompleted
+            val change = graph.list.write(ListWrite.MarkNextWatched(anime)) ?: return@launch
+            val after = change.after ?: return@launch
+            val text =
+                if (change.completed) {
+                    ShellMessage.Text.MovedToCompleted
                 } else {
-                    ListMessage.Kind.EpisodeWatched(after.values.watchedEpisodes)
+                    ShellMessage.Text.EpisodeWatched(after.values.watchedEpisodes)
                 }
-            post(kind, undo = ListWrite.Save(before.anime, before.values))
+            messages.post(ShellMessage(text, ShellMessage.Action.Undo(change.undo)))
         }
     }
 
-    private fun post(
-        kind: ListMessage.Kind,
-        undo: ListWrite? = null,
-    ) {
-        val next = ListMessage(kind, ++serial)
-        undo?.let { this.undo[next.serial] = it }
-        message = next
-    }
-
-    // The first sync after start, a retry and pull-to-refresh; only the last two show the indicator or reorder.
+    // The first sync after start, a retry and pull-to-refresh. Pull-to-refresh, and a first sync with nothing
+    // ordered yet, order the list from what the sync brought; the session banner speaks for an expired session.
     private suspend fun sync(fromUser: Boolean) {
         if (fromUser) refreshing = true
         failure = null
         val result = graph.list.sync()
-        refreshing = false
         firstSyncDone = true
         when (result) {
-            is Outcome.Success -> if (entriesLoaded && (fromUser || orders == null)) orderAll()
-            is Outcome.Failure -> {
-                val cause = result.error.toListFailure()
-                when {
-                    orders != null -> post(ListMessage.Kind.RefreshFailed(cause))
-                    entriesLoaded && entries.isNotEmpty() -> orderAll()
-                    else -> failure = cause
+            is Outcome.Success ->
+                if (fromUser || orders == null) {
+                    val synced = graph.list.observeEntries().first()
+                    // Meanwhile the list may have arrived and been ordered at start.
+                    if (fromUser || orders == null) {
+                        entries = synced.associateBy { it.anime.id }
+                        entriesLoaded = true
+                        orderAll()
+                    }
                 }
-            }
+            is Outcome.Failure ->
+                when {
+                    orders != null ->
+                        if (result.error != DataError.SessionExpired) {
+                            messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
+                        }
+                    entriesLoaded && entries.isNotEmpty() -> orderAll()
+                    else -> failure = result.error.toListFailure()
+                }
         }
+        refreshing = false
     }
 
     private companion object {

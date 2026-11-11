@@ -1,12 +1,18 @@
 package io.github.kauri_off.kiroku.title
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
@@ -33,9 +39,14 @@ class TitleViewModelTest {
 
     private class Subject(
         val graph: TestGraph,
+        val messages: ShellMessages,
         val title: TitleViewModel,
     ) {
         val state: TitleState get() = title.state.value
+        val message: ShellMessage? get() = messages.current?.message
+
+        fun tapAction() = messages.ended(messages.current!!, actionPerformed = true)
+
         val shown: TitleState.Shown get() = state as TitleState.Shown
 
         suspend fun values() =
@@ -50,11 +61,13 @@ class TitleViewModelTest {
         saved: SavedStateHandle = SavedStateHandle(),
         before: TestGraph.() -> Unit = {},
         settle: Boolean = true,
+        lateObservers: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph.over(scope).apply(before)
-        val subject = Subject(graph, TitleViewModel(graph, id, saved))
+        val graph = TestGraph(Demo(Fixtures.reference, scope), lateObservers).apply(before)
+        val messages = ShellMessages(scope, graph.list)
+        val subject = Subject(graph, messages, TitleViewModel(graph, id, saved, messages))
         if (settle) advanceUntilIdle()
         body(subject)
         scope.cancel()
@@ -89,7 +102,52 @@ class TitleViewModelTest {
                 s.shown.page.entry
                     ?.watchedEpisodes,
             )
-            assertNull(s.shown.moment.snackbar)
+            assertNull(s.message)
+        }
+
+    // Three quick taps on the stepper's plus before the page shows the first: each counts (W3, section 7.3).
+    private fun stepperBurst(lateObservers: Boolean) =
+        test(lateObservers = lateObservers) { s ->
+            repeat(3) { s.title.onEvent(TitleEvent.StepWatched(1)) }
+            advanceUntilIdle()
+            assertEquals(15, s.values()?.watchedEpisodes)
+            s.title.onEvent(TitleEvent.StepWatched(-1))
+            s.title.onEvent(TitleEvent.StepWatched(-1))
+            advanceUntilIdle()
+            assertEquals(13, s.values()?.watchedEpisodes)
+        }
+
+    @Test
+    fun `three quick stepper taps all count`() = stepperBurst(lateObservers = false)
+
+    @Test
+    fun `three quick stepper taps all count, with late observers`() = stepperBurst(lateObservers = true)
+
+    @Test
+    fun `W3 stepping up to the total completes the title and Undo takes back only the completing step`() =
+        test(lateObservers = true) { s ->
+            s.title.onEvent(TitleEvent.SetWatched(22))
+            advanceUntilIdle()
+            val before = s.values()
+            s.title.onEvent(TitleEvent.StepWatched(1))
+            s.title.onEvent(TitleEvent.StepWatched(1))
+            advanceUntilIdle()
+            assertEquals(ListStatus.Completed, s.values()?.status)
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
+            s.tapAction()
+            advanceUntilIdle()
+            assertEquals(before?.copy(watchedEpisodes = 23), s.values())
+        }
+
+    @Test
+    fun `a typed count keeps a score set since the page last showed the entry`() =
+        test(lateObservers = true) { s ->
+            val anime = FixtureAnime.exactToWatch
+            s.graph.list.write(ListWrite.Save(anime, s.values()!!.copy(score = 3)))
+            s.title.onEvent(TitleEvent.SetWatched(14))
+            advanceUntilIdle()
+            assertEquals(3, s.values()?.score)
+            assertEquals(14, s.values()?.watchedEpisodes)
         }
 
     @Test
@@ -99,11 +157,11 @@ class TitleViewModelTest {
             s.title.onEvent(TitleEvent.SetWatched(24))
             advanceUntilIdle()
             assertEquals(ListStatus.Completed, s.values()?.status)
-            assertEquals(TitleSnackbar.MovedToCompleted, s.shown.moment.snackbar)
-            s.title.onEvent(TitleEvent.SnackbarAction)
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
+            s.tapAction()
             advanceUntilIdle()
             assertEquals(before, s.values())
-            assertNull(s.shown.moment.snackbar)
+            assertNull(s.message)
         }
 
     @Test
@@ -116,15 +174,15 @@ class TitleViewModelTest {
         }
 
     @Test
-    fun `SnackbarDismissed clears the snackbar and the Undo with it`() =
+    fun `the Undo outlives the page`() =
         test { s ->
+            val before = s.values()
             s.title.onEvent(TitleEvent.SetWatched(24))
             advanceUntilIdle()
-            s.title.onEvent(TitleEvent.SnackbarDismissed)
-            assertNull(s.shown.moment.snackbar)
-            s.title.onEvent(TitleEvent.SnackbarAction)
+            s.title.viewModelScope.cancel()
+            s.tapAction()
             advanceUntilIdle()
-            assertEquals(ListStatus.Completed, s.values()?.status)
+            assertEquals(before, s.values())
         }
 
     @Test
@@ -139,9 +197,12 @@ class TitleViewModelTest {
                 s.shown.page.entry
                     ?.status,
             )
-            assertEquals(TitleSnackbar.AddedToPlanned, s.shown.moment.snackbar)
-            s.title.onEvent(TitleEvent.SnackbarAction)
-            assertNull(s.shown.moment.snackbar)
+            assertEquals(
+                ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(FixtureAnime.notOnListAiring.id)),
+                s.message,
+            )
+            s.tapAction()
+            assertEquals(FixtureAnime.notOnListAiring.id, s.messages.editRequest)
             assertEquals(ListStatus.Planned, s.values()?.status)
         }
 
@@ -171,6 +232,19 @@ class TitleViewModelTest {
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
         }
+
+    @Test
+    fun `a failed refresh with the details shown keeps the page and says so`() =
+        test { s ->
+            s.graph.demo.server.offline.value = true
+            s.title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(FixtureDetails.full, s.shown.page.details)
+            assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), s.message)
+        }
+
+    @Test
+    fun `the session is unknown, not signed out, until it is read`() = test(settle = false) { s -> assertNull(s.state.session) }
 
     @Test
     fun `an unknown title is not found`() =

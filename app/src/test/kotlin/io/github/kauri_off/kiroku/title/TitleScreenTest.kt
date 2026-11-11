@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -114,11 +115,11 @@ class TitleScreenTest {
     fun theStepperHasNoCeiling() {
         show(TitleFixtures.completed)
         compose.onNode(hasSetTextAction() and hasText("12 /\u00A012", substring = true)).assertExists()
-        sends(TitleEvent.SetWatched(13)) { compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled().performClick() }
+        sends(TitleEvent.StepWatched(1)) { compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled().performClick() }
         show(TitleFixtures.aboveTotal)
         compose.onNode(hasSetTextAction() and hasText("14 /\u00A012")).assertIsDisplayed()
         compose.onNodeWithText("Completed").assertIsDisplayed()
-        sends(TitleEvent.SetWatched(15)) { compose.onNodeWithContentDescription("Plus one episode").performClick() }
+        sends(TitleEvent.StepWatched(1)) { compose.onNodeWithContentDescription("Plus one episode").performClick() }
     }
 
     @Test
@@ -146,8 +147,8 @@ class TitleScreenTest {
         sends(TitleEvent.AddToList) { compose.onNodeWithText("Add to list").performClick() }
         show(TitleFixtures.of(FixtureAnime.exactToWatch))
         sends(TitleEvent.Edit) { compose.onNodeWithText("Watching").performClick() }
-        sends(TitleEvent.SetWatched(13)) { compose.onNodeWithContentDescription("Plus one episode").performClick() }
-        sends(TitleEvent.SetWatched(11)) { compose.onNodeWithContentDescription("Minus one episode").performClick() }
+        sends(TitleEvent.StepWatched(1)) { compose.onNodeWithContentDescription("Plus one episode").performClick() }
+        sends(TitleEvent.StepWatched(-1)) { compose.onNodeWithContentDescription("Minus one episode").performClick() }
         show(TitleFixtures.of(FixtureAnime.estimatedToWatch))
         sends(TitleEvent.Edit) { compose.onNodeWithText("Rate").performClick() }
     }
@@ -207,23 +208,15 @@ class TitleScreenTest {
         sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }
     }
 
-    // The contract with the view model: the screen reports how a snackbar ended, the state then drops it, and the same
-    // snackbar set again is shown again.
-    @Test
-    fun aSnackbarReportsHowItEndedAndShowsAgainAfterNull() {
-        val added = TitleFixtures.added
-        show(added)
-        sends(TitleEvent.SnackbarAction) { compose.onNodeWithText("Change").performClick() }
-        show(added.copy(moment = TitleMoment()))
-        show(added)
-        compose.onNodeWithText("Added to Planned").assertIsDisplayed()
-        sends(TitleEvent.SnackbarDismissed) { compose.runOnIdle { snackbars.currentSnackbarData?.dismiss() } }
-    }
-
     // ARCHITECTURE 6.2: the screen itself draws the host the shell hands it.
     @Test
     fun theScreenDrawsTheSnackbarHostItIsGiven() {
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { TitleScreen(TitleFixtures.added, {}, snackbars) } }
+        compose.setContent {
+            KirokuTheme(
+                dark = false,
+                dynamicColor = false,
+            ) { TitleScreen(TitleFixtures.added, {}, rememberHostShowing(TitleFixtures.addedMessage)) }
+        }
         compose.waitForIdle()
         compose.onNodeWithText("Added to Planned").assertIsDisplayed()
         compose.onNodeWithText("Change").assertIsDisplayed()

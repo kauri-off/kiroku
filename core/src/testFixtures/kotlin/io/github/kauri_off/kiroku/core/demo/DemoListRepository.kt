@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
@@ -127,21 +128,23 @@ internal class DemoListRepository(
         }
     }
 
-    override suspend fun write(write: ListWrite) {
+    override suspend fun write(write: ListWrite): ListChange? {
         if (!signedIn.value) {
             failures.tryEmit(WriteFailure(DataError.SessionExpired, write))
-            return
+            return null
         }
-        synchronized(guard) {
+        return synchronized(guard) {
             check(!queue.isClosedForSend) { STOPPED }
             val id = write.anime.id
             val current = local.value[id]
             val values = write.applyTo(current, today())
-            if (values == current?.values) return
+            if (values == current?.values) return null
             val anime = current?.anime ?: write.anime
+            val next = values?.let { ListEntry(anime, it, clock.instant()) }
             pending[id] = (pending[id] ?: 0) + 1
-            set(id, values?.let { ListEntry(anime, it, clock.instant()) })
+            set(id, next)
             accept(Put(anime, values, epochs[id] ?: 0))
+            ListChange(current, next)
         }
     }
 
@@ -210,7 +213,7 @@ internal class DemoListRepository(
         val values = write.applyTo(confirmed, today())
         val refusal =
             when {
-                confirmed == null && (write is ListWrite.MarkWatched || write is ListWrite.MarkNextWatched) -> DataError.NotFound
+                confirmed == null && write !is ListWrite.Save && write !is ListWrite.Remove -> DataError.NotFound
                 write is ListWrite.MarkWatched && confirmed != null && confirmed.values.watchedEpisodes < write.episode - 1 ->
                     DataError.InvalidRequest
                 else -> null

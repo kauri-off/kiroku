@@ -7,18 +7,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.EditSheetViewModel
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // The List with its edit sheet; the only place that knows the List's view model and where its rows lead.
 @Composable
 fun ListRoute(
     graph: AppGraph,
+    messages: ShellMessages,
     snackbars: SnackbarHostState,
     onOpenTitle: (AnimeId) -> Unit,
     onSearch: () -> Unit,
     onSignIn: () -> Unit,
 ) {
-    val list = viewModel { ListViewModel(graph, createSavedStateHandle()) }
+    val list = viewModel { ListViewModel(graph, createSavedStateHandle(), messages) }
     val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle()) }
     ListScreen(
         state = list.state.value,
@@ -33,5 +35,5 @@ fun ListRoute(
         },
         snackbars = snackbars,
     )
-    EditSheetRoute(editor)
+    EditSheetRoute(editor, messages)
 }

@@ -2,15 +2,19 @@ package io.github.kauri_off.kiroku.list
 
 import androidx.lifecycle.SavedStateHandle
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
@@ -45,9 +49,15 @@ class ListViewModelTest {
     private class Subject(
         val graph: TestGraph,
         val saved: SavedStateHandle,
+        val messages: ShellMessages,
         val list: ListViewModel,
     ) {
         val state: ListState get() = list.state.value
+
+        val message: ShellMessage? get() = messages.current?.message
+
+        // The snackbar's action, tapped wherever the user is by then.
+        fun tapAction() = messages.ended(messages.current!!, actionPerformed = true)
 
         fun page(status: ListStatus = state.tab): ListPage = (state.content as ListContent.Tabs).pages.getValue(status)
 
@@ -57,11 +67,13 @@ class ListViewModelTest {
     private fun test(
         demo: (CoroutineScope) -> Demo = { Demo(Fixtures.reference, it) },
         saved: SavedStateHandle = SavedStateHandle(),
+        lateObservers: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(demo(scope))
-        val subject = Subject(graph, saved, ListViewModel(graph, saved))
+        val graph = TestGraph(demo(scope), lateObservers)
+        val messages = ShellMessages(scope, graph.list)
+        val subject = Subject(graph, saved, messages, ListViewModel(graph, saved, messages))
         advanceUntilIdle()
         body(subject)
         scope.cancel()
@@ -106,12 +118,12 @@ class ListViewModelTest {
             s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
             advanceUntilIdle()
             assertEquals(13, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
-            assertEquals(ListMessage.Kind.EpisodeWatched(13), s.state.message?.kind)
+            assertEquals(ShellMessage.Text.EpisodeWatched(13), s.message?.text)
             assertEquals(before, s.ids())
-            s.list.onEvent(ListEvent.Undo(s.state.message!!))
+            s.tapAction()
             advanceUntilIdle()
             assertEquals(12, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
-            assertNull(s.state.message)
+            assertNull(s.message)
         }
 
     @Test
@@ -122,10 +134,10 @@ class ListViewModelTest {
             val values = s.values(anime)
             s.list.onEvent(ListEvent.PlusOne(anime.id))
             advanceUntilIdle()
-            assertEquals(ListMessage.Kind.MovedToCompleted, s.state.message?.kind)
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
             assertEquals(before - anime.id, s.ids())
             assertEquals(anime.id, s.ids(ListStatus.Completed).last())
-            s.list.onEvent(ListEvent.Undo(s.state.message!!))
+            s.tapAction()
             advanceUntilIdle()
             assertEquals(values, s.values(anime))
             assertEquals(before, s.ids())
@@ -139,32 +151,53 @@ class ListViewModelTest {
             s.list.onEvent(ListEvent.PlusOne(anime.id))
             advanceUntilIdle()
             assertEquals(13, s.values(anime)?.watchedEpisodes)
-            assertEquals(ListMessage.Kind.MovedToCompleted, s.state.message?.kind)
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
+        }
+
+    // Five taps before any of them is written: each counts, and Undo takes back only the last (W3).
+    private fun plusOneBurst(lateObservers: Boolean) =
+        test(lateObservers = lateObservers) { s ->
+            val anime = FixtureAnime.exactToWatch
+            repeat(5) { s.list.onEvent(ListEvent.PlusOne(anime.id)) }
+            advanceUntilIdle()
+            assertEquals(17, s.values(anime)?.watchedEpisodes)
+            assertEquals(ShellMessage.Text.EpisodeWatched(17), s.message?.text)
+            s.tapAction()
+            advanceUntilIdle()
+            assertEquals(16, s.values(anime)?.watchedEpisodes)
         }
 
     @Test
-    fun `MessageDismissed clears the message and forgets its Undo`() =
+    fun `W3 five quick PlusOne all count and Undo takes back only the last`() = plusOneBurst(lateObservers = false)
+
+    @Test
+    fun `W3 five quick PlusOne all count and Undo takes back only the last, with late observers`() = plusOneBurst(lateObservers = true)
+
+    @Test
+    fun `W3 a burst that completes the title offers Undo of the completing step only`() =
+        test(lateObservers = true) { s ->
+            val anime = FixtureAnime.oneShortOfTotal
+            val values = s.values(anime)!!
+            s.graph.list.write(ListWrite.Save(anime, values.copy(watchedEpisodes = 9)))
+            advanceUntilIdle()
+            repeat(3) { s.list.onEvent(ListEvent.PlusOne(anime.id)) }
+            advanceUntilIdle()
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
+            s.tapAction()
+            advanceUntilIdle()
+            assertEquals(values.copy(watchedEpisodes = 11), s.values(anime))
+        }
+
+    @Test
+    fun `a dismissed message forgets its Undo`() =
         test { s ->
             s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
             advanceUntilIdle()
-            val message = s.state.message!!
-            s.list.onEvent(ListEvent.MessageDismissed(message))
-            assertNull(s.state.message)
-            s.list.onEvent(ListEvent.Undo(message))
+            val posted = s.messages.current!!
+            s.messages.ended(posted, actionPerformed = false)
+            assertNull(s.message)
             advanceUntilIdle()
             assertEquals(13, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
-        }
-
-    @Test
-    fun `a dismissed older message leaves a newer one shown`() =
-        test { s ->
-            s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
-            advanceUntilIdle()
-            val first = s.state.message!!
-            s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
-            advanceUntilIdle()
-            s.list.onEvent(ListEvent.MessageDismissed(first))
-            assertEquals(ListMessage.Kind.EpisodeWatched(14), s.state.message?.kind)
         }
 
     @Test
@@ -235,7 +268,7 @@ class ListViewModelTest {
             advanceTimeBy(500)
             runCurrent()
             assertFalse(s.state.refreshing)
-            assertNull(s.state.message)
+            assertNull(s.message)
         }
 
     @Test
@@ -244,9 +277,72 @@ class ListViewModelTest {
             s.graph.demo.server.offline.value = true
             s.list.onEvent(ListEvent.Refresh)
             advanceUntilIdle()
-            assertEquals(ListMessage.Kind.RefreshFailed(ListFailure.NoConnection), s.state.message?.kind)
+            assertEquals(ShellMessage.Text.RefreshFailed(DataError.NoConnection), s.message?.text)
             assertEquals(upNext(), s.ids())
             assertEquals(0, s.page().ordering)
+        }
+
+    @Test
+    fun `a sync that fails because the session expired leaves the message to the banner`() =
+        test { s ->
+            s.graph.demo.server.sessionExpired.value = true
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertTrue(s.state.sessionExpired)
+            assertNull(s.message)
+        }
+
+    // A title edited on the website moves tabs; Refresh orders the tabs from what the sync brought.
+    private fun refreshOrdersSyncedData(lateObservers: Boolean) =
+        test(lateObservers = lateObservers) { s ->
+            val anime = FixtureAnime.exactToWatch
+            val values =
+                s.graph.demo.server
+                    .entry(anime.id)!!
+                    .values
+            s.graph.demo.server
+                .editOnWebsite(anime, values.copy(status = ListStatus.Completed))
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            val completed =
+                s.graph.list
+                    .observeEntries()
+                    .first()
+                    .filter { it.status == ListStatus.Completed }
+            val expected = order(completed, ListSort.LastUpdated, set.airing::get, today) { it.anime.titles.romaji }.map { it.anime.id }
+            assertEquals(expected, s.ids(ListStatus.Completed))
+            assertEquals(anime.id, s.ids(ListStatus.Completed).first())
+        }
+
+    @Test
+    fun `Refresh orders every tab from the synced list`() = refreshOrdersSyncedData(lateObservers = false)
+
+    @Test
+    fun `Refresh orders every tab from the synced list, with late observers`() = refreshOrdersSyncedData(lateObservers = true)
+
+    // The first sign-in: nothing cached, the whole list on the website.
+    private fun firstLoad(scope: CoroutineScope) =
+        Demo(set.copy(entries = emptyList()), scope).also { demo -> set.entries.forEach { demo.server.editOnWebsite(it.anime, it.values) } }
+
+    @Test
+    fun `the first load into an empty list orders every tab from what the sync brought`() =
+        test(demo = ::firstLoad, lateObservers = true) { s ->
+            val synced =
+                s.graph.list
+                    .observeEntries()
+                    .first()
+            ListStatus.entries.forEach { status ->
+                val sort = defaultSort(status, withAiring = true)
+                val expected =
+                    order(
+                        synced.filter { it.status == status },
+                        sort,
+                        set.airing::get,
+                        today,
+                    ) { it.anime.titles.romaji }.map { it.anime.id }
+                assertTrue(status.name, expected.isNotEmpty())
+                assertEquals(status.name, expected, s.ids(status))
+            }
         }
 
     @Test

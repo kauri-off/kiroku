@@ -83,4 +83,35 @@ class ListWriteTest {
         assertEquals(watching(3), ListWrite.Save(anime, watching(3)).applyTo(entry(watching(9)), today))
         assertNull(ListWrite.Remove(anime).applyTo(entry(watching(9)), today))
     }
+
+    @Test
+    fun `a typed count keeps every other value as it is when sent, and follows W7 and W9`() {
+        val newer = watching(9).copy(score = 6)
+        assertEquals(newer.copy(watchedEpisodes = 10), ListWrite.SetWatched(anime, 10).applyTo(entry(newer), today))
+        val completed = ListValues(ListStatus.Completed, 30, 8, earlier, day)
+        assertEquals(completed, ListWrite.SetWatched(anime, 30).applyTo(entry(watching(9)), today))
+        assertNull(ListWrite.SetWatched(anime, 10).applyTo(null, today))
+    }
+
+    @Test
+    fun `steps sent before either is applied both count, and a step down stops at zero`() {
+        val up = ListWrite.StepWatched(anime, 1)
+        val first = checkNotNull(up.applyTo(entry(watching(9)), today))
+        assertEquals(watching(11), up.applyTo(entry(first), today))
+        val down = ListWrite.StepWatched(anime, -1)
+        assertEquals(watching(8), down.applyTo(entry(watching(9)), today))
+        assertEquals(watching(0), down.applyTo(entry(watching(0)), today))
+    }
+
+    @Test
+    fun `W3 a change's Undo puts back every value it changed, and removes an entry it added`() {
+        val before = entry(watching(11))
+        val after = entry(ListValues(ListStatus.Completed, 12, 8, earlier, day))
+        val change = ListChange(before, after)
+        assertEquals(true, change.completed)
+        assertEquals(ListWrite.Save(anime, watching(11)), change.undo)
+        assertEquals(false, ListChange(entry(watching(10)), before).completed)
+        assertEquals(ListWrite.Remove(anime), ListChange(null, before).undo)
+        assertEquals(ListWrite.Save(anime, watching(11)), ListChange(before, null).undo)
+    }
 }

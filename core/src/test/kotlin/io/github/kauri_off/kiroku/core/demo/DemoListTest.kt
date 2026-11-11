@@ -99,6 +99,25 @@ class DemoListTest {
         }
 
     @Test
+    fun `W3 each of several quick writes reports its own change, so Undo of the last takes back only that one`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.exactToWatch
+            val changes = List(3) { async(start = CoroutineStart.UNDISPATCHED) { demo.list.write(ListWrite.MarkNextWatched(anime)) } }
+            val counts =
+                changes.map {
+                    checkNotNull(it.await()).let { c ->
+                        c.before!!.values.watchedEpisodes to
+                            c.after!!.values.watchedEpisodes
+                    }
+                }
+            assertEquals(listOf(12 to 13, 13 to 14, 14 to 15), counts)
+            demo.list.write(checkNotNull(changes.last().await()).undo)
+            assertEquals(14, demo.shownWatched(anime))
+            assertNull(demo.list.write(ListWrite.Save(anime, checkNotNull(demo.list.observeEntry(anime.id).first()).values)))
+        }
+
+    @Test
     fun `W7 the last episode completes the entry and Undo restores it in one write`() =
         runTest {
             val demo = demo()

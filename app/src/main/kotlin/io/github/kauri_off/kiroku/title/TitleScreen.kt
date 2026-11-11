@@ -36,20 +36,16 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,7 +106,6 @@ fun TitleScreen(
     modifier: Modifier = Modifier,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    TitleSnackbarEffect((state as? TitleState.Shown)?.moment?.snackbar, snackbars, onEvent)
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -175,33 +170,6 @@ private fun TitleTopBar(
         },
         scrollBehavior = scrollBehavior,
     )
-}
-
-@Composable
-private fun TitleSnackbarEffect(
-    snackbar: TitleSnackbar?,
-    host: SnackbarHostState,
-    onEvent: (TitleEvent) -> Unit,
-) {
-    val message =
-        when (snackbar) {
-            TitleSnackbar.AddedToPlanned -> stringResource(R.string.title_added_to_planned)
-            TitleSnackbar.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
-            null -> null
-        }
-    val action =
-        when (snackbar) {
-            TitleSnackbar.AddedToPlanned -> stringResource(R.string.title_change)
-            TitleSnackbar.MovedToCompleted -> stringResource(R.string.common_undo)
-            null -> null
-        }
-    val events by rememberUpdatedState(onEvent)
-    // Shown again only after the state has passed through null, which follows SnackbarAction or SnackbarDismissed.
-    LaunchedEffect(snackbar) {
-        if (message == null) return@LaunchedEffect
-        val result = host.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Long)
-        events(if (result == SnackbarResult.ActionPerformed) TitleEvent.SnackbarAction else TitleEvent.SnackbarDismissed)
-    }
 }
 
 @Composable
@@ -328,6 +296,7 @@ private fun OnList(
                     watched = entry.watchedEpisodes,
                     total = total,
                     onWatchedChange = { onEvent(TitleEvent.SetWatched(it)) },
+                    onStep = { onEvent(TitleEvent.StepWatched(it)) },
                     modifier = Modifier.padding(start = ButtonEdge),
                 )
             }

@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.UserProfile
@@ -45,6 +46,22 @@ sealed interface ListWrite {
         override val anime: Anime,
     ) : ListWrite
 
+    // A count the user typed, applied to the entry's other values as they are when sent (W7, W9).
+    data class SetWatched(
+        override val anime: Anime,
+        val watched: Int,
+    ) : ListWrite {
+        init {
+            require(watched >= 0)
+        }
+    }
+
+    // A stepper's plus or minus, applied to the count as it is when sent; never below zero.
+    data class StepWatched(
+        override val anime: Anime,
+        val by: Int,
+    ) : ListWrite
+
     fun applyTo(
         current: ListEntry?,
         today: LocalDate,
@@ -62,7 +79,30 @@ sealed interface ListWrite {
                 }
             is MarkNextWatched ->
                 current?.let { it.values.markWatched(it.values.watchedEpisodes + 1, it.anime.malEpisodes, today) }
+            is SetWatched -> current?.let { it.values.withWatched(watched, it.anime.malEpisodes, today) }
+            is StepWatched ->
+                current?.let {
+                    it.values.withWatched((it.values.watchedEpisodes + by).coerceAtLeast(0), it.anime.malEpisodes, today)
+                }
         }
+}
+
+// What one write did to its entry, read and applied as one step, so no other write comes between them (W3).
+data class ListChange(
+    val before: ListEntry?,
+    val after: ListEntry?,
+) {
+    init {
+        require(before != null || after != null)
+    }
+
+    val anime: Anime get() = (after ?: before)!!.anime
+
+    // W3: the one write that puts back every value this change made.
+    val undo: ListWrite get() = before?.let { ListWrite.Save(it.anime, it.values) } ?: ListWrite.Remove(anime)
+
+    // W7 moved the title to Completed.
+    val completed: Boolean get() = after?.status == ListStatus.Completed && before?.status != ListStatus.Completed
 }
 
 data class WriteFailure(
@@ -75,11 +115,14 @@ interface ListRepository {
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
 
+    // Hot: a failure reaches the collectors present when it happens and is dropped with none (section 7.3); one
+    // waiting for a slow collector is buffered, not dropped.
     fun observeWriteFailures(): Flow<WriteFailure>
 
     suspend fun sync(): Outcome<Unit>
 
-    suspend fun write(write: ListWrite)
+    // Applies the write locally and returns what it changed, or null when it changed nothing or was refused.
+    suspend fun write(write: ListWrite): ListChange?
 
     suspend fun send(write: ListWrite): Outcome<Unit>
 }
@@ -95,7 +138,8 @@ interface AnimeRepository {
 interface AiringRepository {
     fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
 
-    // Section 4's result for every title with stored airing data, the one source of every screen's airing lines.
+    // Section 4's result for every title with stored airing data, the one source of every screen's airing lines. It
+    // emits again whenever a stored air time passes (A2) or the stored data changes. Provisional until M3's calculator.
     fun observeAiring(): Flow<Map<AnimeId, Airing>>
 
     suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit>

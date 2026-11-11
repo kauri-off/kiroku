@@ -16,14 +16,14 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.edit.EditSheetState
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 // One title's page. The page is rebuilt with TitlePage.of whenever a source changes; the moment is held apart from
 // it. Navigation events are the route's.
@@ -31,18 +31,16 @@ class TitleViewModel(
     private val graph: AppGraph,
     private val id: AnimeId,
     private val saved: SavedStateHandle,
+    private val messages: ShellMessages,
 ) : ViewModel() {
     private var anime by mutableStateOf<Anime?>(null)
     private var entry by mutableStateOf<ListEntry?>(null)
     private var details by mutableStateOf<AnimeDetails?>(null)
     private var airing by mutableStateOf<Map<AnimeId, Airing>>(emptyMap())
     private var statuses by mutableStateOf<Map<AnimeId, ListStatus>>(emptyMap())
-    private var session by mutableStateOf<Session>(Session.SignedOut)
+    private var session by mutableStateOf<Session?>(null)
     private var failure by mutableStateOf<DataError?>(null)
     private var moment by mutableStateOf(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
-
-    // What Undo of "Moved to Completed" puts back.
-    private var undo: ListValues? = null
 
     val state: State<TitleState> = derivedStateOf { build() }
 
@@ -61,17 +59,11 @@ class TitleViewModel(
     fun onEvent(event: TitleEvent) {
         when (event) {
             TitleEvent.AddToList -> addToList()
-            is TitleEvent.SetWatched -> setWatched(event.watched)
-            TitleEvent.SnackbarAction ->
-                if (moment.snackbar == TitleSnackbar.MovedToCompleted) {
-                    val values = undo
-                    val anime = shownAnime()
-                    if (values != null && anime != null) write(ListWrite.Save(anime, values))
-                }
+            is TitleEvent.SetWatched -> watched(ListWrite.SetWatched(shownAnime() ?: return, event.watched))
+            is TitleEvent.StepWatched -> watched(ListWrite.StepWatched(shownAnime() ?: return, event.by))
             TitleEvent.Retry -> refresh()
             else -> Unit
         }
-        if (event == TitleEvent.SnackbarAction || event == TitleEvent.SnackbarDismissed) undo = null
         moment = moment.after(event)
         saved[EXPANDED] = moment.synopsisExpanded
     }
@@ -93,36 +85,37 @@ class TitleViewModel(
 
     private fun shownAnime(): Anime? = anime ?: entry?.anime
 
+    // With details already shown, a failed refresh is a message and the page stays (section 7.2).
     private fun refresh() {
         failure = null
         viewModelScope.launch {
             val result = graph.anime.refresh(id)
-            if (result is Outcome.Failure) failure = result.error
+            if (result !is Outcome.Failure) return@launch
+            if (details != null) {
+                if (result.error != DataError.SessionExpired) messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
+            } else {
+                failure = result.error
+            }
         }
     }
 
     private fun addToList() {
         val anime = shownAnime() ?: return
         if (entry != null) return
-        write(ListWrite.Save(anime, EditSheetState.newEntry))
-        moment = moment.copy(snackbar = TitleSnackbar.AddedToPlanned)
-    }
-
-    // A count of any size is accepted (W9); reaching or passing MAL's total completes the title (W7).
-    private fun setWatched(watched: Int) {
-        val current = entry ?: return
-        val before = current.values
-        val after = before.withWatched(watched, current.anime.malEpisodes, LocalDate.now(graph.clock))
-        if (after == before) return
-        write(ListWrite.Save(current.anime, after))
-        if (after.status == ListStatus.Completed && before.status != ListStatus.Completed) {
-            undo = before
-            moment = moment.copy(snackbar = TitleSnackbar.MovedToCompleted)
+        viewModelScope.launch {
+            graph.list.write(ListWrite.Save(anime, EditSheetState.newEntry)) ?: return@launch
+            messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id)))
         }
     }
 
-    private fun write(write: ListWrite) {
-        viewModelScope.launch { graph.list.write(write) }
+    // Applied to the entry as it is when the write runs, so quick steps each count; a count of any size is accepted
+    // (W9), and one that completes the title (W7) says so with an Undo of exactly that change.
+    private fun watched(write: ListWrite) {
+        if (entry == null) return
+        viewModelScope.launch {
+            val change = graph.list.write(write) ?: return@launch
+            if (change.completed) messages.post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)))
+        }
     }
 
     private companion object {

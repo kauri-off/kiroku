@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.EditSheetViewModel
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
 
@@ -36,11 +37,12 @@ class TitleLinks(
 fun TitleRoute(
     key: TitleKey,
     graph: AppGraph,
+    messages: ShellMessages,
     snackbars: SnackbarHostState,
     links: TitleLinks,
 ) {
     val id = AnimeId(key.id)
-    val title = viewModel { TitleViewModel(graph, id, createSavedStateHandle()) }
+    val title = viewModel { TitleViewModel(graph, id, createSavedStateHandle(), messages) }
     val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle()) }
     val context = LocalContext.current
     val state = title.state.value
@@ -63,16 +65,12 @@ fun TitleRoute(
                 TitleEvent.OpenDetails -> links.details(id)
                 TitleEvent.OpenRecommendations -> links.recommendations(id)
                 TitleEvent.SignIn -> links.signIn()
-                TitleEvent.SnackbarAction -> {
-                    if ((state as? TitleState.Shown)?.moment?.snackbar == TitleSnackbar.AddedToPlanned) editor.open(id)
-                    title.onEvent(event)
-                }
                 else -> title.onEvent(event)
             }
         },
         snackbars = snackbars,
     )
-    EditSheetRoute(editor)
+    EditSheetRoute(editor, messages)
 }
 
 fun malUrl(id: AnimeId): String = notShown("https://myanimelist.net/anime/${id.value}")

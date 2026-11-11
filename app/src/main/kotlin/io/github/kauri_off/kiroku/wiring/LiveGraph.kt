@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -51,7 +52,7 @@ internal class LiveGraph(
 
             override suspend fun sync(): Outcome<Unit> = signedOut
 
-            override suspend fun write(write: ListWrite) = Unit
+            override suspend fun write(write: ListWrite): ListChange? = null
 
             override suspend fun send(write: ListWrite): Outcome<Unit> = signedOut
         }

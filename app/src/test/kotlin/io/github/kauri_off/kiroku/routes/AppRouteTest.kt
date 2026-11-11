@@ -7,6 +7,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.filter
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -22,6 +23,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.swipeUp
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -343,5 +345,126 @@ class AppRouteTest {
         shows("My list")
         compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().let { assertEquals(1, it.size) }
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+    }
+
+    private fun plusOnTitlePage() = compose.onNode(hasContentDescription("Plus one episode") and hasClickAction()).performClick()
+
+    // ARCHITECTURE 6.2: the message outlives the List, and its Undo works from the title page.
+    @Test
+    fun `the plus one message stays when the title opens or the tab changes, and Undo works from there`() {
+        app()
+        plusOnFirstRow()
+        compose.waitForIdle()
+        shows("Episode\u00A013 watched")
+        openKagerou()
+        shows("Episodes watched")
+        shows("Episode\u00A013 watched")
+        click("Search")
+        compose.waitForIdle()
+        shows("Episode\u00A013 watched")
+        click("Undo")
+        compose.waitForIdle()
+        assertEquals(12, values(kagerou)?.watchedEpisodes)
+    }
+
+    @Test
+    fun `Moved to Completed stays on Back and after a sub-screen, and Undo works from the List`() {
+        app()
+        openKagerou()
+        repeat(12) { plusOnTitlePage() }
+        compose.waitForIdle()
+        shows("Moved to Completed")
+        scrollTo("Details")
+        click("Details")
+        compose.waitForIdle()
+        shows("Moved to Completed")
+        back()
+        shows("Moved to Completed")
+        back()
+        shows("My list")
+        shows("Moved to Completed")
+        click("Undo")
+        compose.waitForIdle()
+        assertEquals(23, values(kagerou)?.watchedEpisodes)
+        assertEquals(ListStatus.Watching, values(kagerou)?.status)
+    }
+
+    @Test
+    fun `Change tapped on the List after Back opens the added title's edit sheet there`() {
+        app()
+        val added = FixtureAnime.notOnListAiring
+        compose.runOnUiThread { navigator.open(TitleKey(added.id.value)) }
+        compose.waitForIdle()
+        click("Add to list")
+        compose.waitForIdle()
+        back()
+        shows("My list")
+        click("Change")
+        compose.waitForIdle()
+        shows("Save")
+        shows(added.titles.romaji)
+    }
+
+    private fun watchingTitles(): List<String> =
+        runBlocking { graph.list.observeEntries().first() }
+            .filter { it.status == ListStatus.Watching }
+            .map { it.anime.titles.romaji }
+
+    // The rows of the List on screen, top to bottom, with their tops.
+    private fun shownRows(titles: List<String>): List<Pair<String, Float>> =
+        titles
+            .filter { compose.onAllNodes(hasText(it)).fetchSemanticsNodes().isNotEmpty() }
+            .map {
+                it to
+                    compose
+                        .onNodeWithText(it)
+                        .getUnclippedBoundsInRoot()
+                        .top.value
+            }.filter { it.second >= 0f }
+            .sortedBy { it.second }
+
+    // 9.3: coming back from a title page keeps the order and the scroll position, even after an edit there.
+    @Test
+    fun `back from a title page edited there keeps the List's order and scroll position`() {
+        app()
+        val titles = watchingTitles()
+        compose.onNodeWithText(kagerou.titles.romaji).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        val before = shownRows(titles)
+        val opened =
+            before
+                .drop(1)
+                .first { (title, _) ->
+                    val entry = runBlocking { graph.list.observeEntries().first() }.single { it.anime.titles.romaji == title }
+                    entry.anime.malEpisodes.let { it == null || entry.values.watchedEpisodes + 1 < it }
+                }.first
+        compose.onNodeWithText(opened).performClick()
+        compose.waitForIdle()
+        plusOnTitlePage()
+        compose.waitForIdle()
+        back()
+        assertEquals(before, shownRows(titles))
+    }
+
+    // Tall enough for every Watching row, so the rows above the one that leaves cannot move.
+    @Test
+    @Config(qualifiers = "en-w411dp-h2000dp-xhdpi")
+    fun `back from a title page that completed the title keeps the other rows in their order`() {
+        app()
+        val titles = watchingTitles()
+        val completed = FixtureAnime.oneShortOfTotal.titles.romaji
+        val before = shownRows(titles)
+        compose.onNodeWithText(completed).performClick()
+        compose.waitForIdle()
+        plusOnTitlePage()
+        compose.waitForIdle()
+        back()
+        val after = shownRows(titles)
+        hides(completed)
+        val kept = before.map { it.first } - completed
+        val shown = after.map { it.first }
+        assertEquals(kept.filter { it in shown }, shown.filter { it in kept })
+        val above = before.takeWhile { it.first != completed }
+        assertEquals(above, after.take(above.size))
     }
 }

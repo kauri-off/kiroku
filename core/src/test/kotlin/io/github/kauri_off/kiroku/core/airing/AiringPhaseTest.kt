@@ -49,6 +49,15 @@ class AiringPhaseTest {
     }
 
     @Test
+    fun `W9 an episode already recorded as watched is not announced as next`() {
+        val airing = Airing(AiredCount.Exact(14), 24, next, aired)
+        assertEquals(AiringPhase.Aired(AiredCount.Exact(14), null, null), airingPhase(airingTitle, watching(15), airing, today))
+        assertEquals(AiringPhase.Aired(AiredCount.Exact(14), null, null), airingPhase(airingTitle, watching(20), airing, today))
+        assertEquals(AiringPhase.Aired(AiredCount.Exact(14), null, next), airingPhase(airingTitle, watching(14), airing, today))
+        assertEquals(null, airingPhase(airingTitle, watching(15), airing, today)?.nextAirsAt)
+    }
+
+    @Test
     fun `an estimated count has an estimated to watch and no next episode`() {
         val airing = Airing(AiredCount.Estimated(10), 12, null, aired)
         assertEquals(

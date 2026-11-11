@@ -367,8 +367,8 @@ was chosen against, and why:
 Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
 is applied locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches
 the user after the screen that made the edit is gone; with nothing collecting it, it is dropped, as the entry is
-already back at the server's state. The notification action instead waits for the server's answer (N9). "+1" and
-"Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
+already back at the server's state. The notification action instead waits for the server's answer (N9). "+1", the
+stepper and "Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown.
@@ -482,7 +482,8 @@ legible, or preventing a jump. Decoration is not a purpose.
   anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance.
+  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance. The tab
+  indicator, the selected tab and the tab row's scroll are driven by the pager, on a tap by the page's own animation.
 - **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
   one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.

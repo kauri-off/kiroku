@@ -187,7 +187,15 @@ internal fun EditSheet(
                         fieldModifier = Modifier.focusRequester(countFocus),
                     )
                 }
-                if (focusCount) LaunchedEffect(Unit) { countFocus.requestFocus() }
+                // Nothing else starts focused, so the drag handle never shows its tooltip unasked.
+                LaunchedEffect(Unit) {
+                    if (focusCount) {
+                        countFocus.requestFocus()
+                    } else {
+                        awaitFrame()
+                        focusManager.clearFocus()
+                    }
+                }
                 Spacer(Modifier.height(Spacing.xl))
                 ScoreSlider(state.draft.score ?: 0) { edit(EditSheetEvent.ScoreChanged(it)) }
                 Spacer(Modifier.height(Spacing.xl))

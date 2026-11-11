@@ -25,7 +25,7 @@ abstract class SubScreenViewModel(
 ) : ViewModel() {
     protected var anime by mutableStateOf<Anime?>(null)
     protected var details by mutableStateOf<AnimeDetails?>(null)
-    protected var session by mutableStateOf<Session>(Session.SignedOut)
+    protected var session by mutableStateOf<Session?>(null)
     protected var failure by mutableStateOf<DataError?>(null)
 
     init {

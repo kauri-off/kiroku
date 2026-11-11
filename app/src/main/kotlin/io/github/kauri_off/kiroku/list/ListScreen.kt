@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,13 +24,9 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -48,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -70,7 +68,8 @@ import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.text.label
 
 // The user's list, or another user's read-only list: a top app bar, the five status tabs and the rows of one tab.
-// [snackbars] is the app shell's one snackbar state; the screen draws it in its own scaffold (ARCHITECTURE 6.2).
+// [snackbars] is the app shell's one snackbar state; the screen draws it in its own scaffold (ARCHITECTURE 6.2). The
+// screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListScreen(
@@ -79,15 +78,17 @@ fun ListScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-    Messages(state.message, snackbars, onEvent)
     BackHandler(enabled = state.filter != null) { onEvent(ListEvent.EndFilter) }
     val tabs = state.content as? ListContent.Tabs
+    val statuses = ListStatus.entries
+    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
+    val motion = rememberListTabMotion(pager)
     Scaffold(
         modifier = modifier,
         topBar = {
             Column {
                 TopBar(state, showActions = tabs != null, onEvent = onEvent)
-                if (tabs != null) Tabs(state.tab, onEvent)
+                if (tabs != null) ListTabs(motion, onEvent)
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
         },
@@ -112,7 +113,7 @@ fun ListScreen(
                     onRefresh = { onEvent(ListEvent.Refresh) },
                     modifier = body.fillMaxSize(),
                 ) {
-                    Pages(state, content, PaddingValues(bottom = padding.calculateBottomPadding()), onEvent)
+                    Pages(state, content, motion, PaddingValues(bottom = padding.calculateBottomPadding()), onEvent)
                 }
         }
     }
@@ -120,35 +121,41 @@ fun ListScreen(
     if (state.sortSheetOpen && page != null) SortSheet(page.sort, page.sorts, onEvent)
 }
 
-// One page per tab, each with its own scroll position. A swipe follows the finger and selects the tab it settles on;
-// a tapped tab slides its page in, a component's entrance.
+// One page per tab, each with its own scroll position, and its neighbours composed ahead. A swipe follows the finger
+// and selects the tab it settles on; a short drag is enough to turn the page.
 @Composable
 private fun Pages(
     state: ListState,
     tabs: ListContent.Tabs,
+    motion: ListTabMotion,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
     val statuses = ListStatus.entries
-    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
+    val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
     val tab = rememberUpdatedState(state.tab)
     LaunchedEffect(pager) {
         snapshotFlow { pager.settledPage }.collect { index ->
-            if (statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
+            if (motion.tapTarget == null && statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
         }
     }
+    // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.
     LaunchedEffect(state.tab) {
         val target = statuses.indexOf(state.tab)
-        if (pager.currentPage != target || pager.currentPageOffsetFraction != 0f) {
-            pager.animateScrollToPage(target, animationSpec = Motion.componentEnter())
-        }
+        if (motion.tapTarget != target && pager.targetPage != target) motion.select(target)
     }
     HorizontalPager(
         pager,
         Modifier.fillMaxSize(),
+        beyondViewportPageCount = 1,
         key = { statuses[it] },
-        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = Motion.fastSpatial()),
+        flingBehavior =
+            PagerDefaults.flingBehavior(
+                pager,
+                snapAnimationSpec = Motion.fastSpatial(),
+                snapPositionalThreshold = PAGE_TURN,
+            ),
     ) { index ->
         Page(state, statuses[index], tabs.pages.getValue(statuses[index]), padding, onEvent)
     }
@@ -203,13 +210,6 @@ private fun ListFailure.messageRes(): Int =
         ListFailure.NoConnection -> R.string.common_no_connection
         ListFailure.Refused -> R.string.common_refused
         ListFailure.Other -> R.string.list_failed
-    }
-
-// With the list still shown, a failed refresh names its cause when it is known.
-private fun ListFailure.refreshMessageRes(): Int =
-    when (this) {
-        ListFailure.Other -> R.string.list_could_not_refresh
-        else -> messageRes()
     }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -292,22 +292,6 @@ private fun FilterField(
 }
 
 @Composable
-private fun Tabs(
-    selected: ListStatus,
-    onEvent: (ListEvent) -> Unit,
-) {
-    PrimaryScrollableTabRow(selectedTabIndex = ListStatus.entries.indexOf(selected), edgePadding = Sizes.tabRowEdge) {
-        ListStatus.entries.forEach { status ->
-            Tab(
-                selected = status == selected,
-                onClick = { onEvent(ListEvent.SelectTab(status)) },
-                text = { Text(stringResource(status.label())) },
-            )
-        }
-    }
-}
-
-@Composable
 private fun Rows(
     state: ListState,
     rows: List<ListRow>,
@@ -317,6 +301,9 @@ private fun Rows(
     val context = LocalContext.current
     val text = remember(context, state.now) { ListText(context, state.now) }
     val edit = stringResource(R.string.list_edit)
+    val burst = LocalViewConfiguration.current.doubleTapTimeoutMillis
+    val guard = remember(burst) { PlusOneGuard(burst) }
+    val shownRows = rememberUpdatedState(rows)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
             items(rows, key = { it.id.value }) { row ->
@@ -331,7 +318,10 @@ private fun Rows(
                         ),
                     trailing =
                         if (row.plusOne) {
-                            RowTrailing.PlusOne(prominent = row.line3 is Line3.ToWatch) { onEvent(ListEvent.PlusOne(row.id)) }
+                            RowTrailing.PlusOne(prominent = row.line3 is Line3.ToWatch) {
+                                val ids = shownRows.value.map { it.id }
+                                if (guard.accept(row.id, ids, SystemClock.uptimeMillis())) onEvent(ListEvent.PlusOne(row.id))
+                            }
                         } else {
                             null
                         },
@@ -382,35 +372,5 @@ private fun SortSheet(
     }
 }
 
-// Shows each message once; Undo and the snackbar's end, however it ends, are reported with the message they belong to.
-@Composable
-private fun Messages(
-    message: ListMessage?,
-    host: SnackbarHostState,
-    onEvent: (ListEvent) -> Unit,
-) {
-    val events = rememberUpdatedState(onEvent)
-    val text =
-        when (val kind = message?.kind) {
-            null -> null
-            is ListMessage.Kind.EpisodeWatched -> stringResource(R.string.list_episode_watched, kind.episode)
-            ListMessage.Kind.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
-            is ListMessage.Kind.RefreshFailed -> stringResource(kind.failure.refreshMessageRes())
-        }
-    val undo = stringResource(R.string.common_undo).takeIf { message?.kind !is ListMessage.Kind.RefreshFailed }
-    LaunchedEffect(message) {
-        if (message == null || text == null) return@LaunchedEffect
-        var result: SnackbarResult? = null
-        try {
-            result =
-                host.showSnackbar(
-                    text,
-                    actionLabel = undo,
-                    duration = if (undo == null) SnackbarDuration.Short else SnackbarDuration.Long,
-                )
-        } finally {
-            // Also when a newer message or leaving the screen ends the snackbar early.
-            events.value(if (result == SnackbarResult.ActionPerformed) ListEvent.Undo(message) else ListEvent.MessageDismissed(message))
-        }
-    }
-}
+// The share of a page's width a released drag must pass to turn the page; the stock half asks for a long drag.
+private const val PAGE_TURN = 0.3f
