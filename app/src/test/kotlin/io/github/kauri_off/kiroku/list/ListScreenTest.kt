@@ -7,19 +7,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Motion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -47,11 +54,7 @@ class ListScreenTest {
         if (shown == null) {
             compose.setContent {
                 KirokuTheme(dark = false, dynamicColor = false) {
-                    shown?.let {
-                        ListScreen(it, onEvent = { e ->
-                            events += e
-                        })
-                    }
+                    shown?.let { HostedListScreen(it) { e -> events += e } }
                 }
             }
         }
@@ -122,6 +125,32 @@ class ListScreenTest {
     }
 
     @Test
+    fun `a snackbar cut short by leaving the screen is reported as dismissed`() {
+        show(ListFixtureStates.undoSnackbar)
+        compose.onNodeWithText("Undo").assertExists()
+        shown = null
+        compose.waitForIdle()
+        assertEquals(listOf(ListEvent.MessageDismissed(ListFixtureStates.undoSnackbar.message!!)), events)
+    }
+
+    @Test
+    fun `a failed refresh names no connection when that is the cause`() {
+        show(ListFixtureStates.offlineCached)
+        compose.onNodeWithText("No connection").assertExists()
+        compose.onNodeWithText("Undo").assertDoesNotExist()
+        show(ListFixtureStates.watching.copy(message = ListMessage(ListMessage.Kind.RefreshFailed(ListFailure.Other), serial = 2)))
+        compose.onNodeWithText("Could not refresh").assertExists()
+    }
+
+    @Test
+    fun `an empty tab can be pulled to refresh`() {
+        show(ListFixtureStates.empty)
+        compose.onRoot().performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        compose.waitForIdle()
+        assertTrue(events.toString(), ListEvent.Refresh in events)
+    }
+
+    @Test
     fun `the empty and signed out states offer their one action`() {
         show(ListFixtureStates.empty)
         compose.onNodeWithText("Search").performClick()
@@ -133,7 +162,8 @@ class ListScreenTest {
     }
 }
 
-// The row a "+1" completes leaves with the list's item animation (ARCHITECTURE 8.5).
+// The row a "+1" completes leaves with the list's item animation, a change inside the list (ARCHITECTURE 8.5); a
+// new order, a filter or another tab replaces the rows at once.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h2000dp")
@@ -150,9 +180,10 @@ class ListMotionTest {
 
     private fun top(title: String): Dp = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
 
-    private fun showAndSettle() {
+    private fun showAndSettle(start: ListState = ListFixtureStates.watching) {
+        state = start
         compose.mainClock.autoAdvance = false
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ListScreen(state, onEvent = {}) } }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) } }
         compose.mainClock.advanceTimeBy(SETTLED)
     }
 
@@ -163,14 +194,20 @@ class ListMotionTest {
 
     private fun complete() = set(ListFixtureStates.completedSnackbar.copy(message = null))
 
+    private fun ListState.titles(): List<String> = (content as ListContent.Rows).rows.map { it.title }
+
+    private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
+
     @Test
-    fun `the row leaves and the rows below close up within 300 ms`() {
+    fun `the row leaves and the rows below close up within 200 ms`() {
         showAndSettle()
         val before = top(following)
         val leavingTop = top(leaving)
         complete()
         compose.mainClock.advanceTimeByFrame()
-        compose.mainClock.advanceTimeBy(COMPONENT_MS)
+        compose.mainClock.advanceTimeBy(COMPONENT_CHANGE_MS / 2)
+        assertTrue("the rows below are on their way up", top(following) < before && top(following) > leavingTop)
+        compose.mainClock.advanceTimeBy(COMPONENT_CHANGE_MS / 2)
         compose.onNodeWithText(leaving).assertDoesNotExist()
         assertEquals(leavingTop, top(following))
         assertTrue(before > leavingTop)
@@ -183,11 +220,60 @@ class ListMotionTest {
         val leavingTop = top(leaving)
         val followingTop = top(following)
         complete()
-        compose.mainClock.advanceTimeBy(COMPONENT_MS / 3)
+        compose.mainClock.advanceTimeBy(COMPONENT_CHANGE_MS / 3)
         set(ListFixtureStates.watching)
         compose.mainClock.advanceTimeBy(SETTLED)
         assertEquals(leavingTop, top(leaving))
         assertEquals(followingTop, top(following))
+        assertIdle()
+    }
+
+    @Test
+    fun `typing in the filter does not animate`() {
+        assertInstant(ListFixtureStates.watching.copy(filter = ""), ListFixtureStates.filtering)
+    }
+
+    @Test
+    fun `a refresh that orders the rows again does not animate`() {
+        val watching = ListFixtureStates.watching
+        val rows = (watching.content as ListContent.Rows).rows
+        assertInstant(watching, watching.copy(ordering = watching.ordering + 1, content = ListContent.Rows(rows.reversed())))
+    }
+
+    @Test
+    fun `a new sort does not animate`() {
+        assertInstant(
+            ListFixtureStates.watching,
+            ListFixtureStates.watching.copy(
+                sort = ListSort.Title,
+                ordering = ListFixtureStates.watching.ordering + 1,
+                content = ListContent.Rows(ListFixtureStates.rows(ListStatus.Watching, ListSort.Title)),
+            ),
+        )
+    }
+
+    @Test
+    fun `switching tabs does not animate`() {
+        assertInstant(ListFixtureStates.watching, ListFixtureStates.planned)
+    }
+
+    // One frame after the change, rows that left are gone and every row is where it settles.
+    private fun assertInstant(
+        from: ListState,
+        to: ListState,
+    ) {
+        showAndSettle(from)
+        set(to)
+        compose.mainClock.advanceTimeByFrame()
+        (from.titles() - to.titles().toSet()).forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        val shown = to.titles().filter(::exists)
+        assertTrue(shown.isNotEmpty())
+        val first = shown.associateWith(::top)
+        val firstRow = compose.onNodeWithText(shown.first()).captureToImage().toPixelMap()
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(first, shown.associateWith(::top))
+        val settledRow = compose.onNodeWithText(shown.first()).captureToImage().toPixelMap()
+        assertTrue("the first row is drawn in full at once", firstRow.buffer.contentEquals(settledRow.buffer))
         assertIdle()
     }
 
@@ -197,7 +283,7 @@ class ListMotionTest {
     }
 
     private companion object {
-        const val COMPONENT_MS = 300L
+        val COMPONENT_CHANGE_MS = Motion.Duration.SHORT4.toLong()
         const val SETTLED = 2_000L
     }
 }
@@ -223,7 +309,7 @@ class ListMotionOffTest {
     @Test
     fun `the change is complete at once`() {
         compose.mainClock.autoAdvance = false
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ListScreen(state, onEvent = {}) } }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) } }
         compose.mainClock.advanceTimeByFrame()
         val leavingTop = compose.onNodeWithText(FixtureAnime.oneShortOfTotal.titles.romaji).getUnclippedBoundsInRoot().top
         compose.runOnUiThread { state = ListFixtureStates.completedSnackbar.copy(message = null) }

@@ -1,15 +1,25 @@
 package io.github.kauri_off.kiroku.list
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.Premiere
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.episodesToWatch
 import io.github.kauri_off.kiroku.core.airing.premiereOf
-import io.github.kauri_off.kiroku.core.airing.toWatch
+import io.github.kauri_off.kiroku.core.airing.shownAired
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.order
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.Titles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -105,19 +115,80 @@ class ListRowTest {
 
     @Test
     fun `A1 every row shows the aired count, to watch and premiere that core computes`() {
-        set.entries.forEach { entry ->
-            val airing = set.airing[entry.anime.id]
-            val row = row(entry.anime)
-            val expectedToWatch = toWatch(entry, airing)?.takeIf { it.value > 0 }
-            assertEquals(entry.anime.titles.romaji, expectedToWatch, (row.line3 as? Line3.ToWatch)?.count)
-            (row.line2 as? Line2.Progress)?.aired?.let { assertEquals(entry.anime.titles.romaji, airing!!.aired, it) }
-            (row.line2 as? Line2.Premieres)?.let { assertEquals(premiereOf(entry.anime, airing, today), it.premiere) }
+        (set.entries + grid()).forEach { entry -> assertFromCore(entry, set.airing[entry.anime.id]) }
+        grid().forEach { entry -> airings.forEach { airing -> assertFromCore(entry, airing) } }
+    }
+
+    @Test
+    fun `A1 a title MAL still calls not yet aired, with episodes aired, shows them and its to watch line`() {
+        val anime = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.NotYetAired)
+        val entry = ListEntry(anime, ListValues(ListStatus.Watching, 0, null, null, null), set.now)
+        val row = listRow(entry, Airing(AiredCount.Estimated(2), 24, null, set.now), today, TitleLanguage.Romaji)
+        assertEquals(Line2.Progress(0, 24, AiredCount.Estimated(2)), row.line2)
+        assertEquals(Line3.ToWatch(AiredCount.Estimated(2)), row.line3)
+    }
+
+    @Test
+    fun `A1 up next puts first exactly the rows with a to watch line`() {
+        airings.forEach { airing ->
+            val entries = grid().filter { it.status == ListStatus.Watching }
+            val ordered = order(entries, ListSort.UpNext, { airing }) { it.anime.titles.romaji }
+            val highlighted = ordered.map { listRow(it, airing, today, TitleLanguage.Romaji).line3 is Line3.ToWatch }
+            assertEquals(airing.toString(), highlighted.sortedDescending(), highlighted)
         }
     }
 
     @Test
-    fun `plus one is on every watching row and on no other`() {
+    fun `plus one is on every watching row and on no other, also at the total`() {
         set.entries.forEach { entry -> assertEquals(entry.status == ListStatus.Watching, row(entry.anime).plusOne) }
+        grid().forEach { entry ->
+            assertEquals(entry.status == ListStatus.Watching, listRow(entry, null, today, TitleLanguage.Romaji).plusOne)
+        }
+        val atTotal = set.entryFor(FixtureAnime.oneShortOfTotal.id)!!.let { it.copy(values = it.values.copy(watchedEpisodes = 12)) }
+        assertEquals(Line2.Progress(12, 12, null), listRow(atTotal, null, today, TitleLanguage.Romaji).line2)
+        assertTrue(listRow(atTotal, null, today, TitleLanguage.Romaji).plusOne)
+    }
+
+    // Every list status, MAL airing status and watched count around an aired count of 2 out of 24.
+    private fun grid(): List<ListEntry> =
+        ListStatus.entries.flatMap { status ->
+            AiringStatus.entries.flatMap { airingStatus ->
+                (0..3).map { watched ->
+                    val anime =
+                        FixtureAnime.exactToWatch.copy(
+                            id = AnimeId(GRID_ID + status.ordinal * 100L + airingStatus.ordinal * 10L + watched),
+                            titles = Titles("$watched ${airingStatus.name} ${status.name}"),
+                        )
+                    ListEntry(anime.copy(airingStatus = airingStatus), ListValues(status, watched, null, null, null), set.now)
+                }
+            }
+        }
+
+    private val airings: List<Airing?> =
+        listOf(
+            null,
+            Airing(AiredCount.Unknown, 24, null, null),
+            Airing(AiredCount.Exact(0), 24, ScheduledEpisode(1, set.now.plusSeconds(DAY)), null),
+            Airing(AiredCount.Exact(2), 24, ScheduledEpisode(3, set.now.plusSeconds(DAY)), set.now.minusSeconds(DAY)),
+            Airing(AiredCount.Exact(2), 24, null, set.now.minusSeconds(DAY)),
+            Airing(AiredCount.Estimated(2), 24, null, set.now.minusSeconds(DAY)),
+        )
+
+    private fun assertFromCore(
+        entry: ListEntry,
+        airing: Airing?,
+    ) {
+        val row = listRow(entry, airing, today, TitleLanguage.Romaji)
+        val name = "${entry.anime.titles.romaji} with $airing"
+        assertEquals(name, episodesToWatch(entry, airing), (row.line3 as? Line3.ToWatch)?.count)
+        (row.line2 as? Line2.Progress)?.let { assertEquals(name, shownAired(entry.anime, airing), it.aired) }
+        (row.line2 as? Line2.Premieres)?.let { assertEquals(name, premiereOf(entry.anime, airing, today), it.premiere) }
+        if (row.line3 is Line3.ToWatch) assertTrue(name, (row.line2 as? Line2.Progress)?.aired != null)
+    }
+
+    private companion object {
+        const val GRID_ID = 990_000L
+        const val DAY = 86_400L
     }
 
     @Test

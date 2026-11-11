@@ -5,10 +5,10 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.episodeTotal
+import io.github.kauri_off.kiroku.core.airing.episodesToWatch
 import io.github.kauri_off.kiroku.core.airing.premiereOf
-import io.github.kauri_off.kiroku.core.airing.toWatch
+import io.github.kauri_off.kiroku.core.airing.shownAired
 import io.github.kauri_off.kiroku.core.list.ListSort
-import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -20,8 +20,10 @@ data class ListState(
     val owner: ListOwner,
     val content: ListContent,
     val tab: ListStatus = ListStatus.Watching,
-    val sort: ListSort = ListSort.UpNext,
-    val sorts: List<ListSort> = ListSort.entries,
+    val sort: ListSort,
+    val sorts: List<ListSort>,
+    // Changes whenever the tab's order is computed again; rows animate only between states with the same value.
+    val ordering: Int = 0,
     val sortSheetOpen: Boolean = false,
     // The text typed into the filter field; null when the list is not being filtered.
     val filter: String? = null,
@@ -69,7 +71,9 @@ data class ListMessage(
 
         data object MovedToCompleted : Kind
 
-        data object CouldNotRefresh : Kind
+        data class RefreshFailed(
+            val failure: ListFailure,
+        ) : Kind
     }
 }
 
@@ -83,7 +87,7 @@ data class ListRow(
 )
 
 sealed interface Line2 {
-    // `12 / 24 · 14 aired`; the aired part only while the title airs and its count is known.
+    // `12 / 24 · 14 aired`; the aired part is :core's shownAired.
     data class Progress(
         val watched: Int,
         val total: Int?,
@@ -168,24 +172,20 @@ fun listRow(
 ): ListRow {
     val anime = entry.anime
     val values = entry.values
-    val total = episodeTotal(anime, airing)
+    val ownAiring = airing.takeUnless { readOnly }
     val premiere = if (readOnly) null else premiereOf(anime, airing, today)
+    val aired = shownAired(anime, ownAiring)
     val line2 =
         when {
             entry.status == ListStatus.Completed -> Line2.Score(values.score)
             premiere != null -> Line2.Premieres(premiere)
-            else ->
-                Line2.Progress(
-                    watched = values.watchedEpisodes,
-                    total = total,
-                    aired = (airing?.aired as? AiredCount.Known)?.takeIf { anime.airingStatus == AiringStatus.Airing && !readOnly },
-                )
+            else -> Line2.Progress(values.watchedEpisodes, episodeTotal(anime, airing), aired)
         }
-    val toWatch = toWatch(entry, airing)?.takeIf { it.value > 0 }
-    val next = airing?.nextEpisode?.takeIf { airing.aired is AiredCount.Exact }
+    val toWatch = episodesToWatch(entry, ownAiring)
+    val next = ownAiring?.nextEpisode
     val line3 =
         when {
-            readOnly || line2 !is Line2.Progress || line2.aired == null -> null
+            line2 !is Line2.Progress || aired == null -> null
             toWatch != null -> Line3.ToWatch(toWatch)
             next != null -> Line3.NextEpisode(next)
             else -> null
@@ -196,6 +196,6 @@ fun listRow(
         posterUrl = anime.posterUrl,
         line2 = line2,
         line3 = line3,
-        plusOne = !readOnly && entry.status == ListStatus.Watching && (total == null || values.watchedEpisodes < total),
+        plusOne = !readOnly && entry.status == ListStatus.Watching,
     )
 }

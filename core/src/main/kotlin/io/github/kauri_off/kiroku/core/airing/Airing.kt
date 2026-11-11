@@ -73,19 +73,30 @@ fun episodeTotal(
     airing: Airing?,
 ): Int? = anime.malEpisodes ?: airing?.total
 
+// The aired count a title shows beside its progress: known, and only until MAL marks the title finished.
+fun shownAired(
+    anime: Anime,
+    airing: Airing?,
+): AiredCount.Known? = if (anime.airingStatus == AiringStatus.Finished) null else airing?.aired as? AiredCount.Known
+
 fun toWatch(
     entry: ListEntry,
     airing: Airing?,
 ): AiredCount.Known? {
     if (entry.status != ListStatus.Watching) return null
-    if (entry.anime.airingStatus == AiringStatus.Finished) return null
-    val aired = airing?.aired as? AiredCount.Known ?: return null
+    val aired = shownAired(entry.anime, airing) ?: return null
     val count = (aired.value - entry.values.watchedEpisodes).coerceAtLeast(0)
     return when (aired) {
         is AiredCount.Exact -> AiredCount.Exact(count)
         is AiredCount.Estimated -> AiredCount.Estimated(count)
     }
 }
+
+// "Episodes to watch": a "to watch" figure above zero, the one a row highlights and "Up next" puts first.
+fun episodesToWatch(
+    entry: ListEntry,
+    airing: Airing?,
+): AiredCount.Known? = toWatch(entry, airing)?.takeIf { it.value > 0 }
 
 sealed interface Premiere {
     data class At(

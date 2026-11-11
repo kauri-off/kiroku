@@ -98,7 +98,24 @@ object ListFixtureStates {
             message = ListMessage(ListMessage.Kind.MovedToCompleted, serial = 1),
         )
 
-    val offlineCached = watching.copy(message = ListMessage(ListMessage.Kind.CouldNotRefresh, serial = 1))
+    // Watching by "Last updated", with the title "+1" is about to complete on top.
+    val lastUpdated =
+        watching.copy(sort = ListSort.LastUpdated, content = ListContent.Rows(rows(ListStatus.Watching, ListSort.LastUpdated)))
+
+    // The same after "+1" completed the top title, before any message: the row is gone and the rest closed up.
+    val completedRow =
+        lastUpdated.copy(
+            content =
+                ListContent.Rows(
+                    rows(
+                        ListStatus.Watching,
+                        ListSort.LastUpdated,
+                        shown = after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) },
+                    ),
+                ),
+        )
+
+    val offlineCached = watching.copy(message = ListMessage(ListMessage.Kind.RefreshFailed(ListFailure.NoConnection), serial = 1))
 
     val loading = state(content = ListContent.Loading)
 

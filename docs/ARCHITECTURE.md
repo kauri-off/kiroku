@@ -85,7 +85,7 @@ AniList (from live queries):
 
 | Source | Failure | What the user gets |
 |---|---|---|
-| MAL | Network or server error | Cached data stays, with a one-line "Could not refresh" snackbar. With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
+| MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
 | MAL | Refused when reading another user's list | "This list is private". Not treated as rate limiting. |
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and the foreground says "MyAnimeList is refusing requests, try again later". |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). |

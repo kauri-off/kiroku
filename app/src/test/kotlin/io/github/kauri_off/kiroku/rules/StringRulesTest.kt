@@ -33,11 +33,17 @@ class StringRulesTest {
             "%1\$d\u00A0/\u00A0%2\$d · вышло\u00A0~%3\$d",
             "%1\$s, %2\$s",
             "See all: %1\$s",
-            "Episode\u00A0%1\$d watched",
-            "Серия\u00A0%1\$d просмотрена",
         )) {
             assertEquals(clean, emptyList<String>(), numberSpaceProblems("a", clean))
         }
+        for (joined in listOf("in\u00A0%d days", "Вышло\u00A0%d серий", "Episode\u00A0%1\$d watched")) {
+            assertTrue(joined, numberSpaceProblems("values/strings_list.xml a", joined).isNotEmpty())
+        }
+        assertEquals(
+            emptyList<String>(),
+            numberSpaceProblems("values-ru/strings_list.xml list_episode_watched", "Серия\u00A0%1\$d просмотрена"),
+        )
+        assertTrue(numberSpaceProblems("values/strings_list.xml list_episode_watched", "Episode %1\$d watched").isNotEmpty())
         for (planted in listOf("%1\$s members", "%s участников", "%1\$s / %2\$s")) {
             assertTrue(planted, numberSpaceProblems("a", planted, plural = true).isNotEmpty())
         }

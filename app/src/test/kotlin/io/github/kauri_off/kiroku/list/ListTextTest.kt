@@ -64,10 +64,10 @@ class ListTextTest {
     @Config(qualifiers = "ru")
     fun `russian lines follow the glossary`() {
         val text = text()
-        assertEquals("12\u00A0/\u00A024 · вышло\u00A014", text.line2(Line2.Progress(12, 24, AiredCount.Exact(14))))
-        assertEquals("12 · вышло\u00A0~14", text.line2(Line2.Progress(12, null, AiredCount.Estimated(14))))
+        assertEquals("12\u00A0/\u00A024 ·\u00A0вышло\u00A014", text.line2(Line2.Progress(12, 24, AiredCount.Exact(14))))
+        assertEquals("12 ·\u00A0вышло\u00A0~14", text.line2(Line2.Progress(12, null, AiredCount.Estimated(14))))
         assertEquals("К просмотру:\u00A0~2", text.line3(Line3.ToWatch(AiredCount.Estimated(2))))
-        assertEquals("Серия\u00A015 · сб\u00A017:30", text.line3(Line3.NextEpisode(ScheduledEpisode(15, at(17, 17, 30)))))
+        assertEquals("Серия\u00A015 ·\u00A0сб\u00A017:30", text.line3(Line3.NextEpisode(ScheduledEpisode(15, at(17, 17, 30)))))
         assertEquals("Премьера: сб\u00A017:30", text.premiere(Premiere.At(at(17, 17, 30))))
         assertEquals("Премьера 4 апр.", text.premiere(Premiere.OnDay(LocalDate.of(2026, 4, 4))))
         assertEquals("Премьера в\u00A0январе\u00A02027\u00A0г.", text.premiere(Premiere.InMonth(YearMonth.of(2027, 1))))
@@ -82,7 +82,7 @@ class ListTextTest {
     fun `english lines follow the glossary`() {
         val text = text()
         assertEquals("12\u00A0/\u00A024", text.line2(Line2.Progress(12, 24, null)))
-        assertEquals("12\u00A0/\u00A024 · ~14\u00A0aired", text.line2(Line2.Progress(12, 24, AiredCount.Estimated(14))))
+        assertEquals("12\u00A0/\u00A024 ·\u00A0~14\u00A0aired", text.line2(Line2.Progress(12, 24, AiredCount.Estimated(14))))
         assertEquals("2\u00A0to watch", text.line3(Line3.ToWatch(AiredCount.Exact(2))))
         assertEquals("Premieres January\u00A02027", text.premiere(Premiere.InMonth(YearMonth.of(2027, 1))))
         assertEquals("Premieres\u00A02027", text.premiere(Premiere.InYear(Year.of(2027))))

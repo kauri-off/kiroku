@@ -1,7 +1,7 @@
 package io.github.kauri_off.kiroku.core.list
 
 import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.toWatch
+import io.github.kauri_off.kiroku.core.airing.episodesToWatch
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -47,7 +47,7 @@ private fun upNext(airing: (AnimeId) -> Airing?): Comparator<ListEntry> {
     fun group(entry: ListEntry): Int {
         val airing = airing(entry.anime.id)
         return when {
-            (toWatch(entry, airing)?.value ?: 0) > 0 -> 0
+            episodesToWatch(entry, airing) != null -> 0
             airing?.nextEpisode != null -> 1
             else -> 2
         }

@@ -70,6 +70,48 @@ class AiringTest {
         assertEquals(AiredCount.Exact(0), toWatch(entry, airing(AiredCount.Exact(14))))
     }
 
+    @Test
+    fun `the aired count is shown while known, until MAL says finished, whatever else MAL says`() {
+        AiringStatus.entries.forEach { status ->
+            val anime = FixtureAnime.exactToWatch.copy(airingStatus = status)
+            val expected = if (status == AiringStatus.Finished) null else AiredCount.Exact(2)
+            assertEquals(status.name, expected, shownAired(anime, airing(AiredCount.Exact(2))))
+            assertNull(shownAired(anime, airing(AiredCount.Unknown)))
+            assertNull(shownAired(anime, null))
+        }
+    }
+
+    @Test
+    fun `A1 to watch is computed from the aired count shown, so one is never without the other`() {
+        val airings =
+            listOf(
+                Airing(AiredCount.Unknown, 24, null, null),
+                Airing(AiredCount.Exact(0), 24, ScheduledEpisode(1, instant), null),
+                Airing(AiredCount.Exact(2), 24, null, instant),
+                Airing(AiredCount.Estimated(2), 24, null, instant),
+            )
+        for (status in AiringStatus.entries) {
+            for (airing in airings) {
+                for (watched in 0..3) {
+                    val entry = entry(FixtureAnime.exactToWatch.copy(airingStatus = status), ListStatus.Watching, watched)
+                    val shown = shownAired(entry.anime, airing)
+                    assertEquals("$status $airing $watched", shown?.value?.minus(watched)?.coerceAtLeast(0), toWatch(entry, airing)?.value)
+                    if (episodesToWatch(entry, airing) != null) assertEquals(true, shown != null)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `episodes to watch is a to watch figure above zero`() {
+        val entry = entry(FixtureAnime.exactToWatch, ListStatus.Watching, 14)
+        assertNull(episodesToWatch(entry, airing(AiredCount.Exact(14))))
+        assertEquals(
+            AiredCount.Estimated(1),
+            episodesToWatch(entry.copy(values = entry.values.copy(watchedEpisodes = 13)), airing(AiredCount.Estimated(14))),
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `A3 the aired count never exceeds a known total`() {
         Airing(AiredCount.Exact(25), 24, null, null)

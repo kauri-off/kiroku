@@ -13,9 +13,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -53,8 +58,12 @@ fun AnimeRow(
             lines.takeIf { it.isNotEmpty() }?.let {
                 {
                     // Two lines' room keeps every row three-line, so text and trailing element sit alike in each.
-                    val twoLines = with(LocalDensity.current) { (MaterialTheme.typography.bodyMedium.lineHeight * 2).toDp() }
-                    Column(Modifier.heightIn(min = twoLines)) {
+                    val line =
+                        with(LocalDensity.current) {
+                            MaterialTheme.typography.bodyMedium.lineHeight
+                                .toDp()
+                        }
+                    Column(Modifier.heightIn(min = line * 2).asTwoLines(line)) {
                         it.forEach { line -> SupportingLine(line) }
                     }
                 }
@@ -66,6 +75,20 @@ fun AnimeRow(
 }
 
 const val MAX_SUPPORTING_LINES = 2
+
+// ListItem picks its layout from the supporting text's first and last baselines, so one line reports a second.
+private fun Modifier.asTwoLines(line: Dp): Modifier =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val first = placeable[FirstBaseline]
+        val lines =
+            if (first == AlignmentLine.Unspecified) {
+                emptyMap()
+            } else {
+                mapOf<AlignmentLine, Int>(LastBaseline to maxOf(placeable[LastBaseline], first + line.roundToPx()))
+            }
+        layout(placeable.width, placeable.height, lines) { placeable.place(0, 0) }
+    }
 
 @Composable
 private fun SupportingLine(line: RowLine) {

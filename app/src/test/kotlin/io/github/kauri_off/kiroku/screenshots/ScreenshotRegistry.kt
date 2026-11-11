@@ -64,8 +64,9 @@ sealed class RegistryBase {
         val shape = shape()
         val structure = shape.problems()
         if (structure.isNotEmpty()) fail(structure.joinToString("\n"))
-        val problems = renderScreen(screen, shape.cases, File(outputRoot, screen), notShown = shape.notShown)
-        transitions.forEach { renderTransition(it, File(outputRoot, screen)) }
+        val problems =
+            renderScreen(screen, shape.cases, File(outputRoot, screen), notShown = shape.notShown) +
+                transitions.flatMap { renderTransition(it, shape.cases, File(outputRoot, screen)) }
         if (problems.isNotEmpty()) fail(problems.joinToString("\n"))
     }
 
