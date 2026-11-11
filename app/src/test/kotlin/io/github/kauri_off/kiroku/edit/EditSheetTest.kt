@@ -1,14 +1,24 @@
 package io.github.kauri_off.kiroku.edit
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -22,6 +32,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -30,6 +41,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
+import java.time.Year
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -44,20 +59,35 @@ class EditSheetTest {
     private val saved =
         ListValues(ListStatus.Watching, 12, score = 8, startDate = PartialDate.Day(LocalDate.of(2025, 10, 12)), finishDate = null)
     private val events = mutableListOf<EditSheetEvent>()
-    private var state by mutableStateOf(EditSheetState.of(saved, total = 24, today))
+    private val opened = EditSheetState.of(TITLE, saved, total = 24, malEpisodes = 24, today)
+    private var state by mutableStateOf(opened)
 
-    private fun sheet(initial: EditSheetState = state) {
-        state = initial
-        compose.setContent {
-            KirokuTheme(dark = false, dynamicColor = false) {
-                EditSheet(state) {
-                    events += it
-                    state = state.after(it)
-                }
+    private val content: @Composable () -> Unit = {
+        KirokuTheme(dark = false, dynamicColor = false) {
+            EditSheet(state) {
+                events += it
+                state = state.after(it)
             }
         }
+    }
+
+    private fun sheet(initial: EditSheetState = opened) {
+        state = initial
+        compose.setContent(content)
         compose.waitForIdle()
     }
+
+    // Save writes the draft, so the draft must be what the sheet shows when Save is tapped.
+    private fun assertTheSheetShows(values: ListValues) {
+        compose.onNode(hasText(statusNames.getValue(values.status)) and isSelectable()).assertIsSelected()
+        field.assertTextContains(values.watchedEpisodes.toString(), substring = true)
+        dateField("Start date").assertTextContains(values.startDate.shown(), substring = true)
+        dateField("Finish date").assertTextContains(values.finishDate.shown(), substring = true)
+    }
+
+    private fun PartialDate?.shown() = (this as? PartialDate.Day)?.date?.let { DAY.format(it) } ?: ""
+
+    private fun dateField(label: String) = compose.onNode(hasText(label) and hasClickAction())
 
     private val save get() = compose.onNodeWithText("Save")
     private val field get() = compose.onNodeWithContentDescription("Episodes watched")
@@ -90,14 +120,108 @@ class EditSheetTest {
     }
 
     @Test
-    fun aTypedCountIsAppliedBeforeSave() {
+    @Config(qualifiers = "ru-w360dp-h640dp", fontScale = 1.3f)
+    fun saveIsOnScreenWithoutScrollingOnASmallScreenWithLargeText() {
+        sheet()
+        compose.onNodeWithText("Сохранить").assertIsDisplayed()
+        compose.onNodeWithText("Удалить из списка").assertIsDisplayed()
+    }
+
+    @Test
+    fun theSheetNamesTheTitle() {
+        sheet()
+        compose.onNodeWithText(TITLE).assertExists()
+    }
+
+    @Test
+    fun aTypedCountTakesEffectAsItIsTyped() {
         sheet()
         field.performTextReplacement("17")
         compose.waitForIdle()
-        assertEquals(emptyList<EditSheetEvent>(), events)
+        assertEquals(listOf(EditSheetEvent.WatchedTyped("17")), events)
+        assertEquals(17, state.draft.watchedEpisodes)
         save.performClick()
         compose.waitForIdle()
-        assertEquals(listOf(EditSheetEvent.WatchedChanged(17), EditSheetEvent.SaveClicked), events.take(2))
+        assertEquals(EditSheetEvent.SaveClicked, events[1])
+        assertEquals(saved.copy(watchedEpisodes = 17), state.draft)
+    }
+
+    @Test
+    fun aTypedCountThenAStatusSavesWhatTheSheetShows() {
+        sheet()
+        field.performTextReplacement("24")
+        compose.onNodeWithText("Dropped").performClick()
+        compose.waitForIdle()
+        val shown = saved.copy(status = ListStatus.Dropped, watchedEpisodes = 24, finishDate = PartialDate.Day(today))
+        assertTheSheetShows(shown)
+        save.performClick()
+        compose.waitForIdle()
+        assertEquals(
+            listOf(EditSheetEvent.WatchedTyped("24"), EditSheetEvent.StatusChosen(ListStatus.Dropped), EditSheetEvent.SaveClicked),
+            events.take(3),
+        )
+        assertTrue(state.closing)
+        assertEquals(shown, state.draft)
+    }
+
+    @Test
+    fun aTypedCountThenAClearedDateSavesWhatTheSheetShows() {
+        sheet()
+        field.performTextReplacement("24")
+        compose.onNodeWithContentDescription("Clear the finish date").performClick()
+        compose.waitForIdle()
+        val shown = saved.copy(status = ListStatus.Completed, watchedEpisodes = 24, finishDate = null)
+        assertTheSheetShows(shown)
+        save.performClick()
+        compose.waitForIdle()
+        assertTrue(state.closing)
+        assertEquals(shown, state.draft)
+    }
+
+    @Test
+    fun aTypedCountSurvivesRecreationWithoutFocus() {
+        state = opened
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent(content)
+        field.performTextReplacement("17")
+        compose.waitForIdle()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        field.assertIsNotFocused()
+        field.assertTextContains("17", substring = true)
+        save.performClick()
+        compose.waitForIdle()
+        assertTrue(state.closing)
+        assertEquals(17, state.draft.watchedEpisodes)
+    }
+
+    @Test
+    fun aRestoredTypedCountIsWhatSaveWrites() {
+        sheet(opened.after(EditSheetEvent.WatchedTyped("17")))
+        field.assertIsNotFocused()
+        save.performClick()
+        compose.waitForIdle()
+        assertEquals(EditSheetEvent.SaveClicked, events.first())
+        assertTrue(state.closing)
+        assertEquals(saved.copy(watchedEpisodes = 17), state.draft)
+    }
+
+    @Test
+    fun anEmptyCountCannotBeSavedAndLeavingTheFieldShowsTheCountAgain() {
+        sheet()
+        field.performTextReplacement("")
+        compose.waitForIdle()
+        save.assertIsNotEnabled()
+        field.performImeAction()
+        compose.waitForIdle()
+        field.assertTextContains("12", substring = true)
+        save.assertIsEnabled()
+    }
+
+    @Test
+    fun aDisabledSaveWritesNothing() {
+        val refused = opened.after(EditSheetEvent.WatchedTyped("26"))
+        assertFalse(refused.after(EditSheetEvent.SaveClicked).closing)
     }
 
     @Test
@@ -144,13 +268,13 @@ class EditSheetTest {
     }
 
     @Test
-    fun anUnconfirmedCountIsAChange() {
+    fun aCountBeingTypedIsAChange() {
         sheet()
-        field.performTextReplacement("17")
+        field.performTextReplacement("")
         compose.waitForIdle()
         dragHandle.performSemanticsAction(SemanticsActions.Dismiss)
         compose.waitForIdle()
-        assertEquals(listOf(EditSheetEvent.DismissAsked), events)
+        assertEquals(listOf(EditSheetEvent.WatchedTyped(""), EditSheetEvent.DismissAsked), events)
         sheetIsOpen()
     }
 
@@ -188,7 +312,7 @@ class EditSheetTest {
 
     @Test
     fun aTitleNotOnTheListHasNothingToRemove() {
-        sheet(EditSheetState.of(null, total = 12, today))
+        sheet(EditSheetState.of(TITLE, null, total = 12, malEpisodes = 12, today))
         sheetIsOpen()
         compose.onNodeWithText("Remove from list").assertDoesNotExist()
     }
@@ -200,5 +324,41 @@ class EditSheetTest {
         compose.waitForIdle()
         assertEquals(listOf(EditSheetEvent.DateOpened(DateField.Finish)), events)
         compose.onNodeWithText("OK").assertExists()
+    }
+
+    @Test
+    fun aScreenReaderOpensThePickerFromADateField() {
+        sheet()
+        dateField("Finish date").performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        assertEquals(listOf(EditSheetEvent.DateOpened(DateField.Finish)), events)
+    }
+
+    @Test
+    fun aDateMalHoldsAsAYearOrAMonthShowsAsSuch() {
+        sheet(
+            opened.copy(
+                draft =
+                    saved.copy(
+                        startDate = PartialDate.OnlyYear(Year.of(2025)),
+                        finishDate = PartialDate.Month(YearMonth.of(2026, 1)),
+                    ),
+            ),
+        )
+        dateField("Start date").assertTextContains("2025")
+        dateField("Finish date").assertTextContains("January 2026")
+    }
+
+    private companion object {
+        const val TITLE = "Kagerou Toshokan 2nd Season"
+        val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, y", Locale.ENGLISH)
+        val statusNames =
+            mapOf(
+                ListStatus.Watching to "Watching",
+                ListStatus.Planned to "Planned",
+                ListStatus.Completed to "Completed",
+                ListStatus.OnHold to "On hold",
+                ListStatus.Dropped to "Dropped",
+            )
     }
 }

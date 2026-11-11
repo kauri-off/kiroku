@@ -1,15 +1,20 @@
 package io.github.kauri_off.kiroku.edit
 
 import android.text.format.DateFormat
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -17,6 +22,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +30,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -41,13 +48,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -57,15 +70,18 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.offset
+import androidx.compose.ui.window.DialogProperties
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
-import io.github.kauri_off.kiroku.design.component.EpisodeInput
-import io.github.kauri_off.kiroku.design.component.EpisodeStepper
+import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
-import io.github.kauri_off.kiroku.design.component.episodeInput
+import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
+import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -78,21 +94,17 @@ import kotlin.math.roundToInt
 fun EditSheet(
     state: EditSheetState,
     onEvent: (EditSheetEvent) -> Unit,
-) = EditSheet(state, onEvent, typedEpisodes = null, focusEpisodes = false)
+) = EditSheet(state, onEvent, focusCount = false)
 
-// [typedEpisodes] and [focusEpisodes] put the sheet in the middle of typing a count, for fixture states.
-@OptIn(ExperimentalMaterial3Api::class)
+// [focusCount] opens the sheet with the count field focused, for fixture states.
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun EditSheet(
     state: EditSheetState,
     onEvent: (EditSheetEvent) -> Unit,
-    typedEpisodes: String?,
-    focusEpisodes: Boolean,
+    focusCount: Boolean,
 ) {
-    var typed by rememberSaveable { mutableStateOf(typedEpisodes) }
-    val typedInput = typed?.let { episodeInput(it, state.draft.watchedEpisodes, state.total) }
-    val unsaved = state.hasChanges || (typedInput != null && typedInput != EpisodeInput.Keep)
-    val mayLeave by rememberUpdatedState(state.closing || !unsaved)
+    val mayLeave by rememberUpdatedState(state.mayLeave)
     val events by rememberUpdatedState(onEvent)
     val sheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true) { value ->
@@ -109,7 +121,20 @@ internal fun EditSheet(
             events(EditSheetEvent.Dismissed)
         }
     }
-    val episodesFocus = remember { FocusRequester() }
+    val countFocus = remember { FocusRequester() }
+    var countSpan by remember { mutableStateOf(IntRange.EMPTY) }
+    var countFocused by remember { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+    // The scroll's own response to the keyboard can carry the field out of view; once it ends, the field comes back.
+    LaunchedEffect(countFocused) {
+        if (countFocused) {
+            snapshotFlow { scroll.viewportSize }.collectLatest {
+                awaitFrame()
+                snapshotFlow { scroll.isScrollInProgress }.first { !it }
+                scroll.scrollToShow(countSpan)
+            }
+        }
+    }
 
     val scope = rememberCoroutineScope()
     ModalBottomSheet(
@@ -123,50 +148,69 @@ internal fun EditSheet(
         sheetState = sheetState,
     ) {
         val focusManager = LocalFocusManager.current
-        Column(
-            Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l),
-        ) {
-            // The gaps between groups look equal once the controls' own invisible margins are counted.
-            StatusChips(state.draft.status) { onEvent(EditSheetEvent.StatusChosen(it)) }
-            Spacer(Modifier.height(Spacing.l))
-            Label(stringResource(R.string.edit_episodes))
-            Spacer(Modifier.height(Spacing.xs))
-            EpisodeStepper(
-                watched = state.draft.watchedEpisodes,
-                total = state.total,
-                onWatchedChange = { onEvent(EditSheetEvent.WatchedChanged(it)) },
-                modifier = Modifier.bleed(start = Spacing.m),
-                typed = typedEpisodes,
-                onTyping = { typed = it },
-                fieldFocus = episodesFocus,
-            )
-            if (focusEpisodes) LaunchedEffect(Unit) { episodesFocus.requestFocus() }
-            Spacer(Modifier.height(Spacing.xl))
-            ScoreSlider(state.draft.score ?: 0) { onEvent(EditSheetEvent.ScoreChanged(it)) }
-            Spacer(Modifier.height(Spacing.l + Spacing.xs))
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                DateInput(DateField.Start, state.draft.startDate, onEvent)
-                DateInput(DateField.Finish, state.draft.finishDate, onEvent)
-            }
-            Spacer(Modifier.height(Spacing.xl))
-            LineOrStack(gap = Spacing.s, stackedEndInset = Spacing.s) {
-                if (state.isNew) {
-                    Box(Modifier)
-                } else {
-                    TextButton(onClick = { onEvent(EditSheetEvent.RemoveClicked) }, modifier = Modifier.bleed(start = Spacing.m)) {
-                        Text(stringResource(R.string.edit_remove))
-                    }
-                }
-                Button(
-                    onClick = {
-                        // Leaving the count field applies what was typed into it before the values are saved.
-                        focusManager.clearFocus()
-                        onEvent(EditSheetEvent.SaveClicked)
+        Column(Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) {
+                // The gaps between groups look equal once the controls' own invisible margins are counted.
+                TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(Spacing.l))
+                StatusChips(state.draft.status) { onEvent(EditSheetEvent.StatusChosen(it)) }
+                Spacer(Modifier.height(Spacing.l))
+                Column(
+                    Modifier.onPlaced {
+                        val top = it.positionInParent().y.roundToInt()
+                        countSpan = top until top + it.size.height
                     },
-                    enabled = typedInput !is EpisodeInput.TooMany,
-                ) { Text(stringResource(R.string.edit_save)) }
+                ) {
+                    Label(stringResource(R.string.edit_episodes))
+                    Spacer(Modifier.height(Spacing.xs))
+                    EpisodeStepperLayout(
+                        text = state.typed ?: state.draft.watchedEpisodes.toString(),
+                        current = if (state.countRefused) null else state.draft.watchedEpisodes,
+                        total = state.total,
+                        refused = state.countRefused,
+                        onTextChange = { onEvent(EditSheetEvent.WatchedTyped(it)) },
+                        onDone = {
+                            onEvent(EditSheetEvent.TypingEnded)
+                            if (!state.countRefused) focusManager.clearFocus()
+                        },
+                        onFocusChange = {
+                            countFocused = it
+                            if (!it) onEvent(EditSheetEvent.TypingEnded)
+                        },
+                        onStep = { onEvent(EditSheetEvent.WatchedChanged(it)) },
+                        modifier = Modifier.bleed(start = iconButtonMargin(R.drawable.ic_remove)),
+                        fieldModifier = Modifier.focusRequester(countFocus),
+                    )
+                }
+                if (focusCount) LaunchedEffect(Unit) { countFocus.requestFocus() }
+                Spacer(Modifier.height(Spacing.xl))
+                ScoreSlider(state.draft.score ?: 0) { onEvent(EditSheetEvent.ScoreChanged(it)) }
+                Spacer(Modifier.height(Spacing.xl))
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    DateInput(DateField.Start, state.draft.startDate, onEvent)
+                    DateInput(DateField.Finish, state.draft.finishDate, onEvent)
+                }
+            }
+            // Out of the scroll so Save is always on screen; hidden while typing, which Done or a tap elsewhere ends.
+            if (!WindowInsets.isImeVisible) {
+                Spacer(Modifier.height(Spacing.xl))
+                Actions(
+                    remove =
+                        if (state.isNew) {
+                            null
+                        } else {
+                            {
+                                TextButton(
+                                    onClick = { onEvent(EditSheetEvent.RemoveClicked) },
+                                ) { Text(stringResource(R.string.edit_remove)) }
+                            }
+                        },
+                    save = {
+                        Button(onClick = { onEvent(EditSheetEvent.SaveClicked) }, enabled = state.canSave) {
+                            Text(stringResource(R.string.edit_save))
+                        }
+                    },
+                )
             }
         }
     }
@@ -174,31 +218,81 @@ internal fun EditSheet(
     when (val dialog = state.dialog) {
         is EditDialog.PickDate -> DateDialog(dialog.field, state, onEvent)
         EditDialog.ConfirmRemove ->
-            AlertDialog(
-                onDismissRequest = { onEvent(EditSheetEvent.DialogDismissed) },
-                title = { Text(stringResource(R.string.edit_remove_title)) },
-                text = { Text(stringResource(R.string.edit_remove_text)) },
-                confirmButton = {
-                    TextButton(onClick = { onEvent(EditSheetEvent.RemoveConfirmed) }) { Text(stringResource(R.string.edit_remove_confirm)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { onEvent(EditSheetEvent.DialogDismissed) }) { Text(stringResource(R.string.edit_cancel)) }
-                },
+            Confirmation(
+                title = stringResource(R.string.edit_remove_title),
+                text = stringResource(R.string.edit_remove_text),
+                confirm = stringResource(R.string.edit_remove_confirm),
+                dismiss = stringResource(R.string.edit_cancel),
+                onConfirm = { onEvent(EditSheetEvent.RemoveConfirmed) },
+                onDismiss = { onEvent(EditSheetEvent.DialogDismissed) },
             )
         EditDialog.ConfirmDiscard ->
-            AlertDialog(
-                onDismissRequest = { onEvent(EditSheetEvent.DialogDismissed) },
-                title = { Text(stringResource(R.string.edit_discard_title)) },
-                confirmButton = {
-                    TextButton(
-                        onClick = { onEvent(EditSheetEvent.DiscardConfirmed) },
-                    ) { Text(stringResource(R.string.edit_discard_confirm)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { onEvent(EditSheetEvent.DialogDismissed) }) { Text(stringResource(R.string.edit_keep_editing)) }
-                },
+            Confirmation(
+                title = stringResource(R.string.edit_discard_title),
+                text = null,
+                confirm = stringResource(R.string.edit_discard_confirm),
+                dismiss = stringResource(R.string.edit_keep_editing),
+                onConfirm = { onEvent(EditSheetEvent.DiscardConfirmed) },
+                onDismiss = { onEvent(EditSheetEvent.DialogDismissed) },
             )
         null -> Unit
+    }
+}
+
+// A stock dialog that keeps the window's side margin however wide its text grows.
+@Composable
+private fun Confirmation(
+    title: String,
+    text: String?,
+    confirm: String,
+    dismiss: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) = AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text(title) },
+    text = text?.let { { Text(it) } },
+    confirmButton = { TextButton(onClick = onConfirm) { Text(confirm) } },
+    dismissButton = { TextButton(onClick = onDismiss) { Text(dismiss) } },
+    properties = DialogProperties(usePlatformDefaultWidth = false),
+    modifier = Modifier.padding(horizontal = Spacing.xl),
+)
+
+// Remove at the start and Save at the end of one line; when they do not fit, Save above Remove, both at the end.
+// Remove's text, not its padding, lines up with the content edge.
+@Composable
+private fun Actions(
+    remove: (@Composable () -> Unit)?,
+    save: @Composable () -> Unit,
+) {
+    val direction = LocalLayoutDirection.current
+    val padding = ButtonDefaults.TextButtonContentPadding
+    val startInset = padding.calculateStartPadding(direction)
+    val endInset = padding.calculateEndPadding(direction)
+    Layout(content = {
+        save()
+        remove?.invoke()
+    }) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val saveButton = measurables[0].measure(loose)
+        val start = startInset.roundToPx()
+        val end = endInset.roundToPx()
+        val removeButton = measurables.getOrNull(1)?.measure(loose.copy(maxWidth = width + start + end))
+        val gap = Spacing.s.roundToPx()
+        val inline = removeButton == null || removeButton.width - start - end + gap + saveButton.width <= width
+        if (inline) {
+            val height = maxOf(saveButton.height, removeButton?.height ?: 0)
+            layout(width, height) {
+                removeButton?.placeRelative(-start, (height - removeButton.height) / 2)
+                saveButton.placeRelative(width - saveButton.width, (height - saveButton.height) / 2)
+            }
+        } else {
+            layout(width, saveButton.height + removeButton.height) {
+                saveButton.placeRelative(width - saveButton.width, 0)
+                removeButton.placeRelative(width - removeButton.width + end, saveButton.height)
+            }
+        }
     }
 }
 
@@ -253,7 +347,21 @@ private fun Label(text: String) =
         modifier = Modifier.clearAndSetSemantics {},
     )
 
-// Lets a control's own padding reach into the sheet's, so its glyph or text lines up with the content edge.
+// Scrolls as little as shows [span] of the content, its start first when it is taller than the viewport.
+private suspend fun ScrollState.scrollToShow(span: IntRange) {
+    if (span.isEmpty()) return
+    val target = if (span.last + 1 - viewportSize > span.first) span.first else value.coerceIn(span.last + 1 - viewportSize, span.first)
+    if (target != value) animateScrollTo(target)
+}
+
+// The space an icon button leaves around its icon, which [bleed] lets reach into the sheet's padding.
+@Composable
+private fun iconButtonMargin(icon: Int): Dp {
+    val iconWidth = with(LocalDensity.current) { painterResource(icon).intrinsicSize.width.toDp() }
+    return (LocalMinimumInteractiveComponentSize.current - iconWidth) / 2
+}
+
+// Lets a control's own padding reach into the sheet's, so its glyph lines up with the content edge.
 private fun Modifier.bleed(start: Dp): Modifier =
     layout { measurable, constraints ->
         val inset = start.roundToPx()
@@ -312,7 +420,7 @@ private fun DateInput(
     date: PartialDate?,
     onEvent: (EditSheetEvent) -> Unit,
 ) {
-    val label = stringResource(if (field == DateField.Start) R.string.edit_start_date else R.string.edit_finish_date)
+    val label = dateLabel(field)
     val clear = stringResource(if (field == DateField.Start) R.string.edit_clear_start_date else R.string.edit_clear_finish_date)
     val choose = stringResource(R.string.edit_choose_date)
     val open = { onEvent(EditSheetEvent.DateOpened(field)) }
@@ -326,15 +434,15 @@ private fun DateInput(
         readOnly = true,
         singleLine = true,
         label = { Text(label) },
-        trailingIcon = {
-            if (date != null) {
-                IconButton(onClick = { onEvent(EditSheetEvent.DateCleared(field)) }) {
-                    Icon(painterResource(R.drawable.ic_close), contentDescription = clear)
+        leadingIcon = { Icon(painterResource(R.drawable.ic_calendar), contentDescription = null) },
+        trailingIcon =
+            date?.let {
+                {
+                    IconButton(onClick = { onEvent(EditSheetEvent.DateCleared(field)) }) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = clear)
+                    }
                 }
-            } else {
-                Icon(painterResource(R.drawable.ic_calendar), contentDescription = null)
-            }
-        },
+            },
         interactionSource = presses,
         modifier =
             Modifier.fillMaxWidth().semantics {
@@ -345,6 +453,10 @@ private fun DateInput(
             },
     )
 }
+
+@Composable
+private fun dateLabel(field: DateField): String =
+    stringResource(if (field == DateField.Start) R.string.edit_start_date else R.string.edit_finish_date)
 
 // A date as precise as MAL holds it, in the locale's own order.
 @Composable
@@ -400,7 +512,13 @@ private fun DateDialog(
         dismissButton = {
             TextButton(onClick = { onEvent(EditSheetEvent.DialogDismissed) }) { Text(stringResource(R.string.edit_cancel)) }
         },
-    ) { DatePicker(picker) }
+    ) {
+        // Names the date being picked, in the stock title's place.
+        DatePicker(
+            picker,
+            title = { Text(dateLabel(field), Modifier.padding(start = Spacing.xl, end = Spacing.m, top = Spacing.l)) },
+        )
+    }
 }
 
 private fun LocalDate.utcMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()

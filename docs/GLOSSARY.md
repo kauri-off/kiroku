@@ -43,7 +43,7 @@ The owner is the final authority on the Russian column.
 | A typed count above the total | The title has 24 episodes | В тайтле 24 серии | Plural: серия, серии, серий |
 | Discard confirmation | Discard changes? | Не сохранять изменения? | Buttons: Discard / Keep editing, «Не сохранять» / «Вернуться». Not «Отменить», which is Undo |
 | Save | Save | Сохранить | |
-| Edit sheet: dates | Start date / Finish date | Дата начала / Дата окончания | Field labels. Spoken: `Clear the start date` / «Очистить дату начала», `Choose a date` / «Выбрать дату» |
+| Edit sheet: dates | Start date / Finish date | Дата начала / Дата окончания | Field labels, and the date picker's title. Spoken: `Clear the start date` / «Очистить дату начала», `Choose a date` / «Выбрать дату» |
 | Edit sheet: score | 8 · Very good / Not scored | 8 · Очень хорошо / Без оценки | The slider's value, with the score names below |
 | Remove confirmation | Remove from list? | Удалить из списка? | Text: Progress, score and dates will be lost / «Прогресс, оценка и даты будут потеряны». Buttons: Remove / Cancel, «Удалить» / «Отмена» |
 | Date picker buttons | OK / Cancel | ОК / Отмена | «Отмена» dismisses; it is not «Отменить», which is Undo |

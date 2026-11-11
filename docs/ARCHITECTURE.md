@@ -413,7 +413,8 @@ restyled into something else.
 
 The default Material 3 type scale with the system font. Screens use only these roles:
 
-- `headlineSmall`: the title on the title page. `titleMedium`: section headers and the number in `StatNumber`.
+- `headlineSmall`: the title on the title page. `titleMedium`: section headers, the title in the edit sheet and the
+  number in `StatNumber`.
 - `bodyMedium`: body text and supporting lines. `labelLarge` and `labelMedium`: captions.
 - Top app bar titles, row headlines, buttons and chips keep the role their component sets.
 
@@ -450,7 +451,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke; a value above the total is refused with an inline error and not applied |
+| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke, except in the edit sheet, which writes nothing before Save and applies it as it is typed; a value above the total is refused with an inline error and not applied |
 | `ScreenState` | `CircularProgressIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
 
@@ -639,10 +640,14 @@ The order of items 2 to 7 does not change, and the above-the-fold rule stays.
 
 ### 9.5 Edit sheet
 
-A modal bottom sheet. Must show: the status as five single-choice chips in a wrapping row (two rows in the base
-variants, more with larger text; chips are controls, not logical lines); an `EpisodeStepper`; a score slider 0 to 10
-with the score names of the glossary; start and finish dates; a text button "Remove from list" (asks for
-confirmation); "Save". Limit: nothing else. Nothing is written before "Save". Dismissing the sheet with unsaved
+A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
+edits; the status as five single-choice chips in a wrapping row (two rows in the base variants, more with larger
+text; chips are controls, not logical lines); an `EpisodeStepper` labelled "Episodes watched"; a score slider 0 to 10
+labelled "Score", with the score names of the glossary; start and finish dates; a text button "Remove from list"
+(asks for confirmation); "Save", always on screen without scrolling. Limit: nothing else. Nothing is written before
+"Save", and "Save" writes exactly what the sheet shows: a typed count takes effect in the sheet as it is typed, and
+"Save" is disabled while the count field is empty or holds a count above the total. The stepper's total is the
+displayed total (A3); the automatic status change is decided on MAL's total (W7). Dismissing the sheet with unsaved
 changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come after 1.0.
 
 ### 9.6 Search

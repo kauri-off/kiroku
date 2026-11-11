@@ -16,17 +16,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -65,7 +61,7 @@ fun EpisodeStepper(
     enabled: Boolean = true,
 ) = EpisodeStepper(watched, total, onWatchedChange, modifier, enabled, typed = null)
 
-// [typed] stands for text the user has typed but not yet confirmed; [onTyping] hears the unconfirmed text, or null.
+// [typed] stands for text the user has typed but not yet confirmed.
 @Composable
 internal fun EpisodeStepper(
     watched: Int,
@@ -74,12 +70,8 @@ internal fun EpisodeStepper(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     typed: String?,
-    onTyping: (String?) -> Unit = {},
-    fieldFocus: FocusRequester? = null,
 ) {
     var draft by rememberSaveable { mutableStateOf(typed) }
-    val typingListener by rememberUpdatedState(onTyping)
-    LaunchedEffect(draft) { typingListener(draft) }
     var refused by rememberSaveable { mutableStateOf(typed != null && episodeInput(typed, watched, total) is EpisodeInput.TooMany) }
     var focused by remember { mutableStateOf(false) }
     var given by remember { mutableStateOf(watched to total) }
@@ -106,33 +98,59 @@ internal fun EpisodeStepper(
     }
 
     val typedInput = draft?.let { episodeInput(it, watched, total) }
-    val tooMany = typedInput is EpisodeInput.TooMany
-    val current = (typedInput as? EpisodeInput.Apply)?.value ?: watched
+    EpisodeStepperLayout(
+        text = draft ?: watched.toString(),
+        current = if (typedInput is EpisodeInput.TooMany) null else (typedInput as? EpisodeInput.Apply)?.value ?: watched,
+        total = total,
+        refused = refused,
+        onTextChange = {
+            draft = it
+            refused = false
+        },
+        onDone = { if (commit()) focusManager.clearFocus() },
+        onFocusChange = { isFocused ->
+            focused = isFocused
+            if (!isFocused) commit()
+        },
+        onStep = {
+            draft = null
+            refused = false
+            onWatchedChange(it)
+        },
+        modifier = modifier,
+        enabled = enabled,
+    )
+}
 
-    fun step(delta: Int) {
-        if (tooMany) return
-        draft = null
-        refused = false
-        onWatchedChange((current + delta).coerceIn(0, total ?: Int.MAX_VALUE))
-    }
-
+// The stepper without state of its own. [current] is the count the buttons step from, null while the text is refused;
+// [onTextChange] hears only text a count field takes, [onFocusChange] only real changes, [onStep] the new count.
+@Composable
+internal fun EpisodeStepperLayout(
+    text: String,
+    current: Int?,
+    total: Int?,
+    refused: Boolean,
+    onTextChange: (String) -> Unit,
+    onDone: () -> Unit,
+    onFocusChange: (Boolean) -> Unit,
+    onStep: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    fieldModifier: Modifier = Modifier,
+) {
     val minus = stringResource(R.string.design_episode_minus)
     val plus = stringResource(R.string.design_episode_plus)
     val fieldLabel = stringResource(R.string.design_episodes_watched)
     val refusal = total?.let { pluralStringResource(R.plurals.design_episode_too_many, it, it) }
+    var focused by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            IconButton(onClick = { step(-1) }, enabled = enabled && !tooMany && current > 0) {
+            IconButton(onClick = { current?.let { onStep(it - 1) } }, enabled = enabled && current != null && current > 0) {
                 Icon(painterResource(R.drawable.ic_remove), contentDescription = minus)
             }
             OutlinedTextField(
-                value = draft ?: watched.toString(),
-                onValueChange = { edit ->
-                    episodeText(edit, total)?.let {
-                        draft = it
-                        refused = false
-                    }
-                },
+                value = text,
+                onValueChange = { edit -> episodeText(edit, total)?.let(onTextChange) },
                 enabled = enabled,
                 singleLine = true,
                 isError = refused,
@@ -143,24 +161,25 @@ internal fun EpisodeStepper(
                         if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else OutlinedTextFieldDefaults.colors().disabledTextColor,
                     ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                keyboardActions =
-                    KeyboardActions(onDone = {
-                        if (commit()) focusManager.clearFocus()
-                    }),
+                keyboardActions = KeyboardActions(onDone = { onDone() }),
                 modifier =
-                    Modifier
+                    fieldModifier
                         .weight(1f, fill = false)
                         .width(fieldWidth(total))
-                        .then(fieldFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
                         .onFocusChanged {
-                            if (focused && !it.isFocused) commit()
-                            focused = it.isFocused
+                            if (it.isFocused != focused) {
+                                focused = it.isFocused
+                                onFocusChange(it.isFocused)
+                            }
                         }.semantics {
                             contentDescription = fieldLabel
                             if (refused && refusal != null) error(refusal)
                         },
             )
-            IconButton(onClick = { step(1) }, enabled = enabled && !tooMany && (total == null || current < total)) {
+            IconButton(
+                onClick = { current?.let { onStep(it + 1) } },
+                enabled = enabled && current != null && (total == null || current < total),
+            ) {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = plus)
             }
         }

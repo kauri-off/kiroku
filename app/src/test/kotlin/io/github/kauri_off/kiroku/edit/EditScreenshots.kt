@@ -5,10 +5,15 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
+import java.time.Year
+import java.time.YearMonth
 
 class EditScreenshots : ScreenshotRegistry() {
     override val content = contentCase("existing") { EditSheet(EditFixtures.existing, onEvent = {}) }
@@ -25,14 +30,11 @@ class EditScreenshots : ScreenshotRegistry() {
         listOf(
             case("new-entry") { EditSheet(EditFixtures.newEntry, onEvent = {}) },
             case("unknown-total") { EditSheet(EditFixtures.unknownTotal, onEvent = {}) },
-            case("keyboard-open", keyboard = true) {
-                EditSheet(EditFixtures.existing, onEvent = {}, typedEpisodes = 14.toString(), focusEpisodes = true)
-            },
-            case("over-total-error") {
-                EditSheet(EditFixtures.existing, onEvent = {}, typedEpisodes = 26.toString(), focusEpisodes = false)
-            },
+            case("keyboard-open", keyboard = true) { EditSheet(EditFixtures.typing, onEvent = {}, focusCount = true) },
+            case("over-total-error") { EditSheet(EditFixtures.overTotal, onEvent = {}) },
             case("remove-confirm") { EditSheet(EditFixtures.existing.copy(dialog = EditDialog.ConfirmRemove), onEvent = {}) },
             case("discard-confirm") { EditSheet(EditFixtures.changed.copy(dialog = EditDialog.ConfirmDiscard), onEvent = {}) },
+            case("partial-dates") { EditSheet(EditFixtures.partialDates, onEvent = {}) },
             case("date-picker") { EditSheet(EditFixtures.existing.copy(dialog = EditDialog.PickDate(DateField.Start)), onEvent = {}) },
         )
 }
@@ -40,16 +42,39 @@ class EditScreenshots : ScreenshotRegistry() {
 object EditFixtures {
     private val today = FixtureTime.reference.atZone(FixtureTime.zone).toLocalDate()
 
-    private fun onList(anime: Anime): EditSheetState {
-        val entry = Fixtures.reference.entries.first { it.anime.id == anime.id }
-        return EditSheetState.of(entry.values, anime.malEpisodes, today)
-    }
+    private fun sheet(
+        anime: Anime,
+        saved: ListValues?,
+    ) = EditSheetState.of(anime, Fixtures.reference.airing[anime.id], saved, TitleLanguage.Romaji, today)
+
+    private fun onList(anime: Anime) =
+        sheet(
+            anime,
+            Fixtures.reference.entries
+                .first { it.anime.id == anime.id }
+                .values,
+        )
 
     val existing = onList(FixtureAnime.exactToWatch)
 
     val unknownTotal = onList(FixtureAnime.unknownTotal)
 
-    val newEntry = EditSheetState.of(null, FixtureAnime.notOnListAiring.malEpisodes, today)
+    val newEntry = sheet(FixtureAnime.notOnListAiring, null)
+
+    val typing = existing.after(EditSheetEvent.WatchedTyped(1.toString())).after(EditSheetEvent.WatchedTyped(14.toString()))
+
+    val overTotal = existing.after(EditSheetEvent.WatchedTyped(2.toString())).after(EditSheetEvent.WatchedTyped(26.toString()))
+
+    val partialDates =
+        sheet(
+            FixtureAnime.exactToWatch,
+            existing.draft.copy(
+                status = ListStatus.Completed,
+                watchedEpisodes = 24,
+                startDate = PartialDate.OnlyYear(Year.of(2025)),
+                finishDate = PartialDate.Month(YearMonth.of(2026, 1)),
+            ),
+        )
 
     val changed =
         existing
