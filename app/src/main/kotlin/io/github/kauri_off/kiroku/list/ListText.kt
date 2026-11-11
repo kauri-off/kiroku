@@ -1,19 +1,15 @@
 package io.github.kauri_off.kiroku.list
 
 import android.content.Context
-import android.text.format.DateFormat
 import androidx.annotation.StringRes
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.list.ListSort
-import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.AirTimeText
+import io.github.kauri_off.kiroku.text.premiereText
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 // The words of a list row, in the device's language, time zone and 12- or 24-hour setting. Air times are written by
 // the same AirTimeText as the title page's.
@@ -22,7 +18,6 @@ class ListText(
     now: Instant,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
-    private val locale: Locale = context.resources.configuration.locales[0]
     private val times = AirTimeText(context, now, zone)
 
     fun line2(line: Line2): String =
@@ -48,38 +43,8 @@ class ListText(
             is Line3.NextEpisode -> times.nextEpisode(line.episode)
         }
 
-    fun premiere(premiere: Premiere): String =
-        when (premiere) {
-            is Premiere.At -> times.premiere(premiere.instant)
-            is Premiere.OnDay ->
-                context.getString(
-                    R.string.list_premieres_day,
-                    DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, DAY_MONTH), locale).format(premiere.date),
-                )
-            is Premiere.InMonth ->
-                context.getString(
-                    R.string.list_premieres_month,
-                    context.resources.getStringArray(R.array.list_premiere_months)[premiere.yearMonth.monthValue - 1],
-                    premiere.yearMonth.year,
-                )
-            is Premiere.InYear -> context.getString(R.string.list_premieres_year, premiere.year.value)
-            Premiere.Unannounced -> context.getString(R.string.list_not_yet_aired)
-        }
-
-    private companion object {
-        val DAY_MONTH = notShown("dMMM")
-    }
+    fun premiere(premiere: Premiere): String = premiereText(context, times, premiere, withYear = false)
 }
-
-@StringRes
-fun ListStatus.labelRes(): Int =
-    when (this) {
-        ListStatus.Watching -> R.string.list_status_watching
-        ListStatus.Planned -> R.string.list_status_planned
-        ListStatus.Completed -> R.string.list_status_completed
-        ListStatus.OnHold -> R.string.list_status_on_hold
-        ListStatus.Dropped -> R.string.list_status_dropped
-    }
 
 @StringRes
 fun ListSort.labelRes(): Int =

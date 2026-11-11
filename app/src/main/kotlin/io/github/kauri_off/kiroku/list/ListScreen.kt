@@ -67,6 +67,7 @@ import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.text.label
 
 // The user's list, or another user's read-only list: a top app bar, the five status tabs and the rows of one tab.
 // [snackbars] is the app shell's one snackbar state; the screen draws it in its own scaffold (ARCHITECTURE 6.2).
@@ -190,7 +191,7 @@ private fun emptyState(
     if (state.filter.isNullOrEmpty()) {
         val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
         ScreenState.Empty(
-            stringResource(R.string.list_empty, stringResource(status.labelRes())),
+            stringResource(R.string.list_empty, stringResource(status.label())),
             search.takeIf { state.owner == ListOwner.Me },
         )
     } else {
@@ -199,8 +200,8 @@ private fun emptyState(
 
 private fun ListFailure.messageRes(): Int =
     when (this) {
-        ListFailure.NoConnection -> R.string.list_no_connection
-        ListFailure.Refused -> R.string.list_refused
+        ListFailure.NoConnection -> R.string.common_no_connection
+        ListFailure.Refused -> R.string.common_refused
         ListFailure.Other -> R.string.list_failed
     }
 
@@ -250,7 +251,7 @@ private fun TopBar(
 @Composable
 private fun BackButton(onClick: () -> Unit) {
     IconButton(onClick = onClick) {
-        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.list_back))
+        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
     }
 }
 
@@ -300,7 +301,7 @@ private fun Tabs(
             Tab(
                 selected = status == selected,
                 onClick = { onEvent(ListEvent.SelectTab(status)) },
-                text = { Text(stringResource(status.labelRes())) },
+                text = { Text(stringResource(status.label())) },
             )
         }
     }
@@ -393,10 +394,10 @@ private fun Messages(
         when (val kind = message?.kind) {
             null -> null
             is ListMessage.Kind.EpisodeWatched -> stringResource(R.string.list_episode_watched, kind.episode)
-            ListMessage.Kind.MovedToCompleted -> stringResource(R.string.list_moved_to_completed)
+            ListMessage.Kind.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
             is ListMessage.Kind.RefreshFailed -> stringResource(kind.failure.refreshMessageRes())
         }
-    val undo = stringResource(R.string.list_undo).takeIf { message?.kind !is ListMessage.Kind.RefreshFailed }
+    val undo = stringResource(R.string.common_undo).takeIf { message?.kind !is ListMessage.Kind.RefreshFailed }
     LaunchedEffect(message) {
         if (message == null || text == null) return@LaunchedEffect
         var result: SnackbarResult? = null

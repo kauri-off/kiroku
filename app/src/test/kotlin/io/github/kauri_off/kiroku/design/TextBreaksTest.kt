@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertTextEquals
@@ -126,23 +127,36 @@ class TextBreaksTest {
     }
 
     @Test
-    fun anEllipsisNeverFollowsAPartShownWhole() {
+    fun aPartIsShownWholeOrInACutThatEndsInAnEllipsis() {
         show { FactRow("Alternative titles", TITLES) }
         eachSize { where ->
-            var lines = 0
-            for (title in TITLES) {
-                val node = compose.onNodeWithText(title, useUnmergedTree = true)
-                if (node.fetchSemanticsNodes().isEmpty()) continue
+            val nodes = TITLES.map(::partNode)
+            val lines = nodes.distinctBy { it.fetchSemanticsNode().id }.sumOf { it.layout().lineCount }
+            assertTrue("$lines lines $where", lines in 1..3)
+            for ((title, node) in TITLES.zip(nodes)) {
                 val layout = node.layout()
-                lines += layout.lineCount
+                val text = layout.layoutInput.text.text
                 val last = layout.lineCount - 1
-                if (layout.isLineEllipsized(last)) {
-                    assertTrue("$title is whole but ends in an ellipsis $where", layout.getLineEnd(last, visibleEnd = true) < title.length)
+                val ellipsized = layout.isLineEllipsized(last)
+                val shownWhole = text.indexOf(title) + title.length <= layout.getLineEnd(last, visibleEnd = true)
+                assertTrue("$title is cut without an ellipsis $where", shownWhole || ellipsized)
+                if (text == title) assertFalse("$title is whole but ends in an ellipsis $where", shownWhole && ellipsized)
+            }
+        }
+    }
+
+    // The text that holds [title] as a whole part, alone or joined in a cut.
+    private fun partNode(title: String): SemanticsNodeInteraction {
+        val all = compose.onAllNodesWithText(title, substring = true, useUnmergedTree = true)
+        val index =
+            all.fetchSemanticsNodes().indexOfFirst { node ->
+                node.config[SemanticsProperties.Text].any {
+                    val text = it.text
+                    text == title || text.startsWith("$title, ") || text.endsWith(", $title") || ", $title, " in text
                 }
             }
-            assertTrue("$lines lines $where", lines in 1..3)
-            assertFalse(compose.onNodeWithText(TITLES.first(), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
-        }
+        assertTrue("$title is not shown", index >= 0)
+        return all[index]
     }
 
     private fun SemanticsNodeInteraction.fetchSemanticsNodes() = runCatching { listOf(fetchSemanticsNode()) }.getOrDefault(emptyList())

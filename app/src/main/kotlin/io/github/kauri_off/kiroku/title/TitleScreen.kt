@@ -77,6 +77,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.EpisodeStepper
@@ -94,6 +95,8 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.genreName
+import io.github.kauri_off.kiroku.text.label
+import io.github.kauri_off.kiroku.text.relationName
 
 // The title page of ARCHITECTURE section 9.4: one column in a fixed order, drawn from [state] alone. Its snackbars go
 // to [snackbars], the host the caller draws.
@@ -139,7 +142,7 @@ private fun TitleTopBar(
         title = {},
         navigationIcon = {
             IconButton(onClick = { onEvent(TitleEvent.Back) }) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.title_back))
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
             }
         },
         actions = {
@@ -181,13 +184,13 @@ private fun TitleSnackbarEffect(
     val message =
         when (snackbar) {
             TitleSnackbar.AddedToPlanned -> stringResource(R.string.title_added_to_planned)
-            TitleSnackbar.MovedToCompleted -> stringResource(R.string.title_moved_to_completed)
+            TitleSnackbar.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
             null -> null
         }
     val action =
         when (snackbar) {
             TitleSnackbar.AddedToPlanned -> stringResource(R.string.title_change)
-            TitleSnackbar.MovedToCompleted -> stringResource(R.string.title_undo)
+            TitleSnackbar.MovedToCompleted -> stringResource(R.string.common_undo)
             null -> null
         }
     val events by rememberUpdatedState(onEvent)
@@ -406,7 +409,7 @@ private fun AiringBlock(
         is AiringPhase.Aired -> {
             val aired = airedText(phase.aired)
             val toWatch = phase.toWatch?.let { toWatchText(it) }
-            val separator = stringResource(R.string.title_separator)
+            val separator = stringResource(R.string.common_separator)
             val emphasis = MaterialTheme.typography.labelLarge.fontWeight
             val tertiary = MaterialTheme.colorScheme.tertiary
             line1 =
@@ -511,7 +514,7 @@ private fun Synopsis(
         if (genres.isNotEmpty()) {
             val names = genres.map { genreName(it) }
             Text(
-                names.joinToString(stringResource(R.string.title_separator)),
+                names.joinToString(stringResource(R.string.common_separator)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -544,7 +547,6 @@ private fun Related(
                     caption1 =
                         card.related.relation
                             .stripLabel()
-                            ?.let { stringResource(it) }
                             .orEmpty(),
                     caption2 = card.status?.let { stringResource(it.label()) } ?: typeAndYear(anime),
                     posterUrl = anime.posterUrl,
@@ -562,7 +564,7 @@ private fun Sequel(
     onEvent: (TitleEvent) -> Unit,
 ) {
     Column {
-        SectionHeader(stringResource(R.string.title_relation_sequel))
+        SectionHeader(relationName(RelationType.Sequel))
         val anime = sequel.related.anime
         AnimeRow(
             modifier = Modifier.trimTop(ListItemTop),
@@ -624,10 +626,10 @@ private fun MoreRow(
     )
 }
 
-private fun DataError.message(): Int =
+internal fun DataError.message(): Int =
     when (this) {
-        DataError.NoConnection -> R.string.title_no_connection
-        DataError.Refused -> R.string.title_refused
+        DataError.NoConnection -> R.string.common_no_connection
+        DataError.Refused -> R.string.common_refused
         DataError.NotFound -> R.string.title_not_found
         else -> R.string.title_could_not_load
     }

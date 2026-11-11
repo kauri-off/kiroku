@@ -22,6 +22,9 @@ class ModelTest {
         assertEquals("The Heat Haze Library", titles.preferred(TitleLanguage.English))
         assertEquals("Kagerou Toshokan", titles.preferred(TitleLanguage.Japanese))
         assertEquals("Kagerou Toshokan", titles.preferred(TitleLanguage.Romaji))
+        assertEquals(TitleLanguage.English, titles.shownLanguage(TitleLanguage.English))
+        assertEquals(TitleLanguage.Romaji, titles.shownLanguage(TitleLanguage.Japanese))
+        assertEquals(TitleLanguage.Romaji, titles.shownLanguage(TitleLanguage.Romaji))
     }
 
     @Test
@@ -135,6 +138,24 @@ class ModelTest {
             listOf(RelationType.Prequel, RelationType.SideStory, RelationType.Other, unknown),
             relatedGroups(related).map { it.first },
         )
+    }
+
+    @Test
+    fun `the count follows a status except where it says nothing`() {
+        fun shows(
+            status: ListStatus,
+            watched: Int,
+            total: Int?,
+        ) = ListValues(status, watched, null, null, null).showsCount(total)
+        assertEquals(false, shows(ListStatus.Planned, 0, 12))
+        assertEquals(true, shows(ListStatus.Planned, 3, 12))
+        assertEquals(false, shows(ListStatus.Completed, 12, 12))
+        assertEquals(true, shows(ListStatus.Completed, 10, 12))
+        assertEquals(true, shows(ListStatus.Completed, 14, 12))
+        assertEquals(true, shows(ListStatus.Completed, 12, null))
+        assertEquals(true, shows(ListStatus.Watching, 0, 12))
+        assertEquals(true, shows(ListStatus.OnHold, 3, null))
+        assertEquals(true, shows(ListStatus.Dropped, 0, 12))
     }
 
     @Test

@@ -75,7 +75,7 @@ fun AnimeRow(
         supportingContent =
             lines.takeIf { it.isNotEmpty() }?.let {
                 {
-                    // Reported as two lines, every row is three-line, so text and trailing element sit alike in each.
+                    // Reported as two lines, every row is three-line, so text and poster align alike in each.
                     val line =
                         with(LocalDensity.current) {
                             MaterialTheme.typography.bodyMedium.lineHeight

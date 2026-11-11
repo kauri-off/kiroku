@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="titlesub_no_details">MyAnimeList gives no details for this title</string>
+
+    <string name="titlesub_romaji_title">Romaji title</string>
+    <string name="titlesub_english_title">English title</string>
+    <string name="titlesub_japanese_title">Japanese title</string>
+    <string name="titlesub_synonyms">Synonyms</string>
+    <string name="titlesub_start_date">Start date</string>
+    <string name="titlesub_end_date">End date</string>
+    <string name="titlesub_source">Source</string>
+    <plurals name="titlesub_studios">
+        <item quantity="one">Studio</item>
+        <item quantity="other">Studios</item>
+    </plurals>
+    <string name="titlesub_rating">Rating</string>
+    <string name="titlesub_episode_length">Episode length</string>
+    <string name="titlesub_broadcast">Broadcast</string>
+
+    <string name="titlesub_minutes">%d\u00A0min</string>
+    <string name="titlesub_hours">%d\u00A0h</string>
+    <string name="titlesub_hours_minutes">%1$d\u00A0h\u00A0%2$d\u00A0min</string>
+    <string name="titlesub_seconds">%d\u00A0s</string>
+    <string-array name="titlesub_broadcast_at">
+        <item>Mondays at\u00A0%s</item>
+        <item>Tuesdays at\u00A0%s</item>
+        <item>Wednesdays at\u00A0%s</item>
+        <item>Thursdays at\u00A0%s</item>
+        <item>Fridays at\u00A0%s</item>
+        <item>Saturdays at\u00A0%s</item>
+        <item>Sundays at\u00A0%s</item>
+    </string-array>
+    <string-array name="titlesub_broadcast_day">
+        <item>Mondays</item>
+        <item>Tuesdays</item>
+        <item>Wednesdays</item>
+        <item>Thursdays</item>
+        <item>Fridays</item>
+        <item>Saturdays</item>
+        <item>Sundays</item>
+    </string-array>
+
+    <string name="titlesub_source_original">Original</string>
+    <string name="titlesub_source_manga">Manga</string>
+    <string name="titlesub_source_4_koma_manga">4-koma manga</string>
+    <string name="titlesub_source_web_manga">Web manga</string>
+    <string name="titlesub_source_digital_manga">Digital manga</string>
+    <string name="titlesub_source_novel">Novel</string>
+    <string name="titlesub_source_light_novel">Light novel</string>
+    <string name="titlesub_source_web_novel">Web novel</string>
+    <string name="titlesub_source_visual_novel">Visual novel</string>
+    <string name="titlesub_source_game">Game</string>
+    <string name="titlesub_source_card_game">Card game</string>
+    <string name="titlesub_source_book">Book</string>
+    <string name="titlesub_source_picture_book">Picture book</string>
+    <string name="titlesub_source_radio">Radio</string>
+    <string name="titlesub_source_music">Music</string>
+    <string name="titlesub_source_mixed_media">Mixed media</string>
+    <string name="titlesub_source_other">Other</string>
+
+    <string name="titlesub_rating_all_ages">G (all ages)</string>
+    <string name="titlesub_rating_children">PG (children)</string>
+    <string name="titlesub_rating_teens_13">PG-13 (teens\u00A013\u00A0or older)</string>
+    <string name="titlesub_rating_violence_17">R (17+, violence and profanity)</string>
+    <string name="titlesub_rating_mild_nudity">R+ (mild nudity)</string>
+    <string name="titlesub_rating_hentai">Rx (hentai)</string>
+</resources>

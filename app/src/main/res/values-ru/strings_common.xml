@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_separator">"\u00A0· "</string>
+    <string name="common_list_separator">", "</string>
+    <string name="common_status_progress">%1$s\u00A0· %2$d\u00A0/\u00A0%3$d</string>
+    <string name="common_status_count">%1$s\u00A0· %2$d</string>
+    <string name="common_status_watching">Смотрю</string>
+    <string name="common_status_planned">Запланировано</string>
+    <string name="common_status_completed">Просмотрено</string>
+    <string name="common_status_on_hold">Отложено</string>
+    <string name="common_status_dropped">Брошено</string>
+    <string name="common_type_tv">ТВ</string>
+    <string name="common_type_tv_special">ТВ-спешл</string>
+    <string name="common_type_movie">Фильм</string>
+    <string name="common_type_ova">OVA</string>
+    <string name="common_type_ona">ONA</string>
+    <string name="common_type_special">Спешл</string>
+    <string name="common_type_music">Клип</string>
+    <string name="common_type_commercial">Реклама</string>
+    <string name="common_type_promotional">Промо</string>
+    <string name="common_relation_prequel">Предыстория</string>
+    <string name="common_relation_sequel">Продолжение</string>
+    <string name="common_relation_parent_story">Основная история</string>
+    <string name="common_relation_full_story">Полная версия</string>
+    <string name="common_relation_side_story">Побочная история</string>
+    <string name="common_relation_spin_off">Спин-офф</string>
+    <string name="common_relation_alternative_setting">Альтернативный сеттинг</string>
+    <string name="common_relation_alternative_version">Альтернативная версия</string>
+    <string name="common_relation_summary">Краткое изложение</string>
+    <string name="common_relation_other">Прочее</string>
+    <string name="common_relation_character">Общий персонаж</string>
+    <string name="common_premieres_on">Премьера %s</string>
+    <string-array name="common_premieres_in_month">
+        <item>Премьера в январе\u00A0%d\u00A0г.</item>
+        <item>Премьера в феврале\u00A0%d\u00A0г.</item>
+        <item>Премьера в марте\u00A0%d\u00A0г.</item>
+        <item>Премьера в апреле\u00A0%d\u00A0г.</item>
+        <item>Премьера в мае\u00A0%d\u00A0г.</item>
+        <item>Премьера в июне\u00A0%d\u00A0г.</item>
+        <item>Премьера в июле\u00A0%d\u00A0г.</item>
+        <item>Премьера в августе\u00A0%d\u00A0г.</item>
+        <item>Премьера в сентябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в октябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в ноябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в декабре\u00A0%d\u00A0г.</item>
+    </string-array>
+    <string name="common_premieres_in_year">Премьера в\u00A0%d\u00A0г.</string>
+    <string name="common_not_yet_aired">Ещё не вышло</string>
+    <string name="common_back">Назад</string>
+    <string name="common_undo">Отменить</string>
+    <string name="common_moved_to_completed">Перенесено в Просмотрено</string>
+    <string name="common_no_connection">Нет соединения</string>
+    <string name="common_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
+</resources>

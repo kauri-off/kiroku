@@ -144,7 +144,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Предыстория» in the
   strip and the «Продолжение» header of the sequel row each stay on one line and «Запланировано» has no ellipsis.
 
-- [ ] **M1-11 [L] Title sub-screens.** "Related: see all" and "Details" (section 9.9).
+- [x] **M1-11 [L] Title sub-screens.** "Related: see all" and "Details" (section 9.9).
   **Cases:** `related/grouped`, `related/single`, `details/full`, `details/sparse`.
   **Needs:** M1-07.
   **Check:** rubric pass on `related/*` and `details/*`.

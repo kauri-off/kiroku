@@ -155,6 +155,26 @@ responses.
 | 62 | Isekai | Isekai | Исэкай |
 | 63 | Iyashikei | Iyashikei | Иясикэй |
 
+## Title details
+
+The facts of the "Details" sub-screen. Their values from MAL that read as interface text are translated too.
+
+| Concept | English | Russian | Notes |
+|---|---|---|---|
+| Romaji title | Romaji title | Название на ромадзи | One row per kind of alternative title; the main title of "Title language" has none |
+| English title | English title | Английское название | |
+| Japanese title | Japanese title | Японское название | |
+| Synonyms | Synonyms | Другие названия | Each synonym on its own line; those that do not fit share the last line and end in an ellipsis |
+| Start date / End date | Start date / End date | Дата начала / Дата окончания | The title's airing dates, by MAL's precision, with the year |
+| Source | Source | Первоисточник | |
+| Studio / Studios | Studio / Studios | Студия / Студии | A plural resource, by the number of studios |
+| Rating | Rating | Возрастной рейтинг | |
+| Episode length | Episode length | Длительность серии | `23 min`, `1 h 58 min`, `30 s` / `23 мин`, `1 ч 58 мин`, `30 сек` |
+| Broadcast | Broadcast | Время показа | `Saturdays at 17:30` / `По субботам в 17:30`, in the device's zone; not shown for a finished title |
+| No details | MyAnimeList gives no details for this title | На MyAnimeList нет подробностей об этом тайтле | |
+| Sources | Original, Manga, 4-koma manga, Web manga, Digital manga, Novel, Light novel, Web novel, Visual novel, Game, Card game, Book, Picture book, Radio, Music, Mixed media, Other | Оригинал, Манга, Ёнкома, Веб-манга, Цифровая манга, Роман, Ранобэ, Веб-новелла, Визуальная новелла, Игра, Карточная игра, Книга, Иллюстрированная книга, Радио, Музыка, Медиамикс, Прочее | |
+| Age ratings | G (all ages), PG (children), PG-13 (teens 13 or older), R (17+, violence and profanity), R+ (mild nudity), Rx (hentai) | G (для всех возрастов), PG (для детей), PG-13 (от 13 лет), R (17+, насилие и ненормативная лексика), R+ (частичная обнажённость), Rx (хентай) | |
+
 ## Notifications
 
 | Concept | English | Russian | Notes |
