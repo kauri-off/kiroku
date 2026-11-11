@@ -2,10 +2,10 @@ package io.github.kauri_off.kiroku.list
 
 import io.github.kauri_off.kiroku.core.model.AnimeId
 
-// Quick taps on the place of a row that has just left the tab were meant for it, not for the row sliding into its
-// place nor for the row fading out: such a tap is dropped while the taps keep coming within [burstMillis] of each other.
+// While taps keep coming within [windowMillis] of each other, a "+1" on a row that is fading out, or on any row below
+// the one that left (moving up, or just arrived), is dropped: the finger was aimed at what was there before.
 class PlusOneGuard(
-    private val burstMillis: Long,
+    private val windowMillis: Long,
 ) {
     private var lastAt: Long? = null
     private var lastId: AnimeId? = null
@@ -19,11 +19,10 @@ class PlusOneGuard(
     ): Boolean {
         val previous = lastAt
         lastAt = at
-        // A row on its way out is no longer on the list.
         if (id !in ids) return false
-        val burst = previous != null && at - previous < burstMillis
+        val burst = previous != null && at - previous < windowMillis
         val left = lastId != null && lastId != id && lastId !in ids
-        if (burst && left && ids.indexOf(id) == lastIndex) return false
+        if (burst && left && ids.indexOf(id) >= lastIndex) return false
         lastId = id
         lastIndex = ids.indexOf(id)
         return true

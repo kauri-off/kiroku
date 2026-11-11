@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
@@ -392,12 +393,9 @@ class ListMotionTest {
 
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
 
-    // A "+1" burst on a row that leaves Watching does not land on the row sliding into its place.
-    @Test
-    fun `quick taps where a completed row was do not reach the row that slides into its place`() {
+    private fun showCompleting(events: MutableList<ListEvent>) {
         val anime = FixtureAnime.oneShortOfTotal
         compose.mainClock.autoAdvance = false
-        val events = mutableListOf<ListEvent>()
         state = ListFixtureStates.watching
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
@@ -408,25 +406,58 @@ class ListMotionTest {
             }
         }
         compose.mainClock.advanceTimeBy(1_000)
-        val row = compose.onNodeWithText(anime.titles.romaji).getUnclippedBoundsInRoot()
-        val button =
-            compose
-                .onAllNodesWithContentDescription("Plus one episode")
-                .fetchSemanticsNodes()
-                .single { it.boundsInRoot.center.y / it.layoutInfo.density.density in row.top.value..row.bottom.value }
-                .boundsInRoot.center
+    }
 
-        fun tap() {
-            compose.onRoot().performTouchInput { click(button) }
-            compose.mainClock.advanceTimeBy(Motion.Duration.SHORT2.toLong())
-        }
-        tap()
-        repeat(3) { tap() }
+    // Where the "+1" of the row showing [title] is now.
+    private fun plusOneOf(title: String): Offset {
+        val row = compose.onNodeWithText(title).getUnclippedBoundsInRoot()
+        return compose
+            .onAllNodesWithContentDescription("Plus one episode")
+            .fetchSemanticsNodes()
+            .single { it.boundsInRoot.center.y / it.layoutInfo.density.density in row.top.value..row.bottom.value }
+            .boundsInRoot.center
+    }
+
+    private fun tap(
+        at: Offset,
+        thenMillis: Long,
+    ) {
+        compose.onRoot().performTouchInput { click(at) }
+        Snapshot.sendApplyNotifications()
+        SystemClock.sleep(thenMillis)
+        compose.mainClock.advanceTimeBy(thenMillis)
+    }
+
+    // A "+1" burst on a row that leaves Watching does not land on the row sliding into its place.
+    @Test
+    fun `quick taps where a completed row was do not reach the row that slides into its place`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events)
+        val button = plusOneOf(anime.titles.romaji)
+        repeat(4) { tap(button, Motion.Duration.SHORT2.toLong()) }
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events.filterIsInstance<ListEvent.PlusOne>())
+        SystemClock.sleep(SETTLED)
+        tap(button, Motion.Duration.SHORT2.toLong())
+        assertEquals(
+            listOf(ListEvent.PlusOne(anime.id), ListEvent.PlusOne(FixtureAnime.estimatedCaughtUp.id)),
+            events.filterIsInstance<ListEvent.PlusOne>(),
+        )
+    }
+
+    // A2's Q1: the finger aims at the row below the completed one, which has moved up; the row now there is not hit.
+    @Test
+    fun `a quick tap aimed at the row below a completed row reaches no other title`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events)
+        val below = plusOneOf(following)
+        tap(plusOneOf(anime.titles.romaji), PAIR_MS)
+        tap(below, Motion.Duration.SHORT2.toLong())
         assertEquals(listOf(ListEvent.PlusOne(anime.id)), events)
         SystemClock.sleep(SETTLED)
-        tap()
-        assertEquals(2, events.size)
-        assertTrue(events.last() is ListEvent.PlusOne && events.last() != ListEvent.PlusOne(anime.id))
+        tap(below, Motion.Duration.SHORT2.toLong())
+        assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
     }
 
     @Test
@@ -565,6 +596,9 @@ class ListMotionTest {
         val COMPONENT_CHANGE_MS = Motion.Duration.SHORT4.toLong()
         val TAB_SWITCH_MS = Motion.Duration.MEDIUM2.toLong()
         const val SETTLED = 2_000L
+
+        // The second tap of A2's pair, measured on the emulator.
+        const val PAIR_MS = 300L
     }
 }
 

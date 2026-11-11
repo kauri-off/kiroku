@@ -301,8 +301,9 @@ private fun Rows(
     val context = LocalContext.current
     val text = remember(context, state.now) { ListText(context, state.now) }
     val edit = stringResource(R.string.list_edit)
-    val burst = LocalViewConfiguration.current.doubleTapTimeoutMillis
-    val guard = remember(burst) { PlusOneGuard(burst) }
+    // The rows' move after one leaves (componentChange), then the platform's double-tap timeout.
+    val window = Motion.Duration.SHORT4 + LocalViewConfiguration.current.doubleTapTimeoutMillis
+    val guard = remember(window) { PlusOneGuard(window) }
     val shownRows = rememberUpdatedState(rows)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
