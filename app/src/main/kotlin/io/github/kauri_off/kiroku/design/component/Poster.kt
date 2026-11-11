@@ -22,9 +22,16 @@ enum class PosterSize(
     Header(Sizes.posterHeader, Sizes.posterHeader * 3 / 2),
 }
 
-// A strip poster grows with the font scale, as its card does; the other two keep their size.
+// A strip poster grows with the font scale, as its card does; a row poster shrinks with it, to leave its text room.
 @Composable
-internal fun PosterSize.scale(): Float = if (this == PosterSize.Strip) LocalDensity.current.fontScale.coerceAtLeast(1f) else 1f
+internal fun PosterSize.scale(): Float {
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    return when (this) {
+        PosterSize.Strip -> fontScale
+        PosterSize.Row -> (1f / fontScale).coerceAtLeast(Sizes.posterRowNarrowest / width)
+        PosterSize.Header -> 1f
+    }
+}
 
 @Composable
 internal fun PosterSize.scaledWidth(): Dp = width * scale()

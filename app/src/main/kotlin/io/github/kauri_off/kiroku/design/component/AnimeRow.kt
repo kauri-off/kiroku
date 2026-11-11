@@ -2,9 +2,7 @@ package io.github.kauri_off.kiroku.design.component
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -14,7 +12,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.AlignmentLine
@@ -25,9 +22,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -51,13 +45,14 @@ sealed interface RowTrailing {
     ) : RowTrailing
 }
 
-// What a long press on a row does, also offered to accessibility services as a custom action named [label].
+// What a long press on a row does; screen readers get it as the row's long-click action, named [label].
 data class RowLongPress(
     val label: String,
     val onLongPress: () -> Unit,
 )
 
-// Poster, a title of at most two lines, up to two supporting lines and one optional trailing element.
+// Poster, a title of at most two lines, up to two supporting lines and one optional trailing element. A row with "+1"
+// starts its text level with the poster's top, so the button stays in one place; any other row centres its text.
 @Composable
 fun AnimeRow(
     title: String,
@@ -70,18 +65,18 @@ fun AnimeRow(
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
     val haptics = LocalHapticFeedback.current
+    val topAligned = trailing is RowTrailing.PlusOne
     ListItem(
         headlineContent = { TitleText(title, maxLines = 2) },
         supportingContent =
             lines.takeIf { it.isNotEmpty() }?.let {
                 {
-                    // Reported as two lines, every row is three-line, so text and poster align alike in each.
                     val line =
                         with(LocalDensity.current) {
                             MaterialTheme.typography.bodyMedium.lineHeight
                                 .toDp()
                         }
-                    Column(Modifier.asTwoLines(line)) {
+                    Column(Modifier.reportedLines(topAligned, line)) {
                         it.forEach { line -> SupportingLine(line) }
                     }
                 }
@@ -92,40 +87,30 @@ fun AnimeRow(
             if (longPress == null) {
                 modifier.clickable(onClick = onClick)
             } else {
-                modifier
-                    .combinedClickable(
-                        onClick = onClick,
-                        onLongClickLabel = longPress.label,
-                        onLongClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            longPress.onLongPress()
-                        },
-                    ).semantics {
-                        customActions =
-                            listOf(
-                                CustomAccessibilityAction(longPress.label) {
-                                    longPress.onLongPress()
-                                    true
-                                },
-                            )
-                    }
+                modifier.combinedClickable(
+                    onClick = onClick,
+                    onLongClickLabel = longPress.label,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        longPress.onLongPress()
+                    },
+                )
             },
     )
 }
 
 const val MAX_SUPPORTING_LINES = 2
 
-// ListItem picks its layout from the supporting text's first and last baselines, so one line reports a second.
-private fun Modifier.asTwoLines(line: Dp): Modifier =
+// ListItem picks its layout from the supporting text's baselines: two lines top-align the row, one line centres it.
+private fun Modifier.reportedLines(
+    topAligned: Boolean,
+    line: Dp,
+): Modifier =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val first = placeable[FirstBaseline]
-        val lines =
-            if (first == AlignmentLine.Unspecified) {
-                emptyMap()
-            } else {
-                mapOf<AlignmentLine, Int>(LastBaseline to maxOf(placeable[LastBaseline], first + line.roundToPx()))
-            }
+        val last = if (topAligned) maxOf(placeable[LastBaseline], first + line.roundToPx()) else first
+        val lines = if (first == AlignmentLine.Unspecified) emptyMap() else mapOf<AlignmentLine, Int>(LastBaseline to last)
         layout(placeable.width, placeable.height, lines) { placeable.place(0, 0) }
     }
 
@@ -138,21 +123,13 @@ private fun SupportingLine(line: RowLine) {
     }
 }
 
-// A value sits centred on the title's first line, in a caption role. The button's visible edge, not its touch
-// target, ends on the content edge.
+// A value, in a caption role, is centred with the row's text. The button's visible edge, not its touch target, ends
+// on the content edge.
 @Composable
 private fun Trailing(trailing: RowTrailing) {
     when (trailing) {
-        is RowTrailing.Value -> {
-            val line =
-                with(LocalDensity.current) {
-                    MaterialTheme.typography.bodyLarge.lineHeight
-                        .toDp()
-                }
-            Box(Modifier.heightIn(min = line), contentAlignment = Alignment.Center) {
-                Text(trailing.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        is RowTrailing.Value ->
+            Text(trailing.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         is RowTrailing.PlusOne -> {
             val icon = @Composable {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.design_episode_plus))

@@ -45,4 +45,5 @@ internal fun skeletonFormat(
 private val HOURS_24 = notShown("Hm")
 private val HOURS_12 = notShown("hm")
 internal val DAY_MONTH_YEAR = notShown("dMMMy")
+internal val DAY_MONTH = notShown("dMMM")
 private val MONTH_YEAR = notShown("LLLLy")

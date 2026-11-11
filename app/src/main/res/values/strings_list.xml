@@ -13,8 +13,8 @@
     <string name="list_sort_start_date">Start date</string>
     <string name="list_progress">Watched %1$d\u00A0of\u00A0%2$d</string>
     <string name="list_progress_unknown_total">Watched %1$d</string>
-    <string name="list_to_watch">%1$d\u00A0to watch</string>
-    <string name="list_to_watch_estimated">~%1$d\u00A0to watch</string>
+    <string name="list_to_watch">%1$d\u00A0to\u00A0watch</string>
+    <string name="list_to_watch_estimated">~%1$d\u00A0to\u00A0watch</string>
     <string name="list_score">Score\u00A0%1$d</string>
     <string name="list_not_scored">Not scored</string>
     <string name="list_empty">No titles in %1$s</string>

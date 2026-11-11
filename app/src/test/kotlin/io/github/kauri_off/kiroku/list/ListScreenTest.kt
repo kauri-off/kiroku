@@ -242,12 +242,11 @@ class ListScreenTest {
         compose.onNodeWithText(watching.titles.romaji).performTouchInput { longClick() }
         show(ListFixtureStates.planned)
         val planned = FixtureAnime.premiereDate
-        compose
-            .onNode(hasText(planned.titles.romaji) and hasClickAction())
-            .fetchSemanticsNode()
-            .config[SemanticsActions.CustomActions]
-            .single { it.label == "Edit" }
-            .action()
+        val row = compose.onNode(hasText(planned.titles.romaji) and hasClickAction()).fetchSemanticsNode()
+        val edit = row.config[SemanticsActions.OnLongClick]
+        assertEquals("Edit", edit.label)
+        assertFalse("Edit is offered once", row.config.contains(SemanticsActions.CustomActions))
+        compose.runOnIdle { edit.action!!() }
         compose.waitForIdle()
         assertEquals(listOf(ListEvent.Edit(watching.id), ListEvent.Edit(planned.id)), events)
     }
@@ -263,6 +262,7 @@ class ListScreenTest {
         compose.onNodeWithText(title).performTouchInput { longClick() }
         compose
             .onNode(hasText(title) and hasClickAction())
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
             .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.CustomActions))
         assertFalse(events.toString(), events.any { it is ListEvent.Edit })
     }

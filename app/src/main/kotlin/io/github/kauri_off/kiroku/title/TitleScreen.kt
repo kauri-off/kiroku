@@ -636,8 +636,8 @@ internal fun DataError.message(): Int =
 
 private const val SYNOPSIS_LINES = 4
 
-// A three-line list item's own top padding, which the room under a section header already provides.
-private val ListItemTop = Spacing.m
+// A centred list item's own top padding, which the room under a section header already provides.
+private val ListItemTop = Spacing.s
 
 // Leaves out the top [amount] of the content's own padding, so it sits as close to the header above as plain text does.
 private fun Modifier.trimTop(amount: Dp) =
