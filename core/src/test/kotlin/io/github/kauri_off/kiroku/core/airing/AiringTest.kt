@@ -74,15 +74,23 @@ class AiringTest {
     fun `the aired count is shown while known, until MAL says finished, whatever else MAL says`() {
         AiringStatus.entries.forEach { status ->
             val anime = FixtureAnime.exactToWatch.copy(airingStatus = status)
-            val expected = if (status == AiringStatus.Finished) null else AiredCount.Exact(2)
-            assertEquals(status.name, expected, shownAired(anime, airing(AiredCount.Exact(2))))
-            assertNull(shownAired(anime, airing(AiredCount.Unknown)))
-            assertNull(shownAired(anime, null))
+            val phase = airingPhase(anime, null, airing(AiredCount.Exact(2)), today)
+            assertEquals(
+                status.name,
+                if (status ==
+                    AiringStatus.Finished
+                ) {
+                    null
+                } else {
+                    AiredCount.Exact(2)
+                },
+                (phase as? AiringPhase.Aired)?.aired,
+            )
         }
     }
 
     @Test
-    fun `A1 to watch is computed from the aired count shown, so one is never without the other`() {
+    fun `A1 the phase's to watch is the aired count it shows minus the watched episodes, only above zero`() {
         val airings =
             listOf(
                 Airing(AiredCount.Unknown, 24, null, null),
@@ -94,22 +102,18 @@ class AiringTest {
             for (airing in airings) {
                 for (watched in 0..3) {
                     val entry = entry(FixtureAnime.exactToWatch.copy(airingStatus = status), ListStatus.Watching, watched)
-                    val shown = shownAired(entry.anime, airing)
-                    assertEquals("$status $airing $watched", shown?.value?.minus(watched)?.coerceAtLeast(0), toWatch(entry, airing)?.value)
-                    if (episodesToWatch(entry, airing) != null) assertEquals(true, shown != null)
+                    val phase = airingPhase(entry.anime, entry.values, airing, today)
+                    val expected =
+                        (phase as? AiringPhase.Aired)
+                            ?.aired
+                            ?.value
+                            ?.minus(watched)
+                            ?.takeIf { it > 0 }
+                    assertEquals("$status $airing $watched", expected, (phase as? AiringPhase.Aired)?.toWatch?.value)
+                    if (phase !is AiringPhase.Aired) assertNull(toWatch(entry, airing)?.takeIf { it.value > 0 })
                 }
             }
         }
-    }
-
-    @Test
-    fun `episodes to watch is a to watch figure above zero`() {
-        val entry = entry(FixtureAnime.exactToWatch, ListStatus.Watching, 14)
-        assertNull(episodesToWatch(entry, airing(AiredCount.Exact(14))))
-        assertEquals(
-            AiredCount.Estimated(1),
-            episodesToWatch(entry.copy(values = entry.values.copy(watchedEpisodes = 13)), airing(AiredCount.Estimated(14))),
-        )
     }
 
     @Test

@@ -123,7 +123,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   `completed`, `sort-sheet`, `filtering` (the text field in the top app bar, a query with two matches),
   `refreshing`, `undo-snackbar`, `completed-snackbar` ("+1" reached the total: the row is gone and the snackbar
   says "Moved to Completed · Undo"), `above-total` ("Watched 25 of 24"), `offline-cached`, `loading`, `empty`,
-  `error`, `signed-out`, `session-expired`, `read-only`; the frames of a tab switch.
+  `error`, `signed-out`, `session-expired`, `read-only`; the frames of a row leaving and of a tab switch.
   **Needs:** M1-07.
   **Check:** rubric pass on `list/*`.
 

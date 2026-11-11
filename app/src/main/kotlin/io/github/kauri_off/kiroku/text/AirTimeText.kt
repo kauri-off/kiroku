@@ -28,7 +28,10 @@ class AirTimeText(
         }
     }
 
-    // "Episode 15 · Sat 17:30".
+    // "Premieres Sat 17:30", a premiere whose first episode's time is known.
+    fun premiere(instant: Instant): String = context.getString(R.string.air_time_premieres, airTime(instant))
+
+    // "Episode 15 · Sat 17:30"; a wrap falls before the dot.
     fun nextEpisode(episode: ScheduledEpisode): String =
         context.getString(R.string.air_time_next_episode, episode.number, airTime(episode.airsAt))
 

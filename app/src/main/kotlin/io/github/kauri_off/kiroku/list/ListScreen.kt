@@ -27,6 +27,7 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
@@ -41,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +59,7 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.RowLongPress
 import io.github.kauri_off.kiroku.design.component.RowTrailing
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
@@ -66,7 +69,7 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // The user's list, or another user's read-only list: a top app bar, the five status tabs and the rows of one tab.
-// Its messages go to [snackbars], the host the app shell shows.
+// [snackbars] is the app shell's one snackbar state; the screen draws it in its own scaffold (ARCHITECTURE 6.2).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListScreen(
@@ -87,6 +90,7 @@ fun ListScreen(
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
         },
+        snackbarHost = { SnackbarHost(snackbars) },
     ) { padding ->
         val body = Modifier.padding(top = padding.calculateTopPadding())
         when (val content = state.content) {
@@ -145,18 +149,36 @@ private fun Pages(
         key = { statuses[it] },
         flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = Motion.fastSpatial()),
     ) { index ->
-        val status = statuses[index]
-        val page = tabs.pages.getValue(status)
-        if (page.rows.isEmpty()) {
-            // A list, so that an empty tab can be pulled to refresh too.
-            val empty = emptyState(state, status, onEvent)
-            LazyColumn(Modifier.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
-        } else {
-            // A new order or a filter replaces the rows at once, from the top; only rows leaving or returning within
-            // one order animate (ARCHITECTURE 8.5).
-            key(page.sort, state.filter, page.ordering) { Rows(state, page.rows, padding, onEvent) }
+        Page(state, statuses[index], tabs.pages.getValue(statuses[index]), padding, onEvent)
+    }
+}
+
+// The unfiltered rows and the filtered ones keep separate scroll positions, so ending the filter returns the user
+// to where they were. A new order or filter text replaces the rows at once, from the top; only rows leaving or
+// returning within one order animate (ARCHITECTURE 8.5).
+@Composable
+private fun Page(
+    state: ListState,
+    status: ListStatus,
+    page: ListPage,
+    padding: PaddingValues,
+    onEvent: (ListEvent) -> Unit,
+) {
+    val positions = rememberSaveableStateHolder()
+    val filter = state.filter.orEmpty()
+    // Keyed by whether the rows are unfiltered.
+    positions.SaveableStateProvider(filter.isEmpty()) {
+        key(page.sort, page.ordering, filter) {
+            if (page.rows.isEmpty()) {
+                // A list, so that an empty tab can be pulled to refresh too.
+                val empty = emptyState(state, status, onEvent)
+                LazyColumn(Modifier.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
+            } else {
+                Rows(state, page.rows, padding, onEvent)
+            }
         }
     }
+    LaunchedEffect(filter.isEmpty()) { if (filter.isEmpty()) positions.removeState(false) }
 }
 
 @Composable
@@ -293,6 +315,7 @@ private fun Rows(
 ) {
     val context = LocalContext.current
     val text = remember(context, state.now) { ListText(context, state.now) }
+    val edit = stringResource(R.string.list_edit)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
             items(rows, key = { it.id.value }) { row ->
@@ -305,7 +328,13 @@ private fun Rows(
                             RowLine(text.line2(row.line2)),
                             row.line3?.let { RowLine(text.line3(it), highlighted = it is Line3.ToWatch) },
                         ),
-                    trailing = if (row.plusOne) RowTrailing.PlusOne { onEvent(ListEvent.PlusOne(row.id)) } else null,
+                    trailing =
+                        if (row.plusOne) {
+                            RowTrailing.PlusOne(prominent = row.line3 is Line3.ToWatch) { onEvent(ListEvent.PlusOne(row.id)) }
+                        } else {
+                            null
+                        },
+                    longPress = RowLongPress(edit) { onEvent(ListEvent.Edit(row.id)) }.takeIf { state.owner == ListOwner.Me },
                     modifier =
                         Modifier.animateItem(
                             fadeInSpec = Motion.componentEnter(),

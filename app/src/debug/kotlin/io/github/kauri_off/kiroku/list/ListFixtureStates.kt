@@ -29,7 +29,7 @@ object ListFixtureStates {
     ): List<ListRow> {
         val now = shown.associateBy { it.anime.id }
         val airing = if (readOnly) emptyMap() else set.airing
-        return order(ordered.filter { it.status == status }, sort, airing::get) { it.anime.titles.romaji }
+        return order(ordered.filter { it.status == status }, sort, airing::get, today) { it.anime.titles.romaji }
             .mapNotNull { now[it.anime.id]?.takeIf { entry -> entry.status == status } }
             .map { listRow(it, airing[it.anime.id], today, TitleLanguage.Romaji, readOnly) }
     }

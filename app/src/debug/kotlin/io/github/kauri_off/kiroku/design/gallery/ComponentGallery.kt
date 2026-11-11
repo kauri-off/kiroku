@@ -129,7 +129,7 @@ internal fun AnimeRowSection() {
                     RowLine(stringResource(R.string.gallery_progress, 14, 24)),
                     RowLine(stringResource(R.string.gallery_next_episode)),
                 ),
-            trailing = plusOne,
+            trailing = RowTrailing.PlusOne(prominent = false) {},
         )
         AnimeRow(
             title = FixtureAnime.premiereUnannounced.title(),

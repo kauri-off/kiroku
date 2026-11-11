@@ -20,7 +20,6 @@
     <string name="title_to_watch">%d\u00A0to\u00A0watch</string>
     <string name="title_to_watch_estimated">~%d\u00A0to\u00A0watch</string>
     <string name="title_airing">Airing</string>
-    <string name="title_premieres_at">Premieres %s</string>
     <string name="title_premieres_on">Premieres %s</string>
     <string-array name="title_premieres_in_month">
         <item>Premieres January\u00A0%d</item>

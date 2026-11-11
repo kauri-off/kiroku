@@ -117,7 +117,7 @@ fun premiereText(
     times: AirTimeText,
 ): String =
     when (premiere) {
-        is Premiere.At -> stringResource(R.string.title_premieres_at, times.airTime(premiere.instant))
+        is Premiere.At -> times.premiere(premiere.instant)
         is Premiere.OnDay -> stringResource(R.string.title_premieres_on, dayMonthYear().format(premiere.date))
         is Premiere.InMonth ->
             stringArrayResource(R.array.title_premieres_in_month)[premiere.yearMonth.monthValue - 1]

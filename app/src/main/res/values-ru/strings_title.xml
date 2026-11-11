@@ -21,7 +21,6 @@
     <string name="title_to_watch">к\u00A0просмотру:\u00A0%d</string>
     <string name="title_to_watch_estimated">к\u00A0просмотру:\u00A0~%d</string>
     <string name="title_airing">Выходит</string>
-    <string name="title_premieres_at">Премьера: %s</string>
     <string name="title_premieres_on">Премьера %s</string>
     <string-array name="title_premieres_in_month">
         <item>Премьера в январе\u00A0%d\u00A0г.</item>

@@ -74,12 +74,6 @@ fun episodeTotal(
     airing: Airing?,
 ): Int? = anime.malEpisodes ?: airing?.total
 
-// The aired count a title shows beside its progress: known, and only until MAL marks the title finished.
-fun shownAired(
-    anime: Anime,
-    airing: Airing?,
-): AiredCount.Known? = if (anime.airingStatus == AiringStatus.Finished) null else airing?.aired as? AiredCount.Known
-
 fun toWatch(
     entry: ListEntry,
     airing: Airing?,
@@ -99,12 +93,6 @@ private fun toWatch(
         is AiredCount.Estimated -> AiredCount.Estimated(count)
     }
 }
-
-// "Episodes to watch": a "to watch" figure above zero, the one a row highlights and "Up next" puts first.
-fun episodesToWatch(
-    entry: ListEntry,
-    airing: Airing?,
-): AiredCount.Known? = toWatch(entry, airing)?.takeIf { it.value > 0 }
 
 sealed interface Premiere {
     data class At(
@@ -147,7 +135,8 @@ fun premiereOf(
     }
 }
 
-// What a title's airing block and a list row's airing lines show; null when the title shows none (A1).
+// What a title's airing block and a list row's airing lines show, the one decision both screens read; null when the
+// title shows none (A1).
 sealed interface AiringPhase {
     data class NotYetAired(
         val premiere: Premiere,
@@ -176,3 +165,12 @@ fun airingPhase(
     val toWatch = values?.let { toWatch(anime.airingStatus, it, airing) }?.takeIf { it.value > 0 }
     return AiringPhase.Aired(aired, toWatch, airing.nextEpisode)
 }
+
+// When the next episode airs, as the title shows it: the next episode, or a premiere whose time is known.
+val AiringPhase.nextAirsAt: Instant?
+    get() =
+        when (this) {
+            is AiringPhase.Aired -> next?.airsAt
+            is AiringPhase.NotYetAired -> (premiere as? Premiere.At)?.instant
+            AiringPhase.CountUnknown -> null
+        }

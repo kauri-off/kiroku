@@ -8,20 +8,45 @@ import androidx.compose.runtime.snapshots.Snapshot
 import org.robolectric.shadows.ShadowChoreographer
 import java.io.File
 
-// A change from the case [start] to the case [case], shown as four frames in one image: start, one third, two
-// thirds and end of [millis] from the first frame that moves (ARCHITECTURE 8.5). [content] shows the start state,
-// then the end state.
+// A change from the case [start] to the case [case], shown as frames in one image: the start, then the moments [at]
+// from the first frame that moves, by default one third, two thirds and the end of [millis] (ARCHITECTURE 8.5). A
+// change that starts fast can show early moments instead. When one part reacts before the motion shown, [lead]
+// says by how long, and the moments are timed from the end of it. [content] shows the start state, then the end
+// state, in the end case's window.
 class Transition(
     val case: String,
     val start: String,
     val millis: Long,
     val variant: Variant = Variant.EnLight,
+    val at: List<Long> = listOf(millis / 3, 2 * millis / 3, millis),
+    val lead: Long = 0,
     val content: @Composable (changed: Boolean) -> Unit,
+) {
+    init {
+        require(at.isNotEmpty() && at.zipWithNext().all { (a, b) -> a < b } && at.last() == millis)
+        require(lead in 0..MAX_LEAD_MILLIS)
+    }
+}
+
+internal class Frames(
+    val images: List<Bitmap>,
+    // How long the change took to show its first moving frame.
+    val waited: Long,
 )
 
-internal fun transitionFrames(transition: Transition): List<Bitmap> {
+internal fun transitionFrames(
+    transition: Transition,
+    window: WindowSize? = null,
+): Frames {
     val changed = mutableStateOf(false)
-    return Shot.launch(transition.variant) { transition.content(changed.value) }.use { shot ->
+    val variant = transition.variant
+    val shot =
+        Shot.launch(
+            variant,
+            heightDp = window?.heightDp ?: variant.heightDp,
+            widthDp = window?.widthDp ?: variant.widthDp,
+        ) { transition.content(changed.value) }
+    return shot.use {
         val start = shot.image()
         // Unpaused, Robolectric runs every pending frame at once, so a whole animation would pass in one step.
         ShadowChoreographer.setPaused(true)
@@ -34,12 +59,15 @@ internal fun transitionFrames(transition: Transition): List<Bitmap> {
                 shot.advance(FRAME_MILLIS)
                 waited += FRAME_MILLIS
             }
-            val third = transition.millis / 3
-            listOf(start) +
-                listOf(third, third, transition.millis - 2 * third).map { step ->
-                    shot.advance(step)
+            shot.advance(transition.lead)
+            var elapsed = 0L
+            val frames =
+                transition.at.map { moment ->
+                    shot.advance(moment - elapsed)
+                    elapsed = moment
                     shot.frame()
                 }
+            Frames(listOf(start) + frames, waited)
         } finally {
             shot.advance(SETTLE_MILLIS)
             ShadowChoreographer.setPaused(false)
@@ -47,22 +75,39 @@ internal fun transitionFrames(transition: Transition): List<Bitmap> {
     }
 }
 
-// Renders the frames image and reports a first or last frame that is not the still image of its case.
+// Renders the frames image and reports a first or last frame that is not the still image of its case, and a change
+// that is late to start.
 internal fun renderTransition(
     transition: Transition,
     cases: List<ScreenshotCase>,
     dir: File,
     write: (Bitmap, File) -> Unit = Shot::write,
 ): List<String> {
-    val frames = transitionFrames(transition)
     val name = "${transition.case}__${transition.variant.id}__frames"
+    val end = cases.firstOrNull { it.name == transition.case } ?: return listOf("$name: there is no case '${transition.case}'")
+    val window = end.window
+    val result = transitionFrames(transition, window)
+    val frames = result.images
+    val variant = transition.variant
+    val late =
+        "$name: the change shows ${result.waited} ms after the state changed, more than ${START_FRAMES * FRAME_MILLIS} ms"
+            .takeIf { result.waited > START_FRAMES * FRAME_MILLIS }
     val problems =
         listOf("first" to (transition.start to frames.first()), "last" to (transition.case to frames.last())).mapNotNull { (which, pair) ->
             val (caseName, frame) = pair
             val case = cases.firstOrNull { it.name == caseName } ?: return@mapNotNull "$name: there is no case '$caseName'"
-            val still = Shot.launch(transition.variant, keyboard = case.keyboard, content = case.content).use { it.image() }
-            if (still.sameAs(frame)) null else "$name: the $which frame is not ${caseName}__${transition.variant.id}.png"
-        }
+            if (case.window != window) return@mapNotNull "$name: '$caseName' is shown in another window than '${transition.case}'"
+            val still =
+                Shot
+                    .launch(
+                        variant,
+                        heightDp = window?.heightDp ?: variant.heightDp,
+                        keyboard = case.keyboard,
+                        widthDp = window?.widthDp ?: variant.widthDp,
+                        content = case.content,
+                    ).use { it.image() }
+            if (still.sameAs(frame)) null else "$name: the $which frame is not ${caseName}__${variant.id}.png"
+        } + listOfNotNull(late)
     val gap = frames.first().width / GAP_FRACTION
     val image =
         Bitmap.createBitmap(
@@ -86,3 +131,8 @@ private const val GAP_FRACTION = 40
 private const val GAP_COLOR = 0xFFFF00FF.toInt()
 private const val SETTLE_MILLIS = 2_000L
 private const val FRAME_MILLIS = 16L
+private const val MAX_LEAD_MILLIS = 2 * FRAME_MILLIS
+
+// A change may take this many frames to show: one to apply the state, one to start the animation at its start value,
+// one to move.
+private const val START_FRAMES = 3

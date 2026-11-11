@@ -451,7 +451,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | Component | Built from | Purpose |
 |---|---|---|
 | `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element |
+| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm: a row is as tall as its poster or its text and padding, never taller. "+1" is filled tonal while the row has episodes to watch and a standard icon button once the user has caught up, at the same size and place. An optional long press with haptic feedback, also offered as a custom accessibility action |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
@@ -497,9 +497,10 @@ legible, or preventing a jump. Decoration is not a purpose.
 
 A task that adds or changes an animation shows, with tests on the test clock, that it settles within its time,
 that re-triggering it mid-flight ends in the right state, that the interaction is correct with animations off, and
-that the idle screen has nothing pending. It also renders the transition as four frames in one image (start, one
-third, two thirds, end), `<case>__<variant>__frames.png`, next to the screen's screenshots: the first and last frames equal the static renders, and
-direction and pattern match this section. The hand-over names the transitions that changed. How a transition
+that the idle screen has nothing pending. It also renders the transition as frames in one image (start, one third,
+two thirds, end; earlier moments for a transition that does most of its way early),
+`<case>__<variant>__frames.png`, next to the screen's screenshots: the first and last frames equal the static
+renders, the change shows within three frames, and direction and pattern match this section. The hand-over names the transitions that changed. How a transition
 feels on a device, and predictive back under a finger, are judged by the owner from the installed app.
 
 ## 9. Per-screen information budgets
@@ -539,7 +540,7 @@ disabled.
 - Rows (`AnimeRow`), at most three logical lines and one action.
 
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
-tab, one "+1" tonal icon button. The three logical lines are the title, line 2 and line 3, so a row with a two-line
+tab, one "+1" icon button, tonal while the row has episodes to watch and quiet once the user has caught up. The three logical lines are the title, line 2 and line 3, so a row with a two-line
 title and both lines is within the limit.
 
 | Case | Line 2 | Line 3 |
@@ -569,16 +570,22 @@ progress bar.
 Equal keys are ordered by title. The other tabs default to "Last updated". The sort chosen for each tab is
 remembered.
 
-**Rows never move under the user's finger.** The order of a tab is computed when the List is opened or returned
-to, when the tab's sort is changed, and on pull-to-refresh, and the tab's page then starts from the top. It is not
-computed after each edit, nor when the user switches tabs, so a tab comes back as it was left. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates
-rows in place without moving them: after "+1" a row stays where it is, under "Up next" and under "Last updated"
-alike. Two things do change the visible rows: a row whose title no longer belongs to the tab leaves at once, with
-the list's item animation (the usual case is a "+1" that completes a title, and Undo puts it back in the same
-place); a title that joins the tab (a sync, or "+1" completing it) appears at the end until the order is next
-computed.
+"Up next" groups a row only by what the row shows: its "to watch" line, or the time of its next episode or
+premiere. The List and the title page take what has aired, what is to watch and the next episode from one decision
+in `:core`, so a title says the same in both places.
 
-**Behind a tap:** the row opens the title page. Filter replaces the top app bar title with a text field that
+**Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's
+sort is changed, and on pull-to-refresh, and only then does the tab's page start from the top. It is not computed
+after an edit, when the user switches tabs or comes back from a title page, so the List comes back with its rows in
+the same order and at the same scroll position. Starting or ending the filter keeps the unfiltered list where it
+was. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates rows in place
+without moving them: after "+1" a row stays where it is, under "Up next" and under "Last updated" alike. Two things
+do change the visible rows, both with the list's item animation: a row whose title no longer belongs to the tab
+leaves at once (the usual case is a "+1" that completes a title, and Undo puts it back in the same place); a title
+that joins the tab (a sync, or "+1" completing it) appears at the end until the order is next computed.
+
+**Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens
+the entry's edit sheet, with haptic feedback; screen readers get it as the row's "Edit" action. Filter replaces the top app bar title with a text field that
 filters every tab by title, so a swipe shows the next tab's matches; Back or clearing the field ends it. Sort opens a bottom sheet with at most five
 options (Up next, Title, Last updated, Score, Start date). "+1" answers with a snackbar "Episode 13 watched · Undo".
 "+1" works at and above the total (W9). When "+1" reaches MAL's total, the title becomes Completed (W7): the row leaves Watching at once and the snackbar says
@@ -761,8 +768,8 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   six days ("Sat 17:30", «сб 17:30»), and the date with the time beyond that ("14 Nov, 17:30"). It never has both a
   weekday and a date. An air time always follows other text, so "today", "tomorrow" and their Russian forms are in
   lower case. A next episode is written in one form everywhere, the list row and the airing block alike:
-  "Episode 15 · Sat 17:30", «Серия 15 · сб 17:30», "Episode 15 · today 17:30". A premiere whose time is known is
-  written the same way: "Premieres Sat 17:30", «Премьера сб 17:30».
+  "Episode 15 · Sat 17:30", «Серия 15 · сб 17:30», "Episode 15 · today 17:30"; a wrap falls before the dot. A
+  premiere whose time is known is written the same way on both screens: "Premieres Sat 17:30", «Премьера сб 17:30».
 - **A date from MAL** is written by its precision: a full date as day and short month ("4 Jan", «4 янв.»), with the
   year added on the title page ("4 Jan 2027") and not in the list row; a year and month as "January 2027"
   («в январе 2027 г.» after «Премьера»); a year alone as "2027" («в 2027 г.» after «Премьера»).

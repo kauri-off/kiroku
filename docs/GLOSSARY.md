@@ -23,7 +23,7 @@ The owner is the final authority on the Russian column.
 | Aired count on the title page | `14 aired` | `Вышло 14` | Written without the total, which the page states once elsewhere. Estimated: `~14 aired` / `Вышло ~14` |
 | Episodes to watch | `2 to watch` | `К просмотру: 2` | Colon form avoids a plural. Lower case after «·»: `· к просмотру: 2` |
 | Episodes to watch, estimated | `~2 to watch` | `К просмотру: ~2` | |
-| Next episode | `Episode 15 · Sat 17:30` | `Серия 15 · сб 17:30` | One form in the list row and the airing block. Time by ARCHITECTURE section 10: today / сегодня, tomorrow / завтра, the weekday within six days, then the date (`14 Nov, 17:30` / `14 нояб., 17:30`). The time words are in lower case, because an air time always follows other text: `Episode 15 · today 17:30` / `Серия 15 · сегодня 17:30` |
+| Next episode | `Episode 15 · Sat 17:30` | `Серия 15 · сб 17:30` | One form in the list row and the airing block. Time by ARCHITECTURE section 10: today / сегодня, tomorrow / завтра, the weekday within six days, then the date (`14 Nov, 17:30` / `14 нояб., 17:30`). The time words are in lower case, because an air time always follows other text: `Episode 15 · today 17:30` / `Серия 15 · сегодня 17:30`. A wrap falls before «·» |
 | Premiere, time known | Premieres Sat 17:30 | Премьера сб 17:30 | When the first episode's air time is known; it replaces the date forms below. Time as for the next episode: `Premieres today 17:30` / `Премьера сегодня 17:30`, `Premieres 4 Jan, 17:30` / `Премьера 4 янв., 17:30`. No colon, like the date forms |
 | Premiere, full date | Premieres 4 Jan / Premieres 4 Jan 2027 | Премьера 4 янв. / Премьера 4 янв. 2027 г. | Without the year in the list row, with it on the title page |
 | Premiere, month known | Premieres January 2027 | Премьера в январе 2027 г. | |
@@ -35,6 +35,7 @@ The owner is the final authority on the Russian column.
 | Add to list | Add to list | Добавить в список | |
 | Remove from list | Remove from list | Удалить из списка | |
 | Undo | Undo | Отменить | |
+| Edit a list entry | Edit | Изменить | A list row's long press and its spoken action; it opens the edit sheet |
 | Snackbar after "+1" | Episode 13 watched · Undo | Серия 13 просмотрена · Отменить | |
 | Snackbar when a change completes the title | Moved to Completed · Undo | Перенесено в Просмотрено · Отменить | On the List after "+1" and on the title page after the stepper. The status name is not declined. A bare «Просмотрено» would read as "the episode is watched" |
 | Snackbar after "Add to list" | Added to Planned · Change | Добавлено: Запланировано · Изменить | Status names are not declined, hence the colon |

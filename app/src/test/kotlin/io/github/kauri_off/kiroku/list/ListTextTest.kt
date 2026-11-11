@@ -4,6 +4,7 @@ import android.provider.Settings
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.text.AirTimeText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,33 +33,6 @@ class ListTextTest {
         hour: Int,
         minute: Int = 0,
     ) = LocalDateTime.of(2026, 1, day, hour, minute).atZone(zone).toInstant()
-
-    @Test
-    @Config(qualifiers = "en")
-    fun `an air time is today, tomorrow, a weekday within six days, then a date`() {
-        val text = text()
-        assertEquals("today\u00A018:00", text.airTime(at(14, 18)))
-        assertEquals("tomorrow\u00A000:30", text.airTime(at(15, 0, 30)))
-        assertEquals("Sat\u00A017:30", text.airTime(at(17, 17, 30)))
-        assertEquals("Tue\u00A009:00", text.airTime(at(20, 9)))
-        assertEquals("Jan 21, 09:00", text.airTime(at(21, 9)))
-    }
-
-    @Test
-    @Config(qualifiers = "en")
-    fun `an air time follows the twelve hour setting`() {
-        assertEquals("Sat\u00A05:30 PM", text(hours24 = false).airTime(at(17, 17, 30)))
-    }
-
-    @Test
-    @Config(qualifiers = "ru")
-    fun `the russian air time is in lower case and never has a weekday and a date`() {
-        val text = text()
-        assertEquals("сегодня\u00A018:00", text.airTime(at(14, 18)))
-        assertEquals("завтра\u00A000:30", text.airTime(at(15, 0, 30)))
-        assertEquals("сб\u00A017:30", text.airTime(at(17, 17, 30)))
-        assertEquals("21 янв., 09:00", text.airTime(at(21, 9)))
-    }
 
     @Test
     @Config(qualifiers = "ru")
@@ -91,5 +65,17 @@ class ListTextTest {
         assertEquals("Premieres January\u00A02027", text.premiere(Premiere.InMonth(YearMonth.of(2027, 1))))
         assertEquals("Premieres\u00A02027", text.premiere(Premiere.InYear(Year.of(2027))))
         assertEquals("Not scored", text.line2(Line2.Score(null)))
+    }
+
+    @Test
+    @Config(qualifiers = "ru")
+    fun `the list writes air times exactly as the title page does`() {
+        val context = RuntimeEnvironment.getApplication()
+        val times = AirTimeText(context, now, zone)
+        listOf(at(14, 18), at(15, 0, 30), at(17, 17, 30), at(21, 9)).forEach { instant ->
+            val episode = ScheduledEpisode(15, instant)
+            assertEquals(times.nextEpisode(episode), text().line3(Line3.NextEpisode(episode)))
+            assertEquals(times.premiere(instant), text().premiere(Premiere.At(instant)))
+        }
     }
 }

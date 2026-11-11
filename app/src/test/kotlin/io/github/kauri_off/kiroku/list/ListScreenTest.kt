@@ -1,21 +1,31 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -28,6 +38,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -62,7 +73,7 @@ class ListScreenTest {
         if (shown == null) {
             compose.setContent {
                 KirokuTheme(dark = false, dynamicColor = false) {
-                    shown?.let { HostedListScreen(it) { e -> events += e } }
+                    shown?.let { FixtureListScreen(it) { e -> events += e } }
                 }
             }
         }
@@ -111,7 +122,7 @@ class ListScreenTest {
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
                 shown?.let {
-                    HostedListScreen(it) { e ->
+                    FixtureListScreen(it) { e ->
                         events += e
                         if (e is ListEvent.SelectTab) shown = shown?.copy(tab = e.status)
                     }
@@ -214,6 +225,110 @@ class ListScreenTest {
     }
 
     @Test
+    fun `the screen draws the snackbar host it is given`() {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                ListScreen(ListFixtureStates.undoSnackbar, {}, remember { SnackbarHostState() })
+            }
+        }
+        compose.onNodeWithText("Episode\u00A013 watched").assertIsDisplayed()
+        compose.onNodeWithText("Undo").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a long press or the edit action on a row asks to edit it, in every tab`() {
+        show(ListFixtureStates.watching)
+        val watching = FixtureAnime.exactToWatch
+        compose.onNodeWithText(watching.titles.romaji).performTouchInput { longClick() }
+        show(ListFixtureStates.planned)
+        val planned = FixtureAnime.premiereDate
+        compose
+            .onNode(hasText(planned.titles.romaji) and hasClickAction())
+            .fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions]
+            .single { it.label == "Edit" }
+            .action()
+        compose.waitForIdle()
+        assertEquals(listOf(ListEvent.Edit(watching.id), ListEvent.Edit(planned.id)), events)
+    }
+
+    @Test
+    fun `another user's rows offer no edit`() {
+        show(ListFixtureStates.readOnly)
+        val title =
+            ListFixtureStates.readOnly.page!!
+                .rows
+                .first()
+                .title
+        compose.onNodeWithText(title).performTouchInput { longClick() }
+        compose
+            .onNode(hasText(title) and hasClickAction())
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.CustomActions))
+        assertFalse(events.toString(), events.any { it is ListEvent.Edit })
+    }
+
+    @Test
+    fun `plus one stands out only on a row with episodes to watch, at one size`() {
+        val rows = ListFixtureStates.rows(ListStatus.Watching)
+        val toWatch = rows.first { it.line3 is Line3.ToWatch }
+        val caughtUp = rows.first { it.line3 !is Line3.ToWatch }
+        show(
+            ListFixtureStates.watching.copy(
+                content = ListFixtureStates.tabs(override = ListFixtureStates.watchingPage(listOf(toWatch, caughtUp))),
+            ),
+        )
+        val buttons = compose.onAllNodesWithContentDescription(plusOne)
+        val (prominent, quiet) = listOf(buttons[0], buttons[1]).map { it.captureToImage().toPixelMap() }
+        assertEquals(prominent.width, quiet.width)
+        assertEquals(prominent.height, quiet.height)
+        val target = with(compose.density) { 48.dp.roundToPx() }
+        listOf(buttons[0], buttons[1]).forEach { button ->
+            val touch = button.fetchSemanticsNode().touchBoundsInRoot
+            assertTrue(touch.toString(), touch.width >= target && touch.height >= target)
+        }
+
+        // Inside the button's visible shape, beside the icon: a container colour, or the row's own background.
+        fun filled(image: PixelMap) = image[image.width / 5, image.height / 2] != image[0, 0]
+        assertTrue("prominent", filled(prominent))
+        assertFalse("quiet", filled(quiet))
+    }
+
+    @Test
+    fun `starting and ending the filter keep the unfiltered list where it was`() {
+        showFollowing(ListFixtureStates.watching)
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        val title = lastWatching()
+        val top = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
+        shown = shown?.copy(filter = "")
+        compose.waitForIdle()
+        assertEquals(top, compose.onNodeWithText(title).getUnclippedBoundsInRoot().top)
+        shown = ListFixtureStates.filtering
+        compose.waitForIdle()
+        shown = ListFixtureStates.watching
+        compose.waitForIdle()
+        assertEquals(top, compose.onNodeWithText(title).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun `coming back to the list keeps its rows where they were`() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(ListFixtureStates.watching) } }
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        val title = lastWatching()
+        val top = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
+        restoration.emulateSavedInstanceStateRestore()
+        assertEquals(top, compose.onNodeWithText(title).getUnclippedBoundsInRoot().top)
+    }
+
+    private fun lastWatching() =
+        ListFixtureStates.watching.page!!
+            .rows
+            .last()
+            .title
+
+    @Test
     fun `a snackbar cut short by leaving the screen is reported as dismissed`() {
         show(ListFixtureStates.undoSnackbar)
         compose.onNodeWithText("Undo").assertExists()
@@ -282,7 +397,7 @@ class ListMotionTest {
     private fun showAndSettle(start: ListState = ListFixtureStates.watching) {
         state = start
         compose.mainClock.autoAdvance = false
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) } }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(state) } }
         compose.mainClock.advanceTimeBy(SETTLED)
     }
 
@@ -366,7 +481,7 @@ class ListMotionTest {
         compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 3)
         assertTrue("the watching page is on its way out", left(following) < watchingLeft)
         assertTrue("the planned page is on its way in", left(planned) > watchingLeft)
-        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS)
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS - TAB_SWITCH_MS / 3)
         assertEquals(watchingLeft, left(planned))
         assertFalse(exists(following))
         compose.mainClock.advanceTimeBy(SETTLED)
@@ -392,7 +507,7 @@ class ListMotionTest {
         val events = mutableListOf<ListEvent>()
         state = ListFixtureStates.watching
         compose.mainClock.autoAdvance = false
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) { events += it } } }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(state) { events += it } } }
         compose.mainClock.advanceTimeBy(SETTLED)
         val watchingLeft = left(following)
         compose.onNodeWithText(following).performTouchInput { swipeLeft(durationMillis = TAB_SWITCH_MS) }
@@ -457,7 +572,7 @@ class ListMotionOffTest {
     @Test
     fun `the change is complete at once`() {
         compose.mainClock.autoAdvance = false
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) } }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(state) } }
         compose.mainClock.advanceTimeByFrame()
         val leavingTop = compose.onNodeWithText(FixtureAnime.oneShortOfTotal.titles.romaji).getUnclippedBoundsInRoot().top
         compose.runOnUiThread { state = ListFixtureStates.completedSnackbar.copy(message = null) }
@@ -471,7 +586,7 @@ class ListMotionOffTest {
     @Test
     fun `another tab is shown at once`() {
         compose.mainClock.autoAdvance = false
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { HostedListScreen(state) } }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(state) } }
         compose.mainClock.advanceTimeByFrame()
         val left = compose.onNodeWithText(FixtureAnime.estimatedCaughtUp.titles.romaji).getUnclippedBoundsInRoot().left
         compose.runOnUiThread { state = ListFixtureStates.planned }

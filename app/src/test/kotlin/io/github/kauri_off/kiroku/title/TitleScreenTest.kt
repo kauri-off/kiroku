@@ -77,7 +77,7 @@ class TitleScreenTest {
     fun theAiringBlockWritesCoresFigures() {
         show(TitleFixtures.of(FixtureAnime.exactToWatch))
         compose.onNodeWithText("14\u00A0aired\u00A0· 2\u00A0to\u00A0watch").assertIsDisplayed()
-        compose.onNodeWithText("Episode\u00A015 · Sat\u00A05:30", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Episode\u00A015 ·\u00A0Sat\u00A05:30", substring = true).assertIsDisplayed()
         show(TitleFixtures.of(FixtureAnime.estimatedToWatch))
         compose.onNodeWithText("~10\u00A0aired\u00A0· ~3\u00A0to\u00A0watch").assertIsDisplayed()
         show(TitleFixtures.of(FixtureAnime.estimatedCaughtUp))

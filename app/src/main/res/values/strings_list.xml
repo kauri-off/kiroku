@@ -21,8 +21,6 @@
     <string name="list_progress_unknown_total">Watched %1$d</string>
     <string name="list_to_watch">%1$d\u00A0to watch</string>
     <string name="list_to_watch_estimated">~%1$d\u00A0to watch</string>
-    <string name="list_next_episode">Episode\u00A0%1$d ·\u00A0%2$s</string>
-    <string name="list_premieres_at">Premieres %1$s</string>
     <string name="list_premieres_day">Premieres %1$s</string>
     <string name="list_premieres_month">Premieres %1$s\u00A0%2$d</string>
     <string name="list_premieres_year">Premieres\u00A0%1$d</string>
@@ -41,10 +39,6 @@
         <item>November</item>
         <item>December</item>
     </string-array>
-    <string name="list_time_today">today\u00A0%1$s</string>
-    <string name="list_time_tomorrow">tomorrow\u00A0%1$s</string>
-    <string name="list_time_weekday">%1$s\u00A0%2$s</string>
-    <string name="list_time_date">%1$s, %2$s</string>
     <string name="list_score">Score\u00A0%1$d</string>
     <string name="list_not_scored">Not scored</string>
     <string name="list_empty">No titles in %1$s</string>
@@ -58,5 +52,6 @@
     <string name="list_episode_watched">Episode\u00A0%1$d watched</string>
     <string name="list_moved_to_completed">Moved to Completed</string>
     <string name="list_could_not_refresh">Could not refresh</string>
+    <string name="list_edit">Edit</string>
     <string name="list_undo">Undo</string>
 </resources>

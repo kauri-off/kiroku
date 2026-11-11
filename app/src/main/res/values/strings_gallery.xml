@@ -30,7 +30,7 @@
     <string name="gallery_progress">Watched %1$d\u00A0of\u00A0%2$d</string>
     <string name="gallery_to_watch">%d\u00A0to watch</string>
     <string name="gallery_to_watch_estimated">~%d\u00A0to watch</string>
-    <string name="gallery_next_episode">Episode\u00A015 · Sat\u00A017:30</string>
+    <string name="gallery_next_episode">Episode\u00A015 ·\u00A0Sat\u00A017:30</string>
     <string name="gallery_score">Score\u00A0%d</string>
     <string name="gallery_not_yet_aired">Not yet aired</string>
     <string name="gallery_facts">TV · 2024 · 24\u00A0episodes</string>

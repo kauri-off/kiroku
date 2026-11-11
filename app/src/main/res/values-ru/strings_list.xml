@@ -21,8 +21,6 @@
     <string name="list_progress_unknown_total">Просмотрено %1$d</string>
     <string name="list_to_watch">К просмотру:\u00A0%1$d</string>
     <string name="list_to_watch_estimated">К просмотру:\u00A0~%1$d</string>
-    <string name="list_next_episode">Серия\u00A0%1$d ·\u00A0%2$s</string>
-    <string name="list_premieres_at">Премьера %1$s</string>
     <string name="list_premieres_day">Премьера %1$s</string>
     <string name="list_premieres_month">Премьера в\u00A0%1$s\u00A0%2$d\u00A0г.</string>
     <string name="list_premieres_year">Премьера в\u00A0%1$d\u00A0г.</string>
@@ -41,10 +39,6 @@
         <item>ноябре</item>
         <item>декабре</item>
     </string-array>
-    <string name="list_time_today">сегодня\u00A0%1$s</string>
-    <string name="list_time_tomorrow">завтра\u00A0%1$s</string>
-    <string name="list_time_weekday">%1$s\u00A0%2$s</string>
-    <string name="list_time_date">%1$s, %2$s</string>
     <string name="list_score">Оценка:\u00A0%1$d</string>
     <string name="list_not_scored">Без оценки</string>
     <string name="list_empty">В «%1$s» нет тайтлов</string>
@@ -58,5 +52,6 @@
     <string name="list_episode_watched">Серия\u00A0%1$d просмотрена</string>
     <string name="list_moved_to_completed">Перенесено в Просмотрено</string>
     <string name="list_could_not_refresh">Не удалось обновить</string>
+    <string name="list_edit">Изменить</string>
     <string name="list_undo">Отменить</string>
 </resources>

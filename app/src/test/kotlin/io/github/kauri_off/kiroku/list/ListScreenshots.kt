@@ -8,8 +8,11 @@ import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
 
+private val TAB_SWITCH = Motion.Duration.MEDIUM2.toLong()
+private const val FRAME = 16L
+
 class ListScreenshots : ScreenshotRegistry() {
-    private fun screen(state: ListState) = @Composable { HostedListScreen(state) }
+    private fun screen(state: ListState) = @Composable { FixtureListScreen(state) }
 
     override val content = contentCase("watching", content = screen(ListFixtureStates.watching))
     override val loading = shown(screen(ListFixtureStates.loading))
@@ -38,11 +41,18 @@ class ListScreenshots : ScreenshotRegistry() {
     override val transitions =
         listOf(
             Transition("completed-row", start = "last-updated", millis = Motion.Duration.SHORT4.toLong()) { changed ->
-                HostedListScreen(if (changed) ListFixtureStates.completedRow else ListFixtureStates.lastUpdated)
+                FixtureListScreen(if (changed) ListFixtureStates.completedRow else ListFixtureStates.lastUpdated)
             },
-            // A tapped tab slides its page in.
-            Transition("planned", start = "watching", millis = Motion.Duration.MEDIUM2.toLong()) { changed ->
-                HostedListScreen(if (changed) ListFixtureStates.planned else ListFixtureStates.watching)
+            // A tapped tab slides its page in. Emphasized decelerate does most of the way early, so the frames are one
+            // frame, a sixth and a third in, and the end. The tab row reacts a frame before the page starts to slide.
+            Transition(
+                "planned",
+                start = "watching",
+                millis = TAB_SWITCH,
+                at = listOf(FRAME, TAB_SWITCH / 6, TAB_SWITCH / 3, TAB_SWITCH),
+                lead = FRAME,
+            ) { changed ->
+                FixtureListScreen(if (changed) ListFixtureStates.planned else ListFixtureStates.watching)
             },
         )
 }

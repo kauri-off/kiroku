@@ -2,12 +2,11 @@ package io.github.kauri_off.kiroku.list
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.airingPhase
 import io.github.kauri_off.kiroku.core.airing.episodeTotal
-import io.github.kauri_off.kiroku.core.airing.episodesToWatch
-import io.github.kauri_off.kiroku.core.airing.premiereOf
-import io.github.kauri_off.kiroku.core.airing.shownAired
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -64,8 +63,9 @@ data class ListPage(
     val sort: ListSort,
     val sorts: List<ListSort>,
     val rows: List<ListRow>,
-    // Changes whenever the tab's order is computed again, which starts the page from the top; rows animate only
-    // between states with the same value. A tab switch does not change it.
+    // Changes whenever the tab's order is computed again (app start, refresh, a new sort), which starts the page from
+    // the top; rows animate only between states with the same value. A tab switch or a return from a title does not
+    // change it.
     val ordering: Int = 0,
 )
 
@@ -137,6 +137,11 @@ sealed interface ListEvent {
         val id: AnimeId,
     ) : ListEvent
 
+    // A long press on a row, or its "Edit" accessibility action: open the entry's edit sheet.
+    data class Edit(
+        val id: AnimeId,
+    ) : ListEvent
+
     data object StartFilter : ListEvent
 
     data class FilterChanged(
@@ -172,8 +177,8 @@ sealed interface ListEvent {
     data object Back : ListEvent
 }
 
-// One row from :core's values: the aired count, "to watch", the total, the next episode and the premiere are never
-// computed here. Another user's list has no airing data, so its row has progress or score and no third line.
+// One row from :core's airing phase, the one the title page reads too: line 2's premiere and line 3 are never decided
+// here. Another user's list has no airing data, so its row has progress or score and no third line.
 fun listRow(
     entry: ListEntry,
     airing: Airing?,
@@ -183,24 +188,15 @@ fun listRow(
 ): ListRow {
     val anime = entry.anime
     val values = entry.values
-    val ownAiring = airing.takeUnless { readOnly }
-    val premiere = if (readOnly) null else premiereOf(anime, airing, today)
-    val aired = shownAired(anime, ownAiring)
+    val phase = if (readOnly) null else airingPhase(anime, values, airing, today)
     val line2 =
         when {
             entry.status == ListStatus.Completed -> Line2.Score(values.score)
-            premiere != null -> Line2.Premieres(premiere)
+            phase is AiringPhase.NotYetAired -> Line2.Premieres(phase.premiere)
             else -> Line2.Progress(values.watchedEpisodes, episodeTotal(anime, airing))
         }
-    val toWatch = episodesToWatch(entry, ownAiring)
-    val next = ownAiring?.nextEpisode
-    val line3 =
-        when {
-            line2 !is Line2.Progress || aired == null -> null
-            toWatch != null -> Line3.ToWatch(toWatch)
-            next != null -> Line3.NextEpisode(next)
-            else -> null
-        }
+    val aired = (phase as? AiringPhase.Aired)?.takeIf { line2 is Line2.Progress }
+    val line3 = aired?.toWatch?.let(Line3::ToWatch) ?: aired?.next?.let(Line3::NextEpisode)
     return ListRow(
         id = anime.id,
         title = anime.titles.preferred(language),
