@@ -108,7 +108,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   read inside a rendered case differs from the app theme's for that variant, light, dark and the second seed
   included.
 
-- [ ] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
+- [x] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
   Profile; placeholder screens in the shared empty state; the place for snackbars and for the session banner.
   **Cases:** `shell/list-selected`, `shell/snackbar`, `shell/session-banner`, `shell/wide` (840 × 600 dp, rail).
   **Needs:** M1-07.
