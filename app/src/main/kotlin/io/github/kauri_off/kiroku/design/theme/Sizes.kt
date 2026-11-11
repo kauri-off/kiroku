@@ -7,6 +7,9 @@ object Sizes {
     // A list row's poster, in a MAL poster's proportions, large enough to recognise its art.
     val posterRow: Dp = 72.dp
     val posterRowHeight: Dp = 104.dp
+
+    // The row poster narrows with the font scale down to this width.
+    val posterRowNarrowest: Dp = 48.dp
     val posterStrip: Dp = 104.dp
     val posterHeader: Dp = 120.dp
 

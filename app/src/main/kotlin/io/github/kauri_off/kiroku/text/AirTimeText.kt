@@ -28,7 +28,7 @@ class AirTimeText(
     }
 
     // "Premieres Sat 17:30", a premiere whose first episode's time is known.
-    fun premiere(instant: Instant): String = context.getString(R.string.air_time_premieres, airTime(instant))
+    fun premiere(instant: Instant): String = context.getString(R.string.common_premieres_on, airTime(instant))
 
     // "Episode 15 · Sat 17:30"; a wrap falls before the dot.
     fun nextEpisode(episode: ScheduledEpisode): String =
@@ -39,6 +39,5 @@ class AirTimeText(
     private companion object {
         const val LAST_WEEKDAY = 6L
         val WEEKDAY = notShown("EEE")
-        val DAY_MONTH = notShown("dMMM")
     }
 }

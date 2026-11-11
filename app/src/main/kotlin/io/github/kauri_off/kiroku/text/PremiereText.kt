@@ -3,7 +3,6 @@ package io.github.kauri_off.kiroku.text
 import android.content.Context
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.Premiere
-import io.github.kauri_off.kiroku.notShown
 
 // "Premieres 4 Jan" in a list row, "Premieres 4 Jan 2027" on the title page; a known time as [times] writes it.
 fun premiereText(
@@ -28,5 +27,3 @@ fun premiereText(
         Premiere.Unannounced -> context.getString(R.string.common_not_yet_aired)
     }
 }
-
-private val DAY_MONTH = notShown("dMMM")

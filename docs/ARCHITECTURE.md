@@ -435,7 +435,10 @@ colour outside the theme is a code-review finding.
 - Every tappable element is at least 48 × 48 dp.
 - Posters have the theme's small corner shape and are cropped to their size, which is one of three named sizes:
   72 × 104 dp, a MAL poster's proportions, in every `AnimeRow` (the List, search results, Related and the title
-  page's Sequel row); 104 × 156 dp (2:3) in strips at font scale 1.0; 120 × 180 dp (2:3) in the title header.
+  page's Sequel row) at font scale 1.0; 104 × 156 dp (2:3) in strips at font scale 1.0; 120 × 180 dp (2:3) in the
+  title header.
+- **A row poster leaves its text room at large text.** Above font scale 1.0 it narrows in inverse proportion to the
+  font scale, in its own proportions, down to 48 dp wide, so a title beside it keeps a readable line length.
 - **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
   scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
   is a rule of the component, and a screen never passes a width.
@@ -443,7 +446,7 @@ colour outside the theme is a code-review finding.
 - **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
   shown ("Tenkuu-Toshi-Rondenia-no-" / "Kuuchuu-…"), unless the segment alone is wider than the line.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked
-  one per line (section 9.7). Nothing else depends on the font scale.
+  one per line (section 9.7). Apart from that and the two poster rules above, nothing depends on the font scale.
 
 ### 8.4 Components
 
@@ -452,7 +455,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | Component | Built from | Purpose |
 |---|---|---|
 | `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm: a row is as tall as its poster or its text and padding, never taller. "+1" is filled tonal while the row has episodes to watch and a standard icon button once the user has caught up, at the same size and place. An optional long press with haptic feedback, also offered as a custom accessibility action |
+| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm: a row is as tall as its poster or its text and padding, never taller. A row with "+1" starts its text level with the poster's top, so the button keeps one place; any other row centres its text on the poster. "+1" is filled tonal while the row has episodes to watch and a standard icon button once the user has caught up, at the same size and place. An optional long press with haptic feedback, offered to screen readers once, as the row's long-click action |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
@@ -487,7 +490,9 @@ legible, or preventing a jump. Decoration is not a purpose.
   can overshoot move, resize and reshape; they are never used on opacity or colour.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
-  stable keys and use the list's item animation for add, remove and move. Content that finishes loading fades in.
+  stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a
+  List tab between orderings (section 9.3), even when a data refresh brings the change. Content that finishes
+  loading fades in.
   One thing moves per change; a container that enters brings its content with it.
 - **Time.** An exit is shorter than the matching entrance. A change inside a component settles within 200 ms, a
   component's entrance within 300 ms, a screen's entrance within 400 ms.
@@ -565,7 +570,7 @@ progress bar.
 
 1. titles with episodes to watch, exact or estimated: the one whose latest episode aired most recently on top (a
    title for which that time is not known goes to the end of the group);
-2. then titles with a known next episode, the soonest first;
+2. then titles with a known time for the next episode or the premiere, the soonest first;
 3. then the rest, by last update, newest first.
 
 Equal keys are ordered by title. The other tabs default to "Last updated". The sort chosen for each tab is
