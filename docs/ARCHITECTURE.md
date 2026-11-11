@@ -703,8 +703,8 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
 
 | Sub-screen | Must show | Row limits |
 |---|---|---|
-| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type (full names) in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results: the title (line cap two); "TV · 2019"; the list status line ("Watching · 5 / 12") when the title is on the user's list; no trailing element |
-| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, broadcast time. A fact MAL does not give is left out | One label and one value per row; a value has line cap three |
+| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type (full names) in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results: the title (line cap two); "TV · 2019"; the list status line ("Watching · 5 / 12") when the title is on the user's list, without the count for Planned with none watched and for Completed at the total; no trailing element |
+| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, broadcast time. Alternative titles take one row per kind: English title, Japanese title, synonyms, so a long title never hides another. A fact MAL does not give is left out | One label and one value per row; a value has line cap three |
 | Recommendations | The titles MAL recommends | `AnimeRow` exactly as in search results, including the trailing MAL score |
 | Score distribution, Genres, Formats and years | `StatBar`s computed from the list; "Formats and years" has two groups | One `StatBar` per row; scores and years in their own order, everything else the largest first; at most twenty bars per group |
 

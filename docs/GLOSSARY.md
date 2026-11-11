@@ -96,6 +96,27 @@ The edit sheet's slider shows the number with MAL's name for it.
 Roadmap milestone M2 compares the Russian relation names with the names Shikimori uses and puts the differences to
 the owner; a name changes only on the owner's answer.
 
+## Title details
+
+The facts of the "Details" sub-screen. Their values from MAL that read as interface text are translated too.
+
+| Concept | English | Russian | Notes |
+|---|---|---|---|
+| English title | English title | Английское название | One row per kind of alternative title |
+| Japanese title | Japanese title | Японское название | |
+| Synonyms | Synonyms | Другие названия | Each synonym on its own line |
+| Start date / End date | Start date / End date | Дата начала / Дата окончания | The title's airing dates, by MAL's precision, with the year |
+| Source | Source | Первоисточник | |
+| Studio / Studios | Studio / Studios | Студия / Студии | By the number of studios |
+| Rating | Rating | Возрастной рейтинг | |
+| Episode length | Episode length | Длительность серии | `23 min`, `1 h 58 min` / `23 мин`, `1 ч 58 мин` |
+| Broadcast | Broadcast | Время показа | `Saturdays at 17:30` / `По субботам в 17:30`, in the device's zone |
+| No details | MyAnimeList gives no details for this title | На MyAnimeList нет подробностей об этом тайтле | |
+| Could not load | Could not load this title | Не удалось загрузить тайтл | |
+| Back (spoken) | Back | Назад | The top app bar's navigation icon |
+| Sources | Original, Manga, 4-koma manga, Web manga, Digital manga, Novel, Light novel, Web novel, Visual novel, Game, Card game, Book, Picture book, Radio, Music, Mixed media, Other | Оригинал, Манга, Ёнкома, Веб-манга, Цифровая манга, Роман, Ранобэ, Веб-роман, Визуальная новелла, Игра, Карточная игра, Книга, Книжка с картинками, Радио, Музыка, Медиамикс, Прочее | |
+| Age ratings | G (all ages), PG (children), PG-13 (teens 13 or older), R (17+, violence and profanity), R+ (mild nudity), Rx (hentai) | G (для всех возрастов), PG (для детей), PG-13 (от 13 лет), R (17+, насилие и ненормативная лексика), R+ (лёгкая обнажённость), Rx (хентай) | |
+
 ## Notifications
 
 | Concept | English | Russian | Notes |

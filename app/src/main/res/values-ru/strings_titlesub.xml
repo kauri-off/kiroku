@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="titlesub_back">Назад</string>
+    <string name="titlesub_related">Связанное</string>
+    <string name="titlesub_details">Подробности</string>
+    <string name="titlesub_no_connection">Нет соединения</string>
+    <string name="titlesub_could_not_load">Не удалось загрузить тайтл</string>
+    <string name="titlesub_no_details">На MyAnimeList нет подробностей об этом тайтле</string>
+    <string name="titlesub_separator">"\u00A0· "</string>
+    <string name="titlesub_status_progress">%1$s\u00A0· %2$d\u00A0/\u00A0%3$d</string>
+    <string name="titlesub_status_count">%1$s\u00A0· %2$d</string>
+
+    <string name="titlesub_english_title">Английское название</string>
+    <string name="titlesub_japanese_title">Японское название</string>
+    <string name="titlesub_synonyms">Другие названия</string>
+    <string name="titlesub_start_date">Дата начала</string>
+    <string name="titlesub_end_date">Дата окончания</string>
+    <string name="titlesub_source">Первоисточник</string>
+    <string name="titlesub_studio">Студия</string>
+    <string name="titlesub_studios">Студии</string>
+    <string name="titlesub_rating">Возрастной рейтинг</string>
+    <string name="titlesub_episode_length">Длительность серии</string>
+    <string name="titlesub_broadcast">Время показа</string>
+    <string name="titlesub_list_separator">", "</string>
+
+    <string name="titlesub_minutes">%d\u00A0мин</string>
+    <string name="titlesub_hours">%d\u00A0ч</string>
+    <string name="titlesub_hours_minutes">%1$d\u00A0ч\u00A0%2$d\u00A0мин</string>
+    <string name="titlesub_seconds">%d\u00A0с</string>
+    <string-array name="titlesub_broadcast_at">
+        <item>По понедельникам в\u00A0%s</item>
+        <item>По вторникам в\u00A0%s</item>
+        <item>По средам в\u00A0%s</item>
+        <item>По четвергам в\u00A0%s</item>
+        <item>По пятницам в\u00A0%s</item>
+        <item>По субботам в\u00A0%s</item>
+        <item>По воскресеньям в\u00A0%s</item>
+    </string-array>
+    <string-array name="titlesub_broadcast_day">
+        <item>По понедельникам</item>
+        <item>По вторникам</item>
+        <item>По средам</item>
+        <item>По четвергам</item>
+        <item>По пятницам</item>
+        <item>По субботам</item>
+        <item>По воскресеньям</item>
+    </string-array>
+
+    <string name="titlesub_status_watching">Смотрю</string>
+    <string name="titlesub_status_planned">Запланировано</string>
+    <string name="titlesub_status_completed">Просмотрено</string>
+    <string name="titlesub_status_on_hold">Отложено</string>
+    <string name="titlesub_status_dropped">Брошено</string>
+
+    <string name="titlesub_type_tv">ТВ</string>
+    <string name="titlesub_type_tv_special">ТВ-спешл</string>
+    <string name="titlesub_type_movie">Фильм</string>
+    <string name="titlesub_type_ova">OVA</string>
+    <string name="titlesub_type_ona">ONA</string>
+    <string name="titlesub_type_special">Спешл</string>
+    <string name="titlesub_type_music">Клип</string>
+    <string name="titlesub_type_commercial">Реклама</string>
+    <string name="titlesub_type_promotional">Промо</string>
+
+    <string name="titlesub_relation_prequel">Предыстория</string>
+    <string name="titlesub_relation_sequel">Продолжение</string>
+    <string name="titlesub_relation_parent_story">Основная история</string>
+    <string name="titlesub_relation_full_story">Полная версия</string>
+    <string name="titlesub_relation_side_story">Побочная история</string>
+    <string name="titlesub_relation_spin_off">Спин-офф</string>
+    <string name="titlesub_relation_alternative_setting">Альтернативный сеттинг</string>
+    <string name="titlesub_relation_alternative_version">Альтернативная версия</string>
+    <string name="titlesub_relation_summary">Краткое изложение</string>
+    <string name="titlesub_relation_other">Прочее</string>
+    <string name="titlesub_relation_character">Общий персонаж</string>
+
+    <string name="titlesub_source_original">Оригинал</string>
+    <string name="titlesub_source_manga">Манга</string>
+    <string name="titlesub_source_4_koma_manga">Ёнкома</string>
+    <string name="titlesub_source_web_manga">Веб-манга</string>
+    <string name="titlesub_source_digital_manga">Цифровая манга</string>
+    <string name="titlesub_source_novel">Роман</string>
+    <string name="titlesub_source_light_novel">Ранобэ</string>
+    <string name="titlesub_source_web_novel">Веб-роман</string>
+    <string name="titlesub_source_visual_novel">Визуальная новелла</string>
+    <string name="titlesub_source_game">Игра</string>
+    <string name="titlesub_source_card_game">Карточная игра</string>
+    <string name="titlesub_source_book">Книга</string>
+    <string name="titlesub_source_picture_book">Книжка с картинками</string>
+    <string name="titlesub_source_radio">Радио</string>
+    <string name="titlesub_source_music">Музыка</string>
+    <string name="titlesub_source_mixed_media">Медиамикс</string>
+    <string name="titlesub_source_other">Прочее</string>
+
+    <string name="titlesub_rating_all_ages">G (для всех возрастов)</string>
+    <string name="titlesub_rating_children">PG (для детей)</string>
+    <string name="titlesub_rating_teens_13">PG-13 (от\u00A013\u00A0лет)</string>
+    <string name="titlesub_rating_violence_17">R (17+, насилие и ненормативная лексика)</string>
+    <string name="titlesub_rating_mild_nudity">R+ (лёгкая обнажённость)</string>
+    <string name="titlesub_rating_hentai">Rx (хентай)</string>
+</resources>
