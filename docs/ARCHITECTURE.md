@@ -319,26 +319,24 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 6.4 Stack, wiring and demo mode
 
-- **User interface:** Jetpack Compose with Material 3 and its adaptive navigation suite. **Navigation:** Jetpack
-  Navigation 3 (runner-up: Navigation Compose, more machinery than this app needs).
-- **Network:** OkHttp, Retrofit and kotlinx.serialization; AniList queries are sent as plain requests. Rejected:
-  Ktor (a second HTTP abstraction) and Apollo (code generation and a plugin for a few queries). **Images:** Coil.
-- **Storage:** Room, with its annotation processor (KSP) only in `:data`; DataStore Preferences for settings.
-- **Background:** WorkManager, and `AlarmManager` for the notification alarm. **Sign-in:** Custom Tabs and the
-  Keystore directly (`security-crypto` is deprecated).
-- **Wiring** is done by hand. Hilt was rejected: a plugin and an annotation processor in every module for a graph
-  of roughly fifteen objects.
-- **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included. A debug build
-  without a client id starts in it. Demo data follows the device's date: the fixtures are shifted by the whole
-  number of weeks since their reference moment, and demo mode runs on a clock that lags the device's by the rest
-  of that week, so every weekday and weekly slot in them stays what it claims; every "today" does too on a device
-  between UTC−9 and UTC+8, which includes the fixtures' own zone. Its server is in memory too, so a new process
-  starts again from the fixtures.
+`gradle/libs.versions.toml` lists what is used and is the only place a version is written. What it cannot say is what
+was chosen against, and why:
+
+- **Navigation:** Jetpack Navigation 3. Navigation Compose is more machinery than this app needs.
+- **Network:** OkHttp, Retrofit and kotlinx.serialization, with AniList queries sent as plain requests. Not Ktor (a
+  second HTTP abstraction) and not Apollo (code generation and a plugin for a few queries).
+- **Storage:** Room, with its annotation processor only in `:data`; DataStore Preferences for settings.
+- **Sign-in:** Custom Tabs and the Keystore directly (`security-crypto` is deprecated).
+- **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
+  fifteen objects.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
   (detekt's current line is alpha).
-- Also not used: a chart library (bars are `StatBar`), AppCompat, `kotlinx-datetime` (`java.time` is available), a
-  paging library, Google Play Services, Firebase, any closed-source dependency (which keeps F-Droid possible).
-- Versions are written only in `gradle/libs.versions.toml`.
+- **Not used at all:** a chart library, AppCompat, `kotlinx-datetime`, a paging library, Google Play Services,
+  Firebase, any closed-source dependency (which keeps F-Droid possible).
+- **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included, and a debug build
+  without a client id starts in it. Demo data follows the device's date, so every weekday and weekly slot in it stays
+  what it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
+  fixtures.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.
@@ -513,23 +511,25 @@ feels on a device, and predictive back under a finger, are judged by the owner f
 
 ### 9.1 How a budget works
 
-Each screen's budget has three parts, and the layout rubric scores against all three:
+A budget is the owner's decision about what a screen shows before the user taps anything. It has three parts, and the
+layout rubric reviews against all three:
 
 - **Must show:** elements that have to be present whenever they apply. Leaving one out fails the screen.
-- **Limits:** the most the screen may show before the user taps anything. Exceeding one fails the screen.
+- **Limits:** the most the screen may show, and what it never shows. Exceeding one fails the screen.
 - **Behind a tap:** where everything else lives.
 
-The terms **logical line**, **line cap**, **ellipsis**, **base variants** and **content from MAL** are defined in
-`docs/LAYOUT_RUBRIC.md` section 2 and are used here in that sense.
+A budget names elements and rules, not wording or arrangement. The strings are in the resources and their recurring
+forms in `docs/GLOSSARY.md`; which case shows what is stated by the screen's tests and screenshot cases. The terms
+**logical line**, **line cap**, **ellipsis**, **base variants** and **content from MAL** are defined in
+`docs/LAYOUT_RUBRIC.md` section 2 and are used here in that sense. **A string that does not fit is budget feedback for
+the owner, never something the author solves with an ellipsis.**
 
-The strings quoted in the budgets are product decisions, given in English; `docs/GLOSSARY.md` has the Russian form
-of each. Whether a string fits where its budget puts it is proven by the render. **A string that does not fit is
-budget feedback for the owner, never something the author solves with an ellipsis.**
+The budget of a screen that is not built yet is a first statement of intent. The owner's look at the built screen
+decides, and the budget then says what was decided.
 
-**Extending a budget** (for features after 1.0) is a pull request that changes this section first: it adds the
-element to Must show or to the limits of one screen, says what it displaces or why the screen can afford it, and is
-approved by the owner before the layout task starts. New content defaults to "behind a tap". The list row never
-gains a line.
+**Extending a budget** (for features after 1.0) is a pull request that changes this section first: it adds the element
+to Must show or to the limits of one screen, says what it displaces or why the screen can afford it, and is approved
+by the owner before the layout task starts. New content defaults to "behind a tap". The list row never gains a line.
 
 ### 9.2 Sign-in
 
@@ -546,118 +546,72 @@ disabled.
 - Rows (`AnimeRow`), at most three logical lines and one action.
 
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
-tab, one "+1" icon button, tonal while the row has episodes to watch and quiet once the user has caught up. The three logical lines are the title, line 2 and line 3, so a row with a two-line
-title and both lines is within the limit.
+tab, one "+1" button.
 
-| Case | Line 2 | Line 3 |
-|---|---|---|
-| Airing, episodes to watch | `Watched 12 of 24` | `2 to watch` (`~2 to watch` when the aired count is estimated), in the `tertiary` colour |
-| Airing, exact count, nothing to watch | same | the next episode, `Episode 15 · Sat 17:30`; none when no next episode is known |
-| Airing, estimated count, nothing to watch | same | none |
-| Finished, or aired count unknown | same | none |
-| Not yet aired | `Premieres Sat 17:30` when the first episode's time is known, written by the air-time rule of section 10; otherwise MAL's date by its precision, `Premieres 4 Jan`; `Not yet aired` when there is neither | none |
-| Completed tab | `Score 8` (or `Not scored`) | none |
-
-Line 2 is always words of one shape. An unknown total is left out: `Watched 212`. The count is written as it is,
-also above the total (`Watched 25 of 24`, W9). A row never shows the aired count: "to watch" carries it, and the
-title page shows it. "Episodes to watch" means a "to watch" figure above zero (A8), which only a title in Watching
-can have; in the other tabs an airing title is always a "nothing to watch" row.
+- **Line 2** is always words of one shape: the user's progress ("Watched 12 of 24"; the total is left out when
+  unknown, and the count is written as it is, also above the total, W9). For a title that has not aired yet it is the
+  premiere, and in the Completed tab the user's score.
+- **Line 3** exists only for an airing title: "to watch", in the `tertiary` colour, when there are episodes to watch;
+  otherwise the next episode, when its time is known exactly.
+- A row never shows the aired count: "to watch" carries it, and the title page shows it.
 
 **Limits:** not in a row: MAL score, member count, genres, media type, studio, tags, a countdown, an edit button, a
 progress bar.
 
-**Default order.** Watching is sorted by default as "Up next", in three groups:
+**Default order.** Watching is sorted by default as "Up next": titles with episodes to watch first, the most recently
+aired on top; then titles with a known time for the next episode or the premiere, the soonest first; then the rest, by
+last update. "Up next" groups a row only by what the row shows, so the order never contradicts the rows. The other
+tabs default to "Last updated". The sort chosen for each tab is remembered.
 
-1. titles with episodes to watch, exact or estimated: the one whose latest episode aired most recently on top (a
-   title for which that time is not known goes to the end of the group);
-2. then titles with a known time for the next episode or the premiere, the soonest first;
-3. then the rest, by last update, newest first.
+**Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's sort
+is changed, and on pull-to-refresh, and only then does the tab's page start from the top. An edit, a sync, an air time
+passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position, and update
+rows in place. Two things do change the visible rows: a row whose title no longer belongs to the tab leaves at once,
+and Undo puts it back in the same place; a title that joins the tab appears at the end until the order is next
+computed.
 
-Equal keys are ordered by title. The other tabs default to "Last updated". The sort chosen for each tab is
-remembered.
-
-"Up next" groups a row only by what the row shows: its "to watch" line, or the time of its next episode or
-premiere. The List and the title page take what has aired, what is to watch and the next episode from one decision
-in `:core`, so a title says the same in both places.
-
-**Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's
-sort is changed, and on pull-to-refresh, and only then does the tab's page start from the top. It is not computed
-after an edit, when the user switches tabs or comes back from a title page, so the List comes back with its rows in
-the same order and at the same scroll position. Starting or ending the filter keeps the unfiltered list where it
-was. Data that changes while the tab is visible (an edit, a sync, an air time passing) updates rows in place
-without moving them: after "+1" a row stays where it is, under "Up next" and under "Last updated" alike. Two things
-do change the visible rows, both with the list's item animation: a row whose title no longer belongs to the tab
-leaves at once (the usual case is a "+1" that completes a title, and Undo puts it back in the same place); a title
-that joins the tab (a sync, or "+1" completing it) appears at the end until the order is next computed.
-
-**Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens
-the entry's edit sheet, with haptic feedback; screen readers get it as the row's "Edit" action. Filter replaces the top app bar title with a text field that
-filters every tab by title, so a swipe shows the next tab's matches; Back or clearing the field ends it. Sort opens a bottom sheet with at most five
-options (Up next, Title, Last updated, Score, Start date). "+1" answers with a snackbar "Episode 13 watched · Undo".
-"+1" works at and above the total (W9). When "+1" reaches MAL's total, the title becomes Completed (W7): the row leaves Watching at once and the snackbar says
-"Moved to Completed · Undo". Undo puts back the count, the status and the dates, and the row returns to its place.
+**Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens the
+entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
+clearing the field ends it. Sort opens a bottom sheet with at most five options. "+1" answers with a snackbar that
+offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves Watching and the
+snackbar says where it went; Undo puts back the count, the status and the dates.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.
 
 ### 9.4 Title page
 
-One scrolling column in this fixed order. No tabs, no floating buttons. **Each fact is stated once on the page**:
-the episode total, the year and a related title appear in one place only, as the items below say.
+One scrolling column in this fixed order. No tabs, no floating buttons. **Each fact is stated once on the page**: the
+episode total, the year, the premiere and a related title each appear in one place only.
 
 1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share". When the session has expired
-   (S6), the `SessionBanner` under it, from the page's own state, while loading and on error too.
-2. **Header.** Must show: the poster; the full title with no line cap; the facts line, "TV · 2024 · 24 episodes";
-   a `StatNumber` with the MAL score and the caption "MAL score" ("—" when there is none); the rank as its own short
-   line, "Ranked #12" (absent when MAL gives none). Limits: the facts line holds at most three facts (type, year,
-   episode count). The episode count is left out when it is 1 or unknown (a film reads "Movie · 2024") and when the
-   title is on the list, whose progress states it; the year is left out when the airing block's premiere states it.
-   The header holds nothing besides these five elements.
+   (S6), the `SessionBanner` under it, in every state.
+2. **Header.** Must show: the poster; the full title with no line cap; the facts line; the MAL score as a `StatNumber`
+   ("—" when there is none); the rank as its own short line, when MAL gives one. Limits: the facts line holds at most
+   three facts (type, year, episode count), and leaves one out when another element of the page states it or when it
+   says nothing, as an episode count of 1 does. The header holds nothing besides these five elements.
 3. **List block.** Not on the list: one filled button "Add to list" across the content width. It adds the title as
-   Planned and shows the snackbar "Added to Planned · Change", where "Change" opens the edit sheet. On the list, must
-   show, as one block: the status as a tonal button across the content width (where "Add to list" stands otherwise)
-   that opens the edit sheet; under it, side by side and each under its own label, the `EpisodeStepper` under
-   "Episodes watched", whose changes are written at once, and the user's score under "Your score", or a "Rate" text
-   button (both open the edit sheet). The score's column starts at the same place on every title; with large text it
-   may move under the stepper. The stepper has no ceiling (W9). A stepper change that reaches or passes MAL's total
-   completes the title (W7) and shows the snackbar "Moved to Completed · Undo", as on the List; other changes show no
-   snackbar.
+   Planned, and its snackbar offers "Change", which opens the edit sheet. On the list, must show, as one block: the
+   status as a tonal button in the same place, which opens the edit sheet; under it, side by side and each under its
+   own label, the `EpisodeStepper`, whose changes are written at once, and the user's score or a "Rate" button (both
+   open the edit sheet). The stepper has no ceiling (W9). A change that completes the title (W7) shows a snackbar with
+   Undo, as on the List; other changes show none.
 4. **Airing block** (must show for titles that are airing or not yet aired; absent otherwise). Limit: two logical
-   lines, as in this table.
-
-   | Case | Line 1 | Line 2 |
-   |---|---|---|
-   | Airing, exact count, episodes to watch | `14 aired · 2 to watch` | the next episode, `Episode 15 · Sat 17:30`; none when no next episode is known |
-   | Airing, exact count, nothing to watch or not on the list | `14 aired` | same |
-   | Airing, estimated count, episodes to watch | `~14 aired · ~2 to watch` | none |
-   | Airing, estimated count, nothing to watch or not on the list | `~14 aired` | none |
-   | Airing, aired count unknown | `Airing` | none |
-   | Not yet aired | `Premieres Sat 17:30` (beyond six days `Premieres 4 Jan, 17:30`) when the first episode's time is known, by the air-time rule of section 10; otherwise `Premieres 4 Jan 2027`, `Premieres January 2027` or `Premieres 2027` by the precision of MAL's date (section 10); `Not yet aired` when there is neither | none |
-
-   The premiere is stated once: when AniList's time is known it replaces MAL's date, which is a Japanese calendar
-   date and can differ from the device's by a day. The aired count is written without the total, which the list
-   block or the header states.
-   The "to watch" part is in the `tertiary` colour. The list row and this block show the same numbers for the same
-   title (A1), also for a title outside the tracked set (A12).
-5. **Sequel** (must show when the title has a direct sequel; absent otherwise): a `SectionHeader` "Sequel" over one
-   `AnimeRow` that opens it: its title, "TV · 2026", and the user's list status for it when it is on their list.
-   Which sequel is decided in `:core` from the related titles: of several, the one that starts first. It is not
-   repeated in the Related strip. Following the chain of sequels across titles is not on the page in 1.0.
-6. **Synopsis:** a `SectionHeader` "Synopsis" over the text, line cap four, with "More" to expand in place and
-   "Less" to collapse it again. Under
-   it one line of plain text with the genres ("Action · Fantasy · Drama"), line cap one. Without a synopsis, the
-   genres line stands alone, with no header.
-7. **Related** (must show when the title has related anime other than the sequel): `SectionHeader` "Related". A horizontal strip of at
-   most ten `PosterCard`s. When none of them fits the strip (only "other" and "character"), the header with "See all"
-   stands alone.
-   - The card's title: line cap two.
-   - Caption 1 is the relation ("Sequel"), line cap two. The two longest names use the short strip labels of the
-     glossary ("Alt. version", "Alt. setting"); the full names are used on "See all".
-   - Caption 2, line cap one: the user's list status for that title ("Completed", "Watching"), without numbers, when
-     it is on their list; otherwise "TV · 2019".
-   - Order: prequel, sequel, parent story, full story, side story, spin-off, alternative setting, alternative
-     version, summary; within a type by start date. The types "other" and "character" appear only on "See all".
-   - "See all" is shown whenever anything other than the sequel row's title is not in the strip. Related manga are not shown in 1.0.
+   lines. The first is the aired count, with "to watch" beside it, in the `tertiary` colour, when there are episodes
+   to watch; the second is the next episode, when its time is known exactly. A title that has not aired yet shows its
+   premiere alone. The list row and this block show the same numbers for the same title (A1), also for a title outside
+   the tracked set (A12).
+5. **Sequel** (must show when the title has a direct sequel; absent otherwise): a `SectionHeader` over one `AnimeRow`
+   that opens it, with the user's list status for it when it is on their list. Which sequel is decided in `:core`: of
+   several, the one that starts first. It is not repeated in the Related strip. Following the chain of sequels across
+   titles is not on the page in 1.0.
+6. **Synopsis:** a `SectionHeader` over the text, line cap four, which expands and collapses in place. Under it one
+   line of plain text with the genres, line cap one.
+7. **Related** (must show when the title has related anime other than the sequel): a `SectionHeader` over a horizontal
+   strip of at most ten `PosterCard`s. A card shows the title, the relation, and the user's list status for that title
+   or else its type and year. Order: prequel, sequel, parent story, full story, side story, spin-off, alternative
+   setting, alternative version, summary; within a type by start date. "See all" is shown whenever a related title is
+   not in the strip; the types "other" and "character" appear only there. Related manga are not shown in 1.0.
 8. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
    percentages, and one line with the member count.
 9. **More:** rows that open sub-screens: "Details", and "Recommendations" when MAL gives any.
@@ -665,30 +619,25 @@ the episode total, the year and a related title appear in one place only, as the
 **Above the fold:** on a 411 × 891 dp screen the header, the list block and the airing block are visible without
 scrolling, for a title of up to two lines.
 
-**Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing
-block render at once, and one linear progress indicator under them stands in for items 5 to 9 until the details
-arrive. Only a page opened with no data at all (a deep link) uses the full-screen loading state.
+**Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
+render at once, and one linear progress indicator under them stands in for items 5 to 9 until the details arrive. Only
+a page opened with no data at all (a deep link) uses the full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 
 **Adding a section later.** A new section starts as a row in "More" and opens a sub-screen. It is promoted onto the
-page, between Statistics and More, only through the procedure of section 9.1, with its own Must show and limit.
-The order of items 2 to 8 does not change, and the above-the-fold rule stays.
+page, between Statistics and More, only through the procedure of section 9.1, with its own Must show and limit. The
+order of items 2 to 8 does not change, and the above-the-fold rule stays.
 
 ### 9.5 Edit sheet
 
 A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
-edits; the status as five single-choice chips in a wrapping row (two rows in the base variants, more with larger
-text; chips are controls, not logical lines); an `EpisodeStepper` labelled "Episodes watched"; a score slider 0 to 10
-labelled "Score", with the score names of the glossary; start and finish dates; a text button "Remove from list"
-(asks for confirmation); "Save", on screen without scrolling whenever the keyboard is closed (while the keyboard is
-open, "Save" and "Remove from list" are hidden; Done, Back or a tap on another control closes it). Limit: nothing
-else. Nothing is written before "Save", and "Save" writes exactly what the sheet shows: a typed count takes effect in
-the sheet as it is typed, and an empty field shows and holds the values from before typing began, taking back any
-automatic change an earlier keystroke caused. "Save" is disabled only while the count field is empty. The stepper's
-total is the displayed total (A3) and does not bound the count (W9); the automatic status change is decided on MAL's
-total (W7). Dismissing the sheet with unsaved
-changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come after 1.0.
+edits; the status as five single-choice chips (chips are controls, not logical lines); an `EpisodeStepper`; a score
+slider 0 to 10 with the score names; start and finish dates; a text button "Remove from list" (asks for confirmation);
+"Save", on screen without scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before
+"Save", and "Save" writes exactly what the sheet shows, an automatic status change (W7) included. The count has no
+ceiling (W9). Dismissing the sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags,
+comments and priority come after 1.0.
 
 ### 9.6 Search
 
@@ -750,8 +699,8 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 
 | Sub-screen | Must show | Row limits |
 |---|---|---|
-| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type (full names) in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results: the title (line cap two); "TV · 2019"; when the title is on the user's list, the list status line: "Watching · 12 / 24", without the count for Planned with none watched and for Completed at the total; no trailing element |
-| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, broadcast time. Alternative titles are every title but the one "Title language" shows as the main title, one row per kind (romaji, English, Japanese, synonyms), so a long title never hides another and no title is missing from the app. Broadcast time only while the title has not finished airing. A fact MAL does not give is left out | One label and one value per row; a value has line cap three, and synonyms that do not fit end in an ellipsis |
+| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results (section 9.6), without the trailing element |
+| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, and the broadcast time while the title has not finished airing. Alternative titles are every title but the one shown as the main title, one row per kind, so no title is missing from the app. A fact MAL does not give is left out | One label and one value per row; a value has line cap three |
 | Recommendations | The titles MAL recommends | `AnimeRow` exactly as in search results, including the trailing MAL score |
 | Score distribution, Genres, Formats and years | `StatBar`s computed from the list; "Formats and years" has two groups | One `StatBar` per row; scores and years in their own order, everything else the largest first; at most twenty bars per group |
 
@@ -763,7 +712,6 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 - **No user-visible string exists outside the `:app` resources**, and strings are split into one file per feature,
   so parallel tasks do not edit the same file. The build fails on a missing or extra translation and on a missing
   plural form, and a test fails on a string literal in user interface code (Android Lint does not see Compose).
-  That test exists before the first screen is written.
 - A line never breaks between a number and its word, unit or slash: `24 episodes`, `12 / 24`, `К просмотру: 2`.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
@@ -772,15 +720,10 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
   user names and proper names (studios, producers) are content and are not translated.
 - Quantities use plural resources (Russian needs `one`, `few`, `many`, `other`). Sentences are never concatenated.
 - Dates and times follow the locale and the device's 12/24-hour setting, in the device's time zone.
-- **An air time** is written as "today 17:30", "tomorrow 17:30", the short weekday with the time within the next
-  six days ("Sat 17:30", «сб 17:30»), and the date with the time beyond that ("14 Nov, 17:30"). It never has both a
-  weekday and a date. An air time always follows other text, so "today", "tomorrow" and their Russian forms are in
-  lower case. A next episode is written in one form everywhere, the list row and the airing block alike:
-  "Episode 15 · Sat 17:30", «Серия 15 · сб 17:30», "Episode 15 · today 17:30"; a wrap falls before the dot. A
-  premiere whose time is known is written the same way on both screens: "Premieres Sat 17:30", «Премьера сб 17:30».
-- **A date from MAL** is written by its precision: a full date as day and short month ("4 Jan", «4 янв.»), with the
-  year added on the title page ("4 Jan 2027") and not in the list row; a year and month as "January 2027"
-  («в январе 2027 г.» after «Премьера»); a year alone as "2027" («в 2027 г.» after «Премьера»).
+- **An air time** is written relative to today: "today", "tomorrow", the short weekday within the next six days, and
+  the date beyond that, each with the time. It never has both a weekday and a date. A next episode is written in one
+  form on every screen, and so is a premiere. **A date from MAL** is written by its precision: a day, a month or a
+  year. `docs/GLOSSARY.md` has the forms in both languages.
 - Language choice: on Android 13 and later the "Language" setting opens the system's per-app language screen. On
   Android 8 to 12 the app follows the system language; an in-app picker would require AppCompat.
 - "Title language" chooses among romaji, English and Japanese; when the chosen one is missing, the romaji title is
@@ -807,33 +750,19 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 
 ### 11.2 Deterministic screenshots without a device
 
-Screens are rendered on the JVM by Roborazzi on Robolectric, which draws Compose with the real Android rendering
-code. Layout review works from these images.
+Screens are rendered on the JVM by Roborazzi on Robolectric, which draws Compose with the real Android rendering code.
+Layout review works from these images. The harness and its tests say how a render works; this section says what a
+render gives a reviewer and what it cannot show.
 
-- The stateless screen is rendered with fixture states. No view model, network or database is involved, times are
-  written against the fixtures' fixed clock in the fixtures' own time zone, never the machine's. A fixture title's
-  poster is stand-in art drawn in code from its id (debug source set only, never an image from MAL or elsewhere),
-  loaded through `Poster` as a real image is, in the screenshots and the debug build alike; a fixture title without
-  a poster shows the placeholder. Any other remote image is a flat grey block in a colour no surface role uses, with
-  a MAL poster's proportions where only one side is set. Two renders of one commit on one machine are
+- **What is rendered.** The stateless screen with fixture states, inside the app's own theme and window setup, with
+  the status bar and the gesture bar drawn. No view model, network or database is involved, every clock gives the
+  fixtures' moment, and no image comes from MAL or elsewhere. Two renders of one commit on one machine are
   byte-identical.
-- Every wall clock the app's code, `:core` or the date picker can read gives the fixtures' moment: `System`,
-  `java.time`'s `now()` and system clocks, `Calendar` and Android's `DateUtils`. Three read the machine's clock, and
-  a test fails when the app's code uses one: the `Date()` and `GregorianCalendar()` constructors and Kotlin's
-  `Clock.System`.
-- The status bar and the gesture bar are drawn, with their insets, so content hidden under one is visible in
-  review. Both are 24 dp; the gesture bar is a handle without a scrim, as on a phone with gesture navigation, and
-  a modal bottom sheet draws its container behind it. Robolectric renders at API 35, the highest it runs on JDK 17.
-- A case can declare the keyboard open. Every window then gets a 300 dp keyboard's insets (the gesture bar
-  included), and the image shows a flat block with the handle in its place.
-- A case can declare its own window size, such as the shell's wide window; it then replaces the variant's screen
-  size, and the variant keeps its language, theme and font scale.
-- Each screen has one registry file, `<Screen>Screenshots`, whose class name gives the screen's directory. It
-  declares its **cases**: content, loading, empty and error, plus the cases its roadmap task names. A screen that
-  has no loading, empty or error state says so with a reason of at least two words, which the render writes to
-  `<screen>/NOT_SHOWN.txt`; a placeholder such as "TODO" or "n/a" fails. Only `sample` and
-  `gallery` are exempt. A **gallery** case renders every component of section 8.4 in all its states.
-- An ordinary test run renders nothing, but checks every registry's structure; only a record run renders.
+- **Cases.** Each screen has one registry file, `<Screen>Screenshots`, which declares its cases: content, loading,
+  empty and error, plus the cases its task needs. A screen that has no loading, empty or error state says why, and the
+  render writes the reason to `<screen>/NOT_SHOWN.txt`. A **gallery** case renders every component of section 8.4 in
+  all its states. A case can declare the keyboard open, or its own window size.
+- An ordinary test run renders nothing; only a record run renders.
 
 **Variants.** Every case is rendered in the five standard variants. The content case of each screen gets two more.
 
@@ -849,52 +778,29 @@ code. Layout review works from these images.
 
 **Captures.** In `app/build/outputs/roborazzi/<screen>/`, for each case and variant:
 
-- `<case>__<variant>.png`: the viewport, as the user first sees it.
-- `<case>__<variant>__full.png`: the whole scrollable content at full height, whenever it is taller than the
-  viewport. Without it the lower half of the title page would never be reviewed. With a sheet or dialog open, it
-  is made from the sheet's or dialog's own content, and there is none when that content does not scroll. A sheet
-  that opens half expanded is shown expanded, while the viewport image shows how it opens. If a sheet's or
-  dialog's content still reaches below the captured window, the render fails instead of writing a cut image. The
-  window is made taller to take it, so content that is centred, weighted or sized to the screen moves: positions
-  are judged in the viewport image.
-- `<case>__<variant>__strip-<n>.png`, for the content case: the `n`th horizontal strip from the top, stitched
-  from its pages so that every card shows. Magenta fills what a page did not cover because the strip was lower
-  there.
-- `<case>__bounds.png`, for the content case in `en-light`: the viewport with the bounds of the components
-  outlined, for checking alignment.
+- `<case>__<variant>.png`: the viewport, as the user first sees it. Positions are judged here.
+- `<case>__<variant>__full.png`: the whole scrollable content at full height, in every variant, whenever it is taller
+  than the viewport; with a sheet or dialog open, that sheet's or dialog's own content.
+- `<case>__<variant>__strip-<n>.png`, for the content case: the `n`th horizontal strip from the top, stitched so that
+  every card shows. Magenta marks a strip that changed height between pages.
+- `<case>__bounds.png`, for the content case in `en-light`: the bounds of the components, for checking alignment.
+- `<case>__<variant>__frames.png`: a transition as frames in one image (section 8.5).
+- `ACCESSIBILITY.txt`: the result of the automatic check, which fails the render on a touch target under 48 dp in any
+  variant and on an unlabeled control in `en-light`.
 
-`__full` images are written for: **all variants**.
+`app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and says "dirty" when the worktree had
+uncommitted changes. A render never comes from the build cache, and a record run first deletes all earlier images, so
+after rendering one screen only that screen's images exist.
 
-For every case, sheets and dialogs included, an automatic accessibility check fails the test on a touch target
-under 48 dp in any variant, and on an unlabeled control in `en-light`. It runs where everything is composed: on the
-full-height render, and on every page of every horizontal strip. A touch target is the laid-out size of a clickable, toggleable or
-selectable element, not the larger area Compose accepts touches in. The 32 dp wide drag handle of the stock modal
-bottom sheet is the one exemption. A link inside a text is a touch target too, and is reported by its text. The
-check's result for a screen is written next to its images as `ACCESSIBILITY.txt`.
+**What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines and
+sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset passes.
+The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales it at font
+scales above 1.03, non-linearly, on every Android version. A looping animation is held at one frame, and a loop
+written by hand is not detected.
 
-**What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines
-and sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset
-passes. The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales
-it at font scales above 1.03, non-linearly, on every Android version.
-
-**Looping animations.** The harness holds every infinite transition and infinite repeatable animation at one fixed
-frame, where an indeterminate progress indicator shows a long arc and reads as a spinner, and fails the render when
-more of them run than the progress indicators on screen account for. A loop written by hand (an animation restarted
-in a `while` loop, a blink on `delay`) is not detected: it stops at its first frame.
-
-**The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and
-says "dirty" when the worktree had uncommitted changes. A render after any commit, including one that changes no
-source file, runs again and names that commit; it never comes from the build cache. Every record run first deletes
-all earlier images, so after rendering one screen only that screen's images exist, and `RENDERED_AT` is written
-only when the run succeeds.
-
-Screenshots are build output and are not committed, except the calibration set of the rubric; CI uploads the full
-set. On a pull request CI renders GitHub's merge commit, so its `RENDERED_AT` names that commit. Fonts rasterise differently between operating systems, so images are compared only when rendered on the same
-machine.
-
-**The review loop.** A layout task is finished when it passes `docs/LAYOUT_RUBRIC.md` with both reviewers (its
-section 4 is the rule). The author renders after the final commit, checks that `RENDERED_AT` names it, looks at
-every image, and hands over the commit hash and the output directory.
+Screenshots are build output and are not committed, except the calibration set of the rubric; CI uploads the full set,
+rendered from GitHub's merge commit. Fonts rasterise differently between operating systems, so images are compared
+only when rendered on the same machine.
 
 ## 12. Build, platform and distribution
 
@@ -906,12 +812,10 @@ every image, and hands over the commit hash and the output directory.
   the underscore in the base package, and composable functions are exempt from the function-naming rule. Android
   Lint with the translation checks of section 10 as errors; other warnings are not errors, because checks such as
   "newer version available" would fail the build whenever a library publishes a release.
-- **The maintainer's machine is shared**, so the build keeps no process alive after a job (no Gradle daemon) and
-  runs one test JVM at a time; the memory settings change only with a measurement. `CLAUDE.md` has the queue rules.
-- **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`: the
-  format check, Lint, the tests, the screenshots, a debug build and the self-test of the queue wrappers, keeping
-  the screenshots and the APK as artifacts, and a check that the pull request title is a conventional commit. Its
-  debug build has no client id, so the APK it keeps runs in demo mode.
+- **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`; its
+  workflow files say what it runs. It keeps the screenshots and a debug APK, which has no client id and so runs in
+  demo mode, and it checks that the pull request title is a conventional commit. The queue rules of the maintainer's
+  machine are in `CLAUDE.md`.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
