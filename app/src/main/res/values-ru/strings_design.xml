@@ -7,6 +7,8 @@
     <string name="design_session_expired">Сессия истекла</string>
     <string name="design_sign_in">Войти</string>
     <string name="design_stat_bar_value">%1$s · %2$s</string>
+    <string name="design_stat_bar_under_one">&lt;%1$s</string>
+    <string name="design_stat_bar_description_under_one">%1$s, %2$s, менее\u00A01\u00A0процента</string>
     <plurals name="design_stat_bar_description">
         <item quantity="one">%1$s, %2$s, %3$d\u00A0процент</item>
         <item quantity="few">%1$s, %2$s, %3$d\u00A0процента</item>

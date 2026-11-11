@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="title_back">Назад</string>
+    <string name="title_more_options">Другие действия</string>
+    <string name="title_open_on_mal">Открыть на MyAnimeList</string>
+    <string name="title_share">Поделиться</string>
+    <string name="title_separator">"\u00A0· "</string>
+    <plurals name="title_episodes">
+        <item quantity="one">%d\u00A0серия</item>
+        <item quantity="few">%d\u00A0серии</item>
+        <item quantity="many">%d\u00A0серий</item>
+        <item quantity="other">%d\u00A0серии</item>
+    </plurals>
+    <string name="title_mal_score">Оценка MAL</string>
+    <string name="title_no_score">Без оценки</string>
+    <string name="title_ranked">№%1$s в рейтинге</string>
+    <string name="title_add_to_list">Добавить в список</string>
+    <string name="title_rate">Оценить</string>
+    <string name="title_aired">Вышло\u00A0%d</string>
+    <string name="title_aired_estimated">Вышло\u00A0~%d</string>
+    <string name="title_to_watch">к\u00A0просмотру:\u00A0%d</string>
+    <string name="title_to_watch_estimated">к\u00A0просмотру:\u00A0~%d</string>
+    <string name="title_airing">Выходит</string>
+    <string name="title_premieres_at">Премьера: %s</string>
+    <string name="title_premieres_on">Премьера %s</string>
+    <string-array name="title_premieres_in_month">
+        <item>Премьера в январе\u00A0%d\u00A0г.</item>
+        <item>Премьера в феврале\u00A0%d\u00A0г.</item>
+        <item>Премьера в марте\u00A0%d\u00A0г.</item>
+        <item>Премьера в апреле\u00A0%d\u00A0г.</item>
+        <item>Премьера в мае\u00A0%d\u00A0г.</item>
+        <item>Премьера в июне\u00A0%d\u00A0г.</item>
+        <item>Премьера в июле\u00A0%d\u00A0г.</item>
+        <item>Премьера в августе\u00A0%d\u00A0г.</item>
+        <item>Премьера в сентябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в октябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в ноябре\u00A0%d\u00A0г.</item>
+        <item>Премьера в декабре\u00A0%d\u00A0г.</item>
+    </string-array>
+    <string name="title_premieres_in_year">Премьера в\u00A0%d\u00A0г.</string>
+    <string name="title_not_yet_aired">Ещё не вышло</string>
+    <string name="title_synopsis">Описание</string>
+    <string name="title_synopsis_more">Ещё</string>
+    <string name="title_synopsis_less">Свернуть</string>
+    <string name="title_episodes_watched">Просмотрено серий</string>
+    <string name="title_your_score_label">Ваша оценка</string>
+    <string name="title_related">Связанное</string>
+    <string name="title_statistics">Статистика</string>
+    <plurals name="title_members">
+        <item quantity="one">%s\u00A0участник</item>
+        <item quantity="few">%s\u00A0участника</item>
+        <item quantity="many">%s\u00A0участников</item>
+        <item quantity="other">%s\u00A0участника</item>
+    </plurals>
+    <string name="title_details">Подробности</string>
+    <string name="title_recommendations">Рекомендации</string>
+    <string name="title_loading_details">Загрузка подробностей</string>
+    <string name="title_no_connection">Нет соединения</string>
+    <string name="title_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
+    <string name="title_not_found">Этого тайтла нет на MyAnimeList</string>
+    <string name="title_could_not_load">Не удалось загрузить тайтл</string>
+    <string name="title_added_to_planned">Добавлено: Запланировано</string>
+    <string name="title_change">Изменить</string>
+    <string name="title_moved_to_completed">Перенесено в Просмотрено</string>
+    <string name="title_undo">Отменить</string>
+
+    <string name="title_status_watching">Смотрю</string>
+    <string name="title_status_planned">Запланировано</string>
+    <string name="title_status_completed">Просмотрено</string>
+    <string name="title_status_on_hold">Отложено</string>
+    <string name="title_status_dropped">Брошено</string>
+
+    <string name="title_type_tv">ТВ</string>
+    <string name="title_type_tv_special">ТВ-спешл</string>
+    <string name="title_type_movie">Фильм</string>
+    <string name="title_type_ova">OVA</string>
+    <string name="title_type_ona">ONA</string>
+    <string name="title_type_special">Спешл</string>
+    <string name="title_type_music">Клип</string>
+    <string name="title_type_commercial">Реклама</string>
+    <string name="title_type_promotional">Промо</string>
+
+    <string name="title_relation_prequel">Предыстория</string>
+    <string name="title_relation_sequel">Продолжение</string>
+    <string name="title_relation_parent_story">Основная история</string>
+    <string name="title_relation_full_story">Полная версия</string>
+    <string name="title_relation_side_story">Побочная история</string>
+    <string name="title_relation_spin_off">Спин-офф</string>
+    <string name="title_relation_alt_setting">Альт. сеттинг</string>
+    <string name="title_relation_alt_version">Альт. версия</string>
+    <string name="title_relation_summary">Краткое изложение</string>
+</resources>

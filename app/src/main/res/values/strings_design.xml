@@ -7,6 +7,8 @@
     <string name="design_session_expired">Session expired</string>
     <string name="design_sign_in">Sign in</string>
     <string name="design_stat_bar_value">%1$s · %2$s</string>
+    <string name="design_stat_bar_under_one">&lt;%1$s</string>
+    <string name="design_stat_bar_description_under_one">%1$s, %2$s, less than\u00A01\u00A0percent</string>
     <plurals name="design_stat_bar_description">
         <item quantity="one">%1$s, %2$s, %3$d\u00A0percent</item>
         <item quantity="other">%1$s, %2$s, %3$d\u00A0percent</item>
