@@ -5,13 +5,15 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.design.theme.Seed
 import io.github.kauri_off.kiroku.probe.ClockProbe
 import io.github.kauri_off.kiroku.probe.DialogProbe
 import io.github.kauri_off.kiroku.probe.KeyboardProbe
@@ -68,6 +70,33 @@ class ScreenshotHarnessTest {
                 assertEquals(shot.dpToPx(SystemBars.HEIGHT_DP).toInt(), status)
                 assertEquals(shot.dpToPx(SystemBars.HEIGHT_DP).toInt(), navigation)
             }
+    }
+
+    // Every role of the scheme a case reads is the app theme's for its variant: the first seed, or the second in en-alt.
+    @Test
+    fun casesReadTheAppThemesColourRoles() {
+        val read = mutableMapOf<Variant, Map<String, String>>()
+        for (variant in Variant.entries) {
+            var scheme: ColorScheme? = null
+            Shot.launch(variant) { scheme = MaterialTheme.colorScheme }.use { }
+            read[variant] = roles(checkNotNull(scheme))
+            assertEquals(variant.id, roles(variant.seed.scheme(variant.dark)), read[variant])
+        }
+        assertEquals(Seed.Amber, Variant.EnAlt.seed)
+        assertTrue(Variant.entries.filter { it != Variant.EnAlt }.all { it.seed == Seed.Teal })
+        assertEquals(3, listOf(Variant.EnLight, Variant.EnDark, Variant.EnAlt).map { read[it] }.distinct().size)
+    }
+
+    private fun roles(scheme: ColorScheme): Map<String, String> =
+        ColorScheme::class.java.methods
+            .filter { it.name.startsWith("get") && it.parameterCount == 0 && it.returnType == Long::class.javaPrimitiveType }
+            .associate { it.name.substringBefore('-') to java.lang.Long.toHexString(it.invoke(scheme) as Long) }
+            .also { check(it.size >= ROLES) { "Found ${it.size} colour roles" } }
+
+    @Test(timeout = 60_000)
+    fun aLoopingAnimationDoesNotHoldTheRender() {
+        val image = Shot.launch(Variant.EnLight) { ScreenState(ScreenState.Loading) }.use { it.image() }
+        assertTrue(image.width > 0)
     }
 
     @Test
@@ -219,7 +248,7 @@ class ScreenshotHarnessTest {
         val image = Shot.launch(Variant.EnLight) { RemoteImageProbe() }.use { it.image() }
         assertEquals(RemoteImages.BLOCK, image.getPixel(image.width / 2, image.height / 2))
         val surfaces =
-            listOf(lightColorScheme(), darkColorScheme()).flatMap {
+            Seed.entries.flatMap { listOf(it.light, it.dark) }.flatMap {
                 listOf(
                     it.surface,
                     it.surfaceVariant,
@@ -233,3 +262,5 @@ class ScreenshotHarnessTest {
         assertFalse(RemoteImages.BLOCK in surfaces)
     }
 }
+
+private const val ROLES = 48

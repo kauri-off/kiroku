@@ -428,10 +428,12 @@ finding.
 - Every tappable element is at least 48 × 48 dp.
 - Posters are 2:3 with the theme's small corner shape, in three sizes: 56 × 84 dp in rows, 104 × 156 dp in strips
   at font scale 1.0, 120 × 180 dp in the title header.
-- **A caption of a strip card is never broken inside a word.** The card grows with the font scale, so that a
-  one-word caption fits at every scale; this is a rule of the component, and a screen never passes a width.
+- **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
+  scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
+  is a rule of the component, and a screen never passes a width.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked
-  one per line (section 9.7). Nothing else depends on the font scale.
+  one per line (section 9.7); below it they are stacked too whenever a caption would otherwise break inside a word
+  («Просмотрено» does in `ru-stress`). Apart from that and the strip card, nothing depends on the font scale.
 
 ### 8.4 Components
 
@@ -468,8 +470,8 @@ legible, or preventing a jump. Decoration is not a purpose.
 - **Not animated:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers counting up,
   anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
-- **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
-  one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
+- **One source.** Durations, easings and springs are Material 3's standard motion scheme and its duration and
+  easing tokens, written once in the theme's `Motion` (Compose Material 3 keeps its own scheme internal). A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
@@ -711,8 +713,9 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   The owner reviews the Russian text at the end of each milestone.
 - **No user-visible string exists outside the `:app` resources**, and strings are split into one file per feature,
   so parallel tasks do not edit the same file. The build fails on a missing or extra translation and on a missing
-  plural form, and a test fails on a string literal in user interface code (Android Lint does not see Compose).
-  That test exists before the first screen is written.
+  plural form, and a test fails on a string literal with a letter in user interface code (any app file that uses
+  Compose), outside an annotation, because Android Lint does not see Compose. That test exists before the first
+  screen is written.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
   falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
@@ -816,7 +819,8 @@ bottom sheet is the one exemption. A link inside a text is a touch target too, a
 
 **What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines
 and sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset
-passes. The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales
+passes. The keyboard is a block of fixed height, without keys or suggestions. A looping animation, such as an
+indeterminate progress indicator, is held at its first frame. Text scales the way Compose scales
 it at font scales above 1.03, non-linearly, on every Android version.
 
 **The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and

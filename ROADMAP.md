@@ -96,7 +96,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   run; an ordinary `:app` test run renders nothing and reports the screenshot tests as skipped; the whole-project
   `test` still passes; the pull request states the time to render one screen.
 
-- [ ] **M1-07 [L][A] Theme and components.** The theme (dynamic colour, the two fixed seeds, light and dark),
+- [x] **M1-07 [L][A] Theme and components.** The theme (dynamic colour, the two fixed seeds, light and dark),
   edge-to-edge, the `Spacing` tokens, the ten components of section 8.4 with previews, and the test that fails on
   a string literal in user interface code (section 10), so that every later screen is written under it.
   **Cases:** `gallery/all` showing every component in every state.

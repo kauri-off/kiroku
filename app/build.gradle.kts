@@ -109,6 +109,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
+    implementation(libs.coil.compose)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(testFixtures(project(":core")))
 
@@ -119,7 +120,8 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.accessibility.check)
-    testImplementation(libs.coil.compose)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.coil.test)
 }
 

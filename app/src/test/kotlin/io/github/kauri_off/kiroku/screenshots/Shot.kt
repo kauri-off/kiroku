@@ -11,8 +11,6 @@ import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowInsets
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.AndroidUiDispatcher
@@ -39,6 +37,7 @@ import com.github.takahirom.roborazzi.fetchRobolectricWindowRoots
 import com.google.android.apps.common.testing.accessibility.framework.checks.SpeakableTextPresentCheck
 import com.google.android.apps.common.testing.accessibility.framework.integrations.espresso.AccessibilityViewCheckException
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.hamcrest.Matchers
@@ -321,6 +320,7 @@ class Shot private constructor(
         controller.pause().stop().destroy()
         idle()
         RemoteImages.reset()
+        StillAnimations.uninstall()
         restore()
     }
 
@@ -362,12 +362,11 @@ class Shot private constructor(
             val app = RuntimeEnvironment.getApplication()
             Shadows.shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, ComponentActivity::class.java))
             RemoteImages.install(app)
+            StillAnimations.install()
 
             val controller = Robolectric.buildActivity(ComponentActivity::class.java).create()
             val activity = controller.get()
-            activity.enableEdgeToEdge()
-            activity.window.isNavigationBarContrastEnforced = false
-            activity.setContent { ScreenshotTheme(variant, content) }
+            activity.setKirokuContent(variant.themeSettings, variant.seed, content)
             controller
                 .start()
                 .postCreate(null)
