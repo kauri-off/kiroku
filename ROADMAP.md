@@ -187,6 +187,14 @@ on the Russian strings so far are fixed.
 
 Not to forget:
 
+- Posters load from the network: the app has only the image library so far, no network fetcher, and no test of
+  its own image loader. Debug builds draw stand-in art for the demo fixtures until then.
+- The full genre table (names in English and Russian) is written from recorded responses.
+- A sandbox mode in debug builds: the real network layer against a local stand-in for MAL that keeps state and
+  answers from recorded responses, so behaviour can be tried without touching a real account.
+- The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
+  between seasons does not hide the next season.
+- Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
   agent reads that file or the value, and only the orchestrator may check that no recorded file contains it.
 - The task that starts using the client id puts the secret `MAL_CLIENT_ID` back on CI's debug build step.
