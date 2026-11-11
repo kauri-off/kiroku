@@ -11,7 +11,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
@@ -20,8 +22,8 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import kotlin.time.Duration.Companion.milliseconds
 
-// Demo mode over the reference fixtures, for tests in either build type. With [lateObservers], observers of the list
-// hear of a change a moment after the write returns, as with a database.
+// Demo mode over the reference fixtures. With [lateObservers], an observer hears of a change a moment after the write
+// returns and after a fresh read sees it, as with a database.
 class TestGraph(
     val demo: Demo,
     lateObservers: Boolean = false,
@@ -42,9 +44,12 @@ class TestGraph(
 private class LateList(
     private val inner: ListRepository,
 ) : ListRepository by inner {
-    override fun observeEntries(): Flow<List<ListEntry>> = inner.observeEntries().onEach { delay(LATE) }
+    override fun observeEntries(): Flow<List<ListEntry>> = inner.observeEntries().late()
 
-    override fun observeEntry(id: AnimeId): Flow<ListEntry?> = inner.observeEntry(id).onEach { delay(LATE) }
+    override fun observeEntry(id: AnimeId): Flow<ListEntry?> = inner.observeEntry(id).late()
+
+    // The first value is a read of what is there now; every later one is a change, heard late.
+    private fun <T> Flow<T>.late(): Flow<T> = withIndex().onEach { if (it.index > 0) delay(LATE) }.map { it.value }
 
     private companion object {
         val LATE = 5.milliseconds
