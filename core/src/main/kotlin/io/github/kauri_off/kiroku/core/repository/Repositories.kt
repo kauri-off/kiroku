@@ -62,6 +62,16 @@ sealed interface ListWrite {
         val by: Int,
     ) : ListWrite
 
+    // W3: takes back [change] alone, from the entry's values as they are when sent.
+    data class Undo(
+        val change: ListChange,
+    ) : ListWrite {
+        override val anime: Anime get() = change.anime
+    }
+
+    // "+1", the stepper and "Mark watched" move the count by a step rather than set it (section 7.3).
+    val steps: Boolean get() = this is MarkWatched || this is MarkNextWatched || this is StepWatched
+
     fun applyTo(
         current: ListEntry?,
         today: LocalDate,
@@ -84,6 +94,7 @@ sealed interface ListWrite {
                 current?.let {
                     it.values.withWatched((it.values.watchedEpisodes + by).coerceAtLeast(0), it.anime.malEpisodes, today)
                 }
+            is Undo -> change.revert(current)
         }
 }
 
@@ -91,6 +102,7 @@ sealed interface ListWrite {
 data class ListChange(
     val before: ListEntry?,
     val after: ListEntry?,
+    val stepped: Boolean,
 ) {
     init {
         require(before != null || after != null)
@@ -98,11 +110,26 @@ data class ListChange(
 
     val anime: Anime get() = (after ?: before)!!.anime
 
-    // W3: the one write that puts back every value this change made.
-    val undo: ListWrite get() = before?.let { ListWrite.Save(it.anime, it.values) } ?: ListWrite.Remove(anime)
+    val undo: ListWrite get() = ListWrite.Undo(this)
 
     // W7 moved the title to Completed.
     val completed: Boolean get() = after?.status == ListStatus.Completed && before?.status != ListStatus.Completed
+
+    // A stepped count steps back; any other value goes back only while it still holds what this change put there.
+    internal fun revert(current: ListEntry?): ListValues? {
+        val before = before?.values ?: return null
+        val after = after?.values ?: return current?.values ?: before
+        val now = current?.values ?: return null
+
+        fun <T> back(field: (ListValues) -> T): T = if (field(now) == field(after)) field(before) else field(now)
+        val watched =
+            if (stepped) {
+                (now.watchedEpisodes - (after.watchedEpisodes - before.watchedEpisodes)).coerceAtLeast(0)
+            } else {
+                back { it.watchedEpisodes }
+            }
+        return ListValues(back { it.status }, watched, back { it.score }, back { it.startDate }, back { it.finishDate })
+    }
 }
 
 data class WriteFailure(

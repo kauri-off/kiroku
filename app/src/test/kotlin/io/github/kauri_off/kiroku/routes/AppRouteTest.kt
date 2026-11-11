@@ -367,6 +367,21 @@ class AppRouteTest {
         assertEquals(12, values(kagerou)?.watchedEpisodes)
     }
 
+    // W3: Undo takes back its own episode only, not the steps made on the title page since.
+    @Test
+    fun `the plus one Undo tapped after two steps on the title page takes back one episode`() {
+        app()
+        plusOnFirstRow()
+        compose.waitForIdle()
+        openKagerou()
+        repeat(2) { plusOnTitlePage() }
+        compose.waitForIdle()
+        assertEquals(15, values(kagerou)?.watchedEpisodes)
+        click("Undo")
+        compose.waitForIdle()
+        assertEquals(14, values(kagerou)?.watchedEpisodes)
+    }
+
     @Test
     fun `Moved to Completed stays on Back and after a sub-screen, and Undo works from the List`() {
         app()

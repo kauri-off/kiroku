@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
@@ -103,15 +104,64 @@ class ListWriteTest {
         assertEquals(watching(0), down.applyTo(entry(watching(0)), today))
     }
 
+    private fun undo(
+        change: ListChange,
+        now: ListValues?,
+    ) = change.undo.applyTo(now?.let(::entry), today)
+
+    private val completing = ListChange(entry(watching(11)), entry(ListValues(ListStatus.Completed, 12, 8, earlier, day)), stepped = true)
+
     @Test
-    fun `W3 a change's Undo puts back every value it changed, and removes an entry it added`() {
-        val before = entry(watching(11))
-        val after = entry(ListValues(ListStatus.Completed, 12, 8, earlier, day))
-        val change = ListChange(before, after)
-        assertEquals(true, change.completed)
-        assertEquals(ListWrite.Save(anime, watching(11)), change.undo)
-        assertEquals(false, ListChange(entry(watching(10)), before).completed)
-        assertEquals(ListWrite.Remove(anime), ListChange(null, before).undo)
-        assertEquals(ListWrite.Save(anime, watching(11)), ListChange(before, null).undo)
+    fun `W3 Undo of a step takes back that step only, after later steps`() {
+        val change = ListChange(entry(watching(12)), entry(watching(13)), stepped = true)
+        assertEquals(watching(14), undo(change, watching(15)))
+        assertEquals(watching(12), undo(change, watching(13)))
+        assertEquals(watching(0), undo(ListChange(entry(watching(0)), entry(watching(3)), stepped = true), watching(1)))
+    }
+
+    @Test
+    fun `W3 Undo of a completing step keeps a score set afterwards and puts back the status and the date it filled`() {
+        assertTrue(completing.completed)
+        val scored = ListValues(ListStatus.Completed, 12, 9, earlier, day)
+        assertEquals(watching(11).copy(score = 9), undo(completing, scored))
+        assertEquals(watching(12), undo(completing, scored.copy(watchedEpisodes = 13, score = 8)))
+    }
+
+    @Test
+    fun `W3 a value changed since the undone edit is kept`() {
+        val onHold = ListValues(ListStatus.OnHold, 12, 8, earlier, earlier)
+        assertEquals(onHold.copy(watchedEpisodes = 11), undo(completing, onHold))
+    }
+
+    @Test
+    fun `W3 a typed count goes back only while it is still the count`() {
+        val typed = ListChange(entry(watching(9)), entry(watching(20)), stepped = false)
+        assertEquals(watching(9).copy(score = 6), undo(typed, watching(20).copy(score = 6)))
+        assertEquals(watching(21), undo(typed, watching(21)))
+    }
+
+    @Test
+    fun `W3 Undo removes an entry the change added and brings back one it removed`() {
+        val added = ListChange(null, entry(watching(0)), stepped = false)
+        assertNull(undo(added, watching(2)))
+        val removed = ListChange(entry(watching(4)), null, stepped = false)
+        assertEquals(watching(4), undo(removed, null))
+        assertEquals(watching(1), undo(removed, watching(1)))
+        assertNull(undo(completing, null))
+    }
+
+    @Test
+    fun `only plus one, the stepper and mark watched are steps`() {
+        assertEquals(
+            listOf(true, true, true, false, false, false),
+            listOf(
+                ListWrite.MarkNextWatched(anime),
+                ListWrite.MarkWatched(anime, 3),
+                ListWrite.StepWatched(anime, -1),
+                ListWrite.SetWatched(anime, 3),
+                ListWrite.Save(anime, watching(3)),
+                ListWrite.Remove(anime),
+            ).map { it.steps },
+        )
     }
 }

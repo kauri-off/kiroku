@@ -118,6 +118,24 @@ class DemoListTest {
         }
 
     @Test
+    fun `W3 Undo of a completing step keeps a score saved and a step made after it`() =
+        runTest {
+            val demo = demo()
+            val anime = FixtureAnime.oneShortOfTotal
+            val change = checkNotNull(demo.list.write(ListWrite.MarkNextWatched(anime)))
+            assertEquals(true, change.completed)
+            val now = checkNotNull(demo.list.observeEntry(anime.id).first()).values
+            demo.list.write(ListWrite.Save(anime, now.copy(score = 10)))
+            demo.list.write(ListWrite.StepWatched(anime, 1))
+            demo.list.write(change.undo)
+            val after = checkNotNull(demo.list.observeEntry(anime.id).first()).values
+            assertEquals(ListStatus.Watching, after.status)
+            assertEquals(10, after.score)
+            assertEquals(12, after.watchedEpisodes)
+            assertEquals(change.before!!.values.finishDate, after.finishDate)
+        }
+
+    @Test
     fun `W7 the last episode completes the entry and Undo restores it in one write`() =
         runTest {
             val demo = demo()

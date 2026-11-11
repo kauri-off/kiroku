@@ -144,7 +144,7 @@ internal class DemoListRepository(
             pending[id] = (pending[id] ?: 0) + 1
             set(id, next)
             accept(Put(anime, values, epochs[id] ?: 0))
-            ListChange(current, next)
+            ListChange(current, next, write.steps)
         }
     }
 
