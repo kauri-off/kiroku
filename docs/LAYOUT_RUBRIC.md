@@ -31,9 +31,8 @@ For each changed screen the reviewer looks at, in `app/build/outputs/roborazzi/<
 - the result of the automatic accessibility check, which runs on every case, in the task's test output;
 - `app/build/outputs/roborazzi/RENDERED_AT`, which must name the commit under review and must not say "dirty";
 - the screen's budget in `docs/ARCHITECTURE.md` section 9, the design system in section 8, and `docs/GLOSSARY.md`;
-- the calibration set in `docs/calibration/`: screenshots with the owner's scores, good and deliberately bad, read
-  before the first cycle to align the scale. It exists from roadmap step M1-07a on, which comes before the first
-  screen is reviewed.
+- the calibration set in `docs/calibration/`, once it exists (roadmap step M1-15): screenshots with the owner's
+  scores, read before the first cycle to align the scale.
 
 **The reduced set.** For a screen that changed only through the theme or a shared component, the reviewer looks at
 the content case in all seven variants, with its `__full` images and the bounds image, and scores the screen from those.
