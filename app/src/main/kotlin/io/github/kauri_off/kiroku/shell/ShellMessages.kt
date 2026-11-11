@@ -55,9 +55,12 @@ data class ShellMessage(
             val id: AnimeId,
         ) : Action
     }
+
+    // The only way back from what happened: the Undo of a title that left its tab, or the Retry of a failed save.
+    val mustStay: Boolean get() = text == Text.MovedToCompleted && action is Action.Undo || action is Action.Retry
 }
 
-// The one message shown at a time; a newer one replaces it. Its action runs here, not in the screen that posted it.
+// One message at a time; one that must stay is never replaced, newer ones wait behind it. Actions run here.
 class ShellMessages(
     private val scope: CoroutineScope,
     private val list: ListRepository,
@@ -75,10 +78,18 @@ class ShellMessages(
     var editRequest by mutableStateOf<AnimeId?>(null)
         private set
 
+    private var waiting = emptyList<Posted>()
+
     private var serial = 0L
 
     fun post(message: ShellMessage) {
-        current = Posted(message, ++serial)
+        val posted = Posted(message, ++serial)
+        val shown = current
+        if (shown == null || !shown.message.mustStay) {
+            current = posted
+        } else {
+            waiting = waiting.filter { it.message.mustStay || message.mustStay } + posted
+        }
     }
 
     // The snackbar ended by itself, by a swipe or by its action; not when a newer message or a recreation cut it short.
@@ -86,7 +97,11 @@ class ShellMessages(
         posted: Posted,
         actionPerformed: Boolean,
     ) {
-        if (current == posted) current = null
+        if (current == posted) {
+            val next = waiting.firstOrNull { it.message.mustStay } ?: waiting.lastOrNull()
+            waiting = if (next == null || next.message.mustStay) waiting - listOfNotNull(next) else emptyList()
+            current = next
+        }
         if (!actionPerformed) return
         when (val action = posted.message.action) {
             is ShellMessage.Action.Undo -> scope.launch { list.write(action.write) }

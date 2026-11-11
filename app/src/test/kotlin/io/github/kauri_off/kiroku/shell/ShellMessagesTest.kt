@@ -132,4 +132,73 @@ class ShellMessagesTest {
         compose.onNodeWithText("Could not save").assertExists()
         compose.onNodeWithText("Retry").assertExists()
     }
+
+    private val moved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(anime)))
+
+    private fun watched(episode: Int) =
+        ShellMessage(ShellMessage.Text.EpisodeWatched(episode), ShellMessage.Action.Undo(ListWrite.Remove(anime)))
+
+    private fun failed(episode: Int) =
+        ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(ListWrite.SetWatched(anime, episode)))
+
+    // Posts [posted] in order, then lets each shown message time out; returns what was shown, in order.
+    private fun shownAfter(vararg posted: ShellMessage): List<ShellMessage> {
+        posted.forEach(messages::post)
+        return generateSequence { messages.current?.also { messages.ended(it, actionPerformed = false) }?.message }.toList()
+    }
+
+    @Test
+    fun `ordinary messages replace each other, so quick taps on several rows build no queue`() {
+        assertEquals(listOf(watched(3)), shownAfter(watched(1), watched(2), watched(3)))
+    }
+
+    @Test
+    fun `the Undo of a title that left its tab is not replaced, and the newest message after it waits`() {
+        assertEquals(listOf(moved, watched(3)), shownAfter(moved, watched(2), watched(3)))
+        assertEquals(listOf(moved), shownAfter(watched(1), moved))
+    }
+
+    @Test
+    fun `two messages that must stay are shown one after the other, before the newest ordinary one`() {
+        assertEquals(listOf(failed(1), moved, failed(2), watched(4)), shownAfter(failed(1), watched(3), moved, failed(2), watched(4)))
+    }
+
+    @Test
+    fun `an Undo that adds nothing back, as an episode watched, does not have to stay`() {
+        assertEquals(false, watched(1).mustStay)
+        assertEquals(false, ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(anime.id)).mustStay)
+        assertEquals(false, ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)).mustStay)
+    }
+
+    // W2: a later "+1" on another title does not take the failed save's Retry away.
+    @Test
+    fun `a failed save keeps its Retry through a newer message, and Retry writes`() {
+        val shell = ShellViewModel(graph)
+        val other = FixtureAnime.oneShortOfTotal
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        val before = watched()
+        graph.demo.server.failingWrites.value = true
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        compose.onNodeWithText("Could not save").assertExists()
+        assertEquals(before, watched())
+        val change = runBlocking { graph.list.write(ListWrite.StepWatched(other, -1)) }!!
+        compose.runOnUiThread {
+            shell.messages.post(ShellMessage(ShellMessage.Text.EpisodeWatched(10), ShellMessage.Action.Undo(change.undo)))
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        compose.waitForIdle()
+        assertEquals(before!! + 1, watched())
+        compose.onNodeWithText("Episode\u00A010 watched").assertExists()
+    }
 }
