@@ -59,14 +59,14 @@ class ListScreenshots : ScreenshotRegistry() {
             ) { changed ->
                 FixtureListScreen(if (changed) ListFixtureStates.planned else ListFixtureStates.watching)
             },
-            // A far tab: the page jumps to the last page before it and slides that one in, while the indicator glides
-            // across the whole row on the same curve.
+            // A far tab: the page jumps next to it at once and slides the last page in, while the indicator glides
+            // across the whole row on the same curve, which starts a frame after the jump.
             Transition(
                 "dropped",
                 start = "watching",
                 millis = TAB_SWITCH,
                 at = listOf(FRAME, TAB_SWITCH / 6, TAB_SWITCH / 3, TAB_SWITCH),
-                lead = FRAME,
+                lead = 2 * FRAME,
             ) { changed ->
                 FixtureListScreen(if (changed) ListFixtureStates.dropped else ListFixtureStates.watching)
             },
