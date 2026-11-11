@@ -21,4 +21,7 @@ object Sizes {
 
     // A tab carries its own padding, so a scrollable tab row with none starts its first label on the content edge.
     val tabRowEdge: Dp = 0.dp
+
+    // The least a control is tall and wide to the touch.
+    val touchTarget: Dp = 48.dp
 }

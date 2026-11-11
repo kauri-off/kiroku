@@ -12,7 +12,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 
 // Every looping animation of a rendered window gets its first frame and one frame HELD_AT_NANOS later, and is then
-// held there for good, so the render can idle. The shot counts the loops that are running.
+// held there for good, so the render can idle. The shot counts the loops that are running. A loop that runs as
+// coroutines of its own, as the loading indicator's does, is stopped where it starts: at its first shape.
 @OptIn(InternalComposeUiApi::class)
 object LoopingAnimations : InfiniteAnimationPolicy {
     // Half of the indeterminate circular indicator's cycle, where its arc is longest.
@@ -27,8 +28,11 @@ object LoopingAnimations : InfiniteAnimationPolicy {
         val job = checkNotNull(currentCoroutineContext()[Job])
         val frame = frames[job] ?: 0.also { job.invokeOnCompletion { frames.remove(job) } }
         frames[job] = frame + 1
-        if (frame < frameTimes.size) return withContext(FixedFrame(frameTimes[frame])) { block() }
-        return awaitCancellation()
+        if (frame >= frameTimes.size) return awaitCancellation()
+        val before = job.children.toSet()
+        return withContext(FixedFrame(frameTimes[frame])) { block() }.also {
+            (job.children.toSet() - before).forEach { it.cancel() }
+        }
     }
 
     private class FixedFrame(

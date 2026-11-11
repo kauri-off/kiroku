@@ -9,11 +9,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotFocused
-import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -79,7 +79,7 @@ class EditSheetTest {
 
     // Save writes the draft, so the draft must be what the sheet shows when Save is tapped.
     private fun assertTheSheetShows(values: ListValues) {
-        compose.onNode(hasText(statusNames.getValue(values.status)) and isSelectable()).assertIsSelected()
+        compose.onNode(hasText(statusNames.getValue(values.status)) and isToggleable()).assertIsOn()
         field.assertTextContains(values.watchedEpisodes.toString(), substring = true)
         dateField("Start date").assertTextContains(values.startDate.shown(), substring = true)
         dateField("Finish date").assertTextContains(values.finishDate.shown(), substring = true)

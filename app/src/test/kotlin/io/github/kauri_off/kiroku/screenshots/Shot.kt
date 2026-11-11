@@ -357,7 +357,9 @@ class Shot private constructor(
 
     companion object {
         const val TOUCH_TARGET_DP = 48
-        const val LOOPS_PER_INDICATOR = 1
+
+        // The wavy linear indicator runs two: its line and its wave.
+        const val LOOPS_PER_INDICATOR = 2
 
         private val FRAME = Duration.ofMillis(16)
         private const val MAX_FRAMES = 600

@@ -1,7 +1,5 @@
 package io.github.kauri_off.kiroku.design.component
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.FilledTonalIconButton
@@ -12,17 +10,11 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.layout.AlignmentLine
-import androidx.compose.ui.layout.FirstBaseline
-import androidx.compose.ui.layout.LastBaseline
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -64,55 +56,23 @@ fun AnimeRow(
     longPress: RowLongPress? = null,
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
-    val haptics = LocalHapticFeedback.current
-    val topAligned = trailing is RowTrailing.PlusOne
-    ListItem(
-        headlineContent = { TitleText(title, maxLines = 2) },
-        supportingContent =
-            lines.takeIf { it.isNotEmpty() }?.let {
-                {
-                    val line =
-                        with(LocalDensity.current) {
-                            MaterialTheme.typography.bodyMedium.lineHeight
-                                .toDp()
-                        }
-                    Column(Modifier.reportedLines(topAligned, line)) {
-                        it.forEach { line -> SupportingLine(line) }
-                    }
-                }
-            },
-        leadingContent = { Poster(posterUrl, PosterSize.Row) },
-        trailingContent = trailing?.let { { Trailing(it) } },
-        modifier =
-            if (longPress == null) {
-                modifier.clickable(onClick = onClick)
-            } else {
-                modifier.combinedClickable(
-                    onClick = onClick,
-                    onLongClickLabel = longPress.label,
-                    onLongClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        longPress.onLongPress()
-                    },
-                )
-            },
-    )
+    // A list that reuses a row for one of another form builds it anew.
+    key(lines.map { it.highlighted }, trailing?.let { it::class }) {
+        ListItem(
+            onClick = onClick,
+            modifier = modifier,
+            leadingContent = { Poster(posterUrl, PosterSize.Row) },
+            trailingContent = trailing?.let { { Trailing(it) } },
+            supportingContent = lines.takeIf { it.isNotEmpty() }?.let { { Column { it.forEach { line -> SupportingLine(line) } } } },
+            verticalAlignment = if (trailing is RowTrailing.PlusOne) Alignment.Top else Alignment.CenterVertically,
+            onLongClick = longPress?.onLongPress,
+            onLongClickLabel = longPress?.label,
+            content = { TitleText(title, maxLines = 2) },
+        )
+    }
 }
 
 const val MAX_SUPPORTING_LINES = 2
-
-// ListItem picks its layout from the supporting text's baselines: two lines top-align the row, one line centres it.
-private fun Modifier.reportedLines(
-    topAligned: Boolean,
-    line: Dp,
-): Modifier =
-    layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints)
-        val first = placeable[FirstBaseline]
-        val last = if (topAligned) maxOf(placeable[LastBaseline], first + line.roundToPx()) else first
-        val lines = if (first == AlignmentLine.Unspecified) emptyMap() else mapOf<AlignmentLine, Int>(LastBaseline to last)
-        layout(placeable.width, placeable.height, lines) { placeable.place(0, 0) }
-    }
 
 @Composable
 private fun SupportingLine(line: RowLine) {
@@ -123,28 +83,33 @@ private fun SupportingLine(line: RowLine) {
     }
 }
 
-// A value, in a caption role, is centred with the row's text. The button's visible edge, not its touch target, ends
-// on the content edge.
+// A value, in a caption role, is centred with the row's text.
 @Composable
 private fun Trailing(trailing: RowTrailing) {
     when (trailing) {
         is RowTrailing.Value ->
             Text(trailing.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        is RowTrailing.PlusOne -> {
-            val icon = @Composable {
-                Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.design_episode_plus))
-            }
-            val place = Modifier.offset(x = Spacing.xs)
-            if (trailing.prominent) {
-                FilledTonalIconButton(onClick = trailing.onClick, modifier = place, content = icon)
-            } else {
-                IconButton(
-                    onClick = trailing.onClick,
-                    modifier = place,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-                    content = icon,
-                )
-            }
+        is RowTrailing.PlusOne -> PlusOne(trailing)
+    }
+}
+
+// The button's visible edge, not its touch target, ends on the content edge.
+@Composable
+private fun PlusOne(trailing: RowTrailing.PlusOne) {
+    val icon = @Composable {
+        Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.design_episode_plus))
+    }
+    val place = Modifier.offset(x = Spacing.xs)
+    TrailingControl {
+        if (trailing.prominent) {
+            FilledTonalIconButton(onClick = trailing.onClick, shapes = IconButtonDefaults.shapes(), modifier = place, content = icon)
+        } else {
+            IconButton(
+                onClick = trailing.onClick,
+                modifier = place,
+                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                content = icon,
+            )
         }
     }
 }

@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.sample
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,10 +57,10 @@ fun SampleScreen(
         LazyColumn(contentPadding = padding) {
             items(state.rows, key = { it.id.value }) { row ->
                 ListItem(
-                    headlineContent = { TitleText(row.title, maxLines = 2) },
+                    onClick = { onEvent(SampleEvent.Open(row.id)) },
                     supportingContent = { Text(stringResource(row.status.labelRes())) },
                     trailingContent = { Text(progressText(row), color = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clickable { onEvent(SampleEvent.Open(row.id)) },
+                    content = { TitleText(row.title, maxLines = 2) },
                 )
             }
         }

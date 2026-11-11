@@ -103,10 +103,11 @@ not use the queue kinds `full`, `batch` or `long`.
   (status, type, season, genre, relation) are translated too.
 - Screens are stateless: `XScreen(state, onEvent)` with fixture states. Only `XRoute` touches a view model or
   navigation. Each screen has its own screenshot registry file.
-- User interface code uses stock Material 3 components, theme colour roles, the `Spacing` tokens and the components
-  listed in ARCHITECTURE section 8.4. No literal colours or dp values, no custom controls, no toasts.
-- Motion follows ARCHITECTURE section 8.5: sparse, from the theme's motion tokens only, with the tests and the
-  frames image it asks for.
+- User interface code uses stock Material 3 Expressive components in the choices of ARCHITECTURE section 8.4, theme
+  colour roles, the `Spacing` tokens and the components listed there. No literal colours or dp values, no custom
+  controls, no toasts. Experimental Expressive API is opted into only in `design/component/ExpressiveOptIn.kt`.
+- Motion follows ARCHITECTURE section 8.5: sparse, from the theme's motion scheme only and only its effects springs,
+  with the tests and the frames image it asks for.
 - "Aired", "to watch" and what is notifiable are computed only in `:core`.
 - Versions are written only in `gradle/libs.versions.toml`. Adding a dependency needs a reason in the pull request.
 - Never commit secrets: no client id, no tokens, no signing keys.

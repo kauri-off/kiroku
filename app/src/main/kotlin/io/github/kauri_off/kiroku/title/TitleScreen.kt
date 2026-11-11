@@ -1,6 +1,5 @@
 package io.github.kauri_off.kiroku.title
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -294,6 +293,7 @@ private fun ListBlock(
     if (entry == null) {
         Button(
             onClick = { onEvent(TitleEvent.AddToList) },
+            shapes = ButtonDefaults.shapes(),
             modifier =
                 Modifier
                     .padding(horizontal = Spacing.l)
@@ -352,6 +352,7 @@ private fun StatusButton(
 ) {
     FilledTonalButton(
         onClick = { onEvent(TitleEvent.Edit) },
+        shapes = ButtonDefaults.shapes(),
         contentPadding = PaddingValues(start = Spacing.xl, end = Spacing.l),
         modifier = modifier,
     ) {
@@ -382,7 +383,7 @@ private fun ScoreValue(
     if (score == null) {
         LabelButton(stringResource(R.string.title_rate)) { onEvent(TitleEvent.Edit) }
     } else {
-        Text(score.toString(), style = MaterialTheme.typography.titleMedium)
+        Text(score.toString(), style = MaterialTheme.typography.titleLargeEmphasized)
     }
 }
 
@@ -434,7 +435,7 @@ private fun AiringBlock(
 @Composable
 private fun DetailsLoading() {
     val loading = stringResource(R.string.title_loading_details)
-    LinearProgressIndicator(
+    LinearWavyProgressIndicator(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.l)
@@ -616,13 +617,11 @@ private fun MoreRow(
     onClick: () -> Unit,
 ) {
     ListItem(
-        headlineContent = { Text(label) },
+        onClick = onClick,
         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
         // Labelled on the row itself, so a row cut off at the screen's edge is labelled too.
-        modifier =
-            Modifier
-                .clickable(onClick = onClick)
-                .semantics { contentDescription = label },
+        modifier = Modifier.semantics { contentDescription = label },
+        content = { Text(label) },
     )
 }
 

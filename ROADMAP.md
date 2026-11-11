@@ -151,7 +151,7 @@ English, light and dark, on demo data. No MAL client id is needed.
 
 - [x] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
   **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `above-total` (a count above the total,
-  "26 / 24", with the title completed), `remove-confirm`, `discard-confirm`, `partial-dates`, `date-picker`.
+  "26 / 24", with the title completed), `remove-confirm`, `discard-confirm`, `partial-dates`, `date-picker`, `status-chosen`.
   **Needs:** M1-07.
   **Check:** rubric pass on `edit/*`.
 

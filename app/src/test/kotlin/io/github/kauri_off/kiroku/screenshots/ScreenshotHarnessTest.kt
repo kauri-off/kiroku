@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -122,13 +123,13 @@ class ScreenshotHarnessTest {
             .also { check(it.size >= ROLES) { "Found ${it.size} colour roles" } }
 
     @Test(timeout = 60_000)
-    fun aLoadingIndicatorIsHeldWhereItReadsAsASpinner() {
+    fun aCircularIndicatorIsHeldWhereItReadsAsASpinner() {
         var arc = 0
         val image =
             Shot
                 .launch(Variant.EnLight) {
                     arc = MaterialTheme.colorScheme.primary.toArgb()
-                    ScreenState(ScreenState.Loading)
+                    CircularProgressIndicator()
                 }.use { it.image() }
         val ring = Math.PI * (RING_OUTER_DP * RING_OUTER_DP - RING_INNER_DP * RING_INNER_DP) * DENSITY * DENSITY
         val drawn = (0 until image.height).sumOf { y -> (0 until image.width).count { x -> image.getPixel(x, y) == arc } }
@@ -136,13 +137,34 @@ class ScreenshotHarnessTest {
     }
 
     @Test
-    fun indicatorsLoopOnceEach() {
-        for (indicator in listOf<@Composable () -> Unit>({ CircularProgressIndicator() }, { LinearProgressIndicator() })) {
+    fun anIndicatorRunsAsManyLoopsAsTheRenderAllowsIt() {
+        val indicators =
+            listOf<Pair<Int, @Composable () -> Unit>>(
+                1 to { CircularProgressIndicator() },
+                1 to { LinearProgressIndicator() },
+                Shot.LOOPS_PER_INDICATOR to { LinearWavyProgressIndicator() },
+            )
+        for ((loops, indicator) in indicators) {
             Shot.launch(Variant.EnLight, content = indicator).use { shot ->
                 shot.image()
-                assertEquals(Shot.LOOPS_PER_INDICATOR, LoopingAnimations.running)
+                assertEquals(loops, LoopingAnimations.running)
             }
         }
+    }
+
+    @Test(timeout = 60_000)
+    fun theLoadingIndicatorIsAStillShape() {
+        val renders =
+            List(2) {
+                Shot.launch(Variant.EnLight) { ScreenState(ScreenState.Loading) }.use { shot ->
+                    val image = shot.image()
+                    assertEquals(0, LoopingAnimations.running)
+                    image
+                }
+            }
+        assertTrue(renders[0].sameAs(renders[1]))
+        val centre = renders[0].getPixel(renders[0].width / 2, renders[0].height / 2)
+        assertFalse("the indicator is drawn at the centre", centre == renders[0].getPixel(0, renders[0].height / 2))
     }
 
     @Test(timeout = 60_000)
@@ -150,6 +172,7 @@ class ScreenshotHarnessTest {
         for (content in listOf<@Composable () -> Unit>({ Pulse() }, {
             Column {
                 CircularProgressIndicator()
+                Pulse()
                 Pulse()
             }
         })) {

@@ -8,12 +8,12 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.only
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarDefaults
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailDefaults
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarDefaults
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
@@ -54,7 +54,7 @@ fun ShellScreen(
                 if (rail) {
                     NavigationRailDefaults.windowInsets.only(WindowInsetsSides.Start)
                 } else {
-                    NavigationBarDefaults.windowInsets.only(WindowInsetsSides.Bottom)
+                    ShortNavigationBarDefaults.windowInsets.only(WindowInsetsSides.Bottom)
                 }
             Box(Modifier.consumeWindowInsets(consumed)) { content() }
         }
@@ -65,10 +65,10 @@ fun ShellScreen(
 private fun Bar(
     state: ShellState,
     onEvent: (ShellEvent) -> Unit,
-) = NavigationBar {
+) = ShortNavigationBar {
     Destination.entries.forEach { destination ->
         val selected = destination == state.selected
-        NavigationBarItem(
+        ShortNavigationBarItem(
             selected = selected,
             onClick = { onEvent(ShellEvent.Select(destination)) },
             icon = { DestinationIcon(destination, selected) },

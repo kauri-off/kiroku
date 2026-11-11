@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +25,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -35,8 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
@@ -51,20 +50,19 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowLongPress
 import io.github.kauri_off.kiroku.design.component.RowTrailing
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
-import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.text.label
@@ -107,7 +105,7 @@ fun ListScreen(
             is ListContent.Failed ->
                 ScreenState(ScreenState.Error(stringResource(content.failure.messageRes())) { onEvent(ListEvent.Retry) }, body)
             is ListContent.Tabs ->
-                PullToRefreshBox(
+                RefreshBox(
                     isRefreshing = state.refreshing,
                     onRefresh = { onEvent(ListEvent.Refresh) },
                     modifier = body.fillMaxSize(),
@@ -138,17 +136,18 @@ private fun Pages(
             if (statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
         }
     }
+    val motionScheme = MaterialTheme.motionScheme
     LaunchedEffect(state.tab) {
         val target = statuses.indexOf(state.tab)
         if (pager.currentPage != target || pager.currentPageOffsetFraction != 0f) {
-            pager.animateScrollToPage(target, animationSpec = Motion.componentEnter())
+            pager.animateScrollToPage(target, animationSpec = motionScheme.defaultEffectsSpec())
         }
     }
     HorizontalPager(
         pager,
         Modifier.fillMaxSize(),
         key = { statuses[it] },
-        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = Motion.fastSpatial()),
+        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = motionScheme.defaultEffectsSpec()),
     ) { index ->
         Page(state, statuses[index], tabs.pages.getValue(statuses[index]), padding, onEvent)
     }
@@ -317,6 +316,7 @@ private fun Rows(
     val context = LocalContext.current
     val text = remember(context, state.now) { ListText(context, state.now) }
     val edit = stringResource(R.string.list_edit)
+    val motionScheme = MaterialTheme.motionScheme
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
             items(rows, key = { it.id.value }) { row ->
@@ -338,9 +338,9 @@ private fun Rows(
                     longPress = RowLongPress(edit) { onEvent(ListEvent.Edit(row.id)) }.takeIf { state.owner == ListOwner.Me },
                     modifier =
                         Modifier.animateItem(
-                            fadeInSpec = Motion.componentEnter(),
-                            placementSpec = Motion.componentChange(),
-                            fadeOutSpec = Motion.componentExit(),
+                            fadeInSpec = motionScheme.defaultEffectsSpec(),
+                            placementSpec = motionScheme.fastEffectsSpec(),
+                            fadeOutSpec = motionScheme.fastEffectsSpec(),
                         ),
                 )
             }
@@ -357,7 +357,7 @@ private fun SortSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = { onEvent(ListEvent.DismissSort) },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
     ) {
         Text(
             stringResource(R.string.list_sort_by),
@@ -367,15 +367,17 @@ private fun SortSheet(
         Column(Modifier.selectableGroup().padding(bottom = Spacing.s)) {
             sorts.forEach { sort ->
                 ListItem(
-                    headlineContent = { Text(stringResource(sort.labelRes())) },
+                    selected = sort == selected,
+                    onClick = { onEvent(ListEvent.SelectSort(sort)) },
                     leadingContent = { RadioButton(selected = sort == selected, onClick = null) },
-                    colors = ListItemDefaults.colors(containerColor = BottomSheetDefaults.ContainerColor),
-                    modifier =
-                        Modifier.selectable(
-                            selected = sort == selected,
-                            role = Role.RadioButton,
-                            onClick = { onEvent(ListEvent.SelectSort(sort)) },
+                    // The radio button states the choice; the row keeps the sheet's colour.
+                    colors =
+                        ListItemDefaults.colors(
+                            containerColor = BottomSheetDefaults.ContainerColor,
+                            selectedContainerColor = BottomSheetDefaults.ContainerColor,
+                            selectedContentColor = MaterialTheme.colorScheme.onSurface,
                         ),
+                    content = { Text(stringResource(sort.labelRes())) },
                 )
             }
         }

@@ -26,8 +26,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -37,10 +36,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,9 +63,11 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
@@ -108,7 +110,7 @@ internal fun EditSheet(
     val mayLeave by rememberUpdatedState(state.mayLeave)
     val events by rememberUpdatedState(onEvent)
     val sheetState =
-        rememberModalBottomSheetState(skipPartiallyExpanded = true) { value ->
+        rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)) { value ->
             if (value != SheetValue.Hidden || mayLeave) {
                 true
             } else {
@@ -159,7 +161,7 @@ internal fun EditSheet(
                 // The gaps between groups look equal once the controls' own invisible margins are counted.
                 TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(Spacing.l))
-                StatusChips(state.draft.status) { edit(EditSheetEvent.StatusChosen(it)) }
+                StatusChoice(state.draft.status) { edit(EditSheetEvent.StatusChosen(it)) }
                 Spacer(Modifier.height(Spacing.l))
                 Column(
                     Modifier.onPlaced {
@@ -211,7 +213,11 @@ internal fun EditSheet(
                             }
                         },
                     save = {
-                        Button(onClick = { onEvent(EditSheetEvent.SaveClicked) }, enabled = state.canSave) {
+                        Button(
+                            onClick = { onEvent(EditSheetEvent.SaveClicked) },
+                            shapes = ButtonDefaults.shapes(),
+                            enabled = state.canSave,
+                        ) {
                             Text(stringResource(R.string.edit_save))
                         }
                     },
@@ -301,31 +307,22 @@ private fun Actions(
     }
 }
 
+// One of five, as toggle buttons: the chosen one is filled and square, and choosing moves no button.
 @Composable
-private fun StatusChips(
+private fun StatusChoice(
     status: ListStatus,
     onChoose: (ListStatus) -> Unit,
 ) {
     FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         ListStatus.entries.forEach { option ->
             val selected = option == status
-            FilterChip(
-                selected = selected,
-                onClick = { if (!selected) onChoose(option) },
-                label = { Text(stringResource(option.label())) },
-                leadingIcon =
-                    if (selected) {
-                        {
-                            Icon(
-                                painterResource(R.drawable.ic_check),
-                                contentDescription = null,
-                                Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else {
-                        null
-                    },
-            )
+            FilledTonalToggleButton(
+                checked = selected,
+                onCheckedChange = { if (!selected) onChoose(option) },
+                modifier = Modifier.semantics { role = Role.RadioButton },
+            ) {
+                Text(stringResource(option.label()))
+            }
         }
     }
 }
@@ -373,11 +370,11 @@ private fun ScoreSlider(
         Label(label)
         Text(value, style = MaterialTheme.typography.labelLarge)
     }
+    val slider = remember { SliderState(score.toFloat(), steps = MAX_SCORE - 1, trackRange = 0f..MAX_SCORE.toFloat()) }
+    slider.value = score.toFloat()
     Slider(
-        value = score.toFloat(),
+        state = slider,
         onValueChange = { position -> position.roundToInt().let { if (it != score) onChange(it) } },
-        valueRange = 0f..MAX_SCORE.toFloat(),
-        steps = MAX_SCORE - 1,
         modifier =
             Modifier.semantics {
                 contentDescription = label

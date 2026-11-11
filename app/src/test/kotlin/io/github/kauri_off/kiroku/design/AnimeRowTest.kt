@@ -114,8 +114,8 @@ class AnimeRowTest {
     }
 
     private companion object {
-        val TopAlignedPadding = 12.dp
-        val CentredPadding = 8.dp
+        val TopAlignedPadding = 10.dp
+        val CentredPadding = 10.dp
     }
 }
 

@@ -42,9 +42,9 @@ import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
-import io.github.kauri_off.kiroku.design.theme.Motion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -413,7 +413,7 @@ class ListMotionTest {
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
 
     @Test
-    fun `the row leaves and the rows below close up within 200 ms`() {
+    fun `the row leaves and the rows below close up within 250 ms`() {
         showAndSettle()
         val before = top(following)
         val leavingTop = top(leaving)
@@ -473,7 +473,7 @@ class ListMotionTest {
     }
 
     @Test
-    fun `a selected tab slides its page in and settles within 300 ms`() {
+    fun `a selected tab slides its page in and settles within 400 ms`() {
         showAndSettle()
         val watchingLeft = left(following)
         set(ListFixtureStates.planned)
@@ -503,7 +503,7 @@ class ListMotionTest {
     }
 
     @Test
-    fun `a swipe settles on the next tab within 300 ms of letting go and selects it`() {
+    fun `a swipe settles on the next tab within 400 ms of letting go and selects it`() {
         val events = mutableListOf<ListEvent>()
         state = ListFixtureStates.watching
         compose.mainClock.autoAdvance = false
@@ -545,8 +545,8 @@ class ListMotionTest {
     }
 
     private companion object {
-        val COMPONENT_CHANGE_MS = Motion.Duration.SHORT4.toLong()
-        val TAB_SWITCH_MS = Motion.Duration.MEDIUM2.toLong()
+        const val COMPONENT_CHANGE_MS = MotionBounds.CHANGE
+        const val TAB_SWITCH_MS = MotionBounds.ENTER
         const val SETTLED = 2_000L
     }
 }

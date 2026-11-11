@@ -34,12 +34,13 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,7 +125,7 @@ fun CentredSmallTarget() {
 @Composable
 fun LongListEndingInSmallTarget() {
     LazyColumn(Modifier.fillMaxSize()) {
-        items((1..40).toList()) { ListItem(headlineContent = { Text("Row $it") }) }
+        items((1..40).toList()) { ListItem { Text("Row $it") } }
         item {
             Row {
                 Text("Last row")
@@ -137,7 +138,7 @@ fun LongListEndingInSmallTarget() {
 @Composable
 fun DialogProbe(smallTarget: Boolean) {
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize()) { items((1..40).toList()) { ListItem(headlineContent = { Text("Row $it") }) } }
+        LazyColumn(Modifier.fillMaxSize()) { items((1..40).toList()) { ListItem { Text("Row $it") } } }
         AlertDialog(
             onDismissRequest = {},
             confirmButton = { TextButton(onClick = {}) { Text("OK") } },
@@ -163,12 +164,24 @@ fun SheetProbe(
     onContainer: (Int) -> Unit = {},
 ) {
     Surface(Modifier.fillMaxSize()) {
-        LazyColumn { items((1..rowsBehind).toList()) { ListItem(headlineContent = { Text("Behind $it") }) } }
+        LazyColumn { items((1..rowsBehind).toList()) { ListItem { Text("Behind $it") } } }
         val container = BottomSheetDefaults.ContainerColor
         onContainer(container.toArgb())
         val marker = MaterialTheme.colorScheme.tertiary
         onEndMarker(marker.toArgb())
-        ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded)) {
+        ModalBottomSheet(
+            onDismissRequest = {},
+            sheetState =
+                rememberBottomSheetState(
+                    SheetValue.Hidden,
+                    enabledValues =
+                        SheetValue.entries
+                            .filter {
+                                !skipPartiallyExpanded ||
+                                    it != SheetValue.PartiallyExpanded
+                            }.toSet(),
+                ),
+        ) {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 repeat(rows) { Text("Sheet row ${it + 1}", Modifier.fillMaxWidth().height(56.dp)) }
                 Row {
@@ -185,7 +198,8 @@ fun SheetProbe(
 @Composable
 fun OverflowingSheet() {
     Surface(Modifier.fillMaxSize()) {
-        ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        ModalBottomSheet(onDismissRequest = {
+        }, sheetState = rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))) {
             Column(Modifier.wrapContentHeight(Alignment.Top, unbounded = true)) {
                 repeat(60) { Text("Line ${it + 1}", Modifier.fillMaxWidth().height(56.dp)) }
             }
@@ -282,7 +296,7 @@ fun StockControls() {
             Switch(checked = true, onCheckedChange = {}, modifier = Modifier.semantics { contentDescription = "Switch" })
             RadioButton(selected = true, onClick = {}, modifier = Modifier.semantics { contentDescription = "Radio" })
             FilterChip(selected = true, onClick = {}, label = { Text("Airing") })
-            ListItem(headlineContent = { Text("Row") }, modifier = Modifier.clickable {})
+            ListItem(onClick = {}) { Text("Row") }
         }
     }
 }

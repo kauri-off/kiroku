@@ -8,7 +8,9 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
@@ -36,8 +38,25 @@ class EditScreenshots : ScreenshotRegistry() {
             case("discard-confirm") { EditSheet(EditFixtures.changed.copy(dialog = EditDialog.ConfirmDiscard), onEvent = {}) },
             case("partial-dates") { EditSheet(EditFixtures.partialDates, onEvent = {}) },
             case("date-picker") { EditSheet(EditFixtures.existing.copy(dialog = EditDialog.PickDate(DateField.Start)), onEvent = {}) },
+            case("status-chosen") { EditSheet(EditFixtures.statusChosen, onEvent = {}) },
+        )
+
+    // Choosing a status reshapes and recolours two toggle buttons, the stock component's own motion; no button moves.
+    override val transitions =
+        listOf(
+            Transition(
+                "status-chosen",
+                start = "existing",
+                millis = STATUS_CHOICE,
+                at = listOf(FRAME, 5 * FRAME, 10 * FRAME, STATUS_CHOICE),
+            ) {
+                EditSheet(if (it) EditFixtures.statusChosen else EditFixtures.existing, onEvent = {})
+            },
         )
 }
+
+private const val FRAME = 16L
+private const val STATUS_CHOICE = 2 * MotionBounds.ENTER
 
 object EditFixtures {
     private val today = FixtureTime.reference.atZone(FixtureTime.zone).toLocalDate()
@@ -75,6 +94,8 @@ object EditFixtures {
                 finishDate = PartialDate.Month(YearMonth.of(2026, 1)),
             ),
         )
+
+    val statusChosen = existing.after(EditSheetEvent.StatusChosen(ListStatus.OnHold))
 
     val changed =
         existing

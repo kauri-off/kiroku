@@ -55,7 +55,7 @@ private fun closeParenthesis(
     return code.length
 }
 
-// Durations, curves, springs and delays of animations come only from the theme's motion scheme and tokens.
+// Durations, curves, springs and delays of animations come only from the theme's motion scheme: no source may write one.
 private val motionLiterals =
     listOf(
         Regex("""(?i)\b(tween|spring|snap|keyframes|keyframesWithSpline|repeatable|infiniteRepeatable)(Spec)?\s*[(<{]"""),
@@ -76,7 +76,7 @@ private val interfaceMotionLiterals =
 // User interface code: a file that declares a composable or uses Compose beyond its runtime.
 private val interfaceCode = Regex("""@Composable\b|^import androidx\.compose\.(?!runtime\.)""", RegexOption.MULTILINE)
 
-// Animation calls that fall back to Compose's own spec when their arguments name nothing from Motion.
+// Animation calls that fall back to Compose's own spec when their arguments name nothing from the motion scheme.
 private val specCalls =
     Regex(
         """\b(animate(?!Scroll)\w*|Crossfade|AnimatedContent|AnimatedVisibility|fadeIn|fadeOut|slideIn\w*|slideOut\w*|""" +
@@ -84,13 +84,15 @@ private val specCalls =
             """\s*(<[^>()]*>)?\s*[({]""",
     )
 
-const val MOTION_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/design/theme/Motion.kt"
+private val fromScheme = Regex("""\bmotionScheme\.\w+Spec\b""")
+
+// The expressive scheme's spatial springs overshoot; the app's own animations use its effects springs, which cannot.
+private val spatialSpec = Regex("""\b\w*SpatialSpec\b""")
 
 fun motionLiteralProblems(
     name: String,
     source: String,
 ): List<String> {
-    if (name == MOTION_SOURCE) return emptyList()
     val code = KotlinSource(source).code
     val rules = if (interfaceCode.containsMatchIn(code)) motionLiterals + interfaceMotionLiterals else motionLiterals
     val lines = code.lines()
@@ -98,20 +100,27 @@ fun motionLiteralProblems(
         lines.flatMapIndexed { index, line ->
             rules
                 .filter { it.containsMatchIn(line) && !line.trimStart().startsWith("import ") }
-                .map { "$name:${index + 1}: animation value outside $MOTION_SOURCE: ${line.trim()}" }
+                .map { "$name:${index + 1}: animation value outside the theme's motion scheme: ${line.trim()}" }
+        }
+    val spatial =
+        lines.mapIndexedNotNull { index, line ->
+            if (spatialSpec.containsMatchIn(line)) "$name:${index + 1}: a spatial spring, which overshoots: ${line.trim()}" else null
         }
     val defaults =
         specCalls
             .findAll(code)
             .filterNot { call ->
                 val open = call.range.last
-                code[open] == '(' && code.substring(open, closeParenthesis(code, open)).contains("Motion.")
+                code[open] == '(' && fromScheme.containsMatchIn(code.substring(open, closeParenthesis(code, open)))
             }.map { call ->
                 val line = code.substring(0, call.range.first).count { it == '\n' }
-                "$name:${line + 1}: ${call.groupValues[1]} without a spec from Motion: ${lines[line].trim()}"
+                "$name:${line + 1}: ${call.groupValues[1]} without a spec from the theme's motion scheme: ${lines[line].trim()}"
             }
-    return literal + defaults
+    return literal + spatial + defaults
 }
+
+// The one file that may use Material 3 Expressive API that is still experimental.
+const val EXPRESSIVE_OPT_IN_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/design/component/ExpressiveOptIn.kt"
 
 // A dp value written as a number, which only the theme may hold.
 private val dpLiteral = Regex("""\b\d+(\.\d+)?f?\s*\.dp\b|\bDp\s*\(\s*\d""")

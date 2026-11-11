@@ -7,6 +7,7 @@ agp = "9.5.1"
 kotlin = "2.4.21"
 ksp = "2.3.13"
 compose-bom = "2026.09.00"
+material3 = "1.5.0-rc01"
 activity = "1.13.0"
 lifecycle = "2.11.0"
 navigation3 = "1.2.1"
@@ -35,8 +36,8 @@ compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
-compose-material3 = { module = "androidx.compose.material3:material3" }
-compose-material3-adaptive-navigation-suite = { module = "androidx.compose.material3:material3-adaptive-navigation-suite" }
+compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
+compose-material3-adaptive-navigation-suite = { module = "androidx.compose.material3:material3-adaptive-navigation-suite", version.ref = "material3" }
 
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }

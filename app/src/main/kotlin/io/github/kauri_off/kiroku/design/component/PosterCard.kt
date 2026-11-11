@@ -38,7 +38,7 @@ fun PosterCard(
     Column(
         modifier
             .width(PosterSize.Strip.scaledWidth())
-            .clip(MaterialTheme.shapes.small)
+            .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {},
     ) {

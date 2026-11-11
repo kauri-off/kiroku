@@ -10,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import io.github.kauri_off.kiroku.design.theme.Motion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Rule
@@ -91,14 +90,14 @@ class TransitionsTest {
 
     private companion object {
         const val FRAME = 16L
-        val SETTLED = Motion.Duration.MEDIUM4.toLong()
-        val SHORT = Motion.Duration.SHORT2.toLong()
+        const val SETTLED = 400L
+        const val SHORT = 100L
     }
 }
 
 @Composable
 private fun Fading(shown: Boolean) {
-    val alpha by animateFloatAsState(if (shown) 1f else 0f, Motion.componentChange())
+    val alpha by animateFloatAsState(if (shown) 1f else 0f, tween(FADE_MILLIS))
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = alpha)))
 }
 
@@ -109,5 +108,6 @@ private fun LateFading(shown: Boolean) {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = alpha)))
 }
 
+private const val FADE_MILLIS = 200
 private const val LATE_MILLIS = 100
 private const val LATE_FADE_MILLIS = 200
