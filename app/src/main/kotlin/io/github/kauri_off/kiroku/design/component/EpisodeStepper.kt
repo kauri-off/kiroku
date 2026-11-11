@@ -1,20 +1,16 @@
 package io.github.kauri_off.kiroku.design.component
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,10 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -48,10 +42,10 @@ import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
-// Minus, the watched count as a numeric field with "/ total", plus. A typed count is applied when the user
-// confirms it, leaves the field or presses a button, which then steps from the typed count; a count above the total
-// is refused with an inline error, not applied, and disables both buttons. The field shows [watched] whenever nothing
-// is being typed; a count changed from outside drops an unconfirmed one unless the field has focus.
+// Minus, the watched count as a numeric field with "/ total", plus. The count has no ceiling: the total is only shown.
+// A typed count is applied when the user confirms it, leaves the field or presses a button, which then steps from the
+// typed count; an empty field keeps the count. The field shows [watched] whenever nothing is being typed; a count
+// changed from outside drops an unconfirmed one unless the field has focus.
 @Composable
 fun EpisodeStepper(
     watched: Int,
@@ -72,140 +66,109 @@ internal fun EpisodeStepper(
     typed: String?,
 ) {
     var draft by rememberSaveable { mutableStateOf(typed) }
-    var refused by rememberSaveable { mutableStateOf(typed != null && episodeInput(typed, watched, total) is EpisodeInput.TooMany) }
     var focused by remember { mutableStateOf(false) }
-    var given by remember { mutableStateOf(watched to total) }
-    if (given != (watched to total)) {
-        given = watched to total
-        if (!focused) {
-            draft = null
-            refused = false
-        }
+    var given by remember { mutableStateOf(watched) }
+    if (given != watched) {
+        given = watched
+        if (!focused) draft = null
     }
     val focusManager = LocalFocusManager.current
 
-    // Applies or drops the draft; false when the draft is refused and stays.
-    fun commit(): Boolean {
-        val input = draft?.let { episodeInput(it, watched, total) } ?: return true
-        if (input is EpisodeInput.TooMany) {
-            refused = true
-            return false
-        }
+    fun commit() {
+        val count = draft?.let { typedCount(it, watched) }
         draft = null
-        refused = false
-        if (input is EpisodeInput.Apply) onWatchedChange(input.value)
-        return true
+        if (count != null) onWatchedChange(count)
     }
 
-    val typedInput = draft?.let { episodeInput(it, watched, total) }
-    val tooMany = typedInput is EpisodeInput.TooMany
-    val current = (typedInput as? EpisodeInput.Apply)?.value ?: watched
+    EpisodeStepperLayout(
+        text = draft ?: watched.toString(),
+        current = draft?.toIntOrNull() ?: watched,
+        total = total,
+        onTextChange = { draft = it },
+        // Leaving the field can resend its last text, so the commit comes after it.
+        onDone = {
+            focusManager.clearFocus()
+            commit()
+        },
+        onFocusChange = { isFocused ->
+            focused = isFocused
+            if (!isFocused) commit()
+        },
+        onStep = {
+            draft = null
+            onWatchedChange(it)
+        },
+        modifier = modifier,
+        enabled = enabled,
+    )
+}
 
-    fun step(delta: Int) {
-        if (tooMany) return
-        draft = null
-        refused = false
-        onWatchedChange((current + delta).coerceIn(0, total ?: Int.MAX_VALUE))
-    }
-
+// The stepper without state of its own. [current] is the count the buttons step from; [onTextChange] hears only text
+// a count field takes, [onFocusChange] only real changes, [onStep] the new count.
+@Composable
+internal fun EpisodeStepperLayout(
+    text: String,
+    current: Int,
+    total: Int?,
+    onTextChange: (String) -> Unit,
+    onDone: () -> Unit,
+    onFocusChange: (Boolean) -> Unit,
+    onStep: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    fieldModifier: Modifier = Modifier,
+) {
     val minus = stringResource(R.string.design_episode_minus)
     val plus = stringResource(R.string.design_episode_plus)
     val fieldLabel = stringResource(R.string.design_episodes_watched)
-    val refusal = total?.let { pluralStringResource(R.plurals.design_episode_too_many, it, it) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            IconButton(onClick = { step(-1) }, enabled = enabled && !tooMany && current > 0) {
-                Icon(painterResource(R.drawable.ic_remove), contentDescription = minus)
-            }
-            OutlinedTextField(
-                value = draft ?: watched.toString(),
-                onValueChange = { edit ->
-                    episodeText(edit, total)?.let {
-                        draft = it
-                        refused = false
-                    }
-                },
-                enabled = enabled,
-                singleLine = true,
-                isError = refused,
-                textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
-                visualTransformation =
-                    totalSuffix(
-                        total,
-                        if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else OutlinedTextFieldDefaults.colors().disabledTextColor,
-                    ),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                keyboardActions =
-                    KeyboardActions(onDone = {
-                        if (commit()) focusManager.clearFocus()
-                    }),
-                modifier =
-                    Modifier
-                        .weight(1f, fill = false)
-                        .width(fieldWidth(total))
-                        .onFocusChanged {
-                            if (focused && !it.isFocused) commit()
-                            focused = it.isFocused
-                        }.semantics {
-                            contentDescription = fieldLabel
-                            if (refused && refusal != null) error(refusal)
-                        },
-            )
-            IconButton(onClick = { step(1) }, enabled = enabled && !tooMany && (total == null || current < total)) {
-                Icon(painterResource(R.drawable.ic_add), contentDescription = plus)
-            }
+    var focused by remember { mutableStateOf(false) }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        IconButton(onClick = { onStep(current - 1) }, enabled = enabled && current > 0) {
+            Icon(painterResource(R.drawable.ic_remove), contentDescription = minus)
         }
-        if (refused && refusal != null) {
-            // Under the field's text, where a text field's own supporting text starts.
-            Text(
-                refusal,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = LocalMinimumInteractiveComponentSize.current + Spacing.xs + FieldPadding),
-            )
+        OutlinedTextField(
+            value = text,
+            onValueChange = { edit -> episodeText(edit)?.let(onTextChange) },
+            enabled = enabled,
+            singleLine = true,
+            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+            visualTransformation =
+                totalSuffix(
+                    total,
+                    if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else OutlinedTextFieldDefaults.colors().disabledTextColor,
+                ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onDone() }),
+            modifier =
+                fieldModifier
+                    .weight(1f, fill = false)
+                    .width(fieldWidth(maxOf(text.length, current.toString().length), total))
+                    .onFocusChanged {
+                        if (it.isFocused != focused) {
+                            focused = it.isFocused
+                            onFocusChange(it.isFocused)
+                        }
+                    }.semantics { contentDescription = fieldLabel },
+        )
+        IconButton(onClick = { onStep(current + 1) }, enabled = enabled && current < MAX_COUNT) {
+            Icon(painterResource(R.drawable.ic_add), contentDescription = plus)
         }
     }
 }
 
-internal sealed interface EpisodeInput {
-    data class Apply(
-        val value: Int,
-    ) : EpisodeInput
-
-    data object Keep : EpisodeInput
-
-    data class TooMany(
-        val total: Int,
-    ) : EpisodeInput
-}
-
-// What confirming [text] does: an empty or unchanged field keeps the count, a count above the total is refused.
-internal fun episodeInput(
+// The count confirming [text] applies, or null when it keeps [watched]: an empty or unchanged field.
+internal fun typedCount(
     text: String,
     watched: Int,
-    total: Int?,
-): EpisodeInput {
-    val value = text.toIntOrNull() ?: return EpisodeInput.Keep
-    return when {
-        total != null && value > total -> EpisodeInput.TooMany(total)
-        value == watched -> EpisodeInput.Keep
-        else -> EpisodeInput.Apply(value)
-    }
-}
+): Int? = text.toIntOrNull()?.takeIf { it != watched }
 
-// The field's text after an edit, or null when the edit is not taken: anything but digits, or more digits than a
-// count above the total needs to be refused visibly.
-internal fun episodeText(
-    edit: String,
-    total: Int?,
-): String? {
+// The field's text after an edit, or null when the edit is not taken: anything but digits, or more than
+// [MAX_DIGITS] of them.
+internal fun episodeText(edit: String): String? {
     val text = edit.filterNot(Char::isWhitespace)
     if (text.any { it !in '0'..'9' }) return null
-    val limit = if (total == null) UNKNOWN_TOTAL_DIGITS else maxDigits(total) + 1
-    return text.takeIf { it.length <= limit }
+    return text.takeIf { it.length <= MAX_DIGITS }
 }
-
-private fun maxDigits(total: Int?): Int = total?.toString()?.length ?: UNKNOWN_TOTAL_DIGITS
 
 @Composable
 private fun totalSuffix(
@@ -234,20 +197,25 @@ private class SuffixMapping(
     override fun transformedToOriginal(offset: Int): Int = offset.coerceAtMost(length)
 }
 
-// Wide enough for the longest count with its total at the current font scale, and no wider.
+// Wide enough for [digits] digits with the total at the current font scale, and for the total's own digits.
 @Composable
-private fun fieldWidth(total: Int?): Dp {
+private fun fieldWidth(
+    digits: Int,
+    total: Int?,
+): Dp {
     val measurer = rememberTextMeasurer()
     val style = LocalTextStyle.current
-    val widest =
-        AnnotatedString(
-            ZERO.toString().repeat(maxDigits(total)) + (total?.let { stringResource(R.string.design_episode_total, it) } ?: ""),
-        )
+    val shown = maxOf(digits, total?.toString()?.length ?: UNKNOWN_TOTAL_DIGITS)
+    val widest = AnnotatedString(ZERO.toString().repeat(shown) + (total?.let { stringResource(R.string.design_episode_total, it) } ?: ""))
     val width = measurer.measure(widest, style, softWrap = false).size.width
     return with(LocalDensity.current) { width.toDp() } + FieldPadding * 2 + CursorRoom
 }
 
 private const val UNKNOWN_TOTAL_DIGITS = 4
+
+// Input sanity, not a ceiling: no title has this many episodes.
+private const val MAX_DIGITS = 5
+internal const val MAX_COUNT = 99_999
 private const val ZERO = '0'
 
 // A text field's own start and end padding, and room for the cursor after the last digit.

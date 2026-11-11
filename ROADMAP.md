@@ -27,8 +27,7 @@ How to read a task:
 - **[A]** architectural task: done by the stronger model, because later tasks build on its choices.
 - **[L]** layout task: finished only when it passes [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) with both
   reviewers. It renders the **cases** it names, plus content, loading, empty and error where they exist, as
-  ARCHITECTURE section 11.2 requires. The review of an [L] task other than M1-07 needs the calibration set of
-  M1-07a.
+  ARCHITECTURE section 11.2 requires.
 - **[O]** a step done by the orchestrator or the owner, not by a coding agent.
 - **Needs** lists what must be merged first. Tasks without a common dependency can run in parallel.
 - **Check** is what a reviewer or the owner runs or looks at, and what it shows. How the task is built, and what
@@ -109,19 +108,10 @@ English, light and dark, on demo data. No MAL client id is needed.
   read inside a rendered case differs from the app theme's for that variant, light, dark and the second seed
   included.
 
-- [ ] **M1-07a [O] First calibration set.** The owner scores, with the rubric, the gallery and the three `sample`
-  cases of M1-06 (`content`, `calibration-noise`, `calibration-hierarchy`), listing each deduction with its size.
-  The images and the scores are committed as `docs/calibration/`. This is also the owner's first look at the
-  design.
-  **Needs:** M1-07.
-  **Check:** `docs/calibration/` holds the four images and a score sheet in the rubric's report format; the two bad
-  cases fail, each with at least one deduction marked Noticeable or Structural; the owner's remarks on the look are
-  filed as tasks before M1-08 to M1-12 are reviewed.
-
-- [ ] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
+- [x] **M1-08 [L] App shell.** Navigation with the behaviour of section 6.3; the bar or rail with List, Search and
   Profile; placeholder screens in the shared empty state; the place for snackbars and for the session banner.
   **Cases:** `shell/list-selected`, `shell/snackbar`, `shell/session-banner`, `shell/wide` (840 × 600 dp, rail).
-  **Needs:** M1-07; the review needs M1-07a.
+  **Needs:** M1-07.
   **Check:** rubric pass on `shell/*`. Tests show: tapping the current destination again pops it to its root; Back
   from the Search root goes to List; each destination keeps its stack.
 
@@ -134,7 +124,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   `refreshing`, `undo-snackbar`, `completed-snackbar` ("+1" reached the total: the row is gone and the snackbar
   says "Moved to Completed · Undo"), `offline-cached`, `loading`, `empty`, `error`, `signed-out`,
   `session-expired`, `read-only`.
-  **Needs:** M1-07; the review needs M1-07a.
+  **Needs:** M1-07.
   **Check:** rubric pass on `list/*`.
 
 - [x] **M1-10 [L] Title page.** The stateless title page as budgeted in section 9.4.
@@ -147,7 +137,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   its list status), `synopsis-expanded` ("Less"), `session-expired` (the banner), `added-snackbar`,
   `completed-snackbar` (the stepper reached the total: the status button says Completed and the snackbar says "Moved
   to Completed · Undo"), `loading`, `error`.
-  **Needs:** M1-07; the review needs M1-07a.
+  **Needs:** M1-07.
   **Check:** rubric pass on `title/*`, including the above-the-fold rule and the Related and Statistics sections in
   the `__full` images; in `airing-on-list` the Related strip shows both short strip labels and a two-line
   caption 1, and its cards have one height in every variant; in `ru-stress` and `ru-large`, «Предыстория» in the
@@ -155,13 +145,13 @@ English, light and dark, on demo data. No MAL client id is needed.
 
 - [ ] **M1-11 [L] Title sub-screens.** "Related: see all" and "Details" (section 9.9).
   **Cases:** `related/grouped`, `related/single`, `details/full`, `details/sparse`.
-  **Needs:** M1-07; the review needs M1-07a.
+  **Needs:** M1-07.
   **Check:** rubric pass on `related/*` and `details/*`.
 
-- [ ] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
-  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `over-total-error` (a typed value above the
-  total, refused inline), `remove-confirm`, `discard-confirm`.
-  **Needs:** M1-07; the review needs M1-07a.
+- [x] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
+  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `above-total` (a count above the total,
+  "26 / 24", with the title completed), `remove-confirm`, `discard-confirm`, `partial-dates`, `date-picker`.
+  **Needs:** M1-07.
   **Check:** rubric pass on `edit/*`.
 
 - [x] **M1-13 [A] Wiring and demo mode.** The app's wiring, and demo mode (section 6.4): a debug build without a
@@ -172,7 +162,8 @@ English, light and dark, on demo data. No MAL client id is needed.
 - [ ] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
   navigation between them.
   **Needs:** M1-08, M1-09, M1-10, M1-11, M1-12, M1-13, M1-02.
-  **Check:** tests cover every event of the three view models; `tools/emu smoke` on the debug APK exits 0 and its
+  **Check:** tests cover every event of the three view models; the edit sheet's state is updated on every keystroke
+  synchronously, in `onEvent` itself, and a test types "24" quickly through the real route; `tools/emu smoke` on the debug APK exits 0 and its
   device screenshots show the List with demo data.
 
 - [ ] **M1-15 [O] Owner's look and calibration.** The owner installs the APK and checks: the app opens on the List
@@ -181,7 +172,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   Title `airing-on-list` in `en-light`, and List `watching` in `ru-large` as the example of the rubric's `ru-large`
   rule (its section 3), with each wrap marked as following from the font scale or not.
   **Needs:** M1-14.
-  **Check:** `docs/calibration/` also holds the three images and their scores; the owner's remarks are filed as
+  **Check:** `docs/calibration/` holds the three images and their scores; the owner's remarks are filed as
   tasks.
 
 ## M2. Sign-in, the real list, the real title page

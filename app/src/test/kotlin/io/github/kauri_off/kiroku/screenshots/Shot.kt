@@ -363,12 +363,13 @@ class Shot private constructor(
             variant: Variant,
             heightDp: Int = variant.heightDp,
             keyboard: Boolean = false,
+            widthDp: Int = variant.widthDp,
             content: @Composable () -> Unit,
         ): Shot {
             val locale = Locale.getDefault()
             val zone = TimeZone.getDefault()
             SystemBars.simulate()
-            RuntimeEnvironment.setQualifiers(variant.qualifiers(heightDp))
+            RuntimeEnvironment.setQualifiers(variant.qualifiers(heightDp, widthDp))
             RuntimeEnvironment.setFontScale(variant.fontScale)
             Locale.setDefault(Locale.forLanguageTag(variant.language))
             TimeZone.setDefault(TimeZone.getTimeZone(FixtureTime.zone))

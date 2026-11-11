@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="shell_list">List</string>
+    <string name="shell_search">Search</string>
+    <string name="shell_profile">Profile</string>
+    <string name="shell_my_list">My list</string>
+    <string name="shell_not_in_this_build">Not available in this build yet</string>
+    <string name="shell_could_not_save" tools:ignore="UnusedResources">Could not save</string>
+</resources>

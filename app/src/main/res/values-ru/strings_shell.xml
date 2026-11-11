@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shell_list">Список</string>
+    <string name="shell_search">Поиск</string>
+    <string name="shell_profile">Профиль</string>
+    <string name="shell_my_list">Мой список</string>
+    <string name="shell_not_in_this_build">В этой сборке пока недоступно</string>
+    <string name="shell_could_not_save">Не удалось сохранить</string>
+</resources>
