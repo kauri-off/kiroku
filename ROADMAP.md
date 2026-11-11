@@ -146,9 +146,9 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-07.
   **Check:** rubric pass on `related/*` and `details/*`.
 
-- [ ] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
-  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `over-total-error` (a typed value above the
-  total, refused inline), `remove-confirm`, `discard-confirm`.
+- [x] **M1-12 [L] Edit sheet.** The stateless bottom sheet of section 9.5.
+  **Cases:** `new-entry`, `existing`, `unknown-total`, `keyboard-open`, `above-total` (a count above the total,
+  "26 / 24", with the title completed), `remove-confirm`, `discard-confirm`, `partial-dates`, `date-picker`.
   **Needs:** M1-07.
   **Check:** rubric pass on `edit/*`.
 
@@ -160,7 +160,8 @@ English, light and dark, on demo data. No MAL client id is needed.
 - [ ] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
   navigation between them.
   **Needs:** M1-08, M1-09, M1-10, M1-11, M1-12, M1-13, M1-02.
-  **Check:** tests cover every event of the three view models; `tools/emu smoke` on the debug APK exits 0 and its
+  **Check:** tests cover every event of the three view models; the edit sheet's state is updated on every keystroke
+  synchronously, in `onEvent` itself, and a test types "24" quickly through the real route; `tools/emu smoke` on the debug APK exits 0 and its
   device screenshots show the List with demo data.
 
 - [ ] **M1-15 [O] Owner's look and calibration.** The owner installs the APK and checks: the app opens on the List

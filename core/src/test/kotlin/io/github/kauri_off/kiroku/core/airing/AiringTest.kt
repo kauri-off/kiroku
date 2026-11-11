@@ -70,6 +70,21 @@ class AiringTest {
         assertEquals(AiredCount.Exact(0), toWatch(entry, airing(AiredCount.Exact(14))))
     }
 
+    @Test
+    fun `any non-negative count is accepted, whatever the aired count and the total, and leaves nothing to watch`() {
+        val watching = ListValues(ListStatus.Watching, 12, null, null, null)
+        val aired = airing(AiredCount.Exact(14))
+        (0..COUNT_LIMIT).forEach { count ->
+            val unknownTotal = watching.withWatched(count, malEpisodes = null, today)
+            assertEquals(count, unknownTotal.watchedEpisodes)
+            val toWatch = toWatch(ListEntry(FixtureAnime.exactToWatch, unknownTotal, Instant.EPOCH), aired)
+            assertEquals(AiredCount.Exact(maxOf(14 - count, 0)), toWatch)
+            val knownTotal = watching.withWatched(count, malEpisodes = 24, today)
+            assertEquals(count, knownTotal.watchedEpisodes)
+            assertEquals(if (count >= 24) ListStatus.Completed else ListStatus.Watching, knownTotal.status)
+        }
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `A3 the aired count never exceeds a known total`() {
         Airing(AiredCount.Exact(25), 24, null, null)
@@ -184,5 +199,9 @@ class AiringTest {
         assertEquals(Premiere.InMonth(YearMonth.of(2026, 1)), premiere(PartialDate.Month(YearMonth.of(2026, 1))))
         assertEquals(Premiere.Unannounced, premiere(PartialDate.OnlyYear(Year.of(2025))))
         assertEquals(Premiere.InYear(Year.of(2026)), premiere(PartialDate.OnlyYear(Year.of(2026))))
+    }
+
+    private companion object {
+        const val COUNT_LIMIT = 100
     }
 }

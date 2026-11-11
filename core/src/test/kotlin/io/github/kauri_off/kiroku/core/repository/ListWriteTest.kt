@@ -42,9 +42,10 @@ class ListWriteTest {
     }
 
     @Test
-    fun `mark watched follows W7 and stops at MAL's total`() {
+    fun `mark watched follows W7 and goes past MAL's total`() {
         val completed = ListValues(ListStatus.Completed, 12, 8, earlier, day)
         assertEquals(completed, ListWrite.MarkWatched(anime, 12).applyTo(entry(watching(11)), today))
+        assertEquals(completed.copy(watchedEpisodes = 13), ListWrite.MarkWatched(anime, 13).applyTo(entry(watching(12)), today))
     }
 
     @Test
@@ -61,9 +62,11 @@ class ListWriteTest {
     }
 
     @Test
-    fun `an increment at the total changes nothing`() {
+    fun `an increment has no ceiling`() {
         val completed = ListValues(ListStatus.Completed, 12, 8, earlier, earlier)
-        assertEquals(completed, ListWrite.MarkNextWatched(anime).applyTo(entry(completed), today))
+        var values = completed
+        repeat(20) { values = checkNotNull(ListWrite.MarkNextWatched(anime).applyTo(entry(values), today)) }
+        assertEquals(completed.copy(watchedEpisodes = 32), values)
     }
 
     @Test

@@ -17,10 +17,4 @@
     <string name="design_episode_minus">Минус одна серия</string>
     <string name="design_episode_plus">Плюс одна серия</string>
     <string name="design_episode_total">" /\u00A0%d"</string>
-    <plurals name="design_episode_too_many">
-        <item quantity="one">В тайтле\u00A0%d\u00A0серия</item>
-        <item quantity="few">В тайтле\u00A0%d\u00A0серии</item>
-        <item quantity="many">В тайтле\u00A0%d\u00A0серий</item>
-        <item quantity="other">В тайтле\u00A0%d\u00A0серии</item>
-    </plurals>
 </resources>

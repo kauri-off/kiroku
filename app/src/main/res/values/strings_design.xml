@@ -15,8 +15,4 @@
     <string name="design_episode_minus">Minus one episode</string>
     <string name="design_episode_plus">Plus one episode</string>
     <string name="design_episode_total">" /\u00A0%d"</string>
-    <plurals name="design_episode_too_many">
-        <item quantity="one">The title has\u00A0%d\u00A0episode</item>
-        <item quantity="other">The title has\u00A0%d\u00A0episodes</item>
-    </plurals>
 </resources>
