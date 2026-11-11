@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="design_see_all">See all</string>
+    <string name="design_see_all_in">See all: %1$s</string>
+    <string name="design_loading">Loading</string>
+    <string name="design_retry">Retry</string>
+    <string name="design_session_expired">Session expired</string>
+    <string name="design_sign_in">Sign in</string>
+    <string name="design_stat_bar_value">%1$s · %2$s</string>
+    <plurals name="design_stat_bar_description">
+        <item quantity="one">%1$s, %2$s, %3$d\u00A0percent</item>
+        <item quantity="other">%1$s, %2$s, %3$d\u00A0percent</item>
+    </plurals>
+    <string name="design_episodes_watched">Episodes watched</string>
+    <string name="design_episode_minus">Minus one episode</string>
+    <string name="design_episode_plus">Plus one episode</string>
+    <string name="design_episode_total">" /\u00A0%d"</string>
+    <plurals name="design_episode_too_many">
+        <item quantity="one">The title has\u00A0%d\u00A0episode</item>
+        <item quantity="other">The title has\u00A0%d\u00A0episodes</item>
+    </plurals>
+</resources>

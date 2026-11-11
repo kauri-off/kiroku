@@ -13,10 +13,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.component.TitleText
 
 data class SampleRow(
     val id: AnimeId,
@@ -58,7 +58,7 @@ fun SampleScreen(
         LazyColumn(contentPadding = padding) {
             items(state.rows, key = { it.id.value }) { row ->
                 ListItem(
-                    headlineContent = { Text(row.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                    headlineContent = { TitleText(row.title, maxLines = 2) },
                     supportingContent = { Text(stringResource(row.status.labelRes())) },
                     trailingContent = { Text(progressText(row), color = MaterialTheme.colorScheme.primary) },
                     modifier = Modifier.clickable { onEvent(SampleEvent.Open(row.id)) },

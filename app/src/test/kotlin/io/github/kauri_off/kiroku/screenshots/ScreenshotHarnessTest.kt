@@ -2,16 +2,33 @@ package io.github.kauri_off.kiroku.screenshots
 
 import android.graphics.Bitmap
 import android.text.format.DateUtils
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Seed
+import io.github.kauri_off.kiroku.probe.CentredSmallTarget
 import io.github.kauri_off.kiroku.probe.ClockProbe
 import io.github.kauri_off.kiroku.probe.DialogProbe
 import io.github.kauri_off.kiroku.probe.KeyboardProbe
@@ -19,6 +36,7 @@ import io.github.kauri_off.kiroku.probe.OverflowingSheet
 import io.github.kauri_off.kiroku.probe.RemoteImageProbe
 import io.github.kauri_off.kiroku.probe.STRIP_CARD_DP
 import io.github.kauri_off.kiroku.probe.SheetProbe
+import io.github.kauri_off.kiroku.probe.StockControls
 import io.github.kauri_off.kiroku.probe.StripProbe
 import io.github.kauri_off.kiroku.probe.WidthOnlyPoster
 import io.github.kauri_off.kiroku.probe.wallClockReadings
@@ -68,6 +86,89 @@ class ScreenshotHarnessTest {
                 assertEquals(shot.dpToPx(SystemBars.HEIGHT_DP).toInt(), status)
                 assertEquals(shot.dpToPx(SystemBars.HEIGHT_DP).toInt(), navigation)
             }
+    }
+
+    // Every colour role a case reads is the app theme's for its variant: the first seed, or the second in en-alt.
+    // Its typography and shapes are the app theme's too.
+    @Test
+    fun casesReadTheAppThemesColourRoles() {
+        val read = mutableMapOf<Variant, Map<String, String>>()
+        for (variant in Variant.entries) {
+            var scheme: ColorScheme? = null
+            var theme: List<Any>? = null
+            var appTheme: List<Any>? = null
+            Shot
+                .launch(variant) {
+                    scheme = MaterialTheme.colorScheme
+                    theme = listOf(MaterialTheme.typography, MaterialTheme.shapes)
+                    KirokuTheme(variant.dark, dynamicColor = false, variant.seed) {
+                        appTheme = listOf(MaterialTheme.typography, MaterialTheme.shapes)
+                    }
+                }.use { }
+            read[variant] = roles(checkNotNull(scheme))
+            assertEquals(variant.id, roles(variant.seed.scheme(variant.dark)), read[variant])
+            assertEquals(variant.id, checkNotNull(appTheme), theme)
+        }
+        assertEquals(Seed.Amber, Variant.EnAlt.seed)
+        assertTrue(Variant.entries.filter { it != Variant.EnAlt }.all { it.seed == Seed.Teal })
+        assertEquals(3, listOf(Variant.EnLight, Variant.EnDark, Variant.EnAlt).map { read[it] }.distinct().size)
+    }
+
+    private fun roles(scheme: ColorScheme): Map<String, String> =
+        ColorScheme::class.java.methods
+            .filter { it.name.startsWith("get") && it.parameterCount == 0 && it.returnType == Long::class.javaPrimitiveType }
+            .associate { it.name.substringBefore('-') to java.lang.Long.toHexString(it.invoke(scheme) as Long) }
+            .also { check(it.size >= ROLES) { "Found ${it.size} colour roles" } }
+
+    @Test(timeout = 60_000)
+    fun aLoadingIndicatorIsHeldWhereItReadsAsASpinner() {
+        var arc = 0
+        val image =
+            Shot
+                .launch(Variant.EnLight) {
+                    arc = MaterialTheme.colorScheme.primary.toArgb()
+                    ScreenState(ScreenState.Loading)
+                }.use { it.image() }
+        val ring = Math.PI * (RING_OUTER_DP * RING_OUTER_DP - RING_INNER_DP * RING_INNER_DP) * DENSITY * DENSITY
+        val drawn = (0 until image.height).sumOf { y -> (0 until image.width).count { x -> image.getPixel(x, y) == arc } }
+        assertTrue("$drawn of ${ring.toInt()} px", drawn > ring * SPINNER_SHARE)
+    }
+
+    @Test
+    fun indicatorsLoopOnceEach() {
+        for (indicator in listOf<@Composable () -> Unit>({ CircularProgressIndicator() }, { LinearProgressIndicator() })) {
+            Shot.launch(Variant.EnLight, content = indicator).use { shot ->
+                shot.image()
+                assertEquals(Shot.LOOPS_PER_INDICATOR, LoopingAnimations.running)
+            }
+        }
+    }
+
+    @Test(timeout = 60_000)
+    fun aLoopThatIsNotAProgressIndicatorFailsTheRender() {
+        for (content in listOf<@Composable () -> Unit>({ Pulse() }, {
+            Column {
+                CircularProgressIndicator()
+                Pulse()
+            }
+        })) {
+            val failure = runCatching { Shot.launch(Variant.EnLight, content = content).use { it.image() } }.exceptionOrNull()
+            assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
+        }
+    }
+
+    @Composable
+    private fun Pulse() {
+        val alpha by rememberInfiniteTransition().animateFloat(0f, 1f, infiniteRepeatable(tween(PULSE_MS)))
+        Box(Modifier.size(PULSE_DP.dp).graphicsLayer { this.alpha = alpha })
+    }
+
+    @Test
+    fun accessibilityResultIsWrittenNextToTheImages() {
+        render(contentCase { StockControls() })
+        assertTrue(File(output.root, ACCESSIBILITY_FILE).readText().startsWith("passed"))
+        render(contentCase { CentredSmallTarget() })
+        assertTrue(File(output.root, ACCESSIBILITY_FILE).readText().contains("TouchTargetSize"))
     }
 
     @Test
@@ -219,7 +320,7 @@ class ScreenshotHarnessTest {
         val image = Shot.launch(Variant.EnLight) { RemoteImageProbe() }.use { it.image() }
         assertEquals(RemoteImages.BLOCK, image.getPixel(image.width / 2, image.height / 2))
         val surfaces =
-            listOf(lightColorScheme(), darkColorScheme()).flatMap {
+            Seed.entries.flatMap { listOf(it.light, it.dark) }.flatMap {
                 listOf(
                     it.surface,
                     it.surfaceVariant,
@@ -233,3 +334,11 @@ class ScreenshotHarnessTest {
         assertFalse(RemoteImages.BLOCK in surfaces)
     }
 }
+
+private const val ROLES = 48
+private const val DENSITY = 2.0
+private const val RING_OUTER_DP = 20.0
+private const val RING_INNER_DP = 16.0
+private const val SPINNER_SHARE = 0.6
+private const val PULSE_MS = 1000
+private const val PULSE_DP = 48

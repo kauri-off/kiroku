@@ -39,6 +39,8 @@ The owner is the final authority on the Russian column.
 | Snackbar after "+1" | Episode 13 watched · Undo | Серия 13 просмотрена · Отменить | |
 | Snackbar when a change completes the title | Moved to Completed · Undo | Перенесено в Просмотрено · Отменить | On the List after "+1" and on the title page after the stepper. The status name is not declined. A bare «Просмотрено» would read as "the episode is watched" |
 | Snackbar after "Add to list" | Added to Planned · Change | Добавлено: Запланировано · Изменить | Status names are not declined, hence the colon |
+| The episode stepper's field (spoken) | Episodes watched | Просмотрено серий | Its buttons: Minus one episode / Plus one episode, «Минус одна серия» / «Плюс одна серия» |
+| A typed count above the total | The title has 24 episodes | В тайтле 24 серии | Plural: серия, серии, серий |
 | Discard confirmation | Discard changes? | Не сохранять изменения? | Buttons: Discard / Keep editing, «Не сохранять» / «Вернуться». Not «Отменить», which is Undo |
 | Save | Save | Сохранить | |
 | Filter the list by title | Filter by title | Фильтр по названию | The icon's label and the field's placeholder |
@@ -77,7 +79,7 @@ The edit sheet's slider shows the number with MAL's name for it.
 | Synopsis | Synopsis | Описание | |
 | Related | Related | Связанное | |
 | Statistics | Statistics | Статистика | |
-| Members | 1 234 567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
+| Members | 1,234,567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
 | Details | Details | Подробности | |
 | Recommendations | Recommendations | Рекомендации | |
 | Airing status: airing | Airing | Выходит | |
@@ -123,6 +125,8 @@ the owner; a name changes only on the owner's answer.
 | Profile | Profile | Профиль | |
 | Settings | Settings | Настройки | |
 | Retry | Retry | Повторить | |
+| Loading (spoken by a screen reader) | Loading | Загрузка | |
+| See all | See all | Показать все | The button of a section header. Spoken with its section: `See all: Related` / `Показать все: Связанное` |
 | Could not save | Could not save | Не удалось сохранить | |
 | Could not refresh | Could not refresh | Не удалось обновить | |
 | No connection | No connection | Нет соединения | |

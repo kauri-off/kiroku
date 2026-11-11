@@ -420,16 +420,20 @@ The default Material 3 type scale with the system font. Screens use only these r
 ### 8.3 Spacing and shape
 
 A 4 dp grid with the `Spacing` tokens `xs` 4, `s` 8, `m` 12, `l` 16, `xl` 24, `xxl` 32. Layout code uses only these
-tokens and component defaults; a literal dp value or colour outside the theme and the components is a code-review
-finding.
+tokens, the theme's named sizes and component defaults. A literal dp value outside the theme fails a test; a literal
+colour outside the theme is a code-review finding.
 
 - Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
 - Content is at most 640 dp wide and centred on wider windows.
 - Every tappable element is at least 48 × 48 dp.
 - Posters are 2:3 with the theme's small corner shape, in three sizes: 56 × 84 dp in rows, 104 × 156 dp in strips
   at font scale 1.0, 120 × 180 dp in the title header.
-- **A caption of a strip card is never broken inside a word.** The card grows with the font scale, so that a
-  one-word caption fits at every scale; this is a rule of the component, and a screen never passes a width.
+- **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
+  scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
+  is a rule of the component, and a screen never passes a width.
+- Cards of a strip are `m` apart.
+- **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
+  shown ("Tenkuu-Toshi-Rondenia-no-" / "Kuuchuu-…"), unless the segment alone is wider than the line.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked
   one per line (section 9.7). Nothing else depends on the font scale.
 
@@ -443,7 +447,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
-| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1 234 567, 45 percent") |
+| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
 | `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke; a value above the total is refused with an inline error and not applied |
@@ -713,6 +717,7 @@ Each is a top app bar with Back and one list. Limit for all: nothing but the lis
   so parallel tasks do not edit the same file. The build fails on a missing or extra translation and on a missing
   plural form, and a test fails on a string literal in user interface code (Android Lint does not see Compose).
   That test exists before the first screen is written.
+- A line never breaks between a number and its word, unit or slash: `24 episodes`, `12 / 24`, `К просмотру: 2`.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
   falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
@@ -812,12 +817,18 @@ For every case, sheets and dialogs included, an automatic accessibility check fa
 under 48 dp in any variant, and on an unlabeled control in `en-light`. It runs where everything is composed: on the
 full-height render, and on every page of every horizontal strip. A touch target is the laid-out size of a clickable, toggleable or
 selectable element, not the larger area Compose accepts touches in. The 32 dp wide drag handle of the stock modal
-bottom sheet is the one exemption. A link inside a text is a touch target too, and is reported by its text.
+bottom sheet is the one exemption. A link inside a text is a touch target too, and is reported by its text. The
+check's result for a screen is written next to its images as `ACCESSIBILITY.txt`.
 
 **What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines
 and sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset
 passes. The keyboard is a block of fixed height, without keys or suggestions. Text scales the way Compose scales
 it at font scales above 1.03, non-linearly, on every Android version.
+
+**Looping animations.** The harness holds every infinite transition and infinite repeatable animation at one fixed
+frame, where an indeterminate progress indicator shows a long arc and reads as a spinner, and fails the render when
+more of them run than the progress indicators on screen account for. A loop written by hand (an animation restarted
+in a `while` loop, a blink on `delay`) is not detected: it stops at its first frame.
 
 **The render names its commit.** `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and
 says "dirty" when the worktree had uncommitted changes. A render after any commit, including one that changes no

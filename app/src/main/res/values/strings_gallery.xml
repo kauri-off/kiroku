@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
+    <string name="gallery_title">Components</string>
+    <string name="gallery_poster">Poster</string>
+    <string name="gallery_anime_row">Anime row</string>
+    <string name="gallery_poster_card">Poster card</string>
+    <string name="gallery_section_header">Section header</string>
+    <string name="gallery_stat_bar">Stat bar</string>
+    <string name="gallery_stat_number">Stat number</string>
+    <string name="gallery_fact_row">Fact row</string>
+    <string name="gallery_episode_stepper">Episode stepper</string>
+    <string name="gallery_screen_state">Screen state</string>
+    <string name="gallery_session_banner">Session banner</string>
+    <string name="gallery_watching">Watching</string>
+    <string name="gallery_planned">Planned</string>
+    <string name="gallery_completed">Completed</string>
+    <string name="gallery_on_hold">On hold</string>
+    <string name="gallery_dropped">Dropped</string>
+    <string name="gallery_sequel">Sequel</string>
+    <string name="gallery_prequel">Prequel</string>
+    <string name="gallery_side_story">Side story</string>
+    <string name="gallery_spin_off">Spin-off</string>
+    <string name="gallery_parent_story">Parent story</string>
+    <string name="gallery_full_story">Full story</string>
+    <string name="gallery_alt_setting">Alt. setting</string>
+    <string name="gallery_alt_version">Alt. version</string>
+    <string name="gallery_summary">Summary</string>
+    <string name="gallery_tv_year">TV · %d</string>
+    <string name="gallery_movie_year">Movie · %d</string>
+    <string name="gallery_progress_aired">%1$d\u00A0/\u00A0%2$d · %3$d\u00A0aired</string>
+    <string name="gallery_progress_estimated">%1$d\u00A0/\u00A0%2$d · ~%3$d\u00A0aired</string>
+    <string name="gallery_to_watch">%d\u00A0to watch</string>
+    <string name="gallery_to_watch_estimated">~%d\u00A0to watch</string>
+    <string name="gallery_next_episode">Episode\u00A015 · Sat\u00A017:30</string>
+    <string name="gallery_score">Score\u00A0%d</string>
+    <string name="gallery_not_yet_aired">Not yet aired</string>
+    <string name="gallery_facts">TV · 2024 · 24\u00A0episodes</string>
+    <string name="gallery_list_status">Watching · 12\u00A0/\u00A024</string>
+    <string name="gallery_related">Related</string>
+    <string name="gallery_statistics">Statistics</string>
+    <string name="gallery_recommendations">Recommendations</string>
+    <string name="gallery_mal_score">MAL score</string>
+    <string name="gallery_days_watched">Days watched</string>
+    <string name="gallery_mean_score">Mean score</string>
+    <string name="gallery_alternative_titles">Alternative titles</string>
+    <string name="gallery_source">Source</string>
+    <string name="gallery_light_novel">Light novel</string>
+    <string name="gallery_broadcast">Broadcast</string>
+    <string name="gallery_broadcast_value">Saturdays at\u00A017:30</string>
+    <string name="gallery_empty">No titles in Planned</string>
+    <string name="gallery_sign_in">Sign in</string>
+    <string name="gallery_no_connection">No connection</string>
+    <string name="gallery_no_value" translatable="false">—</string>
+    <string name="gallery_no_score">No score</string>
+</resources>

@@ -1,0 +1,290 @@
+package io.github.kauri_off.kiroku.design
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.text.AnnotatedString
+import io.github.kauri_off.kiroku.design.component.EpisodeInput
+import io.github.kauri_off.kiroku.design.component.EpisodeStepper
+import io.github.kauri_off.kiroku.design.component.episodeInput
+import io.github.kauri_off.kiroku.design.component.episodeText
+import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "en")
+class EpisodeStepperTest {
+    private val compose = composeRule()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val changes = mutableStateListOf<Int>()
+
+    private lateinit var focus: FocusManager
+
+    private val field get() = compose.onNodeWithContentDescription("Episodes watched")
+
+    private fun stepper(
+        watched: Int,
+        total: Int?,
+        enabled: Boolean = true,
+    ) {
+        compose.setContent {
+            var value by remember { mutableIntStateOf(watched) }
+            focus = LocalFocusManager.current
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(value, total, onWatchedChange = {
+                    changes += it
+                    value = it
+                }, enabled = enabled)
+            }
+        }
+    }
+
+    @Test
+    fun confirmingIsTheOnlyEventOfTyping() {
+        stepper(12, 24)
+        field.performTextReplacement("2")
+        field.performTextInput("0")
+        assertEquals(emptyList<Int>(), changes)
+        field.performImeAction()
+        assertEquals(listOf(20), changes)
+        compose.onNodeWithText("20", substring = true).assertExists()
+    }
+
+    @Test
+    fun leavingTheFieldApplies() {
+        stepper(12, 24)
+        field.performTextReplacement("15")
+        assertEquals(emptyList<Int>(), changes)
+        compose.runOnIdle { focus.clearFocus() }
+        compose.runOnIdle { assertEquals(listOf(15), changes) }
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("15")))
+    }
+
+    @Test
+    fun aCountAboveTheTotalIsRefusedAndNotApplied() {
+        stepper(12, 24)
+        field.performTextReplacement("30")
+        field.performImeAction()
+        assertEquals(emptyList<Int>(), changes)
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        field.assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
+        field.performTextReplacement("24")
+        field.performImeAction()
+        assertEquals(listOf(24), changes)
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
+    }
+
+    @Test
+    fun anEmptyFieldKeepsTheCount() {
+        stepper(12, 24)
+        field.performTextClearance()
+        field.performImeAction()
+        assertEquals(emptyList<Int>(), changes)
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("12")))
+    }
+
+    @Test
+    fun buttonsStepByOneWithinTheTotal() {
+        stepper(23, 24)
+        val plus = compose.onNodeWithContentDescription("Plus one episode")
+        plus.performClick()
+        assertEquals(listOf(24), changes)
+        plus.assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Minus one episode").performClick()
+        assertEquals(listOf(24, 23), changes)
+    }
+
+    @Test
+    fun minusStopsAtZero() {
+        stepper(0, 24)
+        compose.onNodeWithContentDescription("Minus one episode").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled()
+    }
+
+    @Test
+    fun anUnknownTotalHasNoUpperBound() {
+        stepper(1093, null)
+        compose.onNodeWithContentDescription("Plus one episode").performClick()
+        field.performTextReplacement("2000")
+        field.performImeAction()
+        assertEquals(listOf(1094, 2000), changes)
+    }
+
+    @Test
+    fun disabledTakesNoInput() {
+        stepper(12, 24, enabled = false)
+        compose.onNodeWithContentDescription("Minus one episode").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Plus one episode").assertIsNotEnabled()
+        field.assertIsNotEnabled()
+    }
+
+    @Test
+    fun aButtonStepsFromTheTypedCount() {
+        stepper(12, 24)
+        field.performTextReplacement("20")
+        compose.onNodeWithContentDescription("Plus one episode").performClick()
+        assertEquals(listOf(21), changes)
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("21")))
+        field.performTextReplacement("5")
+        compose.onNodeWithContentDescription("Minus one episode").performClick()
+        assertEquals(listOf(21, 4), changes)
+    }
+
+    // The same typed count gives the same buttons before and after it is refused: neither can step from it.
+    @Test
+    fun aCountAboveTheTotalDisablesBothButtons() {
+        stepper(12, 24)
+        val minus = compose.onNodeWithContentDescription("Minus one episode")
+        val plus = compose.onNodeWithContentDescription("Plus one episode")
+        field.performTextReplacement("30")
+        minus.assertIsNotEnabled()
+        plus.assertIsNotEnabled()
+        field.performImeAction()
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        minus.assertIsNotEnabled()
+        plus.assertIsNotEnabled()
+        assertEquals(emptyList<Int>(), changes)
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
+        field.performTextReplacement("3")
+        minus.assertIsEnabled()
+        plus.assertIsEnabled()
+    }
+
+    @Test
+    fun aTypedCountAtTheTotalDisablesPlusAndMinusStepsFromIt() {
+        stepper(12, 24)
+        field.performTextReplacement("24")
+        compose.onNodeWithContentDescription("Plus one episode").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Minus one episode").performClick()
+        assertEquals(listOf(23), changes)
+    }
+
+    @Test
+    fun aCountChangedFromOutsideDropsAnUnconfirmedOne() {
+        var given by mutableIntStateOf(12)
+        compose.setContent {
+            focus = LocalFocusManager.current
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(given, 24, onWatchedChange = { changes += it }, typed = "30")
+            }
+        }
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        compose.runOnIdle { given = 13 }
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("13")))
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Plus one episode").assertIsEnabled()
+        assertEquals(emptyList<Int>(), changes)
+    }
+
+    @Test
+    fun aCountChangedFromOutsideKeepsTheOneBeingTyped() {
+        var given by mutableIntStateOf(12)
+        compose.setContent {
+            focus = LocalFocusManager.current
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(given, 24, onWatchedChange = { changes += it })
+            }
+        }
+        field.performTextReplacement("20")
+        compose.runOnIdle { given = 13 }
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("20")))
+        field.performImeAction()
+        assertEquals(listOf(20), changes)
+    }
+
+    @Test
+    fun anUnconfirmedCountSurvivesRecreation() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(12, 24, onWatchedChange = { changes += it })
+            }
+        }
+        field.performTextReplacement("30")
+        field.performImeAction()
+        restoration.emulateSavedInstanceStateRestore()
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("30")))
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+    }
+
+    @Test
+    fun editingClearsTheRefusal() {
+        stepper(12, 24)
+        field.performTextReplacement("30")
+        field.performImeAction()
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        field.performTextReplacement("3")
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertDoesNotExist()
+        assertEquals(emptyList<Int>(), changes)
+    }
+
+    @Test
+    fun theFieldShowsTheCountItIsGivenOnceTheTypedOneIsApplied() {
+        compose.setContent {
+            focus = LocalFocusManager.current
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(12, 24, onWatchedChange = { changes += it })
+            }
+        }
+        field.performTextReplacement("15")
+        field.performImeAction()
+        assertEquals(listOf(15), changes)
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("12")))
+    }
+
+    @Test
+    fun aPasteIsRefusedOrNotTakenButNeverCut() {
+        stepper(12, 24)
+        field.performTextReplacement("123")
+        field.performImeAction()
+        assertEquals(emptyList<Int>(), changes)
+        compose.onNodeWithText("The title has\u00A024\u00A0episodes").assertExists()
+        field.performTextReplacement("12345")
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.InputText, AnnotatedString("123")))
+    }
+
+    @Test
+    fun inputRules() {
+        assertEquals(EpisodeInput.Apply(13), episodeInput("13", 12, 24))
+        assertEquals(EpisodeInput.Apply(7), episodeInput("007", 12, 24))
+        assertEquals(EpisodeInput.Keep, episodeInput("12", 12, 24))
+        assertEquals(EpisodeInput.Keep, episodeInput("", 12, 24))
+        assertEquals(EpisodeInput.Apply(24), episodeInput("24", 12, 24))
+        assertEquals(EpisodeInput.TooMany(24), episodeInput("25", 12, 24))
+        assertEquals(EpisodeInput.Apply(5000), episodeInput("5000", 12, null))
+        assertEquals("12", episodeText(" 12 ", 24))
+        assertEquals(null, episodeText("1a-2", 24))
+        assertEquals("999", episodeText("999", 24))
+        assertEquals(null, episodeText("9999", 24))
+        assertEquals("1234", episodeText("1234", null))
+        assertEquals(null, episodeText("12345", null))
+    }
+}

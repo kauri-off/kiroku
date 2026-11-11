@@ -1,5 +1,8 @@
 package io.github.kauri_off.kiroku.screenshots
 
+import io.github.kauri_off.kiroku.design.theme.Seed
+import io.github.kauri_off.kiroku.design.theme.ThemeSettings
+
 enum class Variant(
     val id: String,
     val language: String,
@@ -18,6 +21,11 @@ enum class Variant(
     RuLarge("ru-large", "ru", dark = false, widthDp = 411, heightDp = 891, fontScale = 2.0f, contentOnly = true),
     EnAlt("en-alt", "en", dark = false, widthDp = 411, heightDp = 891, fontScale = 1.0f, altSeed = true, contentOnly = true),
     ;
+
+    // The app's own theme settings with dynamic colour off; light or dark comes from the device, as in the app.
+    val themeSettings: ThemeSettings get() = ThemeSettings(dynamicColor = false)
+
+    val seed: Seed get() = if (altSeed) Seed.Amber else Seed.Teal
 
     fun qualifiers(heightDp: Int = this.heightDp): String =
         "$language-w${widthDp}dp-h${heightDp}dp-${if (dark) "night" else "notnight"}-xhdpi"
