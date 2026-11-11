@@ -77,6 +77,13 @@ The edit sheet's slider shows the number with MAL's name for it.
 | Rank | Ranked #12 | №12 в рейтинге | Never the bare number, except in front of the title in a ranked browse list (`1.`) |
 | Facts line | TV · 2024 · 24 episodes / Movie · 2024 | ТВ · 2024 · 24 серии / Фильм · 2024 | The episode count is a plural and is left out when it is 1 or unknown |
 | Synopsis | Synopsis | Описание | |
+| Expand the synopsis | More | Ещё | The text button under a synopsis cut at four lines |
+| Overflow menu (spoken) | More options | Другие действия | |
+| Open the title on MAL | Open on MyAnimeList | Открыть на MyAnimeList | |
+| Share | Share | Поделиться | |
+| Loading details (spoken) | Loading details | Загрузка подробностей | The progress line that stands in for the lower half of the title page |
+| A title MAL does not know | This title is not on MyAnimeList | Этого тайтла нет на MyAnimeList | |
+| Any other failure to load a title | Could not load this title | Не удалось загрузить тайтл | |
 | Related | Related | Связанное | |
 | Statistics | Statistics | Статистика | |
 | Members | 1,234,567 members | 1 234 567 участников | With a number; plural: участник / участника / участников |
@@ -92,6 +99,7 @@ The edit sheet's slider shows the number with MAL's name for it.
 | Summary / Other / Character | Summary / Other / Character | Краткое изложение / Прочее / Общий персонаж | |
 | Seasons | Winter, Spring, Summer, Fall 2024 | Зима, Весна, Лето, Осень 2024 | |
 | Media types | TV, Movie, OVA, ONA, Special, Music | ТВ, Фильм, OVA, ONA, Спешл, Клип | |
+| Rarer media types | TV special, Commercial, Promo video | ТВ-спешл, Реклама, Промо | |
 
 Roadmap milestone M2 compares the Russian relation names with the names Shikimori uses and puts the differences to
 the owner; a name changes only on the owner's answer.
@@ -125,6 +133,8 @@ the owner; a name changes only on the owner's answer.
 | Profile | Profile | Профиль | |
 | Settings | Settings | Настройки | |
 | Retry | Retry | Повторить | |
+| Back (spoken) | Back | Назад | The top app bar's navigation icon |
+| Refused by MAL | MyAnimeList is refusing requests, try again later | MyAnimeList отклоняет запросы, попробуйте позже | |
 | Loading (spoken by a screen reader) | Loading | Загрузка | |
 | See all | See all | Показать все | The button of a section header. Spoken with its section: `See all: Related` / `Показать все: Связанное` |
 | Could not save | Could not save | Не удалось сохранить | |

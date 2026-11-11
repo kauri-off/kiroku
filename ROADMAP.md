@@ -137,7 +137,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Needs:** M1-07; the review needs M1-07a.
   **Check:** rubric pass on `list/*`.
 
-- [ ] **M1-10 [L] Title page.** The stateless title page as budgeted in section 9.4.
+- [x] **M1-10 [L] Title page.** The stateless title page as budgeted in section 9.4.
   **Cases:** `airing-on-list` (episodes to watch; the content case), `not-on-list` (airing), `airing-estimated`
   (episodes to watch), `airing-estimated-caught-up` (estimated, nothing to watch), `airing-unknown` (aired count
   unknown), `finished`, `film` (the facts line without an episode count), `not-yet-aired` (the first episode's time
