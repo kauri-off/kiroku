@@ -681,8 +681,9 @@ changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments a
   airing", "Top rated", "Most popular". Limit: nothing else; there is no home feed. Later browse entries are added
   as rows here.
 - Results (`AnimeRow`), must show: the title (line cap two); the facts line of section 9.4, "TV · 2024 ·
-  24 episodes"; when the title is on the user's list, a second supporting line with the list status ("Watching ·
-  12 / 24"; dailyAL issue #67); trailing, the MAL score.
+  24 episodes"; when the title is on the user's list, a second supporting line, the list status line:
+  "Watching · 12 / 24", without the count for Planned with none watched and for Completed at the total (dailyAL
+  issue #67); trailing, the MAL score.
 - A query that is only digits shows one extra row above the results, "Open title #<id>", which opens the title page
   of that MAL id. Limit: nothing else is added to the results.
 - A browse list uses the same row, with the rank in front of the title for ranked lists.
@@ -728,12 +729,13 @@ section 9.1.
 
 ### 9.9 Sub-screens
 
-Each is a top app bar with Back and one list. Limit for all: nothing but the list and its group headers.
+Each is a top app bar with Back and one list, with the `SessionBanner` under the bar while the session is expired
+(S6), in every state. Limit for all: nothing but the list and its group headers.
 
 | Sub-screen | Must show | Row limits |
 |---|---|---|
-| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type (full names) in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results: the title (line cap two); "TV · 2019"; the list status line ("Watching · 5 / 12") when the title is on the user's list; no trailing element |
-| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, broadcast time. A fact MAL does not give is left out | One label and one value per row; a value has line cap three |
+| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type (full names) in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results: the title (line cap two); "TV · 2019"; when the title is on the user's list, the list status line: "Watching · 12 / 24", without the count for Planned with none watched and for Completed at the total; no trailing element |
+| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, broadcast time. Alternative titles are every title but the one "Title language" shows as the main title, one row per kind (romaji, English, Japanese, synonyms), so a long title never hides another and no title is missing from the app. Broadcast time only while the title has not finished airing. A fact MAL does not give is left out | One label and one value per row; a value has line cap three, and synonyms that do not fit end in an ellipsis |
 | Recommendations | The titles MAL recommends | `AnimeRow` exactly as in search results, including the trailing MAL score |
 | Score distribution, Genres, Formats and years | `StatBar`s computed from the list; "Formats and years" has two groups | One `StatBar` per row; scores and years in their own order, everything else the largest first; at most twenty bars per group |
 

@@ -79,6 +79,7 @@ import io.github.kauri_off.kiroku.design.component.LineOrStack
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -311,7 +312,7 @@ private fun StatusChips(
             FilterChip(
                 selected = selected,
                 onClick = { if (!selected) onChoose(option) },
-                label = { Text(statusName(option)) },
+                label = { Text(stringResource(option.label())) },
                 leadingIcon =
                     if (selected) {
                         {
@@ -328,18 +329,6 @@ private fun StatusChips(
         }
     }
 }
-
-@Composable
-private fun statusName(status: ListStatus): String =
-    stringResource(
-        when (status) {
-            ListStatus.Watching -> R.string.edit_status_watching
-            ListStatus.Planned -> R.string.edit_status_planned
-            ListStatus.Completed -> R.string.edit_status_completed
-            ListStatus.OnHold -> R.string.edit_status_on_hold
-            ListStatus.Dropped -> R.string.edit_status_dropped
-        },
-    )
 
 // Read by the control it names, so a screen reader hears it once.
 @Composable

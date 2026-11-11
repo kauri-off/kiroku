@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.text
 
 import android.content.Context
-import android.text.format.DateFormat
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.notShown
@@ -19,7 +18,7 @@ class AirTimeText(
     // "today 17:30", "tomorrow 17:30", "Sat 17:30" within six days, "14 Nov, 17:30" beyond; never a weekday and a date.
     fun airTime(instant: Instant): String {
         val at = instant.atZone(zone)
-        val time = pattern(if (DateFormat.is24HourFormat(context)) HOURS_24 else HOURS_12).format(at)
+        val time = clockTime(context, at)
         return when (ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), at.toLocalDate())) {
             0L -> context.getString(R.string.air_time_today, time)
             1L -> context.getString(R.string.air_time_tomorrow, time)
@@ -32,15 +31,10 @@ class AirTimeText(
     fun nextEpisode(episode: ScheduledEpisode): String =
         context.getString(R.string.air_time_next_episode, episode.number, airTime(episode.airsAt))
 
-    private fun pattern(skeleton: String): DateTimeFormatter {
-        val locale = context.resources.configuration.locales[0]
-        return DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, skeleton), locale)
-    }
+    private fun pattern(skeleton: String): DateTimeFormatter = skeletonFormat(context.resources.configuration.locales[0], skeleton)
 
     private companion object {
         const val LAST_WEEKDAY = 6L
-        val HOURS_24 = notShown("Hm")
-        val HOURS_12 = notShown("hm")
         val WEEKDAY = notShown("EEE")
         val DAY_MONTH = notShown("dMMM")
     }

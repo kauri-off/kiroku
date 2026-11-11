@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="edit_status_watching">Watching</string>
-    <string name="edit_status_planned">Planned</string>
-    <string name="edit_status_completed">Completed</string>
-    <string name="edit_status_on_hold">On hold</string>
-    <string name="edit_status_dropped">Dropped</string>
     <string name="edit_episodes">Episodes watched</string>
     <string name="edit_score">Score</string>
     <string name="edit_score_value">%1$d · %2$s</string>

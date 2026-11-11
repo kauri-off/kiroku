@@ -45,10 +45,18 @@ data class Titles(
     }
 
     fun preferred(language: TitleLanguage): String =
-        when (language) {
+        when (shownLanguage(language)) {
             TitleLanguage.Romaji -> romaji
             TitleLanguage.English -> english ?: romaji
             TitleLanguage.Japanese -> japanese ?: romaji
+        }
+
+    // The language of the title shown as the main one: the chosen one, or romaji when that title is missing.
+    fun shownLanguage(language: TitleLanguage): TitleLanguage =
+        when (language) {
+            TitleLanguage.Romaji -> TitleLanguage.Romaji
+            TitleLanguage.English -> if (english == null) TitleLanguage.Romaji else language
+            TitleLanguage.Japanese -> if (japanese == null) TitleLanguage.Romaji else language
         }
 }
 
