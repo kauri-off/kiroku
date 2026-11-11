@@ -108,6 +108,13 @@ fun relatedStrip(related: List<RelatedAnime>): List<RelatedAnime> =
         .sortedWith(relatedOrder)
         .take(RELATED_STRIP_LIMIT)
 
+// The direct sequel to watch next; of several, the one that starts first, as that is the order they aired in.
+fun sequelOf(related: List<RelatedAnime>): RelatedAnime? =
+    related
+        .filter { it.relation == RelationType.Sequel }
+        .sortedWith(relatedOrder)
+        .firstOrNull()
+
 fun relatedGroups(related: List<RelatedAnime>): List<Pair<RelationType, List<RelatedAnime>>> =
     related
         .sortedWith(relatedOrder)
