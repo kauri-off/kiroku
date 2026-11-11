@@ -75,6 +75,25 @@ class Shot private constructor(
         return bitmap
     }
 
+    // The window as drawn now, with nothing let to settle: a frame of a running animation.
+    fun frame(): Bitmap {
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        val screen = RoboComponent.Screen(fetchRobolectricWindowRoots(), options).image ?: error("Nothing was drawn")
+        val bitmap = screen.copy(Bitmap.Config.ARGB_8888, true)
+        SystemBars.draw(Canvas(bitmap), activity.window, density, keyboard)
+        return bitmap
+    }
+
+    // Lets time pass on the main looper one frame at a time, as on a device.
+    fun advance(millis: Long) {
+        var left = millis
+        while (left > 0) {
+            val step = minOf(left, FRAME.toMillis())
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(step))
+            left -= step
+        }
+    }
+
     fun boundsImage(): Bitmap {
         val bitmap = image()
         val canvas = Canvas(bitmap)

@@ -49,6 +49,12 @@ The owner is the final authority on the Russian column.
 | Sort by last update | Last updated | Последнее изменение | |
 | Sort by score | Score | Оценка | |
 | Sort by start date | Start date | Дата начала | |
+| The sort icon and the sort sheet's heading | Sort / Sort by | Сортировка | One Russian word for both |
+| Clear the filter | Clear | Очистить | The filter field's button; it ends filtering |
+| A tab with no titles | No titles in On hold | В «Отложено» нет тайтлов | The status name is not declined, hence the quotes. Its button: Search / Поиск |
+| A filter that matches nothing | No titles match the filter | Нет тайтлов с таким названием | |
+| The List, signed out | Sign in with MyAnimeList to see your list here | Войдите через MyAnimeList, чтобы видеть здесь свой список | Its button: Sign in / Войти |
+| The list could not be loaded | Could not load the list | Не удалось загрузить список | With nothing cached; with no network, No connection |
 
 ## Score names
 
@@ -125,6 +131,8 @@ the owner; a name changes only on the owner's answer.
 | Profile | Profile | Профиль | |
 | Settings | Settings | Настройки | |
 | Retry | Retry | Повторить | |
+| Back (spoken) | Back | Назад | The top app bar's back button |
+| Refused by MAL | MyAnimeList is refusing requests, try again later | MyAnimeList отклоняет запросы, попробуйте позже | |
 | Loading (spoken by a screen reader) | Loading | Загрузка | |
 | See all | See all | Показать все | The button of a section header. Spoken with its section: `See all: Related` / `Показать все: Связанное` |
 | Could not save | Could not save | Не удалось сохранить | |

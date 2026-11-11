@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="list_title">Мой список</string>
+    <string name="list_title_other">Список %1$s</string>
+    <string name="list_back">Назад</string>
+    <string name="list_status_watching">Смотрю</string>
+    <string name="list_status_planned">Запланировано</string>
+    <string name="list_status_completed">Просмотрено</string>
+    <string name="list_status_on_hold">Отложено</string>
+    <string name="list_status_dropped">Брошено</string>
+    <string name="list_filter">Фильтр по названию</string>
+    <string name="list_filter_clear">Очистить</string>
+    <string name="list_sort">Сортировка</string>
+    <string name="list_sort_by">Сортировка</string>
+    <string name="list_sort_up_next">На очереди</string>
+    <string name="list_sort_title">Название</string>
+    <string name="list_sort_last_updated">Последнее изменение</string>
+    <string name="list_sort_score">Оценка</string>
+    <string name="list_sort_start_date">Дата начала</string>
+    <string name="list_progress">%1$d\u00A0/\u00A0%2$d</string>
+    <string name="list_progress_unknown_total">%1$d</string>
+    <string name="list_progress_aired">%1$s · вышло\u00A0%2$d</string>
+    <string name="list_progress_aired_estimated">%1$s · вышло\u00A0~%2$d</string>
+    <string name="list_to_watch">К просмотру:\u00A0%1$d</string>
+    <string name="list_to_watch_estimated">К просмотру:\u00A0~%1$d</string>
+    <string name="list_next_episode">Серия\u00A0%1$d · %2$s</string>
+    <string name="list_premieres_at">Премьера: %1$s</string>
+    <string name="list_premieres_day">Премьера %1$s</string>
+    <string name="list_premieres_month">Премьера в\u00A0%1$s\u00A0%2$d\u00A0г.</string>
+    <string name="list_premieres_year">Премьера в\u00A0%1$d\u00A0г.</string>
+    <string name="list_not_yet_aired">Ещё не вышло</string>
+    <string-array name="list_premiere_months">
+        <item>январе</item>
+        <item>феврале</item>
+        <item>марте</item>
+        <item>апреле</item>
+        <item>мае</item>
+        <item>июне</item>
+        <item>июле</item>
+        <item>августе</item>
+        <item>сентябре</item>
+        <item>октябре</item>
+        <item>ноябре</item>
+        <item>декабре</item>
+    </string-array>
+    <string name="list_time_today">сегодня\u00A0%1$s</string>
+    <string name="list_time_tomorrow">завтра\u00A0%1$s</string>
+    <string name="list_time_weekday">%1$s\u00A0%2$s</string>
+    <string name="list_time_date">%1$s, %2$s</string>
+    <string name="list_score">Оценка:\u00A0%1$d</string>
+    <string name="list_not_scored">Без оценки</string>
+    <string name="list_empty">В «%1$s» нет тайтлов</string>
+    <string name="list_empty_action">Поиск</string>
+    <string name="list_no_matches">Нет тайтлов с таким названием</string>
+    <string name="list_signed_out">Войдите через MyAnimeList, чтобы видеть здесь свой список</string>
+    <string name="list_sign_in">Войти</string>
+    <string name="list_no_connection">Нет соединения</string>
+    <string name="list_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
+    <string name="list_failed">Не удалось загрузить список</string>
+    <string name="list_episode_watched">Серия\u00A0%1$d\u00A0просмотрена</string>
+    <string name="list_moved_to_completed">Перенесено в Просмотрено</string>
+    <string name="list_could_not_refresh">Не удалось обновить</string>
+    <string name="list_undo">Отменить</string>
+</resources>

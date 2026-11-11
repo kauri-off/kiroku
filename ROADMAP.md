@@ -125,7 +125,7 @@ English, light and dark, on demo data. No MAL client id is needed.
   **Check:** rubric pass on `shell/*`. Tests show: tapping the current destination again pops it to its root; Back
   from the Search root goes to List; each destination keeps its stack.
 
-- [ ] **M1-09 [L] List screen.** The stateless List as budgeted in section 9.3, including the sort sheet and the
+- [x] **M1-09 [L] List screen.** The stateless List as budgeted in section 9.3, including the sort sheet and the
   read-only variant.
   **Cases:** `watching` (rows: episodes to watch; nothing to watch, with the next episode; estimated with episodes
   to watch; estimated with nothing to watch; finished; unknown total; a long title that takes two lines together
