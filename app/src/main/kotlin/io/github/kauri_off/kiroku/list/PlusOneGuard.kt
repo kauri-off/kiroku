@@ -2,8 +2,7 @@ package io.github.kauri_off.kiroku.list
 
 import io.github.kauri_off.kiroku.core.model.AnimeId
 
-// While taps keep coming within [windowMillis] of each other, a "+1" on a row that is fading out, or on any row below
-// the one that left (moving up, or just arrived), is dropped: the finger was aimed at what was there before.
+// In a burst of taps, a "+1" on a row fading out or on any row below one that left was aimed at what was there before.
 class PlusOneGuard(
     private val windowMillis: Long,
 ) {

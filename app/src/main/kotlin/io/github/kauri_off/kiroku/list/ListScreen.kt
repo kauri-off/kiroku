@@ -70,9 +70,7 @@ import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 
-// The user's list, or another user's read-only list: a top app bar, the five status tabs and the rows of one tab.
-// [snackbars] is the app shell's one snackbar state; the screen draws it in its own scaffold (ARCHITECTURE 6.2). The
-// screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
+// The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListScreen(
@@ -124,8 +122,7 @@ fun ListScreen(
     if (state.sortSheetOpen && page != null) SortSheet(page.sort, page.sorts, onEvent)
 }
 
-// One page per tab, each with its own scroll position, and its neighbours composed ahead. A swipe follows the finger
-// and selects the tab it settles on; a short drag is enough to turn the page.
+// One page per tab, each with its own scroll position, and its neighbours composed ahead.
 @Composable
 private fun Pages(
     state: ListState,

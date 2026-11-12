@@ -142,8 +142,7 @@ interface ListRepository {
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
 
-    // Hot: a failure reaches the collectors present when it happens and is dropped with none (section 7.3); one
-    // waiting for a slow collector is buffered, not dropped.
+    // Hot (section 7.3): dropped with no collector, buffered for a slow one.
     fun observeWriteFailures(): Flow<WriteFailure>
 
     suspend fun sync(): Outcome<Unit>
@@ -165,8 +164,7 @@ interface AnimeRepository {
 interface AiringRepository {
     fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
 
-    // Section 4's result for every title with stored airing data, the one source of every screen's airing lines. It
-    // emits again whenever a stored air time passes (A2) or the stored data changes. Provisional until M3's calculator.
+    // Every screen's airing lines; emits again when an air time passes (A2) or the data changes. Provisional until M3.
     fun observeAiring(): Flow<Map<AnimeId, Airing>>
 
     suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit>

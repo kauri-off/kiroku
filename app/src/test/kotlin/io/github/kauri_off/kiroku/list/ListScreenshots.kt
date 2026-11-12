@@ -48,8 +48,7 @@ class ListScreenshots : ScreenshotRegistry() {
             Transition("completed-row", start = "last-updated", millis = Motion.Duration.SHORT4.toLong()) { changed ->
                 FixtureListScreen(if (changed) ListFixtureStates.completedRow else ListFixtureStates.lastUpdated)
             },
-            // A tapped tab slides its page in, and the indicator rides the same curve. Emphasized decelerate does most
-            // of the way early, so the frames are one frame, a sixth and a third in, and the end.
+            // A tapped tab slides its page in with the indicator on it; the curve does most of its way early.
             Transition(
                 "planned",
                 start = "watching",
@@ -59,8 +58,7 @@ class ListScreenshots : ScreenshotRegistry() {
             ) { changed ->
                 FixtureListScreen(if (changed) ListFixtureStates.planned else ListFixtureStates.watching)
             },
-            // A far tab: the page jumps next to it at once and slides the last page in, while the indicator glides
-            // across the whole row on the same curve, which starts a frame after the jump.
+            // A far tab: the page and the indicator are put next to it at once, then slide in together.
             Transition(
                 "dropped",
                 start = "watching",

@@ -191,8 +191,7 @@ internal fun EditSheet(
                         fieldModifier = Modifier.focusRequester(countFocus),
                     )
                 }
-                // With key input the window gives its first focus to the drag handle, whose tooltip would then show
-                // unasked; the status chips take it instead.
+                // With key input the chips take the first focus, not the drag handle, whose tooltip would show unasked.
                 val window = LocalWindowInfo.current
                 val inputMode = LocalInputModeManager.current
                 LaunchedEffect(Unit) {

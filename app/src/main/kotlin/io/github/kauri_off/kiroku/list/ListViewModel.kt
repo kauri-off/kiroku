@@ -169,8 +169,7 @@ class ListViewModel(
         saved[FILTER] = text
     }
 
-    // One more episode, applied to the entry as it is when the write runs; the message and its Undo come from what
-    // that write changed, so quick taps each count and each Undo takes back its own step (W3).
+    // The message and its Undo come from what this write changed, so each Undo takes back its own step (W3).
     private fun plusOne(id: AnimeId) {
         val anime = entries[id]?.anime ?: return
         viewModelScope.launch {
@@ -186,8 +185,7 @@ class ListViewModel(
         }
     }
 
-    // The first sync after start, a retry and pull-to-refresh. Pull-to-refresh, and a first sync with nothing
-    // ordered yet, order the list from what the sync brought; the session banner speaks for an expired session.
+    // Pull-to-refresh, and a first sync with nothing ordered yet, order the list from what the sync brought.
     private suspend fun sync(fromUser: Boolean) {
         if (fromUser) refreshing = true
         failure = null

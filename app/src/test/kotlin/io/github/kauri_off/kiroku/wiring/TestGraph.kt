@@ -22,8 +22,7 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import kotlin.time.Duration.Companion.milliseconds
 
-// Demo mode over the reference fixtures. With [lateObservers], an observer hears of a change a moment after the write
-// returns and after a fresh read sees it, as with a database.
+// With [lateObservers], as with a database, an observer hears of a change after the write and a fresh read see it.
 class TestGraph(
     val demo: Demo,
     lateObservers: Boolean = false,

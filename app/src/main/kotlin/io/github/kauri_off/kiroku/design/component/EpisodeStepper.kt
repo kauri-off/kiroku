@@ -42,11 +42,7 @@ import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
-// Minus, the watched count as a numeric field with "/ total", plus. The count has no ceiling: the total is only shown.
-// A typed count is applied when the user confirms it, leaves the field or presses a button, which then steps from the
-// typed count; an empty field keeps the count. A button with nothing typed reports a step to [onStep], so taps made
-// before [watched] catches up each count. The field shows [watched] whenever nothing is being typed; a count changed
-// from outside drops an unconfirmed one unless the field has focus.
+// A button with nothing typed reports a step to [onStep], so quick taps each count before [watched] catches up.
 @Composable
 fun EpisodeStepper(
     watched: Int,

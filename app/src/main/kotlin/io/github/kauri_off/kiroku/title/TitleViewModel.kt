@@ -108,8 +108,7 @@ class TitleViewModel(
         }
     }
 
-    // Applied to the entry as it is when the write runs, so quick steps each count; a count of any size is accepted
-    // (W9), and one that completes the title (W7) says so with an Undo of exactly that change.
+    // A change that completes the title (W7) says so, with an Undo of that change alone.
     private fun watched(write: ListWrite) {
         if (entry == null) return
         viewModelScope.launch {
