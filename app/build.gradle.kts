@@ -77,7 +77,18 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
+        // For measuring frames: the release build's code with the debug build's demo mode, profileable, not debuggable.
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".benchmark"
+            manifestPlaceholders["appLabel"] = "@string/app_name_debug"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            isProfileable = true
+        }
     }
+
+    sourceSets.named("benchmark") { kotlin.directories += "src/debug/kotlin" }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -119,6 +130,7 @@ dependencies {
     implementation(libs.coil.compose)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(testFixtures(project(":core")))
+    "benchmarkImplementation"(testFixtures(project(":core")))
 
     testImplementation(testFixtures(project(":core")))
     testImplementation(libs.junit)
