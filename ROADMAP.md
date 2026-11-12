@@ -88,6 +88,11 @@ Not to forget:
 - Posters load from the network: the app has only the image library so far, no network fetcher, and no test of
   its own image loader. Debug builds draw stand-in art for the demo fixtures until then.
 - The full genre table (names in English and Russian) is written from recorded responses.
+- A title opened from a related row that is neither on the list nor stored has only that row's data until its
+  refresh lands: decide what the header shows for the score, episode count and rank that are not known yet.
+- A screen left in the background past its state's stop timeout: decide whether it refreshes again when shown,
+  together with the staleness rule of ARCHITECTURE 7.1.
+- The sort of each List tab is kept across app restarts, in DataStore.
 - A sandbox mode in debug builds: the real network layer against a local stand-in for MAL that keeps state and
   answers from recorded responses, so behaviour can be tried without touching a real account.
 - The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
