@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 
 // The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort), so they are kept here.
@@ -158,18 +159,40 @@ class ListViewModel(
         return TitleSummary(entry.anime, entry, model.airing[id], model.session)
     }
 
+    // What the pages are built from; a tab switch, the sort sheet or the refresh indicator changes none of it.
+    private data class Shown(
+        val entries: Map<AnimeId, ListEntry>,
+        val airing: Map<AnimeId, Airing>,
+        val orders: Map<ListStatus, List<AnimeId>>?,
+        val orderings: Map<ListStatus, Int>,
+        val sorts: Map<ListStatus, ListSort>,
+        val failure: ListFailure?,
+        val signedOut: Boolean,
+        val filter: String?,
+    )
+
+    // The pages last built and the moment they were written against, kept while what they show stays the same.
+    private var built: Triple<Shown, ListContent, Instant>? = null
+
     private fun build(
         model: Model,
         filter: String?,
     ): ListState {
         val session = model.session
-        val orders = model.orders
-        val content =
-            when {
-                session == Session.SignedOut -> ListContent.SignedOut
-                orders == null -> model.failure?.let(ListContent::Failed) ?: ListContent.Loading
-                else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, filter, it, orders.getValue(it)) })
-            }
+        val shown =
+            Shown(
+                model.entries,
+                model.airing,
+                model.orders,
+                model.orderings,
+                model.sorts,
+                model.failure,
+                session == Session.SignedOut,
+                filter,
+            )
+        val (_, content, now) =
+            built?.takeIf { it.first == shown }
+                ?: Triple(shown, content(model, filter), clock.instant()).also { built = it }
         return ListState(
             owner = ListOwner.Me,
             content = content,
@@ -178,8 +201,20 @@ class ListViewModel(
             filter = filter,
             refreshing = model.refreshing,
             sessionExpired = session == Session.Expired,
-            now = clock.instant(),
+            now = now,
         )
+    }
+
+    private fun content(
+        model: Model,
+        filter: String?,
+    ): ListContent {
+        val orders = model.orders
+        return when {
+            model.session == Session.SignedOut -> ListContent.SignedOut
+            orders == null -> model.failure?.let(ListContent::Failed) ?: ListContent.Loading
+            else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, filter, it, orders.getValue(it)) })
+        }
     }
 
     private fun page(
