@@ -120,7 +120,7 @@ class ListTabMotion(
         if (index != reported && index != tapTarget && index != pager.targetPage) select(index)
     }
 
-    // A page further than one away is first put next to its tab, so the last page slides in as a component's entrance.
+    // A page further than one away is first put next to its tab, so only the last page slides.
     fun select(index: Int) {
         if (tapTarget == index || (tapTarget == null && !pager.isScrollInProgress && position == index.toFloat())) return
         val token = Any()
@@ -225,9 +225,8 @@ private data class TabPlaces(
         if (labels.isEmpty()) 0f else around(position, labels.size) { from, to, f -> blend(centring(from), centring(to), f) }
 }
 
-// The tabs are measured only when they change; the pager's position is read where it is needed, in the frame it moves:
-// by the row's placement for its scroll, and by the indicator alone for its place and width.
-private class TabRowLayout(
+// The tabs are measured only when they change; the pager's position is read only in placement and by the indicator.
+internal class TabRowLayout(
     private val motion: ListTabMotion,
 ) : MultiContentMeasurePolicy {
     // A scroll by hand, on top of the pager's, made at [handAt]; it fades out as the pager moves a page from there.
@@ -265,8 +264,7 @@ private class TabRowLayout(
         snapshotFlow { hand != 0f && abs(motion.position - handAt) >= 1f }.collect { if (it) hand = 0f }
     }
 
-    // The indicator spans the whole row, so its size never changes; under the label at the pager's position it measures
-    // the stock indicator at the blend of the two labels' widths.
+    // A full-width child of fixed size: the stock indicator inside it is measured at the blend of the two labels' widths.
     val indicator =
         Modifier.layout { measurable, constraints ->
             val places = places
