@@ -88,7 +88,7 @@ class ListTabMotionTest {
             ListFixtureStates.watching,
             ListFixtureStates.planned,
             ListFixtureStates.completed,
-            ListFixtureStates.watching.copy(tab = ListStatus.OnHold),
+            ListFixtureStates.onHold,
             ListFixtureStates.dropped,
         ).map {
             it.page!!

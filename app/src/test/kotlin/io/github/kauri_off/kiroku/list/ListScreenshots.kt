@@ -28,6 +28,7 @@ class ListScreenshots : ScreenshotRegistry() {
         listOf(
             case("planned", content = screen(ListFixtureStates.planned)),
             case("completed", content = screen(ListFixtureStates.completed)),
+            case("on-hold", content = screen(ListFixtureStates.onHold)),
             case("dropped", content = screen(ListFixtureStates.dropped)),
             case("sort-sheet", content = screen(ListFixtureStates.sortSheet)),
             case("filtering", keyboard = true, content = screen(ListFixtureStates.filtering)),

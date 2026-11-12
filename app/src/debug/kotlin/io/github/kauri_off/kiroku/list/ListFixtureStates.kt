@@ -94,6 +94,8 @@ object ListFixtureStates {
 
     val completed = state(ListStatus.Completed)
 
+    val onHold = state(ListStatus.OnHold)
+
     val dropped = state(ListStatus.Dropped)
 
     val sortSheet = watching.copy(sortSheetOpen = true)
