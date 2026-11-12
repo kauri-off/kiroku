@@ -3,13 +3,17 @@ package io.github.kauri_off.kiroku.scenario
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.inspector.WindowInspector
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.absolutePadding
@@ -28,9 +32,11 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.core.graphics.Insets
+import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -39,18 +45,21 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.ThemeSettings
 import io.github.kauri_off.kiroku.design.theme.isDark
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.math.hypot
 
-// While a scenario is on, the marker is over every full window of the app, sheets included; with all off, nothing is.
+// The debug menu's tab over every full window of the app, sheets included, added after the app's first frame.
 object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
     private val TAG = notShown("scenario-marker")
 
@@ -61,19 +70,24 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
         savedInstanceState: Bundle?,
     ) {
         if (activity !is MainActivity) return
-        val scenarios = activity.scenarios ?: return
+        val scenario = activity.scenarios?.scenario ?: MutableStateFlow(Scenario())
         activity.lifecycleScope.launch {
             activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                val active = scenarios.scenario.map { it.active }.distinctUntilChanged()
-                combine(active, windowsChanged(activity)) { on, _ -> on }.collect { on ->
-                    if (on) show(activity, scenarios) else hide(activity)
-                }
+                afterNextFrame(activity.window.decorView)
+                windowsChanged(activity).collect { show(activity, scenario) }
             }
         }
     }
 
-    // The markers shown, one in each full window of the activity.
+    // The tabs shown, one in each full window of the activity.
     fun markers(activity: Activity): List<View> = windows(activity).mapNotNull { it.findViewWithTag(TAG) }
+
+    // So the frames of start-up are a release build's.
+    private suspend fun afterNextFrame(view: View) =
+        suspendCancellableCoroutine { continuation ->
+            val listener = OneShotPreDrawListener.add(view) { view.post { continuation.resume(Unit) } }
+            continuation.invokeOnCancellation { listener.removeListener() }
+        }
 
     // A sheet or dialog opening or closing moves the focus between the activity's windows.
     private fun windowsChanged(activity: Activity) =
@@ -85,38 +99,100 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
             awaitClose { decor.viewTreeObserver.removeOnWindowFocusChangeListener(listener) }
         }
 
-    // A sheet's layout is raised for its shadow; the marker is drawn and touched above it.
+    // A sheet's layout is raised for its shadow; the tab is drawn and touched above it.
     private fun show(
         activity: ComponentActivity,
-        scenarios: Scenarios,
+        scenario: StateFlow<Scenario>,
     ) {
         windows(activity).forEach { window ->
             val content = window.findViewById<ViewGroup>(android.R.id.content) ?: return@forEach
-            val marker = content.findViewWithTag(TAG) ?: marker(activity, scenarios).also(content::addView)
+            val marker = content.findViewWithTag(TAG) ?: marker(activity, scenario).also(content::addView)
             val above = content.children.filter { it !== marker }.maxOfOrNull { it.z } ?: 0f
             if (marker.z <= above) marker.translationZ = above - marker.elevation + 1
         }
     }
 
-    private fun hide(activity: Activity) {
-        markers(activity).forEach { (it.parent as? ViewGroup)?.removeView(it) }
-    }
-
     private fun marker(
         activity: ComponentActivity,
-        scenarios: Scenarios,
-    ) = ComposeView(activity).apply {
+        scenario: StateFlow<Scenario>,
+    ) = HandOverLayer(activity).apply {
         tag = TAG
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        setViewTreeLifecycleOwner(activity)
-        setViewTreeViewModelStoreOwner(activity)
-        setViewTreeSavedStateRegistryOwner(activity)
-        setContent {
-            val settings = ThemeSettings()
-            KirokuTheme(settings.isDark(), settings.dynamicColor) {
-                val scenario by scenarios.scenario.collectAsScreenState()
-                EdgeMarker(scenario, visibleArea(), onClick = { activity.startActivity(ScenarioActivity.intent(activity)) })
+        val tab =
+            ComposeView(activity).apply {
+                setViewTreeLifecycleOwner(activity)
+                setViewTreeViewModelStoreOwner(activity)
+                setViewTreeSavedStateRegistryOwner(activity)
+                setContent {
+                    val settings = ThemeSettings()
+                    KirokuTheme(settings.isDark(), settings.dynamicColor) {
+                        val current by scenario.collectAsScreenState()
+                        EdgeMarker(current, visibleArea(), onClick = { activity.startActivity(DebugMenuActivity.intent(activity)) })
+                    }
+                }
             }
+        addView(tab, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    // Keeps a tap that lands on the tab; a gesture that moves past the touch slop goes to the view beneath, as if begun there.
+    private class HandOverLayer(
+        context: Context,
+    ) : FrameLayout(context) {
+        private val slop = ViewConfiguration.get(context).scaledTouchSlop
+        private var down: MotionEvent? = null
+        private var beneath: View? = null
+
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            beneath?.let { view ->
+                forward(view, event)
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) beneath = null
+                return true
+            }
+            val start = down
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    forget()
+                    return super.dispatchTouchEvent(event).also { taken -> if (taken) down = MotionEvent.obtain(event) }
+                }
+                MotionEvent.ACTION_MOVE ->
+                    if (start != null && hypot(event.x - start.x, event.y - start.y) > slop) {
+                        handOver(start, event)
+                        return true
+                    }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> forget()
+            }
+            return super.dispatchTouchEvent(event)
+        }
+
+        private fun handOver(
+            start: MotionEvent,
+            event: MotionEvent,
+        ) {
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            super.dispatchTouchEvent(cancel)
+            cancel.recycle()
+            val siblings =
+                (parent as? ViewGroup)
+                    ?.children
+                    ?.filter { it !== this && it.isVisible }
+                    ?.toList()
+                    .orEmpty()
+            beneath = siblings.asReversed().firstOrNull { forward(it, start) }
+            beneath?.let { forward(it, event) }
+            forget()
+        }
+
+        private fun forward(
+            view: View,
+            event: MotionEvent,
+        ): Boolean {
+            val moved = MotionEvent.obtain(event).apply { offsetLocation((left - view.left).toFloat(), (top - view.top).toFloat()) }
+            return view.dispatchTouchEvent(moved).also { moved.recycle() }
+        }
+
+        private fun forget() {
+            down?.recycle()
+            down = null
         }
     }
 

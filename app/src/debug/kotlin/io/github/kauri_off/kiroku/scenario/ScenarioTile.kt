@@ -7,8 +7,9 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 
-// A quick settings tile that opens the panel from anywhere, and shows which scenarios are on.
+// A quick settings tile that opens the debug menu from anywhere, and shows which scenarios are on.
 class ScenarioTile : TileService() {
     override fun onStartListening() {
         val tile = qsTile ?: return
@@ -36,7 +37,7 @@ class ScenarioTile : TileService() {
     // Below Android 14 only the deprecated overload exists, and it works there.
     @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
-        val intent = ScenarioActivity.intent(this).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = DebugMenuActivity.intent(this).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
         } else {

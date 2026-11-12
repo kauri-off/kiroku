@@ -5,13 +5,17 @@
         <activity android:name=".MainActivity">
             <meta-data
                 android:name="android.app.shortcuts"
-                android:resource="@xml/scenario_shortcuts" />
+                android:resource="${debugMenuShortcuts}" />
         </activity>
         <activity
-            android:name=".scenario.ScenarioActivity"
+            android:name=".debugmenu.DebugMenuActivity"
             android:exported="false"
-            android:label="@string/scenarios_title"
+            android:label="@string/debug_menu_title"
             android:launchMode="singleTop" />
+        <activity
+            android:name=".debugmenu.GalleryActivity"
+            android:exported="false"
+            android:label="@string/gallery_title" />
         <service
             android:name=".scenario.ScenarioTile"
             android:exported="true"

@@ -13,12 +13,15 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.kauri_off.kiroku.R
@@ -47,10 +50,24 @@ import java.util.Locale
 // Every component of the design system in every state it can be in, with the hardest content it meets.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ComponentGallery(modifier: Modifier = Modifier) {
+fun ComponentGallery(
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+) {
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.gallery_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.gallery_title)) },
+                navigationIcon = {
+                    onBack?.let {
+                        IconButton(onClick = it) {
+                            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
+                        }
+                    }
+                },
+            )
+        },
     ) { padding ->
         LazyColumn(contentPadding = padding) {
             section(R.string.gallery_poster) { PosterSection() }

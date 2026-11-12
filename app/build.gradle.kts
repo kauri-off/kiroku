@@ -1,7 +1,13 @@
 import com.android.build.api.artifact.ScopedArtifact
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.ScopedArtifacts
+import org.gradle.process.ExecOperations
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
+import java.security.MessageDigest
+import java.time.Instant
 import java.util.zip.ZipFile
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.application)
@@ -72,6 +78,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "@string/app_name_debug"
+            manifestPlaceholders["debugMenuShortcuts"] = "@xml/debug_menu_shortcuts_debug"
         }
         release {
             isMinifyEnabled = true
@@ -83,6 +90,7 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".preview"
             manifestPlaceholders["appLabel"] = "@string/app_name_preview"
+            manifestPlaceholders["debugMenuShortcuts"] = "@xml/debug_menu_shortcuts_preview"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
             isProfileable = true
@@ -241,7 +249,7 @@ abstract class VerifyReleaseClasses : DefaultTask() {
     }
 }
 
-// A release package holds no resource the debug source set declares, and no component or name its manifest adds.
+// A release package holds no resource or manifest name the debug source set declares, and none of [debugEntries].
 abstract class VerifyReleasePackage : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -262,6 +270,9 @@ abstract class VerifyReleasePackage : DefaultTask() {
     @get:Input
     abstract val namespace: Property<String>
 
+    @get:Input
+    abstract val debugEntries: SetProperty<String>
+
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NAME_ONLY)
     abstract val packages: ConfigurableFileCollection
@@ -281,10 +292,21 @@ abstract class VerifyReleasePackage : DefaultTask() {
             check(resources.any { it in resourceNames(mainResources) } && manifest.containsAll(mainNames)) {
                 "Cannot read the names in ${file.name}"
             }
-            val leaked = (debugOnlyResources intersect resources) + (debugOnlyNames intersect manifest)
+            val entries =
+                ZipFile(file).use { zip ->
+                    zip
+                        .entries()
+                        .asSequence()
+                        .map { it.name.removePrefix("base/root/") }
+                        .toSet()
+                }
+            val leaked =
+                (debugOnlyResources intersect resources) + (debugOnlyNames intersect manifest) + (debugEntries.get() intersect entries)
             check(leaked.isEmpty()) { "The release package ${file.name} holds what only the debug build declares: $leaked" }
         }
-        report.get().asFile.writeText("${files.map { it.name }} checked against $debugOnlyResources and $debugOnlyNames\n")
+        report.get().asFile.writeText(
+            "${files.map { it.name }} checked against $debugOnlyResources, $debugOnlyNames and ${debugEntries.get()}\n",
+        )
     }
 
     // A resource's name, from its file's name or from its element in a values file.
@@ -436,6 +458,8 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/core/fixtures/",
                 "io/github/kauri_off/kiroku/standin/",
                 "io/github/kauri_off/kiroku/scenario/",
+                "io/github/kauri_off/kiroku/debugmenu/",
+                "io/github/kauri_off/kiroku/design/gallery/",
             ),
         )
         report.set(layout.buildDirectory.file("reports/release-classes.txt"))
@@ -447,13 +471,148 @@ fun VerifyReleasePackage.againstDebugSourceSet(name: String) {
     debugManifest.set(file("src/debug/AndroidManifest.xml"))
     mainManifest.set(file("src/main/AndroidManifest.xml"))
     namespace.set(android.namespace)
+    debugEntries.add(WriteBuildInfo.FILE)
     report.set(layout.buildDirectory.file("reports/release-$name.txt"))
 }
 
 val verifyReleaseApk = tasks.register<VerifyReleasePackage>("verifyReleaseApk") { againstDebugSourceSet("apk") }
 val verifyReleaseBundle = tasks.register<VerifyReleasePackage>("verifyReleaseBundle") { againstDebugSourceSet("bundle") }
 
+// The short hash of HEAD, followed by a hash of the uncommitted changes when there are any; empty without git.
+abstract class GitTree : ValueSource<String, GitTree.Parameters> {
+    interface Parameters : ValueSourceParameters {
+        val directory: DirectoryProperty
+    }
+
+    @get:Inject
+    abstract val exec: ExecOperations
+
+    override fun obtain(): String =
+        try {
+            val root = File(git("rev-parse", "--show-toplevel")).canonicalFile
+            check(
+                root ==
+                    parameters.directory
+                        .get()
+                        .asFile.canonicalFile,
+            ) { "Not the project's own repository" }
+            val head = git("rev-parse", "--short", "HEAD")
+            val changes = git("status", "--porcelain") + git("diff", "HEAD", "--binary")
+            if (changes.isBlank()) head else "$head ${sha256(changes)}"
+        } catch (_: Exception) {
+            ""
+        }
+
+    private fun git(vararg arguments: String): String {
+        val output = ByteArrayOutputStream()
+        exec.exec {
+            workingDir = parameters.directory.get().asFile
+            commandLine("git", *arguments)
+            standardOutput = output
+            errorOutput = OutputStream.nullOutputStream()
+        }
+        return output.toString(Charsets.UTF_8).trim()
+    }
+
+    private fun sha256(text: String): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(text.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+}
+
+// The commit and build time of a debug or preview package, as a file in its root; no code changes with a commit.
+abstract class WriteBuildInfo : DefaultTask() {
+    @get:Input
+    abstract val tree: Property<String>
+
+    @get:OutputDirectory
+    abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun write() {
+        val parts = tree.get().split(' ')
+        output
+            .get()
+            .file(FILE)
+            .asFile
+            .writeText("commit=${parts[0]}\ndirty=${parts.size > 1}\nbuilt=${Instant.now()}\n")
+    }
+
+    companion object {
+        const val FILE = "build-info.properties"
+    }
+}
+
+val gitTree = providers.of(GitTree::class) { parameters.directory.set(rootProject.layout.projectDirectory) }
+
+// Unit tests and lint ignore the stamp on their classpaths; packaging takes it as an input of its own (below).
+normalization { runtimeClasspath { ignore(WriteBuildInfo.FILE) } }
+
+// The launcher shortcut of a debug or preview package targets that package and no other.
+abstract class VerifyShortcuts : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val xml: DirectoryProperty
+
+    @get:Input
+    abstract val applicationId: Property<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val factory =
+            javax.xml.parsers.DocumentBuilderFactory
+                .newInstance()
+                .apply { isNamespaceAware = true }
+        val metaData = factory.newDocumentBuilder().parse(manifest.get().asFile).getElementsByTagName("meta-data")
+        val shortcuts =
+            (0 until metaData.length)
+                .map { metaData.item(it) as org.w3c.dom.Element }
+                .single { it.getAttributeNS(ANDROID, "name") == "android.app.shortcuts" }
+                .getAttributeNS(ANDROID, "resource")
+                .removePrefix("@xml/")
+        val intents = factory.newDocumentBuilder().parse(xml.get().file("$shortcuts.xml").asFile).getElementsByTagName("intent")
+        val targets = (0 until intents.length).map { (intents.item(it) as org.w3c.dom.Element).getAttributeNS(ANDROID, "targetPackage") }
+        check(targets.isNotEmpty() && targets.all { it == applicationId.get() }) {
+            "The shortcuts in $shortcuts.xml target $targets, not ${applicationId.get()}"
+        }
+        report.get().asFile.writeText("$shortcuts targets ${applicationId.get()}\n")
+    }
+
+    private companion object {
+        const val ANDROID = "http://schemas.android.com/apk/res/android"
+    }
+}
+
 androidComponents {
+    onVariants { variant ->
+        if (variant.buildType !in setOf("debug", "preview")) return@onVariants
+        val name = variant.name.replaceFirstChar { it.uppercase() }
+        val buildInfo = tasks.register<WriteBuildInfo>("write${name}BuildInfo") { tree.set(gitTree) }
+        variant.artifacts
+            .forScope(ScopedArtifacts.Scope.PROJECT)
+            .use(buildInfo)
+            .toAppend(ScopedArtifact.JAVA_RES, WriteBuildInfo::output)
+        // Normalization hides the stamp from packaging's classpath input; a changed stamp here makes it package in full.
+        tasks.named { it == "package$name" }.configureEach {
+            inputs.files(buildInfo).withPropertyName("buildInfo").withPathSensitivity(PathSensitivity.NONE)
+        }
+        val shortcuts =
+            tasks.register<VerifyShortcuts>("verify${name}Shortcuts") {
+                manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                xml.set(layout.projectDirectory.dir("src/debug/res/xml"))
+                applicationId.set(variant.applicationId)
+                report.set(layout.buildDirectory.file("reports/shortcuts-${variant.name}.txt"))
+            }
+        tasks.named { it == "assemble$name" }.configureEach { dependsOn(shortcuts) }
+    }
     onVariants(selector().withBuildType("release")) { variant ->
         variant.artifacts
             .forScope(ScopedArtifacts.Scope.ALL)

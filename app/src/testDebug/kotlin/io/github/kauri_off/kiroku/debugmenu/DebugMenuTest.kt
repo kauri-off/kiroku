@@ -1,4 +1,4 @@
-package io.github.kauri_off.kiroku.scenario
+package io.github.kauri_off.kiroku.debugmenu
 
 import android.content.ComponentName
 import android.content.Intent
@@ -10,13 +10,21 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.scenario.ResetState
+import io.github.kauri_off.kiroku.scenario.Scenario
+import io.github.kauri_off.kiroku.scenario.ScenarioTile
+import io.github.kauri_off.kiroku.scenario.StoreFault
+import io.github.kauri_off.kiroku.scenario.WriteFault
+import io.github.kauri_off.kiroku.scenario.scenarios
 import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.runBlocking
@@ -29,15 +37,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.xmlpull.v1.XmlPullParser
 
-// The panel switches the demo's scenarios by touch, keeps them across a rotation, and resets the demo.
+// The menu switches the demo's scenarios by touch, keeps them across a rotation, resets the demo, names the build and opens the gallery.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
-class ScenarioPanelTest {
+class DebugMenuTest {
     @get:Rule
-    val compose = createAndroidComposeRule<ScenarioActivity>()
+    val compose = createAndroidComposeRule<DebugMenuActivity>()
 
     private val context get() = RuntimeEnvironment.getApplication()
     private val demo get() = (context.appGraph as DemoGraph).demo
@@ -59,9 +68,9 @@ class ScenarioPanelTest {
         compose.onNodeWithText("Offline").assertIsOn()
         assertEquals(Scenario(offline = true, writes = WriteFault.Refused, store = StoreFault.Unreadable), scenarios.scenario.value)
 
-        compose.onNodeWithText("Reset").performClick()
+        compose.onNodeWithText("Reset").performScrollTo().performClick()
         compose.waitUntil(RESET_TIMEOUT) { scenarios.reset.value == ResetState.Idle }
-        compose.onNodeWithText("Offline").assertIsOff()
+        compose.onNodeWithText("Offline").performScrollTo().assertIsOff()
         assertFalse(demo.server.offline.value || demo.server.refusingWrites.value || demo.store.unreadable.value)
     }
 
@@ -71,7 +80,7 @@ class ScenarioPanelTest {
         compose.onNodeWithText("Slow").performClick()
         runBlocking { demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch)) }
 
-        compose.onNodeWithText("Reset").performClick()
+        compose.onNodeWithText("Reset").performScrollTo().performClick()
         compose.onNodeWithText("Waiting for MyAnimeList to answer a save, then resetting").assertExists()
         compose.onNodeWithText("Offline").assertIsNotEnabled()
         compose.onNodeWithText("Refused").assertIsNotEnabled()
@@ -83,11 +92,37 @@ class ScenarioPanelTest {
     }
 
     @Test
-    fun `the panel opens from the app, from the launcher's shortcut and from the system's quick settings, and nowhere else`() {
+    fun `the build section names the build type, the version, and the commit and build time the package names`() {
+        val build = BuildInfo.read()
+        compose.onNodeWithText(BuildConfig.BUILD_TYPE).performScrollTo().assertExists()
+        compose.onNodeWithText(BuildConfig.VERSION_NAME).assertExists()
+        val commit = build.commit
+        when {
+            commit == null -> compose.onNodeWithText("Not known").assertExists()
+            commit.dirty -> compose.onNodeWithText("${commit.hash}, with uncommitted changes").assertExists()
+            else -> compose.onNodeWithText(commit.hash).assertExists()
+        }
+    }
+
+    @Test
+    fun `the gallery opens from the menu`() {
+        compose.onNodeWithText("Components").performScrollTo().performClick()
+        assertEquals(GalleryActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity.component?.className)
+    }
+
+    @Test
+    fun `the back arrow closes the menu`() {
+        compose.onNodeWithContentDescription("Back").performClick()
+        assertTrue(compose.activity.isFinishing)
+    }
+
+    @Test
+    fun `the menu opens from the app, from the launcher's shortcut and from the system's quick settings, and nowhere else`() {
         val manager = context.packageManager
-        val panel = manager.getActivityInfo(compose.activity.componentName, 0)
-        assertFalse(panel.exported)
-        assertEquals(ActivityInfo.LAUNCH_SINGLE_TOP, panel.launchMode)
+        val menu = manager.getActivityInfo(compose.activity.componentName, 0)
+        assertFalse(menu.exported)
+        assertEquals(ActivityInfo.LAUNCH_SINGLE_TOP, menu.launchMode)
+        assertFalse(manager.getActivityInfo(ComponentName(context, GalleryActivity::class.java), 0).exported)
         val tiles =
             manager.queryIntentServices(
                 Intent(TileService.ACTION_QS_TILE).setPackage(context.packageName),
@@ -98,12 +133,21 @@ class ScenarioPanelTest {
         assertEquals("android.permission.BIND_QUICK_SETTINGS_TILE", tile.permission)
 
         val launcher = manager.getActivityInfo(ComponentName(context, MainActivity::class.java), PackageManager.GET_META_DATA)
-        assertEquals(R.xml.scenario_shortcuts, launcher.metaData.getInt("android.app.shortcuts"))
+        assertEquals(R.xml.debug_menu_shortcuts_debug, launcher.metaData.getInt("android.app.shortcuts"))
         val intents = shortcutIntents()
         assertEquals(
-            listOf(context.packageName to MainActivity::class.java.name, context.packageName to ScenarioActivity::class.java.name),
+            listOf(context.packageName to MainActivity::class.java.name, context.packageName to DebugMenuActivity::class.java.name),
             intents.map { it.target },
         )
+    }
+
+    // The preview build shares the debug source set; each build type's shortcut targets its own package.
+    @Test
+    fun `the preview build's shortcut targets the preview package, as the debug build's targets the debug package`() {
+        val base = context.packageName.removeSuffix(".debug")
+        val preview = shortcutIntents(R.xml.debug_menu_shortcuts_preview)
+        assertEquals(listOf("$base.preview", "$base.preview"), preview.map { it.target.first })
+        assertEquals(shortcutIntents().map { it.target.second }, preview.map { it.target.second })
     }
 
     // Otherwise a later tap on the icon starts a second app screen, without the first one's messages.
@@ -123,9 +167,9 @@ class ScenarioPanelTest {
     )
 
     // Each intent of the one shortcut, in the order the launcher starts them.
-    private fun shortcutIntents(): List<ShortcutIntent> {
+    private fun shortcutIntents(shortcuts: Int = R.xml.debug_menu_shortcuts_debug): List<ShortcutIntent> {
         val android = "http://schemas.android.com/apk/res/android"
-        val parser = context.resources.getXml(R.xml.scenario_shortcuts)
+        val parser = context.resources.getXml(shortcuts)
         val intents = mutableListOf<ShortcutIntent>()
         while (parser.next() != XmlPullParser.END_DOCUMENT) {
             if (parser.eventType != XmlPullParser.START_TAG) continue
