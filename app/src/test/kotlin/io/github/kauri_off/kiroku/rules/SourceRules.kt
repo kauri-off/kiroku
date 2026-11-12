@@ -184,3 +184,59 @@ fun projectSources(): List<File> =
                 .filter { it.isFile && it.extension in setOf("kt", "kts", "xml", "toml") }
                 .toList()
         }.sorted()
+
+// A file that declares a view model: a class extending ViewModel or one of the app's own view model classes.
+private val viewModelClass = Regex("""(\)|\bclass\s+\w+(\s*<[^>]*>)?)\s*:\s*[\w.]*ViewModel\s*(<[^>]*>)?\s*\(""")
+
+fun declaresViewModel(source: String): Boolean = viewModelClass.containsMatchIn(KotlinSource(source).code)
+
+// The shell's view model owns the list's writer and listens from its creation; no other view model may.
+const val SHELL_VIEW_MODEL_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/shell/ShellViewModel.kt"
+
+// A view model is given ListSource, which cannot write; these names would give it the writer or the whole graph.
+private val writerOrGraph = Regex("""\b\w*(Graph|ListRepository|ListEngine)\w*\b""")
+
+private val initBlock = Regex("""\binit\s*\{""")
+
+private val aliasOfWriterOrGraph = Regex("""\btypealias\s+\w+(\s*<[^>]*>)?\s*=\s*[\w.]*(AppGraph|ListRepository|ListEngine)\b""")
+
+fun viewModelProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val lines = KotlinSource(source).code.lines()
+    val aliases =
+        lines.mapIndexedNotNull { index, line ->
+            if (aliasOfWriterOrGraph.containsMatchIn(
+                    line,
+                )
+            ) {
+                "$name:${index + 1}: an alias hides the list's writer or the graph: ${line.trim()}"
+            } else {
+                null
+            }
+        }
+    if (name == SHELL_VIEW_MODEL_SOURCE || !declaresViewModel(source)) return aliases
+    return aliases +
+        lines.flatMapIndexed { index, line ->
+            listOfNotNull(
+                writerOrGraph.find(line)?.let { "$name:${index + 1}: a view model names ${it.value}: ${line.trim()}" },
+                if (initBlock.containsMatchIn(line)) "$name:${index + 1}: a view model starts work in init: ${line.trim()}" else null,
+            )
+        }
+}
+
+// The one file that collects a flow into Compose state, for every route: see collectAsScreenState.
+const val SCREEN_STATE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/ScreenState.kt"
+
+private val directCollection = Regex("""\bcollectAsState(WithLifecycle)?\s*\(""")
+
+fun collectionProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (name == SCREEN_STATE_SOURCE) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (directCollection.containsMatchIn(line)) "$name:${index + 1}: use collectAsScreenState: ${line.trim()}" else null
+    }
+}

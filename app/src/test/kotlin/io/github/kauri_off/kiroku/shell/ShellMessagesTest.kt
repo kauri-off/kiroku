@@ -95,7 +95,7 @@ class ShellMessagesTest {
         compose.onNodeWithText("Undo").performClick()
         compose.waitForIdle()
         assertEquals(before.values.watchedEpisodes, watched())
-        assertNull(messages.current)
+        assertNull(messages.current.value)
     }
 
     @Test
@@ -111,7 +111,7 @@ class ShellMessagesTest {
     // W2: the failure is heard by the shell's view model, which lives through a recreation.
     @Test
     fun `a write failure that arrives while no screen is composed is shown afterwards`() {
-        val shell = ShellViewModel(graph)
+        val shell = ShellViewModel(graph.list)
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
                 if (composed) {
@@ -144,7 +144,11 @@ class ShellMessagesTest {
     // Posts [posted] in order, then lets each shown message time out; returns what was shown, in order.
     private fun shownAfter(vararg posted: ShellMessage): List<ShellMessage> {
         posted.forEach(messages::post)
-        return generateSequence { messages.current?.also { messages.ended(it, actionPerformed = false) }?.message }.toList()
+        return generateSequence {
+            messages.current.value
+                ?.also { messages.ended(it, actionPerformed = false) }
+                ?.message
+        }.toList()
     }
 
     @Test
@@ -175,7 +179,11 @@ class ShellMessagesTest {
         compose.waitForIdle()
         val shown =
             compose.runOnUiThread<List<ShellMessage>> {
-                generateSequence { messages.current?.also { messages.ended(it, actionPerformed = false) }?.message }.toList()
+                generateSequence {
+                    messages.current.value
+                        ?.also { messages.ended(it, actionPerformed = false) }
+                        ?.message
+                }.toList()
             }
         assertEquals(listOf(moved, otherMoved), shown)
     }
@@ -190,7 +198,7 @@ class ShellMessagesTest {
     // W2: a later "+1" on another title does not take the failed save's Retry away.
     @Test
     fun `a failed save keeps its Retry through a newer message, and Retry writes`() {
-        val shell = ShellViewModel(graph)
+        val shell = ShellViewModel(graph.list)
         val other = FixtureAnime.oneShortOfTotal
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {

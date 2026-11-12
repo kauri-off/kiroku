@@ -5,30 +5,42 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
-import io.github.kauri_off.kiroku.edit.EditSheetViewModel
+import io.github.kauri_off.kiroku.edit.editSheetViewModel
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class TitleKey(
     val id: Long,
-) : NavKey
+) : NavKey {
+    // Not saved: a page restored after process death starts from the store.
+    @Transient
+    var opened: TitleSummary? = null
+        private set
+
+    constructor(id: Long, opened: TitleSummary?) : this(id) {
+        this.opened = opened
+    }
+}
 
 // Where the title page's links lead; the shell decides.
 class TitleLinks(
     val back: () -> Unit,
-    val openTitle: (AnimeId) -> Unit,
-    val seeAllRelated: (AnimeId) -> Unit,
-    val details: (AnimeId) -> Unit,
+    val openTitle: (AnimeId, TitleSummary?) -> Unit,
+    val seeAllRelated: (AnimeId, TitleSummary?) -> Unit,
+    val details: (AnimeId, TitleSummary?) -> Unit,
     val recommendations: (AnimeId) -> Unit,
     val signIn: () -> Unit,
 )
@@ -42,10 +54,24 @@ fun TitleRoute(
     links: TitleLinks,
 ) {
     val id = AnimeId(key.id)
-    val title = viewModel { TitleViewModel(graph, id, createSavedStateHandle(), messages) }
-    val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle(), messages) }
+    val title =
+        viewModel {
+            TitleViewModel(
+                id,
+                graph.anime,
+                graph.list,
+                graph.airing,
+                graph.session,
+                graph.clock,
+                graph.titleLanguage,
+                createSavedStateHandle(),
+                messages,
+                key.opened,
+            )
+        }
+    val editor = editSheetViewModel(graph, messages)
     val context = LocalContext.current
-    val state = title.state.value
+    val state by title.state.collectAsScreenState()
     TitleScreen(
         state = state,
         onEvent = { event ->
@@ -60,9 +86,9 @@ fun TitleRoute(
                         ),
                     )
                 TitleEvent.Edit -> editor.open(id)
-                is TitleEvent.OpenRelated -> links.openTitle(event.id)
-                TitleEvent.SeeAllRelated -> links.seeAllRelated(id)
-                TitleEvent.OpenDetails -> links.details(id)
+                is TitleEvent.OpenRelated -> links.openTitle(event.id, title.summaryOf(event.id))
+                TitleEvent.SeeAllRelated -> links.seeAllRelated(id, title.summaryOf(id))
+                TitleEvent.OpenDetails -> links.details(id, title.summaryOf(id))
                 TitleEvent.OpenRecommendations -> links.recommendations(id)
                 TitleEvent.SignIn -> links.signIn()
                 else -> title.onEvent(event)

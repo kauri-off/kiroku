@@ -137,16 +137,19 @@ data class WriteFailure(
     val retry: ListWrite,
 )
 
-interface ListRepository {
+// The list as a screen sees it: read and synced, never written, so a write can only go through the shell.
+interface ListSource {
     // Ends with a DataException when the list cannot be read; a new collection tries again.
     fun observeEntries(): Flow<List<ListEntry>>
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
 
+    suspend fun sync(): Outcome<Unit>
+}
+
+interface ListRepository : ListSource {
     // Hot (section 7.3): dropped with no collector, buffered for a slow one.
     fun observeWriteFailures(): Flow<WriteFailure>
-
-    suspend fun sync(): Outcome<Unit>
 
     // Applies the write locally, whole even when its caller is cancelled; null when it changed nothing or was refused.
     suspend fun write(write: ListWrite): ListChange?

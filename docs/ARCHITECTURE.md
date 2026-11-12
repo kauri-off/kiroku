@@ -297,8 +297,20 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 - A screen is a stateless composable, `XScreen(state, onEvent)`, drawn entirely from one immutable state value. It
   never touches a view model, a repository or navigation. This is what previews and screenshot tests render.
-- A view model builds that state from database flows and handles the events. A thin `XRoute` connects the view
-  model to the screen and to navigation, and is the only place that knows either.
+- A view model takes the repositories and services it uses, never the whole graph, and of the list only a view that
+  cannot write. It produces the state as a `StateFlow` from the repositories' flows and the user's input, and handles
+  the events. The state is produced only while a screen collects it: it stops once none has for longer than a
+  rotation takes, and starts again with the next. Nothing is read, synced or refreshed before the first collection.
+- A page opened from a row or another page shows what that row or page showed from its first frame, and keeps
+  showing it until the store knows more, also after a failed refresh. A page opened with nothing known starts in its
+  loading state.
+- Text a person types is held in a `mutableStateOf` or `TextFieldState` that the view model owns and changes inside
+  the event, and its field reads that holder: no flow, collected or not, sits between a keystroke and its field. The
+  view model's flows observe the holder with `snapshotFlow`.
+- A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
+  screen.
+- A thin `XRoute` collects the state only while its screen is started, connects the view model to the screen and to
+  navigation, and is the only place that knows either.
 - There is no MVI framework and no event bus.
 - Snackbars share one state, owned by the shell and handed to every screen as a parameter; the screen on top
   draws it, so a message that outlives its screen still shows. The session banner (S6) is part of each
@@ -654,7 +666,8 @@ scrolling, for a title of up to two lines.
 **Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
 render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 once the wait has lasted
 a second, until the details arrive.
-Only a page opened with no data at all (a deep link) uses the full-screen loading state.
+Only a page opened with no data at all (a deep link, or a page restored after the process was killed) uses the
+full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 

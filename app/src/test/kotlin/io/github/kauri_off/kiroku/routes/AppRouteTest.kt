@@ -6,6 +6,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -139,6 +141,67 @@ class AppRouteTest {
         hides("My list")
         back()
         shows("My list")
+    }
+
+    // Section 9.4: opened from a row, the page has the summary on its first frame, however late the store answers.
+    @Test
+    fun `a title page opened from a row shows its summary on its first frame, before the store answers`() {
+        app()
+        graph.readsHeld = true
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText(kagerou.titles.romaji).performClick()
+        val page = {
+            compose
+                .onAllNodes(
+                    hasText("Episodes watched") or hasContentDescription("Loading"),
+                ).fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        repeat(FRAMES) { if (!page()) compose.mainClock.advanceTimeByFrame() }
+        compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
+        shows("Episodes watched")
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        shows("Episodes watched")
+        graph.readsHeld = false
+    }
+
+    @Test
+    fun `Related and Details opened from a title page show what the page showed, before the store answers`() {
+        app()
+        openKagerou()
+        scrollTo("See all")
+        graph.readsHeld = true
+        click("See all")
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
+        shows("Prequel")
+        back()
+        scrollTo("Details")
+        click("Details")
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
+        showsSubstring("Studio Hanamizuki")
+        graph.readsHeld = false
+    }
+
+    @Test
+    fun `a quickly typed filter reaches the List keystroke by keystroke`() {
+        app()
+        shows(FixtureAnime.exactCaughtUp.titles.romaji)
+        compose.onNodeWithContentDescription("Filter by title").performClick()
+        compose.waitForIdle()
+        val field = compose.onNode(hasSetTextAction())
+        field.performClick()
+        field.performKeyInput {
+            pressKey(Key.K)
+            pressKey(Key.A)
+            pressKey(Key.G)
+        }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText("kag")).assertExists()
+        shows(kagerou.titles.romaji)
+        compose.onNodeWithText(FixtureAnime.exactCaughtUp.titles.romaji).assertDoesNotExist()
     }
 
     @Test
@@ -510,5 +573,9 @@ class AppRouteTest {
         assertEquals(kept.filter { it in shown }, shown.filter { it in kept })
         val above = before.takeWhile { it.first != completed }
         assertEquals(above, after.take(above.size))
+    }
+
+    private companion object {
+        const val FRAMES = 10
     }
 }

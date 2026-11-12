@@ -137,6 +137,8 @@ Not to forget:
 - Before the Russian relation names are written, they are compared with the names Shikimori shows, read from the
   site at that time and not from memory. The differences go to the owner; a term changes, in the glossary and the
   resources together, only on the owner's answer.
+- A one-off effect a view model hands its route (signed in, a redirect received) is state the route acts on and then
+  acknowledges, as `ShellMessages.editRequest` is, not a `Channel`.
 
 ## M3. Episodes aired and episodes to watch
 
@@ -194,6 +196,7 @@ Not to forget:
 - Searches of one, two and three characters are recorded, to learn the shortest query MAL accepts (item 3 of
   section 13).
 - Typing does not send a request per keystroke.
+- Results that arrive page by page are held as a `StateFlow` of the pages loaded.
 
 ## M6. Profiles and statistics
 

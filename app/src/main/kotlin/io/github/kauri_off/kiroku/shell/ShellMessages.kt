@@ -5,22 +5,20 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
-import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
@@ -86,12 +84,13 @@ class ShellMessages(
         val serial: Long,
     )
 
-    var current by mutableStateOf<Posted?>(null)
-        private set
+    private val shown = MutableStateFlow<Posted?>(null)
+    val current: StateFlow<Posted?> = shown.asStateFlow()
+
+    private val requested = MutableStateFlow<AnimeId?>(null)
 
     // A title whose edit sheet "Change" asked for, until a screen with an edit sheet takes it.
-    var editRequest by mutableStateOf<AnimeId?>(null)
-        private set
+    val editRequest: StateFlow<AnimeId?> = requested.asStateFlow()
 
     private class Waiting(
         val posted: Posted,
@@ -104,9 +103,9 @@ class ShellMessages(
 
     fun post(message: ShellMessage) {
         val posted = Posted(message, ++serial)
-        val shown = current
+        val showing = shown.value
         when {
-            shown == null || !shown.message.mustStay -> current = posted
+            showing == null || !showing.message.mustStay -> shown.value = posted
             message.mustStay -> waiting += Waiting(posted, watch(posted))
         }
     }
@@ -141,37 +140,22 @@ class ShellMessages(
         posted: Posted,
         actionPerformed: Boolean,
     ) {
-        if (current == posted) {
+        if (shown.value == posted) {
             val next = waiting.removeFirstOrNull()
             next?.watch?.cancel()
-            current = next?.posted
+            shown.value = next?.posted
         }
         if (!actionPerformed) return
         when (val action = posted.message.action) {
             is ShellMessage.Action.Undo -> write(action.write)
             is ShellMessage.Action.Retry -> write(action.write)
-            is ShellMessage.Action.Change -> editRequest = action.id
+            is ShellMessage.Action.Change -> requested.value = action.id
             null -> Unit
         }
     }
 
     fun editTaken(id: AnimeId) {
-        if (editRequest == id) editRequest = null
-    }
-}
-
-// Lives with the activity's view models, so a message and a write failure (W2) survive recreation.
-class ShellViewModel(
-    graph: AppGraph,
-) : ViewModel() {
-    val messages = ShellMessages(viewModelScope, graph.list)
-
-    init {
-        viewModelScope.launch {
-            graph.list.observeWriteFailures().collect { failure ->
-                messages.post(ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(failure.retry)))
-            }
-        }
+        requested.compareAndSet(id, null)
     }
 }
 
@@ -181,7 +165,7 @@ fun ShownMessages(
     messages: ShellMessages,
     host: SnackbarHostState,
 ) {
-    val posted = messages.current
+    val posted = messages.current.collectAsScreenState().value
     val text = posted?.message?.text?.let { text(it) }
     val action = posted?.message?.action?.let { actionLabel(it) }
     LaunchedEffect(posted) {

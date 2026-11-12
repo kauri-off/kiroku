@@ -57,8 +57,19 @@ class EditSheetViewModelTest {
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
         val graph = TestGraph.over(scope, slowWrites)
-        val subject = Subject(graph, EditSheetViewModel(graph, saved, ShellMessages(scope, graph.list)))
-        open?.let { subject.editor.open(it.id) }
+        val editor =
+            EditSheetViewModel(
+                graph.list,
+                graph.anime,
+                graph.airing,
+                graph.clock,
+                graph.titleLanguage,
+                saved,
+                ShellMessages(scope, graph.list),
+            )
+        val subject = Subject(graph, editor)
+        editor.restore()
+        open?.let { editor.open(it.id) }
         advanceUntilIdle()
         body(subject)
         scope.cancel()

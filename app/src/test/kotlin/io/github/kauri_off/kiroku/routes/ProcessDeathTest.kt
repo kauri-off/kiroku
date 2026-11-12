@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
@@ -55,6 +56,26 @@ class ProcessDeathTest {
 
     private class Owner : ViewModelStoreOwner {
         override val viewModelStore = ViewModelStore()
+    }
+
+    @Test
+    fun `the list's typed filter comes back after process death`() {
+        var owner = Owner()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) }
+            }
+        }
+        compose.onNodeWithContentDescription("Filter by title").performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).performTextReplacement("kag")
+        owner.viewModelStore.clear()
+        owner = Owner()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText("kag")).assertExists()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertExists()
     }
 
     @Test

@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.Demo
@@ -19,8 +20,10 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
+import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -52,13 +55,22 @@ class ListViewModelTest {
         val saved: SavedStateHandle,
         val messages: ShellMessages,
         val list: ListViewModel,
+        private val test: TestScope,
     ) {
-        val state: ListState get() = list.state.value
+        var screen: Job = test.showing(list.state)
 
-        val message: ShellMessage? get() = messages.current?.message
+        // What the screen shows once the events so far have been handled; a frame applies the typed filter first.
+        val state: ListState
+            get() {
+                Snapshot.sendApplyNotifications()
+                test.runCurrent()
+                return list.state.value
+            }
+
+        val message: ShellMessage? get() = messages.current.value?.message
 
         // The snackbar's action, tapped wherever the user is by then.
-        fun tapAction() = messages.ended(messages.current!!, actionPerformed = true)
+        fun tapAction() = messages.ended(messages.current.value!!, actionPerformed = true)
 
         fun page(status: ListStatus = state.tab): ListPage = (state.content as ListContent.Tabs).pages.getValue(status)
 
@@ -76,7 +88,8 @@ class ListViewModelTest {
         val scope = foregroundScope()
         val graph = TestGraph(demo(scope), lateObservers, slowWrites).apply { listUnreadable = unreadable }
         val messages = ShellMessages(scope, graph.list)
-        val subject = Subject(graph, saved, messages, ListViewModel(graph, saved, messages))
+        val list = ListViewModel(graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, saved, messages)
+        val subject = Subject(graph, saved, messages, list, this)
         advanceUntilIdle()
         body(subject)
         scope.cancel()
@@ -221,7 +234,7 @@ class ListViewModelTest {
         test { s ->
             s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
             advanceUntilIdle()
-            val posted = s.messages.current!!
+            val posted = s.messages.current.value!!
             s.messages.ended(posted, actionPerformed = false)
             assertNull(s.message)
             advanceUntilIdle()
@@ -419,6 +432,82 @@ class ListViewModelTest {
         }
 
     @Test
+    fun `the list is read only while the List is shown, and shows what changed meanwhile when it is shown again`() =
+        test { s ->
+            assertTrue(s.graph.readers > 0)
+            s.screen.cancel()
+            advanceTimeBy(ROTATION)
+            runCurrent()
+            assertTrue(s.graph.readers > 0)
+            advanceTimeBy(STOPPED_AFTER)
+            runCurrent()
+            assertEquals(0, s.graph.readers)
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            assertEquals(0, s.graph.readers)
+            s.screen = showing(s.list.state)
+            runCurrent()
+            assertTrue(s.graph.readers > 0)
+            val row = s.page().rows.single { it.id == FixtureAnime.exactToWatch.id }
+            assertEquals(13, (row.line2 as Line2.Progress).watched)
+        }
+
+    @Test
+    fun `the first sync runs once, not again when the List is shown again`() =
+        test { s ->
+            val downloads = s.graph.demo.server.listDownloads
+            s.screen.cancel()
+            advanceTimeBy(ROTATION + STOPPED_AFTER)
+            s.screen = showing(s.list.state)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(downloads, s.graph.demo.server.listDownloads)
+        }
+
+    // Nothing asynchronous sits between a keystroke and the field: no dispatch, no frame.
+    @Test
+    fun `the filter field's text changes with each keystroke before anything runs`() =
+        test { s ->
+            s.list.onEvent(ListEvent.StartFilter)
+            "kag".forEachIndexed { i, _ ->
+                val text = "kag".take(i + 1)
+                s.list.onEvent(ListEvent.FilterChanged(text))
+                assertEquals(text, s.list.filter)
+            }
+            s.list.onEvent(ListEvent.EndFilter)
+            assertNull(s.list.filter)
+        }
+
+    @Test
+    fun `nothing is read or synced before the List is first shown`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.airing,
+                    graph.session,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                )
+            val downloads = graph.demo.server.listDownloads
+            advanceUntilIdle()
+            assertEquals(0, graph.readers)
+            assertEquals(downloads, graph.demo.server.listDownloads)
+            assertEquals(ListContent.Loading, list.state.value.content)
+            val screen = showing(list.state)
+            runCurrent()
+            assertTrue(graph.readers > 0)
+            advanceUntilIdle()
+            assertEquals(downloads + 1, graph.demo.server.listDownloads)
+            screen.cancel()
+            scope.cancel()
+        }
+
+    @Test
     fun `the tab, each tab's sort and the filter survive process death`() {
         val saved = SavedStateHandle()
         test(saved = saved) { s ->
@@ -430,7 +519,13 @@ class ListViewModelTest {
         test(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })) { s ->
             assertEquals(ListStatus.Completed, s.state.tab)
             assertEquals(ListSort.Score, s.page().sort)
+            assertEquals("a", s.list.filter)
             assertEquals("a", s.state.filter)
         }
+    }
+
+    private companion object {
+        const val ROTATION = 4_000L
+        const val STOPPED_AFTER = 1_001L
     }
 }

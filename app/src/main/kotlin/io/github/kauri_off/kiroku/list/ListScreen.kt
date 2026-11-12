@@ -76,7 +76,7 @@ fun ListScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(enabled = state.filter != null) { onEvent(ListEvent.EndFilter) }
+    BackHandler(enabled = state.filterText != null) { onEvent(ListEvent.EndFilter) }
     val tabs = state.content as? ListContent.Tabs
     val statuses = ListStatus.entries
     val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
@@ -210,7 +210,7 @@ private fun TopBar(
     showActions: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val filter = state.filter
+    val filter = state.filterText
     val owner = state.owner
     TopAppBar(
         title = {

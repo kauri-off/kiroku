@@ -1,13 +1,11 @@
 package io.github.kauri_off.kiroku.list
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
@@ -20,181 +18,237 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
-import io.github.kauri_off.kiroku.wiring.AppGraph
-import kotlinx.coroutines.Job
+import io.github.kauri_off.kiroku.title.TitleSummary
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Clock
 import java.time.LocalDate
 
-// The user's own list. Every event that changes what the screen shows is applied in onEvent itself; navigation
-// events are the route's.
+// The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort), so they are kept here.
 class ListViewModel(
-    private val graph: AppGraph,
+    private val list: ListSource,
+    private val airing: AiringRepository,
+    session: SessionRepository,
+    private val clock: Clock,
+    private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
 ) : ViewModel() {
-    private var entries by mutableStateOf<Map<AnimeId, ListEntry>>(emptyMap())
-    private var airing by mutableStateOf<Map<AnimeId, Airing>>(emptyMap())
-    private var session by mutableStateOf<Session?>(null)
+    private data class Model(
+        val entries: Map<AnimeId, ListEntry> = emptyMap(),
+        val airing: Map<AnimeId, Airing> = emptyMap(),
+        // Each tab's ids in the order last computed, with titles that joined since appended; null until the first order.
+        val orders: Map<ListStatus, List<AnimeId>>? = null,
+        val orderings: Map<ListStatus, Int> = ListStatus.entries.associateWith { 0 },
+        val failure: ListFailure? = null,
+        val tab: ListStatus,
+        val sorts: Map<ListStatus, ListSort>,
+        val sortSheetOpen: Boolean = false,
+        val refreshing: Boolean = false,
+        val session: Session? = null,
+    )
 
-    // Each tab's ids in the order last computed, with titles that joined since appended; null until the first order.
-    private var orders by mutableStateOf<Map<ListStatus, List<AnimeId>>?>(null)
-    private var orderings by mutableStateOf(ListStatus.entries.associateWith { 0 })
-    private var failure by mutableStateOf<ListFailure?>(null)
+    private val model =
+        MutableStateFlow(
+            Model(
+                tab = saved.get<String>(TAB)?.let(ListStatus::valueOf) ?: ListStatus.Watching,
+                sorts =
+                    ListStatus.entries.associateWith { status ->
+                        saved.get<String>(sortKey(status))?.let(ListSort::valueOf) ?: defaultSort(status, withAiring = true)
+                    },
+            ),
+        )
+    private val typed = mutableStateOf(saved.get<String>(FILTER))
+    private val retries = MutableStateFlow(0)
+    private var firstSyncStarted = false
     private var firstSyncDone = false
     private var entriesLoaded = false
 
-    private var tab by mutableStateOf(saved.get<String>(TAB)?.let(ListStatus::valueOf) ?: ListStatus.Watching)
-    private var sorts by mutableStateOf(
-        ListStatus.entries.associateWith { status ->
-            saved.get<String>(sortKey(status))?.let(ListSort::valueOf) ?: defaultSort(status, withAiring = true)
-        },
-    )
-    private var filter by mutableStateOf(saved.get<String>(FILTER))
-    private var sortSheetOpen by mutableStateOf(false)
-    private var refreshing by mutableStateOf(false)
-    private var observing: Job? = null
+    // The filter field's text, held as Compose state so the field reads each keystroke in the same frame.
+    val filter: String? get() = typed.value
 
-    val state: State<ListState> = derivedStateOf { build() }
-
-    init {
-        observe()
-        viewModelScope.launch { graph.session.observeSession().collect { session = it } }
-        viewModelScope.launch { sync(fromUser = false) }
-    }
+    val state: StateFlow<ListState> =
+        flow {
+            coroutineScope {
+                launch { reading().collect() }
+                launch { session.observeSession().collect { session -> model.update { it.copy(session = session) } } }
+                emitAll(combine(model, snapshotFlow { typed.value }, ::build))
+            }
+        }.onStart { firstSync() }
+            .stateIn(viewModelScope, WhileShown, build(model.value, typed.value))
 
     fun onEvent(event: ListEvent) {
         when (event) {
             is ListEvent.SelectTab -> {
-                tab = event.status
+                model.update { it.copy(tab = event.status) }
                 saved[TAB] = event.status.name
             }
             is ListEvent.PlusOne -> plusOne(event.id)
             ListEvent.StartFilter -> filterBy("")
             is ListEvent.FilterChanged -> filterBy(event.text)
             ListEvent.EndFilter -> filterBy(null)
-            ListEvent.OpenSort -> sortSheetOpen = true
-            ListEvent.DismissSort -> sortSheetOpen = false
+            ListEvent.OpenSort -> model.update { it.copy(sortSheetOpen = true) }
+            ListEvent.DismissSort -> model.update { it.copy(sortSheetOpen = false) }
             is ListEvent.SelectSort -> selectSort(event.sort)
             ListEvent.Refresh -> viewModelScope.launch { sync(fromUser = true) }
             ListEvent.Retry -> {
-                if (observing?.isActive != true) observe()
+                retries.update { it + 1 }
                 viewModelScope.launch { sync(fromUser = false) }
             }
             is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
     }
 
-    private fun observe() {
-        observing =
-            viewModelScope.launch {
-                try {
-                    combine(graph.list.observeEntries(), graph.airing.observeAiring(), ::Pair).collect { (list, schedule) ->
-                        airing = schedule
-                        entries = list.associateBy { it.anime.id }
-                        entriesLoaded = true
-                        when {
-                            orders != null -> appendJoined()
-                            list.isNotEmpty() || firstSyncDone -> orderAll()
-                        }
-                    }
-                } catch (e: DataException) {
-                    unreadable(e.error)
-                }
+    private fun firstSync() {
+        if (firstSyncStarted) return
+        firstSyncStarted = true
+        viewModelScope.launch { sync(fromUser = false) }
+    }
+
+    private fun reading(): Flow<Unit> =
+        combine(list.observeEntries(), airing.observeAiring(), ::received)
+            .onStart { emit(Unit) }
+            .readAgainOnRetry(retries, ::unreadable)
+
+    private fun received(
+        list: List<ListEntry>,
+        schedule: Map<AnimeId, Airing>,
+    ) {
+        entriesLoaded = true
+        model.update { model ->
+            val read = model.copy(airing = schedule, entries = list.associateBy { it.anime.id })
+            when {
+                read.orders != null -> read.withJoinedAppended()
+                list.isNotEmpty() || firstSyncDone -> read.orderedAll()
+                else -> read
             }
+        }
     }
 
     // A list that cannot be read shows the error state, whatever it showed before.
     private fun unreadable(error: DataError) {
-        orders = null
-        entries = emptyMap()
         entriesLoaded = false
-        failure = error.toListFailure()
+        model.update { it.copy(orders = null, entries = emptyMap(), failure = error.toListFailure()) }
     }
 
-    private fun build(): ListState {
-        val orders = orders
+    // What the List shows of [id], for its title page.
+    fun summaryOf(id: AnimeId): TitleSummary? {
+        val model = model.value
+        val entry = model.entries[id] ?: return null
+        return TitleSummary(entry.anime, entry, model.airing[id], model.session)
+    }
+
+    private fun build(
+        model: Model,
+        filter: String?,
+    ): ListState {
+        val session = model.session
+        val orders = model.orders
         val content =
             when {
                 session == Session.SignedOut -> ListContent.SignedOut
-                orders == null -> failure?.let(ListContent::Failed) ?: ListContent.Loading
-                else -> ListContent.Tabs(ListStatus.entries.associateWith { page(it, orders.getValue(it)) })
+                orders == null -> model.failure?.let(ListContent::Failed) ?: ListContent.Loading
+                else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, filter, it, orders.getValue(it)) })
             }
         return ListState(
             owner = ListOwner.Me,
             content = content,
-            tab = tab,
-            sortSheetOpen = sortSheetOpen,
+            tab = model.tab,
+            sortSheetOpen = model.sortSheetOpen,
             filter = filter,
-            refreshing = refreshing,
+            refreshing = model.refreshing,
             sessionExpired = session == Session.Expired,
-            now = graph.clock.instant(),
+            now = clock.instant(),
         )
     }
 
     private fun page(
+        model: Model,
+        text: String?,
         status: ListStatus,
         ids: List<AnimeId>,
     ): ListPage {
         val today = today()
-        val text = filter
         val rows =
             ids
-                .mapNotNull { id -> entries[id]?.takeIf { it.status == status } }
-                .map { listRow(it, airing[it.anime.id], today, graph.titleLanguage) }
+                .mapNotNull { id -> model.entries[id]?.takeIf { it.status == status } }
+                .map { listRow(it, model.airing[it.anime.id], today, titleLanguage) }
                 .filter { text.isNullOrEmpty() || it.title.contains(text, ignoreCase = true) }
-        return ListPage(sorts.getValue(status), sortsFor(status, withAiring = true), rows, orderings.getValue(status))
+        return ListPage(model.sorts.getValue(status), sortsFor(status, withAiring = true), rows, model.orderings.getValue(status))
     }
 
-    private fun today(): LocalDate = LocalDate.now(graph.clock)
+    private fun today(): LocalDate = LocalDate.now(clock)
 
-    private fun ordered(
+    private fun Model.ordered(
         status: ListStatus,
         sort: ListSort,
     ): List<AnimeId> =
         order(entries.values.filter { it.status == status }, sort, airing::get, today()) {
-            it.anime.titles.preferred(graph.titleLanguage)
+            it.anime.titles.preferred(titleLanguage)
         }.map { it.anime.id }
 
-    private fun orderAll() {
-        val first = orders == null
-        orders = ListStatus.entries.associateWith { ordered(it, sorts.getValue(it)) }
-        if (!first) orderings = orderings.mapValues { it.value + 1 }
-    }
+    private fun Model.orderedAll(): Model =
+        copy(
+            orders = ListStatus.entries.associateWith { ordered(it, sorts.getValue(it)) },
+            orderings = if (orders == null) orderings else orderings.mapValues { it.value + 1 },
+        )
 
     // A title that joined a tab since its order was computed goes at its end; one that left keeps its place for Undo.
-    private fun appendJoined() {
-        val current = orders ?: return
+    private fun Model.withJoinedAppended(): Model {
+        val current = orders ?: return this
         val next =
             current.mapValues { (status, ids) ->
                 val known = ids.toSet()
                 ids + entries.values.filter { it.status == status && it.anime.id !in known }.map { it.anime.id }
             }
-        if (next != current) orders = next
+        return if (next != current) copy(orders = next) else this
     }
 
     private fun selectSort(sort: ListSort) {
-        sortSheetOpen = false
-        if (sorts.getValue(tab) == sort) return
-        sorts = sorts + (tab to sort)
+        val tab = model.value.tab
+        if (model.value.sorts.getValue(tab) == sort) {
+            model.update { it.copy(sortSheetOpen = false) }
+            return
+        }
         saved[sortKey(tab)] = sort.name
-        orders?.let { orders = it + (tab to ordered(tab, sort)) }
-        orderings = orderings + (tab to orderings.getValue(tab) + 1)
+        model.update { model ->
+            model.copy(
+                sortSheetOpen = false,
+                sorts = model.sorts + (tab to sort),
+                orders = model.orders?.let { it + (tab to model.ordered(tab, sort)) },
+                orderings = model.orderings + (tab to model.orderings.getValue(tab) + 1),
+            )
+        }
     }
 
     private fun filterBy(text: String?) {
-        filter = text
+        typed.value = text
         saved[FILTER] = text
     }
 
     // The message and its Undo come from what this write changed, so each Undo takes back its own step (W3).
     private fun plusOne(id: AnimeId) {
-        val anime = entries[id]?.anime ?: return
+        val anime = model.value.entries[id]?.anime ?: return
         messages.write(ListWrite.MarkNextWatched(anime)) { change ->
             val after = change.after ?: return@write null
             val text =
@@ -209,38 +263,39 @@ class ListViewModel(
 
     // Pull-to-refresh, and a first sync with nothing ordered yet, order the list from what the sync brought.
     private suspend fun sync(fromUser: Boolean) {
-        if (fromUser) refreshing = true
-        failure = null
-        val result = graph.list.sync()
+        model.update { it.copy(failure = null, refreshing = it.refreshing || fromUser) }
+        val result = list.sync()
         firstSyncDone = true
         when (result) {
             is Outcome.Success ->
-                if (fromUser || orders == null) {
+                if (fromUser || model.value.orders == null) {
                     val synced =
                         try {
-                            graph.list.observeEntries().first()
+                            list.observeEntries().first()
                         } catch (e: DataException) {
                             unreadable(e.error)
                             null
                         }
+                    val schedule = airing.observeAiring().first()
                     // Meanwhile the list may have arrived and been ordered at start.
-                    if (synced != null && (fromUser || orders == null)) {
-                        entries = synced.associateBy { it.anime.id }
+                    if (synced != null && (fromUser || model.value.orders == null)) {
                         entriesLoaded = true
-                        orderAll()
+                        model.update {
+                            it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
+                        }
                     }
                 }
             is Outcome.Failure ->
                 when {
-                    orders != null ->
+                    model.value.orders != null ->
                         if (result.error != DataError.SessionExpired) {
                             messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
                         }
-                    entriesLoaded && entries.isNotEmpty() -> orderAll()
-                    else -> failure = result.error.toListFailure()
+                    entriesLoaded && model.value.entries.isNotEmpty() -> model.update { it.orderedAll() }
+                    else -> model.update { it.copy(failure = result.error.toListFailure()) }
                 }
         }
-        refreshing = false
+        model.update { it.copy(refreshing = false) }
     }
 
     private companion object {

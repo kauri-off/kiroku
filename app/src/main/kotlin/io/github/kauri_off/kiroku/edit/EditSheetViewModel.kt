@@ -1,52 +1,66 @@
 package io.github.kauri_off.kiroku.edit
 
-import androidx.compose.runtime.getValue
+import androidx.annotation.MainThread
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessages
-import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.Clock
 import java.time.LocalDate
 
-// The edit sheet of the screen that opened it. Every event is reduced synchronously in onEvent, so the count field
-// never loses or reorders a keystroke; the open sheet survives recreation and process death.
+// The edit sheet of the screen that opened it: a draft of the user's input, read once from the store.
 class EditSheetViewModel(
-    private val graph: AppGraph,
+    private val list: ListSource,
+    private val animeRepository: AnimeRepository,
+    private val airing: AiringRepository,
+    private val clock: Clock,
+    private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
 ) : ViewModel() {
-    var sheet by mutableStateOf<EditSheetState?>(null)
-        private set
+    private val shown = mutableStateOf<EditSheetState?>(null)
+
+    // Compose state, changed synchronously by every event, so the sheet's fields read each keystroke in the same frame.
+    val sheet: EditSheetState? get() = shown.value
 
     private var anime: Anime? = null
     private var loading = false
+    private var restored = false
 
-    init {
+    // Reopens the sheet that was open when the process died; its route calls it once shown.
+    @MainThread
+    fun restore() {
+        if (restored) return
+        restored = true
         saved.get<Long>(ID)?.let { id ->
-            val restored = SavedSheet.read(saved)
-            if (restored == null || restored.closing) forget() else load(AnimeId(id), restored)
+            val sheet = SavedSheet.read(saved)
+            if (sheet == null || sheet.closing) forget() else load(AnimeId(id), sheet)
         }
     }
 
     fun open(id: AnimeId) {
-        if (sheet != null || loading) return
+        restored = true
+        if (shown.value != null || loading) return
         saved[ID] = id.value
         load(id, null)
     }
 
     fun onEvent(event: EditSheetEvent) {
-        val before = sheet ?: return
+        val before = shown.value ?: return
         val after = before.after(event)
-        sheet = after
+        shown.value = after
         val anime = anime
         when (event) {
             EditSheetEvent.SaveClicked ->
@@ -55,14 +69,14 @@ class EditSheetViewModel(
                 }
             EditSheetEvent.RemoveConfirmed -> if (anime != null && !before.closing && !after.isNew) messages.write(ListWrite.Remove(anime))
             EditSheetEvent.Dismissed -> {
-                sheet = null
+                shown.value = null
                 this.anime = null
                 forget()
                 return
             }
             else -> Unit
         }
-        SavedSheet.write(saved, after)
+        SavedSheet.save(saved, after)
     }
 
     private fun load(
@@ -73,23 +87,24 @@ class EditSheetViewModel(
         viewModelScope.launch {
             val entry =
                 try {
-                    graph.list.observeEntry(id).first()
+                    list.observeEntry(id).first()
                 } catch (_: DataException) {
                     loading = false
                     forget()
                     return@launch
                 }
-            val found = entry?.anime ?: graph.anime.observeAnime(id).first()
+            val found = entry?.anime ?: animeRepository.observeAnime(id).first()
             loading = false
             if (found == null) {
                 forget()
                 return@launch
             }
             anime = found
-            val today = LocalDate.now(graph.clock)
-            val opened = EditSheetState.of(found, graph.airing.observeAiring().first()[id], entry?.values, graph.titleLanguage, today)
-            sheet = restored?.applyTo(opened) ?: opened
-            sheet?.let { SavedSheet.write(saved, it) }
+            val today = LocalDate.now(clock)
+            val opened = EditSheetState.of(found, airing.observeAiring().first()[id], entry?.values, titleLanguage, today)
+            val sheet = restored?.applyTo(opened) ?: opened
+            shown.value = sheet
+            SavedSheet.save(saved, sheet)
         }
     }
 
