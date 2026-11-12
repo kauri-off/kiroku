@@ -217,20 +217,20 @@ class TitleStateTest {
     fun aRebuiltPageDerivesEverythingAgainAndTheMomentOutlivesIt() {
         val anime = FixtureAnime.exactToWatch
         val entry = checkNotNull(set.entryFor(anime.id))
-        var moment = TitleMoment(snackbar = TitleSnackbar.MovedToCompleted).after(TitleEvent.ExpandSynopsis)
+        var moment = TitleMoment().after(TitleEvent.ExpandSynopsis)
         val before = TitleState.Shown(TitleFixtures.page(anime, entry), set.session, moment)
         assertEquals(AiredCount.Exact(2), (before.page.airing as AiringPhase.Aired).toWatch)
 
         val caughtUp = before.copy(page = TitleFixtures.page(anime, entry.copy(values = entry.values.copy(watchedEpisodes = 14))))
         assertEquals(null, (caughtUp.page.airing as AiringPhase.Aired).toWatch)
-        assertEquals(TitleMoment(synopsisExpanded = true, snackbar = TitleSnackbar.MovedToCompleted), caughtUp.moment)
+        assertEquals(TitleMoment(synopsisExpanded = true), caughtUp.moment)
 
         val removed = caughtUp.copy(page = TitleFixtures.page(anime, entry = null))
         assertEquals(null, removed.page.entry)
         assertEquals(24, removed.page.facts.episodes)
         assertTrue(removed.moment.synopsisExpanded)
 
-        moment = removed.moment.after(TitleEvent.SnackbarDismissed).after(TitleEvent.SetWatched(3))
+        moment = removed.moment.after(TitleEvent.StepWatched(1)).after(TitleEvent.SetWatched(3))
         assertEquals(TitleMoment(synopsisExpanded = true), moment)
         assertEquals(TitleMoment(), moment.after(TitleEvent.CollapseSynopsis))
     }

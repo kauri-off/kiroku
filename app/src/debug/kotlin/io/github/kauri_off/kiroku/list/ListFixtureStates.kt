@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -12,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.shell.ShellMessage
 
 // The List's states over the fixture set, at the fixtures' moment, for previews and screenshots.
 object ListFixtureStates {
@@ -70,6 +72,11 @@ object ListFixtureStates {
             entry.copy(values = values, updatedAt = set.now)
         }
 
+    private fun undo(anime: Anime): ShellMessage.Action.Undo {
+        val entry = set.entries.single { it.anime.id == anime.id }
+        return ShellMessage.Action.Undo(ListWrite.Save(entry.anime, entry.values))
+    }
+
     private fun edited(
         anime: Anime,
         edit: (ListEntry) -> ListEntry,
@@ -87,6 +94,8 @@ object ListFixtureStates {
 
     val completed = state(ListStatus.Completed)
 
+    val dropped = state(ListStatus.Dropped)
+
     val sortSheet = watching.copy(sortSheetOpen = true)
 
     // "Kaze", in two Watching titles and in no other.
@@ -98,17 +107,16 @@ object ListFixtureStates {
 
     val refreshing = watching.copy(refreshing = true)
 
-    val undoSnackbar =
-        watching.copy(
-            content = watchingShown(shown = after(FixtureAnime.exactToWatch) { ListWrite.MarkNextWatched(it) }),
-            message = ListMessage(ListMessage.Kind.EpisodeWatched(13), serial = 1),
-        )
+    // After "+1" on the top title; the shell shows [undoMessage] over it.
+    val undoSnackbar = watching.copy(content = watchingShown(shown = after(FixtureAnime.exactToWatch) { ListWrite.MarkNextWatched(it) }))
 
+    val undoMessage = ShellMessage(ShellMessage.Text.EpisodeWatched(13), undo(FixtureAnime.exactToWatch))
+
+    // After "+1" completed a title; the shell shows [completedMessage] over it.
     val completedSnackbar =
-        watching.copy(
-            content = watchingShown(shown = after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) }),
-            message = ListMessage(ListMessage.Kind.MovedToCompleted, serial = 1),
-        )
+        watching.copy(content = watchingShown(shown = after(FixtureAnime.oneShortOfTotal) { ListWrite.MarkNextWatched(it) }))
+
+    val completedMessage = ShellMessage(ShellMessage.Text.MovedToCompleted, undo(FixtureAnime.oneShortOfTotal))
 
     // Watching by "Last updated", with the title "+1" is about to complete on top.
     val lastUpdated = watching.copy(content = watchingShown(ListSort.LastUpdated))
@@ -128,7 +136,10 @@ object ListFixtureStates {
                 ),
         )
 
-    val offlineCached = watching.copy(message = ListMessage(ListMessage.Kind.RefreshFailed(ListFailure.NoConnection), serial = 1))
+    // A refresh failed with the list cached; the shell shows [offlineMessage] over it.
+    val offlineCached = watching
+
+    val offlineMessage = ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection))
 
     val loading = state(content = ListContent.Loading)
 

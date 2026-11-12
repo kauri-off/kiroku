@@ -360,15 +360,18 @@ was chosen against, and why:
   **With cached content, a failed refresh is a snackbar, never a replaced screen.**
 - Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search and
   unvisited title pages show the error state with "No connection" and Retry.
-- All messages are snackbars or inline text. Toasts are not used.
+- All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it.
+  One is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
+  replaced: a newer one of that kind waits behind it and is dropped if its title is written meanwhile; an ordinary
+  one posted meanwhile is dropped.
 
 ### 7.3 Writes to the list
 
 Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
 is applied locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches
 the user after the screen that made the edit is gone; with nothing collecting it, it is dropped, as the entry is
-already back at the server's state. The notification action instead waits for the server's answer (N9). "+1" and
-"Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
+already back at the server's state. The notification action instead waits for the server's answer (N9). "+1", the
+stepper and "Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown.
@@ -377,7 +380,9 @@ already back at the server's state. The notification action instead waits for th
   snackbar says "Could not save · Retry". Retry applies, as a new edit, the values shown just before the failure.
   Example: the server has 12; two taps show 13, then 14; the request carrying 13 fails. 14 is not sent, the row
   shows 12, and Retry sends 14.
-- **W3. Undo is one write** that restores every value the undone edit changed: count, status and dates.
+- **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
+  undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
+  while it still holds what the edit put there.
 - **W4. A sync never reverts an edit made while it was running**, including an edit whose request completed
   before the sync's download did. A title added during a sync is not deleted by it, and one removed during a sync
   does not come back. Removals made on the website are still reflected for every other entry.
@@ -462,9 +467,11 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke, except in the edit sheet, which writes nothing before Save and applies it as it is typed. The count has no ceiling (W9): "25 / 24" is a legal display, plus stays enabled at the total, and nothing is refused; only digits are taken, an empty field is not a count, and the length is limited |
 | `ScreenState` | `CircularProgressIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
+| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, in the stock scrollable row's measures. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
 
 Stock Material 3 components are used directly for everything else: scaffold, top app bar, navigation suite, search
-bar, tab row, modal bottom sheet, chips, buttons, list items, text fields, switch, slider, date picker, dialogs,
+bar, tab row (except the List's), modal bottom sheet, chips, buttons, list items, text fields, switch, slider, date
+picker, dialogs,
 snackbars, pull-to-refresh, progress indicators. Icons are Material icons.
 
 Not allowed anywhere: custom-drawn buttons or pills, cards used as decoration, gradients, shadows beyond component
@@ -482,7 +489,8 @@ legible, or preventing a jump. Decoration is not a purpose.
   anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
   bounce, no staggered lists, no custom press effect (the ripple is the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance.
+  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance. The tab
+  indicator, the selected tab and the tab row's scroll are drawn from the pager's position, in the frame it moves.
 - **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
   one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
   can overshoot move, resize and reshape; they are never used on opacity or colour.
@@ -574,7 +582,8 @@ computed.
 entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
 clearing the field ends it. Sort opens a bottom sheet with at most five options. "+1" answers with a snackbar that
 offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves Watching and the
-snackbar says where it went; Undo puts back the count, the status and the dates.
+snackbar says where it went; Undo puts back the count, the status and the dates. When a row leaves its tab, a "+1"
+on a row that moved up is not applied until 800 ms after the rows have stopped; taps do not extend this.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.

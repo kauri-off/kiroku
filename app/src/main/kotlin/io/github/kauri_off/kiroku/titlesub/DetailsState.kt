@@ -17,21 +17,22 @@ import java.time.LocalTime
 
 // Every state has the top bar, so every state shows the session banner while the session is expired (S6).
 sealed interface DetailsState {
-    val session: Session
+    // Null until the session is known.
+    val session: Session?
 
     data class Loading(
-        override val session: Session,
+        override val session: Session?,
     ) : DetailsState
 
     data class Failed(
         val error: DataError,
-        override val session: Session,
+        override val session: Session?,
     ) : DetailsState
 
     // Facts in the order of ARCHITECTURE section 9.9; a fact MAL does not give is absent.
     data class Shown(
         val facts: List<Fact>,
-        override val session: Session,
+        override val session: Session?,
     ) : DetailsState
 }
 
@@ -99,7 +100,7 @@ fun detailsState(
     anime: Anime,
     details: AnimeDetails,
     language: TitleLanguage,
-    session: Session,
+    session: Session?,
     clock: Clock,
 ): DetailsState.Shown {
     val titles = anime.titles

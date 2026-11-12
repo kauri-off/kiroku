@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.demo
 
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -69,6 +70,9 @@ internal class DemoAiringRepository(
     private val server: DemoServer,
 ) : AiringRepository {
     override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flowOf(fixtures.schedules)
+
+    // The fixtures' snapshot, taken when the set was made; nothing recomputes it as the clock runs.
+    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flowOf(fixtures.airing)
 
     override suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit> = server.load(needsSignIn = false).toOutcome()
 

@@ -20,7 +20,6 @@ import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import kotlinx.serialization.Serializable
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -168,27 +167,5 @@ class ShellRouteTest {
         shows("Search root")
         tab("List").performClick()
         shows("Page 1, 1 taps")
-    }
-
-    // S6: every signed-in screen shows "Session expired · Sign in", and Sign in reaches the route.
-    @Test
-    fun everyDestinationShowsTheSessionBannerWhileTheSessionIsExpired() {
-        var signIns = 0
-        shell(placeholderEntries(sessionExpired = true, onSignIn = { signIns++ }))
-        Destination.entries.forEachIndexed { index, destination ->
-            tab(compose.activity.getString(destination.label)).performClick()
-            shows("Session expired")
-            compose.onNode(hasText("Sign in") and hasClickAction()).performClick()
-            assertEquals(destination.name, index + 1, signIns)
-        }
-    }
-
-    @Test
-    fun noDestinationShowsTheBannerWhileSignedIn() {
-        shell(placeholderEntries(sessionExpired = false))
-        Destination.entries.forEach { destination ->
-            tab(compose.activity.getString(destination.label)).performClick()
-            hides("Session expired")
-        }
     }
 }

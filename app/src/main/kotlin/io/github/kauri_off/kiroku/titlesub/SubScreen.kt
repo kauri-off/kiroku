@@ -14,7 +14,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -28,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -75,7 +75,7 @@ internal fun SubScreen(
                 if (sessionExpired) SessionBanner(onSignIn = onSignIn)
             }
         },
-        snackbarHost = { SnackbarHost(snackbars) },
+        snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
         when (body) {
             is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))

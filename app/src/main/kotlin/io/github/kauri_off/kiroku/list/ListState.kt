@@ -24,7 +24,6 @@ data class ListState(
     val filter: String? = null,
     val refreshing: Boolean = false,
     val sessionExpired: Boolean = false,
-    val message: ListMessage? = null,
     // The moment air times are written against: "today", "tomorrow", a weekday or a date.
     val now: Instant,
 ) {
@@ -70,24 +69,6 @@ data class ListPage(
 )
 
 enum class ListFailure { NoConnection, Refused, Other }
-
-// A snackbar; [serial] tells two equal messages in a row apart.
-data class ListMessage(
-    val kind: Kind,
-    val serial: Long,
-) {
-    sealed interface Kind {
-        data class EpisodeWatched(
-            val episode: Int,
-        ) : Kind
-
-        data object MovedToCompleted : Kind
-
-        data class RefreshFailed(
-            val failure: ListFailure,
-        ) : Kind
-    }
-}
 
 data class ListRow(
     val id: AnimeId,
@@ -159,14 +140,6 @@ sealed interface ListEvent {
     data object DismissSort : ListEvent
 
     data object Refresh : ListEvent
-
-    data class Undo(
-        val message: ListMessage,
-    ) : ListEvent
-
-    data class MessageDismissed(
-        val message: ListMessage,
-    ) : ListEvent
 
     data object Retry : ListEvent
 

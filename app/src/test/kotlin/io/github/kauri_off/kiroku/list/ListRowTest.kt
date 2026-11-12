@@ -73,13 +73,14 @@ class ListRowTest {
     }
 
     @Test
-    fun `W9 a count above the total and the aired count is shown as it is, with plus one`() {
+    fun `W9 a count above the total and the aired count is shown as it is, with plus one and no next episode`() {
         val entry = set.entryFor(FixtureAnime.exactCaughtUp.id)!!.let { it.copy(values = it.values.copy(watchedEpisodes = 25)) }
         val airing = set.airing.getValue(entry.anime.id)
         val row = listRow(entry, airing, today, TitleLanguage.Romaji)
         assertEquals(Line2.Progress(25, episodeTotal(entry.anime, airing)), row.line2)
         assertTrue(25 > episodeTotal(entry.anime, airing)!!)
-        assertEquals(Line3.NextEpisode(airing.nextEpisode!!), row.line3)
+        assertTrue(25 >= airing.nextEpisode!!.number)
+        assertEquals(null, row.line3)
         assertTrue(row.plusOne)
     }
 

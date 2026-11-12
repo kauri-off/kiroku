@@ -1,18 +1,8 @@
 package io.github.kauri_off.kiroku.title
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
@@ -30,11 +20,14 @@ import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
 import io.github.kauri_off.kiroku.screenshots.shown
+import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import java.time.Duration
 
 class TitleScreenshots : ScreenshotRegistry() {
@@ -68,32 +61,25 @@ class TitleScreenshots : ScreenshotRegistry() {
                 Screen(TitleFixtures.of(FixtureAnime.exactToWatch, moment = TitleMoment(synopsisExpanded = true)))
             },
             case("session-expired") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired)) },
-            case("added-snackbar") { Screen(TitleFixtures.added) },
-            case("completed-snackbar") { Screen(TitleFixtures.completed) },
+            case("added-snackbar") { Screen(TitleFixtures.added, TitleFixtures.addedMessage) },
+            case("completed-snackbar") { Screen(TitleFixtures.completed, TitleFixtures.completedMessage) },
             case("above-total") { Screen(TitleFixtures.aboveTotal) },
         )
 }
 
 @Composable
-private fun Screen(state: TitleState) = TitleInShell(state, onEvent = {})
+private fun Screen(
+    state: TitleState,
+    message: ShellMessage? = null,
+) = TitleInShell(state, onEvent = {}, rememberHostShowing(message))
 
-// The page as the shell shows it: the shell draws the one snackbar host, above the gesture bar.
+// The page with a snackbar host of its own, as the shell hands it one; the screen draws it.
 @Composable
 fun TitleInShell(
     state: TitleState,
     onEvent: (TitleEvent) -> Unit,
     snackbars: SnackbarHostState = remember { SnackbarHostState() },
-) {
-    Box(Modifier.fillMaxSize()) {
-        TitleScreen(state, onEvent, snackbars)
-        SnackbarHost(
-            snackbars,
-            Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
-        )
-    }
-}
+) = TitleScreen(state, onEvent, snackbars)
 
 object TitleFixtures {
     private val set = Fixtures.reference
@@ -168,7 +154,15 @@ object TitleFixtures {
         get() {
             val anime = FixtureAnime.notOnListAiring
             val entry = ListEntry(anime, ListValues(ListStatus.Planned, 0, null, null, null), set.now)
-            return of(anime, entry, moment = TitleMoment(snackbar = TitleSnackbar.AddedToPlanned))
+            return of(anime, entry)
+        }
+
+    val addedMessage = ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(FixtureAnime.notOnListAiring.id))
+
+    val completedMessage: ShellMessage
+        get() {
+            val entry = checkNotNull(set.entryFor(FixtureAnime.oneShortOfTotal.id))
+            return ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Save(entry.anime, entry.values)))
         }
 
     // The stepper reached the total: the title became Completed in the same write (W7).
@@ -186,6 +180,6 @@ object TitleFixtures {
         val entry = checkNotNull(set.entryFor(anime.id))
         val today = set.now.atZone(set.clock.zone).toLocalDate()
         val values = entry.values.withWatched(entry.values.watchedEpisodes + by, anime.malEpisodes, today)
-        return of(anime, entry.copy(values = values), moment = TitleMoment(snackbar = TitleSnackbar.MovedToCompleted))
+        return of(anime, entry.copy(values = values))
     }
 }

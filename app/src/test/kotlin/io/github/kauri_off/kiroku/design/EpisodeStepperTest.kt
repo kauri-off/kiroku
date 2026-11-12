@@ -255,4 +255,23 @@ class EpisodeStepperTest {
         assertEquals("99999", episodeText("99999"))
         assertEquals(null, episodeText("123456"))
     }
+
+    // Taps made before the count given catches up each count: with nothing typed, a button reports a step.
+    @Test
+    fun aButtonWithNothingTypedReportsAStep() {
+        val steps = mutableListOf<Int>()
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                EpisodeStepper(12, 24, onWatchedChange = { changes += it }, onStep = { steps += it })
+            }
+        }
+        repeat(3) { compose.onNodeWithContentDescription("Plus one episode").performClick() }
+        compose.onNodeWithContentDescription("Minus one episode").performClick()
+        assertEquals(listOf(1, 1, 1, -1), steps)
+        assertEquals(emptyList<Int>(), changes)
+        field.performTextReplacement("20")
+        compose.onNodeWithContentDescription("Plus one episode").performClick()
+        assertEquals(listOf(21), changes)
+        assertEquals(listOf(1, 1, 1, -1), steps)
+    }
 }

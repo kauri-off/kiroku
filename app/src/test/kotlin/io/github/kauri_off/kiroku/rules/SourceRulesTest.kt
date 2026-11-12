@@ -107,6 +107,9 @@ class SourceRulesTest {
             "StiffnessMediumLow",
             "androidx.compose.animation.core.tween<Float>(300)",
             "withInfiniteAnimationFrameNanos { }",
+            "withFrameNanos { time = it }",
+            "withFrameMillis { offset = it * speed }",
+            "withFrameNanos {}",
         )) {
             assertTrue(planted, motionLiteralProblems("A.kt", "val a = $planted\n").isNotEmpty())
         }
