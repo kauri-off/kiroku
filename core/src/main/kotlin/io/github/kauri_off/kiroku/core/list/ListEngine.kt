@@ -456,8 +456,8 @@ class ListEngine(
         } catch (e: Exception) {
             ended(e)
             when {
-                e is IOException -> Outcome.Failure(DataError.NoConnection)
                 !signedIn.value -> Outcome.Failure(DataError.SessionExpired)
+                e is IOException -> Outcome.Failure(DataError.NoConnection)
                 else -> Outcome.Failure(DataError.ServerError).also { unexpected(e) }
             }
         }

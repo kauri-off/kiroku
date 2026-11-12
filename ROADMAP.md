@@ -102,6 +102,10 @@ Not to forget:
   engine. A write refused for the session offers no Retry.
 - The engine persists the time of its last successful sync, and W5's restore clears it, so the sync owed after a
   restart is kept until one succeeds, also when the app starts signed out.
+- The MAL client maps a 401 to the expired session itself; one that escapes as an exception reaches the engine as
+  a server error. The release reporter logs an exception's type, not its message, which could quote the list.
+- A waiting Undo or Retry is watched again when the list is read again after a failure; the three read attempts
+  count failures in a row; an engine failure on a queued edit does not leave its title out of later syncs.
 - `ShellMessages` drops a waiting Undo or Retry when its title's values change, not only its time stamp.
 - Confirm on recorded responses what MAL's PATCH answers with, and whether it can clear a start or finish date (the
   Undo of a completing step, W3 and W7).
