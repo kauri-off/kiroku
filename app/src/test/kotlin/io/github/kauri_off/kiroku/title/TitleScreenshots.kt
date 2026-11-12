@@ -61,6 +61,7 @@ class TitleScreenshots : ScreenshotRegistry() {
                         ).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)),
                 )
             },
+            case("refreshing") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(refreshing = true)) },
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
             case("planned-scored") { Screen(TitleFixtures.plannedScored) },
             case("first-episode-aired") { Screen(TitleFixtures.firstEpisodeAired) },

@@ -43,6 +43,8 @@ sealed interface TitleState {
         val moment: TitleMoment = TitleMoment(),
         // What stands where the details would be while the page has none.
         val detailsWait: DetailsWait = DetailsWait.Loading,
+        // A refresh pulled by hand is running.
+        val refreshing: Boolean = false,
     ) : TitleState
 }
 
@@ -181,6 +183,8 @@ sealed interface TitleEvent {
     data object OpenRecommendations : TitleEvent
 
     data object Retry : TitleEvent
+
+    data object Refresh : TitleEvent
 
     data object SignIn : TitleEvent
 }

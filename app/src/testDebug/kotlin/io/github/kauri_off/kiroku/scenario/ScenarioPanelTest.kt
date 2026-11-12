@@ -106,8 +106,7 @@ class ScenarioPanelTest {
         )
     }
 
-    // The shortcut clears the app's task and starts it again; its root must be the launcher icon's intent, or a later
-    // tap on the icon starts a second app screen with none of the first one's messages.
+    // Otherwise a later tap on the icon starts a second app screen, without the first one's messages.
     @Test
     fun `the task the launcher's shortcut starts is the one the app's icon returns to`() {
         val icon = checkNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName))

@@ -244,41 +244,83 @@ class TitleViewModelTest {
         }
     }
 
+    // Section 7.2: the failure stands where the details would be, and is also said by a message on the first screen.
     @Test
-    fun `details that could not load show the failure under the page until Retry loads them`() =
+    fun `details that could not load show the failure under the page until Retry loads them, and say so once`() =
         test(before = { demo.server.offline.value = true }) { s ->
             assertEquals(FixtureAnime.exactToWatch, s.shown.page.anime)
             assertEquals(DetailsWait.Failed(DataError.NoConnection), s.shown.detailsWait)
-            assertNull(s.message)
+            assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), s.message)
+            s.messages.ended(s.messages.current.value!!, actionPerformed = false)
             s.graph.demo.server.offline.value = false
             advanceTimeBy(STOPPED_AFTER_MILLIS)
             assertEquals(DetailsWait.Failed(DataError.NoConnection), s.shown.detailsWait)
             s.title.onEvent(TitleEvent.Retry)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
+            assertNull(s.message)
         }
 
     @Test
-    fun `a Retry that fails again keeps the failure, and the indicator replaces it only once the wait has lasted a second`() =
+    fun `a failure stays while the list changes under it`() =
+        test(before = { demo.server.offline.value = true }) { s ->
+            val failed = DetailsWait.Failed(DataError.NoConnection)
+            assertEquals(failed, s.shown.detailsWait)
+            s.graph.demo.server.offline.value = false
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            assertEquals(13, s.watched())
+            assertEquals(failed, s.shown.detailsWait)
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
+            advanceUntilIdle()
+            assertEquals(failed, s.shown.detailsWait)
+        }
+
+    // A wait the person started needs no second's grace; a Retry that fails says so in place, with no message.
+    @Test
+    fun `a Retry shows the indicator at once, and one that fails again shows the failure again`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            graph.demo.server.offline.value = true
+            val messages = ShellMessages(scope, graph.list)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
+            showing(title.state)
+            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            advanceUntilIdle()
+            val failed = DetailsWait.Failed(DataError.NoConnection)
+            assertEquals(failed, wait())
+            messages.ended(messages.current.value!!, actionPerformed = false)
+            title.onEvent(TitleEvent.Retry)
+            runCurrent()
+            assertEquals(DetailsWait.Loading, wait())
+            advanceUntilIdle()
+            assertEquals(failed, wait())
+            assertNull(messages.current.value)
+            scope.cancel()
+        }
+
+    @Test
+    fun `a pulled refresh shows that it runs, and loads the details of a page whose load failed`() =
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
             graph.demo.server.offline.value = true
             val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
             showing(title.state)
-            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            val shown = { title.state.value as TitleState.Shown }
             advanceUntilIdle()
-            val failed = DetailsWait.Failed(DataError.NoConnection)
-            assertEquals(failed, wait())
-            title.onEvent(TitleEvent.Retry)
-            advanceTimeBy(PATIENCE_MILLIS - 1)
+            graph.demo.server.offline.value = false
+            title.onEvent(TitleEvent.Refresh)
             runCurrent()
-            assertEquals(failed, wait())
-            advanceTimeBy(1)
+            assertTrue(shown().refreshing)
+            assertEquals(DetailsWait.Brief, shown().detailsWait)
+            advanceTimeBy(PATIENCE_MILLIS)
             runCurrent()
-            assertEquals(DetailsWait.Loading, wait())
+            assertEquals(DetailsWait.Brief, shown().detailsWait)
             advanceUntilIdle()
-            assertEquals(failed, wait())
+            assertEquals(false, shown().refreshing)
+            assertEquals(FixtureDetails.full, shown().page.details)
             scope.cancel()
         }
 
@@ -312,12 +354,14 @@ class TitleViewModelTest {
         }
 
     @Test
-    fun `a failed refresh with the details shown keeps the page and says so`() =
+    fun `a failed pulled refresh with the details shown keeps the page and says so`() =
         test { s ->
             s.graph.demo.server.offline.value = true
-            s.title.onEvent(TitleEvent.Retry)
+            s.title.onEvent(TitleEvent.Refresh)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
+            assertEquals(DetailsWait.Brief, s.shown.detailsWait)
+            assertEquals(false, s.shown.refreshing)
             assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), s.message)
         }
 
@@ -456,8 +500,7 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
-    // A title opened from a related row is not stored yet: the page stays, and a failed refresh stands where its
-    // details would be.
+    // A title from a related row is not stored yet: the page stays, and a failed refresh stands in for its details.
     @Test
     fun `a page opened with a summary keeps it while the store does not hold the title, and after a failed refresh`() =
         runTest(dispatcher) {

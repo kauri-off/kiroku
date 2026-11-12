@@ -6,8 +6,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import kotlinx.coroutines.launch
 
-// The one view model that works from its creation: write failures (W2) are dropped with no collector. A write that
-// failed for the session offers no Retry, which could not succeed; the session banner offers sign-in.
+// The one view model that works from its creation: write failures (W2) are dropped with no collector.
 class ShellViewModel(
     list: ListRepository,
 ) : ViewModel() {

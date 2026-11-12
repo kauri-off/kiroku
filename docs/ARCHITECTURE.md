@@ -304,6 +304,10 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - A page opened from a row or another page shows what that row or page showed from its first frame, and keeps
   showing it until the store knows more, also after a failed refresh. A page opened with nothing known starts in its
   loading state.
+- Every screen that asks for data gives a way out of a failure. With nothing to show: the error state with the cause
+  and Retry in place of the content, never a message alone. With older content shown: it stays, the failure is a
+  message, and the screen can be refreshed by pulling. A failed action of the person: a message with Retry that is
+  not lost (section 7.2). A secondary part (a poster, a strip): a placeholder, loaded with the screen's next refresh.
 - Text a person types is held in a `mutableStateOf` or `TextFieldState` that the view model owns and changes inside
   the event, and its field reads that holder: no flow, collected or not, sits between a keystroke and its field. The
   view model's flows observe the holder with `snapshotFlow`.
@@ -375,12 +379,14 @@ was chosen against, and why:
   **With cached content, a failed refresh is a snackbar, never a replaced screen.**
 - Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search shows
   the error state with "No connection" and Retry. A title page whose details were never loaded keeps what it was
-  opened with and shows that error state where the details would be, until a load succeeds.
+  opened with and shows that error state where the details would be, until a load succeeds; as that may be below the
+  first screen, the failure is also a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it.
   One is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
   replaced: a newer one of that kind waits behind it and is dropped if its title is written meanwhile; an ordinary
-  one posted meanwhile is dropped. A snackbar's time runs only while the app is in the foreground: one cut short by
-  leaving the app is shown again on return.
+  one posted meanwhile is dropped. Its time runs only while it can be seen and tapped: the app's window has focus and
+  no sheet or dialog of the app covers it; cut short, it is shown again in full. Every other snackbar runs on
+  regardless and is not shown again.
 
 ### 7.3 Writes to the list
 
@@ -675,7 +681,7 @@ Only a page opened with no data at all (a deep link, or a page restored after th
 full-screen loading state.
 
 **Failed.** Details that could not be loaded leave the page as it is and put the error state with Retry where items 5
-to 9 would be (section 7.2). Only a page with no data at all uses the full-screen error state.
+to 9 would be (section 7.2). After Retry, the indicator stands there at once.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 

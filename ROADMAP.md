@@ -115,6 +115,7 @@ Not to forget:
 - A waiting Undo or Retry is watched again when the list is read again after a failure; the three read attempts
   count failures in a row; an engine failure on a queued edit does not leave its title out of later syncs.
 - `ShellMessages` drops a waiting Undo or Retry when its title's values change, not only its time stamp.
+- A screen that shows a failure tries again by itself when the connection returns.
 - Confirm on recorded responses what MAL's PATCH answers with, and whether it can clear a start or finish date (the
   Undo of a completing step, W3 and W7).
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
@@ -186,6 +187,8 @@ Not to forget:
 - The "Mark watched" action is tested on an Android level before 12 as well as on a current one (N9).
 - An edit sheet opened before a "Mark watched" and saved after it sends the older count, since the last value shown
   wins (W1); decide whether the action's episode survives a save that did not change the count.
+- A held Retry or Undo must not put old values over ones written in the background (the "Mark watched" action, a
+  sync).
 - By hand on Android 13 or later: deny the permission, see "Blocked in system settings", grant it in the system
   settings, return, see the state updated, receive the test notification.
 

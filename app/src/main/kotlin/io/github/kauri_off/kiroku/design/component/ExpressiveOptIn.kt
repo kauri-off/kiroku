@@ -24,6 +24,7 @@ fun RefreshBox(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    contentAlignment: Alignment = Alignment.TopStart,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val state = rememberPullToRefreshState()
@@ -32,6 +33,7 @@ fun RefreshBox(
         onRefresh = onRefresh,
         modifier = modifier,
         state = state,
+        contentAlignment = contentAlignment,
         indicator = { PullToRefreshDefaults.LoadingIndicator(state, isRefreshing, Modifier.align(Alignment.TopCenter)) },
         content = content,
     )

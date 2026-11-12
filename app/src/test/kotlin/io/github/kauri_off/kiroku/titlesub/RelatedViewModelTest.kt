@@ -84,7 +84,7 @@ class RelatedViewModelTest {
 
     // Section 7.2: what a sub-screen could not load is its failed state, which stays until a Retry loads it.
     @Test
-    fun `both sub-screens whose details could not load show the failure until Retry loads them`() =
+    fun `both sub-screens whose details could not load show the failure, also while the list changes, until Retry loads them`() =
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
@@ -99,6 +99,10 @@ class RelatedViewModelTest {
             graph.demo.server.offline.value = false
             advanceTimeBy(STOPPED_AFTER_MILLIS)
             runCurrent()
+            assertTrue(related.state.value is RelatedState.Failed)
+            assertTrue(details.state.value is DetailsState.Failed)
+            graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
             assertTrue(related.state.value is RelatedState.Failed)
             assertTrue(details.state.value is DetailsState.Failed)
             related.onEvent(RelatedEvent.Retry)
