@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.Demo
@@ -58,8 +59,13 @@ class ListViewModelTest {
     ) {
         var screen: Job = test.showing(list.state)
 
-        // What the screen shows once the events so far have been handled.
-        val state: ListState get() = test.runCurrent().let { list.state.value }
+        // What the screen shows once the events so far have been handled; a frame applies the typed filter first.
+        val state: ListState
+            get() {
+                Snapshot.sendApplyNotifications()
+                test.runCurrent()
+                return list.state.value
+            }
 
         val message: ShellMessage? get() = messages.current.value?.message
 
@@ -453,8 +459,52 @@ class ListViewModelTest {
             s.screen.cancel()
             advanceTimeBy(ROTATION + STOPPED_AFTER)
             s.screen = showing(s.list.state)
+            runCurrent()
             advanceUntilIdle()
             assertEquals(downloads, s.graph.demo.server.listDownloads)
+        }
+
+    // Nothing asynchronous sits between a keystroke and the field: no dispatch, no frame.
+    @Test
+    fun `the filter field's text changes with each keystroke before anything runs`() =
+        test { s ->
+            s.list.onEvent(ListEvent.StartFilter)
+            "kag".forEachIndexed { i, _ ->
+                val text = "kag".take(i + 1)
+                s.list.onEvent(ListEvent.FilterChanged(text))
+                assertEquals(text, s.list.filter)
+            }
+            s.list.onEvent(ListEvent.EndFilter)
+            assertNull(s.list.filter)
+        }
+
+    @Test
+    fun `nothing is read or synced before the List is first shown`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.airing,
+                    graph.session,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                )
+            val downloads = graph.demo.server.listDownloads
+            advanceUntilIdle()
+            assertEquals(0, graph.readers)
+            assertEquals(downloads, graph.demo.server.listDownloads)
+            assertEquals(ListContent.Loading, list.state.value.content)
+            val screen = showing(list.state)
+            runCurrent()
+            assertTrue(graph.readers > 0)
+            advanceUntilIdle()
+            assertEquals(downloads + 1, graph.demo.server.listDownloads)
+            screen.cancel()
+            scope.cancel()
         }
 
     @Test
@@ -469,6 +519,7 @@ class ListViewModelTest {
         test(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })) { s ->
             assertEquals(ListStatus.Completed, s.state.tab)
             assertEquals(ListSort.Score, s.page().sort)
+            assertEquals("a", s.list.filter)
             assertEquals("a", s.state.filter)
         }
     }

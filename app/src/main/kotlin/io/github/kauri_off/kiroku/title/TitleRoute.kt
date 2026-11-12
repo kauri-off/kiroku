@@ -19,18 +19,28 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class TitleKey(
     val id: Long,
-) : NavKey
+) : NavKey {
+    // Not saved: a page restored after process death starts from the store.
+    @Transient
+    var opened: TitleSummary? = null
+        private set
+
+    constructor(id: Long, opened: TitleSummary?) : this(id) {
+        this.opened = opened
+    }
+}
 
 // Where the title page's links lead; the shell decides.
 class TitleLinks(
     val back: () -> Unit,
-    val openTitle: (AnimeId) -> Unit,
-    val seeAllRelated: (AnimeId) -> Unit,
-    val details: (AnimeId) -> Unit,
+    val openTitle: (AnimeId, TitleSummary?) -> Unit,
+    val seeAllRelated: (AnimeId, TitleSummary?) -> Unit,
+    val details: (AnimeId, TitleSummary?) -> Unit,
     val recommendations: (AnimeId) -> Unit,
     val signIn: () -> Unit,
 )
@@ -56,6 +66,7 @@ fun TitleRoute(
                 graph.titleLanguage,
                 createSavedStateHandle(),
                 messages,
+                key.opened,
             )
         }
     val editor = editSheetViewModel(graph, messages)
@@ -75,9 +86,9 @@ fun TitleRoute(
                         ),
                     )
                 TitleEvent.Edit -> editor.open(id)
-                is TitleEvent.OpenRelated -> links.openTitle(event.id)
-                TitleEvent.SeeAllRelated -> links.seeAllRelated(id)
-                TitleEvent.OpenDetails -> links.details(id)
+                is TitleEvent.OpenRelated -> links.openTitle(event.id, title.summaryOf(event.id))
+                TitleEvent.SeeAllRelated -> links.seeAllRelated(id, title.summaryOf(id))
+                TitleEvent.OpenDetails -> links.details(id, title.summaryOf(id))
                 TitleEvent.OpenRecommendations -> links.recommendations(id)
                 TitleEvent.SignIn -> links.signIn()
                 else -> title.onEvent(event)

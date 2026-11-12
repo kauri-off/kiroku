@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // The List with its edit sheet; the only place that knows the List's view model and where its rows lead.
@@ -18,7 +19,7 @@ fun ListRoute(
     graph: AppGraph,
     messages: ShellMessages,
     snackbars: SnackbarHostState,
-    onOpenTitle: (AnimeId) -> Unit,
+    onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSearch: () -> Unit,
     onSignIn: () -> Unit,
 ) {
@@ -29,10 +30,10 @@ fun ListRoute(
     val editor = editSheetViewModel(graph, messages)
     val state by list.state.collectAsScreenState()
     ListScreen(
-        state = state,
+        state = state.copy(typed = ListState.Typed(list.filter)),
         onEvent = { event ->
             when (event) {
-                is ListEvent.Open -> onOpenTitle(event.id)
+                is ListEvent.Open -> onOpenTitle(event.id, list.summaryOf(event.id))
                 is ListEvent.Edit -> editor.open(event.id)
                 ListEvent.Search -> onSearch()
                 ListEvent.SignIn -> onSignIn()

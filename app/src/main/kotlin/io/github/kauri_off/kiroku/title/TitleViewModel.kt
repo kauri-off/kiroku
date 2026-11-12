@@ -11,12 +11,11 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
-import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
-import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.edit.EditSheetState
@@ -27,8 +26,10 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -43,25 +44,27 @@ import kotlin.time.Duration.Companion.seconds
 class TitleViewModel(
     private val id: AnimeId,
     private val anime: AnimeRepository,
-    list: ListRepository,
+    list: ListSource,
     airing: AiringRepository,
     session: SessionRepository,
     private val clock: Clock,
     private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
+    opened: TitleSummary? = null,
 ) : ViewModel() {
     private class Sources(
         val anime: Anime?,
         val details: AnimeDetails?,
         val list: ListRead,
         val airing: Map<AnimeId, Airing>,
-        val session: Session,
-    )
+        val session: Session?,
+    ) {
+        constructor(opened: TitleSummary) : this(opened.anime, opened.details, ListRead(opened.list), opened.airing, opened.session)
+    }
 
     private class ListRead(
-        val entry: ListEntry? = null,
-        val statuses: Map<AnimeId, ListStatus> = emptyMap(),
+        val entries: Map<AnimeId, ListEntry> = emptyMap(),
         val failure: DataError? = null,
     )
 
@@ -76,25 +79,44 @@ class TitleViewModel(
     private val listRead =
         list
             .observeEntries()
-            .map { list -> ListRead(list.firstOrNull { it.anime.id == id }, list.associate { it.anime.id to it.status }) }
+            .map { list -> ListRead(list.associateBy { it.anime.id }) }
             .readAgainOnRetry(retries) { ListRead(failure = it) }
 
-    val state: StateFlow<TitleState> =
+    // Starts from what the opening screen showed, so the page needs no read for its first frame.
+    private val sources: StateFlow<Sources?> =
         combine(
-            combine(
-                anime.observeAnime(id),
-                anime.observeDetails(id),
-                listRead,
-                airing.observeAiring(),
-                session.observeSession(),
-                ::Sources,
-            ),
-            moment,
-            failure,
-            detailsWaitShown,
-            ::build,
-        ).onStart { if (!refreshed) refresh() }
-            .stateIn(viewModelScope, WhileShown, TitleState.Loading(null))
+            anime.observeAnime(id),
+            anime.observeDetails(id),
+            listRead,
+            airing.observeAiring(),
+            session.observeSession(),
+            ::Sources,
+        ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
+
+    val state: StateFlow<TitleState> =
+        combine(sources.filterNotNull(), moment, failure, detailsWaitShown, ::build)
+            .onStart { if (!refreshed) refresh() }
+            .stateIn(viewModelScope, WhileShown, sources.value?.let { build(it, moment.value, null, false) } ?: TitleState.Loading(null))
+
+    // What the page shows of [id], itself or a related title, for the screen it opens.
+    fun summaryOf(id: AnimeId): TitleSummary? {
+        val sources = sources.value ?: return null
+        val details = sources.details.takeIf { id == this.id }
+        val anime =
+            (
+                if (id == this.id) {
+                    sources.anime
+                } else {
+                    sources.details
+                        ?.related
+                        ?.firstOrNull { it.anime.id == id }
+                        ?.anime
+                }
+            )
+                ?: sources.list.entries[id]?.anime
+                ?: return null
+        return TitleSummary(anime, details, sources.list.entries, sources.airing, sources.session)
+    }
 
     fun onEvent(event: TitleEvent) {
         when (event) {
@@ -118,7 +140,8 @@ class TitleViewModel(
         failure: DataError?,
         detailsWaitShown: Boolean,
     ): TitleState {
-        val anime = sources.anime ?: sources.list.entry?.anime
+        val entry = sources.list.entries[id]
+        val anime = sources.anime ?: entry?.anime
         val session = sources.session
         val listFailure = sources.list.failure
         return when {
@@ -129,10 +152,10 @@ class TitleViewModel(
                 TitleState.Shown(
                     TitlePage.of(
                         anime,
-                        sources.list.entry,
+                        entry,
                         sources.airing[id],
                         sources.details,
-                        sources.list.statuses,
+                        sources.list.entries.mapValues { it.value.status },
                         titleLanguage,
                         clock,
                     ),

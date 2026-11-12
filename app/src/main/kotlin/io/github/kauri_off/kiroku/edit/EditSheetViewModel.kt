@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.edit
 
+import androidx.annotation.MainThread
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,23 +11,18 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
-import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessages
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.LocalDate
 
-// The edit sheet of the screen that opened it. The sheet is a draft of the user's own input, read once from the
-// store: every event is reduced synchronously in onEvent, so the count field never loses or reorders a keystroke;
-// the open sheet survives recreation and, once its route calls restore, process death.
+// The edit sheet of the screen that opened it: a draft of the user's input, read once from the store.
 class EditSheetViewModel(
-    private val list: ListRepository,
+    private val list: ListSource,
     private val animeRepository: AnimeRepository,
     private val airing: AiringRepository,
     private val clock: Clock,
@@ -33,14 +30,17 @@ class EditSheetViewModel(
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
 ) : ViewModel() {
-    private val shown = MutableStateFlow<EditSheetState?>(null)
-    val sheet: StateFlow<EditSheetState?> = shown.asStateFlow()
+    private val shown = mutableStateOf<EditSheetState?>(null)
+
+    // Compose state, changed synchronously by every event, so the sheet's fields read each keystroke in the same frame.
+    val sheet: EditSheetState? get() = shown.value
 
     private var anime: Anime? = null
     private var loading = false
     private var restored = false
 
-    // Reopens the sheet that was open when the process died.
+    // Reopens the sheet that was open when the process died; its route calls it once shown.
+    @MainThread
     fun restore() {
         if (restored) return
         restored = true

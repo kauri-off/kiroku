@@ -143,10 +143,11 @@ class AppRouteTest {
         shows("My list")
     }
 
-    // The stored title is drawn on the page's first frame; only the details may still be on their way.
+    // Section 9.4: opened from a row, the page has the summary on its first frame, however late the store answers.
     @Test
-    fun `a title page shows the stored title on its first frame`() {
+    fun `a title page opened from a row shows its summary on its first frame, before the store answers`() {
         app()
+        graph.readsHeld = true
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText(kagerou.titles.romaji).performClick()
         val page = {
@@ -159,6 +160,29 @@ class AppRouteTest {
         repeat(FRAMES) { if (!page()) compose.mainClock.advanceTimeByFrame() }
         compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
         shows("Episodes watched")
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        shows("Episodes watched")
+        graph.readsHeld = false
+    }
+
+    @Test
+    fun `Related and Details opened from a title page show what the page showed, before the store answers`() {
+        app()
+        openKagerou()
+        scrollTo("See all")
+        graph.readsHeld = true
+        click("See all")
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
+        shows("Prequel")
+        back()
+        scrollTo("Details")
+        click("Details")
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
+        showsSubstring("Studio Hanamizuki")
+        graph.readsHeld = false
     }
 
     @Test

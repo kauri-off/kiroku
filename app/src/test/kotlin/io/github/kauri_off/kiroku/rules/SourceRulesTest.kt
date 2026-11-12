@@ -16,12 +16,13 @@ class SourceRulesTest {
     }
 
     @Test
-    fun viewModelsWriteOnlyThroughShellMessagesAndTakeNoGraph() {
+    fun viewModelsTakeNeitherTheListsWriterNorTheGraph() {
         val sources = appSources()
         assertEquals(
             setOf("EditSheetViewModel.kt", "ListViewModel.kt", "ShellViewModel.kt", "SubScreenViewModels.kt", "TitleViewModel.kt"),
             sources.filter { declaresViewModel(it.readText()) }.map { it.name }.toSet(),
         )
+        assertTrue(sources.any { relative(it) == SHELL_VIEW_MODEL_SOURCE })
         assertEquals(emptyList<String>(), sources.flatMap { viewModelProblems(relative(it), it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { collectionProblems(relative(it), it.readText()) })
     }
@@ -31,17 +32,28 @@ class SourceRulesTest {
         val planted =
             listOf(
                 "class A(private val list: ListRepository) : ViewModel() {\n    fun a() = viewModelScope.launch { list.write(w) }\n}\n",
-                "class A(\n    private val repository: ListRepository,\n) : ViewModel() {\n    fun a() = viewModelScope.launch { repository.send(w) }\n}\n",
+                "class A(\n    private val messages: io.github.kauri_off.kiroku.core.repository.ListRepository,\n) : ViewModel()\n",
                 "class A(graph: AppGraph) : ViewModel()\n",
-                "class A : SubScreenViewModel(id, anime, session) {\n    fun a() = viewModelScope.launch { graph.list.write(w) }\n}\n",
+                "class A(app: Application) : ViewModel() {\n    val list = app.appGraph.list\n}\n",
+                "class A(app: Application) : ViewModel() {\n    val graph = (app as AppGraphOwner).graph\n}\n",
+                "class A(engine: ListEngine) : androidx.lifecycle.ViewModel()\n",
+                "class A(list: ListRepository) : BaseViewModel<AState>()\n",
+                "class A(list: ListRepository) :\n    SubScreenViewModel(id, anime, session)\n",
+                "class A : ViewModel() {\n    init {\n        viewModelScope.launch { }\n    }\n}\n",
+                "typealias Writer = ListRepository\n",
             )
         for (source in planted) {
             assertEquals(source, 1, viewModelProblems("A.kt", source).size)
         }
         val clean =
-            "class A(private val messages: ShellMessages) : ViewModel() {\n" +
-                "    fun a() = messages.write(w)\n    fun b() = SavedSheet.save(saved, sheet)\n}\n"
+            "class A(\n    private val list: ListSource,\n    private val messages: ShellMessages,\n) : ViewModel() {\n" +
+                "    val state = list.observeEntries().stateIn(viewModelScope, WhileShown, null)\n" +
+                "    fun a() = messages.write(w)\n}\n"
         assertEquals(emptyList<String>(), viewModelProblems("A.kt", clean))
+        assertEquals(
+            emptyList<String>(),
+            viewModelProblems(SHELL_VIEW_MODEL_SOURCE, "class A(list: ListRepository) : ViewModel() {\n    init { }\n}\n"),
+        )
         assertEquals(1, collectionProblems("A.kt", "@Composable fun A(vm: V) { val s by vm.state.collectAsState() }\n").size)
         assertEquals(1, collectionProblems("A.kt", "@Composable fun A(vm: V) { val s by vm.state.collectAsStateWithLifecycle() }\n").size)
         assertEquals(0, collectionProblems("A.kt", "@Composable fun A(vm: V) { val s by vm.state.collectAsScreenState() }\n").size)

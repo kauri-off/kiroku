@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,13 +20,14 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
-import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.title.TitleSummary
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +37,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -42,10 +44,9 @@ import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.LocalDate
 
-// The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort), so the list it last read
-// and the orders are kept here; the pipeline that reads the list updates them while the List is shown.
+// The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort), so they are kept here.
 class ListViewModel(
-    private val list: ListRepository,
+    private val list: ListSource,
     private val airing: AiringRepository,
     session: SessionRepository,
     private val clock: Clock,
@@ -62,7 +63,6 @@ class ListViewModel(
         val failure: ListFailure? = null,
         val tab: ListStatus,
         val sorts: Map<ListStatus, ListSort>,
-        val filter: String?,
         val sortSheetOpen: Boolean = false,
         val refreshing: Boolean = false,
         val session: Session? = null,
@@ -76,24 +76,26 @@ class ListViewModel(
                     ListStatus.entries.associateWith { status ->
                         saved.get<String>(sortKey(status))?.let(ListSort::valueOf) ?: defaultSort(status, withAiring = true)
                     },
-                filter = saved.get<String>(FILTER),
             ),
         )
+    private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val retries = MutableStateFlow(0)
     private var firstSyncStarted = false
     private var firstSyncDone = false
     private var entriesLoaded = false
 
-    // Mapped from the model alone, with no combine, so a filter keystroke reaches the state before onEvent returns.
+    // The filter field's text, held as Compose state so the field reads each keystroke in the same frame.
+    val filter: String? get() = typed.value
+
     val state: StateFlow<ListState> =
         flow {
             coroutineScope {
                 launch { reading().collect() }
                 launch { session.observeSession().collect { session -> model.update { it.copy(session = session) } } }
-                emitAll(model.map(::build))
+                emitAll(combine(model, snapshotFlow { typed.value }, ::build))
             }
         }.onStart { firstSync() }
-            .stateIn(viewModelScope, WhileShown, build(model.value))
+            .stateIn(viewModelScope, WhileShown, build(model.value, typed.value))
 
     fun onEvent(event: ListEvent) {
         when (event) {
@@ -149,21 +151,31 @@ class ListViewModel(
         model.update { it.copy(orders = null, entries = emptyMap(), failure = error.toListFailure()) }
     }
 
-    private fun build(model: Model): ListState {
+    // What the List shows of [id], for its title page.
+    fun summaryOf(id: AnimeId): TitleSummary? {
+        val model = model.value
+        val entry = model.entries[id] ?: return null
+        return TitleSummary(entry.anime, null, model.entries, model.airing, model.session)
+    }
+
+    private fun build(
+        model: Model,
+        filter: String?,
+    ): ListState {
         val session = model.session
         val orders = model.orders
         val content =
             when {
                 session == Session.SignedOut -> ListContent.SignedOut
                 orders == null -> model.failure?.let(ListContent::Failed) ?: ListContent.Loading
-                else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, it, orders.getValue(it)) })
+                else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, filter, it, orders.getValue(it)) })
             }
         return ListState(
             owner = ListOwner.Me,
             content = content,
             tab = model.tab,
             sortSheetOpen = model.sortSheetOpen,
-            filter = model.filter,
+            filter = filter,
             refreshing = model.refreshing,
             sessionExpired = session == Session.Expired,
             now = clock.instant(),
@@ -172,11 +184,11 @@ class ListViewModel(
 
     private fun page(
         model: Model,
+        text: String?,
         status: ListStatus,
         ids: List<AnimeId>,
     ): ListPage {
         val today = today()
-        val text = model.filter
         val rows =
             ids
                 .mapNotNull { id -> model.entries[id]?.takeIf { it.status == status } }
@@ -230,7 +242,7 @@ class ListViewModel(
     }
 
     private fun filterBy(text: String?) {
-        model.update { it.copy(filter = text) }
+        typed.value = text
         saved[FILTER] = text
     }
 

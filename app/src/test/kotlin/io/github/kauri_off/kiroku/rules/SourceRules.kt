@@ -186,39 +186,44 @@ fun projectSources(): List<File> =
         }.sorted()
 
 // A file that declares a view model: a class extending ViewModel or one of the app's own view model classes.
-private val viewModelClass = Regex("""(\)|\bclass\s+\w+)\s*:\s*\w*ViewModel\s*\(""")
+private val viewModelClass = Regex("""(\)|\bclass\s+\w+(\s*<[^>]*>)?)\s*:\s*[\w.]*ViewModel\s*(<[^>]*>)?\s*\(""")
 
 fun declaresViewModel(source: String): Boolean = viewModelClass.containsMatchIn(KotlinSource(source).code)
 
-// A call that writes the list; from a view model it goes only through ShellMessages, whose scope outlives the screen.
-private val writeCall = Regex("""\b(\w+)\s*\.\s*(write|send)\s*\(""")
+// The shell's view model owns the list's writer and listens from its creation; no other view model may.
+const val SHELL_VIEW_MODEL_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/shell/ShellViewModel.kt"
 
-// A view model takes the repositories and services it uses, never the whole graph.
-private val graphUse = Regex("""\bAppGraph\b""")
+// A view model is given ListSource, which cannot write; these names would give it the writer or the whole graph.
+private val writerOrGraph = Regex("""\b\w*(Graph|ListRepository|ListEngine)\w*\b""")
+
+private val initBlock = Regex("""\binit\s*\{""")
+
+private val aliasOfWriterOrGraph = Regex("""\btypealias\s+\w+(\s*<[^>]*>)?\s*=\s*[\w.]*(AppGraph|ListRepository|ListEngine)\b""")
 
 fun viewModelProblems(
     name: String,
     source: String,
 ): List<String> {
-    if (!declaresViewModel(source)) return emptyList()
-    return KotlinSource(source).code.lines().flatMapIndexed { index, line ->
-        val writes =
-            writeCall
-                .findAll(line)
-                .filter { it.groupValues[1] != "messages" }
-                .map { "$name:${index + 1}: a view model writes outside ShellMessages.write: ${line.trim()}" }
-                .toList()
-        val graph =
-            if (graphUse.containsMatchIn(
+    val lines = KotlinSource(source).code.lines()
+    val aliases =
+        lines.mapIndexedNotNull { index, line ->
+            if (aliasOfWriterOrGraph.containsMatchIn(
                     line,
                 )
             ) {
-                listOf("$name:${index + 1}: a view model takes the graph: ${line.trim()}")
+                "$name:${index + 1}: an alias hides the list's writer or the graph: ${line.trim()}"
             } else {
-                emptyList()
+                null
             }
-        writes + graph
-    }
+        }
+    if (name == SHELL_VIEW_MODEL_SOURCE || !declaresViewModel(source)) return aliases
+    return aliases +
+        lines.flatMapIndexed { index, line ->
+            listOfNotNull(
+                writerOrGraph.find(line)?.let { "$name:${index + 1}: a view model names ${it.value}: ${line.trim()}" },
+                if (initBlock.containsMatchIn(line)) "$name:${index + 1}: a view model starts work in init: ${line.trim()}" else null,
+            )
+        }
 }
 
 // The one file that collects a flow into Compose state, for every route: see collectAsScreenState.

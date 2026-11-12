@@ -20,14 +20,24 @@ data class ListState(
     val content: ListContent,
     val tab: ListStatus = ListStatus.Watching,
     val sortSheetOpen: Boolean = false,
-    // The text typed into the filter field, which filters every tab; null when the list is not being filtered.
+    // The text that filters every tab's rows; null when the list is not being filtered.
     val filter: String? = null,
     val refreshing: Boolean = false,
     val sessionExpired: Boolean = false,
     // The moment air times are written against: "today", "tomorrow", a weekday or a date.
     val now: Instant,
+    // The filter field's own text, which the rows follow a moment later; when absent the field shows [filter].
+    val typed: Typed? = null,
 ) {
     val page: ListPage? get() = (content as? ListContent.Tabs)?.pages?.get(tab)
+
+    // What the filter field shows; null while it is closed.
+    val filterText: String? get() = if (typed != null) typed.text else filter
+
+    @JvmInline
+    value class Typed(
+        val text: String?,
+    )
 }
 
 sealed interface ListOwner {

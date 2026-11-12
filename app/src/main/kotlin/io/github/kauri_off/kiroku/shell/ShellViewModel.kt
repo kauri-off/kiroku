@@ -5,8 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import kotlinx.coroutines.launch
 
-// Lives with the activity's view models, so a message and a write failure (W2) survive recreation. Write failures are
-// dropped with no collector, so this one listens for its whole life, whatever is shown.
+// The one view model that works from its creation: write failures (W2) are dropped with no collector.
 class ShellViewModel(
     list: ListRepository,
 ) : ViewModel() {

@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
+import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.titlesub.DetailsRoute
 import io.github.kauri_off.kiroku.titlesub.RelatedKey
@@ -53,7 +54,7 @@ fun appEntries(
 ): ShellEntries =
     { navigator, snackbars ->
         val signIn = { navigator.open(NotBuiltKey(NotBuilt.SignIn)) }
-        val openTitle = { id: AnimeId -> navigator.open(TitleKey(id.value)) }
+        val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
         val back = { navigator.back() }
         entry<ListRoot> {
             ListRoute(
@@ -76,8 +77,8 @@ fun appEntries(
                 TitleLinks(
                     back = { back() },
                     openTitle = openTitle,
-                    seeAllRelated = { navigator.open(RelatedKey(it.value)) },
-                    details = { navigator.open(DetailsKey(it.value)) },
+                    seeAllRelated = { id, opened -> navigator.open(RelatedKey(id.value, opened)) },
+                    details = { id, opened -> navigator.open(DetailsKey(id.value, opened)) },
                     recommendations = { navigator.open(NotBuiltKey(NotBuilt.Recommendations)) },
                     signIn = signIn,
                 ),

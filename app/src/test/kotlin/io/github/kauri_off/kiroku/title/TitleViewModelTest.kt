@@ -359,20 +359,79 @@ class TitleViewModelTest {
     fun `the details are refreshed once, not again when the page is shown again`() =
         test(before = { demo.server.offline.value = true }) { s ->
             assertTrue(s.state is TitleState.Failed)
+            assertEquals(1, s.graph.refreshes)
             s.graph.demo.server.offline.value = false
             s.screen.cancel()
             advanceTimeBy(STOPPED_AFTER_MILLIS)
+            runCurrent()
+            assertEquals(0, s.graph.readers)
             s.screen = showing(s.title.state)
+            runCurrent()
             advanceUntilIdle()
+            assertEquals(1, s.graph.refreshes)
             assertTrue(s.state is TitleState.Failed)
         }
+
+    @Test
+    fun `nothing is read or refreshed before the page is first shown`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            advanceUntilIdle()
+            assertEquals(0, graph.readers)
+            assertEquals(0, graph.refreshes)
+            assertEquals(TitleState.Loading(null), title.state.value)
+            showing(title.state)
+            runCurrent()
+            assertTrue(graph.readers > 0)
+            assertEquals(1, graph.refreshes)
+            scope.cancel()
+        }
+
+    // Section 9.4: opened from a row, the page has the summary, however late the store answers.
+    @Test
+    fun `a page opened with a summary shows it at once, before the store answers`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val summary = summary(graph)
+            graph.readsHeld = true
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list), summary)
+            val first = title.state.value as TitleState.Shown
+            assertEquals(FixtureAnime.exactToWatch, first.page.anime)
+            assertEquals(12, first.page.entry?.watchedEpisodes)
+            assertNull(first.page.details)
+            showing(title.state)
+            advanceTimeBy(PATIENCE_MILLIS - 1)
+            runCurrent()
+            val held = (title.state.value as TitleState.Shown).page
+            assertEquals(first.page.entry, held.entry)
+            assertNull(held.details)
+            graph.readsHeld = false
+            advanceUntilIdle()
+            assertEquals(FixtureDetails.full, (title.state.value as TitleState.Shown).page.details)
+            scope.cancel()
+        }
+
+    // What the List shows of the title.
+    private suspend fun summary(graph: TestGraph): TitleSummary {
+        val entries =
+            graph.list
+                .observeEntries()
+                .first()
+                .associateBy { it.anime.id }
+        val anime = entries.getValue(FixtureAnime.exactToWatch.id).anime
+        return TitleSummary(anime, null, entries, graph.airing.observeAiring().first(), graph.session.observeSession().first())
+    }
 
     private fun title(
         graph: TestGraph,
         id: AnimeId,
         saved: SavedStateHandle,
         messages: ShellMessages,
-    ) = TitleViewModel(id, graph.anime, graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, saved, messages)
+        opened: TitleSummary? = null,
+    ) = TitleViewModel(id, graph.anime, graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, saved, messages, opened)
 
     private companion object {
         const val STOPPED_AFTER_MILLIS = 5_001L

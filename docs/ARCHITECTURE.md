@@ -297,12 +297,15 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 - A screen is a stateless composable, `XScreen(state, onEvent)`, drawn entirely from one immutable state value. It
   never touches a view model, a repository or navigation. This is what previews and screenshot tests render.
-- A view model takes the repositories and services it uses, never the whole graph. It produces the state as a
-  `StateFlow` from the repositories' flows and the user's input, and handles the events. The state is produced from
-  the view model's creation, so the first frame shows what the store holds, and only while a screen collects it: it
-  stops once none has for longer than a rotation takes, and starts again with the next. One-off work at start (the
-  first sync, a refresh) runs on the first collection, not in the constructor.
-- Text the user types reaches the state before the keystroke's event returns.
+- A view model takes the repositories and services it uses, never the whole graph, and of the list only a view that
+  cannot write. It produces the state as a `StateFlow` from the repositories' flows and the user's input, and handles
+  the events. The state is produced only while a screen collects it: it stops once none has for longer than a
+  rotation takes, and starts again with the next. Nothing is read, synced or refreshed before the first collection.
+- The first frame is the state's initial value, built synchronously from what the screen was opened with: a page
+  opened from a row or another page starts from the summary that row or page showed; one opened with nothing known
+  starts in its loading state.
+- Text a person types lives in Compose state that its field reads in the same frame; the view model's flows observe
+  that state, never the other way round.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
   screen.
 - A thin `XRoute` collects the state only while its screen is started, connects the view model to the screen and to

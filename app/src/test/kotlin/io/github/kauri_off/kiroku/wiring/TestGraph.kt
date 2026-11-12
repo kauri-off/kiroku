@@ -23,8 +23,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
@@ -41,16 +43,25 @@ import org.junit.runner.Description
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
-// With [lateObservers], as with a database, an observer hears of a change after the write and a fresh read see it;
-// with [slowWrites], a write takes time before it is applied; while [listUnreadable], the list cannot be read.
-// [readers] counts the collectors of the list, airing, title and session flows at this moment.
+// Demo mode with the stores' answers made late, slow, held or failing, and their open reads counted.
 class TestGraph(
     val demo: Demo,
+    // An observer hears of a change after the write and a fresh read see it, as with a database.
     lateObservers: Boolean = false,
+    // A write takes time before it is applied.
     slowWrites: Boolean = false,
 ) : AppGraph {
     private val counter = Readers()
+
+    // The collectors of the list, airing, title and session flows at this moment.
     val readers: Int get() = counter.count
+
+    // While true, no read of those flows answers, as a database that has not answered yet.
+    var readsHeld: Boolean
+        get() = counter.held.value
+        set(value) {
+            counter.held.value = value
+        }
 
     override val clock = demo.clock
     override val session: SessionRepository = CountedSession(demo.session, counter)
@@ -61,12 +72,18 @@ class TestGraph(
             counter,
         )
 
+    // While true, the list cannot be read.
     var listUnreadable: Boolean
         get() = reads.unreadable
         set(value) {
             reads.unreadable = value
         }
-    override val anime: AnimeRepository = CountedAnime(demo.anime, counter)
+    private val refreshCount = AtomicInteger()
+
+    // The title refreshes asked for so far.
+    val refreshes: Int get() = refreshCount.get()
+
+    override val anime: AnimeRepository = CountedAnime(demo.anime, counter, refreshCount)
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
@@ -82,8 +99,13 @@ class TestGraph(
 private class Readers {
     private val open = AtomicInteger()
     val count: Int get() = open.get()
+    val held = MutableStateFlow(false)
 
-    fun <T> of(flow: Flow<T>): Flow<T> = flow.onStart { open.incrementAndGet() }.onCompletion { open.decrementAndGet() }
+    fun <T> of(flow: Flow<T>): Flow<T> =
+        flow {
+            held.first { !it }
+            emitAll(flow)
+        }.onStart { open.incrementAndGet() }.onCompletion { open.decrementAndGet() }
 }
 
 private class CountedList(
@@ -98,10 +120,16 @@ private class CountedList(
 private class CountedAnime(
     private val inner: AnimeRepository,
     private val readers: Readers,
+    private val refreshes: AtomicInteger,
 ) : AnimeRepository by inner {
     override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(inner.observeAnime(id))
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = readers.of(inner.observeDetails(id))
+
+    override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+        refreshes.incrementAndGet()
+        return inner.refresh(id)
+    }
 }
 
 private class CountedAiring(

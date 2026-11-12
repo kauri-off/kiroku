@@ -38,6 +38,5 @@ fun EditSheetRoute(
             messages.editTaken(id)
         }
     }
-    val sheet by editor.sheet.collectAsScreenState()
-    sheet?.let { EditSheet(it, editor::onEvent) }
+    editor.sheet?.let { EditSheet(it, editor::onEvent) }
 }

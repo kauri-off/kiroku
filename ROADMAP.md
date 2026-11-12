@@ -137,6 +137,10 @@ Not to forget:
 - Before the Russian relation names are written, they are compared with the names Shikimori shows, read from the
   site at that time and not from memory. The differences go to the owner; a term changes, in the glossary and the
   resources together, only on the owner's answer.
+- A one-off effect a view model hands its route (signed in, a redirect received) is state the route acts on and then
+  acknowledges, as `ShellMessages.editRequest` is, not a `Channel`.
+- Room flows join a view model's state as they are; results that arrive page by page are held as a `StateFlow` of the
+  pages loaded, with no paging library (section 6.4).
 
 ## M3. Episodes aired and episodes to watch
 

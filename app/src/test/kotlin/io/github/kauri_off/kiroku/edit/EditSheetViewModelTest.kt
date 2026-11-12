@@ -38,7 +38,7 @@ class EditSheetViewModelTest {
         val graph: TestGraph,
         val editor: EditSheetViewModel,
     ) {
-        val sheet: EditSheetState get() = editor.sheet.value!!
+        val sheet: EditSheetState get() = editor.sheet!!
 
         suspend fun values(anime: Anime) =
             graph.list
@@ -133,7 +133,7 @@ class EditSheetViewModelTest {
             advanceUntilIdle()
             assertEquals(draft, s.values(anime))
             s.editor.onEvent(EditSheetEvent.Dismissed)
-            assertNull(s.editor.sheet.value)
+            assertNull(s.editor.sheet)
         }
 
     @Test
@@ -177,7 +177,7 @@ class EditSheetViewModelTest {
             assertTrue(s.sheet.closing)
             s.editor.onEvent(EditSheetEvent.Dismissed)
             advanceUntilIdle()
-            assertNull(s.editor.sheet.value)
+            assertNull(s.editor.sheet)
             assertEquals(8, s.values(anime)?.score)
         }
 
@@ -217,6 +217,6 @@ class EditSheetViewModelTest {
     fun `a sheet closed before process death does not come back`() {
         val saved = SavedStateHandle()
         test(saved = saved) { s -> s.editor.onEvent(EditSheetEvent.Dismissed) }
-        test(saved = saved, open = null) { s -> assertNull(s.editor.sheet.value) }
+        test(saved = saved, open = null) { s -> assertNull(s.editor.sheet) }
     }
 }
