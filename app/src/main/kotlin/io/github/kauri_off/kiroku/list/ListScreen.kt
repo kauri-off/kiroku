@@ -177,6 +177,14 @@ private fun Pages(
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     motion.composeAll()
+                    motion.touching = true
+                    try {
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                        } while (event.changes.any { it.pressed })
+                    } finally {
+                        motion.touching = false
+                    }
                 }
             }.nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,

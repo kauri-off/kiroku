@@ -150,6 +150,9 @@ class ListTabMotion(
         if (ahead < all) ahead = all
     }
 
+    // A finger is on the pager; only its drag is held by [gate].
+    var touching = false
+
     // Every page is laid out, so a scroll of the pager composes none, which can crash Compose (ROADMAP).
     private val staged: Boolean get() = pager.layoutInfo.beyondViewportPageCount >= all
 
@@ -164,7 +167,7 @@ class ListTabMotion(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                if (!staged) {
+                if (touching && !staged) {
                     composeAll()
                     held += available.x
                     return Offset(available.x, 0f)
