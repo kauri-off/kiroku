@@ -846,9 +846,9 @@ only when rendered on the same machine.
   Lint with the translation checks of section 10 as errors; other warnings are not errors, because checks such as
   "newer version available" would fail the build whenever a library publishes a release.
 - **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`; its
-  workflow files say what it runs. It keeps the screenshots and a debug APK, which has no client id and so runs in
-  demo mode, and it checks that the pull request title is a conventional commit. The queue rules of the maintainer's
-  machine are in `CLAUDE.md`.
+  workflow files say what it runs. It keeps the screenshots; a debug APK, which has no client id and so runs in
+  demo mode; and an unsigned release APK with its R8 mapping, built without any secret. It checks that the pull
+  request title is a conventional commit. The queue rules of the maintainer's machine are in `CLAUDE.md`.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
