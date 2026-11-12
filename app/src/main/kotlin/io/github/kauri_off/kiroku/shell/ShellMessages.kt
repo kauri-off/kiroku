@@ -1,38 +1,24 @@
 package io.github.kauri_off.kiroku.shell
 
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.kauri_off.kiroku.R
-import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
-import io.github.kauri_off.kiroku.design.component.MessageCovers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 // A snackbar a screen posts and the shell shows, so it outlives the screen and its view model (ARCHITECTURE 6.2).
 data class ShellMessage(
@@ -128,19 +114,17 @@ class ShellMessages(
         scope.launch { list.write(write)?.let(message)?.let(::post) }
     }
 
-    // A waiting Undo or Retry is dropped once its title is written, so it never acts on values it did not see.
+    // A waiting Undo or Retry is dropped once its title's values change, also while the list could not be read.
     private fun watch(posted: Posted): Job? {
         val id = posted.message.title ?: return null
         return scope.launch {
-            try {
-                list
-                    .observeEntry(id)
-                    .distinctUntilChanged()
-                    .drop(1)
-                    .first()
-            } catch (_: DataException) {
-                return@launch
-            }
+            list
+                .observeEntry(id)
+                .retryWhen { cause, _ -> (cause is DataException).also { if (it) delay(REREAD) } }
+                .map { it?.values }
+                .distinctUntilChanged()
+                .drop(1)
+                .first()
             waiting.removeAll { it.posted == posted }
         }
     }
@@ -167,78 +151,9 @@ class ShellMessages(
     fun editTaken(id: AnimeId) {
         requested.compareAndSet(id, null)
     }
-}
 
-// A message that must stay runs only while it can be seen and tapped (section 7.2), and starts again in full after.
-@OptIn(ExperimentalCoroutinesApi::class)
-@Composable
-fun ShownMessages(
-    messages: ShellMessages,
-    host: SnackbarHostState,
-    covers: MessageCovers = remember { MessageCovers() },
-) {
-    val posted = messages.current.collectAsScreenState().value
-    val text = posted?.message?.text?.let { text(it) }
-    val action = posted?.message?.action?.let { actionLabel(it) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val window = LocalWindowInfo.current
-    LaunchedEffect(posted, lifecycle, window, covers) {
-        if (posted == null || text == null) return@LaunchedEffect
-        val result =
-            if (posted.message.mustStay) {
-                combine(lifecycle.currentStateFlow, snapshotFlow { window.isWindowFocused && !covers.covered }) { state, seen ->
-                    seen && state.isAtLeast(Lifecycle.State.STARTED)
-                }.distinctUntilChanged()
-                    .mapLatest { seen -> if (seen) host.show(text, action) else null }
-                    .filterNotNull()
-                    .first()
-            } else {
-                host.show(text, action)
-            }
-        messages.ended(posted, result == SnackbarResult.ActionPerformed)
+    internal companion object {
+        // How long a watch waits to read the list again after it could not.
+        val REREAD = 5.seconds
     }
 }
-
-suspend fun SnackbarHostState.show(
-    text: String,
-    action: String?,
-): SnackbarResult =
-    showSnackbar(
-        text,
-        actionLabel = action,
-        duration =
-            if (action ==
-                null
-            ) {
-                SnackbarDuration.Short
-            } else {
-                SnackbarDuration.Long
-            },
-    )
-
-@Composable
-fun text(text: ShellMessage.Text): String =
-    when (text) {
-        is ShellMessage.Text.EpisodeWatched -> stringResource(R.string.list_episode_watched, text.episode)
-        ShellMessage.Text.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
-        ShellMessage.Text.AddedToPlanned -> stringResource(R.string.title_added_to_planned)
-        is ShellMessage.Text.RefreshFailed ->
-            stringResource(
-                when (text.error) {
-                    DataError.NoConnection -> R.string.common_no_connection
-                    DataError.Refused -> R.string.common_refused
-                    else -> R.string.common_could_not_refresh
-                },
-            )
-        ShellMessage.Text.CouldNotSave -> stringResource(R.string.shell_could_not_save)
-    }
-
-@Composable
-fun actionLabel(action: ShellMessage.Action): String =
-    stringResource(
-        when (action) {
-            is ShellMessage.Action.Undo -> R.string.common_undo
-            is ShellMessage.Action.Retry -> R.string.design_retry
-            is ShellMessage.Action.Change -> R.string.title_change
-        },
-    )

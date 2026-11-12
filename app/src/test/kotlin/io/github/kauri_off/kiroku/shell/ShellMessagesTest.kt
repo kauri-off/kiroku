@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.shell
 
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -23,16 +24,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 // ARCHITECTURE 6.2: a message belongs to the shell, so it outlives the screen that posted it and a recreation.
 @RunWith(RobolectricTestRunner::class)
@@ -177,15 +184,50 @@ class ShellMessagesTest {
         compose.waitForIdle()
         runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
         compose.waitForIdle()
-        val shown =
-            compose.runOnUiThread<List<ShellMessage>> {
-                generateSequence {
-                    messages.current.value
-                        ?.also { messages.ended(it, actionPerformed = false) }
-                        ?.message
-                }.toList()
-            }
-        assertEquals(listOf(moved, otherMoved), shown)
+        assertEquals(listOf(moved, otherMoved), shownInTurn())
+    }
+
+    // Lets each shown message time out; returns what was shown, in order.
+    private fun shownInTurn(): List<ShellMessage> =
+        compose.runOnUiThread<List<ShellMessage>> {
+            generateSequence {
+                messages.current.value
+                    ?.also { messages.ended(it, actionPerformed = false) }
+                    ?.message
+            }.toList()
+        }
+
+    private fun idleFor(duration: Duration) {
+        shadowOf(Looper.getMainLooper()).idleFor(duration.toJavaDuration())
+        compose.waitForIdle()
+    }
+
+    // The store failed and came back; the title written since is compared with what was read before the failure.
+    @Test
+    fun `a waiting Undo is watched again when the list is read again after a failure`() {
+        compose.runOnUiThread { listOf(failed(1), moved).forEach(messages::post) }
+        compose.waitForIdle()
+        graph.demo.store.unreadable.value = true
+        idleFor(3.seconds) // longer than the engine's read attempts, so the watch's flow ends
+        graph.demo.store.unreadable.value = false
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        idleFor(ShellMessages.REREAD)
+        assertEquals(listOf(failed(1)), shownInTurn())
+    }
+
+    // A sync that brings the same values with MAL's newer time stamp leaves nothing the Undo would act on changed.
+    @Test
+    fun `a waiting Undo stays when only its title's time stamp changes`() {
+        compose.runOnUiThread { listOf(failed(1), moved).forEach(messages::post) }
+        compose.waitForIdle()
+        val before = graph.demo.server.entry(anime.id)!!
+        graph.demo.server.editOnWebsite(before.anime, before.values)
+        scope.launch { graph.list.sync() }
+        compose.waitForIdle()
+        val after = runBlocking { graph.list.observeEntry(anime.id).first() }!!
+        assertNotEquals(before.updatedAt, after.updatedAt)
+        assertEquals(before.values, after.values)
+        assertEquals(listOf(failed(1), moved), shownInTurn())
     }
 
     @Test
