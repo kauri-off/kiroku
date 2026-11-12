@@ -604,7 +604,7 @@ class ListTabFollowTest {
             pager = rememberPagerState { 5 }
             scope = rememberCoroutineScope()
             val motion = rememberListTabMotion(pager)
-            HorizontalPager(pager, Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) }
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = motion.ahead) { Box(Modifier.fillMaxSize()) }
             LaunchedEffect(motion) { motion.followRest { reports += it } }
             LaunchedEffect(tab) { motion.show(tab) }
         }
@@ -629,7 +629,7 @@ class ListTabFollowTest {
         compose.setContent {
             pager = rememberPagerState { 5 }
             val motion = rememberListTabMotion(pager)
-            HorizontalPager(pager, Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) }
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = motion.ahead) { Box(Modifier.fillMaxSize()) }
             LaunchedEffect(motion) { motion.followRest { tab = it } }
             LaunchedEffect(tab) { motion.show(tab) }
         }

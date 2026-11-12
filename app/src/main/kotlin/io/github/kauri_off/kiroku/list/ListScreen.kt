@@ -51,6 +51,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -68,6 +70,7 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
 import io.github.kauri_off.kiroku.text.label
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 
 // The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
@@ -137,7 +140,7 @@ private data class Shown(
     val now: Instant,
 )
 
-// One page per tab, each with its own scroll position; all are composed, so no swipe or tap composes a page.
+// One page per tab, each with its own scroll position; once the screen has settled all are composed.
 @Composable
 private fun Pages(
     tab: ListStatus,
@@ -154,10 +157,15 @@ private fun Pages(
         motion.followRest { index -> if (statuses[index] != selected.value) events.value(ListEvent.SelectTab(statuses[index])) }
     }
     LaunchedEffect(tab) { motion.show(statuses.indexOf(tab)) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(motion) {
+        lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
+        motion.composeAhead()
+    }
     HorizontalPager(
         pager,
         Modifier.fillMaxSize(),
-        beyondViewportPageCount = statuses.lastIndex,
+        beyondViewportPageCount = motion.ahead,
         key = { statuses[it] },
         flingBehavior =
             PagerDefaults.flingBehavior(

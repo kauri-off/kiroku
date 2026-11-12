@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -57,9 +58,14 @@ class ListFrameWorkTest {
     private val counts = mutableMapOf<String, Int>()
     private var counting = false
 
+    private var pagesComposed = 0
+
+    // Pages composed inside a scroll of the pager, which remeasures it at once: the crash's precondition on main.
+    private var composedInScroll = 0
+
     private val tracer =
         object : CompositionTracer {
-            override fun isTraceInProgress() = counting
+            override fun isTraceInProgress() = true
 
             override fun traceEventStart(
                 key: Int,
@@ -67,7 +73,11 @@ class ListFrameWorkTest {
                 dirty2: Int,
                 info: String,
             ) {
-                counts.merge(info.substringBefore(" ("), 1, Int::plus)
+                val name = info.substringBefore(" (")
+                if (counting) counts.merge(name, 1, Int::plus)
+                if (name != PAGE) return
+                pagesComposed++
+                if (Throwable().stackTrace.any { it.methodName == "forceRemeasure" }) composedInScroll++
             }
 
             override fun traceEventEnd() = Unit
@@ -110,6 +120,19 @@ class ListFrameWorkTest {
         compose.mainClock.autoAdvance = false
     }
 
+    // The frames from the first that composes a page until every page is composed, as the pages each composed.
+    private fun firstFrames(): List<Int> {
+        Composer.setTracer(tracer)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        val pages = mutableListOf<Int>()
+        repeat(FIRST_FRAMES) {
+            val composed = frame()[PAGE] ?: 0
+            if (pages.isNotEmpty() || composed > 0) pages += composed
+        }
+        return pages.dropLastWhile { it == 0 }
+    }
+
     @Test
     fun `a drag and its settle compose no page and no row, and only the selection flip composes the tab row`() {
         app()
@@ -142,12 +165,34 @@ class ListFrameWorkTest {
         }
     }
 
+    @Test
+    fun `the List's first frame composes the shown page and its neighbour, and each later frame one more page`() {
+        val pages = firstFrames()
+        assertEquals("pages composed per frame: $pages", listOf(2, 1, 1, 1), pages.filter { it > 0 })
+        assertEquals("pages composed per frame: $pages", 2, pages.first())
+    }
+
+    @Test
+    fun `a tap before every page is composed composes them before its page moves`() {
+        Composer.setTracer(tracer)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        while (pagesComposed == 0) frame()
+        compose.onNode(hasText("Dropped") and isSelectable()).performClick()
+        repeat(SETTLE_FRAMES) { frame() }
+        assertEquals("pages composed", ListStatus.entries.size, pagesComposed)
+        assertEquals("pages composed inside the pager's scroll", 0, composedInScroll)
+        compose.onNode(hasText("Dropped") and isSelectable()).assertIsSelected()
+    }
+
     private companion object {
         const val DRAG_FRAMES = 10
         const val DRAG_STEP = 0.06f
         const val SETTLE_FRAMES = 30
         const val SETTLED = 2_000L
         const val SETTLE_ROUNDS = 5
+        const val FIRST_FRAMES = 60
+        const val PAGE = "io.github.kauri_off.kiroku.list.Page"
 
         val pageComposables =
             listOf(

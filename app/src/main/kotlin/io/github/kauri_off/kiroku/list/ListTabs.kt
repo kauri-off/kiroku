@@ -22,6 +22,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,6 +56,7 @@ import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
@@ -77,6 +79,12 @@ class ListTabMotion(
     // The last page reported as rested on, so the tab the screen hears back from it is not taken as a request.
     private var reported = pager.currentPage
 
+    // The pages composed on each side of the one shown: its neighbours first, then one more per frame, up to all.
+    var ahead by mutableIntStateOf(1)
+        private set
+
+    private val all: Int get() = pager.pageCount - 1
+
     // Fractional: 1.3 is a third of the way from the second tab to the third.
     val position: Float
         get() = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (pager.pageCount - 1).toFloat())
@@ -96,6 +104,17 @@ class ListTabMotion(
         }
     }
 
+    // One page per frame while the pager rests: no frame composes them all, and no slide composes one, which can crash.
+    suspend fun composeAhead() {
+        while (ahead < all) {
+            snapshotFlow { resting }.first { it != null }
+            ahead++
+            laidOut(ahead)
+        }
+    }
+
+    private suspend fun laidOut(count: Int) = snapshotFlow { pager.layoutInfo.beyondViewportPageCount }.first { it >= count }
+
     // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.
     fun show(index: Int) {
         if (index != reported && index != tapTarget && index != pager.targetPage) select(index)
@@ -109,6 +128,10 @@ class ListTabMotion(
         tapTarget = index
         scope.launch {
             try {
+                if (ahead < all) {
+                    ahead = all
+                    laidOut(all)
+                }
                 val from = position
                 if (abs(index - from) > 1f) pager.scrollToPage(if (index > from) index - 1 else index + 1)
                 pager.animateScrollToPage(index, animationSpec = pageSpec)
