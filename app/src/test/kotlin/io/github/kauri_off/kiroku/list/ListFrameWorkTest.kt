@@ -127,15 +127,13 @@ class ListFrameWorkTest {
     }
 
     @Test
-    fun `a tap on a tab composes no row while its page slides in`() {
+    fun `a tap on a tab composes no page and no row while its page slides in`() {
         app()
-        compose.onNode(hasText("Planned") and isSelectable()).performClick()
-        compose.mainClock.advanceTimeBy(SETTLED)
-        settle()
-        compose.onNode(hasText("Watching") and isSelectable()).performClick()
-        val tap = (1..SETTLE_FRAMES).map { frame() }
-        assertNoPageWork("tap", tap)
-        compose.onNode(hasText("Watching") and isSelectable()).assertIsSelected()
+        for (tab in listOf("Planned", "Dropped", "Completed", "Watching")) {
+            compose.onNode(hasText(tab) and isSelectable()).performClick()
+            assertNoPageWork("tap on $tab", (1..SETTLE_FRAMES).map { frame() })
+            compose.onNode(hasText(tab) and isSelectable()).assertIsSelected()
+        }
     }
 
     private companion object {

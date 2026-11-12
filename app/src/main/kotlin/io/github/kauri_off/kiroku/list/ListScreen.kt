@@ -137,7 +137,7 @@ private data class Shown(
     val now: Instant,
 )
 
-// One page per tab, each with its own scroll position, and its neighbours composed ahead.
+// One page per tab, each with its own scroll position; all are composed, so no swipe or tap composes a page.
 @Composable
 private fun Pages(
     tab: ListStatus,
@@ -157,7 +157,7 @@ private fun Pages(
     HorizontalPager(
         pager,
         Modifier.fillMaxSize(),
-        beyondViewportPageCount = 1,
+        beyondViewportPageCount = statuses.lastIndex,
         key = { statuses[it] },
         flingBehavior =
             PagerDefaults.flingBehavior(

@@ -187,7 +187,9 @@ class ListScreenTest {
     fun `a swipe while filtering shows the next tab filtered`() {
         showFollowing(ListFixtureStates.filtering)
         swipe(left = true)
-        compose.onNodeWithText("No titles match the filter").assertIsDisplayed()
+        val messages = compose.onAllNodesWithText("No titles match the filter")
+        val shown = messages.fetchSemanticsNodes().indices.count { runCatching { messages[it].assertIsDisplayed() }.isSuccess }
+        assertEquals(1, shown)
         assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned)), events)
     }
 
@@ -599,7 +601,7 @@ class ListMotionTest {
         compose.mainClock.advanceTimeBy(SETTLED)
         assertEquals(watchingLeft, left(completed))
         compose.onNodeWithText(planned).assertIsNotDisplayed()
-        assertFalse(exists(following))
+        compose.onNodeWithText(following).assertIsNotDisplayed()
         assertIdle()
     }
 
