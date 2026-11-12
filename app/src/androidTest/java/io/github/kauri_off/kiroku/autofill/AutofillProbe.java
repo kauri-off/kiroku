@@ -18,9 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-// An autofill service that acts as a password manager does: it logs every field it is offered and asks to save any
-// that looks like a password. Java, because the test APK carries no Kotlin library when it runs as a service alone.
-// Set it with `settings put secure autofill_service io.github.kauri_off.kiroku.debug.test/<this class>`.
+// Logs every field it is offered and, as a password manager, asks to save any password field; Java runs without Kotlin.
 public final class AutofillProbe extends AutofillService {
     private static final String TAG = "AutofillProbe";
 

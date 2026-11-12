@@ -10,8 +10,7 @@ import androidx.compose.runtime.Immutable
 import kotlin.math.abs
 import kotlin.math.ceil
 
-// The one motion value not from the theme's scheme (ARCHITECTURE 8.5): the List's pages settle after a release and
-// slide after a tab tap as ViewPager2's snap moves them. The fling's speed is not carried into the settle.
+// ViewPager2's snap, the one motion value not from the theme's scheme (ARCHITECTURE 8.5); a fling's speed is dropped.
 @Immutable
 class PageSettle(
     private val density: Float,

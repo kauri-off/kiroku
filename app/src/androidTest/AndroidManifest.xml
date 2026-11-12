@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <!-- Chosen by hand as the device's autofill service to see what the app offers it; see AutofillProbe. -->
+        <!-- Set by hand as the device's autofill service: settings put secure autofill_service <test package>/<class> -->
         <service
             android:name="io.github.kauri_off.kiroku.autofill.AutofillProbe"
             android:exported="true"

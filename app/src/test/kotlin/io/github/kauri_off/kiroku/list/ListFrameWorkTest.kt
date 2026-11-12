@@ -37,8 +37,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.Duration
 
-// A frame of a swipe or a tab tap moves the pager and draws the tab row from it; no page or row is composed again,
-// though the view model hears of the new tab while the page still moves.
+// A swipe or a tap moves the pager and the tab row only, though the view model hears of the new tab mid-slide.
 @OptIn(ExperimentalCoroutinesApi::class, InternalComposeTracingApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")

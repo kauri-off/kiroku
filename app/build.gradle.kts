@@ -78,7 +78,7 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
-        // For measuring frames: the release build's code with the debug build's demo mode, profileable, not debuggable.
+        // The release build's code on the demo, profileable, for measuring frames.
         create("benchmark") {
             initWith(getByName("release"))
             applicationIdSuffix = ".benchmark"
