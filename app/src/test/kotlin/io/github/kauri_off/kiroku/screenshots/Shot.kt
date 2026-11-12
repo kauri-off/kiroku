@@ -222,7 +222,12 @@ class Shot private constructor(
             .filter { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate }
 
     private val SemanticsNode.loops: Int
-        get() = if (config.getOrNull(SemanticsProperties.TestTag) == WAVY_INDICATOR) WAVY_LOOPS else 1
+        get() =
+            when (config.getOrNull(SemanticsProperties.TestTag)) {
+                WAVY_INDICATOR -> WAVY_LOOPS
+                ONE_LOOP_INDICATOR -> 1
+                else -> 0
+            }
 
     // Pages through one horizontal strip; with images, returns its pages stitched into one picture of every card.
     fun walkStrip(
@@ -364,6 +369,9 @@ class Shot private constructor(
 
         // A wavy indicator runs two loops, its line and its wave, and is allowed them only when tagged as one.
         const val WAVY_LOOPS = 2
+
+        // Marks a circular or flat indeterminate indicator, which runs one loop; the loading indicator runs none.
+        const val ONE_LOOP_INDICATOR = "oneLoopIndicator"
 
         private val FRAME = Duration.ofMillis(16)
         private const val MAX_FRAMES = 600

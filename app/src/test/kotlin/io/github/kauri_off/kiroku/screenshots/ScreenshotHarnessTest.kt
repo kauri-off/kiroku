@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -131,7 +132,7 @@ class ScreenshotHarnessTest {
             Shot
                 .launch(Variant.EnLight) {
                     arc = MaterialTheme.colorScheme.primary.toArgb()
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(Modifier.testTag(Shot.ONE_LOOP_INDICATOR))
                 }.use { it.image() }
         val ring = Math.PI * (RING_OUTER_DP * RING_OUTER_DP - RING_INNER_DP * RING_INNER_DP) * DENSITY * DENSITY
         val drawn = (0 until image.height).sumOf { y -> (0 until image.width).count { x -> image.getPixel(x, y) == arc } }
@@ -142,9 +143,11 @@ class ScreenshotHarnessTest {
     fun anIndicatorRunsAsManyLoopsAsTheRenderAllowsIt() {
         val indicators =
             listOf<Pair<Int, @Composable () -> Unit>>(
-                1 to { CircularProgressIndicator() },
-                1 to { LinearProgressIndicator() },
+                1 to { CircularProgressIndicator(Modifier.testTag(Shot.ONE_LOOP_INDICATOR)) },
+                1 to { LinearProgressIndicator(Modifier.testTag(Shot.ONE_LOOP_INDICATOR)) },
                 Shot.WAVY_LOOPS to { LinearWavyProgressIndicator(Modifier.testTag(WAVY_INDICATOR)) },
+                0 to { ScreenState(ScreenState.Loading) },
+                0 to { RefreshBox(isRefreshing = true, onRefresh = {}) {} },
             )
         for ((loops, indicator) in indicators) {
             Shot.launch(Variant.EnLight, content = indicator).use { shot ->
@@ -171,21 +174,31 @@ class ScreenshotHarnessTest {
 
     @Test(timeout = 60_000)
     fun aLoopThatIsNotAProgressIndicatorFailsTheRender() {
-        for (content in listOf<@Composable () -> Unit>({ Pulse() }, {
-            Column {
-                CircularProgressIndicator()
-                Pulse()
+        val beside =
+            listOf<@Composable () -> Unit>(
+                {},
+                { CircularProgressIndicator(Modifier.testTag(Shot.ONE_LOOP_INDICATOR)) },
+                { ScreenState(ScreenState.Loading) },
+                { RefreshBox(isRefreshing = true, onRefresh = {}) {} },
+            )
+        for (indicator in beside) {
+            val content: @Composable () -> Unit = {
+                Column {
+                    indicator()
+                    Pulse()
+                }
             }
-        })) {
             val failure = runCatching { Shot.launch(Variant.EnLight, content = content).use { it.image() } }.exceptionOrNull()
             assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
         }
     }
 
     @Test(timeout = 60_000)
-    fun anUntaggedWavyIndicatorFailsTheRender() {
-        val failure = runCatching { Shot.launch(Variant.EnLight) { LinearWavyProgressIndicator() }.use { it.image() } }.exceptionOrNull()
-        assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
+    fun anUntaggedLoopingIndicatorFailsTheRender() {
+        for (indicator in listOf<@Composable () -> Unit>({ LinearWavyProgressIndicator() }, { CircularProgressIndicator() })) {
+            val failure = runCatching { Shot.launch(Variant.EnLight, content = indicator).use { it.image() } }.exceptionOrNull()
+            assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
+        }
     }
 
     @Composable

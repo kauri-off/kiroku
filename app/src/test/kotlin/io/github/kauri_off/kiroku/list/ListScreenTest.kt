@@ -2,15 +2,19 @@ package io.github.kauri_off.kiroku.list
 
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -39,6 +43,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
@@ -393,15 +398,33 @@ class ListMotionTest {
 
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
 
-    private fun showCompleting(events: MutableList<ListEvent>) {
+    // With [resize], the window's height changes in the same frame the completed row leaves.
+    private fun showCompleting(
+        events: MutableList<ListEvent>,
+        resize: Boolean = false,
+    ) {
         val anime = FixtureAnime.oneShortOfTotal
         compose.mainClock.autoAdvance = false
         state = ListFixtureStates.watching
+        var halved by mutableStateOf(false)
         compose.setContent {
-            KirokuTheme(dark = false, dynamicColor = false) {
-                FixtureListScreen(state) { e ->
-                    events += e
-                    if (e == ListEvent.PlusOne(anime.id)) state = ListFixtureStates.completedSnackbar
+            val window = LocalWindowInfo.current
+            val resized =
+                remember(window) {
+                    object : WindowInfo by window {
+                        override val containerSize: IntSize
+                            get() = window.containerSize.let { if (halved) IntSize(it.width, it.height / 2) else it }
+                    }
+                }
+            CompositionLocalProvider(LocalWindowInfo provides resized) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    FixtureListScreen(state) { e ->
+                        events += e
+                        if (e == ListEvent.PlusOne(anime.id)) {
+                            state = ListFixtureStates.completedSnackbar
+                            halved = resize
+                        }
+                    }
                 }
             }
         }
@@ -458,6 +481,17 @@ class ListMotionTest {
         SystemClock.sleep(SETTLED)
         tap(below, TAP_GAP_MS)
         assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
+    }
+
+    @Test
+    fun `a window resized as a completed row leaves still keeps a quick tap from the row below`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events, resize = true)
+        val below = plusOneOf(following)
+        tap(plusOneOf(anime.titles.romaji), PAIR_MS)
+        tap(below, TAP_GAP_MS)
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events)
     }
 
     // A3's Q1b: the rows have stopped, but the tap aimed at the row below comes at an ordinary pace after the first.

@@ -208,6 +208,16 @@ class TitleScreenTest {
         sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }
     }
 
+    // The view model holds the wait back for its first second; the screen honours that.
+    @Test
+    fun theDetailsIndicatorStaysHiddenUntilTheWaitIsShown() {
+        val waiting = TitleFixtures.of(FixtureAnime.exactToWatch, details = null)
+        show(waiting.copy(detailsWaitShown = false))
+        compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
+        show(waiting.copy(detailsWaitShown = true))
+        compose.onNodeWithContentDescription("Loading details").assertIsDisplayed()
+    }
+
     // ARCHITECTURE 6.2: the screen itself draws the host the shell hands it.
     @Test
     fun theScreenDrawsTheSnackbarHostItIsGiven() {

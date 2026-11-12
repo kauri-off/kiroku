@@ -307,7 +307,7 @@ private fun Rows(
     val shownRows = rememberUpdatedState(rows)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
-            // A row is reused only for a row of its own form.
+            // Reusing a row for another form crashes the screenshot render (RectList), so rows are reused by form.
             items(rows, key = { it.id.value }, contentType = { Triple(it.line3 != null, it.line3 is Line3.ToWatch, it.plusOne) }) { row ->
                 AnimeRow(
                     title = row.title,
