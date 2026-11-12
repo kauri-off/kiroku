@@ -16,6 +16,39 @@ class SourceRulesTest {
     }
 
     @Test
+    fun viewModelsWriteOnlyThroughShellMessagesAndTakeNoGraph() {
+        val sources = appSources()
+        assertEquals(
+            setOf("EditSheetViewModel.kt", "ListViewModel.kt", "ShellViewModel.kt", "SubScreenViewModels.kt", "TitleViewModel.kt"),
+            sources.filter { declaresViewModel(it.readText()) }.map { it.name }.toSet(),
+        )
+        assertEquals(emptyList<String>(), sources.flatMap { viewModelProblems(relative(it), it.readText()) })
+        assertEquals(emptyList<String>(), sources.flatMap { collectionProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedViewModelProblemFails() {
+        val planted =
+            listOf(
+                "class A(private val list: ListRepository) : ViewModel() {\n    fun a() = viewModelScope.launch { list.write(w) }\n}\n",
+                "class A(\n    private val repository: ListRepository,\n) : ViewModel() {\n    fun a() = viewModelScope.launch { repository.send(w) }\n}\n",
+                "class A(graph: AppGraph) : ViewModel()\n",
+                "class A : SubScreenViewModel(id, anime, session) {\n    fun a() = viewModelScope.launch { graph.list.write(w) }\n}\n",
+            )
+        for (source in planted) {
+            assertEquals(source, 1, viewModelProblems("A.kt", source).size)
+        }
+        val clean =
+            "class A(private val messages: ShellMessages) : ViewModel() {\n" +
+                "    fun a() = messages.write(w)\n    fun b() = SavedSheet.save(saved, sheet)\n}\n"
+        assertEquals(emptyList<String>(), viewModelProblems("A.kt", clean))
+        assertEquals(1, collectionProblems("A.kt", "@Composable fun A(vm: V) { val s by vm.state.collectAsState() }\n").size)
+        assertEquals(1, collectionProblems("A.kt", "@Composable fun A(vm: V) { val s by vm.state.collectAsStateWithLifecycle() }\n").size)
+        assertEquals(0, collectionProblems("A.kt", "@Composable fun A(vm: V) { val s by vm.state.collectAsScreenState() }\n").size)
+        assertTrue(appSources().any { relative(it) == SCREEN_STATE_SOURCE })
+    }
+
+    @Test
     fun appCodeHasNoAnimationValue() {
         assertEquals(emptyList<String>(), appSources().flatMap { motionLiteralProblems(relative(it), it.readText()) })
     }

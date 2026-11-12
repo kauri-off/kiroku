@@ -184,3 +184,54 @@ fun projectSources(): List<File> =
                 .filter { it.isFile && it.extension in setOf("kt", "kts", "xml", "toml") }
                 .toList()
         }.sorted()
+
+// A file that declares a view model: a class extending ViewModel or one of the app's own view model classes.
+private val viewModelClass = Regex("""(\)|\bclass\s+\w+)\s*:\s*\w*ViewModel\s*\(""")
+
+fun declaresViewModel(source: String): Boolean = viewModelClass.containsMatchIn(KotlinSource(source).code)
+
+// A call that writes the list; from a view model it goes only through ShellMessages, whose scope outlives the screen.
+private val writeCall = Regex("""\b(\w+)\s*\.\s*(write|send)\s*\(""")
+
+// A view model takes the repositories and services it uses, never the whole graph.
+private val graphUse = Regex("""\bAppGraph\b""")
+
+fun viewModelProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (!declaresViewModel(source)) return emptyList()
+    return KotlinSource(source).code.lines().flatMapIndexed { index, line ->
+        val writes =
+            writeCall
+                .findAll(line)
+                .filter { it.groupValues[1] != "messages" }
+                .map { "$name:${index + 1}: a view model writes outside ShellMessages.write: ${line.trim()}" }
+                .toList()
+        val graph =
+            if (graphUse.containsMatchIn(
+                    line,
+                )
+            ) {
+                listOf("$name:${index + 1}: a view model takes the graph: ${line.trim()}")
+            } else {
+                emptyList()
+            }
+        writes + graph
+    }
+}
+
+// The one file that collects a flow into Compose state, for every route: see collectAsScreenState.
+const val SCREEN_STATE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/ScreenState.kt"
+
+private val directCollection = Regex("""\bcollectAsState(WithLifecycle)?\s*\(""")
+
+fun collectionProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (name == SCREEN_STATE_SOURCE) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (directCollection.containsMatchIn(line)) "$name:${index + 1}: use collectAsScreenState: ${line.trim()}" else null
+    }
+}

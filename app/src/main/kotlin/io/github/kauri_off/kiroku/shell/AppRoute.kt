@@ -3,10 +3,10 @@ package io.github.kauri_off.kiroku.shell
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.list.ListRoute
@@ -26,12 +26,12 @@ fun AppRoute(
     navigator: ShellNavigator = rememberShellNavigator(),
     snackbars: SnackbarHostState = remember { SnackbarHostState() },
 ) {
-    val messages = viewModel { ShellViewModel(graph) }.messages
+    val messages = viewModel { ShellViewModel(graph.list) }.messages
     ShownMessages(messages, snackbars)
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
-    val edit = messages.editRequest
+    val edit by messages.editRequest.collectAsScreenState()
     LaunchedEffect(edit) {
-        if (edit != null) navigator.showEditorOf(edit)
+        edit?.let { navigator.showEditorOf(it) }
     }
     ShellRoute(navigator, snackbars, remember(graph, messages) { appEntries(graph, messages) })
 }
@@ -96,6 +96,6 @@ private fun NotBuiltDestination(
     onSignIn: () -> Unit,
     snackbars: SnackbarHostState,
 ) {
-    val session by remember(graph) { graph.session.observeSession() }.collectAsState(initial = null)
+    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     PlaceholderScreen(PlaceholderState(destination, sessionExpired = session == Session.Expired), { onSignIn() }, snackbars)
 }

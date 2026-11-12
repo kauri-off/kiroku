@@ -1,16 +1,11 @@
 package io.github.kauri_off.kiroku.title
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
-import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
@@ -18,74 +13,129 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.edit.EditSheetState
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
-import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 // One title's page. The page is rebuilt with TitlePage.of whenever a source changes; the moment is held apart from
 // it. Navigation events are the route's.
 class TitleViewModel(
-    private val graph: AppGraph,
     private val id: AnimeId,
+    private val anime: AnimeRepository,
+    list: ListRepository,
+    airing: AiringRepository,
+    session: SessionRepository,
+    private val clock: Clock,
+    private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
 ) : ViewModel() {
-    private var anime by mutableStateOf<Anime?>(null)
-    private var entry by mutableStateOf<ListEntry?>(null)
-    private var details by mutableStateOf<AnimeDetails?>(null)
-    private var airing by mutableStateOf<Map<AnimeId, Airing>>(emptyMap())
-    private var statuses by mutableStateOf<Map<AnimeId, ListStatus>>(emptyMap())
-    private var session by mutableStateOf<Session?>(null)
-    private var failure by mutableStateOf<DataError?>(null)
-    private var listFailure by mutableStateOf<DataError?>(null)
-    private var moment by mutableStateOf(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
-    private var detailsWaitShown by mutableStateOf(false)
+    private class Sources(
+        val anime: Anime?,
+        val details: AnimeDetails?,
+        val list: ListRead,
+        val airing: Map<AnimeId, Airing>,
+        val session: Session,
+    )
+
+    private class ListRead(
+        val entry: ListEntry? = null,
+        val statuses: Map<AnimeId, ListStatus> = emptyMap(),
+        val failure: DataError? = null,
+    )
+
+    private val moment = MutableStateFlow(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
+    private val failure = MutableStateFlow<DataError?>(null)
+    private val detailsWaitShown = MutableStateFlow(false)
+    private val retries = MutableStateFlow(0)
     private var detailsWait: Job? = null
+    private var refreshed = false
 
-    val state: State<TitleState> = derivedStateOf { build() }
+    // A list that cannot be read fails the page, since its list values would be unknown.
+    private val listRead =
+        list
+            .observeEntries()
+            .map { list -> ListRead(list.firstOrNull { it.anime.id == id }, list.associate { it.anime.id to it.status }) }
+            .readAgainOnRetry(retries) { ListRead(failure = it) }
 
-    init {
-        viewModelScope.launch { graph.anime.observeAnime(id).collect { anime = it } }
-        viewModelScope.launch { graph.anime.observeDetails(id).collect { details = it } }
-        observeList()
-        viewModelScope.launch { graph.airing.observeAiring().collect { airing = it } }
-        viewModelScope.launch { graph.session.observeSession().collect { session = it } }
-        refresh()
-    }
+    val state: StateFlow<TitleState> =
+        combine(
+            combine(
+                anime.observeAnime(id),
+                anime.observeDetails(id),
+                listRead,
+                airing.observeAiring(),
+                session.observeSession(),
+                ::Sources,
+            ),
+            moment,
+            failure,
+            detailsWaitShown,
+            ::build,
+        ).onStart { if (!refreshed) refresh() }
+            .stateIn(viewModelScope, WhileShown, TitleState.Loading(null))
 
     fun onEvent(event: TitleEvent) {
         when (event) {
             TitleEvent.AddToList -> addToList()
-            is TitleEvent.SetWatched -> watched(ListWrite.SetWatched(shownAnime() ?: return, event.watched))
-            is TitleEvent.StepWatched -> watched(ListWrite.StepWatched(shownAnime() ?: return, event.by))
+            is TitleEvent.SetWatched -> watched { ListWrite.SetWatched(it, event.watched) }
+            is TitleEvent.StepWatched -> watched { ListWrite.StepWatched(it, event.by) }
             TitleEvent.Retry -> {
-                if (listFailure != null) observeList()
+                retries.update { it + 1 }
                 refresh()
             }
             else -> Unit
         }
-        moment = moment.after(event)
-        saved[EXPANDED] = moment.synopsisExpanded
+        val next = moment.value.after(event)
+        moment.value = next
+        saved[EXPANDED] = next.synopsisExpanded
     }
 
-    private fun build(): TitleState {
-        val anime = shownAnime()
-        val failure = failure
-        val listFailure = listFailure
+    private fun build(
+        sources: Sources,
+        moment: TitleMoment,
+        failure: DataError?,
+        detailsWaitShown: Boolean,
+    ): TitleState {
+        val anime = sources.anime ?: sources.list.entry?.anime
+        val session = sources.session
+        val listFailure = sources.list.failure
         return when {
             listFailure != null -> TitleState.Failed(listFailure, session)
             anime == null -> failure?.let { TitleState.Failed(it, session) } ?: TitleState.Loading(session)
-            details == null && failure != null -> TitleState.Failed(failure, session)
+            sources.details == null && failure != null -> TitleState.Failed(failure, session)
             else ->
                 TitleState.Shown(
-                    TitlePage.of(anime, entry, airing[id], details, statuses, graph.titleLanguage, graph.clock),
+                    TitlePage.of(
+                        anime,
+                        sources.list.entry,
+                        sources.airing[id],
+                        sources.details,
+                        sources.list.statuses,
+                        titleLanguage,
+                        clock,
+                    ),
                     session,
                     moment,
                     detailsWaitShown,
@@ -93,56 +143,43 @@ class TitleViewModel(
         }
     }
 
-    private fun shownAnime(): Anime? = anime ?: entry?.anime
-
-    // A list that cannot be read fails the page, since its list values would be unknown.
-    private fun observeList() {
-        listFailure = null
-        viewModelScope.launch {
-            try {
-                graph.list.observeEntries().collect { list ->
-                    entry = list.firstOrNull { it.anime.id == id }
-                    statuses = list.associate { it.anime.id to it.status }
-                }
-            } catch (e: DataException) {
-                listFailure = e.error
-            }
-        }
-    }
+    private fun shownPage(): TitlePage? = (state.value as? TitleState.Shown)?.page
 
     // With details already shown, a failed refresh is a message and the page stays (section 7.2).
     private fun refresh() {
-        failure = null
+        refreshed = true
+        failure.value = null
         detailsWait?.cancel()
-        detailsWaitShown = false
+        detailsWaitShown.value = false
         detailsWait =
             viewModelScope.launch {
                 delay(DETAILS_PATIENCE)
-                detailsWaitShown = true
+                detailsWaitShown.value = true
             }
         viewModelScope.launch {
-            val result = graph.anime.refresh(id)
+            val result = anime.refresh(id)
             if (result !is Outcome.Failure) return@launch
-            if (details != null) {
+            if (anime.observeDetails(id).first() != null) {
                 if (result.error != DataError.SessionExpired) messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
             } else {
-                failure = result.error
+                failure.value = result.error
             }
         }
     }
 
     private fun addToList() {
-        val anime = shownAnime() ?: return
-        if (entry != null) return
-        messages.write(ListWrite.Save(anime, EditSheetState.newEntry)) {
+        val page = shownPage() ?: return
+        if (page.entry != null) return
+        messages.write(ListWrite.Save(page.anime, EditSheetState.newEntry)) {
             ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id))
         }
     }
 
     // A change that completes the title (W7) says so, with an Undo of that change alone.
-    private fun watched(write: ListWrite) {
-        if (entry == null) return
-        messages.write(write) { change ->
+    private fun watched(write: (Anime) -> ListWrite) {
+        val page = shownPage() ?: return
+        if (page.entry == null) return
+        messages.write(write(page.anime)) { change ->
             if (change.completed) ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)) else null
         }
     }

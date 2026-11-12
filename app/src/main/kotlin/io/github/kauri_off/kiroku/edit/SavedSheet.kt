@@ -38,7 +38,7 @@ internal data class SavedSheet(
         private val REMOVE = notShown("remove")
         private val DISCARD = notShown("discard")
 
-        fun write(
+        fun save(
             handle: SavedStateHandle,
             state: EditSheetState,
         ) {

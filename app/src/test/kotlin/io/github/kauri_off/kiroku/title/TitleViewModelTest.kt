@@ -16,7 +16,9 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
+import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -44,11 +46,15 @@ class TitleViewModelTest {
         val graph: TestGraph,
         val messages: ShellMessages,
         val title: TitleViewModel,
+        private val test: TestScope,
     ) {
-        val state: TitleState get() = title.state.value
-        val message: ShellMessage? get() = messages.current?.message
+        var screen: Job = test.showing(title.state)
 
-        fun tapAction() = messages.ended(messages.current!!, actionPerformed = true)
+        // What the page shows once the events so far have been handled.
+        val state: TitleState get() = test.runCurrent().let { title.state.value }
+        val message: ShellMessage? get() = messages.current.value?.message
+
+        fun tapAction() = messages.ended(messages.current.value!!, actionPerformed = true)
 
         val shown: TitleState.Shown get() = state as TitleState.Shown
 
@@ -73,7 +79,7 @@ class TitleViewModelTest {
         val scope = foregroundScope()
         val graph = TestGraph(Demo(Fixtures.reference, scope), lateObservers, slowWrites).apply(before)
         val messages = ShellMessages(scope, graph.list)
-        val subject = Subject(graph, messages, TitleViewModel(graph, id, saved, messages))
+        val subject = Subject(graph, messages, title(graph, id, saved, messages), this)
         if (settle) advanceUntilIdle()
         body(subject)
         scope.cancel()
@@ -218,7 +224,7 @@ class TitleViewModelTest {
                 s.message,
             )
             s.tapAction()
-            assertEquals(FixtureAnime.notOnListAiring.id, s.messages.editRequest)
+            assertEquals(FixtureAnime.notOnListAiring.id, s.messages.editRequest.value)
             assertEquals(ListStatus.Planned, s.values()?.status)
         }
 
@@ -274,7 +280,7 @@ class TitleViewModelTest {
         }
 
     @Test
-    fun `the session is unknown, not signed out, until it is read`() = test(settle = false) { s -> assertNull(s.state.session) }
+    fun `the session is unknown, not signed out, until it is read`() = test(settle = false) { s -> assertNull(s.title.state.value.session) }
 
     @Test
     fun `an unknown title is not found`() =
@@ -315,7 +321,8 @@ class TitleViewModelTest {
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
-            val title = TitleViewModel(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            showing(title.state)
             val shown = { title.state.value as TitleState.Shown }
             runCurrent()
             assertNull(shown().page.details)
@@ -332,7 +339,43 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
+    @Test
+    fun `the page reads its sources only while it is shown, and shows what changed meanwhile when it is shown again`() =
+        test { s ->
+            assertTrue(s.graph.readers > 0)
+            s.screen.cancel()
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            runCurrent()
+            assertEquals(0, s.graph.readers)
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            assertEquals(0, s.graph.readers)
+            s.screen = showing(s.title.state)
+            assertEquals(13, s.watched())
+            assertTrue(s.graph.readers > 0)
+        }
+
+    @Test
+    fun `the details are refreshed once, not again when the page is shown again`() =
+        test(before = { demo.server.offline.value = true }) { s ->
+            assertTrue(s.state is TitleState.Failed)
+            s.graph.demo.server.offline.value = false
+            s.screen.cancel()
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            s.screen = showing(s.title.state)
+            advanceUntilIdle()
+            assertTrue(s.state is TitleState.Failed)
+        }
+
+    private fun title(
+        graph: TestGraph,
+        id: AnimeId,
+        saved: SavedStateHandle,
+        messages: ShellMessages,
+    ) = TitleViewModel(id, graph.anime, graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, saved, messages)
+
     private companion object {
+        const val STOPPED_AFTER_MILLIS = 5_001L
         const val PATIENCE_MILLIS = 1_000L
         val DETAILS_LATENCY = 3.seconds
     }

@@ -38,7 +38,7 @@ class EditSheetViewModelTest {
         val graph: TestGraph,
         val editor: EditSheetViewModel,
     ) {
-        val sheet: EditSheetState get() = editor.sheet!!
+        val sheet: EditSheetState get() = editor.sheet.value!!
 
         suspend fun values(anime: Anime) =
             graph.list
@@ -57,8 +57,19 @@ class EditSheetViewModelTest {
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
         val graph = TestGraph.over(scope, slowWrites)
-        val subject = Subject(graph, EditSheetViewModel(graph, saved, ShellMessages(scope, graph.list)))
-        open?.let { subject.editor.open(it.id) }
+        val editor =
+            EditSheetViewModel(
+                graph.list,
+                graph.anime,
+                graph.airing,
+                graph.clock,
+                graph.titleLanguage,
+                saved,
+                ShellMessages(scope, graph.list),
+            )
+        val subject = Subject(graph, editor)
+        editor.restore()
+        open?.let { editor.open(it.id) }
         advanceUntilIdle()
         body(subject)
         scope.cancel()
@@ -122,7 +133,7 @@ class EditSheetViewModelTest {
             advanceUntilIdle()
             assertEquals(draft, s.values(anime))
             s.editor.onEvent(EditSheetEvent.Dismissed)
-            assertNull(s.editor.sheet)
+            assertNull(s.editor.sheet.value)
         }
 
     @Test
@@ -166,7 +177,7 @@ class EditSheetViewModelTest {
             assertTrue(s.sheet.closing)
             s.editor.onEvent(EditSheetEvent.Dismissed)
             advanceUntilIdle()
-            assertNull(s.editor.sheet)
+            assertNull(s.editor.sheet.value)
             assertEquals(8, s.values(anime)?.score)
         }
 
@@ -206,6 +217,6 @@ class EditSheetViewModelTest {
     fun `a sheet closed before process death does not come back`() {
         val saved = SavedStateHandle()
         test(saved = saved) { s -> s.editor.onEvent(EditSheetEvent.Dismissed) }
-        test(saved = saved, open = null) { s -> assertNull(s.editor.sheet) }
+        test(saved = saved, open = null) { s -> assertNull(s.editor.sheet.value) }
     }
 }

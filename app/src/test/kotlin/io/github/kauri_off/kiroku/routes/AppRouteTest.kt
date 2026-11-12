@@ -6,6 +6,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -139,6 +141,41 @@ class AppRouteTest {
         hides("My list")
         back()
         shows("My list")
+    }
+
+    // The stored title is drawn on the page's first frame; only the details may still be on their way.
+    @Test
+    fun `a title page shows the stored title on its first frame`() {
+        app()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText(kagerou.titles.romaji).performClick()
+        val page = {
+            compose
+                .onAllNodes(
+                    hasText("Episodes watched") or hasContentDescription("Loading"),
+                ).fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        repeat(FRAMES) { if (!page()) compose.mainClock.advanceTimeByFrame() }
+        compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
+        shows("Episodes watched")
+    }
+
+    @Test
+    fun `a quickly typed filter reaches the List keystroke by keystroke`() {
+        app()
+        compose.onNodeWithContentDescription("Filter by title").performClick()
+        compose.waitForIdle()
+        val field = compose.onNode(hasSetTextAction())
+        field.performClick()
+        field.performKeyInput {
+            pressKey(Key.K)
+            pressKey(Key.A)
+            pressKey(Key.G)
+        }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText("kag")).assertExists()
+        shows(kagerou.titles.romaji)
     }
 
     @Test
@@ -510,5 +547,9 @@ class AppRouteTest {
         assertEquals(kept.filter { it in shown }, shown.filter { it in kept })
         val above = before.takeWhile { it.first != completed }
         assertEquals(above, after.take(above.size))
+    }
+
+    private companion object {
+        const val FRAMES = 10
     }
 }

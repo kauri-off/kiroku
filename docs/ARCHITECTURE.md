@@ -297,8 +297,16 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 - A screen is a stateless composable, `XScreen(state, onEvent)`, drawn entirely from one immutable state value. It
   never touches a view model, a repository or navigation. This is what previews and screenshot tests render.
-- A view model builds that state from database flows and handles the events. A thin `XRoute` connects the view
-  model to the screen and to navigation, and is the only place that knows either.
+- A view model takes the repositories and services it uses, never the whole graph. It produces the state as a
+  `StateFlow` from the repositories' flows and the user's input, and handles the events. The state is produced from
+  the view model's creation, so the first frame shows what the store holds, and only while a screen collects it: it
+  stops once none has for longer than a rotation takes, and starts again with the next. One-off work at start (the
+  first sync, a refresh) runs on the first collection, not in the constructor.
+- Text the user types reaches the state before the keystroke's event returns.
+- A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
+  screen.
+- A thin `XRoute` collects the state only while its screen is started, connects the view model to the screen and to
+  navigation, and is the only place that knows either.
 - There is no MVI framework and no event bus.
 - Snackbars share one state, owned by the shell and handed to every screen as a parameter; the screen on top
   draws it, so a message that outlives its screen still shows. The session banner (S6) is part of each

@@ -52,7 +52,7 @@ class SavedSheetTest {
                         closing = dialog == null,
                     )
                 val handle = SavedStateHandle()
-                SavedSheet.write(handle, state)
+                SavedSheet.save(handle, state)
                 val read = SavedSheet.read(handle)
                 assertEquals(SavedSheet(state.draft, state.beforeAutomatic, "17", 12, dialog, state.closing), read)
                 assertEquals(state.copy(closing = false), read!!.applyTo(opened))

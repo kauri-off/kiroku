@@ -1,110 +1,123 @@
 package io.github.kauri_off.kiroku.titlesub
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.error.DataError
-import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
-import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.readAgainOnRetry
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Clock
 
-// What both sub-screens read: one title, its details, and whether loading them failed.
+// What both sub-screens read: one title, its details, and whether loading them failed. The first collection refreshes.
 abstract class SubScreenViewModel(
-    protected val graph: AppGraph,
-    protected val id: AnimeId,
+    private val id: AnimeId,
+    private val anime: AnimeRepository,
+    session: SessionRepository,
 ) : ViewModel() {
-    protected var anime by mutableStateOf<Anime?>(null)
-    protected var details by mutableStateOf<AnimeDetails?>(null)
-    protected var session by mutableStateOf<Session?>(null)
-    protected var failure by mutableStateOf<DataError?>(null)
+    protected class Title(
+        val anime: Anime?,
+        val details: AnimeDetails?,
+        val session: Session,
+        val failure: DataError?,
+    )
 
-    init {
-        viewModelScope.launch { graph.anime.observeAnime(id).collect { anime = it } }
-        viewModelScope.launch { graph.anime.observeDetails(id).collect { details = it } }
-        viewModelScope.launch { graph.session.observeSession().collect { session = it } }
-        refresh()
-    }
+    private val failure = MutableStateFlow<DataError?>(null)
+    private var refreshed = false
+
+    protected val title: Flow<Title> =
+        combine(anime.observeAnime(id), anime.observeDetails(id), session.observeSession(), failure, ::Title)
+            .onStart { if (!refreshed) refresh() }
 
     protected fun refresh() {
-        failure = null
+        refreshed = true
+        failure.value = null
         viewModelScope.launch {
-            val result = graph.anime.refresh(id)
-            if (result is Outcome.Failure) failure = result.error
+            val result = anime.refresh(id)
+            if (result is Outcome.Failure) failure.value = result.error
         }
     }
 }
 
 class RelatedViewModel(
-    graph: AppGraph,
     id: AnimeId,
-) : SubScreenViewModel(graph, id) {
-    private var entries by mutableStateOf<Map<AnimeId, ListValues>>(emptyMap())
-    private var airing by mutableStateOf<Map<AnimeId, Airing>>(emptyMap())
-    private var listFailure by mutableStateOf<DataError?>(null)
+    anime: AnimeRepository,
+    list: ListRepository,
+    airing: AiringRepository,
+    session: SessionRepository,
+    private val titleLanguage: TitleLanguage,
+) : SubScreenViewModel(id, anime, session) {
+    private class ListRead(
+        val entries: Map<AnimeId, ListValues> = emptyMap(),
+        val failure: DataError? = null,
+    )
 
-    val state: State<RelatedState> =
-        derivedStateOf {
-            val details = details
-            val failure = failure
-            val listFailure = listFailure
+    private val retries = MutableStateFlow(0)
+
+    // A list that cannot be read fails the screen, since the related titles' list statuses would be unknown.
+    private val listRead =
+        list
+            .observeEntries()
+            .map { list -> ListRead(list.associate { it.anime.id to it.values }) }
+            .readAgainOnRetry(retries) { ListRead(failure = it) }
+
+    val state: StateFlow<RelatedState> =
+        combine(title, listRead, airing.observeAiring()) { title, list, airing ->
+            val details = title.details
+            val failure = title.failure
+            val listFailure = list.failure
             when {
-                listFailure != null -> RelatedState.Failed(listFailure, session)
-                details != null -> relatedState(details.related, entries, airing, graph.titleLanguage, session)
-                failure != null -> RelatedState.Failed(failure, session)
-                else -> RelatedState.Loading(session)
+                listFailure != null -> RelatedState.Failed(listFailure, title.session)
+                details != null -> relatedState(details.related, list.entries, airing, titleLanguage, title.session)
+                failure != null -> RelatedState.Failed(failure, title.session)
+                else -> RelatedState.Loading(title.session)
             }
-        }
-
-    init {
-        observeList()
-        viewModelScope.launch { graph.airing.observeAiring().collect { airing = it } }
-    }
+        }.stateIn(viewModelScope, WhileShown, RelatedState.Loading(null))
 
     fun onEvent(event: RelatedEvent) {
         if (event != RelatedEvent.Retry) return
-        if (listFailure != null) observeList()
+        retries.update { it + 1 }
         refresh()
-    }
-
-    // A list that cannot be read fails the screen, since the related titles' list statuses would be unknown.
-    private fun observeList() {
-        listFailure = null
-        viewModelScope.launch {
-            try {
-                graph.list.observeEntries().collect { list -> entries = list.associate { it.anime.id to it.values } }
-            } catch (e: DataException) {
-                listFailure = e.error
-            }
-        }
     }
 }
 
 class DetailsViewModel(
-    graph: AppGraph,
     id: AnimeId,
-) : SubScreenViewModel(graph, id) {
-    val state: State<DetailsState> =
-        derivedStateOf {
-            val anime = anime
-            val details = details
-            val failure = failure
-            when {
-                anime != null && details != null -> detailsState(anime, details, graph.titleLanguage, session, graph.clock)
-                failure != null -> DetailsState.Failed(failure, session)
-                else -> DetailsState.Loading(session)
-            }
-        }
+    anime: AnimeRepository,
+    session: SessionRepository,
+    private val titleLanguage: TitleLanguage,
+    private val clock: Clock,
+) : SubScreenViewModel(id, anime, session) {
+    val state: StateFlow<DetailsState> =
+        title
+            .map { title ->
+                val anime = title.anime
+                val details = title.details
+                val failure = title.failure
+                when {
+                    anime != null && details != null -> detailsState(anime, details, titleLanguage, title.session, clock)
+                    failure != null -> DetailsState.Failed(failure, title.session)
+                    else -> DetailsState.Loading(title.session)
+                }
+            }.stateIn(viewModelScope, WhileShown, DetailsState.Loading(null))
 
     fun onEvent(event: DetailsEvent) {
         if (event == DetailsEvent.Retry) refresh()

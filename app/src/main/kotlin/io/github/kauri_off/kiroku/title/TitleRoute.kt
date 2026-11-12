@@ -5,14 +5,16 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
-import io.github.kauri_off.kiroku.edit.EditSheetViewModel
+import io.github.kauri_off.kiroku.edit.editSheetViewModel
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -42,10 +44,23 @@ fun TitleRoute(
     links: TitleLinks,
 ) {
     val id = AnimeId(key.id)
-    val title = viewModel { TitleViewModel(graph, id, createSavedStateHandle(), messages) }
-    val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle(), messages) }
+    val title =
+        viewModel {
+            TitleViewModel(
+                id,
+                graph.anime,
+                graph.list,
+                graph.airing,
+                graph.session,
+                graph.clock,
+                graph.titleLanguage,
+                createSavedStateHandle(),
+                messages,
+            )
+        }
+    val editor = editSheetViewModel(graph, messages)
     val context = LocalContext.current
-    val state = title.state.value
+    val state by title.state.collectAsScreenState()
     TitleScreen(
         state = state,
         onEvent = { event ->
