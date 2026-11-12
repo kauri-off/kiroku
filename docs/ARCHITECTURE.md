@@ -514,6 +514,10 @@ several components for one job, these are the choices:
 | Top app bars | The small top app bar | A large or flexible bar spends the first screen on a title the user knows |
 | Lists of content | Plain list items, not segmented ones | A container around every row is a card used as decoration |
 
+A screen's loading indicator appears only once the wait has lasted as long as the title page waits before its wavy
+line (section 9.4), so a short wait shows none. At a start the system's splash stays until the List has content, for
+no longer than that wait.
+
 Expressive means that only decorate are not used: wavy sliders, images clipped to or morphing between shapes, split
 buttons, floating toolbars, the FAB menu, button groups that resize under the finger, vibrant colour variants.
 

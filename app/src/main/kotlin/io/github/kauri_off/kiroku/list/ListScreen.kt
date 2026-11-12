@@ -49,13 +49,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
@@ -105,7 +108,7 @@ fun ListScreen(
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        val body = Modifier.padding(top = padding.calculateTopPadding())
+        val body = Modifier.belowBars(padding)
         when (val content = state.content) {
             ListContent.Loading -> ScreenState(ScreenState.Loading, body)
             ListContent.SignedOut ->
@@ -186,7 +189,8 @@ private fun Pages(
                         motion.touching = false
                     }
                 }
-            }.nestedScroll(motion.gate),
+            }.withoutTravelledTaps()
+            .nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,
         key = { statuses[it] },
         flingBehavior =
@@ -199,6 +203,35 @@ private fun Pages(
         Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown, padding, onEvent)
     }
 }
+
+// The top bar's height read when laid out: the tab row comes in the frame that composes the rows, so a height read
+// while composing them would still be the bar's alone, and the rows would be drawn a tab row too high.
+private fun Modifier.belowBars(padding: PaddingValues): Modifier =
+    layout { measurable, constraints ->
+        val top = padding.calculateTopPadding().roundToPx()
+        val placeable = measurable.measure(constraints.offset(vertical = -top))
+        layout(placeable.width, placeable.height + top) { placeable.place(0, top) }
+    }
+
+// A finger that went further than touch slop is not a tap, also when no move of it reached the screen before it
+// lifted (as when every move came during a long frame): its release is kept from the rows unless a scroll took it.
+private fun Modifier.withoutTravelledTaps(): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            var travelled = false
+            var taken = false
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                travelled = travelled || (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                if (change.changedToUpIgnoreConsumed()) {
+                    if (travelled && !taken) change.consume()
+                    break
+                }
+                taken = taken || awaitPointerEvent(PointerEventPass.Final).changes.any { it.id == down.id && it.isConsumed }
+            }
+        }
+    }
 
 // The unfiltered rows and the filtered ones keep separate scroll positions, so ending the filter returns the user
 // to where they were. A new order or filter text replaces the rows at once, from the top; only rows leaving or
