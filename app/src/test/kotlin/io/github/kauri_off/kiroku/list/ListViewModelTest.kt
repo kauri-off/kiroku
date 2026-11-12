@@ -41,6 +41,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.ZoneOffset
 import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -530,6 +531,29 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `the pages are built again when the clock is set back`() {
+        val clock = MovingClock(midnight.plusSeconds(HOUR), FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val ahead = s.state
+            clock.instant = set.now
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertNotSame(ahead.content, s.state.content)
+            assertEquals(set.now, s.state.now)
+        }
+    }
+
+    @Test
+    fun `the pages are built again when the time zone changes`() {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val before = s.state
+            clock.moveTo(ZoneOffset.ofHours(-12))
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertNotSame(before.content, s.state.content)
+        }
+    }
+
+    @Test
     fun `a Refresh that brings nothing builds the pages again`() {
         val clock = MovingClock(set.now, FixtureTime.zone)
         test(demo = { Demo(set, it, clock = clock) }) { s ->
@@ -594,3 +618,5 @@ class ListViewModelTest {
         const val STOPPED_AFTER = 1_001L
     }
 }
+
+private const val HOUR = 3_600L

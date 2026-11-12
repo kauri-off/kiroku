@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 // The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort), so they are kept here.
 class ListViewModel(
@@ -100,12 +101,13 @@ class ListViewModel(
         val refreshes: Int,
     )
 
-    // Pages written against [now], kept until what they show changes, the day ends or an air time they show passes.
+    // Pages written against [now] in [zone]: kept while what they show, the zone and the clock within [now, until) hold.
     private class Built(
         val shown: Shown,
         val content: ListContent,
         val now: Instant,
         val until: Instant,
+        val zone: ZoneId,
     )
 
     private var built: Built? = null
@@ -202,7 +204,9 @@ class ListViewModel(
                 model.refreshes,
             )
         val instant = clock.instant()
-        val pages = built?.takeIf { it.shown == shown && instant < it.until } ?: built(model, filter, shown, instant)
+        val pages =
+            built?.takeIf { it.shown == shown && instant >= it.now && instant < it.until && it.zone == clock.zone }
+                ?: built(model, filter, shown, instant)
         return ListState(
             owner = ListOwner.Me,
             content = pages.content,
@@ -228,7 +232,7 @@ class ListViewModel(
                 .mapNotNull { it.nextEpisode?.airsAt?.takeIf(now::isBefore) }
                 .minOrNull()
         val until = nextAirTime?.coerceAtMost(midnight) ?: midnight
-        return Built(shown, content(model, filter, today), now, until).also { built = it }
+        return Built(shown, content(model, filter, today), now, until, clock.zone).also { built = it }
     }
 
     private fun content(
