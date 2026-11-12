@@ -76,6 +76,7 @@ import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
 import io.github.kauri_off.kiroku.design.component.TitleText
+import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.stepButtonMargin
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -150,6 +151,7 @@ internal fun EditSheet(
         },
         sheetState = sheetState,
     ) {
+        WindowWithoutAutofill()
         val focusManager = LocalFocusManager.current
         // A tap on another control ends typing, so the keyboard closes and Save shows again.
         val edit = { event: EditSheetEvent ->
@@ -497,6 +499,7 @@ private fun DateDialog(
             TextButton(onClick = { onEvent(EditSheetEvent.DialogDismissed) }) { Text(stringResource(R.string.edit_cancel)) }
         },
     ) {
+        WindowWithoutAutofill()
         // Names the date being picked, in the stock title's place.
         DatePicker(
             picker,
