@@ -63,6 +63,10 @@ internal class DemoAnimeRepository(
         cached.value += id to details
         return Outcome.Success(Unit)
     }
+
+    fun forget() {
+        cached.value = emptyMap()
+    }
 }
 
 internal class DemoAiringRepository(

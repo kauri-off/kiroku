@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.EpisodeStepper
 import io.github.kauri_off.kiroku.design.component.FactRow
 import io.github.kauri_off.kiroku.design.component.Poster
@@ -60,6 +61,7 @@ fun ComponentGallery(modifier: Modifier = Modifier) {
             section(R.string.gallery_stat_number) { StatNumberSection() }
             section(R.string.gallery_fact_row) { FactRowSection() }
             section(R.string.gallery_episode_stepper) { EpisodeStepperSection() }
+            section(R.string.gallery_connected_choice) { ConnectedChoiceSection() }
             section(R.string.gallery_screen_state) { ScreenStateSection() }
             section(R.string.gallery_session_banner, last = true) { SessionBanner(onSignIn = {}) }
         }
@@ -272,6 +274,23 @@ internal fun EpisodeStepperSection() {
 }
 
 @Composable
+internal fun ConnectedChoiceSection() {
+    val statuses =
+        listOf(
+            R.string.gallery_watching,
+            R.string.gallery_planned,
+            R.string.gallery_completed,
+            R.string.gallery_on_hold,
+            R.string.gallery_dropped,
+        ).map { stringResource(it) }
+    Column(Modifier.padding(horizontal = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.l)) {
+        ConnectedChoice(statuses, chosen = 0, onChoose = {})
+        ConnectedChoice(statuses.take(2), chosen = 1, onChoose = {})
+        ConnectedChoice(statuses.take(3), chosen = 2, onChoose = {}, enabled = false)
+    }
+}
+
+@Composable
 internal fun ScreenStateSection() {
     Column {
         ScreenState(ScreenState.Loading)
@@ -335,6 +354,10 @@ private fun FactRowPreview() = GalleryPreview { FactRowSection() }
 @Preview
 @Composable
 private fun EpisodeStepperPreview() = GalleryPreview { EpisodeStepperSection() }
+
+@Preview
+@Composable
+private fun ConnectedChoicePreview() = GalleryPreview { ConnectedChoiceSection() }
 
 @Preview
 @Composable

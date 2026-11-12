@@ -9,6 +9,7 @@
     <string name="gallery_stat_number">Stat number</string>
     <string name="gallery_fact_row">Fact row</string>
     <string name="gallery_episode_stepper">Episode stepper</string>
+    <string name="gallery_connected_choice">Connected choice</string>
     <string name="gallery_screen_state">Screen state</string>
     <string name="gallery_session_banner">Session banner</string>
     <string name="gallery_watching">Watching</string>

@@ -113,9 +113,10 @@ not use the queue kinds `full`, `batch` or `long`.
 
 - Default to no code comments. Where one is needed, one short line at most.
 - No user-visible string outside `app/src/main/res`, except the fallback for a value from MAL the app does not
-  know (its code written as words, or a genre's MAL name). Every string exists in English and Russian, in the feature's
-  own strings file, with the glossary's terms; quantities use plurals. Values from MAL that read as interface text
-  (status, type, season, genre, relation) are translated too.
+  know (its code written as words, or a genre's MAL name), and the strings of the debug source set, which live in
+  `app/src/debug/res`. Every string exists in English and Russian, in the feature's own strings file, with the
+  glossary's terms; quantities use plurals. Values from MAL that read as interface text (status, type, season, genre,
+  relation) are translated too.
 - Screens are stateless: `XScreen(state, onEvent)` with fixture states. Only `XRoute` touches a view model or
   navigation. Each screen has its own screenshot registry file.
 - User interface code uses stock Material 3 Expressive components in the choices of ARCHITECTURE section 8.4, theme

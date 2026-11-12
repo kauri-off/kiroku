@@ -32,6 +32,7 @@ import androidx.test.espresso.Espresso
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.design.component.balancedRows
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme

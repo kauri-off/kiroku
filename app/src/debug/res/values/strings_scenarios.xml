@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scenarios_title">Scenarios</string>
+    <string name="scenarios_off">Off</string>
+    <string name="scenarios_offline">Offline</string>
+    <string name="scenarios_offline_detail">Every request to MyAnimeList fails with “No connection”</string>
+    <string name="scenarios_session_detail">MyAnimeList answers every request that needs the sign-in as expired</string>
+    <string name="scenarios_slow">Slow</string>
+    <string name="scenarios_slow_detail">Every answer from MyAnimeList takes a few seconds</string>
+    <string name="scenarios_writes">Saving to MyAnimeList</string>
+    <string name="scenarios_writes_detail">Reading the list keeps working</string>
+    <string name="scenarios_writes_none">Works</string>
+    <string name="scenarios_writes_refused">Refused</string>
+    <string name="scenarios_writes_server_error">Server error</string>
+    <string name="scenarios_store">The store on the device</string>
+    <string name="scenarios_store_detail">A full store refuses every write; an unreadable one fails every read too</string>
+    <string name="scenarios_store_none">Works</string>
+    <string name="scenarios_store_writes_fail">Full</string>
+    <string name="scenarios_store_unreadable">Unreadable</string>
+    <string name="scenarios_name_writes_refused">Saving refused</string>
+    <string name="scenarios_name_write_errors">Saving fails</string>
+    <string name="scenarios_name_store_writes_fail">Store full</string>
+    <string name="scenarios_name_store_unreadable">Store unreadable</string>
+    <string name="scenarios_reset_title">Demo data</string>
+    <string name="scenarios_reset_detail">The list the app started with, and every scenario off</string>
+    <string name="scenarios_reset">Reset</string>
+    <string name="scenarios_reset_waiting">Waiting for MyAnimeList to answer a save, then resetting</string>
+    <string name="scenarios_reset_running">Bringing the list back</string>
+    <string name="scenarios_reset_dropped">The list is back; a save that got no answer was dropped</string>
+    <string name="scenarios_reset_failed">The list did not come back. Reset again</string>
+    <string name="scenarios_unavailable">Scenarios work only on demo data, and this build has a MyAnimeList client id</string>
+    <string name="scenarios_marker_spoken">Simulated: %s</string>
+</resources>
