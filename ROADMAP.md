@@ -98,6 +98,13 @@ Not to forget:
 - The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
   between seasons does not hide the next season.
 - Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
+- Compose UI 1.12.1 can crash with `LayoutNode … not found in RectList` when a pager measures, inside a scroll, a
+  page whose rows were measured but never placed: a `ListItem`'s baseline query then places a text node whose
+  parent has no rect yet. The List therefore composes every page before any slide (`ListFrameWorkTest`). On a
+  Compose update, check the issue tracker before composing pages during a gesture again.
+- A fling of the List's long tab back to the top has one frame of 50 to 120 ms on the emulator's minified build,
+  where the rows coming into view are composed, much of it in code still interpreted: find the rest of its cost,
+  and consider a baseline profile.
 - The list's database store in `:data` passes `:core`'s `ListEngineContract`; the MAL client is held to `RemoteList`
   by tests on recorded responses. `InMemoryLocalList` then moves to the test fixtures.
 - The MAL client's `RemoteList.fetch` asks with `nsfw=true`, reads pages in an order edits do not change, and fails
