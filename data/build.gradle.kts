@@ -40,5 +40,8 @@ android {
 
 dependencies {
     api(project(":core"))
+    testImplementation(project(":core")) {
+        capabilities { requireCapability("kiroku:core-contract") }
+    }
     testImplementation(libs.junit)
 }

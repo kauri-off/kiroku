@@ -39,4 +39,4 @@ internal fun createGraph(
     clock: Clock,
     scope: CoroutineScope,
     demo: DemoGraphFactory? = demoGraphFactory,
-): AppGraph = if (malClientId(clientId) == null && demo != null) demo(clock, scope) else LiveGraph(clock)
+): AppGraph = if (malClientId(clientId) == null && demo != null) demo(clock, scope) else LiveGraph(clock, scope)

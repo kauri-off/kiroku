@@ -102,18 +102,16 @@ class TitleViewModel(
     private fun addToList() {
         val anime = shownAnime() ?: return
         if (entry != null) return
-        viewModelScope.launch {
-            graph.list.write(ListWrite.Save(anime, EditSheetState.newEntry)) ?: return@launch
-            messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id)))
+        messages.write(ListWrite.Save(anime, EditSheetState.newEntry)) {
+            ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id))
         }
     }
 
     // A change that completes the title (W7) says so, with an Undo of that change alone.
     private fun watched(write: ListWrite) {
         if (entry == null) return
-        viewModelScope.launch {
-            val change = graph.list.write(write) ?: return@launch
-            if (change.completed) messages.post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)))
+        messages.write(write) { change ->
+            if (change.completed) ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)) else null
         }
     }
 

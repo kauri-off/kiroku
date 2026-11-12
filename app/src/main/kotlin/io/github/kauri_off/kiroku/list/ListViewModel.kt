@@ -172,16 +172,15 @@ class ListViewModel(
     // The message and its Undo come from what this write changed, so each Undo takes back its own step (W3).
     private fun plusOne(id: AnimeId) {
         val anime = entries[id]?.anime ?: return
-        viewModelScope.launch {
-            val change = graph.list.write(ListWrite.MarkNextWatched(anime)) ?: return@launch
-            val after = change.after ?: return@launch
+        messages.write(ListWrite.MarkNextWatched(anime)) { change ->
+            val after = change.after ?: return@write null
             val text =
                 if (change.completed) {
                     ShellMessage.Text.MovedToCompleted
                 } else {
                     ShellMessage.Text.EpisodeWatched(after.values.watchedEpisodes)
                 }
-            messages.post(ShellMessage(text, ShellMessage.Action.Undo(change.undo)))
+            ShellMessage(text, ShellMessage.Action.Undo(change.undo))
         }
     }
 

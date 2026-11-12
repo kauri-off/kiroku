@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -20,6 +21,7 @@ import java.time.LocalDate
 class EditSheetViewModel(
     private val graph: AppGraph,
     private val saved: SavedStateHandle,
+    private val messages: ShellMessages,
 ) : ViewModel() {
     var sheet by mutableStateOf<EditSheetState?>(null)
         private set
@@ -48,9 +50,9 @@ class EditSheetViewModel(
         when (event) {
             EditSheetEvent.SaveClicked ->
                 if (anime != null && after.closing && !before.closing && (after.hasChanges || after.isNew)) {
-                    write(ListWrite.Save(anime, after.draft))
+                    messages.write(ListWrite.Save(anime, after.draft))
                 }
-            EditSheetEvent.RemoveConfirmed -> if (anime != null && !before.closing && !after.isNew) write(ListWrite.Remove(anime))
+            EditSheetEvent.RemoveConfirmed -> if (anime != null && !before.closing && !after.isNew) messages.write(ListWrite.Remove(anime))
             EditSheetEvent.Dismissed -> {
                 sheet = null
                 this.anime = null
@@ -60,10 +62,6 @@ class EditSheetViewModel(
             else -> Unit
         }
         SavedSheet.write(saved, after)
-    }
-
-    private fun write(write: ListWrite) {
-        viewModelScope.launch { graph.list.write(write) }
     }
 
     private fun load(

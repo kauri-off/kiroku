@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.RemoteList
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -16,11 +17,12 @@ data class ListRequest(
     val values: ListValues?,
 )
 
+// The demo's MAL: the list as the website has it, with scripted latency and failures.
 class DemoServer(
     entries: List<ListEntry>,
     private val clock: Clock,
     private val latency: Duration,
-) {
+) : RemoteList {
     val offline = MutableStateFlow(false)
 
     val failingLoads = MutableStateFlow(false)
@@ -65,7 +67,7 @@ class DemoServer(
         }
     }
 
-    suspend fun download(): Outcome<List<ListEntry>> {
+    override suspend fun fetch(): Outcome<List<ListEntry>> {
         load(needsSignIn = true)?.let { return Outcome.Failure(it) }
         val snapshot =
             synchronized(guard) {
@@ -76,10 +78,13 @@ class DemoServer(
         return Outcome.Success(snapshot)
     }
 
-    suspend fun put(
+    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> =
+        load(needsSignIn = true)?.let { Outcome.Failure(it) } ?: Outcome.Success(entry(id))
+
+    override suspend fun put(
         anime: Anime,
         values: ListValues?,
-    ): Outcome<Unit> {
+    ): Outcome<ListEntry?> {
         val request = ListRequest(anime.id, values)
         delay(writeLatency(request))
         if (offline.value) return Outcome.Failure(DataError.NoConnection)
@@ -92,8 +97,12 @@ class DemoServer(
                 else -> null
             }
         if (error != null) return Outcome.Failure(error)
-        synchronized(guard) { store(anime, values) }
-        return Outcome.Success(Unit)
+        return Outcome.Success(
+            synchronized(guard) {
+                store(anime, values)
+                list[anime.id]
+            },
+        )
     }
 
     private fun store(

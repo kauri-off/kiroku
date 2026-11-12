@@ -62,10 +62,11 @@ class TitleViewModelTest {
         before: TestGraph.() -> Unit = {},
         settle: Boolean = true,
         lateObservers: Boolean = false,
+        slowWrites: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(Demo(Fixtures.reference, scope), lateObservers).apply(before)
+        val graph = TestGraph(Demo(Fixtures.reference, scope), lateObservers, slowWrites).apply(before)
         val messages = ShellMessages(scope, graph.list)
         val subject = Subject(graph, messages, TitleViewModel(graph, id, saved, messages))
         if (settle) advanceUntilIdle()
@@ -183,6 +184,16 @@ class TitleViewModelTest {
             s.tapAction()
             advanceUntilIdle()
             assertEquals(before, s.values())
+        }
+
+    @Test
+    fun `a completing step is written and says so although its page is closed before the write is applied`() =
+        test(slowWrites = true) { s ->
+            s.title.onEvent(TitleEvent.SetWatched(24))
+            s.title.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(ListStatus.Completed, s.values()?.status)
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
         }
 
     @Test

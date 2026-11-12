@@ -4,7 +4,9 @@ import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,21 +24,27 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import kotlin.time.Duration.Companion.milliseconds
 
-// With [lateObservers], as with a database, an observer hears of a change after the write and a fresh read see it.
+// With [lateObservers], as with a database, an observer hears of a change after the write and a fresh read see it;
+// with [slowWrites], a write takes time before it is applied.
 class TestGraph(
     val demo: Demo,
     lateObservers: Boolean = false,
+    slowWrites: Boolean = false,
 ) : AppGraph {
     override val clock = demo.clock
     override val session = demo.session
-    override val list: ListRepository = if (lateObservers) LateList(demo.list) else demo.list
+    override val list: ListRepository =
+        demo.list.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it }
     override val anime = demo.anime
     override val airing = demo.airing
     override val search = demo.search
     override val user = demo.user
 
     companion object {
-        fun over(scope: CoroutineScope) = TestGraph(Demo(Fixtures.reference, scope))
+        fun over(
+            scope: CoroutineScope,
+            slowWrites: Boolean = false,
+        ) = TestGraph(Demo(Fixtures.reference, scope), slowWrites = slowWrites)
     }
 }
 
@@ -52,6 +60,19 @@ private class LateList(
 
     private companion object {
         val LATE = 5.milliseconds
+    }
+}
+
+private class SlowWrites(
+    private val inner: ListRepository,
+) : ListRepository by inner {
+    override suspend fun write(write: ListWrite): ListChange? {
+        delay(SLOW)
+        return inner.write(write)
+    }
+
+    private companion object {
+        val SLOW = 5.milliseconds
     }
 }
 

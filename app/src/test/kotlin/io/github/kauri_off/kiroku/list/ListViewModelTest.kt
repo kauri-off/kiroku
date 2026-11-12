@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
@@ -68,10 +69,11 @@ class ListViewModelTest {
         demo: (CoroutineScope) -> Demo = { Demo(Fixtures.reference, it) },
         saved: SavedStateHandle = SavedStateHandle(),
         lateObservers: Boolean = false,
+        slowWrites: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(demo(scope), lateObservers)
+        val graph = TestGraph(demo(scope), lateObservers, slowWrites)
         val messages = ShellMessages(scope, graph.list)
         val subject = Subject(graph, saved, messages, ListViewModel(graph, saved, messages))
         advanceUntilIdle()
@@ -124,6 +126,16 @@ class ListViewModelTest {
             advanceUntilIdle()
             assertEquals(12, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
             assertNull(s.message)
+        }
+
+    @Test
+    fun `PlusOne is written and says so although the List is closed before the write is applied`() =
+        test(slowWrites = true) { s ->
+            s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
+            s.list.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(13, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
+            assertEquals(ShellMessage.Text.EpisodeWatched(13), s.message?.text)
         }
 
     @Test

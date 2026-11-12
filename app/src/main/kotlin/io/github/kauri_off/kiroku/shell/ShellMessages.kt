@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -109,6 +110,14 @@ class ShellMessages(
         }
     }
 
+    // A screen's write runs in the shell's scope, so the write and the message about it outlive the screen.
+    fun write(
+        write: ListWrite,
+        message: (ListChange) -> ShellMessage? = { null },
+    ) {
+        scope.launch { list.write(write)?.let(message)?.let(::post) }
+    }
+
     // A waiting Undo or Retry is dropped once its title is written, so it never acts on values it did not see.
     private fun watch(posted: Posted): Job? {
         val id = posted.message.title ?: return null
@@ -134,8 +143,8 @@ class ShellMessages(
         }
         if (!actionPerformed) return
         when (val action = posted.message.action) {
-            is ShellMessage.Action.Undo -> scope.launch { list.write(action.write) }
-            is ShellMessage.Action.Retry -> scope.launch { list.write(action.write) }
+            is ShellMessage.Action.Undo -> write(action.write)
+            is ShellMessage.Action.Retry -> write(action.write)
             is ShellMessage.Action.Change -> editRequest = action.id
             null -> Unit
         }
