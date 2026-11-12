@@ -445,7 +445,8 @@ everything else stays calm, because this is a tool opened many times a day.
   errors use `error`.
 - **Edge-to-edge.** Content is never hidden under a system bar: the last row of every list can be scrolled clear of
   the gesture bar, and a snackbar never sits under it.
-- **Launcher icon:** an original adaptive icon built from the character 記, with no MAL name or logo.
+- **Launcher icon:** an original adaptive icon with a monochrome layer: an abstract mark, with no characters and no MAL
+  name or logo.
 
 ### 8.2 Typography
 
