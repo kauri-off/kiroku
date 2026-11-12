@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.PrimaryScrollableTabRow
@@ -11,12 +12,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
@@ -29,6 +34,8 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
@@ -46,12 +53,28 @@ class ListTabMotion(
 
     private var tap: Any? = null
 
-    // Fractional: 1.3 is a third of the way from the second tab to the third. Read it only in layout, draw or effects.
+    // Fractional: 1.3 is a third of the way from the second tab to the third.
     val position: Float
         get() = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (pager.pageCount - 1).toFloat())
 
     // Flips half-way through a drag, and at once to a tapped tab.
     val selected: Int by derivedStateOf { tapTarget ?: pager.currentPage }
+
+    // The page the pager has rested on for a frame: a fling starts a moment after the drag that threw it ends.
+    var resting by mutableIntStateOf(pager.currentPage)
+        private set
+
+    // Keeps [resting] and tells [onRest] of each page the pager rests on.
+    suspend fun followRest(onRest: (Int) -> Unit) {
+        val still = { pager.currentPage.takeUnless { pager.isScrollInProgress || tapTarget != null } }
+        snapshotFlow(still).filterNotNull().collectLatest { index ->
+            withFrameNanos {}
+            if (still() == index) {
+                resting = index
+                onRest(index)
+            }
+        }
+    }
 
     // A page further than one away is first put next to its tab, so the last page slides in as a component's entrance.
     fun select(index: Int) {
@@ -87,8 +110,14 @@ internal fun ListTabs(
 ) {
     val scroll = rememberScrollState()
     val selected = motion.selected
+    val geometry = remember { RowGeometry() }
+    // Written in composition, whose changes reach layout in the same frame; a write in measure would show a frame late.
+    val position = motion.position
+    val max = scroll.maxValue
+    val density = LocalDensity.current
+    geometry.positions?.let { scroll.follow(rowScroll(it, position, max, with(density) { Sizes.tabRowEdge.roundToPx() }, density)) }
     // The stock row scrolls itself to its index; it changes only at rest, where that scroll is already the row's.
-    val resting = motion.pager.settledPage
+    val resting = motion.resting
     PrimaryScrollableTabRow(
         selectedTabIndex = resting,
         scrollState = scroll,
@@ -99,10 +128,10 @@ internal fun ListTabs(
                     .tabIndicatorLayout { measurable, constraints, positions ->
                         if (positions.isEmpty()) return@tabIndicatorLayout layout(0, 0) {}
                         val position = motion.position
-                        // Here, in the row's measure, so the row is scrolled in the same frame the indicator moves.
-                        val target = rowScroll(positions, position, scroll.maxValue, Sizes.tabRowEdge.roundToPx(), this)
-                        val now = Snapshot.withoutReadObservation { scroll.value }
-                        if (target != now) scroll.dispatchRawDelta((target - now).toFloat())
+                        if (geometry.positions != positions) {
+                            geometry.positions = positions
+                            scroll.follow(rowScroll(positions, position, scroll.maxValue, Sizes.tabRowEdge.roundToPx(), this))
+                        }
                         val at = between(positions, position)
                         val width = at.contentWidth.roundToPx()
                         val placeable = measurable.measure(Constraints(width, width, 0, constraints.maxHeight))
@@ -125,6 +154,17 @@ internal fun ListTabs(
             )
         }
     }
+}
+
+// The tabs' places from the row's last measure; not state, as only a new place in the pager asks for a new scroll.
+private class RowGeometry {
+    var positions: List<TabPosition>? = null
+}
+
+// Sets the row's scroll without reading it, so a scroll by hand stays until the pager moves.
+private fun ScrollState.follow(target: Int) {
+    val now = Snapshot.withoutReadObservation { value }
+    if (target != now) dispatchRawDelta((target - now).toFloat())
 }
 
 private class Between(

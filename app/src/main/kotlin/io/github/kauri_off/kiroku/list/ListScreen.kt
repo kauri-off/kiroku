@@ -39,8 +39,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -67,8 +65,6 @@ import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.text.label
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.filterNotNull
 
 // The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -135,13 +131,8 @@ private fun Pages(
     val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
     val tab = rememberUpdatedState(state.tab)
-    // A fling starts a moment after the drag that threw it ends, so a page counts as settled a frame after it rests.
-    LaunchedEffect(pager) {
-        val resting = { pager.currentPage.takeUnless { pager.isScrollInProgress || motion.tapTarget != null } }
-        snapshotFlow(resting).filterNotNull().collectLatest { index ->
-            withFrameNanos {}
-            if (resting() == index && statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
-        }
+    LaunchedEffect(motion) {
+        motion.followRest { index -> if (statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index])) }
     }
     // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.
     LaunchedEffect(state.tab) {
