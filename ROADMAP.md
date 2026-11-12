@@ -82,6 +82,9 @@ on the Russian strings so far are fixed.
 
 Not to forget:
 
+- When a Compose BOM brings material3 1.5.0 stable, the pin goes. Then check whether `MaterialExpressiveTheme`
+  now supplies the Expressive type scale itself: the theme's own `ExpressiveTypography` would hide it, and
+  `TypographyTest` would stay green.
 - Posters load from the network: the app has only the image library so far, no network fetcher, and no test of
   its own image loader. Debug builds draw stand-in art for the demo fixtures until then.
 - The full genre table (names in English and Russian) is written from recorded responses.
