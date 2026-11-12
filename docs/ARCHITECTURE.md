@@ -12,8 +12,6 @@ how things work.
 - A **decision** is the owner's. An agent that needs to depart from one stops and reports.
 - An **invariant** is a property of the result that a test must demonstrate. Invariants are labelled (A1, N3, …) so
   that tests and reviews can name them.
-- When the code or a device shows this document to be wrong, it is corrected in the same pull request, by
-  shortening or restating it, not by describing the implementation.
 
 Sections: 1 Scope · 2 Data sources · 3 Sign-in with MAL · 4 Episodes aired · 5 Notifications · 6 Structure and
 stack · 7 Persistence, errors and writes · 8 Design system · 9 Per-screen information budgets · 10 Localisation ·
@@ -298,9 +296,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - A screen is a stateless composable, `XScreen(state, onEvent)`, drawn entirely from one immutable state value. It
   never touches a view model, a repository or navigation. This is what previews and screenshot tests render.
 - A view model takes the repositories and services it uses, never the whole graph, and of the list only a view that
-  cannot write. It produces the state as a `StateFlow` from the repositories' flows and the user's input, and handles
-  the events. The state is produced only while a screen collects it: it stops once none has for longer than a
-  rotation takes, and starts again with the next. Nothing is read, synced or refreshed before the first collection.
+  cannot write. It produces the state from the repositories and the user's input only while a screen shows it, a
+  rotation included, and reads, syncs or refreshes nothing before then.
 - A page opened from a row or another page shows what that row or page showed from its first frame, and keeps
   showing it until the store knows more, also after a failed refresh. A page opened with nothing known starts in its
   loading state.
@@ -308,13 +305,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   and Retry in place of the content, never a message alone. With older content shown: it stays, the failure is a
   message, and the screen can be refreshed by pulling. A failed action of the person: a message with Retry that is
   not lost (section 7.2). A secondary part (a poster, a strip): a placeholder, loaded with the screen's next refresh.
-- Text a person types is held in a `mutableStateOf` or `TextFieldState` that the view model owns and changes inside
-  the event, and its field reads that holder: no flow, collected or not, sits between a keystroke and its field. The
-  view model's flows observe the holder with `snapshotFlow`.
+- Text a person types is state the view model owns and changes inside the event; no flow sits between a keystroke and
+  its field.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
   screen.
-- A thin `XRoute` collects the state only while its screen is started, connects the view model to the screen and to
-  navigation, and is the only place that knows either.
+- A thin `XRoute` connects the view model to the screen and to navigation, and is the only place that knows either.
 - There is no MVI framework and no event bus.
 - Snackbars share one state, owned by the shell and handed to every screen as a parameter; the screen on top
   draws it, so a message that outlives its screen still shows. The session banner (S6) is part of each
@@ -354,8 +349,8 @@ was chosen against, and why:
 - **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included, and a debug build
   without a client id starts in it. Demo data follows the device's date, so every weekday and weekly slot in it stays
   what it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
-  fixtures. Debug and preview builds have a debug menu that makes the demo fail, resets it and says what build is
-  running; a tab on the app's edge opens it and is red while the demo fails. A release build holds none of it.
+  fixtures. Debug builds and the preview build (the release build's code on the demo) have a debug menu that makes
+  the demo fail and resets it. A release build holds none of it.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.
@@ -378,23 +373,19 @@ was chosen against, and why:
 - A screen has four states: content, loading (no content yet), empty, and error (no content and the load failed).
   **With cached content, a failed refresh is a snackbar, never a replaced screen.**
 - Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search shows
-  the error state with "No connection" and Retry. A title page whose details were never loaded keeps what it was
-  opened with and shows that error state where the details would be, until a load succeeds; as that may be below the
-  first screen, the failure is also a snackbar.
-- All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it.
-  One is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
-  replaced: a newer one of that kind waits behind it and is dropped if its title is written meanwhile; an ordinary
-  one posted meanwhile is dropped. Its time runs only while it can be seen and tapped: the app's window has focus and
-  no sheet or dialog of the app covers it; cut short, it is shown again in full. Every other snackbar runs on
-  regardless and is not shown again.
+  the error state with "No connection" and Retry. A title page whose details were never loaded shows that error
+  state where they would be (section 9.4) and, as that may be below the first screen, a snackbar.
+- All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
+  one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
+  replaced, another of its kind waits behind it while its title is unchanged, and its time runs only while the user
+  can see and tap it. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
 
 Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
-is applied locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches
-the user after the screen that made the edit is gone; with nothing collecting it, it is dropped, as the entry is
-already back at the server's state. The notification action instead waits for the server's answer (N9). "+1", the
-stepper and "Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
+is applied locally, and its failure reaches the user also after the screen that made the edit is gone. The
+notification action instead waits for the server's answer (N9). "+1", the stepper and "Mark watched" are steps,
+applied to the entry's values as they are when sent, not to values read earlier.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown.
@@ -433,19 +424,17 @@ everything else stays calm, because this is a tool opened many times a day.
 
 - The Material 3 Expressive theme with its default typography, shapes and motion scheme. Only the colours are
   Kiroku's.
-- Material 3 is pinned ahead of the Compose BOM while the version with Expressive is a release candidate. API that is
-  still experimental there is opted into in one file of the design package and nowhere else, so that what may break
-  on an update is in one place.
+- Material 3 is pinned ahead of the Compose BOM while the version with Expressive is a release candidate, and its
+  experimental API is opted into in one file, so that what may break on an update is in one place.
 - **Dynamic colour** is on by default on Android 12 and later, with a setting to turn it off. Below Android 12 and
-  in screenshot tests the app uses a fixed light and dark scheme generated from one seed colour, `#00696D` (a teal,
-  deliberately not MAL's blue). One screenshot variant uses a second, contrasting seed, `#8B5000`, to expose
-  misused colour roles.
+  in screenshot tests the app uses a fixed light and dark scheme from one seed colour, a teal, deliberately not MAL's
+  blue. One screenshot variant uses a second, contrasting seed to expose misused colour roles.
 - Light and dark follow the system; a setting overrides (System, Light, Dark).
 - Colours are used only through the theme's colour roles. Emphasis uses `primary`; "to watch" uses `tertiary`;
   errors use `error`.
 - **Edge-to-edge.** Content is never hidden under a system bar: the last row of every list can be scrolled clear of
   the gesture bar, and a snackbar never sits under it.
-- **Launcher icon:** an original abstract adaptive icon with a monochrome layer; no characters, no MAL name or logo.
+- **Launcher icon:** original and abstract; no characters, no MAL name or logo.
 
 ### 8.2 Typography
 
@@ -460,19 +449,18 @@ The default Material 3 type scale with the system font. Screens use only these r
 
 ### 8.3 Spacing and shape
 
-Layout code uses only the `Spacing` tokens (a 4 dp grid), the theme's named sizes and component defaults; the theme's
-code holds their values. A literal dp value outside the theme fails a test; a literal colour outside the theme is a
-code-review finding.
+Layout code uses only the `Spacing` tokens, the theme's named sizes and component defaults: no literal dp value or
+colour outside the theme.
 
 - Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
-- Content is at most 640 dp wide and centred on wider windows.
+- Content has a maximum width and is centred on wider windows.
 - Every tappable element is at least 48 × 48 dp.
-- Posters have the theme's medium corner shape, are cropped to their size, and come in three named sizes: the row
-  poster, in a MAL poster's proportions, in every `AnimeRow`; the strip poster and the header poster, both 2:3.
+- Posters are cropped to one of three named sizes: the row poster in every `AnimeRow`, the strip poster and the
+  header poster.
 - **A row poster leaves its text room at large text:** it narrows as the font scale grows, so a title beside it keeps
   a readable line length.
-- **A caption of a strip card is never broken inside a word:** the card grows with the font scale. This is a rule of
-  the component, and a screen never passes a width.
+- **A caption of a strip card is never broken inside a word**, at any font scale. This is a rule of the component,
+  and a screen never passes a width.
 - **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
   shown, unless the segment alone is wider than the line.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked one
@@ -485,17 +473,17 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | Component | Built from | Purpose |
 |---|---|---|
 | `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm, and "+1" keeps one place and one size on every row, prominent while the row has episodes to watch and quiet once the user has caught up. An optional long press with haptic feedback, offered to screen readers once, as the row's long-click action |
+| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element, an optional long press with haptic feedback that screen readers are offered too. "+1" keeps one place and one size on every row, prominent while the row has episodes to watch and quiet once the user has caught up |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9): "25 / 24" is a legal display and nothing is refused |
+| `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9) |
 | `ScreenState` | `LoadingIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
-| `ConnectedChoice` | `ToggleButton` | One of a few options, all visible, as a connected button group in as few rows as fit and as even as can be |
-| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
+| `ConnectedChoice` | `ToggleButton` | One of a few options, all visible, as a connected button group in as few rows as fit |
+| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, which follows the pager between two tabs, as the stock row cannot |
 
 Stock Material 3 components are used directly for everything else. Icons are Material icons. Where Material offers
 several components for one job, these are the choices:
@@ -534,24 +522,19 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in the same way. The tab row is drawn from the pager's position in
-  the frame it moves, except that a tap glides it to the tapped tab while the one page slides, and back
-  to the pager if a drag takes over.
-- **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
-  curve, spring value or delay in user interface code fails the build. One value is the owner's exception: the List's
-  pages settle after a release, and slide after a tab tap, with ViewPager2's snap timing, so that the gesture feels
-  as in Droid-ify; a faster release settles sooner, and the settle decelerates and cannot overshoot.
-- **No bounce in what the app animates.** The Expressive scheme's spatial springs overshoot, so the app's own
-  animations use only its effects springs, which cannot: fast for a change inside a component and for an exit,
-  default for a component's entrance, slow for a screen.
+  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page.
+- **One source.** Every animation the app writes takes its spec from the theme's motion scheme, and only from its
+  effects springs, because the spatial ones overshoot: fast for a change inside a component and for an exit, default
+  for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
+  slide with ViewPager2's snap timing, so that the gesture feels as in Droid-ify.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
   stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a
   List tab between orderings (section 9.3), even when a data refresh brings the change. Content that finishes
   loading fades in.
   One thing moves per change; a container that enters brings its content with it.
-- **Time.** As the Expressive scheme's springs settle: a change inside a component within 250 ms, a component's
-  entrance within 400 ms, a screen within 550 ms; an exit is shorter than the matching entrance.
+- **Time.** An exit is shorter than the matching entrance, and an animation settles within the bound the motion
+  tests set for its spring.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
   reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back shows where
   Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned off,
@@ -631,8 +614,9 @@ computed.
 entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
 clearing the field ends it. Sort opens a bottom sheet with at most five options. "+1" answers with a snackbar that
 offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves Watching and the
-snackbar says where it went; Undo puts back the count, the status and the dates. When a row leaves its tab, a "+1"
-on a row that moved up is not applied until 800 ms after the rows have stopped; taps do not extend this.
+snackbar says where it went; Undo puts back the count, the status and the dates. After a row leaves its tab, a "+1"
+on a row that moved up is not applied until the rows have stood still a moment, so a tap meant for the row that left
+lands on no other.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.
@@ -774,8 +758,7 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
   The owner reviews the Russian text at the end of each milestone.
 - **No user-visible string exists outside the `:app` resources**, and strings are split into one file per feature,
   so parallel tasks do not edit the same file. Strings of the debug source set live in that source set, in English
-  and Russian. The build fails on a missing or extra translation and on a missing plural form, and a test fails on a
-  string literal in user interface code (Android Lint does not see Compose).
+  and Russian.
 - A line never breaks between a number and its word, unit or slash: `24 episodes`, `12 / 24`, `К просмотру: 2`.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
@@ -784,15 +767,13 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
   user names and proper names (studios, producers) are content and are not translated.
 - Quantities use plural resources (Russian needs `one`, `few`, `many`, `other`). Sentences are never concatenated.
 - Dates and times follow the locale and the device's 12/24-hour setting, in the device's time zone.
-- **An air time** is written relative to today: "today", "tomorrow", the short weekday within the next six days, and
-  the date beyond that, each with the time. It never has both a weekday and a date. A next episode is written in one
-  form on every screen, and so is a premiere. **A date from MAL** is written by its precision: a day, a month or a
-  year. `docs/GLOSSARY.md` has the forms in both languages.
+- **An air time** is written relative to today and never has both a weekday and a date; a next episode and a
+  premiere each have one form on every screen. **A date from MAL** is written by its precision. `docs/GLOSSARY.md`
+  has the forms in both languages.
 - Language choice: on Android 13 and later the "Language" setting opens the system's per-app language screen. On
   Android 8 to 12 the app follows the system language; an in-app picker would require AppCompat.
 - "Title language" chooses among romaji, English and Japanese; when the chosen one is missing, the romaji title is
   shown. Russian titles come after 1.0.
-
 
 ## 11. Testing and screenshots
 
@@ -826,19 +807,11 @@ render gives a reviewer and what it cannot show.
   empty and error, plus the cases its task needs. A screen that has no loading, empty or error state says why, and the
   render writes the reason to `<screen>/NOT_SHOWN.txt`. A **gallery** case renders every component of section 8.4 in
   all its states. A case can declare the keyboard open, or its own window size.
-- An ordinary test run renders nothing; only a record run renders.
 
-**Variants.** Every case is rendered in the five standard variants. The content case of each screen gets two more.
-
-| Variant | Language | Theme | Screen | Font scale | Rendered for |
-|---|---|---|---|---|---|
-| `en-light` | English | Light | 411 × 891 dp | 1.0 | every case |
-| `en-dark` | English | Dark | same | 1.0 | every case |
-| `ru-light` | Russian | Light | same | 1.0 | every case |
-| `ru-dark` | Russian | Dark | same | 1.0 | every case |
-| `ru-stress` | Russian | Light | 360 × 640 dp | 1.3 | every case |
-| `ru-large` | Russian | Light | 411 × 891 dp | 2.0 | content case |
-| `en-alt` | English | Light, second seed colour | 411 × 891 dp | 1.0 | content case |
+**Variants.** Every case is rendered in the five standard variants: `en-light`, `en-dark`, `ru-light` and `ru-dark`
+on a phone-sized screen, and `ru-stress`, Russian on a small screen at a larger font scale. The content case also
+gets `ru-large`, at a font scale of 2.0, and `en-alt`, with the second seed colour. The harness's variant list holds
+their sizes.
 
 **Captures.** In `app/build/outputs/roborazzi/<screen>/`, for each case and variant:
 
@@ -849,12 +822,11 @@ render gives a reviewer and what it cannot show.
   every card shows. Magenta marks a strip that changed height between pages.
 - `<case>__bounds.png`, for the content case in `en-light`: the bounds of the components, for checking alignment.
 - `<case>__<variant>__frames.png`: a transition as frames in one image (section 8.5).
-- `ACCESSIBILITY.txt`: the result of the automatic check, which fails the render on a touch target under 48 dp in any
-  variant and on an unlabeled control in `en-light`.
+- `ACCESSIBILITY.txt`: the result of the automatic check for small touch targets and unlabeled controls, which
+  fails the render.
 
 `app/build/outputs/roborazzi/RENDERED_AT` holds the hash of the rendered commit and says "dirty" when the worktree had
-uncommitted changes. A render never comes from the build cache, and a record run first deletes all earlier images, so
-after rendering one screen only that screen's images exist.
+uncommitted changes. A render never comes from the build cache, and it deletes all earlier images.
 
 **What an image cannot show.** Robolectric renders at density 2.0, where phones run at 2.625 or 3, so hairlines and
 sub-dp rounding differ. The status bar is always 24 dp, so a top padding written as 24 dp instead of the inset passes.
@@ -869,17 +841,14 @@ only when rendered on the same machine.
 ## 12. Build, platform and distribution
 
 - **`minSdk` 26** (Android 8.0): `java.time` without desugaring, notification channels and adaptive icons
-  everywhere. **`targetSdk` 37** (Android 17). **`compileSdk` 37, minor API level 2**: current Compose and
-  `androidx.core` require 37, and the build uses the SDK package `platforms;android-37.2`. JDK 17.
-- The Android Gradle Plugin compiles Kotlin itself; the project pins a newer Kotlin than the plugin's default.
+  everywhere. The compile SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
 - **Checks.** ktlint with its default rules and two exceptions: the package-name rule is off, because it rejects
   the underscore in the base package, and composable functions are exempt from the function-naming rule. Android
-  Lint with the translation checks of section 10 as errors; other warnings are not errors, because checks such as
-  "newer version available" would fail the build whenever a library publishes a release.
-- **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`; its
-  workflow files say what it runs. It keeps the screenshots; a debug APK, which has no client id and so runs in
-  demo mode; and an unsigned release APK with its R8 mapping, built without any secret. It checks that the pull
-  request title is a conventional commit. The queue rules of the maintainer's machine are in `CLAUDE.md`.
+  Lint with the translation checks as errors; other warnings are not errors, because checks such as "newer version
+  available" would fail the build whenever a library publishes a release.
+- **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`, and
+  checks that the pull request title is a conventional commit; its workflow files say what it runs and keeps. What
+  it builds for a pull request is built without any secret.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
