@@ -5,9 +5,10 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -23,24 +24,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,11 +69,14 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.offset
 import androidx.compose.ui.window.DialogProperties
@@ -80,6 +86,7 @@ import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
 import io.github.kauri_off.kiroku.design.component.TitleText
+import io.github.kauri_off.kiroku.design.component.stepButtonMargin
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
@@ -111,7 +118,7 @@ internal fun EditSheet(
     val mayLeave by rememberUpdatedState(state.mayLeave)
     val events by rememberUpdatedState(onEvent)
     val sheetState =
-        rememberModalBottomSheetState(skipPartiallyExpanded = true) { value ->
+        rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)) { value ->
             if (value != SheetValue.Hidden || mayLeave) {
                 true
             } else {
@@ -163,7 +170,7 @@ internal fun EditSheet(
                 // The gaps between groups look equal once the controls' own invisible margins are counted.
                 TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(Spacing.l))
-                StatusChips(state.draft.status, Modifier.focusRequester(statusFocus)) { edit(EditSheetEvent.StatusChosen(it)) }
+                StatusChoice(state.draft.status, Modifier.focusRequester(statusFocus)) { edit(EditSheetEvent.StatusChosen(it)) }
                 Spacer(Modifier.height(Spacing.l))
                 Column(
                     Modifier.onPlaced {
@@ -187,7 +194,7 @@ internal fun EditSheet(
                             if (!it) onEvent(EditSheetEvent.TypingEnded)
                         },
                         onStep = { onEvent(EditSheetEvent.WatchedChanged(it)) },
-                        modifier = Modifier.bleed(start = iconButtonMargin(R.drawable.ic_remove)),
+                        modifier = Modifier.bleed(start = stepButtonMargin),
                         fieldModifier = Modifier.focusRequester(countFocus),
                     )
                 }
@@ -226,7 +233,11 @@ internal fun EditSheet(
                             }
                         },
                     save = {
-                        Button(onClick = { onEvent(EditSheetEvent.SaveClicked) }, enabled = state.canSave) {
+                        Button(
+                            onClick = { onEvent(EditSheetEvent.SaveClicked) },
+                            shapes = ButtonDefaults.shapes(),
+                            enabled = state.canSave,
+                        ) {
                             Text(stringResource(R.string.edit_save))
                         }
                     },
@@ -316,34 +327,92 @@ private fun Actions(
     }
 }
 
+// One of five as a connected button group, in as few rows as fit and as even as can be; the chosen one is in primary.
 @Composable
-private fun StatusChips(
+private fun StatusChoice(
     status: ListStatus,
     modifier: Modifier,
     onChoose: (ListStatus) -> Unit,
 ) {
-    FlowRow(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        ListStatus.entries.forEach { option ->
-            val selected = option == status
-            FilterChip(
-                selected = selected,
-                onClick = { if (!selected) onChoose(option) },
-                label = { Text(stringResource(option.label())) },
-                leadingIcon =
-                    if (selected) {
-                        {
-                            Icon(
-                                painterResource(R.drawable.ic_check),
-                                contentDescription = null,
-                                Modifier.size(FilterChipDefaults.IconSize),
-                            )
+    val options = ListStatus.entries
+    val labels = options.map { stringResource(it.label()) }
+    val widths = toggleButtonWidths(labels)
+    val gap = ButtonGroupDefaults.ConnectedSpaceBetween
+    BoxWithConstraints(modifier) {
+        val rows = balancedRows(widths, maxWidth, gap)
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            rows.forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEachIndexed { place, index ->
+                        val option = options[index]
+                        val selected = option == status
+                        ToggleButton(
+                            checked = selected,
+                            onCheckedChange = { if (!selected) onChoose(option) },
+                            shapes = connectedShapes(first = place == 0, last = place == row.lastIndex),
+                            modifier = Modifier.weight(widths[index].value).semantics { role = Role.RadioButton },
+                        ) {
+                            Text(labels[index])
                         }
-                    } else {
-                        null
-                    },
-            )
+                    }
+                }
+            }
         }
     }
+}
+
+// Each label's toggle button at its own width, with a pixel to spare for rounding.
+@Composable
+private fun toggleButtonWidths(labels: List<String>): List<Dp> {
+    val measurer = rememberTextMeasurer()
+    val style = ButtonDefaults.textStyleFor(ToggleButtonDefaults.MinHeight)
+    val padding = ToggleButtonDefaults.contentPaddingFor(ToggleButtonDefaults.MinHeight)
+    val direction = LocalLayoutDirection.current
+    val sides = padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction)
+    return with(LocalDensity.current) {
+        labels.map {
+            measurer
+                .measure(it, style, softWrap = false)
+                .size.width
+                .plus(1)
+                .toDp() + sides
+        }
+    }
+}
+
+@Composable
+private fun connectedShapes(
+    first: Boolean,
+    last: Boolean,
+): ToggleButtonShapes =
+    when {
+        first && last ->
+            ButtonGroupDefaults.connectedMiddleButtonShapes(shape = ButtonGroupDefaults.connectedButtonCheckedShape)
+        first -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+        last -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+    }
+
+// The items in order in the fewest rows of at most [available] width, the widest of them as narrow as it can be.
+internal fun balancedRows(
+    widths: List<Dp>,
+    available: Dp,
+    gap: Dp,
+): List<List<Int>> {
+    val count = widths.size
+    if (count == 0) return emptyList()
+
+    fun width(row: List<Int>) = row.fold(gap * (row.size - 1)) { sum, index -> sum + widths[index] }
+    val splits =
+        (0 until (1 shl (count - 1))).map { breaks ->
+            (0 until count).fold(mutableListOf(mutableListOf<Int>())) { rows, index ->
+                if (index > 0 && breaks and (1 shl (index - 1)) != 0) rows += mutableListOf<Int>()
+                rows.also { it.last() += index }
+            }
+        }
+    val fitting = splits.filter { rows -> rows.all { width(it) <= available } }
+    return fitting.minWithOrNull(compareBy({ it.size }, { rows -> rows.maxOf { width(it) } }))
+        ?: List(count) { listOf(it) }
 }
 
 // Read by the control it names, so a screen reader hears it once.
@@ -361,13 +430,6 @@ private suspend fun ScrollState.scrollToShow(span: IntRange) {
     if (span.isEmpty()) return
     val target = if (span.last + 1 - viewportSize > span.first) span.first else value.coerceIn(span.last + 1 - viewportSize, span.first)
     if (target != value) animateScrollTo(target)
-}
-
-// The space an icon button leaves around its icon, which [bleed] lets reach into the sheet's padding.
-@Composable
-private fun iconButtonMargin(icon: Int): Dp {
-    val iconWidth = with(LocalDensity.current) { painterResource(icon).intrinsicSize.width.toDp() }
-    return (LocalMinimumInteractiveComponentSize.current - iconWidth) / 2
 }
 
 // Lets a control's own padding reach into the sheet's, so its glyph lines up with the content edge.
@@ -389,11 +451,11 @@ private fun ScoreSlider(
         Label(label)
         Text(value, style = MaterialTheme.typography.labelLarge)
     }
+    val slider = remember { SliderState(score.toFloat(), steps = MAX_SCORE - 1, trackRange = 0f..MAX_SCORE.toFloat()) }
+    slider.value = score.toFloat()
     Slider(
-        value = score.toFloat(),
+        state = slider,
         onValueChange = { position -> position.roundToInt().let { if (it != score) onChange(it) } },
-        valueRange = 0f..MAX_SCORE.toFloat(),
-        steps = MAX_SCORE - 1,
         modifier =
             Modifier.semantics {
                 contentDescription = label

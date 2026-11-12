@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,7 +54,7 @@ fun ScreenState(
         when (state) {
             ScreenState.Loading -> {
                 val loading = stringResource(R.string.design_loading)
-                CircularProgressIndicator(Modifier.semantics { contentDescription = loading })
+                WaitIndicator(Modifier.semantics { contentDescription = loading })
             }
             is ScreenState.Empty -> Message(state.message, state.action)
             is ScreenState.Error -> Message(state.message, StateAction(stringResource(R.string.design_retry), state.onRetry))
@@ -79,6 +79,6 @@ private fun Message(
             style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading),
             textAlign = TextAlign.Center,
         )
-        if (action != null) Button(onClick = action.onClick) { Text(action.label) }
+        if (action != null) Button(onClick = action.onClick, shapes = ButtonDefaults.shapes()) { Text(action.label) }
     }
 }

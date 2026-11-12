@@ -34,9 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
-import io.github.kauri_off.kiroku.design.theme.Motion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -88,7 +88,7 @@ class ListTabMotionTest {
             ListFixtureStates.watching,
             ListFixtureStates.planned,
             ListFixtureStates.completed,
-            ListFixtureStates.watching.copy(tab = ListStatus.OnHold),
+            ListFixtureStates.onHold,
             ListFixtureStates.dropped,
         ).map {
             it.page!!
@@ -310,7 +310,8 @@ class ListTabMotionTest {
         val rest = left(firstRows[0])
         tab(tab).performClick()
         compose.mainClock.advanceTimeByFrame()
-        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 3)
+        // The spring does most of its way early: a frame well inside the slide.
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 8)
         val page = pagerPosition(rest)
         val target = labels.indexOf(tab).toFloat()
         assertTrue("part-way: $page", page > target - 1f + 0.1f && page < target - 0.05f)
@@ -399,7 +400,7 @@ class ListTabMotionTest {
         show(ListFixtureStates.watching)
         tab("Planned").performClick()
         compose.mainClock.advanceTimeByFrame()
-        compose.mainClock.advanceTimeBy(Motion.Duration.SHORT2.toLong())
+        compose.mainClock.advanceTimeBy(MID_TAP_MS)
         compose.onRoot().performTouchInput {
             down(center)
             moveBy(Offset(width * drag, 0f))
@@ -532,7 +533,8 @@ class ListTabMotionTest {
     }
 
     private companion object {
-        val TAB_SWITCH_MS = Motion.Duration.MEDIUM2.toLong()
+        const val TAB_SWITCH_MS = MotionBounds.ENTER
+        const val MID_TAP_MS = 100L
         const val FRAME = 16L
         const val SETTLED = 2_000L
         const val MAX_FRAMES = 60

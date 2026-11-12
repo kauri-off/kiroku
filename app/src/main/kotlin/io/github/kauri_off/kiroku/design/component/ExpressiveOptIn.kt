@@ -1,0 +1,38 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
+package io.github.kauri_off.kiroku.design.component
+
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+
+// The only file that opts in to Material 3 Expressive API that is still experimental: the loading indicator.
+
+// A wait of unknown, short length.
+@Composable
+fun WaitIndicator(modifier: Modifier = Modifier) = LoadingIndicator(modifier)
+
+// Pull-to-refresh whose indicator is the loading indicator.
+@Composable
+fun RefreshBox(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val state = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier,
+        state = state,
+        indicator = { PullToRefreshDefaults.LoadingIndicator(state, isRefreshing, Modifier.align(Alignment.TopCenter)) },
+        content = content,
+    )
+}

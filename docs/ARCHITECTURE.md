@@ -403,12 +403,17 @@ stepper and "Mark watched" are steps, applied to the entry's values as they are 
 
 ## 8. Design system
 
-The rule behind every choice: stock Material 3 components with default shapes and behaviour, composed, never
-restyled into something else.
+The rule behind every choice: stock Material 3 Expressive components with default shapes and behaviour, composed,
+never restyled into something else. Expressive means are spent where they show the user a state or answer an action;
+everything else stays calm, because this is a tool opened many times a day.
 
 ### 8.1 Theme and window
 
-- The Material 3 theme with default typography and shapes.
+- The Material 3 Expressive theme with its default typography, shapes and motion scheme. Only the colours are
+  Kiroku's.
+- Material 3 is pinned ahead of the Compose BOM while the version with Expressive is a release candidate. API that is
+  still experimental there is opted into in one file of the design package and nowhere else, so that what may break
+  on an update is in one place.
 - **Dynamic colour** is on by default on Android 12 and later, with a setting to turn it off. Below Android 12 and
   in screenshot tests the app uses a fixed light and dark scheme generated from one seed colour, `#00696D` (a teal,
   deliberately not MAL's blue). One screenshot variant uses a second, contrasting seed, `#8B5000`, to expose
@@ -424,34 +429,32 @@ restyled into something else.
 
 The default Material 3 type scale with the system font. Screens use only these roles:
 
-- `headlineSmall`: the title on the title page. `titleMedium`: section headers, the title in the edit sheet and the
-  number in `StatNumber`.
+- `headlineSmallEmphasized`: the title on the title page. `titleMedium`: section headers and the title in the edit
+  sheet.
+- `titleLargeEmphasized`: the number in `StatNumber` and the user's own score on the title page.
+- Emphasised roles mark only the subject of the title page and the few numbers a screen is opened for.
 - `bodyMedium`: body text and supporting lines. `labelLarge` and `labelMedium`: captions.
 - Top app bar titles, row headlines, buttons and chips keep the role their component sets.
 
 ### 8.3 Spacing and shape
 
-A 4 dp grid with the `Spacing` tokens `xs` 4, `s` 8, `m` 12, `l` 16, `xl` 24, `xxl` 32. Layout code uses only these
-tokens, the theme's named sizes and component defaults. A literal dp value outside the theme fails a test; a literal
-colour outside the theme is a code-review finding.
+Layout code uses only the `Spacing` tokens (a 4 dp grid), the theme's named sizes and component defaults; the theme's
+code holds their values. A literal dp value outside the theme fails a test; a literal colour outside the theme is a
+code-review finding.
 
 - Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
 - Content is at most 640 dp wide and centred on wider windows.
 - Every tappable element is at least 48 × 48 dp.
-- Posters have the theme's small corner shape and are cropped to their size, which is one of three named sizes:
-  72 × 104 dp, a MAL poster's proportions, in every `AnimeRow` (the List, search results, Related and the title
-  page's Sequel row) at font scale 1.0; 104 × 156 dp (2:3) in strips at font scale 1.0; 120 × 180 dp (2:3) in the
-  title header.
-- **A row poster leaves its text room at large text.** Above font scale 1.0 it narrows in inverse proportion to the
-  font scale, in its own proportions, down to 48 dp wide, so a title beside it keeps a readable line length.
-- **A caption of a strip card is never broken inside a word.** The card and its poster are 104 dp wide at font
-  scale 1.0 and grow in proportion to the font scale above it, so that a one-word caption fits at every scale; this
-  is a rule of the component, and a screen never passes a width.
-- Cards of a strip are `m` apart.
+- Posters have the theme's medium corner shape, are cropped to their size, and come in three named sizes: the row
+  poster, in a MAL poster's proportions, in every `AnimeRow`; the strip poster and the header poster, both 2:3.
+- **A row poster leaves its text room at large text:** it narrows as the font scale grows, so a title beside it keeps
+  a readable line length.
+- **A caption of a strip card is never broken inside a word:** the card grows with the font scale. This is a rule of
+  the component, and a screen never passes a width.
 - **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
-  shown ("Tenkuu-Toshi-Rondenia-no-" / "Kuuchuu-…"), unless the segment alone is wider than the line.
-- **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked
-  one per line (section 9.7). Apart from that and the two poster rules above, nothing depends on the font scale.
+  shown, unless the segment alone is wider than the line.
+- **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked one
+  per line (section 9.7). Apart from that and the two poster rules above, nothing depends on the font scale.
 
 ### 8.4 Components
 
@@ -460,21 +463,36 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | Component | Built from | Purpose |
 |---|---|---|
 | `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm: a row is as tall as its poster or its text and padding, never taller. A row with "+1" starts its text level with the poster's top, so the button keeps one place; any other row centres its text on the poster. "+1" is filled tonal while the row has episodes to watch and a standard icon button once the user has caught up, at the same size and place. An optional long press with haptic feedback, offered to screen readers once, as the row's long-click action |
+| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element. Rows of one list share one rhythm, and "+1" keeps one place and one size on every row, prominent while the row has episodes to watch and quiet once the user has caught up. An optional long press with haptic feedback, offered to screen readers once, as the row's long-click action |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
-| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence ("Completed, 1,234,567, 45 percent") |
+| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. A typed value is applied when the user confirms it or leaves the field, not per keystroke, except in the edit sheet, which writes nothing before Save and applies it as it is typed. The count has no ceiling (W9): "25 / 24" is a legal display, plus stays enabled at the total, and nothing is refused; only digits are taken, an empty field is not a count, and the length is limited |
-| `ScreenState` | `CircularProgressIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
+| `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9): "25 / 24" is a legal display and nothing is refused |
+| `ScreenState` | `LoadingIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
-| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, in the stock scrollable row's measures. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
+| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
 
-Stock Material 3 components are used directly for everything else: scaffold, top app bar, navigation suite, search
-bar, tab row (except the List's), modal bottom sheet, chips, buttons, list items, text fields, switch, slider, date
-picker, dialogs,
-snackbars, pull-to-refresh, progress indicators. Icons are Material icons.
+Stock Material 3 components are used directly for everything else. Icons are Material icons. Where Material offers
+several components for one job, these are the choices:
+
+| Job | Choice | Why |
+|---|---|---|
+| A wait of unknown length for a whole screen, and pull-to-refresh | The loading indicator | One sign for "this screen is being fetched" |
+| A wait for part of a screen already shown, and progress of counted work | The wavy linear progress indicator | The wave says that work is running, and stops when it does |
+| A share of a whole that does not change | The flat linear progress indicator | Nothing is running, so nothing waves |
+| One of a few options, all visible | A connected button group of toggle buttons, in as few rows as fit | The chosen one differs in colour and in shape, not in colour alone, and choosing one moves no other |
+| A button with a container, and an icon button | With its stock press shapes | The press is answered where the finger is |
+| The action a page is opened for (the title page's list block) | The medium button size | It is the one large target on the page |
+| A row that opens something | The list item that takes the click itself | Its own press shape, focus ring and semantics |
+| One of a list of options with a radio button | A list item that looks the same chosen or not | The radio button states the choice once |
+| The navigation bar on phones | The short navigation bar | More room for content |
+| Top app bars | The small top app bar | A large or flexible bar spends the first screen on a title the user knows |
+| Lists of content | Plain list items, not segmented ones | A container around every row is a card used as decoration |
+
+Expressive means that only decorate are not used: wavy sliders, images clipped to or morphing between shapes, split
+buttons, floating toolbars, the FAB menu, button groups that resize under the finger, vibrant colour variants.
 
 Not allowed anywhere: custom-drawn buttons or pills, cards used as decoration, gradients, shadows beyond component
 defaults, shimmer placeholders, text or badges drawn over images, chips that do nothing when tapped, auto-scrolling
@@ -483,39 +501,42 @@ for the same content, second-by-second countdowns.
 
 ### 8.5 Motion
 
-Motion is functional and sparse. Stock Material 3 components keep their own motion. Anything beyond that needs a
-purpose stated in the pull request: feedback, showing where something came from or went, making a state change
-legible, or preventing a jump. Decoration is not a purpose.
+Motion is functional and sparse. Stock components keep their own motion, which in the Expressive theme includes a
+shape that changes while a control is pressed or chosen and springs that overshoot slightly. Anything beyond that
+needs a purpose stated in the pull request: feedback, showing where something came from or went, making a state
+change legible, or preventing a jump. Decoration is not a purpose.
 
-- **Not animated:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers counting up,
-  anything looping except a progress indicator while work runs. No parallax, no full-screen zoom or rotation, no
-  bounce, no staggered lists, no custom press effect (the ripple is the feedback).
+- **Not animated by the app:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers
+  counting up, anything looping except a progress or loading indicator while work runs. No parallax, no full-screen
+  zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
+  shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles with the fast spatial spring; a tab chosen by a tap slides its page in as a component's entrance. The tab
-  indicator, the selected tab and the tab row's scroll are drawn from the pager's position, in the frame it moves.
-- **One source.** Durations, easings and springs come from the theme's Material motion scheme and tokens, kept in
-  one place. A literal duration, curve, spring value or delay in user interface code fails the build. Specs that
-  can overshoot move, resize and reshape; they are never used on opacity or colour.
+  settles; a tab chosen by a tap slides its page in as a component's entrance. The tab indicator, the selected tab
+  and the tab row's scroll are drawn from the pager's position, in the frame it moves.
+- **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
+  curve, spring value or delay in user interface code fails the build.
+- **No bounce in what the app animates.** The Expressive scheme's spatial springs overshoot, so the app's own
+  animations use only its effects springs, which cannot: fast for a change inside a component and for an exit,
+  default for a component's entrance and for a page, slow for a screen.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
   stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a
   List tab between orderings (section 9.3), even when a data refresh brings the change. Content that finishes
   loading fades in.
   One thing moves per change; a container that enters brings its content with it.
-- **Time.** An exit is shorter than the matching entrance. A change inside a component settles within 200 ms, a
-  component's entrance within 300 ms, a screen's entrance within 400 ms.
+- **Time.** As the Expressive scheme's springs settle: a change inside a component within 250 ms, a component's
+  entrance within 400 ms, a screen within 550 ms; an exit is shorter than the matching entrance.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
   reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back shows where
   Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned off,
   every screen is complete and correct immediately. An idle screen has no animation running.
 
-A task that adds or changes an animation shows, with tests on the test clock, that it settles within its time,
-that re-triggering it mid-flight ends in the right state, that the interaction is correct with animations off, and
-that the idle screen has nothing pending. It also renders the transition as frames in one image (start, one third,
-two thirds, end; earlier moments for a transition that does most of its way early),
-`<case>__<variant>__frames.png`, next to the screen's screenshots: the first and last frames equal the static
-renders, the change shows within three frames, and direction and pattern match this section. The hand-over names the transitions that changed. How a transition
-feels on a device, and predictive back under a finger, are judged by the owner from the installed app.
+A task that adds or changes an animation shows with tests that it settles within its time, that re-triggering it
+mid-flight ends in the right state, that the interaction is correct with animations off and that the idle screen has
+nothing pending. It also renders the transition as a frames image next to the screen's screenshots (section 11.2), and
+the hand-over names the transitions that changed. A state change that a stock component answers with motion of its
+own gets the frames image, without the tests. How a transition feels on a device, and predictive back under a finger,
+are judged by the owner from the installed app.
 
 ## 9. Per-screen information budgets
 
@@ -631,8 +652,9 @@ episode total, the year, the premiere and a related title each appear in one pla
 scrolling, for a title of up to two lines.
 
 **Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
-render at once, and one linear progress indicator under them stands in for items 5 to 9 until the details arrive. Only
-a page opened with no data at all (a deep link) uses the full-screen loading state.
+render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 once the wait has lasted
+a second, until the details arrive.
+Only a page opened with no data at all (a deep link) uses the full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 
@@ -643,12 +665,12 @@ order of items 2 to 8 does not change, and the above-the-fold rule stays.
 ### 9.5 Edit sheet
 
 A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
-edits; the status as five single-choice chips (chips are controls, not logical lines); an `EpisodeStepper`; a score
-slider 0 to 10 with the score names; start and finish dates; a text button "Remove from list" (asks for confirmation);
-"Save", on screen without scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before
-"Save", and "Save" writes exactly what the sheet shows, an automatic status change (W7) included. The count has no
-ceiling (W9). Dismissing the sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags,
-comments and priority come after 1.0.
+edits; the status as a connected group of five single-choice toggle buttons, in as few rows as fit; an
+`EpisodeStepper`; a score slider 0 to 10 with the score names; start and finish dates; a text button "Remove from
+list" (asks for confirmation); "Save", on screen without scrolling whenever the keyboard is closed. Limit: nothing
+else. Nothing is written before "Save", and "Save" writes exactly what the sheet shows, an automatic status change
+(W7) included. The count has no ceiling (W9). Dismissing the sheet with unsaved changes, by swipe or Back, asks
+"Discard changes?". Rewatching, tags, comments and priority come after 1.0.
 
 ### 9.6 Search
 

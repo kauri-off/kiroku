@@ -55,7 +55,7 @@ fun Poster(
         modifier =
             modifier
                 .size(size.width * scale, size.height * scale)
-                .clip(MaterialTheme.shapes.small)
+                .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     )
 }

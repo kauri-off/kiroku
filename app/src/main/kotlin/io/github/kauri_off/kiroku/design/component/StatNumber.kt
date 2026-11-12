@@ -22,7 +22,7 @@ fun StatNumber(
     Column(modifier.semantics(mergeDescendants = true) {}, horizontalAlignment = horizontalAlignment) {
         Text(
             value,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLargeEmphasized,
             modifier = if (spokenValue == null) Modifier else Modifier.semantics { contentDescription = spokenValue },
         )
         Text(caption, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

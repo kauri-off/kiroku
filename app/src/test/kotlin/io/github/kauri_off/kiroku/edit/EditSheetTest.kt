@@ -4,16 +4,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotFocused
-import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -23,6 +27,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -79,7 +84,7 @@ class EditSheetTest {
 
     // Save writes the draft, so the draft must be what the sheet shows when Save is tapped.
     private fun assertTheSheetShows(values: ListValues) {
-        compose.onNode(hasText(statusNames.getValue(values.status)) and isSelectable()).assertIsSelected()
+        compose.onNode(hasText(statusNames.getValue(values.status)) and isToggleable()).assertIsOn()
         field.assertTextContains(values.watchedEpisodes.toString(), substring = true)
         dateField("Start date").assertTextContains(values.startDate.shown(), substring = true)
         dateField("Finish date").assertTextContains(values.finishDate.shown(), substring = true)
@@ -394,6 +399,56 @@ class EditSheetTest {
         )
         dateField("Start date").assertTextContains("2025")
         dateField("Finish date").assertTextContains("January 2026")
+    }
+
+    @Test
+    fun everyStatusIsAnnouncedAsARadioButton() {
+        sheet()
+        for (name in statusNames.values) {
+            compose
+                .onNode(
+                    hasText(name) and isToggleable(),
+                ).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "ru-w411dp-h891dp")
+    fun theStatusesFillEvenRowsWithAGapBetweenThem() = assertStatusRows()
+
+    @Test
+    @Config(qualifiers = "ru-w411dp-h891dp", fontScale = 2f)
+    fun theStatusesFillEvenRowsWithAGapBetweenThemAtLargeText() = assertStatusRows()
+
+    private fun assertStatusRows() {
+        sheet()
+        val buttons = compose.onAllNodes(isToggleable()).fetchSemanticsNodes().map { it.boundsInRoot }
+        val rows =
+            buttons
+                .groupBy { it.top }
+                .toSortedMap()
+                .values
+                .toList()
+        assertTrue("${rows.size} rows", rows.size > 1)
+        val density = compose.activity.resources.displayMetrics.density
+        rows.zipWithNext().forEach { (above, below) ->
+            assertTrue("rows ${above.first().bottom} and ${below.first().top}", below.first().top - above.first().bottom >= 8 * density - 1)
+        }
+        val left = rows.minOf { row -> row.minOf { it.left } }
+        val right = rows.maxOf { row -> row.maxOf { it.right } }
+        rows.forEach { row ->
+            assertEquals(left, row.minOf { it.left }, 1f)
+            assertEquals(right, row.maxOf { it.right }, 1f)
+        }
+    }
+
+    @Test
+    fun rowsAreTheFewestThatFitAndAsEvenAsTheyCanBe() {
+        val widths = listOf(84, 137, 124, 102, 97).map { it.dp }
+        assertEquals(listOf(listOf(0, 1, 2, 3, 4)), balancedRows(widths, 600.dp, 2.dp))
+        assertEquals(listOf(listOf(0, 1), listOf(2, 3, 4)), balancedRows(widths, 379.dp, 2.dp))
+        assertEquals(listOf(listOf(0, 1), listOf(2), listOf(3, 4)), balancedRows(widths, 240.dp, 2.dp))
+        assertEquals(widths.indices.map { listOf(it) }, balancedRows(widths, 100.dp, 2.dp))
     }
 
     private companion object {

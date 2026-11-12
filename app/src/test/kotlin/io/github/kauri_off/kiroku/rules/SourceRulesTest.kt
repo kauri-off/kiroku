@@ -115,17 +115,15 @@ class SourceRulesTest {
         }
         val allowed =
             listOf(
-                "Motion.componentEnter<Float>()",
-                "Motion.fastSpatial<Float>()",
-                "Motion.Easing.standard",
+                "MaterialTheme.motionScheme.fastEffectsSpec<Float>()",
+                "motionScheme.defaultEffectsSpec<Float>()",
                 "snapshotFlow { x }",
                 "animatable.snapTo(1f)",
             )
         for (code in allowed) {
             assertEquals(code, emptyList<String>(), motionLiteralProblems("A.kt", "val a = $code\n"))
         }
-        assertEquals(emptyList<String>(), motionLiteralProblems(MOTION_SOURCE, "val a = tween<Float>(300)\n"))
-        assertTrue(motionLiteralProblems("app/src/main/kotlin/other/design/theme/Motion.kt", "val a = tween<Float>(300)\n").isNotEmpty())
+        assertTrue(motionLiteralProblems(THEME_SOURCES + "Motion.kt", "val a = tween<Float>(300)\n").isNotEmpty())
     }
 
     @Test
@@ -160,18 +158,31 @@ class SourceRulesTest {
             "slideInVertically { it }",
             "expandVertically()",
             "scaleIn()",
+            "animateFloatAsState(target, Motion.fastEffects())",
+            "animatable.animateTo(1f, motionScheme)",
+            "animatable.animateTo(1f, motionScheme.defaultSpatialSpec())",
+            "Modifier.animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec())",
         )) {
             assertTrue(planted, motionLiteralProblems("A.kt", "val a = $planted\n").isNotEmpty())
         }
         for (allowed in listOf(
-            "animateFloatAsState(target, Motion.fastEffects())",
-            "AnimatedVisibility(visible, enter = fadeIn(Motion.componentEnter()), exit = fadeOut(Motion.componentExit())) { }",
-            "Modifier.animateContentSize(Motion.fastSpatial())",
-            "animatable.animateTo(1f, Motion.defaultSpatial())",
+            "animateFloatAsState(target, MaterialTheme.motionScheme.fastEffectsSpec())",
+            "AnimatedVisibility(visible, enter = fadeIn(motionScheme.defaultEffectsSpec()), exit = fadeOut(motionScheme.fastEffectsSpec())) { }",
+            "Modifier.animateContentSize(motionScheme.fastEffectsSpec())",
+            "animatable.animateTo(1f, motionScheme.slowEffectsSpec())",
             "state.animateScrollToItem(0)",
         )) {
             assertEquals(allowed, emptyList<String>(), motionLiteralProblems("A.kt", "val a = $allowed\n"))
         }
+    }
+
+    @Test
+    fun experimentalExpressiveApiIsOptedIntoInOneFile() {
+        val optIn = "ExperimentalMaterial3ExpressiveApi"
+        val users = appSources().filter { optIn in it.readText() }.map { relative(it) }
+        assertEquals(listOf(EXPRESSIVE_OPT_IN_SOURCE), users)
+        val scripts = projectSources().filter { it.extension == "kts" }
+        assertTrue(scripts.isNotEmpty() && scripts.none { optIn in it.readText() })
     }
 
     @Test
@@ -204,9 +215,6 @@ class SourceRulesTest {
         }
         assertEquals(emptyList<String>(), invisibleCharacterProblems("A.kt", "val a = \"a\\u200Bb\"\n\tval b = 1\r\n"))
     }
-
-    @Test
-    fun motionSourceExists() = assertTrue(File(projectDir, MOTION_SOURCE).isFile)
 
     @Test
     fun everySourceSetThatShipsIsScanned() {

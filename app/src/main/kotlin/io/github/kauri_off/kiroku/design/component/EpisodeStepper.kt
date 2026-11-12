@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -123,7 +125,7 @@ internal fun EpisodeStepperLayout(
     val fieldLabel = stringResource(R.string.design_episodes_watched)
     var focused by remember { mutableStateOf(false) }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        IconButton(onClick = { onStep(current - 1) }, enabled = enabled && current > 0) {
+        FilledTonalIconButton(onClick = { onStep(current - 1) }, shapes = IconButtonDefaults.shapes(), enabled = enabled && current > 0) {
             Icon(painterResource(R.drawable.ic_remove), contentDescription = minus)
         }
         OutlinedTextField(
@@ -150,11 +152,20 @@ internal fun EpisodeStepperLayout(
                         }
                     }.semantics { contentDescription = fieldLabel },
         )
-        IconButton(onClick = { onStep(current + 1) }, enabled = enabled && current < MAX_COUNT) {
+        FilledTonalIconButton(
+            onClick = { onStep(current + 1) },
+            shapes = IconButtonDefaults.shapes(),
+            enabled =
+                enabled && current < MAX_COUNT,
+        ) {
             Icon(painterResource(R.drawable.ic_add), contentDescription = plus)
         }
     }
 }
+
+// The room a step button's touch target leaves beside its container, which a caller lets reach into its padding.
+val stepButtonMargin: Dp
+    @Composable get() = (LocalMinimumInteractiveComponentSize.current - IconButtonDefaults.smallContainerSize().width) / 2
 
 // The count confirming [text] applies, or null when it keeps [watched]: an empty or unchanged field.
 internal fun typedCount(

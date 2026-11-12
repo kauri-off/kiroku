@@ -9,7 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -34,8 +33,8 @@ fun FactRow(
     // Keeps the text as far from the row's edges for a tall value as for a one-line one.
     ListItem(
         overlineContent = { Text(label, Modifier.padding(top = Spacing.s)) },
-        headlineContent = { Parts(values, Modifier.padding(bottom = Spacing.s)) },
-        modifier = modifier.semantics(mergeDescendants = true) {},
+        modifier = modifier,
+        content = { Parts(values, Modifier.padding(bottom = Spacing.s)) },
     )
 }
 

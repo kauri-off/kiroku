@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.ScrollableState
@@ -11,6 +12,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -45,7 +47,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
@@ -62,6 +63,8 @@ import kotlin.math.roundToInt
 class ListTabMotion(
     val pager: PagerState,
     private val scope: CoroutineScope,
+    // The page's settle and a tap's slide: the theme's default effects spring, which does not overshoot.
+    val pageSpec: AnimationSpec<Float>,
 ) {
     // The tab a tap is taking the pager to; it is selected from the tap on.
     var tapTarget by mutableStateOf<Int?>(null)
@@ -106,7 +109,7 @@ class ListTabMotion(
             try {
                 val from = position
                 if (abs(index - from) > 1f) pager.scrollToPage(if (index > from) index - 1 else index + 1)
-                pager.animateScrollToPage(index, animationSpec = Motion.componentEnter())
+                pager.animateScrollToPage(index, animationSpec = pageSpec)
             } finally {
                 if (tap === token) {
                     tap = null
@@ -120,7 +123,8 @@ class ListTabMotion(
 @Composable
 fun rememberListTabMotion(pager: PagerState): ListTabMotion {
     val scope = rememberCoroutineScope()
-    return remember(pager, scope) { ListTabMotion(pager, scope) }
+    val spec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    return remember(pager, scope, spec) { ListTabMotion(pager, scope, spec) }
 }
 
 // Stock tabs, indicator and divider in the stock scrollable row's measures, in a layout only the pager scrolls.

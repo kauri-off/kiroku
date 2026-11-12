@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.component.TrailingControl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,12 +46,12 @@ fun SampleNoiseScreen(
                     ListItem(
                         leadingContent = { Badge { Text(row.title.take(1)) } },
                         overlineContent = { Text(stringResource(row.status.labelRes())) },
-                        headlineContent = { Text(row.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                         supportingContent =
                             row.total?.let { total ->
                                 { Text(pluralStringResource(R.plurals.sample_episodes_watched, total, row.watched, total)) }
                             },
                         trailingContent = { Text(progressText(row)) },
+                        content = { Text(row.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                     )
                     row.total?.let { total ->
                         LinearProgressIndicator(
@@ -68,9 +69,6 @@ fun SampleNoiseScreen(
 @Composable
 private fun NoiseSummary(state: SampleState) {
     ListItem(
-        headlineContent = {
-            Text(pluralStringResource(R.plurals.sample_titles_on_list, state.rows.size, state.rows.size))
-        },
         supportingContent = {
             Column {
                 ListStatus.entries.forEach { status ->
@@ -85,6 +83,9 @@ private fun NoiseSummary(state: SampleState) {
             }
         },
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        content = {
+            Text(pluralStringResource(R.plurals.sample_titles_on_list, state.rows.size, state.rows.size))
+        },
     )
 }
 
@@ -113,14 +114,16 @@ fun SampleHierarchyScreen(
             }
             items(state.rows, key = { it.id.value }) { row ->
                 ListItem(
-                    headlineContent = { Text(row.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onEvent(SampleEvent.Open(row.id)) },
                     supportingContent = { Text(progressText(row)) },
                     trailingContent = {
-                        Button(onClick = { onEvent(SampleEvent.Increment(row.id)) }) {
-                            Text(stringResource(R.string.sample_plus_one))
+                        TrailingControl {
+                            Button(onClick = { onEvent(SampleEvent.Increment(row.id)) }) {
+                                Text(stringResource(R.string.sample_plus_one))
+                            }
                         }
                     },
-                    modifier = Modifier.clickable { onEvent(SampleEvent.Open(row.id)) },
+                    content = { Text(row.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                 )
             }
         }

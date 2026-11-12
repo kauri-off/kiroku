@@ -41,6 +41,8 @@ sealed interface TitleState {
         val page: TitlePage,
         override val session: Session?,
         val moment: TitleMoment = TitleMoment(),
+        // False for the first moment of a wait for the details, which a page answered within it never shows.
+        val detailsWaitShown: Boolean = true,
     ) : TitleState
 }
 

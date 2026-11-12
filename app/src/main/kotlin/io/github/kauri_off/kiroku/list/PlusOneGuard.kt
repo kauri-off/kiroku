@@ -7,7 +7,8 @@ const val PLUS_ONE_SETTLE_MILLIS = 800L
 
 // Drops a "+1" on a row fading out, or on one that moved up, until the rows have stood; taps do not extend that.
 class PlusOneGuard(
-    private val moveMillis: Long,
+    // How long the rows take to close up; it follows the window's height.
+    var moveMillis: Long,
 ) {
     private var shown = emptyList<AnimeId>()
     private var until = Long.MIN_VALUE

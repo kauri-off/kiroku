@@ -2,15 +2,19 @@ package io.github.kauri_off.kiroku.list
 
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -39,13 +43,14 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
-import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -393,15 +398,33 @@ class ListMotionTest {
 
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
 
-    private fun showCompleting(events: MutableList<ListEvent>) {
+    // With [resize], the window's height changes in the same frame the completed row leaves.
+    private fun showCompleting(
+        events: MutableList<ListEvent>,
+        resize: Boolean = false,
+    ) {
         val anime = FixtureAnime.oneShortOfTotal
         compose.mainClock.autoAdvance = false
         state = ListFixtureStates.watching
+        var halved by mutableStateOf(false)
         compose.setContent {
-            KirokuTheme(dark = false, dynamicColor = false) {
-                FixtureListScreen(state) { e ->
-                    events += e
-                    if (e == ListEvent.PlusOne(anime.id)) state = ListFixtureStates.completedSnackbar
+            val window = LocalWindowInfo.current
+            val resized =
+                remember(window) {
+                    object : WindowInfo by window {
+                        override val containerSize: IntSize
+                            get() = window.containerSize.let { if (halved) IntSize(it.width, it.height / 2) else it }
+                    }
+                }
+            CompositionLocalProvider(LocalWindowInfo provides resized) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    FixtureListScreen(state) { e ->
+                        events += e
+                        if (e == ListEvent.PlusOne(anime.id)) {
+                            state = ListFixtureStates.completedSnackbar
+                            halved = resize
+                        }
+                    }
                 }
             }
         }
@@ -435,10 +458,10 @@ class ListMotionTest {
         val events = mutableListOf<ListEvent>()
         showCompleting(events)
         val button = plusOneOf(anime.titles.romaji)
-        repeat(4) { tap(button, Motion.Duration.SHORT2.toLong()) }
+        repeat(4) { tap(button, TAP_GAP_MS) }
         assertEquals(listOf(ListEvent.PlusOne(anime.id)), events.filterIsInstance<ListEvent.PlusOne>())
         SystemClock.sleep(SETTLED)
-        tap(button, Motion.Duration.SHORT2.toLong())
+        tap(button, TAP_GAP_MS)
         assertEquals(
             listOf(ListEvent.PlusOne(anime.id), ListEvent.PlusOne(FixtureAnime.estimatedCaughtUp.id)),
             events.filterIsInstance<ListEvent.PlusOne>(),
@@ -453,11 +476,22 @@ class ListMotionTest {
         showCompleting(events)
         val below = plusOneOf(following)
         tap(plusOneOf(anime.titles.romaji), PAIR_MS)
-        tap(below, Motion.Duration.SHORT2.toLong())
+        tap(below, TAP_GAP_MS)
         assertEquals(listOf(ListEvent.PlusOne(anime.id)), events)
         SystemClock.sleep(SETTLED)
-        tap(below, Motion.Duration.SHORT2.toLong())
+        tap(below, TAP_GAP_MS)
         assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
+    }
+
+    @Test
+    fun `a window resized as a completed row leaves still keeps a quick tap from the row below`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events, resize = true)
+        val below = plusOneOf(following)
+        tap(plusOneOf(anime.titles.romaji), PAIR_MS)
+        tap(below, TAP_GAP_MS)
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events)
     }
 
     // A3's Q1b: the rows have stopped, but the tap aimed at the row below comes at an ordinary pace after the first.
@@ -472,15 +506,15 @@ class ListMotionTest {
         compose.mainClock.advanceTimeByFrame()
         SystemClock.sleep(ORDINARY_PACE_MS)
         compose.mainClock.advanceTimeBy(ORDINARY_PACE_MS)
-        tap(below, Motion.Duration.SHORT2.toLong())
+        tap(below, TAP_GAP_MS)
         assertEquals(listOf(ListEvent.PlusOne(anime.id)), events.filterIsInstance<ListEvent.PlusOne>())
         SystemClock.sleep(PLUS_ONE_SETTLE_MILLIS)
-        tap(below, Motion.Duration.SHORT2.toLong())
+        tap(below, TAP_GAP_MS)
         assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
     }
 
     @Test
-    fun `the row leaves and the rows below close up within 200 ms`() {
+    fun `the row leaves and the rows below close up within 250 ms`() {
         showAndSettle()
         val before = top(following)
         val leavingTop = top(leaving)
@@ -540,7 +574,7 @@ class ListMotionTest {
     }
 
     @Test
-    fun `a selected tab slides its page in and settles within 300 ms`() {
+    fun `a selected tab slides its page in and settles within 400 ms`() {
         showAndSettle()
         val watchingLeft = left(following)
         set(ListFixtureStates.planned)
@@ -570,7 +604,7 @@ class ListMotionTest {
     }
 
     @Test
-    fun `a swipe settles on the next tab within 300 ms of letting go and selects it`() {
+    fun `a swipe settles on the next tab within 400 ms of letting go and selects it`() {
         val events = mutableListOf<ListEvent>()
         state = ListFixtureStates.watching
         compose.mainClock.autoAdvance = false
@@ -612,9 +646,12 @@ class ListMotionTest {
     }
 
     private companion object {
-        val COMPONENT_CHANGE_MS = Motion.Duration.SHORT4.toLong()
-        val TAB_SWITCH_MS = Motion.Duration.MEDIUM2.toLong()
+        const val COMPONENT_CHANGE_MS = MotionBounds.CHANGE
+        const val TAB_SWITCH_MS = MotionBounds.ENTER
         const val SETTLED = 2_000L
+
+        // Between two taps of a burst.
+        const val TAP_GAP_MS = 100L
 
         // The second tap of A2's pair, measured on the emulator.
         const val PAIR_MS = 300L
