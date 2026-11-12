@@ -11,12 +11,14 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
+import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,6 +34,7 @@ import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Duration
 
 // A frame of a swipe or a tab tap moves the pager and draws the tab row from it; no page or row is composed again,
 // though the view model hears of the new tab while the page still moves.
@@ -46,7 +49,10 @@ class ListFrameWorkTest {
     val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose))
 
     private val scope = CoroutineScope(SupervisorJob() + main)
-    private val graph = TestGraph(Demo(Fixtures.reference, scope))
+
+    // Read anew for every build, so pages built again would show a new moment and be composed again.
+    private val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone, step = Duration.ofMillis(1))
+    private val graph = TestGraph(Demo(Fixtures.reference, scope, clock = clock))
 
     private val counts = mutableMapOf<String, Int>()
     private var counting = false

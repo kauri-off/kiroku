@@ -67,6 +67,8 @@ class ListViewModel(
         val sortSheetOpen: Boolean = false,
         val refreshing: Boolean = false,
         val session: Session? = null,
+        // Counts the user's refreshes, each of which builds the pages again.
+        val refreshes: Int = 0,
     )
 
     private val model =
@@ -84,6 +86,29 @@ class ListViewModel(
     private var firstSyncStarted = false
     private var firstSyncDone = false
     private var entriesLoaded = false
+
+    // What the pages are built from; a tab switch, the sort sheet or the refresh indicator changes none of it.
+    private data class Shown(
+        val entries: Map<AnimeId, ListEntry>,
+        val airing: Map<AnimeId, Airing>,
+        val orders: Map<ListStatus, List<AnimeId>>?,
+        val orderings: Map<ListStatus, Int>,
+        val sorts: Map<ListStatus, ListSort>,
+        val failure: ListFailure?,
+        val signedOut: Boolean,
+        val filter: String?,
+        val refreshes: Int,
+    )
+
+    // Pages written against [now], kept until what they show changes, the day ends or an air time they show passes.
+    private class Built(
+        val shown: Shown,
+        val content: ListContent,
+        val now: Instant,
+        val until: Instant,
+    )
+
+    private var built: Built? = null
 
     // The filter field's text, held as Compose state so the field reads each keystroke in the same frame.
     val filter: String? get() = typed.value
@@ -159,21 +184,6 @@ class ListViewModel(
         return TitleSummary(entry.anime, entry, model.airing[id], model.session)
     }
 
-    // What the pages are built from; a tab switch, the sort sheet or the refresh indicator changes none of it.
-    private data class Shown(
-        val entries: Map<AnimeId, ListEntry>,
-        val airing: Map<AnimeId, Airing>,
-        val orders: Map<ListStatus, List<AnimeId>>?,
-        val orderings: Map<ListStatus, Int>,
-        val sorts: Map<ListStatus, ListSort>,
-        val failure: ListFailure?,
-        val signedOut: Boolean,
-        val filter: String?,
-    )
-
-    // The pages last built and the moment they were written against, kept while what they show stays the same.
-    private var built: Triple<Shown, ListContent, Instant>? = null
-
     private fun build(
         model: Model,
         filter: String?,
@@ -189,31 +199,48 @@ class ListViewModel(
                 model.failure,
                 session == Session.SignedOut,
                 filter,
+                model.refreshes,
             )
-        val (_, content, now) =
-            built?.takeIf { it.first == shown }
-                ?: Triple(shown, content(model, filter), clock.instant()).also { built = it }
+        val instant = clock.instant()
+        val pages = built?.takeIf { it.shown == shown && instant < it.until } ?: built(model, filter, shown, instant)
         return ListState(
             owner = ListOwner.Me,
-            content = content,
+            content = pages.content,
             tab = model.tab,
             sortSheetOpen = model.sortSheetOpen,
             filter = filter,
             refreshing = model.refreshing,
             sessionExpired = session == Session.Expired,
-            now = now,
+            now = pages.now,
         )
+    }
+
+    private fun built(
+        model: Model,
+        filter: String?,
+        shown: Shown,
+        now: Instant,
+    ): Built {
+        val today = now.atZone(clock.zone).toLocalDate()
+        val midnight = today.plusDays(1).atStartOfDay(clock.zone).toInstant()
+        val nextAirTime =
+            model.airing.values
+                .mapNotNull { it.nextEpisode?.airsAt?.takeIf(now::isBefore) }
+                .minOrNull()
+        val until = nextAirTime?.coerceAtMost(midnight) ?: midnight
+        return Built(shown, content(model, filter, today), now, until).also { built = it }
     }
 
     private fun content(
         model: Model,
         filter: String?,
+        today: LocalDate,
     ): ListContent {
         val orders = model.orders
         return when {
             model.session == Session.SignedOut -> ListContent.SignedOut
             orders == null -> model.failure?.let(ListContent::Failed) ?: ListContent.Loading
-            else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, filter, it, orders.getValue(it)) })
+            else -> ListContent.Tabs(ListStatus.entries.associateWith { page(model, filter, it, orders.getValue(it), today) })
         }
     }
 
@@ -222,8 +249,8 @@ class ListViewModel(
         text: String?,
         status: ListStatus,
         ids: List<AnimeId>,
+        today: LocalDate,
     ): ListPage {
-        val today = today()
         val rows =
             ids
                 .mapNotNull { id -> model.entries[id]?.takeIf { it.status == status } }
@@ -330,7 +357,7 @@ class ListViewModel(
                     else -> model.update { it.copy(failure = result.error.toListFailure()) }
                 }
         }
-        model.update { it.copy(refreshing = false) }
+        model.update { it.copy(refreshing = false, refreshes = if (fromUser) it.refreshes + 1 else it.refreshes) }
     }
 
     private companion object {
