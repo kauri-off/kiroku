@@ -4,20 +4,25 @@ import android.os.Handler
 import android.os.Looper
 import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.scenario.Scenarios
 import io.github.kauri_off.kiroku.standin.StandInPosters
+import kotlinx.coroutines.CoroutineScope
 
 // A debug build crashes on an exception the list did not expect, on the main thread, so it is never missed.
 internal val reportUnexpected: (Throwable) -> Unit = { e ->
     Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
 }
 
-internal val demoGraphFactory: DemoGraphFactory? = { clock, scope -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected)) }
+internal val demoGraphFactory: DemoGraphFactory? = { clock, scope -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected), scope) }
 
 internal val standInPosters: Interceptor? = StandInPosters
 
 class DemoGraph(
     val demo: Demo,
+    scope: CoroutineScope,
 ) : AppGraph {
+    val scenarios = Scenarios(demo, scope)
+
     override val clock = demo.clock
     override val session = demo.session
     override val list = demo.list

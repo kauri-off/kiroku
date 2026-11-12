@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scenarios_title">Сценарии</string>
+    <string name="scenarios_off">Выключены</string>
+    <string name="scenarios_offline">Нет сети</string>
+    <string name="scenarios_offline_detail">Любой запрос к MyAnimeList завершается ошибкой «Нет соединения»</string>
+    <string name="scenarios_session_detail">На запросы, которым нужен вход, MyAnimeList отвечает, что сессия истекла</string>
+    <string name="scenarios_slow">Медленно</string>
+    <string name="scenarios_slow_detail">Каждый ответ MyAnimeList приходит через несколько секунд</string>
+    <string name="scenarios_writes">Сохранение в MyAnimeList</string>
+    <string name="scenarios_writes_detail">Чтение списка продолжает работать</string>
+    <string name="scenarios_writes_none">Работает</string>
+    <string name="scenarios_writes_refused">Отказ</string>
+    <string name="scenarios_writes_server_error">Ошибка сервера</string>
+    <string name="scenarios_store">Хранилище на устройстве</string>
+    <string name="scenarios_store_detail">Заполненное хранилище не принимает записи, нечитаемое не даёт и читать</string>
+    <string name="scenarios_store_none">Работает</string>
+    <string name="scenarios_store_writes_fail">Заполнено</string>
+    <string name="scenarios_store_unreadable">Не читается</string>
+    <string name="scenarios_name_writes_refused">Сохранение отклонено</string>
+    <string name="scenarios_name_write_errors">Сохранение не работает</string>
+    <string name="scenarios_name_store_writes_fail">Хранилище заполнено</string>
+    <string name="scenarios_name_store_unreadable">Хранилище не читается</string>
+    <string name="scenarios_reset_title">Демо-данные</string>
+    <string name="scenarios_reset_detail">Список, с которым запустилось приложение, и все сценарии выключены</string>
+    <string name="scenarios_reset">Сбросить</string>
+    <string name="scenarios_unavailable">Сценарии работают только на демо-данных, а в этой сборке есть идентификатор клиента MyAnimeList</string>
+    <string name="scenarios_marker_spoken">Симуляция: %s</string>
+</resources>

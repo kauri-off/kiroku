@@ -2,8 +2,6 @@ package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.demo.Demo
-import io.github.kauri_off.kiroku.core.error.DataError
-import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -67,18 +65,17 @@ class TestGraph(
 
     override val clock = demo.clock
     override val session: SessionRepository = CountedSession(demo.session, counter)
-    private val reads = UnreadableList(demo.list)
     override val list: ListRepository =
         CountedList(
-            reads.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it },
+            demo.list.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it },
             counter,
         )
 
-    // While true, the list cannot be read.
+    // While true, the list's store cannot be read.
     var listUnreadable: Boolean
-        get() = reads.unreadable
+        get() = demo.store.unreadable.value
         set(value) {
-            reads.unreadable = value
+            demo.store.unreadable.value = value
         }
     private val refreshCount = AtomicInteger()
 
@@ -167,21 +164,6 @@ private class LateList(
     private companion object {
         val LATE = 5.milliseconds
     }
-}
-
-private class UnreadableList(
-    private val inner: ListRepository,
-) : ListRepository by inner {
-    @Volatile
-    var unreadable = false
-
-    override fun observeEntries(): Flow<List<ListEntry>> = flow { emitAll(readable { inner.observeEntries() }) }
-
-    override fun observeEntry(id: AnimeId): Flow<ListEntry?> = flow { emitAll(readable { inner.observeEntry(id) }) }
-
-    override suspend fun sync(): Outcome<Unit> = if (unreadable) Outcome.Failure(DataError.StorageError) else inner.sync()
-
-    private fun <T> readable(flow: () -> Flow<T>): Flow<T> = if (unreadable) throw DataException(DataError.StorageError) else flow()
 }
 
 private class SlowWrites(

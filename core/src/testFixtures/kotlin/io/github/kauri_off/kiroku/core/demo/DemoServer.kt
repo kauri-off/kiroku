@@ -21,8 +21,12 @@ data class ListRequest(
 class DemoServer(
     entries: List<ListEntry>,
     private val clock: Clock,
-    private val latency: Duration,
+    latency: Duration,
 ) : RemoteList {
+    // How long every answer takes.
+    @Volatile
+    var latency: Duration = latency
+
     val offline = MutableStateFlow(false)
 
     val failingLoads = MutableStateFlow(false)
@@ -31,10 +35,13 @@ class DemoServer(
 
     val refusing = MutableStateFlow(false)
 
+    // Refuses writes alone; reads still work.
+    val refusingWrites = MutableStateFlow(false)
+
     val sessionExpired = MutableStateFlow(false)
 
     @Volatile
-    var writeLatency: (ListRequest) -> Duration = { latency }
+    var writeLatency: (ListRequest) -> Duration = { this.latency }
 
     private val guard = Any()
     private val list = entries.associateBy { it.anime.id }.toMutableMap()
@@ -54,6 +61,20 @@ class DemoServer(
         values: ListValues?,
     ) {
         synchronized(guard) { store(anime, values) }
+    }
+
+    // Every failure off and the list back to [entries], as a new server would have it.
+    fun reset(
+        entries: List<ListEntry>,
+        latency: Duration,
+    ) {
+        listOf(offline, failingLoads, failingWrites, refusing, refusingWrites, sessionExpired).forEach { it.value = false }
+        this.latency = latency
+        writeLatency = { this.latency }
+        synchronized(guard) {
+            list.clear()
+            entries.associateByTo(list) { it.anime.id }
+        }
     }
 
     suspend fun load(needsSignIn: Boolean): DataError? {
@@ -92,7 +113,7 @@ class DemoServer(
         val error =
             when {
                 sessionExpired.value -> DataError.SessionExpired
-                refusing.value -> DataError.Refused
+                refusing.value || refusingWrites.value -> DataError.Refused
                 failingWrites.value -> DataError.ServerError
                 else -> null
             }

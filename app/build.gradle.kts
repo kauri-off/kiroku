@@ -1,4 +1,5 @@
 import com.android.build.api.artifact.ScopedArtifact
+import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.ScopedArtifacts
 import java.util.zip.ZipFile
 
@@ -224,6 +225,57 @@ abstract class VerifyReleaseClasses : DefaultTask() {
     }
 }
 
+// The release APK declares no debug-only component and holds no debug-only resource: neither in its manifest nor in
+// its resource table, whose names are stored in UTF-8 or UTF-16.
+abstract class VerifyReleaseApk : DefaultTask() {
+    @get:Input
+    abstract val forbidden: ListProperty<String>
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val apks: DirectoryProperty
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val inManifest =
+            forbidden.get().filter {
+                manifest
+                    .get()
+                    .asFile
+                    .readText()
+                    .contains(it, ignoreCase = true)
+            }
+        check(inManifest.isEmpty()) { "The release manifest must not declare debug-only components: $inManifest" }
+        val files =
+            apks
+                .get()
+                .asFile
+                .walk()
+                .filter { it.extension == "apk" }
+                .toList()
+        check(files.isNotEmpty()) { "No release APK in ${apks.get().asFile}" }
+        for (apk in files) {
+            val table = ZipFile(apk).use { zip -> zip.getInputStream(zip.getEntry("resources.arsc")).readBytes() }
+            val inTable =
+                forbidden.get().filter { word ->
+                    listOf(Charsets.UTF_8, Charsets.UTF_16LE).any { table.indexOf(word.toByteArray(it)) >= 0 }
+                }
+            check(inTable.isEmpty()) { "The release APK ${apk.name} must not hold debug-only resources: $inTable" }
+        }
+        report.get().asFile.writeText("${files.size} APK checked\n")
+    }
+
+    private fun ByteArray.indexOf(part: ByteArray): Int =
+        (0..size - part.size).firstOrNull { start -> part.indices.all { this[start + it] == part[it] } } ?: -1
+}
+
 fun ResolvedComponentResult.capabilities(): Set<String> {
     val seen = mutableSetOf<ResolvedComponentResult>()
     val names = mutableSetOf<String>()
@@ -257,9 +309,17 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/core/demo/",
                 "io/github/kauri_off/kiroku/core/fixtures/",
                 "io/github/kauri_off/kiroku/standin/",
+                "io/github/kauri_off/kiroku/scenario/",
             ),
         )
         report.set(layout.buildDirectory.file("reports/release-classes.txt"))
+    }
+
+// The debug build's scenario panel: its activity, its quick settings tile and its strings.
+val verifyReleaseApk =
+    tasks.register<VerifyReleaseApk>("verifyReleaseApk") {
+        forbidden.set(listOf("scenario", "android.service.quicksettings"))
+        report.set(layout.buildDirectory.file("reports/release-apk.txt"))
     }
 
 androidComponents {
@@ -268,6 +328,10 @@ androidComponents {
             .forScope(ScopedArtifacts.Scope.ALL)
             .use(verifyReleaseClasses)
             .toGet(ScopedArtifact.CLASSES, VerifyReleaseClasses::jars, VerifyReleaseClasses::directories)
+        verifyReleaseApk.configure {
+            manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+            apks.set(variant.artifacts.get(SingleArtifact.APK))
+        }
     }
 }
 
@@ -275,3 +339,4 @@ tasks.named { it == "preReleaseBuild" || it == "test" }.configureEach { dependsO
 tasks.named { it == "packageRelease" || it == "packageReleaseBundle" || it == "test" }.configureEach {
     dependsOn(verifyReleaseClasses)
 }
+tasks.named { it == "assembleRelease" }.configureEach { dependsOn(verifyReleaseApk) }

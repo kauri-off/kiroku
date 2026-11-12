@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -11,9 +12,12 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.UserListLoad
+import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -28,6 +32,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DemoTest {
@@ -52,6 +57,12 @@ class DemoTest {
             .filter { !it.airsAt.isAfter(now) }
             .maxOf { it.number }
     }
+
+    private fun TestScope.failures(demo: Demo): List<WriteFailure> =
+        mutableListOf<WriteFailure>().also { seen ->
+            backgroundScope.launch { demo.list.observeWriteFailures().collect { seen += it } }
+            runCurrent()
+        }
 
     private fun TestScope.settle() {
         advanceTimeBy(1.minutes)
@@ -132,6 +143,86 @@ class DemoTest {
             demo.server.failingLoads.value = false
             assertEquals(Outcome.Success(Unit), demo.anime.refresh(id))
             assertEquals(Fixtures.reference.details.getValue(id), demo.anime.observeDetails(id).first())
+        }
+
+    @Test
+    fun `refused writes fail as refused while reads still work`() =
+        runTest {
+            val demo = demo()
+            val failures = failures(demo)
+            demo.server.refusingWrites.value = true
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            assertEquals(listOf(DataError.Refused), failures.map { it.error })
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+            assertEquals(Outcome.Success(Unit), demo.list.sync())
+            assertEquals(Outcome.Success(Unit), demo.anime.refresh(FixtureAnime.exactToWatch.id))
+        }
+
+    @Test
+    fun `a store that cannot be read ends the list with a storage error, and its faults are not unexpected`() =
+        runTest {
+            val demo = demo()
+            val ended = async { runCatching { demo.list.observeEntries().collect {} }.exceptionOrNull() }
+            runCurrent()
+            demo.store.unreadable.value = true
+            settle()
+            assertEquals(DataError.StorageError, (ended.await() as DataException).error)
+            assertEquals(Outcome.Failure(DataError.StorageError), demo.list.sync())
+
+            demo.store.unreadable.value = false
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+        }
+
+    @Test
+    fun `a store whose writes fail reports the edit as failed and keeps the list readable`() =
+        runTest {
+            val demo = demo()
+            val failures = failures(demo)
+            demo.store.failingWrites.value = true
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            assertEquals(listOf(DataError.StorageError), failures.map { it.error })
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+        }
+
+    @Test
+    fun `a latency set while the demo runs applies to the next answer`() =
+        runTest {
+            val demo = demo()
+            demo.server.latency = 3.seconds
+            val began = testScheduler.currentTime
+            demo.anime.refresh(FixtureAnime.exactToWatch.id)
+            assertEquals(3.seconds.inWholeMilliseconds, testScheduler.currentTime - began)
+        }
+
+    @Test
+    fun `reset brings back the list of the fixtures, signed in, with every failure off`() =
+        runTest {
+            val demo = demo()
+            val id = FixtureAnime.exactToWatch.id
+            demo.anime.refresh(id)
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            demo.list.write(ListWrite.Remove(FixtureAnime.plannedFinished))
+            settle()
+            demo.server.offline.value = true
+            demo.server.sessionExpired.value = true
+            demo.server.refusingWrites.value = true
+            demo.server.latency = 3.seconds
+            demo.store.failingWrites.value = true
+            demo.session.signOut()
+
+            assertEquals(Outcome.Success(Unit), demo.reset())
+
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+            assertEquals(Fixtures.reference.entries.toSet(), demo.server.entries().toSet())
+            assertEquals(Session.SignedIn(Fixtures.reference.user.name), demo.session.observeSession().first())
+            assertNull(demo.anime.observeDetails(id).first())
+            assertEquals(kotlin.time.Duration.ZERO, demo.server.latency)
+            val failures = failures(demo)
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            assertEquals(emptyList<WriteFailure>(), failures)
         }
 
     @Test

@@ -350,7 +350,9 @@ was chosen against, and why:
 - **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included, and a debug build
   without a client id starts in it. Demo data follows the device's date, so every weekday and weekly slot in it stays
   what it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
-  fixtures.
+  fixtures. While it runs, a debug-only scenario panel makes the demo fail as MAL and the store can (offline, an
+  expired session, slow answers, refused or failing writes, a full or unreadable store) and resets it; a marker over
+  the app says while a scenario is on. A release build holds neither.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.
