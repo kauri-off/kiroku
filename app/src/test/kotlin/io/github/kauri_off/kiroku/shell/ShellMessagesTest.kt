@@ -152,15 +152,32 @@ class ShellMessagesTest {
         assertEquals(listOf(watched(3)), shownAfter(watched(1), watched(2), watched(3)))
     }
 
+    // An ordinary message's row already shows what happened; held back, its Undo would come long after its tap.
     @Test
-    fun `the Undo of a title that left its tab is not replaced, and the newest message after it waits`() {
-        assertEquals(listOf(moved, watched(3)), shownAfter(moved, watched(2), watched(3)))
+    fun `the Undo of a title that left its tab is not replaced, and an ordinary message meanwhile is dropped`() {
+        assertEquals(listOf(moved), shownAfter(moved, watched(2), watched(3)))
         assertEquals(listOf(moved), shownAfter(watched(1), moved))
     }
 
     @Test
-    fun `two messages that must stay are shown one after the other, before the newest ordinary one`() {
-        assertEquals(listOf(failed(1), moved, failed(2), watched(4)), shownAfter(failed(1), watched(3), moved, failed(2), watched(4)))
+    fun `two messages that must stay are shown one after the other`() {
+        assertEquals(listOf(failed(1), moved, failed(2)), shownAfter(failed(1), watched(3), moved, failed(2), watched(4)))
+    }
+
+    // B3's m1: a stale Undo would take back a step the user had already taken back; a stale Retry would overwrite.
+    @Test
+    fun `a waiting Undo or Retry is dropped once its title has been written, and one whose title has not is shown`() {
+        val other = FixtureAnime.oneShortOfTotal
+        val otherMoved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(other)))
+        compose.runOnUiThread { listOf(moved, failed(1), otherMoved, moved).forEach(messages::post) }
+        compose.waitForIdle()
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        compose.waitForIdle()
+        val shown =
+            compose.runOnUiThread<List<ShellMessage>> {
+                generateSequence { messages.current?.also { messages.ended(it, actionPerformed = false) }?.message }.toList()
+            }
+        assertEquals(listOf(moved, otherMoved), shown)
     }
 
     @Test
@@ -199,6 +216,6 @@ class ShellMessagesTest {
         compose.onNodeWithText("Retry").performClick()
         compose.waitForIdle()
         assertEquals(before!! + 1, watched())
-        compose.onNodeWithText("Episode\u00A010 watched").assertExists()
+        compose.onNodeWithText("Episode\u00A010 watched").assertDoesNotExist()
     }
 }

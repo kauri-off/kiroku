@@ -18,6 +18,10 @@ import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // A snackbar a screen posts and the shell shows, so it outlives the screen and its view model (ARCHITECTURE 6.2).
@@ -58,9 +62,18 @@ data class ShellMessage(
 
     // The only way back from what happened: the Undo of a title that left its tab, or the Retry of a failed save.
     val mustStay: Boolean get() = text == Text.MovedToCompleted && action is Action.Undo || action is Action.Retry
+
+    // The title an Undo or a Retry writes.
+    val title: AnimeId?
+        get() =
+            when (action) {
+                is Action.Undo -> action.write.anime.id
+                is Action.Retry -> action.write.anime.id
+                else -> null
+            }
 }
 
-// One message at a time; one that must stay is never replaced, newer ones wait behind it. Actions run here.
+// One message at a time; one that must stay is never replaced, and an ordinary one posted meanwhile is dropped.
 class ShellMessages(
     private val scope: CoroutineScope,
     private val list: ListRepository,
@@ -78,17 +91,34 @@ class ShellMessages(
     var editRequest by mutableStateOf<AnimeId?>(null)
         private set
 
-    private var waiting = emptyList<Posted>()
+    private class Waiting(
+        val posted: Posted,
+        val watch: Job?,
+    )
+
+    private val waiting = mutableListOf<Waiting>()
 
     private var serial = 0L
 
     fun post(message: ShellMessage) {
         val posted = Posted(message, ++serial)
         val shown = current
-        if (shown == null || !shown.message.mustStay) {
-            current = posted
-        } else {
-            waiting = waiting.filter { it.message.mustStay || message.mustStay } + posted
+        when {
+            shown == null || !shown.message.mustStay -> current = posted
+            message.mustStay -> waiting += Waiting(posted, watch(posted))
+        }
+    }
+
+    // A waiting Undo or Retry is dropped once its title is written, so it never acts on values it did not see.
+    private fun watch(posted: Posted): Job? {
+        val id = posted.message.title ?: return null
+        return scope.launch {
+            list
+                .observeEntry(id)
+                .distinctUntilChanged()
+                .drop(1)
+                .first()
+            waiting.removeAll { it.posted == posted }
         }
     }
 
@@ -98,9 +128,9 @@ class ShellMessages(
         actionPerformed: Boolean,
     ) {
         if (current == posted) {
-            val next = waiting.firstOrNull { it.message.mustStay } ?: waiting.lastOrNull()
-            waiting = if (next == null || next.message.mustStay) waiting - listOfNotNull(next) else emptyList()
-            current = next
+            val next = waiting.removeFirstOrNull()
+            next?.watch?.cancel()
+            current = next?.posted
         }
         if (!actionPerformed) return
         when (val action = posted.message.action) {
