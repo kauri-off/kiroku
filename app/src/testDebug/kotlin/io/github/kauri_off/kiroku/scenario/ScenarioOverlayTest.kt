@@ -2,12 +2,15 @@ package io.github.kauri_off.kiroku.scenario
 
 import android.os.Looper
 import android.os.SystemClock
+import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -18,7 +21,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -86,16 +89,97 @@ class ScenarioOverlayTest {
     }
 
     @Test
-    fun `the tab takes a touch only on itself, at the window's end edge, and lets every other through`() {
-        settle()
-        val marker = markers().single()
-        val tab = compose.onNodeWithContentDescription("Debug menu").fetchSemanticsNode().boundsInWindow
-        assertEquals(marker.width.toFloat(), tab.right, 1f)
-        assertTrue(tab.width < marker.resources.displayMetrics.density * Spacing.l.value)
+    fun `a finger takes the tab within the side margin at the end edge, and a tap just outside it reaches the row beneath`() =
+        tapsAtTheMargin(rtl = false)
 
-        assertFalse(marker.dispatchTouchEvent(down(marker.width / 2f, marker.height / 2f)))
-        assertFalse(marker.dispatchTouchEvent(down(tab.left - 1, tab.center.y)))
-        assertTrue(marker.dispatchTouchEvent(down(tab.center.x, tab.center.y)))
+    // The ldrtl qualifier leaves the layout direction left to right under Robolectric, so the window is set to it.
+    @Test
+    fun `in a right-to-left layout the tab is at the left edge, within the side margin`() = tapsAtTheMargin(rtl = true)
+
+    private fun tapsAtTheMargin(rtl: Boolean) {
+        if (rtl) compose.activity.window.decorView.layoutDirection = View.LAYOUT_DIRECTION_RTL
+        settle()
+        val density = compose.activity.resources.displayMetrics.density
+        val margin = Spacing.l.value * density
+        val width = compose.activity.window.decorView.width
+        val tab = compose.onNodeWithTag(MARKER_TAG).fetchSemanticsNode().boundsInWindow
+        assertEquals(margin, tab.width, 1f)
+        assertEquals(if (rtl) 0f else width.toFloat(), if (rtl) tab.left else tab.right, 1f)
+        val inside = if (rtl) margin - 1 else width - margin + 1
+        val outside = if (rtl) margin + 1 else width - margin - 1
+        val y = tab.center.y
+
+        tap(inside, y)
+        assertEquals(DebugMenuActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity?.component?.className)
+
+        compose.onNodeWithText("My list").assertExists()
+        tap(outside, y)
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
+        compose.onNodeWithText("My list").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a drag that starts on the tab moves the List's pages, as if it began on the List`() {
+        settle()
+        val tab = compose.onNodeWithTag(MARKER_TAG).fetchSemanticsNode().boundsInWindow
+        compose.onNodeWithText("Watching").assertIsSelected()
+        val step = compose.activity.resources.displayMetrics.density * Spacing.xl.value
+        val start = SystemClock.uptimeMillis()
+        touch(MotionEvent.ACTION_DOWN, tab.center.x, tab.center.y, start, start)
+        for (i in 1..DRAG_STEPS) touch(MotionEvent.ACTION_MOVE, tab.center.x - i * step, tab.center.y, start, start + i * FRAME)
+        touch(MotionEvent.ACTION_UP, tab.center.x - DRAG_STEPS * step, tab.center.y, start, start + (DRAG_STEPS + 1) * FRAME)
+        settle()
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
+        compose.onNodeWithText("Planned").assertIsSelected()
+    }
+
+    private fun tap(
+        x: Float,
+        y: Float,
+    ) {
+        val time = SystemClock.uptimeMillis()
+        touch(MotionEvent.ACTION_DOWN, x, y, time, time)
+        touch(MotionEvent.ACTION_UP, x, y, time, time + FRAME)
+        settle()
+    }
+
+    // A touchscreen finger, as the system sends it; Compose widens small targets only for these.
+    private fun touch(
+        action: Int,
+        x: Float,
+        y: Float,
+        downTime: Long,
+        time: Long,
+    ) {
+        val pointer = MotionEvent.PointerProperties().apply { toolType = MotionEvent.TOOL_TYPE_FINGER }
+        val coords =
+            MotionEvent.PointerCoords().apply {
+                this.x = x
+                this.y = y
+                pressure = 1f
+                size = 1f
+            }
+        val event =
+            MotionEvent.obtain(
+                downTime,
+                time,
+                action,
+                1,
+                arrayOf(pointer),
+                arrayOf(coords),
+                0,
+                0,
+                1f,
+                1f,
+                0,
+                0,
+                InputDevice.SOURCE_TOUCHSCREEN,
+                0,
+            )
+        compose.activity.window.decorView
+            .dispatchTouchEvent(event)
+        event.recycle()
+        shadowOf(Looper.getMainLooper()).idle()
     }
 
     @Test
@@ -118,8 +202,8 @@ class ScenarioOverlayTest {
         root.javaClass.getMethod("windowFocusChanged", Boolean::class.javaPrimitiveType).invoke(root, false)
     }
 
-    private fun down(
-        x: Float,
-        y: Float,
-    ): MotionEvent = SystemClock.uptimeMillis().let { MotionEvent.obtain(it, it, MotionEvent.ACTION_DOWN, x, y, 0) }
+    private companion object {
+        const val DRAG_STEPS = 8
+        const val FRAME = 16L
+    }
 }

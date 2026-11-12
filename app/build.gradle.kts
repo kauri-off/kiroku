@@ -249,7 +249,7 @@ abstract class VerifyReleaseClasses : DefaultTask() {
     }
 }
 
-// A release package holds no resource, manifest name or packaged file that only the debug build adds.
+// A release package holds no resource or manifest name the debug source set declares, and none of [debugEntries].
 abstract class VerifyReleasePackage : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -489,6 +489,13 @@ abstract class GitTree : ValueSource<String, GitTree.Parameters> {
 
     override fun obtain(): String =
         try {
+            val root = File(git("rev-parse", "--show-toplevel")).canonicalFile
+            check(
+                root ==
+                    parameters.directory
+                        .get()
+                        .asFile.canonicalFile,
+            ) { "Not the project's own repository" }
             val head = git("rev-parse", "--short", "HEAD")
             val changes = git("status", "--porcelain") + git("diff", "HEAD", "--binary")
             if (changes.isBlank()) head else "$head ${sha256(changes)}"
@@ -537,10 +544,52 @@ abstract class WriteBuildInfo : DefaultTask() {
     }
 }
 
-val gitTree = providers.of(GitTree::class) { parameters.directory.set(layout.projectDirectory) }
+val gitTree = providers.of(GitTree::class) { parameters.directory.set(rootProject.layout.projectDirectory) }
 
-// Unit tests see the build's stamp on their classpath; ignoring it keeps them up to date and cached across commits.
+// Unit tests and lint ignore the stamp on their classpaths; packaging takes it as an input of its own (below).
 normalization { runtimeClasspath { ignore(WriteBuildInfo.FILE) } }
+
+// The launcher shortcut of a debug or preview package targets that package and no other.
+abstract class VerifyShortcuts : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val xml: DirectoryProperty
+
+    @get:Input
+    abstract val applicationId: Property<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val factory =
+            javax.xml.parsers.DocumentBuilderFactory
+                .newInstance()
+                .apply { isNamespaceAware = true }
+        val metaData = factory.newDocumentBuilder().parse(manifest.get().asFile).getElementsByTagName("meta-data")
+        val shortcuts =
+            (0 until metaData.length)
+                .map { metaData.item(it) as org.w3c.dom.Element }
+                .single { it.getAttributeNS(ANDROID, "name") == "android.app.shortcuts" }
+                .getAttributeNS(ANDROID, "resource")
+                .removePrefix("@xml/")
+        val intents = factory.newDocumentBuilder().parse(xml.get().file("$shortcuts.xml").asFile).getElementsByTagName("intent")
+        val targets = (0 until intents.length).map { (intents.item(it) as org.w3c.dom.Element).getAttributeNS(ANDROID, "targetPackage") }
+        check(targets.isNotEmpty() && targets.all { it == applicationId.get() }) {
+            "The shortcuts in $shortcuts.xml target $targets, not ${applicationId.get()}"
+        }
+        report.get().asFile.writeText("$shortcuts targets ${applicationId.get()}\n")
+    }
+
+    private companion object {
+        const val ANDROID = "http://schemas.android.com/apk/res/android"
+    }
+}
 
 androidComponents {
     onVariants { variant ->
@@ -551,6 +600,18 @@ androidComponents {
             .forScope(ScopedArtifacts.Scope.PROJECT)
             .use(buildInfo)
             .toAppend(ScopedArtifact.JAVA_RES, WriteBuildInfo::output)
+        // Normalization hides the stamp from packaging's classpath input; a changed stamp here makes it package in full.
+        tasks.named { it == "package$name" }.configureEach {
+            inputs.files(buildInfo).withPropertyName("buildInfo").withPathSensitivity(PathSensitivity.NONE)
+        }
+        val shortcuts =
+            tasks.register<VerifyShortcuts>("verify${name}Shortcuts") {
+                manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                xml.set(layout.projectDirectory.dir("src/debug/res/xml"))
+                applicationId.set(variant.applicationId)
+                report.set(layout.buildDirectory.file("reports/shortcuts-${variant.name}.txt"))
+            }
+        tasks.named { it == "assemble$name" }.configureEach { dependsOn(shortcuts) }
     }
     onVariants(selector().withBuildType("release")) { variant ->
         variant.artifacts

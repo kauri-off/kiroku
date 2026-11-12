@@ -355,7 +355,7 @@ was chosen against, and why:
   without a client id starts in it. Demo data follows the device's date, so every weekday and weekly slot in it stays
   what it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
   fixtures. Debug and preview builds have a debug menu that makes the demo fail, resets it and says what build is
-  running; a tab on the app's edge opens it and is red while the demo fails. A release build holds neither.
+  running; a tab on the app's edge opens it and is red while the demo fails. A release build holds none of it.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.

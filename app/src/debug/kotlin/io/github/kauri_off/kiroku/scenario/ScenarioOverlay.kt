@@ -3,13 +3,17 @@ package io.github.kauri_off.kiroku.scenario
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.inspector.WindowInspector
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.absolutePadding
@@ -32,6 +36,7 @@ import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -52,6 +57,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import kotlin.math.hypot
 
 // The debug menu's tab over every full window of the app, sheets included, added after the app's first frame.
 object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
@@ -109,18 +115,84 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
     private fun marker(
         activity: ComponentActivity,
         scenario: StateFlow<Scenario>,
-    ) = ComposeView(activity).apply {
+    ) = HandOverLayer(activity).apply {
         tag = TAG
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        setViewTreeLifecycleOwner(activity)
-        setViewTreeViewModelStoreOwner(activity)
-        setViewTreeSavedStateRegistryOwner(activity)
-        setContent {
-            val settings = ThemeSettings()
-            KirokuTheme(settings.isDark(), settings.dynamicColor) {
-                val current by scenario.collectAsScreenState()
-                EdgeMarker(current, visibleArea(), onClick = { activity.startActivity(DebugMenuActivity.intent(activity)) })
+        val tab =
+            ComposeView(activity).apply {
+                setViewTreeLifecycleOwner(activity)
+                setViewTreeViewModelStoreOwner(activity)
+                setViewTreeSavedStateRegistryOwner(activity)
+                setContent {
+                    val settings = ThemeSettings()
+                    KirokuTheme(settings.isDark(), settings.dynamicColor) {
+                        val current by scenario.collectAsScreenState()
+                        EdgeMarker(current, visibleArea(), onClick = { activity.startActivity(DebugMenuActivity.intent(activity)) })
+                    }
+                }
             }
+        addView(tab, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    // Keeps a tap that lands on the tab; a gesture that moves past the touch slop goes to the view beneath, as if begun there.
+    private class HandOverLayer(
+        context: Context,
+    ) : FrameLayout(context) {
+        private val slop = ViewConfiguration.get(context).scaledTouchSlop
+        private var down: MotionEvent? = null
+        private var beneath: View? = null
+
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            beneath?.let { view ->
+                forward(view, event)
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) beneath = null
+                return true
+            }
+            val start = down
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    forget()
+                    return super.dispatchTouchEvent(event).also { taken -> if (taken) down = MotionEvent.obtain(event) }
+                }
+                MotionEvent.ACTION_MOVE ->
+                    if (start != null && hypot(event.x - start.x, event.y - start.y) > slop) {
+                        handOver(start, event)
+                        return true
+                    }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> forget()
+            }
+            return super.dispatchTouchEvent(event)
+        }
+
+        private fun handOver(
+            start: MotionEvent,
+            event: MotionEvent,
+        ) {
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            super.dispatchTouchEvent(cancel)
+            cancel.recycle()
+            val siblings =
+                (parent as? ViewGroup)
+                    ?.children
+                    ?.filter { it !== this && it.isVisible }
+                    ?.toList()
+                    .orEmpty()
+            beneath = siblings.asReversed().firstOrNull { forward(it, start) }
+            beneath?.let { forward(it, event) }
+            forget()
+        }
+
+        private fun forward(
+            view: View,
+            event: MotionEvent,
+        ): Boolean {
+            val moved = MotionEvent.obtain(event).apply { offsetLocation((left - view.left).toFloat(), (top - view.top).toFloat()) }
+            return view.dispatchTouchEvent(moved).also { moved.recycle() }
+        }
+
+        private fun forget() {
+            down?.recycle()
+            down = null
         }
     }
 
