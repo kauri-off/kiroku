@@ -71,9 +71,9 @@ class TitleViewModel(
 
     private val moment = MutableStateFlow(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
     private val failure = MutableStateFlow<DataError?>(null)
-    private val detailsWaitShown = MutableStateFlow(false)
+    private val waitShown = MutableStateFlow(false)
     private val retries = MutableStateFlow(0)
-    private var detailsWait: Job? = null
+    private var load: Job? = null
     private var refreshed = false
 
     // A list that cannot be read fails the page, since its list values would be unknown.
@@ -95,7 +95,7 @@ class TitleViewModel(
         ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<TitleState> =
-        combine(sources.filterNotNull(), moment, failure, detailsWaitShown, ::build)
+        combine(sources.filterNotNull(), moment, failure, waitShown, ::build)
             .onStart { if (!refreshed) refresh() }
             .stateIn(viewModelScope, WhileShown, sources.value?.let { build(it, moment.value, null, false) } ?: TitleState.Loading(null))
 
@@ -139,7 +139,7 @@ class TitleViewModel(
         sources: Sources,
         moment: TitleMoment,
         failure: DataError?,
-        detailsWaitShown: Boolean,
+        waitShown: Boolean,
     ): TitleState {
         val entry = sources.list.entries[id]
         val anime = animeOf(sources)
@@ -149,7 +149,6 @@ class TitleViewModel(
         return when {
             listFailure != null -> TitleState.Failed(listFailure, session)
             anime == null -> failure?.let { TitleState.Failed(it, session) } ?: TitleState.Loading(session)
-            details == null && failure != null -> TitleState.Failed(failure, session)
             else ->
                 TitleState.Shown(
                     TitlePage.of(
@@ -163,36 +162,49 @@ class TitleViewModel(
                     ),
                     session,
                     moment,
-                    detailsWaitShown,
+                    when {
+                        failure != null -> DetailsWait.Failed(failure)
+                        waitShown -> DetailsWait.Loading
+                        else -> DetailsWait.Brief
+                    },
                 )
         }
     }
 
     private fun shownPage(): TitlePage? = (state.value as? TitleState.Shown)?.page
 
-    // With details already shown, or a summary, a failed refresh is a message and the page stays (section 7.2).
+    // With details already shown, a failed refresh is a message and the page stays (section 7.2); without them, the
+    // failure stands where they would be until the indicator replaces it. A failed screen shows its loading state at once.
     private fun refresh() {
         refreshed = true
-        failure.value = null
-        detailsWait?.cancel()
-        detailsWaitShown.value = false
-        detailsWait =
+        if (state.value !is TitleState.Shown) failure.value = null
+        load?.cancel()
+        load =
             viewModelScope.launch {
-                delay(DETAILS_PATIENCE)
-                detailsWaitShown.value = true
+                waitShown.value = false
+                val wait =
+                    launch {
+                        delay(DETAILS_PATIENCE)
+                        failure.value = null
+                        waitShown.value = true
+                    }
+                val result = anime.refresh(id)
+                wait.cancel()
+                if (result !is Outcome.Failure) {
+                    failure.value = null
+                    return@launch
+                }
+                waitShown.value = false
+                if (detailsKnown()) {
+                    failure.value = null
+                    if (result.error != DataError.SessionExpired) messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
+                } else {
+                    failure.value = result.error
+                }
             }
-        viewModelScope.launch {
-            val result = anime.refresh(id)
-            if (result !is Outcome.Failure) return@launch
-            if (opened != null || anime.observeDetails(id).first() != null) {
-                detailsWait?.cancel()
-                detailsWaitShown.value = false
-                if (result.error != DataError.SessionExpired) messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
-            } else {
-                failure.value = result.error
-            }
-        }
     }
+
+    private suspend fun detailsKnown(): Boolean = sources.value?.let(::detailsOf) != null || anime.observeDetails(id).first() != null
 
     private fun addToList() {
         val page = shownPage() ?: return

@@ -28,7 +28,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -246,13 +245,56 @@ class TitleViewModelTest {
     }
 
     @Test
-    fun `a failed load shows the error, and Retry loads the page`() =
+    fun `details that could not load show the failure under the page until Retry loads them`() =
         test(before = { demo.server.offline.value = true }) { s ->
-            assertEquals(DataError.NoConnection, (s.state as TitleState.Failed).error)
+            assertEquals(FixtureAnime.exactToWatch, s.shown.page.anime)
+            assertEquals(DetailsWait.Failed(DataError.NoConnection), s.shown.detailsWait)
+            assertNull(s.message)
             s.graph.demo.server.offline.value = false
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            assertEquals(DetailsWait.Failed(DataError.NoConnection), s.shown.detailsWait)
             s.title.onEvent(TitleEvent.Retry)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
+        }
+
+    @Test
+    fun `a Retry that fails again keeps the failure, and the indicator replaces it only once the wait has lasted a second`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            graph.demo.server.offline.value = true
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            showing(title.state)
+            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            advanceUntilIdle()
+            val failed = DetailsWait.Failed(DataError.NoConnection)
+            assertEquals(failed, wait())
+            title.onEvent(TitleEvent.Retry)
+            advanceTimeBy(PATIENCE_MILLIS - 1)
+            runCurrent()
+            assertEquals(failed, wait())
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(DetailsWait.Loading, wait())
+            advanceUntilIdle()
+            assertEquals(failed, wait())
+            scope.cancel()
+        }
+
+    @Test
+    fun `a title that cannot be loaded at all fails the whole page, and Retry shows its loading state at once`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, AnimeId(999_999_999), SavedStateHandle(), ShellMessages(scope, graph.list))
+            showing(title.state)
+            advanceUntilIdle()
+            assertEquals(DataError.NotFound, (title.state.value as TitleState.Failed).error)
+            title.onEvent(TitleEvent.Retry)
+            runCurrent()
+            assertTrue(title.state.value is TitleState.Loading)
+            scope.cancel()
         }
 
     @Test
@@ -326,13 +368,13 @@ class TitleViewModelTest {
             val shown = { title.state.value as TitleState.Shown }
             runCurrent()
             assertNull(shown().page.details)
-            assertFalse(shown().detailsWaitShown)
+            assertEquals(DetailsWait.Brief, shown().detailsWait)
             advanceTimeBy(PATIENCE_MILLIS - 1)
             runCurrent()
-            assertFalse(shown().detailsWaitShown)
+            assertEquals(DetailsWait.Brief, shown().detailsWait)
             advanceTimeBy(1)
             runCurrent()
-            assertTrue(shown().detailsWaitShown)
+            assertEquals(DetailsWait.Loading, shown().detailsWait)
             assertNull(shown().page.details)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, shown().page.details)
@@ -358,7 +400,7 @@ class TitleViewModelTest {
     @Test
     fun `the details are refreshed once, not again when the page is shown again`() =
         test(before = { demo.server.offline.value = true }) { s ->
-            assertTrue(s.state is TitleState.Failed)
+            assertTrue(s.shown.detailsWait is DetailsWait.Failed)
             assertEquals(1, s.graph.refreshes)
             s.graph.demo.server.offline.value = false
             s.screen.cancel()
@@ -369,7 +411,7 @@ class TitleViewModelTest {
             runCurrent()
             advanceUntilIdle()
             assertEquals(1, s.graph.refreshes)
-            assertTrue(s.state is TitleState.Failed)
+            assertTrue(s.shown.detailsWait is DetailsWait.Failed)
         }
 
     @Test
@@ -414,7 +456,8 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
-    // A title opened from a related row is not stored yet: the page stays, and a failed refresh is a message.
+    // A title opened from a related row is not stored yet: the page stays, and a failed refresh stands where its
+    // details would be.
     @Test
     fun `a page opened with a summary keeps it while the store does not hold the title, and after a failed refresh`() =
         runTest(dispatcher) {
@@ -434,8 +477,8 @@ class TitleViewModelTest {
             advanceUntilIdle()
             val shown = title.state.value as TitleState.Shown
             assertEquals(anime, shown.page.anime)
-            assertFalse(shown.detailsWaitShown)
-            assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), messages.current.value?.message)
+            assertEquals(DetailsWait.Failed(DataError.NoConnection), shown.detailsWait)
+            assertNull(messages.current.value)
             scope.cancel()
         }
 

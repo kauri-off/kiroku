@@ -26,6 +26,7 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipeUp
+import androidx.lifecycle.Lifecycle
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -378,6 +379,43 @@ class AppRouteTest {
         assertEquals(13, values(kagerou)?.watchedEpisodes)
     }
 
+    // Section 6.2: Home, or a window over the app, stops the activity; the failed save's Retry is still there on return.
+    @Test
+    fun `a failed save's Retry survives the app being stopped longer than the message shows, and Retry writes`() {
+        app()
+        graph.demo.server.failingWrites.value = true
+        plusOnFirstRow()
+        compose.waitForIdle()
+        shows("Could not save")
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+        shows("Could not save")
+        graph.demo.server.failingWrites.value = false
+        click("Retry")
+        compose.waitForIdle()
+        assertEquals(13, values(kagerou)?.watchedEpisodes)
+    }
+
+    // Section 7.2: offline, a page whose details were never loaded says why where they would be, and Retry loads them.
+    @Test
+    fun `a title page whose details could not load says why and Retry loads them once the connection is back`() {
+        app()
+        graph.demo.server.offline.value = true
+        openKagerou()
+        shows("Episodes watched")
+        shows("No connection")
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        shows("No connection")
+        graph.demo.server.offline.value = false
+        click("Retry")
+        compose.waitForIdle()
+        hides("No connection")
+        scrollTo("Details")
+        shows("Details")
+    }
+
     @Test
     fun `the same title opened twice in one stack keeps two separate states`() {
         app()
@@ -577,5 +615,8 @@ class AppRouteTest {
 
     private companion object {
         const val FRAMES = 10
+
+        // Longer than a message with an action is shown.
+        const val AWAY_MILLIS = 20_000L
     }
 }

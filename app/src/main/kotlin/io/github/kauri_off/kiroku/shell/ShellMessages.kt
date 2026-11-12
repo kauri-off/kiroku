@@ -6,6 +6,8 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -15,13 +17,17 @@ import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 
 // A snackbar a screen posts and the shell shows, so it outlives the screen and its view model (ARCHITECTURE 6.2).
@@ -159,7 +165,9 @@ class ShellMessages(
     }
 }
 
-// Shows the current message on [host]; a message cut short by recreation is shown again afterwards.
+// Shows the current message on [host] only while the app is started, so its time runs only while it can be seen; a
+// message cut short by a stop or a recreation is shown again afterwards.
+@OptIn(ExperimentalCoroutinesApi::class)
 @Composable
 fun ShownMessages(
     messages: ShellMessages,
@@ -168,9 +176,16 @@ fun ShownMessages(
     val posted = messages.current.collectAsScreenState().value
     val text = posted?.message?.text?.let { text(it) }
     val action = posted?.message?.action?.let { actionLabel(it) }
-    LaunchedEffect(posted) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(posted, lifecycle) {
         if (posted == null || text == null) return@LaunchedEffect
-        val result = host.show(text, action)
+        val result =
+            lifecycle.currentStateFlow
+                .map { it.isAtLeast(Lifecycle.State.STARTED) }
+                .distinctUntilChanged()
+                .mapLatest { started -> if (started) host.show(text, action) else null }
+                .filterNotNull()
+                .first()
         messages.ended(posted, result == SnackbarResult.ActionPerformed)
     }
 }

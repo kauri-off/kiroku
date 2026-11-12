@@ -107,7 +107,7 @@ Not to forget:
 - The list engine takes the session, not a boolean: expired keeps the list readable and sends nothing (S6), and
   each sign-in is told apart from the one before. The session it is given does not start with a placeholder
   "signed out", which the engine would take as a sign-out. Clearing the list at sign-out (S9) goes through the
-  engine. A write refused for the session offers no Retry.
+  engine.
 - The engine persists the time of its last successful sync, and W5's restore clears it, so the sync owed after a
   restart is kept until one succeeds, also when the app starts signed out.
 - The MAL client maps a 401 to the expired session itself; one that escapes as an exception reaches the engine as

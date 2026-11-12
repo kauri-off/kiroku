@@ -52,6 +52,15 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("no-related") { Screen(TitleFixtures.of(FixtureAnime.exactCaughtUp)) },
             case("long-title") { Screen(TitleFixtures.of(FixtureAnime.longTitle)) },
             case("details-loading") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, details = null)) },
+            case("details-failed") {
+                Screen(
+                    TitleFixtures
+                        .of(
+                            FixtureAnime.exactToWatch,
+                            details = null,
+                        ).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)),
+                )
+            },
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
             case("planned-scored") { Screen(TitleFixtures.plannedScored) },
             case("first-episode-aired") { Screen(TitleFixtures.firstEpisodeAired) },

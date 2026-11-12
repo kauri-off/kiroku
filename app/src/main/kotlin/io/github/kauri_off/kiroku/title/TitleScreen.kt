@@ -124,7 +124,7 @@ fun TitleScreen(
                     ScreenState.Error(stringResource(state.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
                     Modifier.padding(padding),
                 )
-            is TitleState.Shown -> TitleContent(state.page, state.moment, state.detailsWaitShown, onEvent, padding)
+            is TitleState.Shown -> TitleContent(state.page, state.moment, state.detailsWait, onEvent, padding)
         }
     }
 }
@@ -177,7 +177,7 @@ private fun TitleTopBar(
 private fun TitleContent(
     page: TitlePage,
     moment: TitleMoment,
-    waitShown: Boolean,
+    wait: DetailsWait,
     onEvent: (TitleEvent) -> Unit,
     padding: PaddingValues,
 ) {
@@ -200,7 +200,18 @@ private fun TitleContent(
             }
             val details = page.details
             if (details == null) {
-                if (waitShown) item(key = Section.Loading) { Gap { DetailsLoading() } }
+                when (wait) {
+                    DetailsWait.Brief -> Unit
+                    DetailsWait.Loading -> item(key = Section.Loading) { Gap { DetailsLoading() } }
+                    // The state's own padding separates it from the block above.
+                    is DetailsWait.Failed ->
+                        item(key = Section.Failed) {
+                            ScreenState(
+                                ScreenState.Error(stringResource(wait.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
+                                Modifier.testTag(TitleTags.detailsFailed),
+                            )
+                        }
+                }
             } else {
                 details(details, page, moment.synopsisExpanded, onEvent)
             }
@@ -643,6 +654,7 @@ internal object TitleTags {
     val header = notShown("title-header")
     val list = notShown("title-list-block")
     val airing = notShown("title-airing-block")
+    val detailsFailed = notShown("title-details-failed")
 }
 
-private enum class Section { Header, List, Airing, Loading, Sequel, Synopsis, Related, Statistics, More }
+private enum class Section { Header, List, Airing, Loading, Failed, Sequel, Synopsis, Related, Statistics, More }

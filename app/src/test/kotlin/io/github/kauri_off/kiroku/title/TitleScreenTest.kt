@@ -212,10 +212,20 @@ class TitleScreenTest {
     @Test
     fun theDetailsIndicatorStaysHiddenUntilTheWaitIsShown() {
         val waiting = TitleFixtures.of(FixtureAnime.exactToWatch, details = null)
-        show(waiting.copy(detailsWaitShown = false))
+        show(waiting.copy(detailsWait = DetailsWait.Brief))
         compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
-        show(waiting.copy(detailsWaitShown = true))
+        show(waiting.copy(detailsWait = DetailsWait.Loading))
         compose.onNodeWithContentDescription("Loading details").assertIsDisplayed()
+    }
+
+    // Section 7.2: where the details would be, the cause and Retry, under the summary that stays.
+    @Test
+    fun detailsThatCouldNotLoadSayWhyUnderTheSummaryAndOfferRetry() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch, details = null).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)))
+        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        compose.onNodeWithText("No connection").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
+        sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }
     }
 
     // ARCHITECTURE 6.2: the screen itself draws the host the shell hands it.
