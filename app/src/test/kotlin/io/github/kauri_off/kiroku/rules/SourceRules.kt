@@ -63,8 +63,7 @@ private val motionLiterals =
         Regex("""\b\w+Easing\b|\bEase\w*\b|\bEasing\s*\{"""),
         Regex("""\bSpring\.\w+|\b(Stiffness|DampingRatio)\w+"""),
         Regex("""\bAnimationConstants\b|\bDefaultDurationMillis\b"""),
-        // A frame clock drives an animation by hand; an empty one only waits for the next frame.
-        Regex("""\bwithInfinite(Animation)?Frame(Nanos|Millis)\b|\bwith(Animation)?Frame(Nanos|Millis)\b(?!\s*\{\s*\})"""),
+        Regex("""\bwith(Infinite)?(Animation)?Frame(Nanos|Millis)\b"""),
     )
 
 // Names that are animation values only in user interface code; elsewhere a delay is a debounce or a backoff.

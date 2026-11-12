@@ -1,10 +1,19 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -28,6 +37,9 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Motion
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -137,6 +149,40 @@ class ListTabMotionTest {
     private fun assertIndicatorAt(position: Float) {
         val from = position.toInt().coerceIn(0, labels.lastIndex)
         assertIndicatorAt(labels[from], labels[minOf(from + 1, labels.lastIndex)], position - from)
+        assertRowAt(position)
+    }
+
+    // The row's scroll, from the first tab's place on screen: the row starts on the content edge.
+    private fun rowScroll(): Float = -bounds(tab(labels[0])).left.value
+
+    // The scroll the row must have at the pager's [position], worked out from the tabs' places alone: at a whole
+    // page it centres that page's tab where the row can scroll that far, between two it blends the two. A scroll by
+    // [hand] made at [handAt] fades out over one page of the pager's travel.
+    private fun expectedScroll(
+        position: Float,
+        hand: Float = 0f,
+        handAt: Float = 0f,
+    ): Float {
+        val scroll = rowScroll()
+        val tabs = labels.map { bounds(tab(it)) }
+        val lefts = tabs.map { it.left.value + scroll }
+        val max = (tabs.last().right.value + scroll - pageWidth).coerceAtLeast(0f)
+
+        fun centring(index: Int) = (lefts[index] - (pageWidth / 2 - tabs[index].width.value / 2)).coerceIn(0f, max)
+        val from = position.toInt().coerceIn(0, labels.lastIndex)
+        val to = minOf(from + 1, labels.lastIndex)
+        val f = position - from
+        val pager = centring(from) + (centring(to) - centring(from)) * f
+        return (pager + hand * (1f - abs(position - handAt)).coerceAtLeast(0f)).coerceIn(0f, max)
+    }
+
+    private fun assertRowAt(
+        position: Float,
+        hand: Float = 0f,
+        handAt: Float = 0f,
+    ) {
+        val expected = expectedScroll(position, hand, handAt)
+        assertEquals("the row's scroll at the pager's $position", expected, rowScroll(), TOLERANCE)
     }
 
     // The indicator sits between the two labels at the pager's place, as wide as the blend of the two.
@@ -174,6 +220,7 @@ class ListTabMotionTest {
         val past = pagePosition(watchingRow, rest)
         assertTrue(past > 0.5f)
         assertIndicatorAt("Watching", "Planned", past)
+        assertRowAt(past)
         tab("Planned").assertIsSelected()
         tab("Watching").assertIsNotSelected()
         assertTrue("nothing is selected in the view model while the finger is down", events.isEmpty())
@@ -181,7 +228,7 @@ class ListTabMotionTest {
         var frames = 0
         while (pagePosition(watchingRow, rest) < 1f - SETTLE_EPSILON && frames++ < MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
-            assertIndicatorAt("Watching", "Planned", pagePosition(watchingRow, rest).coerceIn(0f, 1f))
+            assertIndicatorAt(pagePosition(watchingRow, rest).coerceIn(0f, 1f))
         }
         compose.mainClock.advanceTimeBy(SETTLED)
         assertIndicatorAt("Planned", "Planned", 0f)
@@ -371,6 +418,104 @@ class ListTabMotionTest {
     @Test
     fun `a drag back during a tap ends on the tab it settles on`() = dragAfterTap(0.6f, ListStatus.Watching)
 
+    // Every frame of a drag, its settle and a tap: the row has the pager's scroll, never one of its own or a late one.
+    @Test
+    fun `the row's scroll is taken from the pager in every frame`() {
+        show(ListFixtureStates.planned)
+        val rest = left(firstRows[1])
+        assertRowAt(1f)
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(-width * 0.2f, 0f))
+        }
+        repeat(HOLD_FRAMES) {
+            compose.onRoot().performTouchInput { moveBy(Offset(-width * 0.02f, 0f)) }
+            compose.mainClock.advanceTimeByFrame()
+            assertRowAt(pagerPosition(rest))
+        }
+        compose.onRoot().performTouchInput { up() }
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            assertRowAt(pagerPosition(rest))
+        }
+        tab("Watching").performClick()
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            assertRowAt(pagerPosition(rest))
+        }
+        tab("Dropped").performClick()
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            assertRowAt(pagerPosition(rest))
+        }
+        assertRowAt(4f)
+        assertIdle()
+    }
+
+    // A2's mA: a row scrolled by hand goes back to the pager's scroll over the page's own move, not in one frame.
+    @Test
+    fun `the row scrolls by hand and goes back to the pager's scroll as the page moves`() {
+        show(ListFixtureStates.completed)
+        val rest = left(firstRows[2])
+        val pagerScroll = rowScroll()
+        assertTrue("the row can scroll back: $pagerScroll", pagerScroll > HAND)
+        tab("Completed").performTouchInput {
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(HAND.dp.toPx() / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+            advanceEventTime(SLOW_STEP_MS * SLOW_STEPS)
+            up()
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        val byHand = rowScroll()
+        assertTrue("scrolled by hand: $pagerScroll, then $byHand", byHand < pagerScroll - TOLERANCE)
+        tab("Completed").assertIsSelected()
+        repeat(HOLD_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("stays where the hand left it while the page rests", byHand, rowScroll(), STILL)
+        }
+        val hand = byHand - pagerScroll
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(-width * 0.1f, 0f))
+        }
+        repeat(HOLD_FRAMES) {
+            compose.onRoot().performTouchInput { moveBy(Offset(-width * 0.02f, 0f)) }
+            compose.mainClock.advanceTimeByFrame()
+            assertRowAt(pagerPosition(rest), hand, handAt = 2f)
+        }
+        compose.onRoot().performTouchInput { up() }
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            assertRowAt(pagerPosition(rest), hand, handAt = 2f)
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        tab("On hold").assertIsSelected()
+        assertRowAt(3f)
+        tab("Completed").performClick()
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals("no scroll by hand is left once the page has moved on", pagerScroll, rowScroll(), TOLERANCE)
+        assertIdle()
+    }
+
+    // The pager rests for a moment between the drag and the fling; the tab it reports then does not pull it back.
+    @Test
+    fun `a drag past half-way flicked back ends on the page it started from`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        compose.onRoot().performTouchInput {
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(-width * 0.65f / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+            repeat(3) { moveBy(Offset(width * 0.05f, 0f), delayMillis = FRAME) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals("$events", 0f, pagerPosition(rest), SETTLE_EPSILON)
+        tab("Watching").assertIsSelected()
+        assertEquals(ListStatus.Watching, state.tab)
+        assertIndicatorAt("Watching", "Watching", 0f)
+        assertIdle()
+    }
+
     @Test
     fun `tapping the selected tab moves nothing`() {
         show(ListFixtureStates.watching)
@@ -398,6 +543,7 @@ class ListTabMotionTest {
         const val SHORT_DRAG = 0.38f
         const val SLOW_STEPS = 20
         const val SLOW_STEP_MS = 50L
+        const val HAND = 24f
     }
 }
 
@@ -433,5 +579,65 @@ class ListTabMotionOffTest {
         val label = compose.onAllNodesWithText("Dropped", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
         val shown = compose.onNodeWithTag(INDICATOR, useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertEquals(label.left.value, shown.left.value, 1.5f)
+    }
+}
+
+// The view model hears of each page the pager rests on, and a tab it hears back is not a request to move the pager.
+@RunWith(RobolectricTestRunner::class)
+class ListTabFollowTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    // B3's m3: a fling starts a moment after the drag that threw it ends, so the pager can rest on a page in between.
+    @Test
+    fun `a tab reported in a pause before a fling does not pull the pager back to it`() {
+        var tab by mutableIntStateOf(0)
+        val reports = mutableListOf<Int>()
+        lateinit var pager: PagerState
+        lateinit var scope: CoroutineScope
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            pager = rememberPagerState { 5 }
+            scope = rememberCoroutineScope()
+            val motion = rememberListTabMotion(pager)
+            HorizontalPager(pager, Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) }
+            LaunchedEffect(motion) { motion.followRest { reports += it } }
+            LaunchedEffect(tab) { motion.show(tab) }
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        compose.runOnIdle { scope.launch { pager.scrollToPage(1) } }
+        compose.mainClock.advanceTimeBy(FRAMES)
+        assertEquals(listOf(0, 1), reports)
+        compose.runOnIdle { scope.launch { pager.animateScrollToPage(0) } }
+        compose.mainClock.advanceTimeBy(FRAMES)
+        assertTrue(pager.isScrollInProgress)
+        // The view model's answer to the report reaches the screen while the fling runs.
+        compose.runOnIdle { tab = 1 }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(0, pager.currentPage)
+        assertEquals(listOf(0, 1, 0), reports)
+    }
+
+    @Test
+    fun `a tab chosen elsewhere moves the pager to it`() {
+        var tab by mutableIntStateOf(0)
+        lateinit var pager: PagerState
+        compose.setContent {
+            pager = rememberPagerState { 5 }
+            val motion = rememberListTabMotion(pager)
+            HorizontalPager(pager, Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) }
+            LaunchedEffect(motion) { motion.followRest { tab = it } }
+            LaunchedEffect(tab) { motion.show(tab) }
+        }
+        compose.runOnIdle { tab = 3 }
+        compose.waitForIdle()
+        assertEquals(3, pager.currentPage)
+    }
+
+    private companion object {
+        const val SETTLED = 2_000L
+        const val FRAMES = 48L
     }
 }

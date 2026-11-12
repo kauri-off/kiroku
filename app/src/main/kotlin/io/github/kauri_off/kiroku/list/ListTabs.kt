@@ -1,40 +1,56 @@
 package io.github.kauri_off.kiroku.list
 
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabPosition
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.snapshots.Snapshot
-import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.MultiContentMeasurePolicy
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ScrollAxisRange
+import androidx.compose.ui.semantics.horizontalScrollAxisRange
+import androidx.compose.ui.semantics.scrollBy
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.lerp
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -53,6 +69,9 @@ class ListTabMotion(
 
     private var tap: Any? = null
 
+    // The last page reported as rested on, so the tab the screen hears back from it is not taken as a request.
+    private var reported = pager.currentPage
+
     // Fractional: 1.3 is a third of the way from the second tab to the third.
     val position: Float
         get() = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (pager.pageCount - 1).toFloat())
@@ -60,20 +79,21 @@ class ListTabMotion(
     // Flips half-way through a drag, and at once to a tapped tab.
     val selected: Int by derivedStateOf { tapTarget ?: pager.currentPage }
 
-    // The page the pager has rested on for a frame: a fling starts a moment after the drag that threw it ends.
-    var resting by mutableIntStateOf(pager.currentPage)
-        private set
+    // The page the pager rests on; null while it moves or a tap is taking it elsewhere.
+    private val resting: Int?
+        get() = pager.currentPage.takeUnless { pager.isScrollInProgress || tapTarget != null }
 
-    // Keeps [resting] and tells [onRest] of each page the pager rests on.
+    // Tells [onRest] of each new page the pager rests on; it may rest a moment between a drag and its fling.
     suspend fun followRest(onRest: (Int) -> Unit) {
-        val still = { pager.currentPage.takeUnless { pager.isScrollInProgress || tapTarget != null } }
-        snapshotFlow(still).filterNotNull().collectLatest { index ->
-            withFrameNanos {}
-            if (still() == index) {
-                resting = index
-                onRest(index)
-            }
+        snapshotFlow { resting }.filterNotNull().distinctUntilChanged().collect { index ->
+            reported = index
+            onRest(index)
         }
+    }
+
+    // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.
+    fun show(index: Int) {
+        if (index != reported && index != tapTarget && index != pager.targetPage) select(index)
     }
 
     // A page further than one away is first put next to its tab, so the last page slides in as a component's entrance.
@@ -103,122 +123,159 @@ fun rememberListTabMotion(pager: PagerState): ListTabMotion {
     return remember(pager, scope) { ListTabMotion(pager, scope) }
 }
 
+// Stock tabs, indicator and divider in the stock scrollable row's measures, in a layout only the pager scrolls.
 @Composable
 internal fun ListTabs(
     motion: ListTabMotion,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val scroll = rememberScrollState()
+    val row = remember(motion) { TabRowLayout(motion) }
     val selected = motion.selected
-    val geometry = remember { RowGeometry() }
-    // Written in composition, whose changes reach layout in the same frame; a write in measure would show a frame late.
-    val position = motion.position
-    val max = scroll.maxValue
-    val density = LocalDensity.current
-    geometry.positions?.let { scroll.follow(rowScroll(it, position, max, with(density) { Sizes.tabRowEdge.roundToPx() }, density)) }
-    // The stock row scrolls itself to its index; it changes only at rest, where that scroll is already the row's.
-    val resting = motion.resting
-    PrimaryScrollableTabRow(
-        selectedTabIndex = resting,
-        scrollState = scroll,
-        edgePadding = Sizes.tabRowEdge,
-        indicator = {
-            TabRowDefaults.PrimaryIndicator(
-                Modifier
-                    .tabIndicatorLayout { measurable, constraints, positions ->
-                        if (positions.isEmpty()) return@tabIndicatorLayout layout(0, 0) {}
-                        val position = motion.position
-                        if (geometry.positions != positions) {
-                            geometry.positions = positions
-                            scroll.follow(rowScroll(positions, position, scroll.maxValue, Sizes.tabRowEdge.roundToPx(), this))
-                        }
-                        val at = between(positions, position)
-                        val width = at.contentWidth.roundToPx()
-                        val placeable = measurable.measure(Constraints(width, width, 0, constraints.maxHeight))
-                        // The row places this box half its selected tab's width in.
-                        val box = positions[resting].width.roundToPx() / 2
-                        layout(0, placeable.height) { placeable.place(at.contentLeft.roundToPx() - box, 0) }
-                    }.testTag(INDICATOR),
-                width = Dp.Unspecified,
-            )
-        },
-    ) {
-        ListStatus.entries.forEachIndexed { index, status ->
-            Tab(
-                selected = index == selected,
-                onClick = {
-                    motion.select(index)
-                    onEvent(ListEvent.SelectTab(status))
-                },
-                text = { Text(stringResource(status.label())) },
+    LaunchedEffect(row) { row.forgetHand() }
+    val overscroll = rememberOverscrollEffect()
+    val reverse = ScrollableDefaults.reverseDirection(LocalLayoutDirection.current, Orientation.Horizontal, false)
+    Surface(color = TabRowDefaults.primaryContainerColor, contentColor = TabRowDefaults.primaryContentColor) {
+        Box(contentAlignment = Alignment.BottomStart) {
+            HorizontalDivider()
+            Layout(
+                contents =
+                    listOf(
+                        {
+                            ListStatus.entries.forEachIndexed { index, status ->
+                                Tab(
+                                    selected = index == selected,
+                                    onClick = {
+                                        motion.select(index)
+                                        onEvent(ListEvent.SelectTab(status))
+                                    },
+                                    text = { Text(stringResource(status.label())) },
+                                    modifier = Modifier.onFocusChanged { if (it.isFocused) row.reveal(index) },
+                                )
+                            }
+                        },
+                        { TabRowDefaults.PrimaryIndicator(Modifier.testTag(INDICATOR), width = Dp.Unspecified) },
+                    ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clipToBounds()
+                        .selectableGroup()
+                        .overscroll(overscroll)
+                        .scrollable(row.byHand, Orientation.Horizontal, overscroll, reverseDirection = reverse)
+                        .semantics {
+                            horizontalScrollAxisRange = ScrollAxisRange({ row.scroll(motion.position) }, { row.max.toFloat() })
+                            scrollBy { x, _ -> row.byHand.dispatchRawDelta(x) != 0f }
+                        },
+                measurePolicy = row,
             )
         }
     }
 }
 
-// The tabs' places from the row's last measure; not state, as only a new place in the pager asks for a new scroll.
-private class RowGeometry {
-    var positions: List<TabPosition>? = null
+// The tabs' places from the last layout: [lefts] has one more entry, the right end of the last tab.
+private class TabPlaces(
+    val lefts: IntArray,
+    val labels: IntArray,
+    viewport: Int,
+) {
+    val max = (lefts.last() + lefts.first() - viewport).coerceAtLeast(0)
+
+    private val centre = viewport / 2
+
+    fun width(index: Int) = lefts[index + 1] - lefts[index]
+
+    fun labelLeft(index: Int) = lefts[index] + (width(index) - labels[index]) / 2
+
+    // The scroll the stock row chooses for a selected tab: centred where the row can scroll that far.
+    fun centring(index: Int) = (lefts[index] - (centre - width(index) / 2)).coerceIn(0, max)
+
+    // At a fractional pager [position], the straight blend of the centring scrolls of the two tabs around it.
+    fun scroll(position: Float) =
+        if (labels.isEmpty()) 0f else around(position, labels.size) { from, to, f -> blend(centring(from), centring(to), f) }
 }
 
-// Sets the row's scroll without reading it, so a scroll by hand stays until the pager moves.
-private fun ScrollState.follow(target: Int) {
-    val now = Snapshot.withoutReadObservation { value }
-    if (target != now) dispatchRawDelta((target - now).toFloat())
-}
+// The row's scroll and the indicator are read from the pager in layout, so they move in the frame the pager does.
+private class TabRowLayout(
+    private val motion: ListTabMotion,
+) : MultiContentMeasurePolicy {
+    // A scroll by hand, on top of the pager's, made at [handAt]; it fades out as the pager moves a page from there.
+    private var hand by mutableFloatStateOf(0f)
+    private var handAt by mutableFloatStateOf(0f)
 
-private class Between(
-    val contentLeft: Dp,
-    val contentWidth: Dp,
-)
+    // Read only by input and semantics, never by composition.
+    private var places = TabPlaces(IntArray(1), IntArray(0), 0)
 
-// The indicator's place and width at a fractional [position], each the straight blend of the two tabs around it.
-private fun between(
-    positions: List<TabPosition>,
-    position: Float,
-): Between {
-    val (from, to, f) = around(positions, position)
-    val a = positions[from]
-    val b = positions[to]
-    return Between(lerp(a.contentLeft, b.contentLeft, f), lerp(a.contentWidth, b.contentWidth, f))
-}
+    val max: Int get() = places.max
 
-private fun around(
-    positions: List<TabPosition>,
-    position: Float,
-): Triple<Int, Int, Float> {
-    val p = position.coerceIn(0f, positions.lastIndex.toFloat())
-    val from = floor(p).toInt()
-    return Triple(from, minOf(from + 1, positions.lastIndex), p - from)
-}
-
-private val TabPosition.contentLeft: Dp get() = left + (width - contentWidth) / 2
-
-// The blend of the scrolls that centre the two tabs around [position], each the one the stock row would choose.
-private fun rowScroll(
-    positions: List<TabPosition>,
-    position: Float,
-    max: Int,
-    edge: Int,
-    density: Density,
-): Int {
-    val (from, to, f) = around(positions, position)
-    val a = centring(positions, from, max, edge, density)
-    val b = centring(positions, to, max, edge, density)
-    return (a + (b - a) * f).roundToInt()
-}
-
-private fun centring(
-    positions: List<TabPosition>,
-    index: Int,
-    max: Int,
-    edge: Int,
-    density: Density,
-): Int =
-    with(density) {
-        val visible = positions.last().right.roundToPx() + edge - max
-        val tab = positions[index]
-        (tab.left.roundToPx() - (visible / 2 - tab.width.roundToPx() / 2)).coerceIn(0, max.coerceAtLeast(0))
+    fun scroll(position: Float): Float {
+        val fade = (1f - abs(position - handAt)).coerceAtLeast(0f)
+        return (places.scroll(position) + hand * fade).coerceIn(0f, places.max.toFloat())
     }
+
+    val byHand =
+        ScrollableState { delta ->
+            val position = motion.position
+            val now = scroll(position)
+            val next = (now + delta).coerceIn(0f, places.max.toFloat())
+            hand = next - places.scroll(position)
+            handAt = position
+            next - now
+        }
+
+    // A tab given focus by a key is centred like a selected one.
+    fun reveal(index: Int) {
+        val position = motion.position
+        hand = places.centring(index) - places.scroll(position)
+        handAt = position
+    }
+
+    // Once the pager is a page or more from where the hand left the row, its scroll is the pager's alone again.
+    suspend fun forgetHand() {
+        snapshotFlow { hand != 0f && abs(motion.position - handAt) >= 1f }.collect { if (it) hand = 0f }
+    }
+
+    override fun MeasureScope.measure(
+        measurables: List<List<Measurable>>,
+        constraints: Constraints,
+    ): MeasureResult {
+        val (tabs, indicator) = measurables
+        val height = tabs.maxOf { it.maxIntrinsicHeight(Constraints.Infinity) }
+        val tab = Constraints(minWidth = TabRowDefaults.ScrollableTabRowMinTabWidth.roundToPx(), minHeight = height, maxHeight = height)
+        val placeables = tabs.map { it.measure(tab) }
+        val lefts = IntArray(tabs.size + 1)
+        lefts[0] = Sizes.tabRowEdge.roundToPx()
+        placeables.forEachIndexed { index, placeable -> lefts[index + 1] = lefts[index] + placeable.width }
+        val padding = Sizes.tabLabelPadding.roundToPx() * 2
+        val labels = IntArray(tabs.size) { tabs[it].maxIntrinsicWidth(Constraints.Infinity) - padding }
+        places = TabPlaces(lefts, labels, constraints.maxWidth)
+        val position = motion.position
+        val scroll = scroll(position).roundToInt()
+        val (left, width) =
+            around(position, tabs.size) { from, to, f ->
+                blend(places.labelLeft(from), places.labelLeft(to), f) to blend(labels[from], labels[to], f)
+            }
+        val bar = indicator.map { it.measure(Constraints.fixedWidth(width.roundToInt())) }
+        return layout(constraints.maxWidth, height) {
+            placeables.forEachIndexed { index, placeable -> placeable.placeRelative(lefts[index] - scroll, 0) }
+            bar.forEach { it.placeRelative(left.roundToInt() - scroll, height - it.height) }
+        }
+    }
+}
+
+private fun <T> around(
+    position: Float,
+    count: Int,
+    at: (from: Int, to: Int, fraction: Float) -> T,
+): T {
+    val p = position.coerceIn(0f, (count - 1).toFloat())
+    val from = floor(p).toInt()
+    return at(from, minOf(from + 1, count - 1), p - from)
+}
+
+private fun blend(
+    a: Int,
+    b: Int,
+    f: Float,
+): Float = a + (b - a) * f
 
 val INDICATOR = notShown("list.tabIndicator")

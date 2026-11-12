@@ -134,11 +134,7 @@ private fun Pages(
     LaunchedEffect(motion) {
         motion.followRest { index -> if (statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index])) }
     }
-    // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.
-    LaunchedEffect(state.tab) {
-        val target = statuses.indexOf(state.tab)
-        if (motion.tapTarget != target && pager.targetPage != target) motion.select(target)
-    }
+    LaunchedEffect(state.tab) { motion.show(statuses.indexOf(state.tab)) }
     HorizontalPager(
         pager,
         Modifier.fillMaxSize(),
