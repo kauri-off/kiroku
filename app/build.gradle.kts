@@ -89,7 +89,11 @@ android {
         }
     }
 
-    sourceSets.named("benchmark") { kotlin.directories += "src/debug/kotlin" }
+    sourceSets.named("benchmark") {
+        kotlin.directories += "src/debug/kotlin"
+        res.directories += "src/debug/res"
+        manifest.srcFile("src/debug/AndroidManifest.xml")
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
