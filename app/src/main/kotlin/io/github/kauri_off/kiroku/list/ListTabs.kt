@@ -285,11 +285,17 @@ internal fun ListTabs(
                                         onEvent(ListEvent.SelectTab(status))
                                     },
                                     text = {
+                                        // Only the two titles around the header change weight, so only they are drawn again.
+                                        val weight =
+                                            remember(
+                                                motion,
+                                                index,
+                                            ) { derivedStateOf { (1f - abs(index - motion.header)).coerceIn(0f, 1f) } }
                                         // Drawn in the blend of the two colours by the header, so the stock fade has nothing to animate.
                                         BasicText(
                                             stringResource(status.label()),
                                             style = LocalTextStyle.current,
-                                            color = { lerp(inactive, active, (1f - abs(index - motion.header)).coerceIn(0f, 1f)) },
+                                            color = { lerp(inactive, active, weight.value) },
                                         )
                                     },
                                     modifier = Modifier.onFocusChanged { if (it.isFocused) row.reveal(index) },
