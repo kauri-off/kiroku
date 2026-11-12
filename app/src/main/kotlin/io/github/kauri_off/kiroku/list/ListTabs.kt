@@ -1,7 +1,5 @@
 package io.github.kauri_off.kiroku.list
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.PrimaryScrollableTabRow
@@ -10,7 +8,6 @@ import androidx.compose.material3.TabPosition
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -18,9 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
@@ -37,59 +33,37 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlin.math.sign
 
-// The tab row's place between two tabs, drawn from the pager: the finger's drag and the settle move the indicator,
-// the selection and the row's scroll with the page. A tap runs the page and the header on one animation.
+// The pager is the only thing that moves; the indicator, the selection and the row's scroll are drawn from it.
 @Stable
 class ListTabMotion(
     val pager: PagerState,
     private val scope: CoroutineScope,
 ) {
-    // The tab a tap is sliding to; while it runs, the header follows the tap's animation.
+    // The tab a tap is taking the pager to; it is selected from the tap on.
     var tapTarget by mutableStateOf<Int?>(null)
         private set
 
-    private val tapped = Animatable(0f)
     private var tap: Any? = null
-
-    private val last: Float get() = (pager.pageCount - 1).toFloat()
-
-    private val pagerPosition: Float get() = pager.currentPage + pager.currentPageOffsetFraction
 
     // Fractional: 1.3 is a third of the way from the second tab to the third. Read it only in layout, draw or effects.
     val position: Float
-        get() = (if (tapTarget != null) tapped.value else pagerPosition).coerceIn(0f, last)
+        get() = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (pager.pageCount - 1).toFloat())
 
     // Flips half-way through a drag, and at once to a tapped tab.
     val selected: Int by derivedStateOf { tapTarget ?: pager.currentPage }
 
-    // One animation moves the header and the page together. A page further than one away first jumps next to the
-    // target, then slides the last page on the header's curve, so both arrive on the same frame.
+    // A page further than one away is first put next to its tab, so the last page slides in as a component's entrance.
     fun select(index: Int) {
         if (tapTarget == index || (tapTarget == null && !pager.isScrollInProgress && position == index.toFloat())) return
-        val from = position
-        val target = index.toFloat()
         val token = Any()
         tap = token
         tapTarget = index
         scope.launch {
             try {
-                tapped.snapTo(from)
-                val size = (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing).toFloat()
-                var page = pagerPosition
-                val start = if (abs(target - page) > 1f) target - sign(target - page) else page
-                pager.scroll {
-                    scrollBy((start - page) * size)
-                    page = start
-                    tapped.animateTo(target, Motion.componentEnter()) {
-                        val way = if (target == from) 1f else (value - from) / (target - from)
-                        val next = start + (target - start) * way
-                        scrollBy((next - page) * size)
-                        page = next
-                    }
-                }
-                pager.scrollToPage(index)
+                val from = position
+                if (abs(index - from) > 1f) pager.scrollToPage(if (index > from) index - 1 else index + 1)
+                pager.animateScrollToPage(index, animationSpec = Motion.componentEnter())
             } finally {
                 if (tap === token) {
                     tap = null
@@ -111,18 +85,12 @@ internal fun ListTabs(
     motion: ListTabMotion,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val statuses = ListStatus.entries
     val scroll = rememberScrollState()
-    val geometry = remember { TabGeometry() }
-    val density = LocalDensity.current
-    LaunchedEffect(motion, scroll, density) {
-        snapshotFlow { geometry.positions to motion.position }.collect { (positions, position) ->
-            if (positions.isNotEmpty()) scroll.scrollTo(centredScroll(positions, position, scroll, density))
-        }
-    }
     val selected = motion.selected
+    // The stock row scrolls itself to its index; it changes only at rest, where that scroll is already the row's.
+    val resting = motion.pager.settledPage
     PrimaryScrollableTabRow(
-        selectedTabIndex = selected,
+        selectedTabIndex = resting,
         scrollState = scroll,
         edgePadding = Sizes.tabRowEdge,
         indicator = {
@@ -130,19 +98,23 @@ internal fun ListTabs(
                 Modifier
                     .tabIndicatorLayout { measurable, constraints, positions ->
                         if (positions.isEmpty()) return@tabIndicatorLayout layout(0, 0) {}
-                        geometry.positions = positions
-                        val at = between(positions, motion.position)
+                        val position = motion.position
+                        // Here, in the row's measure, so the row is scrolled in the same frame the indicator moves.
+                        val target = rowScroll(positions, position, scroll.maxValue, Sizes.tabRowEdge.roundToPx(), this)
+                        val now = Snapshot.withoutReadObservation { scroll.value }
+                        if (target != now) scroll.dispatchRawDelta((target - now).toFloat())
+                        val at = between(positions, position)
                         val width = at.contentWidth.roundToPx()
                         val placeable = measurable.measure(Constraints(width, width, 0, constraints.maxHeight))
-                        // The row places this box half its selected tab's width in; the indicator goes where the pager is.
-                        val box = (positions[motion.selected].width.roundToPx() / 2)
+                        // The row places this box half its selected tab's width in.
+                        val box = positions[resting].width.roundToPx() / 2
                         layout(0, placeable.height) { placeable.place(at.contentLeft.roundToPx() - box, 0) }
                     }.testTag(INDICATOR),
                 width = Dp.Unspecified,
             )
         },
     ) {
-        statuses.forEachIndexed { index, status ->
+        ListStatus.entries.forEachIndexed { index, status ->
             Tab(
                 selected = index == selected,
                 onClick = {
@@ -155,14 +127,9 @@ internal fun ListTabs(
     }
 }
 
-private class TabGeometry {
-    var positions by mutableStateOf(emptyList<TabPosition>())
-}
-
 private class Between(
     val contentLeft: Dp,
     val contentWidth: Dp,
-    val centre: Dp,
 )
 
 // The indicator's place and width at a fractional [position], each the straight blend of the two tabs around it.
@@ -170,30 +137,48 @@ private fun between(
     positions: List<TabPosition>,
     position: Float,
 ): Between {
-    val p = position.coerceIn(0f, positions.lastIndex.toFloat())
-    val from = floor(p).toInt()
-    val to = minOf(from + 1, positions.lastIndex)
-    val f = p - from
+    val (from, to, f) = around(positions, position)
     val a = positions[from]
     val b = positions[to]
-    return Between(
-        contentLeft = lerp(a.contentLeft, b.contentLeft, f),
-        contentWidth = lerp(a.contentWidth, b.contentWidth, f),
-        centre = lerp(a.left + a.width / 2, b.left + b.width / 2, f),
-    )
+    return Between(lerp(a.contentLeft, b.contentLeft, f), lerp(a.contentWidth, b.contentWidth, f))
+}
+
+private fun around(
+    positions: List<TabPosition>,
+    position: Float,
+): Triple<Int, Int, Float> {
+    val p = position.coerceIn(0f, positions.lastIndex.toFloat())
+    val from = floor(p).toInt()
+    return Triple(from, minOf(from + 1, positions.lastIndex), p - from)
 }
 
 private val TabPosition.contentLeft: Dp get() = left + (width - contentWidth) / 2
 
-// The row's scroll that puts the point between two tabs in its middle, as far as the row can scroll.
-private fun centredScroll(
+// The blend of the scrolls that centre the two tabs around [position], each the one the stock row would choose.
+private fun rowScroll(
     positions: List<TabPosition>,
     position: Float,
-    scroll: ScrollState,
+    max: Int,
+    edge: Int,
     density: Density,
 ): Int {
-    val centre = with(density) { between(positions, position).centre.toPx() }
-    return (centre - scroll.viewportSize / 2f).roundToInt().coerceIn(0, scroll.maxValue)
+    val (from, to, f) = around(positions, position)
+    val a = centring(positions, from, max, edge, density)
+    val b = centring(positions, to, max, edge, density)
+    return (a + (b - a) * f).roundToInt()
 }
+
+private fun centring(
+    positions: List<TabPosition>,
+    index: Int,
+    max: Int,
+    edge: Int,
+    density: Density,
+): Int =
+    with(density) {
+        val visible = positions.last().right.roundToPx() + edge - max
+        val tab = positions[index]
+        (tab.left.roundToPx() - (visible / 2 - tab.width.roundToPx() / 2)).coerceIn(0, max.coerceAtLeast(0))
+    }
 
 val INDICATOR = notShown("list.tabIndicator")

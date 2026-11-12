@@ -5,6 +5,7 @@ import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsNotSelected
@@ -20,6 +21,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.DpRect
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -67,6 +69,22 @@ class ListTabMotionTest {
             .first()
             .title
 
+    private val labels = listOf("Watching", "Planned", "Completed", "On hold", "Dropped")
+
+    private val firstRows =
+        listOf(
+            ListFixtureStates.watching,
+            ListFixtureStates.planned,
+            ListFixtureStates.completed,
+            ListFixtureStates.watching.copy(tab = ListStatus.OnHold),
+            ListFixtureStates.dropped,
+        ).map {
+            it.page!!
+                .rows
+                .first()
+                .title
+        }
+
     // Follows the selected tab as the view model does.
     private fun show(start: ListState) {
         state = start
@@ -107,6 +125,19 @@ class ListTabMotionTest {
         row: String,
         rest: Float,
     ) = (rest - left(row)) / pageWidth
+
+    private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
+
+    // The pager's place, from the first row of a page that is composed; [rest] is a row's left on a page at rest.
+    private fun pagerPosition(rest: Float): Float {
+        val page = firstRows.indices.first { exists(firstRows[it]) }
+        return page + (rest - left(firstRows[page])) / pageWidth
+    }
+
+    private fun assertIndicatorAt(position: Float) {
+        val from = position.toInt().coerceIn(0, labels.lastIndex)
+        assertIndicatorAt(labels[from], labels[minOf(from + 1, labels.lastIndex)], position - from)
+    }
 
     // The indicator sits between the two labels at the pager's place, as wide as the blend of the two.
     private fun assertIndicatorAt(
@@ -226,32 +257,119 @@ class ListTabMotionTest {
         assertIdle()
     }
 
-    // A far page jumps next to its tab at once and slides the last page in.
-    private fun assertOneCurve(
-        tab: String,
-        row: String,
-    ) {
+    // The header is drawn from the pager: a far page is put next to its tab at once, and the header goes with it.
+    private fun assertHeaderOnThePage(tab: String) {
         show(ListFixtureStates.watching)
-        val rest = left(watchingRow)
+        val rest = left(firstRows[0])
         tab(tab).performClick()
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 3)
-        val page = (rest + pageWidth - left(row)) / pageWidth
-        val a = label("Watching").left.value
-        val b = label(tab).left.value
-        val header = (indicator().left.value - a) / (b - a)
-        assertTrue("part-way: $page", page in 0.1f..0.95f)
-        assertTrue("the header at $header, the page at $page", abs(header - page) <= CURVE_TOLERANCE)
+        val page = pagerPosition(rest)
+        val target = labels.indexOf(tab).toFloat()
+        assertTrue("part-way: $page", page > target - 1f + 0.1f && page < target - 0.05f)
+        assertIndicatorAt(page)
         compose.mainClock.advanceTimeBy(SETTLED)
         assertIndicatorAt(tab, tab, 0f)
         assertIdle()
     }
 
     @Test
-    fun `on a tap the indicator and the page run one curve`() = assertOneCurve("Planned", plannedRow)
+    fun `on a tap the indicator is where the page is`() = assertHeaderOnThePage("Planned")
 
     @Test
-    fun `on a tap on a far tab the indicator and the last page run one curve`() = assertOneCurve("Dropped", droppedRow)
+    fun `on a tap on a far tab the indicator travels with the last page`() = assertHeaderOnThePage("Dropped")
+
+    // A2's T1: the stock row's own scroll to a newly selected tab never runs against the finger.
+    @Test
+    fun `a drag held just past half-way leaves the row still, and on release the row moves one way only`() {
+        show(ListFixtureStates.completed)
+        val rest = left(firstRows[2])
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(-width * 0.3f, 0f))
+            moveBy(Offset(-width * 0.3f, 0f))
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val held = pagerPosition(rest)
+        assertTrue("just past half-way: $held", held > 2.5f && held < 2.75f)
+        tab("On hold").assertIsSelected()
+        val row = label("Completed").left.value
+        val bar = indicator().left.value
+        repeat(HOLD_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("the row is still while the finger is", row, label("Completed").left.value, STILL)
+            assertEquals("the indicator is still while the finger is", bar, indicator().left.value, STILL)
+        }
+        compose.onRoot().performTouchInput { up() }
+        var last = row
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            val now = label("Completed").left.value
+            assertTrue("the row only moves on towards On hold: $last, then $now", now <= last + STILL)
+            assertIndicatorAt(pagerPosition(rest))
+            last = now
+        }
+        tab("On hold").assertIsSelected()
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(last, label("Completed").left.value, STILL)
+        assertIndicatorAt("On hold", "On hold", 0f)
+        assertEquals(listOf(ListEvent.SelectTab(ListStatus.OnHold)), events)
+        assertIdle()
+    }
+
+    // A2's T2: the page and the indicator cannot disagree when a tap interrupts a settle.
+    @Test
+    fun `a tap during a settle keeps the indicator on the page every frame`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(-width * 0.2f, 0f))
+            moveBy(Offset(-width * 0.2f, 0f))
+            up()
+        }
+        repeat(2) { compose.mainClock.advanceTimeByFrame() }
+        val settling = pagerPosition(rest)
+        assertTrue("mid-settle: $settling", settling > 0.05f && settling < 0.95f)
+        tab("Completed").performClick()
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            tab("Completed").assertIsSelected()
+            assertIndicatorAt(pagerPosition(rest))
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertIndicatorAt("Completed", "Completed", 0f)
+        assertEquals(rest, left(firstRows[2]), TOLERANCE)
+        assertEquals(listOf(ListEvent.SelectTab(ListStatus.Completed)), events)
+        assertIdle()
+    }
+
+    // B2's m5: a drag that takes over from a tap sends no tab but the tapped one and the one the drag settles on.
+    private fun dragAfterTap(
+        drag: Float,
+        settles: ListStatus,
+    ) {
+        show(ListFixtureStates.watching)
+        tab("Planned").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(Motion.Duration.SHORT2.toLong())
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(width * drag, 0f))
+            up()
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned), ListEvent.SelectTab(settles)), events)
+        tab(labels[settles.ordinal]).assertIsSelected()
+        assertIndicatorAt(labels[settles.ordinal], labels[settles.ordinal], 0f)
+        assertIdle()
+    }
+
+    @Test
+    fun `a drag on during a tap ends on the tab it settles on`() = dragAfterTap(-0.6f, ListStatus.Completed)
+
+    @Test
+    fun `a drag back during a tap ends on the tab it settles on`() = dragAfterTap(0.6f, ListStatus.Watching)
 
     @Test
     fun `tapping the selected tab moves nothing`() {
@@ -275,9 +393,45 @@ class ListTabMotionTest {
         const val MAX_FRAMES = 60
         const val SETTLE_EPSILON = 0.001f
         const val TOLERANCE = 1.5f
-        const val CURVE_TOLERANCE = 0.08f
+        const val HOLD_FRAMES = 30
+        const val STILL = 0.01f
         const val SHORT_DRAG = 0.38f
         const val SLOW_STEPS = 20
         const val SLOW_STEP_MS = 50L
+    }
+}
+
+// With the system's animations off, a tap on a far tab puts the page, the indicator and the row there in one frame.
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "en-w411dp-h2000dp")
+class ListTabMotionOffTest {
+    private val compose =
+        createAndroidComposeRule<ComponentActivity>(
+            effectContext =
+                object : MotionDurationScale {
+                    override val scaleFactor = 0f
+                },
+        )
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    // A2's T1 with animations off: the row was scrolled a frame after the indicator was placed.
+    @Test
+    fun `a far tap never shows the indicator off the row`() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(ListFixtureStates.watching) } }
+        compose.mainClock.advanceTimeBy(2_000)
+        val width = compose.onRoot().getUnclippedBoundsInRoot().width
+        compose.onNode(hasText("Dropped") and isSelectable()).performClick()
+        repeat(10) {
+            compose.mainClock.advanceTimeByFrame()
+            val shown = compose.onNodeWithTag(INDICATOR, useUnmergedTree = true).getUnclippedBoundsInRoot()
+            assertTrue("frame $it: ${shown.left}..${shown.right} in 0..$width", shown.left >= 0.dp && shown.right <= width)
+        }
+        val label = compose.onAllNodesWithText("Dropped", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
+        val shown = compose.onNodeWithTag(INDICATOR, useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertEquals(label.left.value, shown.left.value, 1.5f)
     }
 }

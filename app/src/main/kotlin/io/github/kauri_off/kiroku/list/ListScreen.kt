@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -66,6 +67,8 @@ import io.github.kauri_off.kiroku.design.theme.Motion
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.text.label
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 
 // The user's list, or another user's read-only list: a top app bar, the five status tabs and the rows of one tab.
 // [snackbars] is the app shell's one snackbar state; the screen draws it in its own scaffold (ARCHITECTURE 6.2). The
@@ -135,9 +138,12 @@ private fun Pages(
     val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
     val tab = rememberUpdatedState(state.tab)
+    // A fling starts a moment after the drag that threw it ends, so a page counts as settled a frame after it rests.
     LaunchedEffect(pager) {
-        snapshotFlow { pager.settledPage }.collect { index ->
-            if (motion.tapTarget == null && statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
+        val resting = { pager.currentPage.takeUnless { pager.isScrollInProgress || motion.tapTarget != null } }
+        snapshotFlow(resting).filterNotNull().collectLatest { index ->
+            withFrameNanos {}
+            if (resting() == index && statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index]))
         }
     }
     // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.

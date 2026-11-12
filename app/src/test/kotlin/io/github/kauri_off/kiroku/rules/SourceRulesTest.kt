@@ -107,6 +107,8 @@ class SourceRulesTest {
             "StiffnessMediumLow",
             "androidx.compose.animation.core.tween<Float>(300)",
             "withInfiniteAnimationFrameNanos { }",
+            "withFrameNanos { time = it }",
+            "withFrameMillis { offset = it * speed }",
         )) {
             assertTrue(planted, motionLiteralProblems("A.kt", "val a = $planted\n").isNotEmpty())
         }
@@ -117,6 +119,7 @@ class SourceRulesTest {
                 "Motion.Easing.standard",
                 "snapshotFlow { x }",
                 "animatable.snapTo(1f)",
+                "withFrameNanos {}",
             )
         for (code in allowed) {
             assertEquals(code, emptyList<String>(), motionLiteralProblems("A.kt", "val a = $code\n"))
