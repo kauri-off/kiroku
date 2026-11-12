@@ -35,6 +35,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -44,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -291,9 +291,9 @@ private fun Rows(
     val context = LocalContext.current
     val text = remember(context, state.now) { ListText(context, state.now) }
     val edit = stringResource(R.string.list_edit)
-    // The rows' move after one leaves (componentChange), then the platform's double-tap timeout.
-    val window = Motion.Duration.SHORT4 + LocalViewConfiguration.current.doubleTapTimeoutMillis
-    val guard = remember(window) { PlusOneGuard(window) }
+    // The rows' move after one leaves is componentChange's.
+    val guard = remember { PlusOneGuard(Motion.Duration.SHORT4.toLong()) }
+    SideEffect { guard.shown(rows.map { it.id }, SystemClock.uptimeMillis()) }
     val shownRows = rememberUpdatedState(rows)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {

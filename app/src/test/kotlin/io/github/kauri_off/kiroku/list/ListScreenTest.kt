@@ -460,6 +460,25 @@ class ListMotionTest {
         assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
     }
 
+    // A3's Q1b: the rows have stopped, but the tap aimed at the row below comes at an ordinary pace after the first.
+    @Test
+    fun `a tap aimed at the row below a completed row at an ordinary pace reaches no other title`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events)
+        val below = plusOneOf(following)
+        compose.onRoot().performTouchInput { click(plusOneOf(anime.titles.romaji)) }
+        Snapshot.sendApplyNotifications()
+        compose.mainClock.advanceTimeByFrame()
+        SystemClock.sleep(ORDINARY_PACE_MS)
+        compose.mainClock.advanceTimeBy(ORDINARY_PACE_MS)
+        tap(below, Motion.Duration.SHORT2.toLong())
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events.filterIsInstance<ListEvent.PlusOne>())
+        SystemClock.sleep(PLUS_ONE_SETTLE_MILLIS)
+        tap(below, Motion.Duration.SHORT2.toLong())
+        assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
+    }
+
     @Test
     fun `the row leaves and the rows below close up within 200 ms`() {
         showAndSettle()
@@ -599,6 +618,9 @@ class ListMotionTest {
 
         // The second tap of A2's pair, measured on the emulator.
         const val PAIR_MS = 300L
+
+        // A3's Q1b: the second tap of a pair at an ordinary pace, after the rows have stopped.
+        const val ORDINARY_PACE_MS = 900L
     }
 }
 
