@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.list
 
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,6 +36,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
@@ -44,12 +47,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -63,10 +71,14 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
+import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
+import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
 import io.github.kauri_off.kiroku.text.label
+import kotlinx.coroutines.flow.first
+import java.time.Instant
 
 // The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,7 +98,7 @@ fun ListScreen(
         modifier = modifier,
         topBar = {
             Column {
-                TopBar(state, showActions = tabs != null, onEvent = onEvent)
+                TopBar(state.filterText, state.owner, showActions = tabs != null, onEvent = onEvent)
                 if (tabs != null) ListTabs(motion, onEvent)
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
@@ -112,7 +124,13 @@ fun ListScreen(
                     onRefresh = { onEvent(ListEvent.Refresh) },
                     modifier = body.fillMaxSize(),
                 ) {
-                    Pages(state, content, motion, PaddingValues(bottom = padding.calculateBottomPadding()), onEvent)
+                    Pages(
+                        state.tab,
+                        Shown(content, state.filter.orEmpty(), state.owner, state.now),
+                        motion,
+                        PaddingValues(bottom = padding.calculateBottomPadding()),
+                        onEvent,
+                    )
                 }
         }
     }
@@ -120,11 +138,20 @@ fun ListScreen(
     if (state.sortSheetOpen && page != null) SortSheet(page.sort, page.sorts, onEvent)
 }
 
-// One page per tab, each with its own scroll position, and its neighbours composed ahead.
+// What every page shows besides its own rows; a tab switch changes none of it, so no page or row is composed again.
+@Immutable
+private data class Shown(
+    val tabs: ListContent.Tabs,
+    val filter: String,
+    val owner: ListOwner,
+    val now: Instant,
+)
+
+// One page per tab, each with its own scroll position; once the screen has settled all are composed.
 @Composable
 private fun Pages(
-    state: ListState,
-    tabs: ListContent.Tabs,
+    tab: ListStatus,
+    shown: Shown,
     motion: ListTabMotion,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
@@ -132,24 +159,44 @@ private fun Pages(
     val statuses = ListStatus.entries
     val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
-    val tab = rememberUpdatedState(state.tab)
+    val selected = rememberUpdatedState(tab)
     LaunchedEffect(motion) {
-        motion.followRest { index -> if (statuses[index] != tab.value) events.value(ListEvent.SelectTab(statuses[index])) }
+        motion.followRest { index -> if (statuses[index] != selected.value) events.value(ListEvent.SelectTab(statuses[index])) }
     }
-    LaunchedEffect(state.tab) { motion.show(statuses.indexOf(state.tab)) }
+    LaunchedEffect(tab) { motion.show(statuses.indexOf(tab)) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(motion) {
+        lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
+        motion.composeAhead()
+    }
     HorizontalPager(
         pager,
-        Modifier.fillMaxSize(),
-        beyondViewportPageCount = 1,
+        Modifier
+            .fillMaxSize()
+            .pointerInput(motion) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    motion.composeAll()
+                    motion.touching = true
+                    try {
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                        } while (event.changes.any { it.pressed })
+                    } finally {
+                        motion.touching = false
+                    }
+                }
+            }.nestedScroll(motion.gate),
+        beyondViewportPageCount = motion.ahead,
         key = { statuses[it] },
         flingBehavior =
             PagerDefaults.flingBehavior(
                 pager,
-                snapAnimationSpec = motion.pageSpec,
+                snapAnimationSpec = motion.settleSpec,
                 snapPositionalThreshold = PAGE_TURN,
             ),
     ) { index ->
-        Page(state, statuses[index], tabs.pages.getValue(statuses[index]), padding, onEvent)
+        Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown, padding, onEvent)
     }
 }
 
@@ -158,23 +205,23 @@ private fun Pages(
 // returning within one order animate (ARCHITECTURE 8.5).
 @Composable
 private fun Page(
-    state: ListState,
     status: ListStatus,
     page: ListPage,
+    shown: Shown,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
     val positions = rememberSaveableStateHolder()
-    val filter = state.filter.orEmpty()
+    val filter = shown.filter
     // Keyed by whether the rows are unfiltered.
     positions.SaveableStateProvider(filter.isEmpty()) {
         key(page.sort, page.ordering, filter) {
             if (page.rows.isEmpty()) {
                 // A list, so that an empty tab can be pulled to refresh too.
-                val empty = emptyState(state, status, onEvent)
+                val empty = emptyState(filter, shown.owner, status, onEvent)
                 LazyColumn(Modifier.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
             } else {
-                Rows(state, page.rows, padding, onEvent)
+                Rows(page.rows, shown.owner, shown.now, padding, onEvent)
             }
         }
     }
@@ -183,15 +230,16 @@ private fun Page(
 
 @Composable
 private fun emptyState(
-    state: ListState,
+    filter: String,
+    owner: ListOwner,
     status: ListStatus,
     onEvent: (ListEvent) -> Unit,
 ): ScreenState =
-    if (state.filter.isNullOrEmpty()) {
+    if (filter.isEmpty()) {
         val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
         ScreenState.Empty(
             stringResource(R.string.list_empty, stringResource(status.label())),
-            search.takeIf { state.owner == ListOwner.Me },
+            search.takeIf { owner == ListOwner.Me },
         )
     } else {
         ScreenState.Empty(stringResource(R.string.list_no_matches))
@@ -207,12 +255,11 @@ private fun ListFailure.messageRes(): Int =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(
-    state: ListState,
+    filter: String?,
+    owner: ListOwner,
     showActions: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val filter = state.filterText
-    val owner = state.owner
     TopAppBar(
         title = {
             when {
@@ -278,20 +325,21 @@ private fun FilterField(
                 focusedIndicatorColor = surface,
                 unfocusedIndicatorColor = surface,
             ),
-        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+        modifier = Modifier.withoutAutofill().fillMaxWidth().focusRequester(focus),
     )
     LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
 @Composable
 private fun Rows(
-    state: ListState,
     rows: List<ListRow>,
+    owner: ListOwner,
+    now: Instant,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
     val context = LocalContext.current
-    val text = remember(context, state.now) { ListText(context, state.now) }
+    val text = remember(context, now) { ListText(context, now) }
     val edit = stringResource(R.string.list_edit)
     val motionScheme = MaterialTheme.motionScheme
     // The rows close up on the fast effects spring; across the window is the longest that takes.
@@ -328,7 +376,7 @@ private fun Rows(
                         } else {
                             null
                         },
-                    longPress = RowLongPress(edit) { onEvent(ListEvent.Edit(row.id)) }.takeIf { state.owner == ListOwner.Me },
+                    longPress = RowLongPress(edit) { onEvent(ListEvent.Edit(row.id)) }.takeIf { owner == ListOwner.Me },
                     modifier =
                         Modifier.animateItem(
                             fadeInSpec = motionScheme.defaultEffectsSpec(),
@@ -353,6 +401,7 @@ private fun SortSheet(
         onDismissRequest = { onEvent(ListEvent.DismissSort) },
         sheetState = rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
     ) {
+        WindowWithoutAutofill()
         Text(
             stringResource(R.string.list_sort_by),
             style = MaterialTheme.typography.titleMedium,

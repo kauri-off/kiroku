@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
+import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
@@ -34,10 +35,13 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.ZoneOffset
 import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -49,6 +53,11 @@ class ListViewModelTest {
 
     private val set = Fixtures.reference
     private val today = set.now.atZone(FixtureTime.zone).toLocalDate()
+    private val midnight = today.plusDays(1).atStartOfDay(FixtureTime.zone).toInstant()
+    private val nextAirTime =
+        set.airing.values
+            .mapNotNull { it.nextEpisode?.airsAt?.takeIf { at -> at > set.now } }
+            .min()
 
     private class Subject(
         val graph: TestGraph,
@@ -479,6 +488,86 @@ class ListViewModelTest {
         }
 
     @Test
+    fun `the pages are built once while what they show, the day and the air times they show stay the same`() {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val first = s.state
+            clock.instant = minOf(nextAirTime, midnight).minusSeconds(1)
+            for (event in listOf(ListEvent.SelectTab(ListStatus.Planned), ListEvent.OpenSort, ListEvent.DismissSort)) {
+                s.list.onEvent(event)
+                assertSame("$event", first.content, s.state.content)
+                assertEquals("$event", first.now, s.state.now)
+            }
+        }
+    }
+
+    @Test
+    fun `the pages are built again once the day ends`() {
+        val clock = MovingClock(midnight.minusSeconds(1), FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val before = s.state
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertSame(before.content, s.state.content)
+            clock.instant = midnight
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Watching))
+            assertNotSame(before.content, s.state.content)
+            assertEquals(clock.instant, s.state.now)
+        }
+    }
+
+    @Test
+    fun `the pages are built again once an air time they show passes`() {
+        val airsAt = nextAirTime
+        val clock = MovingClock(airsAt.minusSeconds(1), FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val before = s.state
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertSame(before.content, s.state.content)
+            clock.instant = airsAt
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Watching))
+            assertNotSame(before.content, s.state.content)
+            assertEquals(airsAt, s.state.now)
+        }
+    }
+
+    @Test
+    fun `the pages are built again when the clock is set back`() {
+        val clock = MovingClock(midnight.plusSeconds(HOUR), FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val ahead = s.state
+            clock.instant = set.now
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertNotSame(ahead.content, s.state.content)
+            assertEquals(set.now, s.state.now)
+        }
+    }
+
+    @Test
+    fun `the pages are built again when the time zone changes`() {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val before = s.state
+            clock.moveTo(ZoneOffset.ofHours(-12))
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertNotSame(before.content, s.state.content)
+        }
+    }
+
+    @Test
+    fun `a Refresh that brings nothing builds the pages again`() {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val before = s.state
+            clock.instant = clock.instant.plusSeconds(1)
+            s.graph.demo.server.offline.value = true
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertNotSame(before.content, s.state.content)
+            assertEquals(clock.instant, s.state.now)
+        }
+    }
+
+    @Test
     fun `nothing is read or synced before the List is first shown`() =
         runTest(dispatcher) {
             val scope = foregroundScope()
@@ -529,3 +618,5 @@ class ListViewModelTest {
         const val STOPPED_AFTER = 1_001L
     }
 }
+
+private const val HOUR = 3_600L

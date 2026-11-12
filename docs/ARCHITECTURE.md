@@ -534,13 +534,16 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in as a component's entrance. The tab indicator, the selected tab
-  and the tab row's scroll are drawn from the pager's position, in the frame it moves.
+  settles; a tab chosen by a tap slides its page in the same way. The tab row is drawn from the pager's position in
+  the frame it moves, except that a tap glides it to the tapped tab while the one page slides, and back
+  to the pager if a drag takes over.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
-  curve, spring value or delay in user interface code fails the build.
+  curve, spring value or delay in user interface code fails the build. One value is the owner's exception: the List's
+  pages settle after a release, and slide after a tab tap, with ViewPager2's snap timing, so that the gesture feels
+  as in Droid-ify; a faster release settles sooner, and the settle decelerates and cannot overshoot.
 - **No bounce in what the app animates.** The Expressive scheme's spatial springs overshoot, so the app's own
   animations use only its effects springs, which cannot: fast for a change inside a component and for an exit,
-  default for a component's entrance and for a page, slow for a screen.
+  default for a component's entrance, slow for a screen.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
   stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a

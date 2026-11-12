@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
@@ -16,9 +18,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
@@ -50,6 +57,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 // The tab row is drawn from the pager's position: through a drag, its settle and a tap (ARCHITECTURE 8.5).
 @RunWith(RobolectricTestRunner::class)
@@ -97,12 +105,15 @@ class ListTabMotionTest {
                 .title
         }
 
+    private lateinit var scheme: ColorScheme
+
     // Follows the selected tab as the view model does.
     private fun show(start: ListState) {
         state = start
         compose.mainClock.autoAdvance = false
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
+                scheme = MaterialTheme.colorScheme
                 FixtureListScreen(state) { event ->
                     events += event
                     if (event is ListEvent.SelectTab) state = state.copy(tab = event.status)
@@ -324,8 +335,81 @@ class ListTabMotionTest {
     @Test
     fun `on a tap the indicator is where the page is`() = assertHeaderOnThePage("Planned")
 
+    // The header's place in tabs, read from the indicator against the labels it blends between.
+    private fun headerPosition(): Float {
+        val left = indicator().left.value
+        val lefts = labels.map { label(it).left.value }
+        val from = (0 until labels.lastIndex).lastOrNull { lefts[it] <= left + 0.01f } ?: 0
+        return (from + (left - lefts[from]) / (lefts[from + 1] - lefts[from])).coerceIn(0f, labels.lastIndex.toFloat())
+    }
+
+    // Telegram's far tap: one page slides, and the header glides from the tab it left to the tapped one by its progress.
     @Test
-    fun `on a tap on a far tab the indicator travels with the last page`() = assertHeaderOnThePage("Dropped")
+    fun `on a tap on a far tab the header glides the whole way with the one sliding page`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        val target = labels.lastIndex.toFloat()
+        tab("Dropped").performClick()
+        var last = 0f
+        var moving = 0
+        repeat(MAX_FRAMES) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            val page = pagerPosition(rest)
+            val header = headerPosition()
+            val shown = indicator()
+            assertTrue(
+                "frame $frame: the indicator ${shown.left}..${shown.right} off the row",
+                shown.left.value >= 0f && shown.right.value <= pageWidth,
+            )
+            assertTrue("frame $frame: the header went back from $last to $header", header >= last - GLIDE_TOLERANCE)
+            val progress = (page - (target - 1f)).coerceIn(0f, 1f)
+            assertEquals("frame $frame: the header at the page's progress $progress", target * progress, header, GLIDE_TOLERANCE)
+            if (header > last + GLIDE_TOLERANCE) moving++
+            last = header
+        }
+        assertTrue("the glide took $moving frames", moving >= GLIDE_FRAMES)
+        assertEquals(target, last, GLIDE_TOLERANCE)
+        assertEquals("the page has arrived with the header", rest, left(droppedRow), TOLERANCE)
+        assertIndicatorAt("Dropped", "Dropped", 0f)
+        assertIdle()
+    }
+
+    // A release's speed sets the settle's length: a fast flick ends sooner than a release with the finger at rest.
+    @Test
+    fun `a fast flick settles sooner than a still release over the same way`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+
+        fun settleFrames(
+            to: Int,
+            release: TouchInjectionScope.() -> Unit,
+        ): Int {
+            compose.onRoot().performTouchInput(release)
+            var frames = 0
+            while (pagerPosition(rest) < to - SETTLE_EPSILON && frames < MAX_FRAMES) {
+                compose.mainClock.advanceTimeByFrame()
+                frames++
+            }
+            compose.mainClock.advanceTimeBy(SETTLED)
+            tab(labels[to]).assertIsSelected()
+            return frames
+        }
+        val flick =
+            settleFrames(1) {
+                down(center)
+                moveBy(Offset(-width * FLICK, 0f), delayMillis = FRAME)
+                moveBy(Offset(-width * FLICK, 0f), delayMillis = FRAME)
+                up()
+            }
+        val still =
+            settleFrames(2) {
+                down(center)
+                repeat(SLOW_STEPS) { moveBy(Offset(-width * FLICK * 2 / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+                repeat(SLOW_STEPS) { moveBy(Offset.Zero, delayMillis = SLOW_STEP_MS) }
+                up()
+            }
+        assertTrue("a flick settles in $flick frames, a still release in $still", flick * FRAME <= FLICK_SETTLE_MS && still > flick + 2)
+    }
 
     // A2's T1: the stock row's own scroll to a newly selected tab never runs against the finger.
     @Test
@@ -365,9 +449,9 @@ class ListTabMotionTest {
         assertIdle()
     }
 
-    // A2's T2: the page and the indicator cannot disagree when a tap interrupts a settle.
+    // A2's T2: a tap that interrupts a settle glides the header from where it is, and it arrives with the page.
     @Test
-    fun `a tap during a settle keeps the indicator on the page every frame`() {
+    fun `a tap during a settle glides the header from where it is and arrives with the page`() {
         show(ListFixtureStates.watching)
         val rest = left(firstRows[0])
         compose.onRoot().performTouchInput {
@@ -380,16 +464,113 @@ class ListTabMotionTest {
         val settling = pagerPosition(rest)
         assertTrue("mid-settle: $settling", settling > 0.05f && settling < 0.95f)
         tab("Completed").performClick()
+        val from = headerPosition()
+        val jumped = pagerPosition(rest)
+        assertTrue(
+            "the glide starts where the settle was: $from after $settling",
+            from >= settling - GLIDE_TOLERANCE && from <= settling + SETTLE_FRAME,
+        )
+        assertTrue("the header is not where the pager jumped: $from, $jumped", from < jumped - SETTLE_FRAME)
+        var last = from
         repeat(MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
             tab("Completed").assertIsSelected()
-            assertIndicatorAt(pagerPosition(rest))
+            val progress = (pagerPosition(rest) - 1f).coerceIn(0f, 1f)
+            val header = headerPosition()
+            assertEquals("the header at the page's progress $progress", from + (2f - from) * progress, header, GLIDE_TOLERANCE)
+            assertTrue("the header went back from $last to $header", header >= last - GLIDE_TOLERANCE)
+            last = header
         }
         compose.mainClock.advanceTimeBy(SETTLED)
         assertIndicatorAt("Completed", "Completed", 0f)
         assertEquals(rest, left(firstRows[2]), TOLERANCE)
         assertEquals(listOf(ListEvent.SelectTab(ListStatus.Completed)), events)
         assertIdle()
+    }
+
+    // A drag that catches a far tap's glide takes the pager at once; the header comes back to it with no jump. The
+    // slow effects spring (stiffness 800, critically damped) moves at most a sixth of its way in a frame.
+    @Test
+    fun `a drag that catches a far tap's glide brings the header back to the pager with no jump`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        tab("Dropped").performClick()
+        repeat(CATCH_FRAMES) { compose.mainClock.advanceTimeByFrame() }
+        var header = headerPosition()
+        var page = pagerPosition(rest)
+        val gap = abs(page - header)
+        assertTrue("caught early in the glide: header $header, pager $page", gap > 1.5f)
+        compose.onRoot().performTouchInput { down(center) }
+        val steps = mutableListOf<String>()
+
+        fun frame() {
+            compose.mainClock.advanceTimeByFrame()
+            val nextHeader = headerPosition()
+            val nextPage = pagerPosition(rest)
+            val step = abs(nextHeader - header)
+            steps += "h%.2f p%.2f".format(nextHeader, nextPage)
+            assertTrue(
+                "a step of $step tabs with the pager's ${abs(nextPage - page)}: $steps",
+                step <= abs(nextPage - page) + gap * RETURN_STEP,
+            )
+            header = nextHeader
+            page = nextPage
+        }
+        repeat(DRAG_FRAMES) {
+            compose.onRoot().performTouchInput { moveBy(Offset(width * 0.03f, 0f), delayMillis = 0) }
+            frame()
+        }
+        compose.onRoot().performTouchInput { up() }
+        repeat(MAX_FRAMES) { frame() }
+        assertEquals("the header is back on the pager", pagerPosition(rest), headerPosition(), GLIDE_TOLERANCE)
+        val shown = pagerPosition(rest).roundToInt()
+        tab(labels[shown]).assertIsSelected()
+        assertIdle()
+    }
+
+    // Unselected titles take Material's inactive colour; the two titles the header is between blend with it.
+    @Test
+    fun `the titles' colours follow the header`() {
+        show(ListFixtureStates.watching)
+        assertTitleColour("Watching", 1f)
+        assertTitleColour("Planned", 0f)
+        assertTitleColour("Dropped", 0f)
+        compose.onRoot().performTouchInput {
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(-width * 0.5f / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val at = headerPosition()
+        assertTitleColour("Watching", 1f - at)
+        assertTitleColour("Planned", at)
+        assertTitleColour("Completed", 0f)
+        compose.onRoot().performTouchInput { up() }
+    }
+
+    // The colour most of a title's ink is drawn in, against the blend of the inactive and the active colour by [weight].
+    private fun assertTitleColour(
+        title: String,
+        weight: Float,
+    ) {
+        val image = compose.onRoot().captureToImage().asAndroidBitmap()
+        val box = label(title)
+        val density = compose.activity.resources.displayMetrics.density
+        val background = image.getPixel(0, ((box.bottom.value + 2) * density).toInt())
+        val counts = mutableMapOf<Int, Int>()
+        for (x in (box.left.value * density).toInt() until (box.right.value * density).toInt()) {
+            for (y in (box.top.value * density).toInt() until (box.bottom.value * density).toInt()) {
+                if (x in 0 until image.width) image.getPixel(x, y).takeIf { it != background }?.let { counts.merge(it, 1, Int::plus) }
+            }
+        }
+        val ink = Color(counts.maxBy { it.value }.key)
+        val expected = lerp(scheme.onSurfaceVariant, scheme.primary, weight)
+        for ((name, a, b) in listOf(
+            Triple("red", ink.red, expected.red),
+            Triple("green", ink.green, expected.green),
+            Triple("blue", ink.blue, expected.blue),
+        )) {
+            assertEquals("$title's $name at weight $weight", b, a, COLOUR_TOLERANCE)
+        }
     }
 
     // B2's m5: a drag that takes over from a tap sends no tab but the tapped one and the one the drag settles on.
@@ -439,15 +620,17 @@ class ListTabMotionTest {
             compose.mainClock.advanceTimeByFrame()
             assertRowAt(pagerPosition(rest))
         }
+        // A tap's header glides; the row's scroll is taken from it, as the indicator is.
         tab("Watching").performClick()
         repeat(MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
-            assertRowAt(pagerPosition(rest))
+            assertRowAt(headerPosition())
         }
+        assertRowAt(pagerPosition(rest))
         tab("Dropped").performClick()
         repeat(MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
-            assertRowAt(pagerPosition(rest))
+            assertRowAt(headerPosition())
         }
         assertRowAt(4f)
         assertIdle()
@@ -546,6 +729,15 @@ class ListTabMotionTest {
         const val SLOW_STEPS = 20
         const val SLOW_STEP_MS = 50L
         const val HAND = 24f
+        const val GLIDE_TOLERANCE = 0.02f
+        const val SETTLE_FRAME = 0.15f
+        const val CATCH_FRAMES = 2
+        const val DRAG_FRAMES = 12
+        const val RETURN_STEP = 1f / 6
+        const val COLOUR_TOLERANCE = 0.02f
+        const val GLIDE_FRAMES = 6
+        const val FLICK = 0.2f
+        const val FLICK_SETTLE_MS = 220L
     }
 }
 
@@ -582,6 +774,35 @@ class ListTabMotionOffTest {
         val shown = compose.onNodeWithTag(INDICATOR, useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertEquals(label.left.value, shown.left.value, 1.5f)
     }
+
+    // ARCHITECTURE 8.5: with animations off a released swipe is on its page at once.
+    @Test
+    fun `a released swipe is on its page at once`() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(ListFixtureStates.watching) } }
+        compose.mainClock.advanceTimeBy(2_000)
+        val planned =
+            ListFixtureStates.planned.page!!
+                .rows
+                .first()
+                .title
+        val rest = compose.onNodeWithText(FixtureAnime.estimatedCaughtUp.titles.romaji).getUnclippedBoundsInRoot().left
+        compose.onRoot().performTouchInput {
+            down(center)
+            repeat(10) { moveBy(Offset(-width * 0.04f, 0f), delayMillis = 50) }
+            up()
+        }
+        repeat(2) { compose.mainClock.advanceTimeByFrame() }
+        assertEquals(
+            rest.value,
+            compose
+                .onNodeWithText(planned)
+                .getUnclippedBoundsInRoot()
+                .left.value,
+            1.5f,
+        )
+        compose.onNode(hasText("Planned") and isSelectable()).assertIsSelected()
+    }
 }
 
 // The view model hears of each page the pager rests on, and a tab it hears back is not a request to move the pager.
@@ -593,6 +814,30 @@ class ListTabFollowTest {
     val rule: TestRule = registered(compose)
 
     // B3's m3: a fling starts a moment after the drag that threw it ends, so the pager can rest on a page in between.
+    // B3's m2: a tap that waits for the pages to be laid out does not move the pager once a later tap has.
+    @Test
+    fun `of two taps before every page is laid out only the later one moves the pager`() {
+        var laidOut by mutableStateOf(false)
+        lateinit var pager: PagerState
+        lateinit var motion: ListTabMotion
+        compose.setContent {
+            pager = rememberPagerState { 5 }
+            motion = rememberListTabMotion(pager)
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = if (laidOut) motion.ahead else 1) {
+                Box(Modifier.fillMaxSize())
+            }
+        }
+        compose.runOnIdle {
+            motion.select(4)
+            motion.select(1)
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { laidOut = true }
+        compose.waitForIdle()
+        assertEquals(1, pager.currentPage)
+        assertEquals(0f, pager.currentPageOffsetFraction, 0.001f)
+    }
+
     @Test
     fun `a tab reported in a pause before a fling does not pull the pager back to it`() {
         var tab by mutableIntStateOf(0)
@@ -604,7 +849,7 @@ class ListTabFollowTest {
             pager = rememberPagerState { 5 }
             scope = rememberCoroutineScope()
             val motion = rememberListTabMotion(pager)
-            HorizontalPager(pager, Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) }
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = motion.ahead) { Box(Modifier.fillMaxSize()) }
             LaunchedEffect(motion) { motion.followRest { reports += it } }
             LaunchedEffect(tab) { motion.show(tab) }
         }
@@ -629,7 +874,7 @@ class ListTabFollowTest {
         compose.setContent {
             pager = rememberPagerState { 5 }
             val motion = rememberListTabMotion(pager)
-            HorizontalPager(pager, Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) }
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = motion.ahead) { Box(Modifier.fillMaxSize()) }
             LaunchedEffect(motion) { motion.followRest { tab = it } }
             LaunchedEffect(tab) { motion.show(tab) }
         }

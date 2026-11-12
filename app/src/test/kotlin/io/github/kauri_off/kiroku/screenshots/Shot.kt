@@ -12,6 +12,7 @@ import android.view.Window
 import android.view.WindowInsets
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.autofill.ContentDataType
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ViewRootForTest
@@ -156,6 +157,23 @@ class Shot private constructor(
                     }
             }
         }
+    }
+
+    // Every text field in every window, by its label, with whether autofill or a password manager is offered it.
+    fun textFields(): List<Pair<String, Boolean>> {
+        settle()
+        return windows()
+            .flatMap { it.composeRoots() }
+            .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
+            .filter { SemanticsProperties.EditableText in it.config }
+            .map { node ->
+                val config = node.config
+                val offered =
+                    config.getOrNull(SemanticsProperties.ContentDataType) != ContentDataType.None ||
+                        SemanticsProperties.ContentType in config ||
+                        SemanticsProperties.Password in config
+                node.label() to offered
+            }
     }
 
     // As a user drags it up: a sheet that opened half expanded is expanded, so all of it can be captured.

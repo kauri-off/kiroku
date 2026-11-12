@@ -2,4 +2,5 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" tools:ignore="UnusedResources">Kiroku</string>
     <string name="app_name_debug">Kiroku debug</string>
+    <string name="app_name_preview">Kiroku preview</string>
 </resources>

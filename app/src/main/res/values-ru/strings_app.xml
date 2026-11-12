@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Kiroku</string>
     <string name="app_name_debug">Kiroku (отладка)</string>
+    <string name="app_name_preview">Kiroku (превью)</string>
 </resources>

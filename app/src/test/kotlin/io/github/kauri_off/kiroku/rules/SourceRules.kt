@@ -89,11 +89,18 @@ private val fromScheme = Regex("""\bmotionScheme\.\w+Spec\b""")
 // The expressive scheme's spatial springs overshoot; the app's own animations use its effects springs, which cannot.
 private val spatialSpec = Regex("""\b\w*SpatialSpec\b""")
 
+// The pager's settle and tab slide, the one motion value the owner chose over the theme's scheme (ARCHITECTURE 8.5).
+const val PAGE_MOTION_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/design/theme/PageSettle.kt"
+
+// That value's curve and its use, the only animation values its file may write.
+val pageMotion = listOf("tween<Float>(millis, easing = decelerate)", "Easing { 1f - (1f - it) * (1f - it) }")
+
 fun motionLiteralProblems(
     name: String,
     source: String,
 ): List<String> {
-    val code = KotlinSource(source).code
+    val parsed = KotlinSource(source).code
+    val code = if (name == PAGE_MOTION_SOURCE) pageMotion.fold(parsed) { code, allowed -> code.replace(allowed, "") } else parsed
     val rules = if (interfaceCode.containsMatchIn(code)) motionLiterals + interfaceMotionLiterals else motionLiterals
     val lines = code.lines()
     val literal =
@@ -117,6 +124,26 @@ fun motionLiteralProblems(
                 "$name:${line + 1}: ${call.groupValues[1]} without a spec from the theme's motion scheme: ${lines[line].trim()}"
             }
     return literal + spatial + defaults
+}
+
+// Every text field takes withoutAutofill() first in its modifier, so none is offered to autofill or a password manager.
+private val textFieldCall = Regex("""(?<!fun )\b((Basic|Outlined)?(Secure)?TextField|InputField)\s*\(""")
+private val autofillFirst = Regex("""\bmodifier\s*=\s*\w+\s*\.\s*withoutAutofill\s*\(\s*\)""")
+
+fun textFields(source: String): Int = textFieldCall.findAll(KotlinSource(source).code).count()
+
+fun autofillProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val code = KotlinSource(source).code
+    return textFieldCall
+        .findAll(code)
+        .filterNot { call -> autofillFirst.containsMatchIn(code.substring(call.range.last, closeParenthesis(code, call.range.last))) }
+        .map { call ->
+            val line = code.substring(0, call.range.first).count { it == '\n' }
+            "$name:${line + 1}: ${call.groupValues[1]} without Modifier.withoutAutofill() first in its modifier"
+        }.toList()
 }
 
 // The one file that may use Material 3 Expressive API that is still experimental.

@@ -7,26 +7,7 @@ import java.io.File
 import java.lang.reflect.Modifier
 
 class RegistriesTest {
-    private val registries: List<Class<*>> by lazy {
-        val root =
-            File(
-                checkNotNull(RegistryBase::class.java.protectionDomain)
-                    .codeSource.location
-                    .toURI(),
-            )
-        root
-            .walk()
-            .filter { it.isFile && it.name.endsWith(".class") && '$' !in it.name }
-            .map {
-                it
-                    .relativeTo(root)
-                    .path
-                    .removeSuffix(".class")
-                    .replace(File.separatorChar, '.')
-            }.map { Class.forName(it, false, javaClass.classLoader) }
-            .filter { RegistryBase::class.java.isAssignableFrom(it) && !Modifier.isAbstract(it.modifiers) }
-            .toList()
-    }
+    private val registries: List<Class<*>> by lazy { registryClasses() }
 
     @Test
     fun everyRegistryNamesItsScreenByItsClass() {
@@ -64,4 +45,25 @@ class RegistriesTest {
     }
 
     private class TitleDetailsScreenshots
+}
+
+// Every screen's registry in the test classes.
+fun registryClasses(): List<Class<*>> {
+    // Found by a resource, since a sandbox's class loader gives its classes no code source.
+    val path = RegistryBase::class.java.name.replace('.', '/') + ".class"
+    val root =
+        generateSequence(File(checkNotNull(RegistryBase::class.java.classLoader.getResource(path)).toURI())) { it.parentFile }
+            .elementAt(path.count { it == '/' } + 1)
+    return root
+        .walk()
+        .filter { it.isFile && it.name.endsWith(".class") && '$' !in it.name }
+        .map {
+            it
+                .relativeTo(root)
+                .path
+                .removeSuffix(".class")
+                .replace(File.separatorChar, '.')
+        }.map { Class.forName(it, false, RegistryBase::class.java.classLoader) }
+        .filter { RegistryBase::class.java.isAssignableFrom(it) && !Modifier.isAbstract(it.modifiers) }
+        .toList()
 }

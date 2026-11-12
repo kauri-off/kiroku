@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -54,6 +55,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -98,7 +100,17 @@ class AppRouteTest {
 
     private fun showsSubstring(text: String) = compose.onNodeWithText(text, substring = true).assertExists()
 
-    private fun hides(text: String) = compose.onNodeWithText(text).assertDoesNotExist()
+    private fun hides(text: String) = assertTrue("$text is shown", displayed(text).isEmpty())
+
+    // Every tab's page is composed, so a row of another tab exists off screen; these are the ones on it.
+    private fun displayed(text: String) =
+        compose.onAllNodesWithText(text).let { nodes ->
+            nodes
+                .fetchSemanticsNodes()
+                .indices
+                .filter { runCatching { nodes[it].assertIsDisplayed() }.isSuccess }
+                .map { nodes[it] }
+        }
 
     private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction()).performClick()
 
@@ -649,15 +661,11 @@ class AppRouteTest {
     // The rows of the List on screen, top to bottom, with their tops.
     private fun shownRows(titles: List<String>): List<Pair<String, Float>> =
         titles
-            .filter { compose.onAllNodes(hasText(it)).fetchSemanticsNodes().isNotEmpty() }
-            .map {
-                it to
-                    compose
-                        .onNodeWithText(it)
-                        .getUnclippedBoundsInRoot()
-                        .top.value
-            }.filter { it.second >= 0f }
-            .sortedBy { it.second }
+            .mapNotNull { title -> displayed(title).firstOrNull()?.let { title to it.getUnclippedBoundsInRoot().top.value } }
+            .filter {
+                it.second >=
+                    0f
+            }.sortedBy { it.second }
 
     // 9.3: coming back from a title page keeps the order and the scroll position, even after an edit there.
     @Test

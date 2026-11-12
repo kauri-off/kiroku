@@ -169,6 +169,41 @@ class SourceRulesTest {
             assertEquals(code, emptyList<String>(), motionLiteralProblems("A.kt", "val a = $code\n"))
         }
         assertTrue(motionLiteralProblems(THEME_SOURCES + "Motion.kt", "val a = tween<Float>(300)\n").isNotEmpty())
+        assertEquals(emptyList<String>(), motionLiteralProblems(PAGE_MOTION_SOURCE, pageMotion.joinToString("\n") { "val a = $it" }))
+        for (other in listOf("tween<Float>(300)", "tween<Float>(millis, easing = FastOutSlowInEasing)", "spring<Float>()")) {
+            assertTrue(other, motionLiteralProblems(PAGE_MOTION_SOURCE, "val a = $other\n").isNotEmpty())
+        }
+        assertTrue(pageMotion.all { allowed -> appSources().single { relative(it) == PAGE_MOTION_SOURCE }.readText().contains(allowed) })
+    }
+
+    @Test
+    fun everyTextFieldTakesTheAutofillModifier() {
+        val sources = appSources()
+        assertEquals(3, sources.sumOf { textFields(it.readText()) })
+        assertEquals(emptyList<String>(), sources.flatMap { autofillProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aTextFieldWithoutTheAutofillModifierFails() {
+        for (planted in listOf(
+            "TextField(value = a, onValueChange = {})",
+            "OutlinedTextField(value = a, onValueChange = {}, modifier = Modifier.fillMaxWidth())",
+            "OutlinedTextField(a, {}, modifier = Modifier.fillMaxWidth().withoutAutofill())",
+            "BasicTextField(state, modifier = Modifier.padding(Spacing.s))",
+            "SecureTextField(state)",
+            "OutlinedSecureTextField(state, modifier = Modifier)",
+            "SearchBarDefaults.InputField(query = q, onQueryChange = {}, onSearch = {}, expanded = e, onExpandedChange = {})",
+            "androidx.compose.material3.TextField(a, {})",
+        )) {
+            assertEquals(planted, 1, autofillProblems("A.kt", "@Composable\nfun A() {\n    $planted\n}\n").size)
+        }
+        for (allowed in listOf(
+            "TextField(value = a, onValueChange = {}, modifier = Modifier.withoutAutofill().fillMaxWidth())",
+            "OutlinedTextField(a, {}, modifier = fieldModifier.withoutAutofill().weight(1f))",
+            "OutlinedTextField(a, {}, label = { Text(b(c)) }, modifier =\n        Modifier\n            .withoutAutofill())",
+        )) {
+            assertEquals(allowed, emptyList<String>(), autofillProblems("A.kt", "@Composable\nfun A() {\n    $allowed\n}\n"))
+        }
     }
 
     @Test
