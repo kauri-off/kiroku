@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
@@ -40,6 +41,7 @@ class TitleViewModel(
     private var statuses by mutableStateOf<Map<AnimeId, ListStatus>>(emptyMap())
     private var session by mutableStateOf<Session?>(null)
     private var failure by mutableStateOf<DataError?>(null)
+    private var listFailure by mutableStateOf<DataError?>(null)
     private var moment by mutableStateOf(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
 
     val state: State<TitleState> = derivedStateOf { build() }
@@ -47,10 +49,7 @@ class TitleViewModel(
     init {
         viewModelScope.launch { graph.anime.observeAnime(id).collect { anime = it } }
         viewModelScope.launch { graph.anime.observeDetails(id).collect { details = it } }
-        viewModelScope.launch { graph.list.observeEntry(id).collect { entry = it } }
-        viewModelScope.launch {
-            graph.list.observeEntries().collect { list -> statuses = list.associate { it.anime.id to it.status } }
-        }
+        observeList()
         viewModelScope.launch { graph.airing.observeAiring().collect { airing = it } }
         viewModelScope.launch { graph.session.observeSession().collect { session = it } }
         refresh()
@@ -61,7 +60,10 @@ class TitleViewModel(
             TitleEvent.AddToList -> addToList()
             is TitleEvent.SetWatched -> watched(ListWrite.SetWatched(shownAnime() ?: return, event.watched))
             is TitleEvent.StepWatched -> watched(ListWrite.StepWatched(shownAnime() ?: return, event.by))
-            TitleEvent.Retry -> refresh()
+            TitleEvent.Retry -> {
+                if (listFailure != null) observeList()
+                refresh()
+            }
             else -> Unit
         }
         moment = moment.after(event)
@@ -71,7 +73,9 @@ class TitleViewModel(
     private fun build(): TitleState {
         val anime = shownAnime()
         val failure = failure
+        val listFailure = listFailure
         return when {
+            listFailure != null -> TitleState.Failed(listFailure, session)
             anime == null -> failure?.let { TitleState.Failed(it, session) } ?: TitleState.Loading(session)
             details == null && failure != null -> TitleState.Failed(failure, session)
             else ->
@@ -84,6 +88,21 @@ class TitleViewModel(
     }
 
     private fun shownAnime(): Anime? = anime ?: entry?.anime
+
+    // A list that cannot be read fails the page, since its list values would be unknown.
+    private fun observeList() {
+        listFailure = null
+        viewModelScope.launch {
+            try {
+                graph.list.observeEntries().collect { list ->
+                    entry = list.firstOrNull { it.anime.id == id }
+                    statuses = list.associate { it.anime.id to it.status }
+                }
+            } catch (e: DataException) {
+                listFailure = e.error
+            }
+        }
+    }
 
     // With details already shown, a failed refresh is a message and the page stays (section 7.2).
     private fun refresh() {
@@ -102,18 +121,16 @@ class TitleViewModel(
     private fun addToList() {
         val anime = shownAnime() ?: return
         if (entry != null) return
-        viewModelScope.launch {
-            graph.list.write(ListWrite.Save(anime, EditSheetState.newEntry)) ?: return@launch
-            messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id)))
+        messages.write(ListWrite.Save(anime, EditSheetState.newEntry)) {
+            ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id))
         }
     }
 
     // A change that completes the title (W7) says so, with an Undo of that change alone.
     private fun watched(write: ListWrite) {
         if (entry == null) return
-        viewModelScope.launch {
-            val change = graph.list.write(write) ?: return@launch
-            if (change.completed) messages.post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)))
+        messages.write(write) { change ->
+            if (change.completed) ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)) else null
         }
     }
 

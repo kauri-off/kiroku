@@ -1,10 +1,12 @@
 package io.github.kauri_off.kiroku.edit
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
@@ -50,11 +52,12 @@ class EditSheetViewModelTest {
     private fun test(
         saved: SavedStateHandle = SavedStateHandle(),
         open: Anime? = FixtureAnime.exactToWatch,
+        slowWrites: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph.over(scope)
-        val subject = Subject(graph, EditSheetViewModel(graph, saved))
+        val graph = TestGraph.over(scope, slowWrites)
+        val subject = Subject(graph, EditSheetViewModel(graph, saved, ShellMessages(scope, graph.list)))
         open?.let { subject.editor.open(it.id) }
         advanceUntilIdle()
         body(subject)
@@ -120,6 +123,16 @@ class EditSheetViewModelTest {
             assertEquals(draft, s.values(anime))
             s.editor.onEvent(EditSheetEvent.Dismissed)
             assertNull(s.editor.sheet)
+        }
+
+    @Test
+    fun `Save is written although the sheet's screen is closed before the write is applied`() =
+        test(slowWrites = true) { s ->
+            s.editor.onEvent(EditSheetEvent.ScoreChanged(9))
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            s.editor.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(9, s.values(anime)?.score)
         }
 
     @Test

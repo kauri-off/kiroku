@@ -1,8 +1,16 @@
 package io.github.kauri_off.kiroku.wiring
 
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.WriteFailure
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,6 +20,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class GraphSwitchTest {
     private val clock = Clock.fixed(Instant.parse("2026-11-10T12:00:00Z"), ZoneOffset.UTC)
 
@@ -32,6 +41,23 @@ class GraphSwitchTest {
                 assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
                 assertEquals(clock, graph.clock)
             }
+        }
+
+    @Test
+    fun `signed out, the live graph's list refuses a write and a sync, and says that the write failed`() =
+        runTest {
+            val graph = createGraph("0123abcd", clock, backgroundScope, demo = null)
+            val failures = mutableListOf<WriteFailure>()
+            backgroundScope.launch { graph.list.observeWriteFailures().collect { failures += it } }
+            runCurrent()
+            val write = ListWrite.MarkNextWatched(FixtureAnime.exactToWatch)
+
+            assertNull(graph.list.write(write))
+            runCurrent()
+
+            assertEquals(listOf(WriteFailure(DataError.SessionExpired, write)), failures)
+            assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.sync())
+            assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.send(write))
         }
 
     @Test

@@ -49,6 +49,8 @@ class TitleViewModelTest {
 
         val shown: TitleState.Shown get() = state as TitleState.Shown
 
+        fun watched() = shown.page.entry?.watchedEpisodes
+
         suspend fun values() =
             graph.list
                 .observeEntry(shown.page.anime.id)
@@ -62,10 +64,11 @@ class TitleViewModelTest {
         before: TestGraph.() -> Unit = {},
         settle: Boolean = true,
         lateObservers: Boolean = false,
+        slowWrites: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(Demo(Fixtures.reference, scope), lateObservers).apply(before)
+        val graph = TestGraph(Demo(Fixtures.reference, scope), lateObservers, slowWrites).apply(before)
         val messages = ShellMessages(scope, graph.list)
         val subject = Subject(graph, messages, TitleViewModel(graph, id, saved, messages))
         if (settle) advanceUntilIdle()
@@ -186,6 +189,16 @@ class TitleViewModelTest {
         }
 
     @Test
+    fun `a completing step is written and says so although its page is closed before the write is applied`() =
+        test(slowWrites = true) { s ->
+            s.title.onEvent(TitleEvent.SetWatched(24))
+            s.title.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(ListStatus.Completed, s.values()?.status)
+            assertEquals(ShellMessage.Text.MovedToCompleted, s.message?.text)
+        }
+
+    @Test
     fun `AddToList adds the title as Planned and says so`() =
         test(id = FixtureAnime.notOnListAiring.id) { s ->
             assertNull(s.shown.page.entry)
@@ -231,6 +244,20 @@ class TitleViewModelTest {
             s.title.onEvent(TitleEvent.Retry)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
+        }
+
+    @Test
+    fun `a list that cannot be read fails the page, and Retry shows it and follows the list again`() =
+        test(before = { listUnreadable = true }) { s ->
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+
+            s.graph.listUnreadable = false
+            s.title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(12, s.watched())
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            assertEquals(13, s.watched())
         }
 
     @Test
