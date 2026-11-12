@@ -534,8 +534,9 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in the same way. The tab indicator, the selected tab
-  and the tab row's scroll are drawn from the pager's position, in the frame it moves.
+  settles; a tab chosen by a tap slides its page in the same way. The tab row is drawn from the pager's position in
+  the frame it moves, except that a tap on a far tab glides it to the tapped tab while the one page slides, and back
+  to the pager if a drag takes over.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
   curve, spring value or delay in user interface code fails the build. One value is the owner's exception: the List's
   pages settle after a release, and slide after a tab tap, with ViewPager2's snap timing, so that the gesture feels

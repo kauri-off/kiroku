@@ -5,8 +5,10 @@ import androidx.compose.runtime.CompositionTracer
 import androidx.compose.runtime.InternalComposeTracingApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -28,6 +30,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -183,6 +186,35 @@ class ListFrameWorkTest {
         assertEquals("pages composed inside the pager's scroll", 0, composedInScroll)
         compose.onNode(hasText("Dropped") and isSelectable()).assertIsSelected()
     }
+
+    // B2's M1: a drag made before every page is composed composes none inside the pager's scroll, and turns the page.
+    @Test
+    fun `a drag before every page is composed composes no page inside the pager's scroll and still turns the page`() {
+        Composer.setTracer(tracer)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        while (pagesComposed == 0) frame()
+        val start = indicatorLeft()
+        compose.onRoot().performTouchInput { down(center) }
+        var held = 0
+        var moved = false
+        repeat(DRAG_FRAMES) {
+            compose.onRoot().performTouchInput { moveBy(Offset(-width * DRAG_STEP, 0f)) }
+            frame()
+            moved = moved || indicatorLeft() != start
+            if (!moved) held++
+        }
+        compose.onRoot().performTouchInput { up() }
+        repeat(SETTLE_FRAMES) { frame() }
+        assertEquals("pages composed inside the pager's scroll", 0, composedInScroll)
+        assertEquals("pages composed", ListStatus.entries.size, pagesComposed)
+        assertTrue("the drag was held for $held frames", held <= 1)
+        compose.mainClock.advanceTimeBy(SETTLED)
+        settle()
+        compose.onNode(hasText("Planned") and isSelectable()).assertIsSelected()
+    }
+
+    private fun indicatorLeft() = compose.onNodeWithTag(INDICATOR, useUnmergedTree = true).getUnclippedBoundsInRoot().left
 
     private companion object {
         const val DRAG_FRAMES = 10

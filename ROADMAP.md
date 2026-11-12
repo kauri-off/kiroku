@@ -100,8 +100,8 @@ Not to forget:
 - Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
 - Compose UI 1.12.1 can crash with `LayoutNode … not found in RectList` when a pager measures, inside a scroll, a
   page whose rows were measured but never placed: a `ListItem`'s baseline query then places a text node whose
-  parent has no rect yet. The List therefore composes every page before any slide (`ListFrameWorkTest`). On a
-  Compose update, check the issue tracker before composing pages during a gesture again.
+  parent has no rect yet. The List therefore composes every page before a tap or a drag moves the pager
+  (`ListFrameWorkTest`). On a Compose update, check the issue tracker before composing pages during a gesture again.
 - A fling of the List's long tab back to the top has one frame of 50 to 120 ms on the emulator's minified build,
   where the rows coming into view are composed, much of it in code still interpreted: find the rest of its cost,
   and consider a baseline profile.

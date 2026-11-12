@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.list
 
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,6 +47,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
@@ -166,13 +171,20 @@ private fun Pages(
     }
     HorizontalPager(
         pager,
-        Modifier.fillMaxSize(),
+        Modifier
+            .fillMaxSize()
+            .pointerInput(motion) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    motion.composeAll()
+                }
+            }.nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,
         key = { statuses[it] },
         flingBehavior =
             PagerDefaults.flingBehavior(
                 pager,
-                snapAnimationSpec = motion.pageSpec,
+                snapAnimationSpec = motion.settleSpec,
                 snapPositionalThreshold = PAGE_TURN,
             ),
     ) { index ->

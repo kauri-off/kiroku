@@ -9,11 +9,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Immutable
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 // ViewPager2's snap, shortened after a fast release, the one motion value not from the theme's scheme (ARCHITECTURE 8.5).
 @Immutable
 class PageSettle(
     private val density: Float,
+    // The system's animation scale, for a settle that runs where Compose does not apply it.
+    private val scale: () -> Float = { 1f },
 ) : FiniteAnimationSpec<Float> {
     // ViewPager2's time for the way; a release toward the target shortens it until the curve starts at the finger's speed.
     fun millis(
@@ -22,9 +25,14 @@ class PageSettle(
     ): Int {
         val linear = minOf(MAX_LINEAR_MS, ceil(abs(distancePx) * MS_PER_INCH / (density * DPI_PER_DENSITY)))
         val still = ceil(linear / DECELERATE_SHARE).toInt()
-        if (distancePx == 0f || velocityPxPerSecond * distancePx <= 0f) return still
-        val meeting = ceil(DECELERATE_START * abs(distancePx) / abs(velocityPxPerSecond) * MS_PER_SECOND).toInt()
-        return meeting.coerceIn(minOf(SHORTEST_MS, still), still)
+        val unscaled =
+            if (distancePx == 0f || velocityPxPerSecond * distancePx <= 0f) {
+                still
+            } else {
+                val meeting = ceil(DECELERATE_START * abs(distancePx) / abs(velocityPxPerSecond) * MS_PER_SECOND).toInt()
+                meeting.coerceIn(minOf(SHORTEST_MS, still), still)
+            }
+        return (unscaled * scale()).roundToInt()
     }
 
     override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<Float, V>): VectorizedFiniteAnimationSpec<V> =
@@ -67,9 +75,9 @@ class PageSettle(
             ).getVelocityFromNanos(playTimeNanos, initialValue, targetValue, initialVelocity)
         }
 
-    override fun equals(other: Any?) = other is PageSettle && other.density == density
+    override fun equals(other: Any?) = other is PageSettle && other.density == density && other.scale === scale
 
-    override fun hashCode() = density.hashCode()
+    override fun hashCode() = 31 * density.hashCode() + scale.hashCode()
 
     private companion object {
         const val MS_PER_INCH = 100f

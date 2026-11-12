@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.ScrollableState
@@ -11,11 +12,14 @@ import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -30,8 +34,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
@@ -48,12 +57,14 @@ import androidx.compose.ui.semantics.scrollBy
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.theme.PageSettle
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -62,13 +73,16 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-// The pager is the only thing that moves; the indicator, the selection and the row's scroll are drawn from it.
+// The pager alone moves the pages; the header is drawn from it, gliding on a far tap and easing back after a catch.
 @Stable
 class ListTabMotion(
     val pager: PagerState,
     private val scope: CoroutineScope,
-    // The page's settle and a tap's slide.
+    // A tap's slide.
     val pageSpec: AnimationSpec<Float>,
+    // A release's settle, which the system's animation scale shortens to nothing when animations are off.
+    val settleSpec: AnimationSpec<Float>,
+    private val motionScheme: MotionScheme,
 ) {
     // The tab a tap is taking the pager to; it is selected from the tap on.
     var tapTarget by mutableStateOf<Int?>(null)
@@ -93,10 +107,14 @@ class ListTabMotion(
     private var glideFrom by mutableFloatStateOf(0f)
     private var slideFrom by mutableStateOf<Float?>(null)
 
+    // After a drag catches a tap's glide, how far the header still is from the pager, in tabs; it eases to nothing.
+    private var lag by mutableFloatStateOf(0f)
+    private var lagReturn: Job? = null
+
     // Where the tab row is drawn: the pager's position, or during a tap the glide by the sliding page's progress.
     val header: Float
         get() {
-            val target = tapTarget ?: return position
+            val target = tapTarget ?: return (position + lag).coerceIn(0f, all.toFloat())
             val start = slideFrom ?: return glideFrom
             val way = target - start
             val progress = if (way == 0f) 1f else ((position - start) / way).coerceIn(0f, 1f)
@@ -118,16 +136,53 @@ class ListTabMotion(
         }
     }
 
-    // One page per frame while the pager rests: no frame composes them all, and no slide composes one, which can crash.
+    // One page per frame while the pager rests, so no frame composes them all; a touch composes the rest at once.
     suspend fun composeAhead() {
         while (ahead < all) {
             snapshotFlow { resting }.first { it != null }
-            ahead++
+            if (ahead < all) ahead++
             laidOut(ahead)
         }
     }
 
+    // Composes every page in the next layout, before a gesture that comes early moves the pager.
+    fun composeAll() {
+        if (ahead < all) ahead = all
+    }
+
+    // Every page is laid out, so a scroll of the pager composes none, which can crash Compose (ROADMAP).
+    private val staged: Boolean get() = pager.layoutInfo.beyondViewportPageCount >= all
+
     private suspend fun laidOut(count: Int) = snapshotFlow { pager.layoutInfo.beyondViewportPageCount }.first { it >= count }
+
+    // Holds a drag's movement until every page is laid out, at most until the next layout, then gives it to the pager.
+    val gate =
+        object : NestedScrollConnection {
+            private var held = 0f
+
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (!staged) {
+                    composeAll()
+                    held += available.x
+                    return Offset(available.x, 0f)
+                }
+                if (held == 0f) return Offset.Zero
+                val given = held
+                held = 0f
+                return Offset(-given, 0f)
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (!staged) {
+                    composeAll()
+                    laidOut(all)
+                }
+                return Velocity.Zero
+            }
+        }
 
     // A tab chosen elsewhere than on this screen, as a restored one; a tap or a swipe is already there or on its way.
     fun show(index: Int) {
@@ -141,28 +196,44 @@ class ListTabMotion(
         val gliding = header != position
         glideFrom = header
         slideFrom = null
+        lagReturn?.cancel()
+        lag = 0f
         tap = token
         tapTarget = index
         scope.launch {
+            var arrived = false
             try {
                 if (ahead < all) {
                     ahead = all
                     laidOut(all)
                 }
+                if (tap !== token) return@launch
                 val from = position
                 val far = abs(index - from) > 1f
                 if (far) pager.scrollToPage(if (index > from) index - 1 else index + 1)
                 if (!far && !gliding) glideFrom = position
                 slideFrom = position
                 pager.animateScrollToPage(index, animationSpec = pageSpec)
+                arrived = true
             } finally {
                 if (tap === token) {
+                    val shown = header
                     tap = null
                     tapTarget = null
                     slideFrom = null
+                    if (!arrived && shown != position) ease(shown - position)
                 }
             }
         }
+    }
+
+    // A drag that catches a glide takes the pager; the header comes back to it on the theme's slow effects spring.
+    private fun ease(from: Float) {
+        lag = from
+        lagReturn =
+            scope.launch {
+                animate(lag, 0f, animationSpec = motionScheme.slowEffectsSpec()) { value, _ -> lag = value }
+            }
     }
 }
 
@@ -170,7 +241,17 @@ class ListTabMotion(
 fun rememberListTabMotion(pager: PagerState): ListTabMotion {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current.density
-    return remember(pager, scope, density) { ListTabMotion(pager, scope, PageSettle(density)) }
+    val motionScheme = MaterialTheme.motionScheme
+    return remember(pager, scope, density, motionScheme) {
+        val durationScale = scope.coroutineContext[MotionDurationScale]
+        ListTabMotion(
+            pager,
+            scope,
+            PageSettle(density),
+            PageSettle(density) { durationScale?.scaleFactor ?: 1f },
+            motionScheme,
+        )
+    }
 }
 
 // Stock tabs, indicator and divider in the stock scrollable row's measures, in a layout only the pager scrolls.
@@ -184,6 +265,8 @@ internal fun ListTabs(
     LaunchedEffect(row) { row.forgetHand() }
     val overscroll = rememberOverscrollEffect()
     val reverse = ScrollableDefaults.reverseDirection(LocalLayoutDirection.current, Orientation.Horizontal, false)
+    val active = MaterialTheme.colorScheme.primary
+    val inactive = MaterialTheme.colorScheme.onSurfaceVariant
     Surface(color = TabRowDefaults.primaryContainerColor, contentColor = TabRowDefaults.primaryContentColor) {
         Box(contentAlignment = Alignment.BottomStart) {
             HorizontalDivider()
@@ -198,7 +281,14 @@ internal fun ListTabs(
                                         motion.select(index)
                                         onEvent(ListEvent.SelectTab(status))
                                     },
-                                    text = { Text(stringResource(status.label())) },
+                                    text = {
+                                        // Drawn in the blend of the two colours by the header, so the stock fade has nothing to animate.
+                                        BasicText(
+                                            stringResource(status.label()),
+                                            style = LocalTextStyle.current,
+                                            color = { lerp(inactive, active, (1f - abs(index - motion.header)).coerceIn(0f, 1f)) },
+                                        )
+                                    },
                                     modifier = Modifier.onFocusChanged { if (it.isFocused) row.reveal(index) },
                                 )
                             }

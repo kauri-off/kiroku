@@ -10,7 +10,7 @@ import io.github.kauri_off.kiroku.wiring.appGraph
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // No field of the window is offered to autofill; a screen that needs autofill sets its own part back to AUTO.
+        // No field of the window is offered to autofill; a screen that needs it sets the window's root back to AUTO.
         window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         setKirokuContent { AppRoute(appGraph) }
     }
