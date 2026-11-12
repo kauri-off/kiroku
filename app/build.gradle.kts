@@ -78,18 +78,18 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
-        // The release build's code on the demo, profileable, for measuring frames.
-        create("benchmark") {
+        // The release build's code on the demo, profileable: the owner's channel, and the build frames are measured on.
+        create("preview") {
             initWith(getByName("release"))
-            applicationIdSuffix = ".benchmark"
-            manifestPlaceholders["appLabel"] = "@string/app_name_debug"
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appLabel"] = "@string/app_name_preview"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
             isProfileable = true
         }
     }
 
-    sourceSets.named("benchmark") {
+    sourceSets.named("preview") {
         kotlin.directories += "src/debug/kotlin"
         res.directories += "src/debug/res"
         manifest.srcFile("src/debug/AndroidManifest.xml")
@@ -135,7 +135,7 @@ dependencies {
     implementation(libs.coil.compose)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(testFixtures(project(":core")))
-    "benchmarkImplementation"(testFixtures(project(":core")))
+    "previewImplementation"(testFixtures(project(":core")))
 
     testImplementation(testFixtures(project(":core")))
     testImplementation(libs.junit)

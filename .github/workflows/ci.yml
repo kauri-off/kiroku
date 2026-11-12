@@ -49,8 +49,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Debug build, release build with R8 and its guards, and the benchmark build
-        run: ./gradlew assembleDebug assembleRelease assembleBenchmark
+      - name: Debug build, release build with R8 and its guards, and the preview build
+        run: ./gradlew assembleDebug assembleRelease assemblePreview
 
       - name: Keep the debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
