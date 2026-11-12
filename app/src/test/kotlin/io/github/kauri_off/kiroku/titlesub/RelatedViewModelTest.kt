@@ -82,6 +82,37 @@ class RelatedViewModelTest {
             scope.cancel()
         }
 
+    // Section 7.2: what a sub-screen could not load is its failed state, which stays until a Retry loads it.
+    @Test
+    fun `both sub-screens whose details could not load show the failure, also while the list changes, until Retry loads them`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            graph.demo.server.offline.value = true
+            val related = related(graph)
+            val details = details(graph)
+            showing(related.state)
+            showing(details.state)
+            advanceUntilIdle()
+            assertEquals(DataError.NoConnection, (related.state.value as RelatedState.Failed).error)
+            assertEquals(DataError.NoConnection, (details.state.value as DetailsState.Failed).error)
+            graph.demo.server.offline.value = false
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            runCurrent()
+            assertTrue(related.state.value is RelatedState.Failed)
+            assertTrue(details.state.value is DetailsState.Failed)
+            graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            assertTrue(related.state.value is RelatedState.Failed)
+            assertTrue(details.state.value is DetailsState.Failed)
+            related.onEvent(RelatedEvent.Retry)
+            details.onEvent(DetailsEvent.Retry)
+            advanceUntilIdle()
+            assertTrue(related.state.value is RelatedState.Shown)
+            assertTrue(details.state.value is DetailsState.Shown)
+            scope.cancel()
+        }
+
     @Test
     fun `both sub-screens read nothing before first shown, and refresh once, not again when shown again`() =
         runTest(dispatcher) {

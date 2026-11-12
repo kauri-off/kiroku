@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.routes
 
+import android.view.View
 import androidx.activity.BackEventCompat
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -17,15 +18,18 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipeUp
+import androidx.lifecycle.Lifecycle
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -57,6 +61,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowViewRootImpl
 
 // The app's real entries over demo mode: what the owner does first on the device.
 @RunWith(RobolectricTestRunner::class)
@@ -120,6 +126,22 @@ class AppRouteTest {
 
     private fun openKagerou() {
         compose.onNodeWithText(kagerou.titles.romaji).performClick()
+        compose.waitForIdle()
+    }
+
+    // What the system does to the app's window when the notification shade or Recents takes the focus.
+    private fun windowFocus(focused: Boolean) {
+        compose.runOnUiThread {
+            val decor = compose.activity.window.decorView
+            val root = View::class.java.getMethod("getViewRootImpl").invoke(decor)
+            Shadow.extract<ShadowViewRootImpl>(root).callWindowFocusChanged(focused)
+        }
+        compose.waitForIdle()
+    }
+
+    // The edit sheet's drag handle offers to dismiss it, as a swipe down does.
+    private fun dismissSheet() {
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).performSemanticsAction(SemanticsActions.Dismiss)
         compose.waitForIdle()
     }
 
@@ -378,6 +400,113 @@ class AppRouteTest {
         assertEquals(13, values(kagerou)?.watchedEpisodes)
     }
 
+    // Section 6.2: Home, or a window over the app, stops the activity; the failed save's Retry is still there on return.
+    @Test
+    fun `a failed save's Retry survives the app being stopped longer than the message shows, and Retry writes`() {
+        app()
+        graph.demo.server.failingWrites.value = true
+        plusOnFirstRow()
+        compose.waitForIdle()
+        shows("Could not save")
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+        shows("Could not save")
+        graph.demo.server.failingWrites.value = false
+        click("Retry")
+        compose.waitForIdle()
+        assertEquals(13, values(kagerou)?.watchedEpisodes)
+    }
+
+    // Section 7.2: a pulled notification shade or a Recents tile takes the window's focus, and the Retry waits.
+    @Test
+    fun `a failed save's Retry waits while the window has no focus, and Retry writes`() {
+        app()
+        graph.demo.server.failingWrites.value = true
+        plusOnFirstRow()
+        compose.waitForIdle()
+        shows("Could not save")
+        windowFocus(false)
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        windowFocus(true)
+        shows("Could not save")
+        graph.demo.server.failingWrites.value = false
+        click("Retry")
+        compose.waitForIdle()
+        assertEquals(13, values(kagerou)?.watchedEpisodes)
+    }
+
+    // Section 7.2: an ordinary message runs on whether it can be seen or not.
+    @Test
+    fun `the plus one message runs out while the window has no focus`() {
+        app()
+        plusOnFirstRow()
+        compose.waitForIdle()
+        shows("Episode\u00A013 watched")
+        windowFocus(false)
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        windowFocus(true)
+        hides("Episode\u00A013 watched")
+    }
+
+    @Test
+    fun `a failed save's Retry waits under an edit sheet opened over it, and Retry writes`() {
+        app()
+        graph.demo.server.failingWrites.value = true
+        plusOnFirstRow()
+        compose.waitForIdle()
+        openKagerou()
+        shows("Could not save")
+        click("Watching")
+        shows("Save")
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        dismissSheet()
+        hides("Save")
+        shows("Could not save")
+        graph.demo.server.failingWrites.value = false
+        click("Retry")
+        compose.waitForIdle()
+        assertEquals(13, values(kagerou)?.watchedEpisodes)
+    }
+
+    @Test
+    fun `a completion's Undo waits under an edit sheet opened over it, and Undo takes the step back`() {
+        app()
+        openKagerou()
+        repeat(12) { plusOnTitlePage() }
+        compose.waitForIdle()
+        shows("Moved to Completed")
+        click("Completed")
+        shows("Save")
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        dismissSheet()
+        hides("Save")
+        shows("Moved to Completed")
+        click("Undo")
+        compose.waitForIdle()
+        assertEquals(23, values(kagerou)?.watchedEpisodes)
+        assertEquals(ListStatus.Watching, values(kagerou)?.status)
+    }
+
+    // Section 7.2 offline: the failure is said by a message on the first screen and stays where the details would be.
+    @Test
+    fun `a title page whose details could not load says why and Retry loads them once the connection is back`() {
+        app()
+        graph.demo.server.offline.value = true
+        openKagerou()
+        shows("Episodes watched")
+        compose.onAllNodesWithText("No connection").assertCountEquals(2)
+        compose.mainClock.advanceTimeBy(AWAY_MILLIS)
+        compose.onAllNodesWithText("No connection").assertCountEquals(1)
+        graph.demo.server.offline.value = false
+        click("Retry")
+        compose.waitForIdle()
+        hides("No connection")
+        scrollTo("Details")
+        shows("Details")
+    }
+
     @Test
     fun `the same title opened twice in one stack keeps two separate states`() {
         app()
@@ -577,5 +706,8 @@ class AppRouteTest {
 
     private companion object {
         const val FRAMES = 10
+
+        // Longer than a message with an action is shown.
+        const val AWAY_MILLIS = 20_000L
     }
 }

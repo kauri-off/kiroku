@@ -73,6 +73,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
+import io.github.kauri_off.kiroku.design.component.CoversMessages
 import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
 import io.github.kauri_off.kiroku.design.component.TitleText
@@ -105,6 +106,7 @@ internal fun EditSheet(
     onEvent: (EditSheetEvent) -> Unit,
     focusCount: Boolean,
 ) {
+    CoversMessages()
     val mayLeave by rememberUpdatedState(state.mayLeave)
     val events by rememberUpdatedState(onEvent)
     val sheetState =

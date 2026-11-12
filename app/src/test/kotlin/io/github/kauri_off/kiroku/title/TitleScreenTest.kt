@@ -15,8 +15,11 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -212,10 +215,26 @@ class TitleScreenTest {
     @Test
     fun theDetailsIndicatorStaysHiddenUntilTheWaitIsShown() {
         val waiting = TitleFixtures.of(FixtureAnime.exactToWatch, details = null)
-        show(waiting.copy(detailsWaitShown = false))
+        show(waiting.copy(detailsWait = DetailsWait.Brief))
         compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
-        show(waiting.copy(detailsWaitShown = true))
+        show(waiting.copy(detailsWait = DetailsWait.Loading))
         compose.onNodeWithContentDescription("Loading details").assertIsDisplayed()
+    }
+
+    // Section 7.2: where the details would be, the cause and Retry, under the summary that stays.
+    @Test
+    fun detailsThatCouldNotLoadSayWhyUnderTheSummaryAndOfferRetry() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch, details = null).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)))
+        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        compose.onNodeWithText("No connection").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
+        sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }
+    }
+
+    @Test
+    fun aShownPageCanBePulledToRefresh() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        sends(TitleEvent.Refresh) { compose.onRoot().performTouchInput { swipeDown(startY = centerY, endY = bottom) } }
     }
 
     // ARCHITECTURE 6.2: the screen itself draws the host the shell hands it.

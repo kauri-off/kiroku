@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The first intent is the launcher icon's own, so the task it starts is the one the icon returns to. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:enabled="true"
@@ -8,7 +9,9 @@
         <intent
             android:action="android.intent.action.MAIN"
             android:targetClass="io.github.kauri_off.kiroku.MainActivity"
-            android:targetPackage="io.github.kauri_off.kiroku.debug" />
+            android:targetPackage="io.github.kauri_off.kiroku.debug">
+            <categories android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <intent
             android:action="android.intent.action.VIEW"
             android:targetClass="io.github.kauri_off.kiroku.scenario.ScenarioActivity"

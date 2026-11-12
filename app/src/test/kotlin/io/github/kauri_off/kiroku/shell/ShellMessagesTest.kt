@@ -195,6 +195,31 @@ class ShellMessagesTest {
         assertEquals(false, ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)).mustStay)
     }
 
+    // A save that fails for the session cannot succeed by a Retry; the session banner offers sign-in instead.
+    @Test
+    fun `a save that fails for the expired session offers no Retry`() {
+        val shell = ShellViewModel(graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        graph.demo.server.sessionExpired.value = true
+        compose.waitForIdle()
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        assertNull(
+            shell.messages.current.value
+                ?.message
+                ?.action,
+        )
+    }
+
     // W2: a later "+1" on another title does not take the failed save's Retry away.
     @Test
     fun `a failed save keeps its Retry through a newer message, and Retry writes`() {

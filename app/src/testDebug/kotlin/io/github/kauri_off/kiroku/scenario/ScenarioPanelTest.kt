@@ -99,23 +99,47 @@ class ScenarioPanelTest {
 
         val launcher = manager.getActivityInfo(ComponentName(context, MainActivity::class.java), PackageManager.GET_META_DATA)
         assertEquals(R.xml.scenario_shortcuts, launcher.metaData.getInt("android.app.shortcuts"))
+        val intents = shortcutIntents()
         assertEquals(
             listOf(context.packageName to MainActivity::class.java.name, context.packageName to ScenarioActivity::class.java.name),
-            shortcutTargets(),
+            intents.map { it.target },
         )
     }
 
-    // The package and class of each intent of the one shortcut, in the order the launcher starts them.
-    private fun shortcutTargets(): List<Pair<String, String>> {
+    // Otherwise a later tap on the icon starts a second app screen, without the first one's messages.
+    @Test
+    fun `the task the launcher's shortcut starts is the one the app's icon returns to`() {
+        val icon = checkNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName))
+        val root = shortcutIntents().first()
+        assertEquals(icon.action, root.action)
+        assertEquals(icon.categories, root.categories)
+        assertEquals(icon.component?.className, root.target.second)
+    }
+
+    private class ShortcutIntent(
+        val target: Pair<String, String>,
+        val action: String,
+        val categories: MutableSet<String> = mutableSetOf(),
+    )
+
+    // Each intent of the one shortcut, in the order the launcher starts them.
+    private fun shortcutIntents(): List<ShortcutIntent> {
         val android = "http://schemas.android.com/apk/res/android"
         val parser = context.resources.getXml(R.xml.scenario_shortcuts)
-        val targets = mutableListOf<Pair<String, String>>()
+        val intents = mutableListOf<ShortcutIntent>()
         while (parser.next() != XmlPullParser.END_DOCUMENT) {
-            if (parser.eventType == XmlPullParser.START_TAG && parser.name == "intent") {
-                targets += parser.getAttributeValue(android, "targetPackage") to parser.getAttributeValue(android, "targetClass")
+            if (parser.eventType != XmlPullParser.START_TAG) continue
+            when (parser.name) {
+                "intent" ->
+                    intents +=
+                        ShortcutIntent(
+                            parser.getAttributeValue(android, "targetPackage") to parser.getAttributeValue(android, "targetClass"),
+                            parser.getAttributeValue(android, "action"),
+                        )
+                "categories" -> intents.last().categories += parser.getAttributeValue(android, "name")
             }
         }
-        return targets
+        return intents
     }
 
     private companion object {

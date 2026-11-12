@@ -41,9 +41,23 @@ sealed interface TitleState {
         val page: TitlePage,
         override val session: Session?,
         val moment: TitleMoment = TitleMoment(),
-        // False for the first moment of a wait for the details, which a page answered within it never shows.
-        val detailsWaitShown: Boolean = true,
+        // What stands where the details would be while the page has none.
+        val detailsWait: DetailsWait = DetailsWait.Loading,
+        // A refresh pulled by hand is running.
+        val refreshing: Boolean = false,
     ) : TitleState
+}
+
+sealed interface DetailsWait {
+    // The first moment of a wait, which a page answered within it never shows.
+    data object Brief : DetailsWait
+
+    data object Loading : DetailsWait
+
+    // Stays until a load succeeds.
+    data class Failed(
+        val error: DataError,
+    ) : DetailsWait
 }
 
 val TitleState.sessionExpired: Boolean get() = session == Session.Expired
@@ -169,6 +183,8 @@ sealed interface TitleEvent {
     data object OpenRecommendations : TitleEvent
 
     data object Retry : TitleEvent
+
+    data object Refresh : TitleEvent
 
     data object SignIn : TitleEvent
 }
