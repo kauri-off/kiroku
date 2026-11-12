@@ -5,7 +5,9 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.PageSettle
 import io.github.kauri_off.kiroku.design.theme.settleMillis
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -69,7 +71,38 @@ class MotionTest {
         }
     }
 
+    // ViewPager2's snap at 420 dpi: a page or an inch and more in 298 ms, a shorter way in proportion.
+    @Test
+    fun `the pager's settle and tab slide are timed as ViewPager2's snap`() {
+        val spec = PageSettle(PHONE_DENSITY)
+        assertEquals(298L, spec.settleMillis(SCREEN_PX))
+        assertEquals(298L, spec.settleMillis(PHONE_DENSITY * INCH_DP))
+        assertEquals(155L, spec.settleMillis(SCREEN_PX / 5))
+        assertEquals(spec.settleMillis(-SCREEN_PX), spec.settleMillis(SCREEN_PX))
+        assertTrue(spec.settleMillis(SCREEN_PX * 4) <= MotionBounds.ENTER)
+    }
+
+    @Test
+    fun `the pager's settle decelerates to its end without overshoot and ignores the fling's speed`() {
+        val vectorized = PageSettle(PHONE_DENSITY).vectorize(Float.VectorConverter)
+        val start = AnimationVector1D(0f)
+        val end = AnimationVector1D(SCREEN_PX)
+        val fast = AnimationVector1D(SCREEN_PX * 10)
+        var last = 0f
+        for (millis in 0L..298L step 2) {
+            val value = vectorized.getValueFromNanos(millis * 1_000_000L, start, end, start).value
+            assertTrue("$value at $millis ms", value >= last && value <= SCREEN_PX)
+            assertEquals(value, vectorized.getValueFromNanos(millis * 1_000_000L, start, end, fast).value, 0f)
+            last = value
+        }
+        assertEquals(SCREEN_PX, last, 0f)
+        val half = vectorized.getValueFromNanos(149L * 1_000_000L, start, end, start).value
+        assertEquals("a quadratic deceleration is three quarters of the way at half time", SCREEN_PX * 0.75f, half, SCREEN_PX * 0.01f)
+    }
+
     private companion object {
+        const val PHONE_DENSITY = 2.625f
+        const val INCH_DP = 160f
         const val SCREEN_PX = 1080f
         const val FRAME = 16L
     }

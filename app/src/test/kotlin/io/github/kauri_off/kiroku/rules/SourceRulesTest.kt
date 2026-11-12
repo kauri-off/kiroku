@@ -169,6 +169,8 @@ class SourceRulesTest {
             assertEquals(code, emptyList<String>(), motionLiteralProblems("A.kt", "val a = $code\n"))
         }
         assertTrue(motionLiteralProblems(THEME_SOURCES + "Motion.kt", "val a = tween<Float>(300)\n").isNotEmpty())
+        assertEquals(emptyList<String>(), motionLiteralProblems(PAGE_MOTION_SOURCE, "val a = tween<Float>(300)\n"))
+        assertTrue(appSources().any { it.relativeTo(projectDir).path == PAGE_MOTION_SOURCE })
     }
 
     @Test

@@ -12,7 +12,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -37,6 +36,8 @@ import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.MultiContentMeasurePolicy
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -47,6 +48,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.theme.PageSettle
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
@@ -63,7 +65,7 @@ import kotlin.math.roundToInt
 class ListTabMotion(
     val pager: PagerState,
     private val scope: CoroutineScope,
-    // The page's settle and a tap's slide: the theme's default effects spring, which does not overshoot.
+    // The page's settle and a tap's slide.
     val pageSpec: AnimationSpec<Float>,
 ) {
     // The tab a tap is taking the pager to; it is selected from the tap on.
@@ -123,8 +125,8 @@ class ListTabMotion(
 @Composable
 fun rememberListTabMotion(pager: PagerState): ListTabMotion {
     val scope = rememberCoroutineScope()
-    val spec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    return remember(pager, scope, spec) { ListTabMotion(pager, scope, spec) }
+    val density = LocalDensity.current.density
+    return remember(pager, scope, density) { ListTabMotion(pager, scope, PageSettle(density)) }
 }
 
 // Stock tabs, indicator and divider in the stock scrollable row's measures, in a layout only the pager scrolls.
@@ -157,7 +159,7 @@ internal fun ListTabs(
                                 )
                             }
                         },
-                        { TabRowDefaults.PrimaryIndicator(Modifier.testTag(INDICATOR), width = Dp.Unspecified) },
+                        { TabRowDefaults.PrimaryIndicator(row.indicator.testTag(INDICATOR), width = Dp.Unspecified) },
                     ),
                 modifier =
                     Modifier
@@ -176,13 +178,15 @@ internal fun ListTabs(
     }
 }
 
-// The tabs' places from the last layout: [lefts] has one more entry, the right end of the last tab.
-private class TabPlaces(
-    val lefts: IntArray,
-    val labels: IntArray,
-    viewport: Int,
+// The tabs' places from their last measure: [lefts] has one more entry, the right end of the last tab.
+private data class TabPlaces(
+    val lefts: List<Int>,
+    val labels: List<Int>,
+    val viewport: Int,
 ) {
     val max = (lefts.last() + lefts.first() - viewport).coerceAtLeast(0)
+
+    val width = lefts.last() + lefts.first()
 
     private val centre = viewport / 2
 
@@ -198,7 +202,8 @@ private class TabPlaces(
         if (labels.isEmpty()) 0f else around(position, labels.size) { from, to, f -> blend(centring(from), centring(to), f) }
 }
 
-// The row's scroll and the indicator are read from the pager in layout, so they move in the frame the pager does.
+// The tabs are measured only when they change; the pager's position is read where it is needed, in the frame it moves:
+// by the row's placement for its scroll, and by the indicator alone for its place and width.
 private class TabRowLayout(
     private val motion: ListTabMotion,
 ) : MultiContentMeasurePolicy {
@@ -206,8 +211,7 @@ private class TabRowLayout(
     private var hand by mutableFloatStateOf(0f)
     private var handAt by mutableFloatStateOf(0f)
 
-    // Read only by input and semantics, never by composition.
-    private var places = TabPlaces(IntArray(1), IntArray(0), 0)
+    private var places by mutableStateOf(TabPlaces(listOf(0), emptyList(), 0))
 
     val max: Int get() = places.max
 
@@ -238,6 +242,23 @@ private class TabRowLayout(
         snapshotFlow { hand != 0f && abs(motion.position - handAt) >= 1f }.collect { if (it) hand = 0f }
     }
 
+    // The indicator spans the whole row, so its size never changes; under the label at the pager's position it measures
+    // the stock indicator at the blend of the two labels' widths.
+    val indicator =
+        Modifier.layout { measurable, constraints ->
+            val places = places
+            val (left, width) =
+                if (places.labels.isEmpty()) {
+                    0f to 0f
+                } else {
+                    around(motion.position, places.labels.size) { from, to, f ->
+                        blend(places.labelLeft(from), places.labelLeft(to), f) to blend(places.labels[from], places.labels[to], f)
+                    }
+                }
+            val bar = measurable.measure(Constraints.fixedWidth(width.roundToInt()))
+            layout(constraints.maxWidth, bar.height) { bar.placeRelative(left.roundToInt(), 0) }
+        }
+
     override fun MeasureScope.measure(
         measurables: List<List<Measurable>>,
         constraints: Constraints,
@@ -250,18 +271,14 @@ private class TabRowLayout(
         lefts[0] = Sizes.tabRowEdge.roundToPx()
         placeables.forEachIndexed { index, placeable -> lefts[index + 1] = lefts[index] + placeable.width }
         val padding = Sizes.tabLabelPadding.roundToPx() * 2
-        val labels = IntArray(tabs.size) { tabs[it].maxIntrinsicWidth(Constraints.Infinity) - padding }
-        places = TabPlaces(lefts, labels, constraints.maxWidth)
-        val position = motion.position
-        val scroll = scroll(position).roundToInt()
-        val (left, width) =
-            around(position, tabs.size) { from, to, f ->
-                blend(places.labelLeft(from), places.labelLeft(to), f) to blend(labels[from], labels[to], f)
-            }
-        val bar = indicator.map { it.measure(Constraints.fixedWidth(width.roundToInt())) }
+        val labels = List(tabs.size) { tabs[it].maxIntrinsicWidth(Constraints.Infinity) - padding }
+        val measured = TabPlaces(lefts.toList(), labels, constraints.maxWidth)
+        places = measured
+        val bar = indicator.map { it.measure(Constraints(minWidth = measured.width, maxWidth = measured.width, maxHeight = height)) }
         return layout(constraints.maxWidth, height) {
-            placeables.forEachIndexed { index, placeable -> placeable.placeRelative(lefts[index] - scroll, 0) }
-            bar.forEach { it.placeRelative(left.roundToInt() - scroll, height - it.height) }
+            val scroll = scroll(motion.position).roundToInt()
+            placeables.forEachIndexed { index, placeable -> placeable.placeRelative(measured.lefts[index] - scroll, 0) }
+            bar.forEach { it.placeRelative(-scroll, height - it.height) }
         }
     }
 }

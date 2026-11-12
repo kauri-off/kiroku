@@ -89,10 +89,14 @@ private val fromScheme = Regex("""\bmotionScheme\.\w+Spec\b""")
 // The expressive scheme's spatial springs overshoot; the app's own animations use its effects springs, which cannot.
 private val spatialSpec = Regex("""\b\w*SpatialSpec\b""")
 
+// The pager's settle and tab slide, the one motion value the owner chose over the theme's scheme (ARCHITECTURE 8.5).
+const val PAGE_MOTION_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/design/theme/PageSettle.kt"
+
 fun motionLiteralProblems(
     name: String,
     source: String,
 ): List<String> {
+    if (name == PAGE_MOTION_SOURCE) return emptyList()
     val code = KotlinSource(source).code
     val rules = if (interfaceCode.containsMatchIn(code)) motionLiterals + interfaceMotionLiterals else motionLiterals
     val lines = code.lines()
