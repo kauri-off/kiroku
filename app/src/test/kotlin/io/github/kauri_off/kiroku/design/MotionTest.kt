@@ -16,8 +16,7 @@ import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
-// The settle times of ARCHITECTURE 8.5, in milliseconds: a change inside a component, a component's entrance and a
-// screen's entrance, which the theme's fast, default and slow effects springs keep.
+// Settle bounds in milliseconds of the fast, default and slow effects springs (ARCHITECTURE 8.5).
 object MotionBounds {
     const val CHANGE = 250L
     const val ENTER = 400L

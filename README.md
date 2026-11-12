@@ -10,8 +10,8 @@ trademark of its owner. The name Kiroku (記録) is Japanese for "record".
 
 ## Status
 
-The project is in early development and there is nothing to install yet. These documents say what is being built;
-the code and its tests say how:
+The project is in early development and has no release yet. These documents say what is being built; the code and
+its tests say how:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the decisions and their reasons, what must hold, and what each
   screen shows
@@ -37,17 +37,17 @@ Every screen is designed to an explicit limit on how much it may show, using sta
 
 Data comes from the official MyAnimeList API and, for airing times, from the AniList API. To get airing times, the app
 sends AniList the MyAnimeList ids of the unfinished titles on your list and of an airing title whose page you open,
-and nothing else about you. The app has no
-server of its own, scrapes no web pages, and contains no analytics, ads or closed-source components.
+and nothing else about you. The app has no server of its own, scrapes no web pages, and contains no analytics, ads
+or closed-source components.
 
 The first release is a starting point. Manga, a deeper title page, a weekly schedule and read-only forums are planned
 after it; the roadmap lists what is planned and what is not built.
 
 ## Building
 
-A debug build needs JDK 17 and the Android SDK. Once the first roadmap milestone is finished, it runs on demo data
-without any account or API key. Signing in to MyAnimeList needs your own MAL API client id, which is never committed
-to this repository; `docs/ARCHITECTURE.md`, section 3.3, explains how to supply it.
+A debug build needs JDK 17 and the Android SDK, and runs on demo data without any account or API key. Signing in to
+MyAnimeList needs your own MAL API client id, which is never committed to this repository; `docs/ARCHITECTURE.md`,
+section 3.3, explains how to supply it.
 
 ## Contributing
 
