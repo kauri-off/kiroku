@@ -1,7 +1,10 @@
 package io.github.kauri_off.kiroku.scenario
 
+import android.content.Context
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.wiring.DemoGraph
+import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,3 +97,6 @@ class Scenarios(
         val SLOW = 3.seconds
     }
 }
+
+// The demo's scenarios, or null when the app runs on a real account.
+val Context.scenarios: Scenarios? get() = (appGraph as? DemoGraph)?.scenarios

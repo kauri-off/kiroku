@@ -1,33 +1,20 @@
 package io.github.kauri_off.kiroku.scenario
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -35,9 +22,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
-import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
-import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 sealed interface ScenarioState {
@@ -56,39 +41,18 @@ sealed interface ScenarioEvent {
     ) : ScenarioEvent
 
     data object Reset : ScenarioEvent
-
-    data object Close : ScenarioEvent
 }
 
-// The debug panel: switches for the demo's failures, which apply at once, and a reset of its data.
-@OptIn(ExperimentalMaterial3Api::class)
+// The debug menu's first section: switches for the demo's failures, which apply at once, and a reset of its data.
 @Composable
-fun ScenarioScreen(
+fun ScenarioSection(
     state: ScenarioState,
     onEvent: (ScenarioEvent) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.scenarios_title)) },
-                navigationIcon = {
-                    IconButton(onClick = { onEvent(ScenarioEvent.Close) }) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        when (state) {
-            ScenarioState.Unavailable ->
-                ScreenState(ScreenState.Empty(stringResource(R.string.scenarios_unavailable)), Modifier.padding(padding))
-            is ScenarioState.Ready ->
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-                    Switches(state, onEvent, Modifier.widthIn(max = Sizes.contentMaxWidth))
-                }
-        }
+    SectionHeader(stringResource(R.string.scenarios_title))
+    when (state) {
+        ScenarioState.Unavailable -> Detail(R.string.scenarios_unavailable)
+        is ScenarioState.Ready -> Switches(state, onEvent)
     }
 }
 
@@ -96,44 +60,41 @@ fun ScenarioScreen(
 private fun Switches(
     state: ScenarioState.Ready,
     onEvent: (ScenarioEvent) -> Unit,
-    modifier: Modifier,
 ) {
     val scenario = state.scenario
     val enabled = !state.reset.busy
     val change = { next: Scenario -> onEvent(ScenarioEvent.Change(next)) }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = Spacing.xl)) {
-        SwitchRow(R.string.scenarios_offline, R.string.scenarios_offline_detail, scenario.offline, enabled) {
-            change(scenario.copy(offline = it))
-        }
-        SwitchRow(R.string.design_session_expired, R.string.scenarios_session_detail, scenario.sessionExpired, enabled) {
-            change(scenario.copy(sessionExpired = it))
-        }
-        SwitchRow(R.string.scenarios_slow, R.string.scenarios_slow_detail, scenario.slow, enabled) { change(scenario.copy(slow = it)) }
-        Choice(
-            R.string.scenarios_writes,
-            R.string.scenarios_writes_detail,
-            WriteFault.entries.map { it.label },
-            scenario.writes.ordinal,
-            enabled,
-        ) { change(scenario.copy(writes = WriteFault.entries[it])) }
-        Choice(
-            R.string.scenarios_store,
-            R.string.scenarios_store_detail,
-            StoreFault.entries.map { it.label },
-            scenario.store.ordinal,
-            enabled,
-        ) { change(scenario.copy(store = StoreFault.entries[it])) }
-        SectionHeader(stringResource(R.string.scenarios_reset_title), Modifier.padding(top = Spacing.xl))
-        Detail(R.string.scenarios_reset_detail)
-        OutlinedButton(
-            onClick = { onEvent(ScenarioEvent.Reset) },
-            enabled = enabled,
-            modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s),
-        ) {
-            Text(stringResource(R.string.scenarios_reset))
-        }
-        state.reset.message?.let { ResetMessage(it, failed = state.reset == ResetState.Failed) }
+    SwitchRow(R.string.scenarios_offline, R.string.scenarios_offline_detail, scenario.offline, enabled) {
+        change(scenario.copy(offline = it))
     }
+    SwitchRow(R.string.design_session_expired, R.string.scenarios_session_detail, scenario.sessionExpired, enabled) {
+        change(scenario.copy(sessionExpired = it))
+    }
+    SwitchRow(R.string.scenarios_slow, R.string.scenarios_slow_detail, scenario.slow, enabled) { change(scenario.copy(slow = it)) }
+    Choice(
+        R.string.scenarios_writes,
+        R.string.scenarios_writes_detail,
+        WriteFault.entries.map { it.label },
+        scenario.writes.ordinal,
+        enabled,
+    ) { change(scenario.copy(writes = WriteFault.entries[it])) }
+    Choice(
+        R.string.scenarios_store,
+        R.string.scenarios_store_detail,
+        StoreFault.entries.map { it.label },
+        scenario.store.ordinal,
+        enabled,
+    ) { change(scenario.copy(store = StoreFault.entries[it])) }
+    SectionHeader(stringResource(R.string.scenarios_reset_title), Modifier.padding(top = Spacing.xl))
+    Detail(R.string.scenarios_reset_detail)
+    OutlinedButton(
+        onClick = { onEvent(ScenarioEvent.Reset) },
+        enabled = enabled,
+        modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s),
+    ) {
+        Text(stringResource(R.string.scenarios_reset))
+    }
+    state.reset.message?.let { ResetMessage(it, failed = state.reset == ResetState.Failed) }
 }
 
 // Said where Reset was touched, so it is never below the fold.
