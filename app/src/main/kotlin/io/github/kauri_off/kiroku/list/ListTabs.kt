@@ -89,6 +89,20 @@ class ListTabMotion(
     val position: Float
         get() = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (pager.pageCount - 1).toFloat())
 
+    // A tap's glide: from where the header was to the tapped tab, as the one sliding page goes from [slideFrom].
+    private var glideFrom by mutableFloatStateOf(0f)
+    private var slideFrom by mutableStateOf<Float?>(null)
+
+    // Where the tab row is drawn: the pager's position, or during a tap the glide by the sliding page's progress.
+    val header: Float
+        get() {
+            val target = tapTarget ?: return position
+            val start = slideFrom ?: return glideFrom
+            val way = target - start
+            val progress = if (way == 0f) 1f else ((position - start) / way).coerceIn(0f, 1f)
+            return glideFrom + (target - glideFrom) * progress
+        }
+
     // Flips half-way through a drag, and at once to a tapped tab.
     val selected: Int by derivedStateOf { tapTarget ?: pager.currentPage }
 
@@ -120,10 +134,13 @@ class ListTabMotion(
         if (index != reported && index != tapTarget && index != pager.targetPage) select(index)
     }
 
-    // A page further than one away is first put next to its tab, so only the last page slides.
+    // A page further than one away is first put next to its tab, so only the last page slides; the header glides.
     fun select(index: Int) {
         if (tapTarget == index || (tapTarget == null && !pager.isScrollInProgress && position == index.toFloat())) return
         val token = Any()
+        val gliding = header != position
+        glideFrom = header
+        slideFrom = null
         tap = token
         tapTarget = index
         scope.launch {
@@ -133,12 +150,16 @@ class ListTabMotion(
                     laidOut(all)
                 }
                 val from = position
-                if (abs(index - from) > 1f) pager.scrollToPage(if (index > from) index - 1 else index + 1)
+                val far = abs(index - from) > 1f
+                if (far) pager.scrollToPage(if (index > from) index - 1 else index + 1)
+                if (!far && !gliding) glideFrom = position
+                slideFrom = position
                 pager.animateScrollToPage(index, animationSpec = pageSpec)
             } finally {
                 if (tap === token) {
                     tap = null
                     tapTarget = null
+                    slideFrom = null
                 }
             }
         }
@@ -192,7 +213,7 @@ internal fun ListTabs(
                         .overscroll(overscroll)
                         .scrollable(row.byHand, Orientation.Horizontal, overscroll, reverseDirection = reverse)
                         .semantics {
-                            horizontalScrollAxisRange = ScrollAxisRange({ row.scroll(motion.position) }, { row.max.toFloat() })
+                            horizontalScrollAxisRange = ScrollAxisRange({ row.scroll(motion.header) }, { row.max.toFloat() })
                             scrollBy { x, _ -> row.byHand.dispatchRawDelta(x) != 0f }
                         },
                 measurePolicy = row,
@@ -244,7 +265,7 @@ internal class TabRowLayout(
 
     val byHand =
         ScrollableState { delta ->
-            val position = motion.position
+            val position = motion.header
             val now = scroll(position)
             val next = (now + delta).coerceIn(0f, places.max.toFloat())
             hand = next - places.scroll(position)
@@ -254,14 +275,14 @@ internal class TabRowLayout(
 
     // A tab given focus by a key is centred like a selected one.
     fun reveal(index: Int) {
-        val position = motion.position
+        val position = motion.header
         hand = places.centring(index) - places.scroll(position)
         handAt = position
     }
 
     // Once the pager is a page or more from where the hand left the row, its scroll is the pager's alone again.
     suspend fun forgetHand() {
-        snapshotFlow { hand != 0f && abs(motion.position - handAt) >= 1f }.collect { if (it) hand = 0f }
+        snapshotFlow { hand != 0f && abs(motion.header - handAt) >= 1f }.collect { if (it) hand = 0f }
     }
 
     // A full-width child of fixed size: the stock indicator inside it is measured at the blend of the two labels' widths.
@@ -272,7 +293,7 @@ internal class TabRowLayout(
                 if (places.labels.isEmpty()) {
                     0f to 0f
                 } else {
-                    around(motion.position, places.labels.size) { from, to, f ->
+                    around(motion.header, places.labels.size) { from, to, f ->
                         blend(places.labelLeft(from), places.labelLeft(to), f) to blend(places.labels[from], places.labels[to], f)
                     }
                 }
@@ -297,7 +318,7 @@ internal class TabRowLayout(
         places = measured
         val bar = indicator.map { it.measure(Constraints(minWidth = measured.width, maxWidth = measured.width, maxHeight = height)) }
         return layout(constraints.maxWidth, height) {
-            val scroll = scroll(motion.position).roundToInt()
+            val scroll = scroll(motion.header).roundToInt()
             placeables.forEachIndexed { index, placeable -> placeable.placeRelative(measured.lefts[index] - scroll, 0) }
             bar.forEach { it.placeRelative(-scroll, height - it.height) }
         }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -324,8 +325,81 @@ class ListTabMotionTest {
     @Test
     fun `on a tap the indicator is where the page is`() = assertHeaderOnThePage("Planned")
 
+    // The header's place in tabs, read from the indicator against the labels it blends between.
+    private fun headerPosition(): Float {
+        val left = indicator().left.value
+        val lefts = labels.map { label(it).left.value }
+        val from = (0 until labels.lastIndex).lastOrNull { lefts[it] <= left + 0.01f } ?: 0
+        return (from + (left - lefts[from]) / (lefts[from + 1] - lefts[from])).coerceIn(0f, labels.lastIndex.toFloat())
+    }
+
+    // Telegram's far tap: one page slides, and the header glides from the tab it left to the tapped one by its progress.
     @Test
-    fun `on a tap on a far tab the indicator travels with the last page`() = assertHeaderOnThePage("Dropped")
+    fun `on a tap on a far tab the header glides the whole way with the one sliding page`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        val target = labels.lastIndex.toFloat()
+        tab("Dropped").performClick()
+        var last = 0f
+        var moving = 0
+        repeat(MAX_FRAMES) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            val page = pagerPosition(rest)
+            val header = headerPosition()
+            val shown = indicator()
+            assertTrue(
+                "frame $frame: the indicator ${shown.left}..${shown.right} off the row",
+                shown.left.value >= 0f && shown.right.value <= pageWidth,
+            )
+            assertTrue("frame $frame: the header went back from $last to $header", header >= last - GLIDE_TOLERANCE)
+            val progress = (page - (target - 1f)).coerceIn(0f, 1f)
+            assertEquals("frame $frame: the header at the page's progress $progress", target * progress, header, GLIDE_TOLERANCE)
+            if (header > last + GLIDE_TOLERANCE) moving++
+            last = header
+        }
+        assertTrue("the glide took $moving frames", moving >= GLIDE_FRAMES)
+        assertEquals(target, last, GLIDE_TOLERANCE)
+        assertEquals("the page has arrived with the header", rest, left(droppedRow), TOLERANCE)
+        assertIndicatorAt("Dropped", "Dropped", 0f)
+        assertIdle()
+    }
+
+    // A release's speed sets the settle's length: a fast flick ends sooner than a release with the finger at rest.
+    @Test
+    fun `a fast flick settles sooner than a still release over the same way`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+
+        fun settleFrames(
+            to: Int,
+            release: TouchInjectionScope.() -> Unit,
+        ): Int {
+            compose.onRoot().performTouchInput(release)
+            var frames = 0
+            while (pagerPosition(rest) < to - SETTLE_EPSILON && frames < MAX_FRAMES) {
+                compose.mainClock.advanceTimeByFrame()
+                frames++
+            }
+            compose.mainClock.advanceTimeBy(SETTLED)
+            tab(labels[to]).assertIsSelected()
+            return frames
+        }
+        val flick =
+            settleFrames(1) {
+                down(center)
+                moveBy(Offset(-width * FLICK, 0f), delayMillis = FRAME)
+                moveBy(Offset(-width * FLICK, 0f), delayMillis = FRAME)
+                up()
+            }
+        val still =
+            settleFrames(2) {
+                down(center)
+                repeat(SLOW_STEPS) { moveBy(Offset(-width * FLICK * 2 / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+                repeat(SLOW_STEPS) { moveBy(Offset.Zero, delayMillis = SLOW_STEP_MS) }
+                up()
+            }
+        assertTrue("a flick settles in $flick frames, a still release in $still", flick * FRAME <= FLICK_SETTLE_MS && still > flick + 2)
+    }
 
     // A2's T1: the stock row's own scroll to a newly selected tab never runs against the finger.
     @Test
@@ -365,9 +439,9 @@ class ListTabMotionTest {
         assertIdle()
     }
 
-    // A2's T2: the page and the indicator cannot disagree when a tap interrupts a settle.
+    // A2's T2: a tap that interrupts a settle glides the header from where it is, and it arrives with the page.
     @Test
-    fun `a tap during a settle keeps the indicator on the page every frame`() {
+    fun `a tap during a settle glides the header from where it is and arrives with the page`() {
         show(ListFixtureStates.watching)
         val rest = left(firstRows[0])
         compose.onRoot().performTouchInput {
@@ -380,10 +454,17 @@ class ListTabMotionTest {
         val settling = pagerPosition(rest)
         assertTrue("mid-settle: $settling", settling > 0.05f && settling < 0.95f)
         tab("Completed").performClick()
+        val from = headerPosition()
+        assertTrue("the glide starts where the settle was: $from", from >= settling - GLIDE_TOLERANCE && from < 1f)
+        var last = from
         repeat(MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
             tab("Completed").assertIsSelected()
-            assertIndicatorAt(pagerPosition(rest))
+            val progress = (pagerPosition(rest) - 1f).coerceIn(0f, 1f)
+            val header = headerPosition()
+            assertEquals("the header at the page's progress $progress", from + (2f - from) * progress, header, GLIDE_TOLERANCE)
+            assertTrue("the header went back from $last to $header", header >= last - GLIDE_TOLERANCE)
+            last = header
         }
         compose.mainClock.advanceTimeBy(SETTLED)
         assertIndicatorAt("Completed", "Completed", 0f)
@@ -439,15 +520,17 @@ class ListTabMotionTest {
             compose.mainClock.advanceTimeByFrame()
             assertRowAt(pagerPosition(rest))
         }
+        // A tap's header glides; the row's scroll is taken from it, as the indicator is.
         tab("Watching").performClick()
         repeat(MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
-            assertRowAt(pagerPosition(rest))
+            assertRowAt(headerPosition())
         }
+        assertRowAt(pagerPosition(rest))
         tab("Dropped").performClick()
         repeat(MAX_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
-            assertRowAt(pagerPosition(rest))
+            assertRowAt(headerPosition())
         }
         assertRowAt(4f)
         assertIdle()
@@ -546,6 +629,10 @@ class ListTabMotionTest {
         const val SLOW_STEPS = 20
         const val SLOW_STEP_MS = 50L
         const val HAND = 24f
+        const val GLIDE_TOLERANCE = 0.02f
+        const val GLIDE_FRAMES = 6
+        const val FLICK = 0.2f
+        const val FLICK_SETTLE_MS = 220L
     }
 }
 
