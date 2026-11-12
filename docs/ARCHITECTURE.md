@@ -539,7 +539,7 @@ change legible, or preventing a jump. Decoration is not a purpose.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
   curve, spring value or delay in user interface code fails the build. One value is the owner's exception: the List's
   pages settle after a release, and slide after a tab tap, with ViewPager2's snap timing, so that the gesture feels
-  as in Droid-ify; it decelerates and cannot overshoot.
+  as in Droid-ify; a faster release settles sooner, and the settle decelerates and cannot overshoot.
 - **No bounce in what the app animates.** The Expressive scheme's spatial springs overshoot, so the app's own
   animations use only its effects springs, which cannot: fast for a change inside a component and for an exit,
   default for a component's entrance, slow for a screen.
