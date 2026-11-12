@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.wiring
 
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -12,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -50,7 +52,7 @@ internal class LiveGraph(
 
             override suspend fun sync(): Outcome<Unit> = signedOut
 
-            override suspend fun write(write: ListWrite) = Unit
+            override suspend fun write(write: ListWrite): ListChange? = null
 
             override suspend fun send(write: ListWrite): Outcome<Unit> = signedOut
         }
@@ -67,6 +69,8 @@ internal class LiveGraph(
     override val airing =
         object : AiringRepository {
             override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flowOf(emptyMap())
+
+            override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flowOf(emptyMap())
 
             override suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit> = unavailable
 

@@ -42,10 +42,7 @@ import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
-// Minus, the watched count as a numeric field with "/ total", plus. The count has no ceiling: the total is only shown.
-// A typed count is applied when the user confirms it, leaves the field or presses a button, which then steps from the
-// typed count; an empty field keeps the count. The field shows [watched] whenever nothing is being typed; a count
-// changed from outside drops an unconfirmed one unless the field has focus.
+// A button with nothing typed reports a step to [onStep], so quick taps each count before [watched] catches up.
 @Composable
 fun EpisodeStepper(
     watched: Int,
@@ -53,7 +50,8 @@ fun EpisodeStepper(
     onWatchedChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-) = EpisodeStepper(watched, total, onWatchedChange, modifier, enabled, typed = null)
+    onStep: (Int) -> Unit = { onWatchedChange(watched + it) },
+) = EpisodeStepper(watched, total, onWatchedChange, modifier, enabled, typed = null, onStep = onStep)
 
 // [typed] stands for text the user has typed but not yet confirmed.
 @Composable
@@ -64,6 +62,7 @@ internal fun EpisodeStepper(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     typed: String?,
+    onStep: (Int) -> Unit = { onWatchedChange(watched + it) },
 ) {
     var draft by rememberSaveable { mutableStateOf(typed) }
     var focused by remember { mutableStateOf(false) }
@@ -94,9 +93,10 @@ internal fun EpisodeStepper(
             focused = isFocused
             if (!isFocused) commit()
         },
-        onStep = {
+        onStep = { count ->
+            val typedCount = draft?.let { typedCount(it, watched) }
             draft = null
-            onWatchedChange(it)
+            if (typedCount != null) onWatchedChange(count) else onStep(count - watched)
         },
         modifier = modifier,
         enabled = enabled,

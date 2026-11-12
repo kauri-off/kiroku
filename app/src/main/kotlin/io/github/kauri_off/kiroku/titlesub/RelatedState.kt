@@ -14,20 +14,21 @@ import io.github.kauri_off.kiroku.core.model.relatedGroups
 
 // Every state has the top bar, so every state shows the session banner while the session is expired (S6).
 sealed interface RelatedState {
-    val session: Session
+    // Null until the session is known.
+    val session: Session?
 
     data class Loading(
-        override val session: Session,
+        override val session: Session?,
     ) : RelatedState
 
     data class Failed(
         val error: DataError,
-        override val session: Session,
+        override val session: Session?,
     ) : RelatedState
 
     data class Shown(
         val groups: List<RelatedGroup>,
-        override val session: Session,
+        override val session: Session?,
     ) : RelatedState
 }
 
@@ -67,7 +68,7 @@ fun relatedState(
     entries: Map<AnimeId, ListValues>,
     airing: Map<AnimeId, Airing>,
     language: TitleLanguage,
-    session: Session,
+    session: Session?,
 ): RelatedState.Shown =
     RelatedState.Shown(
         relatedGroups(related).map { (relation, items) ->

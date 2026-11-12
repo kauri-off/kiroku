@@ -53,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
@@ -60,7 +61,9 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -125,6 +128,7 @@ internal fun EditSheet(
         }
     }
     val countFocus = remember { FocusRequester() }
+    val statusFocus = remember { FocusRequester() }
     var countSpan by remember { mutableStateOf(IntRange.EMPTY) }
     var countFocused by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -161,7 +165,7 @@ internal fun EditSheet(
                 // The gaps between groups look equal once the controls' own invisible margins are counted.
                 TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(Spacing.l))
-                StatusChoice(state.draft.status) { edit(EditSheetEvent.StatusChosen(it)) }
+                StatusChoice(state.draft.status, Modifier.focusRequester(statusFocus)) { edit(EditSheetEvent.StatusChosen(it)) }
                 Spacer(Modifier.height(Spacing.l))
                 Column(
                     Modifier.onPlaced {
@@ -169,7 +173,7 @@ internal fun EditSheet(
                         countSpan = top until top + it.size.height
                     },
                 ) {
-                    Label(stringResource(R.string.edit_episodes))
+                    Label(stringResource(R.string.design_episodes_watched))
                     Spacer(Modifier.height(Spacing.xs))
                     EpisodeStepperLayout(
                         text = state.typed ?: state.draft.watchedEpisodes.toString(),
@@ -189,7 +193,18 @@ internal fun EditSheet(
                         fieldModifier = Modifier.focusRequester(countFocus),
                     )
                 }
-                if (focusCount) LaunchedEffect(Unit) { countFocus.requestFocus() }
+                // With key input the chips take the first focus, not the drag handle, whose tooltip would show unasked.
+                val window = LocalWindowInfo.current
+                val inputMode = LocalInputModeManager.current
+                LaunchedEffect(Unit) {
+                    if (focusCount) {
+                        countFocus.requestFocus()
+                    } else {
+                        snapshotFlow { window.isWindowFocused }.first { it }
+                        awaitFrame()
+                        if (inputMode.inputMode == InputMode.Keyboard) statusFocus.requestFocus()
+                    }
+                }
                 Spacer(Modifier.height(Spacing.xl))
                 ScoreSlider(state.draft.score ?: 0) { edit(EditSheetEvent.ScoreChanged(it)) }
                 Spacer(Modifier.height(Spacing.xl))
@@ -311,9 +326,10 @@ private fun Actions(
 @Composable
 private fun StatusChoice(
     status: ListStatus,
+    modifier: Modifier,
     onChoose: (ListStatus) -> Unit,
 ) {
-    FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+    FlowRow(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         ListStatus.entries.forEach { option ->
             val selected = option == status
             FilledTonalToggleButton(

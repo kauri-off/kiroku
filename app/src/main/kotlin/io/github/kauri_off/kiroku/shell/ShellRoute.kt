@@ -5,6 +5,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.EntryProviderScope
@@ -14,6 +15,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.notShown
 
 // What each key shows. Every screen gets the shell's one snackbar host and draws it in its own scaffold.
@@ -52,7 +54,13 @@ fun ShellRoute(
     val provider = entryProvider { entries(navigator, snackbars) }
     val decorated =
         Destination.entries.associateWith { destination ->
-            val stack = navigator.stackOf(destination).mapIndexed { depth, key -> provider(key).scopedTo(key, destination, depth) }
+            val stack =
+                navigator.stackOf(destination).mapIndexed {
+                    depth,
+                    key,
+                    ->
+                    provider(key).scopedTo(key, destination, depth, navigator)
+                }
             rememberDecoratedNavEntries(stack, decorators)
         }
     ShellScreen(
@@ -74,13 +82,18 @@ fun ShellRoute(
 }
 
 // Each entry's saved state and view models belong to its place in one destination's stack, never to its key alone.
+// Only the entry on top draws the snackbar host, also while a back gesture shows the one under it.
 private fun NavEntry<NavKey>.scopedTo(
     key: NavKey,
     destination: Destination,
     depth: Int,
+    navigator: ShellNavigator,
 ): NavEntry<NavKey> {
     val entry = this
-    return NavEntry(key, notShown("${destination.name}/$depth/$contentKey"), metadata) { entry.Content() }
+    return NavEntry(key, notShown("${destination.name}/$depth/$contentKey"), metadata) {
+        val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
+        CompositionLocalProvider(LocalOnTop provides onTop) { entry.Content() }
+    }
 }
 
 // Screens change without animation until the transitions of ARCHITECTURE section 8.5 are built.

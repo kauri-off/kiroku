@@ -24,6 +24,5 @@
     <string name="list_sign_in">Войти</string>
     <string name="list_failed">Не удалось загрузить список</string>
     <string name="list_episode_watched">Серия\u00A0%1$d просмотрена</string>
-    <string name="list_could_not_refresh">Не удалось обновить</string>
     <string name="list_edit">Изменить</string>
 </resources>

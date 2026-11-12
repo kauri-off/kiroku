@@ -1,14 +1,14 @@
 package io.github.kauri_off.kiroku.list
 
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
@@ -19,6 +19,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -45,6 +46,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -83,6 +85,12 @@ class ListScreenTest {
 
     private val plusOne = "Plus one episode"
 
+    // The neighbouring tabs' pages are composed off screen.
+    private fun noneShown(description: String) {
+        val nodes = compose.onAllNodesWithContentDescription(description)
+        repeat(nodes.fetchSemanticsNodes().size) { nodes[it].assertIsNotDisplayed() }
+    }
+
     @Test
     fun `plus one is on each watching row and sends that row's title`() {
         val rows = ListFixtureStates.rows(ListStatus.Watching).take(2)
@@ -96,7 +104,7 @@ class ListScreenTest {
     @Test
     fun `no other tab and no other user's list has plus one`() {
         show(ListFixtureStates.planned)
-        compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
+        noneShown(plusOne)
         show(ListFixtureStates.readOnly)
         compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
     }
@@ -216,19 +224,10 @@ class ListScreenTest {
     }
 
     @Test
-    fun `undo in the snackbar is sent with its message`() {
-        show(ListFixtureStates.undoSnackbar)
-        compose.onNodeWithText("Episode\u00A013 watched").assertExists()
-        compose.onNodeWithText("Undo").performClick()
-        compose.waitForIdle()
-        assertEquals(listOf(ListEvent.Undo(ListFixtureStates.undoSnackbar.message!!)), events)
-    }
-
-    @Test
     fun `the screen draws the snackbar host it is given`() {
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                ListScreen(ListFixtureStates.undoSnackbar, {}, remember { SnackbarHostState() })
+                ListScreen(ListFixtureStates.undoSnackbar, {}, rememberHostShowing(ListFixtureStates.undoMessage))
             }
         }
         compose.onNodeWithText("Episode\u00A013 watched").assertIsDisplayed()
@@ -329,24 +328,6 @@ class ListScreenTest {
             .title
 
     @Test
-    fun `a snackbar cut short by leaving the screen is reported as dismissed`() {
-        show(ListFixtureStates.undoSnackbar)
-        compose.onNodeWithText("Undo").assertExists()
-        shown = null
-        compose.waitForIdle()
-        assertEquals(listOf(ListEvent.MessageDismissed(ListFixtureStates.undoSnackbar.message!!)), events)
-    }
-
-    @Test
-    fun `a failed refresh names no connection when that is the cause`() {
-        show(ListFixtureStates.offlineCached)
-        compose.onNodeWithText("No connection").assertExists()
-        compose.onNodeWithText("Undo").assertDoesNotExist()
-        show(ListFixtureStates.watching.copy(message = ListMessage(ListMessage.Kind.RefreshFailed(ListFailure.Other), serial = 2)))
-        compose.onNodeWithText("Could not refresh").assertExists()
-    }
-
-    @Test
     fun `an empty tab can be pulled to refresh`() {
         show(ListFixtureStates.empty)
         compose.onRoot().performTouchInput { swipeDown(startY = centerY, endY = bottom) }
@@ -406,11 +387,97 @@ class ListMotionTest {
         Snapshot.sendApplyNotifications()
     }
 
-    private fun complete() = set(ListFixtureStates.completedSnackbar.copy(message = null))
+    private fun complete() = set(ListFixtureStates.completedSnackbar)
 
     private fun ListState.titles(): List<String> = page!!.rows.map { it.title }
 
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
+
+    private fun showCompleting(events: MutableList<ListEvent>) {
+        val anime = FixtureAnime.oneShortOfTotal
+        compose.mainClock.autoAdvance = false
+        state = ListFixtureStates.watching
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                FixtureListScreen(state) { e ->
+                    events += e
+                    if (e == ListEvent.PlusOne(anime.id)) state = ListFixtureStates.completedSnackbar
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_000)
+    }
+
+    // Where the "+1" of the row showing [title] is now.
+    private fun plusOneOf(title: String): Offset {
+        val row = compose.onNodeWithText(title).getUnclippedBoundsInRoot()
+        return compose
+            .onAllNodesWithContentDescription("Plus one episode")
+            .fetchSemanticsNodes()
+            .single { it.boundsInRoot.center.y / it.layoutInfo.density.density in row.top.value..row.bottom.value }
+            .boundsInRoot.center
+    }
+
+    private fun tap(
+        at: Offset,
+        thenMillis: Long,
+    ) {
+        compose.onRoot().performTouchInput { click(at) }
+        Snapshot.sendApplyNotifications()
+        SystemClock.sleep(thenMillis)
+        compose.mainClock.advanceTimeBy(thenMillis)
+    }
+
+    // A "+1" burst on a row that leaves Watching does not land on the row sliding into its place.
+    @Test
+    fun `quick taps where a completed row was do not reach the row that slides into its place`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events)
+        val button = plusOneOf(anime.titles.romaji)
+        repeat(4) { tap(button, TAP_GAP_MS) }
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events.filterIsInstance<ListEvent.PlusOne>())
+        SystemClock.sleep(SETTLED)
+        tap(button, TAP_GAP_MS)
+        assertEquals(
+            listOf(ListEvent.PlusOne(anime.id), ListEvent.PlusOne(FixtureAnime.estimatedCaughtUp.id)),
+            events.filterIsInstance<ListEvent.PlusOne>(),
+        )
+    }
+
+    // A2's Q1: the finger aims at the row below the completed one, which has moved up; the row now there is not hit.
+    @Test
+    fun `a quick tap aimed at the row below a completed row reaches no other title`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events)
+        val below = plusOneOf(following)
+        tap(plusOneOf(anime.titles.romaji), PAIR_MS)
+        tap(below, TAP_GAP_MS)
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events)
+        SystemClock.sleep(SETTLED)
+        tap(below, TAP_GAP_MS)
+        assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
+    }
+
+    // A3's Q1b: the rows have stopped, but the tap aimed at the row below comes at an ordinary pace after the first.
+    @Test
+    fun `a tap aimed at the row below a completed row at an ordinary pace reaches no other title`() {
+        val anime = FixtureAnime.oneShortOfTotal
+        val events = mutableListOf<ListEvent>()
+        showCompleting(events)
+        val below = plusOneOf(following)
+        compose.onRoot().performTouchInput { click(plusOneOf(anime.titles.romaji)) }
+        Snapshot.sendApplyNotifications()
+        compose.mainClock.advanceTimeByFrame()
+        SystemClock.sleep(ORDINARY_PACE_MS)
+        compose.mainClock.advanceTimeBy(ORDINARY_PACE_MS)
+        tap(below, TAP_GAP_MS)
+        assertEquals(listOf(ListEvent.PlusOne(anime.id)), events.filterIsInstance<ListEvent.PlusOne>())
+        SystemClock.sleep(PLUS_ONE_SETTLE_MILLIS)
+        tap(below, TAP_GAP_MS)
+        assertEquals(2, events.filterIsInstance<ListEvent.PlusOne>().size)
+    }
 
     @Test
     fun `the row leaves and the rows below close up within 250 ms`() {
@@ -483,7 +550,7 @@ class ListMotionTest {
         assertTrue("the planned page is on its way in", left(planned) > watchingLeft)
         compose.mainClock.advanceTimeBy(TAB_SWITCH_MS - TAB_SWITCH_MS / 3)
         assertEquals(watchingLeft, left(planned))
-        assertFalse(exists(following))
+        compose.onNodeWithText(following).assertIsNotDisplayed()
         compose.mainClock.advanceTimeBy(SETTLED)
         assertIdle()
     }
@@ -497,7 +564,7 @@ class ListMotionTest {
         set(ListFixtureStates.completed)
         compose.mainClock.advanceTimeBy(SETTLED)
         assertEquals(watchingLeft, left(completed))
-        assertFalse(exists(planned))
+        compose.onNodeWithText(planned).assertIsNotDisplayed()
         assertFalse(exists(following))
         assertIdle()
     }
@@ -548,6 +615,15 @@ class ListMotionTest {
         const val COMPONENT_CHANGE_MS = MotionBounds.CHANGE
         const val TAB_SWITCH_MS = MotionBounds.ENTER
         const val SETTLED = 2_000L
+
+        // Between two taps of a burst.
+        const val TAP_GAP_MS = 100L
+
+        // The second tap of A2's pair, measured on the emulator.
+        const val PAIR_MS = 300L
+
+        // A3's Q1b: the second tap of a pair at an ordinary pace, after the rows have stopped.
+        const val ORDINARY_PACE_MS = 900L
     }
 }
 
@@ -575,7 +651,7 @@ class ListMotionOffTest {
         compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(state) } }
         compose.mainClock.advanceTimeByFrame()
         val leavingTop = compose.onNodeWithText(FixtureAnime.oneShortOfTotal.titles.romaji).getUnclippedBoundsInRoot().top
-        compose.runOnUiThread { state = ListFixtureStates.completedSnackbar.copy(message = null) }
+        compose.runOnUiThread { state = ListFixtureStates.completedSnackbar }
         Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()

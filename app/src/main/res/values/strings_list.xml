@@ -24,6 +24,5 @@
     <string name="list_sign_in">Sign in</string>
     <string name="list_failed">Could not load the list</string>
     <string name="list_episode_watched">Episode\u00A0%1$d watched</string>
-    <string name="list_could_not_refresh">Could not refresh</string>
     <string name="list_edit">Edit</string>
 </resources>

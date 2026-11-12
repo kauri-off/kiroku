@@ -163,7 +163,9 @@ fun airingPhase(
     if (anime.airingStatus == AiringStatus.Finished) return null
     val aired = airing?.aired as? AiredCount.Known ?: return AiringPhase.CountUnknown
     val toWatch = values?.let { toWatch(anime.airingStatus, it, airing) }?.takeIf { it.value > 0 }
-    return AiringPhase.Aired(aired, toWatch, airing.nextEpisode)
+    // An episode the user has already recorded as watched is not announced as next (W9).
+    val next = airing.nextEpisode?.takeIf { values == null || it.number > values.watchedEpisodes }
+    return AiringPhase.Aired(aired, toWatch, next)
 }
 
 // When the next episode airs, as the title shows it: the next episode, or a premiere whose time is known.

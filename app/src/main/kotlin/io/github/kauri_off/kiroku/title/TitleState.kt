@@ -24,21 +24,22 @@ import java.time.ZonedDateTime
 // The page is rebuilt from stored data with TitlePage.of whenever any of it changes; the moment is carried over.
 sealed interface TitleState {
     // Every state has the top bar, so every state shows the session banner while the session is expired (S6).
-    val session: Session
+    // Null until the session is known.
+    val session: Session?
 
     // Opened with no data at all, as from a deep link.
     data class Loading(
-        override val session: Session,
+        override val session: Session?,
     ) : TitleState
 
     data class Failed(
         val error: DataError,
-        override val session: Session,
+        override val session: Session?,
     ) : TitleState
 
     data class Shown(
         val page: TitlePage,
-        override val session: Session,
+        override val session: Session?,
         val moment: TitleMoment = TitleMoment(),
     ) : TitleState
 }
@@ -105,14 +106,12 @@ data class TitlePage private constructor(
 // What belongs to the user's moment on the page rather than to the data: it survives every rebuild of the page.
 data class TitleMoment(
     val synopsisExpanded: Boolean = false,
-    val snackbar: TitleSnackbar? = null,
 ) {
     // The part of an event that concerns the moment; every other event leaves it as it is.
     fun after(event: TitleEvent): TitleMoment =
         when (event) {
             TitleEvent.ExpandSynopsis -> copy(synopsisExpanded = true)
             TitleEvent.CollapseSynopsis -> copy(synopsisExpanded = false)
-            TitleEvent.SnackbarAction, TitleEvent.SnackbarDismissed -> copy(snackbar = null)
             else -> this
         }
 }
@@ -132,8 +131,6 @@ data class RelatedCard(
     val status: ListStatus?,
 )
 
-enum class TitleSnackbar { AddedToPlanned, MovedToCompleted }
-
 sealed interface TitleEvent {
     data object Back : TitleEvent
 
@@ -145,8 +142,14 @@ sealed interface TitleEvent {
 
     data object Edit : TitleEvent
 
+    // A typed count.
     data class SetWatched(
         val watched: Int,
+    ) : TitleEvent
+
+    // The stepper's plus or minus.
+    data class StepWatched(
+        val by: Int,
     ) : TitleEvent
 
     data object ExpandSynopsis : TitleEvent
@@ -166,10 +169,6 @@ sealed interface TitleEvent {
     data object Retry : TitleEvent
 
     data object SignIn : TitleEvent
-
-    data object SnackbarAction : TitleEvent
-
-    data object SnackbarDismissed : TitleEvent
 }
 
 private fun headerFacts(

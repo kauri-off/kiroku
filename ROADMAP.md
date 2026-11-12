@@ -60,13 +60,7 @@ Built and merged (the code and its tests say what each one is):
 - [x] **M1-11 [L] Title sub-screens.**
 - [x] **M1-12 [L] Edit sheet.**
 - [x] **M1-13 [A] Wiring and demo mode.**
-
-- [ ] **M1-14 View models, routes and the first APK.** List, title page and edit sheet working on demo data, with
-  navigation between them.
-  **Needs:** M1-08, M1-09, M1-10, M1-11, M1-12, M1-13, M1-02.
-  **Check:** tests cover every event of the three view models; the edit sheet's state is updated on every keystroke
-  synchronously, in `onEvent` itself, and a test types "24" quickly through the real route; `tools/emu smoke` on the debug APK exits 0 and its
-  device screenshots show the List with demo data.
+- [x] **M1-14 View models, routes and the first APK.**
 
 - [ ] **M1-15 [O] Owner's look and calibration.** The owner installs the APK and checks: the app opens on the List
   with demo data; a row opens the title page; "+1" changes the progress and offers Undo; the phone's language and
@@ -96,6 +90,9 @@ Not to forget:
 - The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
   between seasons does not hide the next season.
 - Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
+- Once `ListRepository.write` suspends on the database, a write that posts a message runs in a scope that outlives
+  its screen, so Back right after a step loses neither the write nor its Undo. The database repository passes the
+  same `:core` contract tests as demo mode for what `write` returns, `ListChange.stepped` included.
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
   agent reads that file or the value, and only the orchestrator may check that no recorded file contains it.
 - The task that starts using the client id puts the secret `MAL_CLIENT_ID` back on CI's debug build step.
@@ -140,6 +137,8 @@ Not to forget:
   section 13.
 - The rule that rows never move (section 9.3) is tested with airing data changing under a visible tab.
 - The calculator's result also carries "to watch" and the premiere, so no screen combines them on its own (A1).
+- Airing is observed with one clock tick from `:core`, shared by demo mode and `:data`, so every screen moves to the
+  next episode at the same instant (A2); the title page fetches airing for a title outside the tracked set (A12).
 - A next episode beyond MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at
   the total and there is no next episode beyond it, shown by a calculator test. An AniList episode numbered 0 or
   below is dropped.

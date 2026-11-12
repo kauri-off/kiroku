@@ -360,15 +360,18 @@ was chosen against, and why:
   **With cached content, a failed refresh is a snackbar, never a replaced screen.**
 - Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search and
   unvisited title pages show the error state with "No connection" and Retry.
-- All messages are snackbars or inline text. Toasts are not used.
+- All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it.
+  One is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
+  replaced: a newer one of that kind waits behind it and is dropped if its title is written meanwhile; an ordinary
+  one posted meanwhile is dropped.
 
 ### 7.3 Writes to the list
 
 Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
 is applied locally; a failure is reported on a stream of the list repository, with what Retry needs, so it reaches
 the user after the screen that made the edit is gone; with nothing collecting it, it is dropped, as the entry is
-already back at the server's state. The notification action instead waits for the server's answer (N9). "+1" and
-"Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
+already back at the server's state. The notification action instead waits for the server's answer (N9). "+1", the
+stepper and "Mark watched" are steps, applied to the entry's values as they are when sent, not to values read earlier.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown.
@@ -377,7 +380,9 @@ already back at the server's state. The notification action instead waits for th
   snackbar says "Could not save · Retry". Retry applies, as a new edit, the values shown just before the failure.
   Example: the server has 12; two taps show 13, then 14; the request carrying 13 fails. 14 is not sent, the row
   shows 12, and Retry sends 14.
-- **W3. Undo is one write** that restores every value the undone edit changed: count, status and dates.
+- **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
+  undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
+  while it still holds what the edit put there.
 - **W4. A sync never reverts an edit made while it was running**, including an edit whose request completed
   before the sync's download did. A title added during a sync is not deleted by it, and one removed during a sync
   does not come back. Removals made on the website are still reflected for every other entry.
@@ -464,6 +469,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9): "25 / 24" is a legal display and nothing is refused |
 | `ScreenState` | `LoadingIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
+| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, in the stock scrollable row's measures. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
 
 Stock Material 3 components are used directly for everything else. Icons are Material icons. Where Material offers
 several components for one job, these are the choices:
@@ -501,7 +507,8 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in as a component's entrance.
+  settles; a tab chosen by a tap slides its page in as a component's entrance. The tab indicator, the selected tab
+  and the tab row's scroll are drawn from the pager's position, in the frame it moves.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
   curve, spring value or delay in user interface code fails the build.
 - **No bounce in what the app animates.** The Expressive scheme's spatial springs overshoot, so the app's own
@@ -594,7 +601,8 @@ computed.
 entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
 clearing the field ends it. Sort opens a bottom sheet with at most five options. "+1" answers with a snackbar that
 offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves Watching and the
-snackbar says where it went; Undo puts back the count, the status and the dates.
+snackbar says where it went; Undo puts back the count, the status and the dates. When a row leaves its tab, a "+1"
+on a row that moved up is not applied until 800 ms after the rows have stopped; taps do not extend this.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.
@@ -640,8 +648,8 @@ episode total, the year, the premiere and a related title each appear in one pla
 scrolling, for a title of up to two lines.
 
 **Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
-render at once, and one linear progress indicator under them stands in for items 5 to 9 until the details arrive. Only
-a page opened with no data at all (a deep link) uses the full-screen loading state.
+render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 until the details arrive.
+Only a page opened with no data at all (a deep link) uses the full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 
@@ -651,13 +659,13 @@ order of items 2 to 8 does not change, and the above-the-fold rule stays.
 
 ### 9.5 Edit sheet
 
-A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
-edits; the status as five single-choice chips (chips are controls, not logical lines); an `EpisodeStepper`; a score
-slider 0 to 10 with the score names; start and finish dates; a text button "Remove from list" (asks for confirmation);
-"Save", on screen without scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before
-"Save", and "Save" writes exactly what the sheet shows, an automatic status change (W7) included. The count has no
-ceiling (W9). Dismissing the sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags,
-comments and priority come after 1.0.
+A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it edits;
+the status as five single-choice toggle buttons in a wrapping row; an `EpisodeStepper`; a score slider 0 to 10 with the
+score names; start and finish dates; a text button "Remove from list" (asks for confirmation); "Save", on screen without
+scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before "Save", and "Save" writes
+exactly what the sheet shows, an automatic status change (W7) included. The count has no ceiling (W9). Dismissing the
+sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come
+after 1.0.
 
 ### 9.6 Search
 

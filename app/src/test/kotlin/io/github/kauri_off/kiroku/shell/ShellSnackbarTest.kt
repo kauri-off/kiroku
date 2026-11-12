@@ -19,7 +19,9 @@ import io.github.kauri_off.kiroku.design.theme.ThemeSettings
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.screenshots.SystemBars
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -52,6 +54,10 @@ class ShellSnackbarTest {
             ).around(compose)
 
     private val snackbars = SnackbarHostState()
+    private val scope = MainScope()
+
+    @After
+    fun stop() = scope.cancel()
 
     private fun shell() {
         compose.runOnUiThread {
@@ -60,7 +66,7 @@ class ShellSnackbarTest {
             ) { ShellRoute(snackbars = snackbars) }
         }
         compose.waitForIdle()
-        MainScope().launch { snackbars.showSnackbar("Could not save", "Retry", duration = SnackbarDuration.Indefinite) }
+        scope.launch { snackbars.showSnackbar("Could not save", "Retry", duration = SnackbarDuration.Indefinite) }
         compose.waitForIdle()
     }
 

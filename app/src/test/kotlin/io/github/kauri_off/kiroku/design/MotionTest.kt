@@ -1,11 +1,11 @@
 package io.github.kauri_off.kiroku.design
 
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.settleMillis
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -50,7 +50,7 @@ class MotionTest {
                 "slow effects" to (scheme.slowEffectsSpec<Float>() to MotionBounds.SCREEN),
             )
         for ((name, bound) in bounds) {
-            val millis = settleMillis(bound.first)
+            val millis = bound.first.settleMillis(SCREEN_PX)
             assertTrue("$name settles in $millis ms, not within ${bound.second}", millis <= bound.second)
         }
     }
@@ -63,22 +63,14 @@ class MotionTest {
             val start = AnimationVector1D(0f)
             val end = AnimationVector1D(SCREEN_PX)
             for (millis in 0..MotionBounds.SCREEN step FRAME) {
-                val value = vectorized.getValueFromNanos(millis * NANOS_PER_MILLI, start, end, start).value
+                val value = vectorized.getValueFromNanos(millis * 1_000_000L, start, end, start).value
                 assertTrue("$value at $millis ms", value <= SCREEN_PX)
             }
         }
     }
 
-    // Across a phone's width in pixels, to the pixel.
-    private fun settleMillis(spec: FiniteAnimationSpec<Float>): Long {
-        val vectorized = spec.vectorize(Float.VectorConverter)
-        val nanos = vectorized.getDurationNanos(AnimationVector1D(0f), AnimationVector1D(SCREEN_PX), AnimationVector1D(0f))
-        return nanos / NANOS_PER_MILLI
-    }
-
     private companion object {
         const val SCREEN_PX = 1080f
-        const val NANOS_PER_MILLI = 1_000_000L
         const val FRAME = 16L
     }
 }
