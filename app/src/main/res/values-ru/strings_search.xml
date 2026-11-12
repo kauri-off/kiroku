@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_placeholder">Поиск аниме</string>
+    <string name="search_clear">Очистить поиск</string>
+    <string name="search_recent">Недавние запросы</string>
+    <string name="search_browse">Подборки</string>
+    <string name="search_this_season">Этот сезон</string>
+    <string name="search_top_airing">Лучшие из выходящих</string>
+    <string name="search_top_rated">Лучшие по оценке</string>
+    <string name="search_most_popular">Самые популярные</string>
+    <string name="search_open_id">Открыть тайтл №%1$d</string>
+    <string name="search_no_results">По запросу «%1$s» ничего не найдено</string>
+    <string name="search_failed">Не удалось выполнить поиск</string>
+    <string name="search_loading_more">Загрузка</string>
+    <string name="search_browse_empty">В этой подборке пока нет тайтлов</string>
+    <string name="search_browse_failed">Не удалось загрузить подборку</string>
+</resources>

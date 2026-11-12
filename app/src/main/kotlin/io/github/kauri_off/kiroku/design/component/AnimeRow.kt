@@ -1,7 +1,10 @@
 package io.github.kauri_off.kiroku.design.component
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -12,8 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -23,9 +29,10 @@ data class RowLine(
     val highlighted: Boolean = false,
 )
 
-// The one trailing element a row may have: a short value such as the MAL score, or the "+1" button.
+// The one trailing element a row may have: the MAL score, or the "+1" button.
 sealed interface RowTrailing {
-    data class Value(
+    // [text] is the score as written; a star says what it is, and screen readers hear "MAL score" with it.
+    data class MalScore(
         val text: String,
     ) : RowTrailing
 
@@ -79,13 +86,27 @@ private fun SupportingLine(line: RowLine) {
     }
 }
 
-// A value, in a caption role, is centred with the row's text.
 @Composable
 private fun Trailing(trailing: RowTrailing) {
     when (trailing) {
-        is RowTrailing.Value ->
-            Text(trailing.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        is RowTrailing.MalScore -> MalScore(trailing)
         is RowTrailing.PlusOne -> PlusOne(trailing)
+    }
+}
+
+// In a caption role, centred with the row's text; the star is as tall as the caption's line, so it grows with the text.
+@Composable
+private fun MalScore(trailing: RowTrailing.MalScore) {
+    val style = MaterialTheme.typography.labelLarge
+    val spoken = stringResource(R.string.design_mal_score, trailing.text)
+    val star = with(LocalDensity.current) { style.lineHeight.toDp() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
+    ) {
+        Icon(painterResource(R.drawable.ic_star), contentDescription = null, modifier = Modifier.size(star))
+        Text(trailing.text, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
