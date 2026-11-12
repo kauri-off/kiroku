@@ -149,7 +149,7 @@ interface ListSource {
 }
 
 interface ListRepository : ListSource {
-    // Hot (section 7.3): dropped with no collector, buffered for a slow one.
+    // Hot: dropped with no collector, buffered for a slow one.
     fun observeWriteFailures(): Flow<WriteFailure>
 
     // Applies the write locally, whole even when its caller is cancelled; null when it changed nothing or was refused.
