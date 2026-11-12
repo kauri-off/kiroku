@@ -90,6 +90,9 @@ Not to forget:
 - The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
   between seasons does not hide the next season.
 - Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
+- Once `ListRepository.write` suspends on the database, a write that posts a message runs in a scope that outlives
+  its screen, so Back right after a step loses neither the write nor its Undo. The database repository passes the
+  same `:core` contract tests as demo mode for what `write` returns, `ListChange.stepped` included.
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
   agent reads that file or the value, and only the orchestrator may check that no recorded file contains it.
 - The task that starts using the client id puts the secret `MAL_CLIENT_ID` back on CI's debug build step.
