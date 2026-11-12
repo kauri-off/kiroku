@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.gestures.Orientation
@@ -47,6 +48,7 @@ import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.MultiContentMeasurePolicy
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -83,6 +85,8 @@ class ListTabMotion(
     // A release's settle, which the system's animation scale shortens to nothing when animations are off.
     val settleSpec: AnimationSpec<Float>,
     private val motionScheme: MotionScheme,
+    // Whether the pager scrolls against a drag's direction, as its scrollable does in a left-to-right layout.
+    private val reverse: Boolean,
 ) {
     // The tab a tap is taking the pager to; it is selected from the tap on.
     var tapTarget by mutableStateOf<Int?>(null)
@@ -111,7 +115,7 @@ class ListTabMotion(
     private var lag by mutableFloatStateOf(0f)
     private var lagReturn: Job? = null
 
-    // Where the tab row is drawn: the pager's position, or during a tap the glide by the sliding page's progress.
+    // Where the tab row is drawn: the pager's position plus [lag], or during a tap the glide by the sliding page's progress.
     val header: Float
         get() {
             val target = tapTarget ?: return (position + lag).coerceIn(0f, all.toFloat())
@@ -158,7 +162,7 @@ class ListTabMotion(
 
     private suspend fun laidOut(count: Int) = snapshotFlow { pager.layoutInfo.beyondViewportPageCount }.first { it >= count }
 
-    // Holds a drag's movement until every page is laid out, at most until the next layout, then gives it to the pager.
+    // Holds a drag's movement until every page is laid out, then gives it to the pager on the next move or before the fling.
     val gate =
         object : NestedScrollConnection {
             private var held = 0f
@@ -182,6 +186,10 @@ class ListTabMotion(
                 if (!staged) {
                     composeAll()
                     laidOut(all)
+                }
+                if (held != 0f) {
+                    pager.dispatchRawDelta(if (reverse) -held else held)
+                    held = 0f
                 }
                 return Velocity.Zero
             }
@@ -245,7 +253,9 @@ fun rememberListTabMotion(pager: PagerState): ListTabMotion {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current.density
     val motionScheme = MaterialTheme.motionScheme
-    return remember(pager, scope, density, motionScheme) {
+    val reverse = ScrollableDefaults.reverseDirection(LocalLayoutDirection.current, Orientation.Horizontal, false)
+    val context = LocalContext.current
+    return remember(pager, scope, density, motionScheme, reverse) {
         val durationScale = scope.coroutineContext[MotionDurationScale]
         ListTabMotion(
             pager,
@@ -253,7 +263,11 @@ fun rememberListTabMotion(pager: PagerState): ListTabMotion {
             PageSettle(density),
             PageSettle(density) { durationScale?.scaleFactor ?: 1f },
             motionScheme,
-        )
+            reverse,
+        ).apply {
+            // An accessibility service turns pages by its own actions, which no gate holds: every page is composed at once.
+            if (context.getSystemService(AccessibilityManager::class.java)?.isEnabled == true) composeAll()
+        }
     }
 }
 

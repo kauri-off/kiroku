@@ -535,7 +535,7 @@ change legible, or preventing a jump. Decoration is not a purpose.
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
   settles; a tab chosen by a tap slides its page in the same way. The tab row is drawn from the pager's position in
-  the frame it moves, except that a tap on a far tab glides it to the tapped tab while the one page slides, and back
+  the frame it moves, except that a tap glides it to the tapped tab while the one page slides, and back
   to the pager if a drag takes over.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme; a literal duration,
   curve, spring value or delay in user interface code fails the build. One value is the owner's exception: the List's

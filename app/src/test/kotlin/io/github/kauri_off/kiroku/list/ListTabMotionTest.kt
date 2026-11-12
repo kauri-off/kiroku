@@ -814,6 +814,30 @@ class ListTabFollowTest {
     val rule: TestRule = registered(compose)
 
     // B3's m3: a fling starts a moment after the drag that threw it ends, so the pager can rest on a page in between.
+    // B3's m2: a tap that waits for the pages to be laid out does not move the pager once a later tap has.
+    @Test
+    fun `of two taps before every page is laid out only the later one moves the pager`() {
+        var laidOut by mutableStateOf(false)
+        lateinit var pager: PagerState
+        lateinit var motion: ListTabMotion
+        compose.setContent {
+            pager = rememberPagerState { 5 }
+            motion = rememberListTabMotion(pager)
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = if (laidOut) motion.ahead else 1) {
+                Box(Modifier.fillMaxSize())
+            }
+        }
+        compose.runOnIdle {
+            motion.select(4)
+            motion.select(1)
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { laidOut = true }
+        compose.waitForIdle()
+        assertEquals(1, pager.currentPage)
+        assertEquals(0f, pager.currentPageOffsetFraction, 0.001f)
+    }
+
     @Test
     fun `a tab reported in a pause before a fling does not pull the pager back to it`() {
         var tab by mutableIntStateOf(0)
