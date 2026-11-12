@@ -36,8 +36,8 @@ fun ScenarioRoute(
         return
     }
     val scenario by scenarios.scenario.collectAsScreenState()
-    val resetting by scenarios.resetting.collectAsScreenState()
-    ScenarioScreen(ScenarioState.Ready(scenario, resetting), onEvent = { event ->
+    val reset by scenarios.reset.collectAsScreenState()
+    ScenarioScreen(ScenarioState.Ready(scenario, reset), onEvent = { event ->
         when (event) {
             is ScenarioEvent.Change -> scenarios.set(event.scenario)
             ScenarioEvent.Reset -> scenarios.reset()

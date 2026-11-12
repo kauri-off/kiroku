@@ -3,7 +3,6 @@ package io.github.kauri_off.kiroku.scenario
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
@@ -24,7 +23,8 @@ class ScenarioScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("several-on") { ScenarioScreen(ScenarioState.Ready(several), onEvent = {}) },
-            case("resetting") { ScenarioScreen(ScenarioState.Ready(several, resetting = true), onEvent = {}) },
+            case("waiting-for-save") { ScenarioScreen(ScenarioState.Ready(several, ResetState.WaitingForSave), onEvent = {}) },
+            case("save-dropped") { ScenarioScreen(ScenarioState.Ready(Scenario(), ResetState.SaveDropped), onEvent = {}) },
             case("marker-on-list") { OverList(Scenario(offline = true)) },
             case("marker-several-on-list") { OverList(several) },
         )
@@ -35,5 +35,5 @@ class ScenarioScreenshots : ScreenshotRegistry() {
 private fun OverList(scenario: Scenario) =
     Box(Modifier.fillMaxSize()) {
         FixtureListScreen(ListFixtureStates.watching)
-        FloatingScenarioMarker(scenario, onClick = {}, Modifier.align(Alignment.TopCenter))
+        EdgeMarker(scenario, Modifier, onClick = {})
     }

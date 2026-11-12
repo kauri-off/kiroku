@@ -1,20 +1,26 @@
 package io.github.kauri_off.kiroku.scenario
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.notShown
 
 // The names of the scenarios that are on, in the panel's order.
 fun Scenario.names(): List<Int> =
@@ -34,16 +40,15 @@ fun Scenario.names(): List<Int> =
         }
     }
 
-// The marker where it floats over the app: centred on the top app bar of the screen beneath.
+// The marker on the end edge of [area], a little below its middle, where every screen has content under its bars.
 @Composable
-fun FloatingScenarioMarker(
+fun EdgeMarker(
     scenario: Scenario,
+    area: Modifier,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) = Box(modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = Spacing.s)) { ScenarioMarker(scenario, onClick) }
+) = Box(area.fillMaxSize().padding(top = Spacing.xxl)) { ScenarioMarker(scenario, onClick, Modifier.align(Alignment.CenterEnd)) }
 
-// Says that scenarios are on, so a simulated failure is not taken for a bug; it is spoken with their names, and a tap
-// opens the panel. An icon fits between a top app bar's title and its actions on every screen.
+// A tab narrower than every screen's side margin, so it covers nothing; spoken with what is on, a tap opens the panel.
 @Composable
 fun ScenarioMarker(
     scenario: Scenario,
@@ -52,12 +57,22 @@ fun ScenarioMarker(
 ) {
     if (!scenario.active) return
     val names = scenario.names().map { stringResource(it) }.joinToString(stringResource(R.string.common_separator))
-    val colors = MaterialTheme.colorScheme
-    FilledIconButton(
-        onClick = onClick,
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.errorContainer, contentColor = colors.onErrorContainer),
-        modifier = modifier,
-    ) {
-        Icon(painterResource(R.drawable.ic_scenarios), contentDescription = stringResource(R.string.scenarios_marker_spoken, names))
+    val spoken = stringResource(R.string.scenarios_marker_spoken, names)
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(topStartPercent = HALF, bottomStartPercent = HALF),
+            color = MaterialTheme.colorScheme.error,
+            modifier =
+                modifier
+                    .size(width = Spacing.m, height = Sizes.touchTarget)
+                    .testTag(MARKER_TAG)
+                    .semantics { contentDescription = spoken },
+        ) {}
     }
 }
+
+private const val HALF = 50
+
+// The marker's test tag: narrower than 48 dp, so it fits the screen's side margin.
+val MARKER_TAG = notShown("scenario-marker")

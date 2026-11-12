@@ -9,6 +9,7 @@
     <string name="gallery_stat_number">Число статистики</string>
     <string name="gallery_fact_row">Строка факта</string>
     <string name="gallery_episode_stepper">Счётчик серий</string>
+    <string name="gallery_connected_choice">Группа переключателей</string>
     <string name="gallery_screen_state">Состояние экрана</string>
     <string name="gallery_session_banner">Баннер сессии</string>
     <string name="gallery_watching">Смотрю</string>

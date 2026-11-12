@@ -1,6 +1,8 @@
 package io.github.kauri_off.kiroku.scenario
 
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.Outcome
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,21 +24,37 @@ data class Scenario(
     val active: Boolean get() = this != Scenario()
 }
 
-// The demo's failures, switched while the app runs. They live as long as the process: a new one starts the demo
-// from the fixtures with every scenario off.
+enum class ResetState {
+    Idle,
+    WaitingForSave,
+    Running,
+    SaveDropped,
+    Failed,
+    ;
+
+    val busy: Boolean get() = this == WaitingForSave || this == Running
+}
+
+// The demo's failures, switched while the app runs; a new process starts with every one off.
 class Scenarios(
     private val demo: Demo,
     private val scope: CoroutineScope,
 ) {
     private val normal = demo.server.latency
     private val current = MutableStateFlow(Scenario())
-    private val resets = MutableStateFlow(false)
+    private val resets = MutableStateFlow(ResetState.Idle)
 
     val scenario: StateFlow<Scenario> = current.asStateFlow()
 
-    val resetting: StateFlow<Boolean> = resets.asStateFlow()
+    val reset: StateFlow<ResetState> = resets.asStateFlow()
 
     fun set(scenario: Scenario) {
+        if (resets.value.busy) return
+        resets.value = ResetState.Idle
+        apply(scenario)
+    }
+
+    private fun apply(scenario: Scenario) {
         with(demo.server) {
             offline.value = scenario.offline
             sessionExpired.value = scenario.sessionExpired
@@ -49,16 +67,26 @@ class Scenarios(
         current.value = scenario
     }
 
-    // Every scenario off, and the demo's data as it was when the process started.
+    // An edit on its way to MAL is answered under the scenarios it was made in; then all are off and the list is back.
     fun reset() {
-        if (!resets.compareAndSet(expect = false, update = true)) return
-        current.value = Scenario()
+        if (resets.value.busy) return
+        resets.value = if (demo.saving) ResetState.WaitingForSave else ResetState.Running
         scope.launch {
-            try {
-                demo.reset()
-            } finally {
-                resets.value = false
-            }
+            resets.value =
+                try {
+                    val settled = demo.awaitSaves()
+                    resets.value = ResetState.Running
+                    apply(Scenario())
+                    when {
+                        demo.reset() is Outcome.Failure -> ResetState.Failed
+                        !settled -> ResetState.SaveDropped
+                        else -> ResetState.Idle
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    ResetState.Failed
+                }
         }
     }
 

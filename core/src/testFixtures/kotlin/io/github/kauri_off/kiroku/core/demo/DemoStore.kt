@@ -7,6 +7,8 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import java.io.IOException
 
@@ -26,6 +28,11 @@ class DemoStore(
 
     // Writes fail and reads work, as on a full disk.
     val failingWrites = MutableStateFlow(false)
+
+    private val waiting = MutableStateFlow(false)
+
+    // Whether a title waits for MAL to confirm an edit, as the store last took it.
+    val unconfirmed: StateFlow<Boolean> = waiting.asStateFlow()
 
     override fun observeEntries(): Flow<List<ListEntry>> =
         combine(inner.observeEntries(), unreadable) { entries, unreadable ->
@@ -47,6 +54,7 @@ class DemoStore(
         readable(unreadable.value)
         if (failingWrites.value) throw DemoStoreFault("The disk is full")
         inner.write(entries)
+        waiting.value = inner.readAll().values.any { it.unconfirmed }
     }
 
     fun reset() {

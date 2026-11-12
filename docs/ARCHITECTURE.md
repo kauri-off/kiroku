@@ -350,9 +350,8 @@ was chosen against, and why:
 - **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included, and a debug build
   without a client id starts in it. Demo data follows the device's date, so every weekday and weekly slot in it stays
   what it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
-  fixtures. While it runs, a debug-only scenario panel makes the demo fail as MAL and the store can (offline, an
-  expired session, slow answers, refused or failing writes, a full or unreadable store) and resets it; a marker over
-  the app says while a scenario is on. A release build holds neither.
+  fixtures. While it runs, a debug-only panel makes the demo fail and resets it; a marker over the app says while it
+  fails. A release build holds neither.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.
@@ -486,6 +485,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9): "25 / 24" is a legal display and nothing is refused |
 | `ScreenState` | `LoadingIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
+| `ConnectedChoice` | `ToggleButton` | One of a few options, all visible, as a connected button group in as few rows as fit and as even as can be |
 | `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
 
 Stock Material 3 components are used directly for everything else. Icons are Material icons. Where Material offers
@@ -758,8 +758,9 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
   fixes the Russian term for every recurring concept and is required reading for any task that touches strings.
   The owner reviews the Russian text at the end of each milestone.
 - **No user-visible string exists outside the `:app` resources**, and strings are split into one file per feature,
-  so parallel tasks do not edit the same file. The build fails on a missing or extra translation and on a missing
-  plural form, and a test fails on a string literal in user interface code (Android Lint does not see Compose).
+  so parallel tasks do not edit the same file. Strings of the debug source set live in that source set, in English
+  and Russian. The build fails on a missing or extra translation and on a missing plural form, and a test fails on a
+  string literal in user interface code (Android Lint does not see Compose).
 - A line never breaks between a number and its word, unit or slash: `24 episodes`, `12 / 24`, `К просмотру: 2`.
 - **Values from MAL that the user reads as interface text are translated by the app:** list status, airing status,
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value

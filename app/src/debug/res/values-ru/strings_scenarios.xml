@@ -24,6 +24,10 @@
     <string name="scenarios_reset_title">Демо-данные</string>
     <string name="scenarios_reset_detail">Список, с которым запустилось приложение, и все сценарии выключены</string>
     <string name="scenarios_reset">Сбросить</string>
+    <string name="scenarios_reset_waiting">Ждём ответа MyAnimeList на сохранение, затем сброс</string>
+    <string name="scenarios_reset_running">Список восстанавливается</string>
+    <string name="scenarios_reset_dropped">Список восстановлен, сохранение без ответа отброшено</string>
+    <string name="scenarios_reset_failed">Список не восстановился. Сбросьте ещё раз</string>
     <string name="scenarios_unavailable">Сценарии работают только на демо-данных, а в этой сборке есть идентификатор клиента MyAnimeList</string>
     <string name="scenarios_marker_spoken">Симуляция: %s</string>
 </resources>

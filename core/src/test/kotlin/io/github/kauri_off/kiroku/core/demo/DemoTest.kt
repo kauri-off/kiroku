@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -223,6 +224,42 @@ class DemoTest {
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
             assertEquals(emptyList<WriteFailure>(), failures)
+        }
+
+    @Test
+    fun `waiting for saves lets an edit on its way be answered under the failures it was made in`() =
+        runTest {
+            val demo = Demo(Fixtures.reference, backgroundScope, 3.seconds)
+            val failures = failures(demo)
+            demo.server.offline.value = true
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            runCurrent()
+            assertTrue(demo.saving)
+
+            val settled = async { demo.awaitSaves() }
+            advanceTimeBy(2.seconds)
+            assertFalse(settled.isCompleted)
+            settle()
+            assertTrue(settled.await())
+            assertFalse(demo.saving)
+            assertEquals(listOf(DataError.NoConnection), failures.map { it.error })
+        }
+
+    @Test
+    fun `waiting for saves gives up on an edit a failing store left unconfirmed, and reset still brings the list back`() =
+        runTest {
+            val demo = Demo(Fixtures.reference, backgroundScope, 3.seconds)
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            runCurrent()
+            demo.store.failingWrites.value = true
+            settle()
+            demo.store.failingWrites.value = false
+            assertTrue(demo.saving)
+
+            assertFalse(demo.awaitSaves())
+            assertEquals(Outcome.Success(Unit), demo.reset())
+            assertFalse(demo.saving)
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
         }
 
     @Test

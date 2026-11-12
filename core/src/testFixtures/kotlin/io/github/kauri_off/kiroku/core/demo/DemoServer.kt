@@ -9,6 +9,9 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListValues
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.time.Clock
 import kotlin.time.Duration
 
@@ -42,6 +45,11 @@ class DemoServer(
 
     @Volatile
     var writeLatency: (ListRequest) -> Duration = { this.latency }
+
+    private val sending = MutableStateFlow(0)
+
+    // The writes received and not answered yet.
+    val writing: StateFlow<Int> = sending.asStateFlow()
 
     private val guard = Any()
     private val list = entries.associateBy { it.anime.id }.toMutableMap()
@@ -103,6 +111,18 @@ class DemoServer(
         load(needsSignIn = true)?.let { Outcome.Failure(it) } ?: Outcome.Success(entry(id))
 
     override suspend fun put(
+        anime: Anime,
+        values: ListValues?,
+    ): Outcome<ListEntry?> {
+        sending.update { it + 1 }
+        try {
+            return answer(anime, values)
+        } finally {
+            sending.update { it - 1 }
+        }
+    }
+
+    private suspend fun answer(
         anime: Anime,
         values: ListValues?,
     ): Outcome<ListEntry?> {

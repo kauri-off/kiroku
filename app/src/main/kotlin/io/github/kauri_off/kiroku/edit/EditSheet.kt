@@ -5,10 +5,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -19,12 +17,10 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,9 +35,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -62,27 +55,24 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.offset
 import androidx.compose.ui.window.DialogProperties
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
 import io.github.kauri_off.kiroku.design.component.TitleText
@@ -327,7 +317,6 @@ private fun Actions(
     }
 }
 
-// One of five as a connected button group, in as few rows as fit and as even as can be; the chosen one is in primary.
 @Composable
 private fun StatusChoice(
     status: ListStatus,
@@ -335,84 +324,7 @@ private fun StatusChoice(
     onChoose: (ListStatus) -> Unit,
 ) {
     val options = ListStatus.entries
-    val labels = options.map { stringResource(it.label()) }
-    val widths = toggleButtonWidths(labels)
-    val gap = ButtonGroupDefaults.ConnectedSpaceBetween
-    BoxWithConstraints(modifier) {
-        val rows = balancedRows(widths, maxWidth, gap)
-        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            rows.forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    row.forEachIndexed { place, index ->
-                        val option = options[index]
-                        val selected = option == status
-                        ToggleButton(
-                            checked = selected,
-                            onCheckedChange = { if (!selected) onChoose(option) },
-                            shapes = connectedShapes(first = place == 0, last = place == row.lastIndex),
-                            modifier = Modifier.weight(widths[index].value).semantics { role = Role.RadioButton },
-                        ) {
-                            Text(labels[index])
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Each label's toggle button at its own width, with a pixel to spare for rounding.
-@Composable
-private fun toggleButtonWidths(labels: List<String>): List<Dp> {
-    val measurer = rememberTextMeasurer()
-    val style = ButtonDefaults.textStyleFor(ToggleButtonDefaults.MinHeight)
-    val padding = ToggleButtonDefaults.contentPaddingFor(ToggleButtonDefaults.MinHeight)
-    val direction = LocalLayoutDirection.current
-    val sides = padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction)
-    return with(LocalDensity.current) {
-        labels.map {
-            measurer
-                .measure(it, style, softWrap = false)
-                .size.width
-                .plus(1)
-                .toDp() + sides
-        }
-    }
-}
-
-@Composable
-private fun connectedShapes(
-    first: Boolean,
-    last: Boolean,
-): ToggleButtonShapes =
-    when {
-        first && last ->
-            ButtonGroupDefaults.connectedMiddleButtonShapes(shape = ButtonGroupDefaults.connectedButtonCheckedShape)
-        first -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-        last -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-    }
-
-// The items in order in the fewest rows of at most [available] width, the widest of them as narrow as it can be.
-internal fun balancedRows(
-    widths: List<Dp>,
-    available: Dp,
-    gap: Dp,
-): List<List<Int>> {
-    val count = widths.size
-    if (count == 0) return emptyList()
-
-    fun width(row: List<Int>) = row.fold(gap * (row.size - 1)) { sum, index -> sum + widths[index] }
-    val splits =
-        (0 until (1 shl (count - 1))).map { breaks ->
-            (0 until count).fold(mutableListOf(mutableListOf<Int>())) { rows, index ->
-                if (index > 0 && breaks and (1 shl (index - 1)) != 0) rows += mutableListOf<Int>()
-                rows.also { it.last() += index }
-            }
-        }
-    val fitting = splits.filter { rows -> rows.all { width(it) <= available } }
-    return fitting.minWithOrNull(compareBy({ it.size }, { rows -> rows.maxOf { width(it) } }))
-        ?: List(count) { listOf(it) }
+    ConnectedChoice(options.map { stringResource(it.label()) }, options.indexOf(status), { onChoose(options[it]) }, modifier)
 }
 
 // Read by the control it names, so a screen reader hears it once.

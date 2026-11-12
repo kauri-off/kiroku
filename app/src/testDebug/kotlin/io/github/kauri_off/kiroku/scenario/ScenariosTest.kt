@@ -6,11 +6,15 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -73,13 +77,63 @@ class ScenariosTest {
             scenarios.set(Scenario(slow = true, sessionExpired = true, store = StoreFault.WritesFail))
 
             scenarios.reset()
-            assertTrue(scenarios.resetting.value)
+            assertEquals(ResetState.Running, scenarios.reset.value)
             advanceUntilIdle()
 
             assertEquals(Scenario(), scenarios.scenario.value)
-            assertFalse(scenarios.resetting.value)
+            assertEquals(ResetState.Idle, scenarios.reset.value)
             assertEquals(List(7) { false }, demo.switches())
             assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+            scope.cancel()
+        }
+
+    @Test
+    fun `reset waits for a save on its way, answered under the scenarios it was made in, and keeps the switches meanwhile`() =
+        runTest {
+            val scope = foregroundScope()
+            val demo = Demo(Fixtures.reference, scope, Demo.latency)
+            val scenarios = Scenarios(demo, scope)
+            val failures = mutableListOf<WriteFailure>()
+            scope.launch { demo.list.observeWriteFailures().collect { failures += it } }
+            val made = Scenario(offline = true, slow = true)
+            scenarios.set(made)
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            runCurrent()
+
+            scenarios.reset()
+            assertEquals(ResetState.WaitingForSave, scenarios.reset.value)
+            scenarios.set(Scenario(writes = WriteFault.Refused))
+            advanceTimeBy(Scenarios.SLOW / 2)
+            assertEquals(made, scenarios.scenario.value)
+            assertTrue(demo.server.offline.value)
+
+            advanceUntilIdle()
+            assertEquals(listOf(DataError.NoConnection), failures.map { it.error })
+            assertEquals(ResetState.Idle, scenarios.reset.value)
+            assertEquals(List(7) { false }, demo.switches())
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+            scope.cancel()
+        }
+
+    @Test
+    fun `reset says so when an edit a failing store left unconfirmed is dropped, and the list still comes back`() =
+        runTest {
+            val scope = foregroundScope()
+            val demo = Demo(Fixtures.reference, scope, Demo.latency)
+            val scenarios = Scenarios(demo, scope)
+            scenarios.set(Scenario(slow = true))
+            demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            runCurrent()
+            scenarios.set(Scenario(slow = true, store = StoreFault.WritesFail))
+            advanceTimeBy(Scenarios.SLOW * 2)
+            scenarios.set(Scenario())
+
+            scenarios.reset()
+            advanceUntilIdle()
+            assertEquals(ResetState.SaveDropped, scenarios.reset.value)
+            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+            scenarios.set(Scenario(offline = true))
+            assertEquals(ResetState.Idle, scenarios.reset.value)
             scope.cancel()
         }
 

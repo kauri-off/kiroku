@@ -12,9 +12,13 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 // [unexpected] does not hear of the faults the demo's store was told to make.
 class Demo(
@@ -44,6 +48,20 @@ class Demo(
 
     val user: UserRepository = DemoUserRepository(fixtures, server, signedIn)
 
+    // Whether an edit is on its way to MAL.
+    val saving: Boolean get() = server.writing.value > 0 || store.unconfirmed.value
+
+    // Waits for every edit on its way to MAL to be answered; false when one stays unconfirmed with nothing being sent.
+    suspend fun awaitSaves(): Boolean {
+        while (true) {
+            server.writing.first { it == 0 }
+            if (!store.unconfirmed.value) return true
+            withTimeoutOrNull(QUIET) {
+                combine(server.writing, store.unconfirmed) { writing, unconfirmed -> writing > 0 || !unconfirmed }.first { it }
+            } ?: return false
+        }
+    }
+
     // The demo as it started: every failure off, signed in, no details fetched, and the list synced back to the fixtures.
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
@@ -55,6 +73,9 @@ class Demo(
 
     companion object {
         val latency: Duration = 400.milliseconds
+
+        // Longer than the engine ever takes between one answer and its next request.
+        private val QUIET = 1.seconds
 
         fun startingAt(
             clock: Clock,
