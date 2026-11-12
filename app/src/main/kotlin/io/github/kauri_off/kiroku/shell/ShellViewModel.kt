@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.shell
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import kotlinx.coroutines.launch
 
@@ -14,7 +15,8 @@ class ShellViewModel(
     init {
         viewModelScope.launch {
             list.observeWriteFailures().collect { failure ->
-                messages.post(ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(failure.retry)))
+                val retry = ShellMessage.Action.Retry(failure.retry).takeUnless { failure.error == DataError.SessionExpired }
+                messages.post(ShellMessage(ShellMessage.Text.CouldNotSave, retry))
             }
         }
     }

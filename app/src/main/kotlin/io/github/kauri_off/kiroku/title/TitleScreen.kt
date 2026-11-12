@@ -79,6 +79,7 @@ import io.github.kauri_off.kiroku.design.component.EpisodeStepper
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterCard
 import io.github.kauri_off.kiroku.design.component.PosterSize
+import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
@@ -124,7 +125,7 @@ fun TitleScreen(
                     ScreenState.Error(stringResource(state.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
                     Modifier.padding(padding),
                 )
-            is TitleState.Shown -> TitleContent(state.page, state.moment, state.detailsWaitShown, onEvent, padding)
+            is TitleState.Shown -> TitleContent(state, onEvent, padding)
         }
     }
 }
@@ -175,23 +176,28 @@ private fun TitleTopBar(
 
 @Composable
 private fun TitleContent(
-    page: TitlePage,
-    moment: TitleMoment,
-    waitShown: Boolean,
+    state: TitleState.Shown,
     onEvent: (TitleEvent) -> Unit,
     padding: PaddingValues,
 ) {
+    val page = state.page
     val direction = LocalLayoutDirection.current
-    Box(
-        Modifier
-            .fillMaxSize()
-            .padding(start = padding.calculateStartPadding(direction), end = padding.calculateEndPadding(direction)),
+    RefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = { onEvent(TitleEvent.Refresh) },
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(
+                    start = padding.calculateStartPadding(direction),
+                    top = padding.calculateTopPadding(),
+                    end = padding.calculateEndPadding(direction),
+                ),
         contentAlignment = Alignment.TopCenter,
     ) {
         LazyColumn(
             modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
-            contentPadding =
-                PaddingValues(top = padding.calculateTopPadding() + Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
+            contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
             item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(page) } }
             item(key = Section.List) { Gap(modifier = Modifier.testTag(TitleTags.list)) { ListBlock(page.entry, page.total, onEvent) } }
@@ -200,9 +206,20 @@ private fun TitleContent(
             }
             val details = page.details
             if (details == null) {
-                if (waitShown) item(key = Section.Loading) { Gap { DetailsLoading() } }
+                when (val wait = state.detailsWait) {
+                    DetailsWait.Brief -> Unit
+                    DetailsWait.Loading -> item(key = Section.Loading) { Gap { DetailsLoading() } }
+                    // The state's own padding separates it from the block above.
+                    is DetailsWait.Failed ->
+                        item(key = Section.Failed) {
+                            ScreenState(
+                                ScreenState.Error(stringResource(wait.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
+                                Modifier.testTag(TitleTags.detailsFailed),
+                            )
+                        }
+                }
             } else {
-                details(details, page, moment.synopsisExpanded, onEvent)
+                details(details, page, state.moment.synopsisExpanded, onEvent)
             }
         }
     }
@@ -643,6 +660,7 @@ internal object TitleTags {
     val header = notShown("title-header")
     val list = notShown("title-list-block")
     val airing = notShown("title-airing-block")
+    val detailsFailed = notShown("title-details-failed")
 }
 
-private enum class Section { Header, List, Airing, Loading, Sequel, Synopsis, Related, Statistics, More }
+private enum class Section { Header, List, Airing, Loading, Failed, Sequel, Synopsis, Related, Statistics, More }

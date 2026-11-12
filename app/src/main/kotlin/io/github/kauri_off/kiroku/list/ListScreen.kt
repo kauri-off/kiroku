@@ -57,6 +57,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.CoversMessages
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowLongPress
@@ -375,6 +376,7 @@ private fun SortSheet(
     sorts: List<ListSort>,
     onEvent: (ListEvent) -> Unit,
 ) {
+    CoversMessages()
     ModalBottomSheet(
         onDismissRequest = { onEvent(ListEvent.DismissSort) },
         sheetState = rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),

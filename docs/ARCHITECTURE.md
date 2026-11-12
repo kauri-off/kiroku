@@ -87,7 +87,7 @@ AniList (from live queries):
 |---|---|---|
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
 | MAL | Refused when reading another user's list | "This list is private". Not treated as rate limiting. |
-| MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and the foreground says "MyAnimeList is refusing requests, try again later". |
+| MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). |
 | An optional source (after 1.0) | Any failure | Its section collapses to one line, "Unavailable · Retry", and never blocks or delays the rest of the page. |
 
@@ -304,6 +304,10 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - A page opened from a row or another page shows what that row or page showed from its first frame, and keeps
   showing it until the store knows more, also after a failed refresh. A page opened with nothing known starts in its
   loading state.
+- Every screen that asks for data gives a way out of a failure. With nothing to show: the error state with the cause
+  and Retry in place of the content, never a message alone. With older content shown: it stays, the failure is a
+  message, and the screen can be refreshed by pulling. A failed action of the person: a message with Retry that is
+  not lost (section 7.2). A secondary part (a poster, a strip): a placeholder, loaded with the screen's next refresh.
 - Text a person types is held in a `mutableStateOf` or `TextFieldState` that the view model owns and changes inside
   the event, and its field reads that holder: no flow, collected or not, sits between a keystroke and its field. The
   view model's flows observe the holder with `snapshotFlow`.
@@ -373,12 +377,16 @@ was chosen against, and why:
 
 - A screen has four states: content, loading (no content yet), empty, and error (no content and the load failed).
   **With cached content, a failed refresh is a snackbar, never a replaced screen.**
-- Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search and
-  unvisited title pages show the error state with "No connection" and Retry.
+- Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search shows
+  the error state with "No connection" and Retry. A title page whose details were never loaded keeps what it was
+  opened with and shows that error state where the details would be, until a load succeeds; as that may be below the
+  first screen, the failure is also a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it.
   One is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
   replaced: a newer one of that kind waits behind it and is dropped if its title is written meanwhile; an ordinary
-  one posted meanwhile is dropped.
+  one posted meanwhile is dropped. Its time runs only while it can be seen and tapped: the app's window has focus and
+  no sheet or dialog of the app covers it; cut short, it is shown again in full. Every other snackbar runs on
+  regardless and is not shown again.
 
 ### 7.3 Writes to the list
 
@@ -392,7 +400,8 @@ stepper and "Mark watched" are steps, applied to the entry's values as they are 
   last value shown.
 - **W2. A failure returns to the server's state.** When a write fails, the entry shows what the server last
   confirmed (not "the value before the tap"), no later edit of that entry that was still waiting is sent, and a
-  snackbar says "Could not save · Retry". Retry applies, as a new edit, the values shown just before the failure.
+  snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
+  Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, the values shown just before the failure.
   Example: the server has 12; two taps show 13, then 14; the request carrying 13 fails. 14 is not sent, the row
   shows 12, and Retry sends 14.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
@@ -672,6 +681,9 @@ render at once, and one wavy linear progress indicator under them stands in for 
 a second, until the details arrive.
 Only a page opened with no data at all (a deep link, or a page restored after the process was killed) uses the
 full-screen loading state.
+
+**Failed.** Details that could not be loaded leave the page as it is and put the error state with Retry where items 5
+to 9 would be (section 7.2). After Retry, the indicator stands there at once.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 
