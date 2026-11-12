@@ -21,10 +21,13 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
@@ -40,6 +43,7 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
@@ -345,12 +349,29 @@ class AppRouteTest {
     }
 
     @Test
-    fun `Search and Profile say they are not in this build`() {
+    fun `Search says it is not in this build`() {
         app()
         click("Search")
         shows("Not available in this build yet")
+        back()
+        shows("My list")
+    }
+
+    @Test
+    fun `Profile opens another user by name, whose rows lead to screens not built yet`() {
+        app()
         click("Profile")
+        shows("kiroku_demo")
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
+        click("Open")
+        shows("sample_viewer")
+        compose.onNodeWithContentDescription("View list").performScrollTo().performClick()
+        shows("sample_viewer's list")
         shows("Not available in this build yet")
+        back()
+        back()
+        shows("kiroku_demo")
         back()
         shows("My list")
     }

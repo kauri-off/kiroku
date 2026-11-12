@@ -237,8 +237,7 @@ Not to forget:
   told apart from rate limiting (item 3 of section 13). Without a private user name from the owner, that stays
   open and the task says so.
 
-- [ ] **M6-01 [L] Profile screen.** The stateless screens of section 9.7 on fixture states: own profile and another
-  user's; no view model, no network, no sub-screens.
+- [x] **M6-01 [L] Profile screen.**
 
 ## M7. Settings, polish and release 1.0
 

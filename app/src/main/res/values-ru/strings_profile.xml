@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_title">Профиль</string>
+    <string name="profile_settings">Настройки</string>
+    <string name="profile_joined">На MyAnimeList с\u00A0%1$d\u00A0г.</string>
+    <string name="profile_completed">Просмотрено</string>
+    <string name="profile_days_watched">Дней просмотра</string>
+    <string name="profile_mean_score">Средняя оценка</string>
+    <string name="profile_no_mean_score">Нет средней оценки</string>
+    <string name="profile_score_distribution">Распределение оценок</string>
+    <string name="profile_genres">Жанры</string>
+    <string name="profile_formats_and_years">Форматы и годы</string>
+    <string name="profile_open_another">Открыть другой профиль</string>
+    <string name="profile_view_list">Открыть список</string>
+    <string name="profile_signed_out">Войдите через MyAnimeList, чтобы видеть здесь свой профиль</string>
+    <string name="profile_sign_in">Войти</string>
+    <string name="profile_could_not_load">Не удалось загрузить профиль</string>
+    <string name="profile_private_list">Этот список скрыт</string>
+    <string name="profile_unknown_user">На MyAnimeList нет пользователя с таким именем</string>
+    <string name="profile_loading_list">Загружено\u00A0%1$s\u00A0из\u00A0%2$s</string>
+    <plurals name="profile_loading_list_unknown_total">
+        <item quantity="one">Загружен\u00A0%1$s\u00A0тайтл</item>
+        <item quantity="few">Загружено\u00A0%1$s\u00A0тайтла</item>
+        <item quantity="many">Загружено\u00A0%1$s\u00A0тайтлов</item>
+        <item quantity="other">Загружено\u00A0%1$s\u00A0тайтла</item>
+    </plurals>
+    <string name="profile_user_name">Имя пользователя</string>
+    <string name="profile_recent">Недавние</string>
+    <string name="profile_open">Открыть</string>
+    <string name="profile_cancel">Отмена</string>
+</resources>
