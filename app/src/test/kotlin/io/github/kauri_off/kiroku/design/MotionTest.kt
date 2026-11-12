@@ -42,7 +42,7 @@ class MotionTest {
     }
 
     @Test
-    fun `the theme's springs settle within the times of the architecture`() {
+    fun `the theme's springs settle within their time limits`() {
         val scheme = scheme()
         val bounds =
             listOf(

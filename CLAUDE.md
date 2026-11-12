@@ -26,8 +26,8 @@ The rest of the documents is not needed for your task.
   implementation.
 - A document does not repeat what the code or a test states. When your task makes a sentence redundant (a value
   that is now a constant, a case list that is now a registry, a rule that is now a test), delete the sentence.
-- A pull request makes a document longer only by adding a decision. Its description names, for each sentence it
-  adds to a document, the sentence that sentence replaces.
+- A change makes a document longer only by adding a decision, a constraint, an invariant, a term or a milestone's
+  tasks. Your hand-off names, for each sentence you add, the sentence it replaces, or says that it is new.
 - Decisions and invariants are the owner's. If you need to depart from one, do not do it silently: stop and report.
   A change to a budget, an invariant or a decision is the owner's too: propose it in the hand-off, do not write it
   into the document as decided.
@@ -121,7 +121,7 @@ not use the queue kinds `full`, `batch` or `long`.
   navigation. Each screen has its own screenshot registry file.
 - User interface code uses stock Material 3 Expressive components in the choices of ARCHITECTURE section 8.4, theme
   colour roles, the `Spacing` tokens and the components listed there. No literal colours or dp values, no custom
-  controls, no toasts.
+  controls, no toasts. Experimental Expressive API is opted into only in `design/component/ExpressiveOptIn.kt`.
 - Motion follows ARCHITECTURE section 8.5: from the theme's motion scheme only, with the tests and the frames image
   it asks for.
 - "Aired", "to watch" and what is notifiable are computed only in `:core`.

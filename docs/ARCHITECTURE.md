@@ -651,9 +651,9 @@ episode total, the year, the premiere and a related title each appear in one pla
    line of plain text with the genres, line cap one.
 7. **Related** (must show when the title has related anime other than the sequel): a `SectionHeader` over a horizontal
    strip of at most ten `PosterCard`s. A card shows the title, the relation, and the user's list status for that title
-   or else its type and year. Order: by relation type, prequel and sequel first, and within a type by start date. "See
-   all" is shown whenever a related title is not in the strip; the types "other" and "character" appear only there.
-   Related manga are not shown in 1.0.
+   or else its type and year. Order: prequel, sequel, parent story, full story, side story, spin-off, alternative
+   setting, alternative version, summary; within a type by start date. "See all" is shown whenever a related title is
+   not in the strip; the types "other" and "character" appear only there. Related manga are not shown in 1.0.
 8. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
    percentages, and one line with the member count.
 9. **More:** rows that open sub-screens: "Details", and "Recommendations" when MAL gives any.
@@ -847,7 +847,8 @@ only when rendered on the same machine.
   Lint with the translation checks as errors; other warnings are not errors, because checks such as "newer version
   available" would fail the build whenever a library publishes a release.
 - **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`, and
-  checks that the pull request title is a conventional commit; its workflow files say what it runs and keeps.
+  checks that the pull request title is a conventional commit; its workflow files say what it runs and keeps. What
+  it builds for a pull request is built without any secret.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
