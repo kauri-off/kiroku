@@ -5,7 +5,8 @@ be is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); this file says in which o
 is accepted.
 
 Only the milestone in progress is broken into tasks. A later milestone has a goal, an acceptance (what the owner
-can do when it is finished) and the things its planner must not forget; it becomes tasks when it starts. At the end
+can do when it is finished) and the things its planner must not forget; it becomes tasks when it starts. A layout
+task of a later milestone may run ahead of it, on fixture states. At the end
 of each milestone work stops and the owner looks at the result.
 
 | Milestone | Result |
@@ -216,6 +217,9 @@ Not to forget:
 - Typing does not send a request per keystroke.
 - Results that arrive page by page are held as a `StateFlow` of the pages loaded.
 
+- [ ] **M5-01 [L] Search screen.** The stateless screen of section 9.6 on fixture states: before a query, results,
+  the digits row, a browse list; no view model, no network.
+
 ## M6. Profiles and statistics
 
 Goal: the owner's profile, another user's profile and list, and the statistics sub-screens (ARCHITECTURE sections
@@ -232,6 +236,9 @@ Not to forget:
 - The answers for a public list, a private list and an unknown name are recorded, and settle how a private list is
   told apart from rate limiting (item 3 of section 13). Without a private user name from the owner, that stays
   open and the task says so.
+
+- [ ] **M6-01 [L] Profile screen.** The stateless screens of section 9.7 on fixture states: own profile and another
+  user's; no view model, no network, no sub-screens.
 
 ## M7. Settings, polish and release 1.0
 
