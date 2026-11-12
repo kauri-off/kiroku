@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Chosen by hand as the device's autofill service to see what the app offers it; see AutofillProbe. -->
+        <service
+            android:name="io.github.kauri_off.kiroku.autofill.AutofillProbe"
+            android:exported="true"
+            android:label="Kiroku autofill probe"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>
