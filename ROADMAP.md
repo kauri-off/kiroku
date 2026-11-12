@@ -93,6 +93,8 @@ Not to forget:
 - A screen left in the background past its state's stop timeout: decide whether it refreshes again when shown,
   together with the staleness rule of ARCHITECTURE 7.1.
 - The sort of each List tab is kept across app restarts, in DataStore.
+- On the title page the title and the synopsis can be selected and copied.
+- The back gesture previews the screen it leads to (ARCHITECTURE 8.5): the shell's predictive pop is instant so far.
 - A sandbox mode in debug builds: the real network layer against a local stand-in for MAL that keeps state and
   answers from recorded responses, so behaviour can be tried without touching a real account.
 - The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
@@ -267,7 +269,7 @@ P1 to P5; each starts with a budget change (ARCHITECTURE section 9.1). The sourc
 
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|
-| P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics, behind an Anime / Manga switch; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; pictures; opening and ending themes; deep links to manga pages | MAL only |
+| P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics, behind an Anime / Manga switch; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
 | P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the franchise in watch order; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
 | P3 | Schedule and discovery | A weekly schedule of the user's airing titles as the fourth destination; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
 | P4 | Community, read-only | Forum boards, topics and posts as the fifth destination; a title's discussions; reviews | MAL, Jikan |
