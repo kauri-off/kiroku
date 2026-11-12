@@ -317,7 +317,9 @@ on the Russian strings so far are fixed.
 
 - [ ] **M2-26 The real title page and its link.** The live graph's titles are M2-17. A
   `myanimelist.net/anime/{id}` link, with or without a slug or a trailing slash, opens the title page with the
-  List beneath it (section 6.3); no other address is claimed.
+  List beneath it (section 6.3); no other address is claimed. While the system does not let the app open these
+  links, the app says so once in a screen of its own that leads to the system's setting for it; the row in Settings
+  comes with M7.
   **Needs:** M2-17, M2-24.
   **Check:** a parser test with ten forms of the address; `tools/emu run` on the demo source: the link starts
   the app on the title page, and Back shows the List.
