@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
 interface SessionRepository {
+    // Emits nothing until the token store was read.
     fun observeSession(): Flow<Session>
 
     suspend fun signOut()

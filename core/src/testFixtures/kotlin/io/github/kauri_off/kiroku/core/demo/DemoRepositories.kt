@@ -30,14 +30,14 @@ import kotlinx.coroutines.flow.map
 internal class DemoSessionRepository(
     private val signedIn: MutableStateFlow<Boolean>,
     private val server: DemoServer,
-    private val userName: String,
+    private val signIn: Session.SignedIn,
 ) : SessionRepository {
     override fun observeSession(): Flow<Session> =
         combine(signedIn, server.sessionExpired) { signedIn, expired ->
             when {
                 !signedIn -> Session.SignedOut
                 expired -> Session.Expired
-                else -> Session.SignedIn(userName)
+                else -> signIn
             }
         }
 
