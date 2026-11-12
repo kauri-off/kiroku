@@ -4,6 +4,8 @@
 
     <application
         android:name=".KirokuApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="${appLabel}"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="33"
