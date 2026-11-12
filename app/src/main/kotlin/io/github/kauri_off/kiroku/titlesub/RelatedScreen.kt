@@ -37,7 +37,7 @@ fun RelatedScreen(
                             val gap = if (index == 0) Modifier else Modifier.padding(top = Spacing.l)
                             SectionHeader(relationName(group.relation), gap)
                         }
-                        items(group.rows, key = { relation to it.id.value }, contentType = { ROW }) { row ->
+                        items(group.rows, key = { relation to it.id.value }, contentType = { rowForm(it) }) { row ->
                             RelatedAnimeRow(row) { onEvent(RelatedEvent.Open(row.id)) }
                         }
                     }
@@ -68,4 +68,6 @@ private fun RelatedAnimeRow(
 }
 
 private const val HEADER = 0
-private const val ROW = 1
+
+// A row is reused only for a row with as many supporting lines.
+private fun rowForm(row: RelatedRow) = Pair(row.mediaType != null || row.year != null, row.entry != null)

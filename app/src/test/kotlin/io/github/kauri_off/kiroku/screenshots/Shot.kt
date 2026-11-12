@@ -38,6 +38,7 @@ import com.github.takahirom.roborazzi.fetchRobolectricWindowRoots
 import com.google.android.apps.common.testing.accessibility.framework.checks.SpeakableTextPresentCheck
 import com.google.android.apps.common.testing.accessibility.framework.integrations.espresso.AccessibilityViewCheckException
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -65,8 +66,8 @@ class Shot private constructor(
     fun image(): Bitmap {
         settle()
         val indicators = indeterminateIndicators()
-        check(LoopingAnimations.running <= indicators * LOOPS_PER_INDICATOR) {
-            "${LoopingAnimations.running} looping animations run with $indicators progress indicators: " +
+        check(LoopingAnimations.running <= indicators.sumOf { it.loops }) {
+            "${LoopingAnimations.running} looping animations run with ${indicators.size} progress indicators: " +
                 "nothing but a progress indicator may loop (ARCHITECTURE section 8.5)"
         }
         val screen = RoboComponent.Screen(fetchRobolectricWindowRoots(), options).image ?: error("Nothing was drawn")
@@ -214,11 +215,14 @@ class Shot private constructor(
 
     fun stripCount(): Int = strips().size
 
-    private fun indeterminateIndicators(): Int =
+    private fun indeterminateIndicators(): List<SemanticsNode> =
         windows()
             .flatMap { it.composeRoots() }
             .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
-            .count { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate }
+            .filter { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate }
+
+    private val SemanticsNode.loops: Int
+        get() = if (config.getOrNull(SemanticsProperties.TestTag) == WAVY_INDICATOR) WAVY_LOOPS else 1
 
     // Pages through one horizontal strip; with images, returns its pages stitched into one picture of every card.
     fun walkStrip(
@@ -358,8 +362,8 @@ class Shot private constructor(
     companion object {
         const val TOUCH_TARGET_DP = 48
 
-        // The wavy linear indicator runs two: its line and its wave.
-        const val LOOPS_PER_INDICATOR = 2
+        // A wavy indicator runs two loops, its line and its wave, and is allowed them only when tagged as one.
+        const val WAVY_LOOPS = 2
 
         private val FRAME = Duration.ofMillis(16)
         private const val MAX_FRAMES = 600

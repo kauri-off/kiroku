@@ -250,8 +250,7 @@ private class TabRowLayout(
         lefts[0] = Sizes.tabRowEdge.roundToPx()
         placeables.forEachIndexed { index, placeable -> lefts[index + 1] = lefts[index] + placeable.width }
         val padding = Sizes.tabLabelPadding.roundToPx() * 2
-        val least = Sizes.tabIndicatorMinWidth.roundToPx()
-        val labels = IntArray(tabs.size) { maxOf(tabs[it].maxIntrinsicWidth(Constraints.Infinity) - padding, least) }
+        val labels = IntArray(tabs.size) { tabs[it].maxIntrinsicWidth(Constraints.Infinity) - padding }
         places = TabPlaces(lefts, labels, constraints.maxWidth)
         val position = motion.position
         val scroll = scroll(position).roundToInt()

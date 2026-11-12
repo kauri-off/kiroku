@@ -23,7 +23,10 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 // One title's page. The page is rebuilt with TitlePage.of whenever a source changes; the moment is held apart from
 // it. Navigation events are the route's.
@@ -41,6 +44,8 @@ class TitleViewModel(
     private var session by mutableStateOf<Session?>(null)
     private var failure by mutableStateOf<DataError?>(null)
     private var moment by mutableStateOf(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
+    private var detailsWaitShown by mutableStateOf(false)
+    private var detailsWait: Job? = null
 
     val state: State<TitleState> = derivedStateOf { build() }
 
@@ -79,6 +84,7 @@ class TitleViewModel(
                     TitlePage.of(anime, entry, airing[id], details, statuses, graph.titleLanguage, graph.clock),
                     session,
                     moment,
+                    detailsWaitShown,
                 )
         }
     }
@@ -88,6 +94,13 @@ class TitleViewModel(
     // With details already shown, a failed refresh is a message and the page stays (section 7.2).
     private fun refresh() {
         failure = null
+        detailsWait?.cancel()
+        detailsWaitShown = false
+        detailsWait =
+            viewModelScope.launch {
+                delay(DETAILS_PATIENCE)
+                detailsWaitShown = true
+            }
         viewModelScope.launch {
             val result = graph.anime.refresh(id)
             if (result !is Outcome.Failure) return@launch
@@ -119,5 +132,8 @@ class TitleViewModel(
 
     private companion object {
         val EXPANDED = notShown("synopsisExpanded")
+
+        // Within a second the flow of use is not interrupted, so a shorter wait shows no indicator.
+        val DETAILS_PATIENCE = 1.seconds
     }
 }

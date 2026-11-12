@@ -10,7 +10,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -56,20 +55,17 @@ fun AnimeRow(
     longPress: RowLongPress? = null,
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
-    // A list that reuses a row for one of another form builds it anew.
-    key(lines.map { it.highlighted }, trailing?.let { it::class }) {
-        ListItem(
-            onClick = onClick,
-            modifier = modifier,
-            leadingContent = { Poster(posterUrl, PosterSize.Row) },
-            trailingContent = trailing?.let { { Trailing(it) } },
-            supportingContent = lines.takeIf { it.isNotEmpty() }?.let { { Column { it.forEach { line -> SupportingLine(line) } } } },
-            verticalAlignment = if (trailing is RowTrailing.PlusOne) Alignment.Top else Alignment.CenterVertically,
-            onLongClick = longPress?.onLongPress,
-            onLongClickLabel = longPress?.label,
-            content = { TitleText(title, maxLines = 2) },
-        )
-    }
+    ListItem(
+        onClick = onClick,
+        modifier = modifier,
+        leadingContent = { Poster(posterUrl, PosterSize.Row) },
+        trailingContent = trailing?.let { { Trailing(it) } },
+        supportingContent = lines.takeIf { it.isNotEmpty() }?.let { { Column { it.forEach { line -> SupportingLine(line) } } } },
+        verticalAlignment = if (trailing is RowTrailing.PlusOne) Alignment.Top else Alignment.CenterVertically,
+        onLongClick = longPress?.onLongPress,
+        onLongClickLabel = longPress?.label,
+        content = { TitleText(title, maxLines = 2) },
+    )
 }
 
 const val MAX_SUPPORTING_LINES = 2

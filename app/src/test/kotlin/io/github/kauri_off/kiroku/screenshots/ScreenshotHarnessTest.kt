@@ -23,10 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Seed
 import io.github.kauri_off.kiroku.probe.CentredSmallTarget
@@ -142,7 +144,7 @@ class ScreenshotHarnessTest {
             listOf<Pair<Int, @Composable () -> Unit>>(
                 1 to { CircularProgressIndicator() },
                 1 to { LinearProgressIndicator() },
-                Shot.LOOPS_PER_INDICATOR to { LinearWavyProgressIndicator() },
+                Shot.WAVY_LOOPS to { LinearWavyProgressIndicator(Modifier.testTag(WAVY_INDICATOR)) },
             )
         for ((loops, indicator) in indicators) {
             Shot.launch(Variant.EnLight, content = indicator).use { shot ->
@@ -173,12 +175,17 @@ class ScreenshotHarnessTest {
             Column {
                 CircularProgressIndicator()
                 Pulse()
-                Pulse()
             }
         })) {
             val failure = runCatching { Shot.launch(Variant.EnLight, content = content).use { it.image() } }.exceptionOrNull()
             assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
         }
+    }
+
+    @Test(timeout = 60_000)
+    fun anUntaggedWavyIndicatorFailsTheRender() {
+        val failure = runCatching { Shot.launch(Variant.EnLight) { LinearWavyProgressIndicator() }.use { it.image() } }.exceptionOrNull()
+        assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
     }
 
     @Composable

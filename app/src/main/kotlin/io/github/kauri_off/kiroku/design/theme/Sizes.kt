@@ -27,7 +27,4 @@ object Sizes {
 
     // The stock tab's padding either side of its label, which the tab indicator leaves out.
     val tabLabelPadding: Dp = 16.dp
-
-    // The stock tab indicator's least width, kept for a short label.
-    val tabIndicatorMinWidth: Dp = 24.dp
 }

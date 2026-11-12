@@ -21,14 +21,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TitleViewModelTest {
@@ -279,4 +282,31 @@ class TitleViewModelTest {
             advanceUntilIdle()
             assertEquals(before, s.state)
         }
+
+    @Test
+    fun `a wait for the details shows its indicator only once it has lasted a second`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = TitleViewModel(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            val shown = { title.state.value as TitleState.Shown }
+            runCurrent()
+            assertNull(shown().page.details)
+            assertFalse(shown().detailsWaitShown)
+            advanceTimeBy(PATIENCE_MILLIS - 1)
+            runCurrent()
+            assertFalse(shown().detailsWaitShown)
+            advanceTimeBy(1)
+            runCurrent()
+            assertTrue(shown().detailsWaitShown)
+            assertNull(shown().page.details)
+            advanceUntilIdle()
+            assertEquals(FixtureDetails.full, shown().page.details)
+            scope.cancel()
+        }
+
+    private companion object {
+        const val PATIENCE_MILLIS = 1_000L
+        val DETAILS_LATENCY = 3.seconds
+    }
 }

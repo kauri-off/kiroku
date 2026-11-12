@@ -12,6 +12,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Typography
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 
 enum class ThemeMode { System, Light, Dark }
 
@@ -56,8 +58,12 @@ fun KirokuTheme(
     seed: Seed = Seed.Teal,
     content: @Composable () -> Unit,
 ) {
-    MaterialExpressiveTheme(colorScheme = kirokuColorScheme(dark, dynamicColor, seed), content = content)
+    MaterialExpressiveTheme(colorScheme = kirokuColorScheme(dark, dynamicColor, seed), typography = ExpressiveTypography, content = content)
 }
+
+// Typography() copies the plain roles into the emphasised ones; naming one, at its Expressive value, takes the scale's.
+private val ExpressiveTypography =
+    Typography().let { plain -> Typography(labelSmallEmphasized = plain.labelSmall.copy(fontWeight = FontWeight.Bold)) }
 
 // The app's window: edge-to-edge, system bar icons that follow the theme, and the theme's background behind it all.
 fun ComponentActivity.setKirokuContent(

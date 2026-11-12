@@ -19,6 +19,7 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -227,10 +228,10 @@ private fun TopBar(
         },
         actions = {
             if (showActions && filter == null) {
-                IconButton(onClick = { onEvent(ListEvent.StartFilter) }) {
+                IconButton(onClick = { onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
                     Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))
                 }
-                IconButton(onClick = { onEvent(ListEvent.OpenSort) }) {
+                IconButton(onClick = { onEvent(ListEvent.OpenSort) }, shapes = IconButtonDefaults.shapes()) {
                     Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.list_sort))
                 }
             }
@@ -298,12 +299,16 @@ private fun Rows(
             LocalWindowInfo.current.containerSize.height
                 .toFloat(),
         )
-    val guard = remember(moveMillis) { PlusOneGuard(moveMillis) }
-    SideEffect { guard.shown(rows.map { it.id }, SystemClock.uptimeMillis()) }
+    val guard = remember { PlusOneGuard(moveMillis) }
+    SideEffect {
+        guard.moveMillis = moveMillis
+        guard.shown(rows.map { it.id }, SystemClock.uptimeMillis())
+    }
     val shownRows = rememberUpdatedState(rows)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
-            items(rows, key = { it.id.value }) { row ->
+            // A row is reused only for a row of its own form.
+            items(rows, key = { it.id.value }, contentType = { Triple(it.line3 != null, it.line3 is Line3.ToWatch, it.plusOne) }) { row ->
                 AnimeRow(
                     title = row.title,
                     posterUrl = row.posterUrl,

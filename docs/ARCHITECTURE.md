@@ -427,9 +427,10 @@ everything else stays calm, because this is a tool opened many times a day.
 
 The default Material 3 type scale with the system font. Screens use only these roles:
 
-- `headlineSmall`: the title on the title page. `titleMedium`: section headers and the title in the edit sheet.
-- `titleLargeEmphasized`: the few numbers a screen is opened for, and nothing else: the number in `StatNumber` and
-  the user's own score on the title page.
+- `headlineSmallEmphasized`: the title on the title page. `titleMedium`: section headers and the title in the edit
+  sheet.
+- `titleLargeEmphasized`: the number in `StatNumber` and the user's own score on the title page.
+- Emphasised roles mark only the subject of the title page and the few numbers a screen is opened for.
 - `bodyMedium`: body text and supporting lines. `labelLarge` and `labelMedium`: captions.
 - Top app bar titles, row headlines, buttons and chips keep the role their component sets.
 
@@ -466,10 +467,10 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence |
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `IconButton`, `OutlinedTextField`, `IconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9): "25 / 24" is a legal display and nothing is refused |
+| `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9): "25 / 24" is a legal display and nothing is refused |
 | `ScreenState` | `LoadingIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
-| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, in the stock scrollable row's measures. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
+| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row. The stock row scrolls itself and cannot follow a pager between two tabs; this one is scrolled only by the pager and by hand |
 
 Stock Material 3 components are used directly for everything else. Icons are Material icons. Where Material offers
 several components for one job, these are the choices:
@@ -479,8 +480,9 @@ several components for one job, these are the choices:
 | A wait of unknown length for a whole screen, and pull-to-refresh | The loading indicator | One sign for "this screen is being fetched" |
 | A wait for part of a screen already shown, and progress of counted work | The wavy linear progress indicator | The wave says that work is running, and stops when it does |
 | A share of a whole that does not change | The flat linear progress indicator | Nothing is running, so nothing waves |
-| One of a few options, all visible | Toggle buttons in a wrapping row | The chosen one differs in colour and in shape, not in colour alone, and choosing one moves no other |
-| A button with a container | With its stock press shapes | The press is answered where the finger is |
+| One of a few options, all visible | A connected button group of toggle buttons, in as few rows as fit | The chosen one differs in colour and in shape, not in colour alone, and choosing one moves no other |
+| A button with a container, and an icon button | With its stock press shapes | The press is answered where the finger is |
+| The action a page is opened for (the title page's list block) | The medium button size | It is the one large target on the page |
 | A row that opens something | The list item that takes the click itself | Its own press shape, focus ring and semantics |
 | One of a list of options with a radio button | A list item that looks the same chosen or not | The radio button states the choice once |
 | The navigation bar on phones | The short navigation bar | More room for content |
@@ -513,15 +515,15 @@ change legible, or preventing a jump. Decoration is not a purpose.
   curve, spring value or delay in user interface code fails the build.
 - **No bounce in what the app animates.** The Expressive scheme's spatial springs overshoot, so the app's own
   animations use only its effects springs, which cannot: fast for a change inside a component and for an exit,
-  default for a component's entrance and for a page, slow for a screen. A test holds each to its time.
+  default for a component's entrance and for a page, slow for a screen.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
   bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
   stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a
   List tab between orderings (section 9.3), even when a data refresh brings the change. Content that finishes
   loading fades in.
   One thing moves per change; a container that enters brings its content with it.
-- **Time.** An exit is shorter than the matching entrance, and a change inside a component is shorter than a
-  component's entrance, which is shorter than a screen's.
+- **Time.** As the Expressive scheme's springs settle: a change inside a component within 250 ms, a component's
+  entrance within 400 ms, a screen within 550 ms; an exit is shorter than the matching entrance.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
   reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back shows where
   Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned off,

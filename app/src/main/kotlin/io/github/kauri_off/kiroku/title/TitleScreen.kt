@@ -87,6 +87,8 @@ import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
 import io.github.kauri_off.kiroku.design.component.TitleText
+import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.stepButtonMargin
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
@@ -122,7 +124,7 @@ fun TitleScreen(
                     ScreenState.Error(stringResource(state.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
                     Modifier.padding(padding),
                 )
-            is TitleState.Shown -> TitleContent(state.page, state.moment, onEvent, padding)
+            is TitleState.Shown -> TitleContent(state.page, state.moment, state.detailsWaitShown, onEvent, padding)
         }
     }
 }
@@ -175,6 +177,7 @@ private fun TitleTopBar(
 private fun TitleContent(
     page: TitlePage,
     moment: TitleMoment,
+    waitShown: Boolean,
     onEvent: (TitleEvent) -> Unit,
     padding: PaddingValues,
 ) {
@@ -197,7 +200,7 @@ private fun TitleContent(
             }
             val details = page.details
             if (details == null) {
-                item(key = Section.Loading) { Gap { DetailsLoading() } }
+                if (waitShown) item(key = Section.Loading) { Gap { DetailsLoading() } }
             } else {
                 details(details, page, moment.synopsisExpanded, onEvent)
             }
@@ -227,7 +230,7 @@ private fun Header(page: TitlePage) {
             TitleText(
                 page.title,
                 maxLines = Int.MAX_VALUE,
-                style = MaterialTheme.typography.headlineSmall.copy(lineBreak = LineBreak.Heading),
+                style = MaterialTheme.typography.headlineSmallEmphasized.copy(lineBreak = LineBreak.Heading),
                 modifier = Modifier.semantics { heading() },
             )
             val facts = factsLine(page.facts)
@@ -263,13 +266,15 @@ private fun ListBlock(
     if (entry == null) {
         Button(
             onClick = { onEvent(TitleEvent.AddToList) },
-            shapes = ButtonDefaults.shapes(),
+            shapes = ButtonDefaults.shapesFor(PrimaryButtonHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight),
             modifier =
                 Modifier
                     .padding(horizontal = Spacing.l)
+                    .heightIn(min = PrimaryButtonHeight)
                     .fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.title_add_to_list))
+            Text(stringResource(R.string.title_add_to_list), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
         }
         return
     }
@@ -297,7 +302,7 @@ private fun OnList(
                     total = total,
                     onWatchedChange = { onEvent(TitleEvent.SetWatched(it)) },
                     onStep = { onEvent(TitleEvent.StepWatched(it)) },
-                    modifier = Modifier.padding(start = ButtonEdge),
+                    modifier = Modifier.padding(start = Spacing.l - stepButtonMargin),
                 )
             }
             Column(Modifier.padding(start = ButtonEdge)) {
@@ -323,16 +328,16 @@ private fun StatusButton(
 ) {
     FilledTonalButton(
         onClick = { onEvent(TitleEvent.Edit) },
-        shapes = ButtonDefaults.shapes(),
-        contentPadding = PaddingValues(start = Spacing.xl, end = Spacing.l),
-        modifier = modifier,
+        shapes = ButtonDefaults.shapesFor(PrimaryButtonHeight),
+        contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight, hasEndIcon = true),
+        modifier = modifier.heightIn(min = PrimaryButtonHeight),
     ) {
-        Text(stringResource(status.label()))
-        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+        Text(stringResource(status.label()), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
+        Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(PrimaryButtonHeight)))
         Icon(
             painterResource(R.drawable.ic_arrow_drop_down),
             contentDescription = null,
-            modifier = Modifier.size(ButtonDefaults.IconSize),
+            modifier = Modifier.size(ButtonDefaults.iconSizeFor(PrimaryButtonHeight)),
         )
     }
 }
@@ -410,6 +415,7 @@ private fun DetailsLoading() {
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.l)
+            .testTag(WAVY_INDICATOR)
             .semantics { contentDescription = loading },
     )
 }
@@ -624,6 +630,9 @@ private fun Modifier.toCentre(endPadding: Dp) =
         val placeable = measurable.measure(constraints.copy(minWidth = maxOf(constraints.minWidth, half)))
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
+
+// The list block's one button, in the medium button size.
+private val PrimaryButtonHeight = ButtonDefaults.MediumContainerHeight
 
 // Where a button starts or ends so that its label or icon, Spacing.m inside it, lines up with the content edge.
 private val ButtonEdge = Spacing.l - Spacing.m
