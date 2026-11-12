@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -13,6 +16,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.withIndex
@@ -25,7 +30,7 @@ import org.junit.runner.Description
 import kotlin.time.Duration.Companion.milliseconds
 
 // With [lateObservers], as with a database, an observer hears of a change after the write and a fresh read see it;
-// with [slowWrites], a write takes time before it is applied.
+// with [slowWrites], a write takes time before it is applied; while [listUnreadable], the list cannot be read.
 class TestGraph(
     val demo: Demo,
     lateObservers: Boolean = false,
@@ -33,8 +38,15 @@ class TestGraph(
 ) : AppGraph {
     override val clock = demo.clock
     override val session = demo.session
+    private val reads = UnreadableList(demo.list)
     override val list: ListRepository =
-        demo.list.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it }
+        reads.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it }
+
+    var listUnreadable: Boolean
+        get() = reads.unreadable
+        set(value) {
+            reads.unreadable = value
+        }
     override val anime = demo.anime
     override val airing = demo.airing
     override val search = demo.search
@@ -61,6 +73,21 @@ private class LateList(
     private companion object {
         val LATE = 5.milliseconds
     }
+}
+
+private class UnreadableList(
+    private val inner: ListRepository,
+) : ListRepository by inner {
+    @Volatile
+    var unreadable = false
+
+    override fun observeEntries(): Flow<List<ListEntry>> = flow { emitAll(readable { inner.observeEntries() }) }
+
+    override fun observeEntry(id: AnimeId): Flow<ListEntry?> = flow { emitAll(readable { inner.observeEntry(id) }) }
+
+    override suspend fun sync(): Outcome<Unit> = if (unreadable) Outcome.Failure(DataError.StorageError) else inner.sync()
+
+    private fun <T> readable(flow: () -> Flow<T>): Flow<T> = if (unreadable) throw DataException(DataError.StorageError) else flow()
 }
 
 private class SlowWrites(

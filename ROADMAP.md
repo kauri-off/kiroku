@@ -92,13 +92,14 @@ Not to forget:
 - Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
 - The list's database store in `:data` passes `:core`'s `ListEngineContract`; the MAL client is held to `RemoteList`
   by tests on recorded responses. `InMemoryLocalList` then moves to the test fixtures.
-- `RemoteList.fetch` is the whole list or a failure (`nsfw=true`, pages in an order edits do not change, any failed
-  page fails it), since a title missing from it leaves the list.
+- The MAL client's `RemoteList.fetch` asks with `nsfw=true`, reads pages in an order edits do not change, and fails
+  when any page fails.
 - `StoredEntry` carries the whole `Anime`: decide how list rows and the titles table relate, so that the title
   page's refresh and a list write do not overwrite each other.
 - The list engine takes the session, not a boolean: expired keeps the list readable and sends nothing (S6), and
-  each sign-in is told apart from the one before. Clearing the list at sign-out (S9) goes through the engine. A
-  write refused for the session offers no Retry.
+  each sign-in is told apart from the one before. The session it is given does not start with a placeholder
+  "signed out", which the engine would take as a sign-out. Clearing the list at sign-out (S9) goes through the
+  engine. A write refused for the session offers no Retry.
 - The engine persists the time of its last successful sync, and W5's restore clears it, so the sync owed after a
   restart is kept until one succeeds, also when the app starts signed out.
 - `ShellMessages` drops a waiting Undo or Retry when its title's values change, not only its time stamp.

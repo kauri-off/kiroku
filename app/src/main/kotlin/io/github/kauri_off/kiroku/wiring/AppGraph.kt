@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineScope
 import java.time.Clock
 
@@ -34,9 +35,12 @@ internal typealias DemoGraphFactory = (Clock, CoroutineScope) -> AppGraph
 
 internal fun malClientId(value: String): String? = value.trim().ifEmpty { null }
 
+internal val LOG_TAG = notShown("Kiroku")
+internal val UNEXPECTED = notShown("An exception the list did not expect")
+
 internal fun createGraph(
     clientId: String,
     clock: Clock,
     scope: CoroutineScope,
     demo: DemoGraphFactory? = demoGraphFactory,
-): AppGraph = if (malClientId(clientId) == null && demo != null) demo(clock, scope) else LiveGraph(clock, scope)
+): AppGraph = if (malClientId(clientId) == null && demo != null) demo(clock, scope) else LiveGraph(clock, scope, reportUnexpected)

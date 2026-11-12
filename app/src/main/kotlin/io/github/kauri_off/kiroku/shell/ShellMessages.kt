@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
@@ -122,11 +123,15 @@ class ShellMessages(
     private fun watch(posted: Posted): Job? {
         val id = posted.message.title ?: return null
         return scope.launch {
-            list
-                .observeEntry(id)
-                .distinctUntilChanged()
-                .drop(1)
-                .first()
+            try {
+                list
+                    .observeEntry(id)
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .first()
+            } catch (_: DataException) {
+                return@launch
+            }
             waiting.removeAll { it.posted == posted }
         }
     }

@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.defaultSort
@@ -24,6 +25,7 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -56,21 +58,12 @@ class ListViewModel(
     private var filter by mutableStateOf(saved.get<String>(FILTER))
     private var sortSheetOpen by mutableStateOf(false)
     private var refreshing by mutableStateOf(false)
+    private var observing: Job? = null
 
     val state: State<ListState> = derivedStateOf { build() }
 
     init {
-        viewModelScope.launch {
-            combine(graph.list.observeEntries(), graph.airing.observeAiring(), ::Pair).collect { (list, schedule) ->
-                airing = schedule
-                entries = list.associateBy { it.anime.id }
-                entriesLoaded = true
-                when {
-                    orders != null -> appendJoined()
-                    list.isNotEmpty() || firstSyncDone -> orderAll()
-                }
-            }
-        }
+        observe()
         viewModelScope.launch { graph.session.observeSession().collect { session = it } }
         viewModelScope.launch { sync(fromUser = false) }
     }
@@ -89,9 +82,39 @@ class ListViewModel(
             ListEvent.DismissSort -> sortSheetOpen = false
             is ListEvent.SelectSort -> selectSort(event.sort)
             ListEvent.Refresh -> viewModelScope.launch { sync(fromUser = true) }
-            ListEvent.Retry -> viewModelScope.launch { sync(fromUser = false) }
+            ListEvent.Retry -> {
+                if (observing?.isActive != true) observe()
+                viewModelScope.launch { sync(fromUser = false) }
+            }
             is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
+    }
+
+    private fun observe() {
+        observing =
+            viewModelScope.launch {
+                try {
+                    combine(graph.list.observeEntries(), graph.airing.observeAiring(), ::Pair).collect { (list, schedule) ->
+                        airing = schedule
+                        entries = list.associateBy { it.anime.id }
+                        entriesLoaded = true
+                        when {
+                            orders != null -> appendJoined()
+                            list.isNotEmpty() || firstSyncDone -> orderAll()
+                        }
+                    }
+                } catch (e: DataException) {
+                    unreadable(e.error)
+                }
+            }
+    }
+
+    // A list that cannot be read shows the error state, whatever it showed before.
+    private fun unreadable(error: DataError) {
+        orders = null
+        entries = emptyMap()
+        entriesLoaded = false
+        failure = error.toListFailure()
     }
 
     private fun build(): ListState {
@@ -193,9 +216,15 @@ class ListViewModel(
         when (result) {
             is Outcome.Success ->
                 if (fromUser || orders == null) {
-                    val synced = graph.list.observeEntries().first()
+                    val synced =
+                        try {
+                            graph.list.observeEntries().first()
+                        } catch (e: DataException) {
+                            unreadable(e.error)
+                            null
+                        }
                     // Meanwhile the list may have arrived and been ordered at start.
-                    if (fromUser || orders == null) {
+                    if (synced != null && (fromUser || orders == null)) {
                         entries = synced.associateBy { it.anime.id }
                         entriesLoaded = true
                         orderAll()

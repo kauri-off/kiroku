@@ -34,6 +34,7 @@ import java.time.Clock
 internal class LiveGraph(
     override val clock: Clock,
     scope: CoroutineScope,
+    unexpected: (Throwable) -> Unit,
 ) : AppGraph {
     private val unavailable = Outcome.Failure(DataError.ServerError)
     private val signedOut = Outcome.Failure(DataError.SessionExpired)
@@ -62,6 +63,7 @@ internal class LiveGraph(
             MutableStateFlow(false),
             clock,
             scope,
+            unexpected,
         )
 
     override val anime =

@@ -21,6 +21,7 @@ class Demo(
     scope: CoroutineScope,
     latency: Duration = Duration.ZERO,
     val clock: Clock = fixtures.clock,
+    unexpected: (Throwable) -> Unit = { throw it },
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
@@ -28,7 +29,7 @@ class Demo(
 
     val session: SessionRepository = DemoSessionRepository(signedIn, server, fixtures.user.name)
 
-    val list: ListRepository = ListEngine(server, InMemoryLocalList(fixtures.entries), signedIn, clock, scope)
+    val list: ListRepository = ListEngine(server, InMemoryLocalList(fixtures.entries), signedIn, clock, scope, unexpected)
 
     val anime: AnimeRepository = DemoAnimeRepository(fixtures, server)
 
@@ -44,6 +45,7 @@ class Demo(
         fun startingAt(
             clock: Clock,
             scope: CoroutineScope,
-        ): Demo = Demo(Fixtures.at(clock), scope, latency)
+            unexpected: (Throwable) -> Unit = { throw it },
+        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected)
     }
 }

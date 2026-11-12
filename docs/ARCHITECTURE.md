@@ -280,8 +280,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 | Module | Contains | Why separate |
 |---|---|---|
-| `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, the rules of list writes and syncs over a store and MAL, repository interfaces, typed errors; in its test fixtures, the fixture set and demo mode's in-memory repositories over it | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
-| `:data` (Android library) | The MAL and AniList clients, sign-in and token storage, the database, the list's store and MAL client under `:core`'s list engine, the other repository implementations | Network and database types stay inside it, so the user interface depends only on `:core` types. |
+| `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, the rules of list writes and syncs over a store and MAL, an in-memory store of the list, repository interfaces, typed errors; in its test fixtures, the fixture set and demo mode's repositories over it | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
+| `:data` (Android library) | The MAL and AniList clients (the list's under `:core`'s list engine), sign-in and token storage, the database and the list's store, the other repository implementations | Network and database types stay inside it, so the user interface depends only on `:core` types. |
 | `:app` (Android application) | Theme and components, screens and view models, navigation, notifications and background work, wiring | The only module that knows Compose. |
 
 - Dependencies point one way: `app → data → core` and `app → core`. The base package is

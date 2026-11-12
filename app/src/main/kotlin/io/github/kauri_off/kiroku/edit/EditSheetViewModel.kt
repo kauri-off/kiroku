@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -70,7 +71,14 @@ class EditSheetViewModel(
     ) {
         loading = true
         viewModelScope.launch {
-            val entry = graph.list.observeEntry(id).first()
+            val entry =
+                try {
+                    graph.list.observeEntry(id).first()
+                } catch (_: DataException) {
+                    loading = false
+                    forget()
+                    return@launch
+                }
             val found = entry?.anime ?: graph.anime.observeAnime(id).first()
             loading = false
             if (found == null) {

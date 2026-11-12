@@ -70,10 +70,11 @@ class ListViewModelTest {
         saved: SavedStateHandle = SavedStateHandle(),
         lateObservers: Boolean = false,
         slowWrites: Boolean = false,
+        unreadable: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(demo(scope), lateObservers, slowWrites)
+        val graph = TestGraph(demo(scope), lateObservers, slowWrites).apply { listUnreadable = unreadable }
         val messages = ShellMessages(scope, graph.list)
         val subject = Subject(graph, saved, messages, ListViewModel(graph, saved, messages))
         advanceUntilIdle()
@@ -101,6 +102,21 @@ class ListViewModelTest {
             assertEquals(set.entries.count { it.status == ListStatus.Planned }, s.ids(ListStatus.Planned).size)
             assertFalse(s.state.refreshing)
             assertFalse(s.state.sessionExpired)
+        }
+
+    @Test
+    fun `a list that cannot be read shows the error state, and Retry shows the list and follows it again`() =
+        test(unreadable = true) { s ->
+            assertEquals(ListContent.Failed(ListFailure.Other), s.state.content)
+
+            s.graph.listUnreadable = false
+            s.list.onEvent(ListEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(upNext(), s.ids())
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            val row = s.page().rows.single { it.id == FixtureAnime.exactToWatch.id }
+            assertEquals(13, (row.line2 as Line2.Progress).watched)
         }
 
     @Test

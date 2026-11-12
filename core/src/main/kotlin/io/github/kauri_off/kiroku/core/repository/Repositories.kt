@@ -138,6 +138,7 @@ data class WriteFailure(
 )
 
 interface ListRepository {
+    // Ends with a DataException when the list cannot be read; a new collection tries again.
     fun observeEntries(): Flow<List<ListEntry>>
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>

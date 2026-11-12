@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.core.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
@@ -37,18 +39,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.time.Clock
 import java.time.LocalDate
 import kotlin.time.Duration.Companion.seconds
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
-// A port that throws fails the one call it was asked in: MAL's client as a server error, the store as a storage error.
+// [unexpected] hears of the exceptions it did not expect: the store's, MAL's client's, and its own in background work.
 class ListEngine(
     remote: RemoteList,
-    private val local: LocalList,
+    store: LocalList,
     private val signedIn: StateFlow<Boolean>,
     private val clock: Clock,
     private val scope: CoroutineScope,
+    private val unexpected: (Throwable) -> Unit,
 ) : ListRepository {
     private sealed interface Request {
         val id: AnimeId
@@ -72,16 +76,33 @@ class ListEngine(
         override val id: AnimeId get() = write.anime.id
     }
 
+    // A store call that threw; it fails the one call the engine was asked in as a storage error.
+    private class StoreFailure(
+        cause: Throwable,
+    ) : Exception(cause)
+
+    // MAL's client throwing fails the one call: an IOException as no connection, signed out as expired, else reported.
     private val mal =
         object : RemoteList {
-            override suspend fun fetch() = guarded({ Outcome.Failure(DataError.ServerError) }) { remote.fetch() }
+            override suspend fun fetch() = remoteCall { remote.fetch() }
 
-            override suspend fun fetchEntry(id: AnimeId) = guarded({ Outcome.Failure(DataError.ServerError) }) { remote.fetchEntry(id) }
+            override suspend fun fetchEntry(id: AnimeId) = remoteCall { remote.fetchEntry(id) }
 
             override suspend fun put(
                 anime: Anime,
                 values: ListValues?,
-            ) = guarded({ Outcome.Failure(DataError.ServerError) }) { remote.put(anime, values) }
+            ) = remoteCall { remote.put(anime, values) }
+        }
+
+    private val local =
+        object : LocalList {
+            override fun observeEntries() = store.observeEntries().catch { throw if (it is Exception) storeFailure(it) else it }
+
+            override suspend fun read(id: AnimeId) = storeCall { store.read(id) }
+
+            override suspend fun readAll() = storeCall { store.readAll() }
+
+            override suspend fun write(entries: Map<AnimeId, StoredEntry?>) = storeCall { store.write(entries) }
         }
 
     // Held for every change to the store and to the fields below it, never while MAL is asked.
@@ -115,9 +136,13 @@ class ListEngine(
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 for (request in queue) {
-                    when (request) {
-                        is Put -> guarded({ lost(request) }) { send(request) }
-                        is Direct -> request.result.complete(guarded({ Outcome.Failure(DataError.StorageError) }) { send(request) })
+                    try {
+                        handle(request)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        unexpected(e)
+                        if (request is Direct) request.result.completeExceptionally(e)
                     }
                     mutex.withLock { accepted.remove(request) }
                 }
@@ -128,15 +153,34 @@ class ListEngine(
         scope.launch { signedIn.collect { if (!it) mutex.withLock { signOut() } } }
     }
 
+    private suspend fun handle(request: Request) {
+        when (request) {
+            is Put ->
+                try {
+                    send(request)
+                } catch (_: StoreFailure) {
+                    lost(request)
+                }
+            is Direct ->
+                request.result.complete(
+                    try {
+                        send(request)
+                    } catch (_: StoreFailure) {
+                        Outcome.Failure(DataError.StorageError)
+                    },
+                )
+        }
+    }
+
+    // A store that cannot be read is tried a few times, and then the flow ends with a storage error.
     override fun observeEntries(): Flow<List<ListEntry>> =
         combine(
             flow {
                 mutex.withLock { restore() }
                 emitAll(local.observeEntries())
-            }.retryWhen { _, _ ->
-                delay(STORE_RETRY)
-                true
-            },
+            }.retryWhen { cause, attempt ->
+                (cause is StoreFailure && attempt < STORE_ATTEMPTS - 1).also { if (it) delay(STORE_RETRY) }
+            }.catch { throw if (it is StoreFailure) DataException(DataError.StorageError, it.cause) else it },
             signedIn,
         ) { entries, signedIn -> if (signedIn) entries else emptyList() }
             .distinctUntilChanged()
@@ -182,26 +226,35 @@ class ListEngine(
             failures.tryEmit(WriteFailure(DataError.SessionExpired, write))
             return null
         }
-        return withContext(NonCancellable) {
-            locked {
-                check(!stopped) { STOPPED }
-                guarded({
-                    failures.tryEmit(WriteFailure(DataError.StorageError, write))
-                    null
-                }) { edit(write) }
+        return try {
+            withContext(NonCancellable) {
+                locked {
+                    check(!stopped) { STOPPED }
+                    try {
+                        edit(write)
+                    } catch (_: StoreFailure) {
+                        failures.tryEmit(WriteFailure(DataError.StorageError, write))
+                        null
+                    }
+                }
             }
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw IllegalStateException(STOPPED, e)
         }
     }
 
+    // An unconfirmed title with nothing on its way to MAL is sent even unchanged, so a Retry always does something.
     private suspend fun edit(write: ListWrite): ListChange? {
         val id = write.anime.id
         val stored = local.read(id)
         val current = stored?.shown
         val values = write.applyTo(current, today())
-        if (values == current?.values) return null
+        val owed = stored?.unconfirmed == true && id !in pending
+        if (values == current?.values && !owed) return null
         val anime = current?.anime ?: write.anime
         val next = values?.let { ListEntry(anime, it, clock.instant()) }
-        store(id, StoredEntry(next, stored?.confirmed, unconfirmed = true))
+        save(id, StoredEntry(next, stored?.confirmed, unconfirmed = true))
         pending[id] = (pending[id] ?: 0) + 1
         accept(Put(anime, values, epochs[id] ?: 0, session))
         return ListChange(current, next, write.steps)
@@ -228,9 +281,9 @@ class ListEngine(
                 is Outcome.Failure -> return outcome
                 is Outcome.Success -> outcome.value.associateBy { it.anime.id }
             }
-        return guarded({ Outcome.Failure(DataError.StorageError) }) {
-            locked {
-                if (!signedIn.value || session != began) return@locked Outcome.Failure(DataError.SessionExpired)
+        return locked {
+            if (!signedIn.value || session != began) return@locked Outcome.Failure(DataError.SessionExpired)
+            try {
                 val stored = local.readAll()
                 val synced =
                     (stored.keys + fetched.keys)
@@ -239,6 +292,8 @@ class ListEngine(
                         .filter { (id, entry) -> entry != stored[id] }
                 if (synced.isNotEmpty()) local.write(synced)
                 Outcome.Success(Unit)
+            } catch (_: StoreFailure) {
+                Outcome.Failure(DataError.StorageError)
             }
         }
     }
@@ -263,7 +318,7 @@ class ListEngine(
                         epochs[id] = put.epoch + 1
                         pending.remove(id)
                         val stored = local.read(id)
-                        store(id, stored?.confirmed?.let { StoredEntry.settled(it) })
+                        save(id, stored?.confirmed?.let { StoredEntry.settled(it) })
                         val shown = stored?.shown
                         WriteFailure(outcome.error, shown?.let { ListWrite.Save(it.anime, it.values) } ?: ListWrite.Remove(put.anime))
                     }
@@ -280,7 +335,10 @@ class ListEngine(
                 if (session != put.session) return
                 epochs[id] = put.epoch + 1
                 pending.remove(id)
-                guarded({}) { store(id, local.read(id)?.confirmed?.let { StoredEntry.settled(it) }) }
+                try {
+                    save(id, local.read(id)?.confirmed?.let { StoredEntry.settled(it) })
+                } catch (_: StoreFailure) {
+                }
                 accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it) } ?: ListWrite.Remove(last.anime)
@@ -336,13 +394,18 @@ class ListEngine(
                 shown?.values == entry.values -> StoredEntry.settled(shown)
                 else -> StoredEntry.settled(entry)
             }
-        if (next != stored) store(id, next)
+        if (next != stored) save(id, next)
     }
 
     // W5: an edit whose request died with an earlier process returns to the confirmed values, and the list is synced.
     private suspend fun restore() {
         if (restored) return
-        val returned = guarded({ return }) { returnToConfirmed() }
+        val returned =
+            try {
+                returnToConfirmed()
+            } catch (_: StoreFailure) {
+                return
+            }
         restored = true
         if (returned) scope.launch { sync() }
     }
@@ -351,7 +414,10 @@ class ListEngine(
     private suspend fun signOut() {
         session++
         pending.clear()
-        guarded({ false }) { returnToConfirmed() }
+        try {
+            returnToConfirmed()
+        } catch (_: StoreFailure) {
+        }
     }
 
     private suspend fun returnToConfirmed(): Boolean {
@@ -368,7 +434,11 @@ class ListEngine(
                 restored = true
                 queue.close()
                 pending.clear()
-                guarded({ false }) { returnToConfirmed() }
+                try {
+                    returnToConfirmed()
+                } catch (_: StoreFailure) {
+                } catch (_: CancellationException) {
+                }
                 accepted.filterIsInstance<Direct>().also { accepted.clear() }
             }
         directs.forEach { it.result.completeExceptionally(IllegalStateException(STOPPED)) }
@@ -380,19 +450,39 @@ class ListEngine(
             block()
         }
 
-    // The engine's own cancellation still ends it; any other exception is the given failure.
-    private suspend inline fun <T> guarded(
-        failed: () -> T,
-        block: () -> T,
-    ): T =
+    private suspend inline fun <T> remoteCall(call: () -> Outcome<T>): Outcome<T> =
         try {
-            block()
+            call()
         } catch (e: Exception) {
-            currentCoroutineContext().ensureActive()
-            failed()
+            ended(e)
+            when {
+                e is IOException -> Outcome.Failure(DataError.NoConnection)
+                !signedIn.value -> Outcome.Failure(DataError.SessionExpired)
+                else -> Outcome.Failure(DataError.ServerError).also { unexpected(e) }
+            }
         }
 
-    private suspend fun store(
+    private suspend inline fun <T> storeCall(call: () -> T): T =
+        try {
+            call()
+        } catch (e: Exception) {
+            throw storeFailure(e)
+        }
+
+    private suspend fun storeFailure(e: Exception): Exception {
+        ended(e)
+        unexpected(e)
+        return StoreFailure(e)
+    }
+
+    // A cancellation of the caller or of the engine's scope ends the call; any other is a failure like any exception.
+    private suspend fun ended(e: Exception) {
+        if (e !is CancellationException) return
+        currentCoroutineContext().ensureActive()
+        if (!scope.isActive) throw e
+    }
+
+    private suspend fun save(
         id: AnimeId,
         entry: StoredEntry?,
     ) {
@@ -408,6 +498,7 @@ class ListEngine(
 
     private companion object {
         const val STOPPED = "The list's scope has ended"
+        const val STORE_ATTEMPTS = 3
         val STORE_RETRY = 1.seconds
     }
 }

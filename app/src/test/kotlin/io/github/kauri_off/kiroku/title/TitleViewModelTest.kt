@@ -49,6 +49,8 @@ class TitleViewModelTest {
 
         val shown: TitleState.Shown get() = state as TitleState.Shown
 
+        fun watched() = shown.page.entry?.watchedEpisodes
+
         suspend fun values() =
             graph.list
                 .observeEntry(shown.page.anime.id)
@@ -242,6 +244,20 @@ class TitleViewModelTest {
             s.title.onEvent(TitleEvent.Retry)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
+        }
+
+    @Test
+    fun `a list that cannot be read fails the page, and Retry shows it and follows the list again`() =
+        test(before = { listUnreadable = true }) { s ->
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+
+            s.graph.listUnreadable = false
+            s.title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(12, s.watched())
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            assertEquals(13, s.watched())
         }
 
     @Test
