@@ -138,6 +138,7 @@ data class WriteFailure(
 )
 
 interface ListRepository {
+    // Ends with a DataException when the list cannot be read; a new collection tries again.
     fun observeEntries(): Flow<List<ListEntry>>
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
@@ -147,7 +148,7 @@ interface ListRepository {
 
     suspend fun sync(): Outcome<Unit>
 
-    // Applies the write locally and returns what it changed, or null when it changed nothing or was refused.
+    // Applies the write locally, whole even when its caller is cancelled; null when it changed nothing or was refused.
     suspend fun write(write: ListWrite): ListChange?
 
     suspend fun send(write: ListWrite): Outcome<Unit>

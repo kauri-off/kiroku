@@ -4,33 +4,37 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
+import io.github.kauri_off.kiroku.core.list.ListEngine
+import io.github.kauri_off.kiroku.core.list.RemoteList
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
-import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
-import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.UserRepository
-import io.github.kauri_off.kiroku.core.repository.WriteFailure
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import java.time.Clock
 
 // Signed out and without a remote source.
 internal class LiveGraph(
     override val clock: Clock,
+    scope: CoroutineScope,
+    unexpected: (Throwable) -> Unit,
 ) : AppGraph {
     private val unavailable = Outcome.Failure(DataError.ServerError)
     private val signedOut = Outcome.Failure(DataError.SessionExpired)
@@ -42,20 +46,25 @@ internal class LiveGraph(
             override suspend fun signOut() = Unit
         }
 
-    override val list =
-        object : ListRepository {
-            override fun observeEntries(): Flow<List<ListEntry>> = flowOf(emptyList())
+    // The engine, signed out, over a store that lives with the process and a MAL that cannot be reached.
+    override val list: ListRepository =
+        ListEngine(
+            object : RemoteList {
+                override suspend fun fetch(): Outcome<List<ListEntry>> = unavailable
 
-            override fun observeEntry(id: AnimeId): Flow<ListEntry?> = flowOf(null)
+                override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> = unavailable
 
-            override fun observeWriteFailures(): Flow<WriteFailure> = emptyFlow()
-
-            override suspend fun sync(): Outcome<Unit> = signedOut
-
-            override suspend fun write(write: ListWrite): ListChange? = null
-
-            override suspend fun send(write: ListWrite): Outcome<Unit> = signedOut
-        }
+                override suspend fun put(
+                    anime: Anime,
+                    values: ListValues?,
+                ): Outcome<ListEntry?> = unavailable
+            },
+            InMemoryLocalList(),
+            MutableStateFlow(false),
+            clock,
+            scope,
+            unexpected,
+        )
 
     override val anime =
         object : AnimeRepository {

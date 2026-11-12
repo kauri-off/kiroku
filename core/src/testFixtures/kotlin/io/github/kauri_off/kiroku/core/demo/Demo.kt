@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
+import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListRepository
@@ -19,6 +21,7 @@ class Demo(
     scope: CoroutineScope,
     latency: Duration = Duration.ZERO,
     val clock: Clock = fixtures.clock,
+    unexpected: (Throwable) -> Unit = { throw it },
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
@@ -26,7 +29,7 @@ class Demo(
 
     val session: SessionRepository = DemoSessionRepository(signedIn, server, fixtures.user.name)
 
-    val list: ListRepository = DemoListRepository(fixtures.entries, server, signedIn, clock, scope)
+    val list: ListRepository = ListEngine(server, InMemoryLocalList(fixtures.entries), signedIn, clock, scope, unexpected)
 
     val anime: AnimeRepository = DemoAnimeRepository(fixtures, server)
 
@@ -42,6 +45,7 @@ class Demo(
         fun startingAt(
             clock: Clock,
             scope: CoroutineScope,
-        ): Demo = Demo(Fixtures.at(clock), scope, latency)
+            unexpected: (Throwable) -> Unit = { throw it },
+        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected)
     }
 }

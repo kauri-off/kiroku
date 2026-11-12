@@ -1,10 +1,17 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.os.Handler
+import android.os.Looper
 import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.standin.StandInPosters
 
-internal val demoGraphFactory: DemoGraphFactory? = { clock, scope -> DemoGraph(Demo.startingAt(clock, scope)) }
+// A debug build crashes on an exception the list did not expect, on the main thread, so it is never missed.
+internal val reportUnexpected: (Throwable) -> Unit = { e ->
+    Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
+}
+
+internal val demoGraphFactory: DemoGraphFactory? = { clock, scope -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected)) }
 
 internal val standInPosters: Interceptor? = StandInPosters
 

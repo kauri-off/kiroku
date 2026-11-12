@@ -21,7 +21,7 @@ fun ListRoute(
     onSignIn: () -> Unit,
 ) {
     val list = viewModel { ListViewModel(graph, createSavedStateHandle(), messages) }
-    val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle()) }
+    val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle(), messages) }
     ListScreen(
         state = list.state.value,
         onEvent = { event ->

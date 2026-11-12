@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
@@ -68,10 +69,12 @@ class ListViewModelTest {
         demo: (CoroutineScope) -> Demo = { Demo(Fixtures.reference, it) },
         saved: SavedStateHandle = SavedStateHandle(),
         lateObservers: Boolean = false,
+        slowWrites: Boolean = false,
+        unreadable: Boolean = false,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(demo(scope), lateObservers)
+        val graph = TestGraph(demo(scope), lateObservers, slowWrites).apply { listUnreadable = unreadable }
         val messages = ShellMessages(scope, graph.list)
         val subject = Subject(graph, saved, messages, ListViewModel(graph, saved, messages))
         advanceUntilIdle()
@@ -102,6 +105,21 @@ class ListViewModelTest {
         }
 
     @Test
+    fun `a list that cannot be read shows the error state, and Retry shows the list and follows it again`() =
+        test(unreadable = true) { s ->
+            assertEquals(ListContent.Failed(ListFailure.Other), s.state.content)
+
+            s.graph.listUnreadable = false
+            s.list.onEvent(ListEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(upNext(), s.ids())
+            s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            advanceUntilIdle()
+            val row = s.page().rows.single { it.id == FixtureAnime.exactToWatch.id }
+            assertEquals(13, (row.line2 as Line2.Progress).watched)
+        }
+
+    @Test
     fun `SelectTab changes the tab and never the order`() =
         test { s ->
             s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
@@ -124,6 +142,16 @@ class ListViewModelTest {
             advanceUntilIdle()
             assertEquals(12, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
             assertNull(s.message)
+        }
+
+    @Test
+    fun `PlusOne is written and says so although the List is closed before the write is applied`() =
+        test(slowWrites = true) { s ->
+            s.list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
+            s.list.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(13, s.values(FixtureAnime.exactToWatch)?.watchedEpisodes)
+            assertEquals(ShellMessage.Text.EpisodeWatched(13), s.message?.text)
         }
 
     @Test

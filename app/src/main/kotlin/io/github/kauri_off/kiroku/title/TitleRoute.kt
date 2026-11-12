@@ -43,7 +43,7 @@ fun TitleRoute(
 ) {
     val id = AnimeId(key.id)
     val title = viewModel { TitleViewModel(graph, id, createSavedStateHandle(), messages) }
-    val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle()) }
+    val editor = viewModel { EditSheetViewModel(graph, createSavedStateHandle(), messages) }
     val context = LocalContext.current
     val state = title.state.value
     TitleScreen(

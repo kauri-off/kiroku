@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
@@ -50,12 +51,15 @@ class RelatedViewModel(
 ) : SubScreenViewModel(graph, id) {
     private var entries by mutableStateOf<Map<AnimeId, ListValues>>(emptyMap())
     private var airing by mutableStateOf<Map<AnimeId, Airing>>(emptyMap())
+    private var listFailure by mutableStateOf<DataError?>(null)
 
     val state: State<RelatedState> =
         derivedStateOf {
             val details = details
             val failure = failure
+            val listFailure = listFailure
             when {
+                listFailure != null -> RelatedState.Failed(listFailure, session)
                 details != null -> relatedState(details.related, entries, airing, graph.titleLanguage, session)
                 failure != null -> RelatedState.Failed(failure, session)
                 else -> RelatedState.Loading(session)
@@ -63,14 +67,26 @@ class RelatedViewModel(
         }
 
     init {
-        viewModelScope.launch {
-            graph.list.observeEntries().collect { list -> entries = list.associate { it.anime.id to it.values } }
-        }
+        observeList()
         viewModelScope.launch { graph.airing.observeAiring().collect { airing = it } }
     }
 
     fun onEvent(event: RelatedEvent) {
-        if (event == RelatedEvent.Retry) refresh()
+        if (event != RelatedEvent.Retry) return
+        if (listFailure != null) observeList()
+        refresh()
+    }
+
+    // A list that cannot be read fails the screen, since the related titles' list statuses would be unknown.
+    private fun observeList() {
+        listFailure = null
+        viewModelScope.launch {
+            try {
+                graph.list.observeEntries().collect { list -> entries = list.associate { it.anime.id to it.values } }
+            } catch (e: DataException) {
+                listFailure = e.error
+            }
+        }
     }
 }
 

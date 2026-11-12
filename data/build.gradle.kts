@@ -40,5 +40,8 @@ android {
 
 dependencies {
     api(project(":core"))
+    testImplementation(project(":core")) {
+        capabilities { requireFeature("contract") }
+    }
     testImplementation(libs.junit)
 }
