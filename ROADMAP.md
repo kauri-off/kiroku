@@ -6,8 +6,8 @@ is accepted.
 
 Only the milestone in progress is broken into tasks. A later milestone has a goal, an acceptance (what the owner
 can do when it is finished) and the things its planner must not forget; it becomes tasks when it starts. A layout
-task of a later milestone may run ahead of it, on fixture states. At the end
-of each milestone work stops and the owner looks at the result.
+task of a later milestone may run ahead of it, on fixture states. At the end of each milestone work stops and the
+owner looks at the result.
 
 | Milestone | Result |
 |---|---|
@@ -23,21 +23,15 @@ M2 to M4 are the daily loop that replaces dailyAL for the owner; search and prof
 
 How to read a task:
 
-- `[ ]` becomes `[x]` in the pull request that completes the task, which also cuts the entry down to its name: what
-  it built is in the code, and its check has become a test or has been run. Each task is one agent, one git worktree
-  and one squash-merged pull request.
+- `[ ]` becomes `[x]` in the pull request that completes the task, which also cuts the entry down to its name.
 - **[A]** architectural task: done by the stronger model, because later tasks build on its choices.
 - **[L]** layout task: finished only when it passes [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) with both
-  reviewers. It renders the **cases** it names, plus content, loading, empty and error where they exist, as
-  ARCHITECTURE section 11.2 requires; the screen's registry file is the list of cases from then on.
+  reviewers. The **cases** it names go into the screen's registry file, which holds them from then on.
 - **[O]** a step done by the orchestrator or the owner, not by a coding agent.
 - **Needs** lists what must be merged first. Tasks without a common dependency can run in parallel.
 - **Check** is what a reviewer or the owner runs or looks at, and what it shows. How the task is built, and what
   its parts are called, is the author's decision.
 - A section number without a document name refers to `docs/ARCHITECTURE.md`.
-
-Every task also passes `tools/gw --kind check ktlintCheck lint test assembleDebug`. Agents never push; a check that
-needs GitHub is observed by the orchestrator after it pushes the branch.
 
 ---
 
@@ -45,8 +39,6 @@ needs GitHub is observed by the orchestrator after it pushes the branch.
 
 Goal: the owner installs a debug APK and sees the List and the title page in the final design, in Russian and
 English, light and dark, on demo data. No MAL client id is needed.
-
-Built and merged (the code and its tests say what each one is):
 
 - [x] **M1-01 [A] Project skeleton.**
 - [x] **M1-02 [A] Queue wrappers.**
@@ -468,7 +460,7 @@ lost; the Russian strings of M7 are reviewed; then the orchestrator tags `v1.0.0
 Not to forget:
 
 - A wide-window pass over every screen, as one more variant, `en-wide`, of each content case: 840 × 600 dp and
-  600 × 960 dp, the rail, the 640 dp content limit, landscape.
+  600 × 960 dp, the rail, the content width limit, landscape.
 - A screen-reader pass with TalkBack over List, Title and Profile: every interactive element has spoken text that
   names its action or value, and the reading order is the visual order.
 - A walk through every screen with the network off, on a slow network and with MAL refusing requests, compared
