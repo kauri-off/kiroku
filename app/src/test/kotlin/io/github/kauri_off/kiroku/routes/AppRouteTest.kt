@@ -188,6 +188,7 @@ class AppRouteTest {
     @Test
     fun `a quickly typed filter reaches the List keystroke by keystroke`() {
         app()
+        shows(FixtureAnime.exactCaughtUp.titles.romaji)
         compose.onNodeWithContentDescription("Filter by title").performClick()
         compose.waitForIdle()
         val field = compose.onNode(hasSetTextAction())
@@ -200,6 +201,7 @@ class AppRouteTest {
         compose.waitForIdle()
         compose.onNode(hasSetTextAction() and hasText("kag")).assertExists()
         shows(kagerou.titles.romaji)
+        compose.onNodeWithText(FixtureAnime.exactCaughtUp.titles.romaji).assertDoesNotExist()
     }
 
     @Test

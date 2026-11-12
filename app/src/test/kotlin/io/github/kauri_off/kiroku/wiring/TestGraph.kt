@@ -24,7 +24,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -83,7 +85,10 @@ class TestGraph(
     // The title refreshes asked for so far.
     val refreshes: Int get() = refreshCount.get()
 
-    override val anime: AnimeRepository = CountedAnime(demo.anime, counter, refreshCount)
+    // While true, the store holds no title and no details, as before a title is first stored.
+    val titlesUnstored = MutableStateFlow(false)
+
+    override val anime: AnimeRepository = CountedAnime(demo.anime, counter, refreshCount, titlesUnstored)
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
@@ -121,10 +126,13 @@ private class CountedAnime(
     private val inner: AnimeRepository,
     private val readers: Readers,
     private val refreshes: AtomicInteger,
+    private val unstored: StateFlow<Boolean>,
 ) : AnimeRepository by inner {
-    override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(inner.observeAnime(id))
+    override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(stored(inner.observeAnime(id)))
 
-    override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = readers.of(inner.observeDetails(id))
+    override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = readers.of(stored(inner.observeDetails(id)))
+
+    private fun <T> stored(flow: Flow<T?>): Flow<T?> = combine(flow, unstored) { value, unstored -> value.takeUnless { unstored } }
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         refreshes.incrementAndGet()

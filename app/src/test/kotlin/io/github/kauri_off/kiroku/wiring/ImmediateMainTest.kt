@@ -38,12 +38,8 @@ class ImmediateMainTest {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
             val id = FixtureAnime.exactToWatch.id
-            val entries =
-                graph.list
-                    .observeEntries()
-                    .first()
-                    .associateBy { it.anime.id }
-            val summary = TitleSummary(entries.getValue(id).anime, null, entries, graph.airing.observeAiring().first(), null)
+            val entry = graph.list.observeEntry(id).first()!!
+            val summary = TitleSummary(entry.anime, entry, graph.airing.observeAiring().first()[id], null)
             val shell = ShellViewModel(graph.list)
             val messages = shell.messages
             val list =

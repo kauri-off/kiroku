@@ -51,6 +51,7 @@ class TypedTextTest {
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
     private val kagerou = FixtureAnime.exactToWatch
+    private val shiokaze = FixtureAnime.exactCaughtUp
 
     @After
     fun stop() = scope.cancel()
@@ -70,6 +71,7 @@ class TypedTextTest {
     @Test
     fun `the List's filter field shows every keystroke before the List's state follows`() {
         app()
+        compose.onNodeWithText(shiokaze.titles.romaji).assertExists()
         compose.onNodeWithContentDescription("Filter by title").performClick()
         compose.waitForIdle()
         val field = compose.onNode(hasSetTextAction())
@@ -84,6 +86,7 @@ class TypedTextTest {
         settle()
         compose.onNode(hasSetTextAction() and hasText("kag")).assertExists()
         compose.onNodeWithText(kagerou.titles.romaji).assertExists()
+        compose.onNodeWithText(shiokaze.titles.romaji).assertDoesNotExist()
     }
 
     @Test

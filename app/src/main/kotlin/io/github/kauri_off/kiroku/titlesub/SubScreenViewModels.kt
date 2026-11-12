@@ -18,6 +18,8 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.title.TitleSummary
+import io.github.kauri_off.kiroku.title.knownAiring
+import io.github.kauri_off.kiroku.title.knownEntries
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,11 +33,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
 
-// What both sub-screens read: one title, its details, and whether loading them failed. Reading it first refreshes.
+// One title, its details and whether loading them failed, the summary standing in for what is not stored.
 abstract class SubScreenViewModel(
     private val id: AnimeId,
     private val anime: AnimeRepository,
     session: SessionRepository,
+    opened: TitleSummary?,
 ) : ViewModel() {
     protected class Title(
         val anime: Anime?,
@@ -43,15 +46,16 @@ abstract class SubScreenViewModel(
         val session: Session?,
         val failure: DataError?,
     ) {
-        constructor(opened: TitleSummary) : this(opened.anime, opened.details, opened.session, null)
+        constructor(opened: TitleSummary) : this(opened.anime, opened.page?.details, opened.session, null)
     }
 
     private val failure = MutableStateFlow<DataError?>(null)
     private var refreshed = false
 
     protected val title: Flow<Title> =
-        combine(anime.observeAnime(id), anime.observeDetails(id), session.observeSession(), failure, ::Title)
-            .onStart { if (!refreshed) refresh() }
+        combine(anime.observeAnime(id), anime.observeDetails(id), session.observeSession(), failure) { stored, details, session, failure ->
+            Title(stored ?: opened?.anime, details ?: opened?.page?.details, session, failure)
+        }.onStart { if (!refreshed) refresh() }
 
     protected fun refresh() {
         refreshed = true
@@ -71,7 +75,7 @@ class RelatedViewModel(
     session: SessionRepository,
     private val titleLanguage: TitleLanguage,
     opened: TitleSummary? = null,
-) : SubScreenViewModel(id, anime, session) {
+) : SubScreenViewModel(id, anime, session, opened) {
     private class ListRead(
         val entries: Map<AnimeId, ListEntry> = emptyMap(),
         val failure: DataError? = null,
@@ -82,7 +86,7 @@ class RelatedViewModel(
         val list: ListRead,
         val airing: Map<AnimeId, Airing>,
     ) {
-        constructor(opened: TitleSummary) : this(Title(opened), ListRead(opened.list), opened.airing)
+        constructor(opened: TitleSummary) : this(Title(opened), ListRead(opened.knownEntries()), opened.knownAiring())
     }
 
     private val retries = MutableStateFlow(0)
@@ -113,12 +117,15 @@ class RelatedViewModel(
     // What the screen shows of a related title, for its page.
     fun summaryOf(id: AnimeId): TitleSummary? {
         val sources = sources.value ?: return null
+        if (sources.list.failure != null) return null
+        val entry = sources.list.entries[id]
+        // A related row knows less of a title than its list entry does.
         val anime =
-            sources.title.details
+            entry?.anime ?: sources.title.details
                 ?.related
                 ?.firstOrNull { it.anime.id == id }
                 ?.anime ?: return null
-        return TitleSummary(anime, null, sources.list.entries, sources.airing, sources.title.session)
+        return TitleSummary(anime, entry, sources.airing[id], sources.title.session)
     }
 
     private fun build(sources: Sources): RelatedState {
@@ -149,7 +156,7 @@ class DetailsViewModel(
     private val titleLanguage: TitleLanguage,
     private val clock: Clock,
     opened: TitleSummary? = null,
-) : SubScreenViewModel(id, anime, session) {
+) : SubScreenViewModel(id, anime, session, opened) {
     val state: StateFlow<DetailsState> =
         title
             .map(::build)

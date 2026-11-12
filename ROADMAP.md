@@ -139,8 +139,6 @@ Not to forget:
   resources together, only on the owner's answer.
 - A one-off effect a view model hands its route (signed in, a redirect received) is state the route acts on and then
   acknowledges, as `ShellMessages.editRequest` is, not a `Channel`.
-- Room flows join a view model's state as they are; results that arrive page by page are held as a `StateFlow` of the
-  pages loaded, with no paging library (section 6.4).
 
 ## M3. Episodes aired and episodes to watch
 
@@ -198,6 +196,7 @@ Not to forget:
 - Searches of one, two and three characters are recorded, to learn the shortest query MAL accepts (item 3 of
   section 13).
 - Typing does not send a request per keystroke.
+- Results that arrive page by page are held as a `StateFlow` of the pages loaded.
 
 ## M6. Profiles and statistics
 

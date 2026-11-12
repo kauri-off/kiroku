@@ -155,7 +155,7 @@ class ListViewModel(
     fun summaryOf(id: AnimeId): TitleSummary? {
         val model = model.value
         val entry = model.entries[id] ?: return null
-        return TitleSummary(entry.anime, null, model.entries, model.airing, model.session)
+        return TitleSummary(entry.anime, entry, model.airing[id], model.session)
     }
 
     private fun build(

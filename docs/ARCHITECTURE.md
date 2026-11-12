@@ -301,11 +301,12 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   cannot write. It produces the state as a `StateFlow` from the repositories' flows and the user's input, and handles
   the events. The state is produced only while a screen collects it: it stops once none has for longer than a
   rotation takes, and starts again with the next. Nothing is read, synced or refreshed before the first collection.
-- The first frame is the state's initial value, built synchronously from what the screen was opened with: a page
-  opened from a row or another page starts from the summary that row or page showed; one opened with nothing known
-  starts in its loading state.
-- Text a person types lives in Compose state that its field reads in the same frame; the view model's flows observe
-  that state, never the other way round.
+- A page opened from a row or another page shows what that row or page showed from its first frame, and keeps
+  showing it until the store knows more, also after a failed refresh. A page opened with nothing known starts in its
+  loading state.
+- Text a person types is held in a `mutableStateOf` or `TextFieldState` that the view model owns and changes inside
+  the event, and its field reads that holder: no flow, collected or not, sits between a keystroke and its field. The
+  view model's flows observe the holder with `snapshotFlow`.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
   screen.
 - A thin `XRoute` collects the state only while its screen is started, connects the view model to the screen and to
@@ -665,7 +666,8 @@ scrolling, for a title of up to two lines.
 **Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
 render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 once the wait has lasted
 a second, until the details arrive.
-Only a page opened with no data at all (a deep link) uses the full-screen loading state.
+Only a page opened with no data at all (a deep link, or a page restored after the process was killed) uses the
+full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
 

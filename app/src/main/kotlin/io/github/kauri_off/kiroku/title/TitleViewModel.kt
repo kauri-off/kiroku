@@ -51,7 +51,7 @@ class TitleViewModel(
     private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
-    opened: TitleSummary? = null,
+    private val opened: TitleSummary? = null,
 ) : ViewModel() {
     private class Sources(
         val anime: Anime?,
@@ -60,7 +60,8 @@ class TitleViewModel(
         val airing: Map<AnimeId, Airing>,
         val session: Session?,
     ) {
-        constructor(opened: TitleSummary) : this(opened.anime, opened.details, ListRead(opened.list), opened.airing, opened.session)
+        // The store's answers are not known yet; the summary stands in for them in build.
+        constructor(opened: TitleSummary) : this(null, null, ListRead(opened.knownEntries()), opened.knownAiring(), opened.session)
     }
 
     private class ListRead(
@@ -82,7 +83,7 @@ class TitleViewModel(
             .map { list -> ListRead(list.associateBy { it.anime.id }) }
             .readAgainOnRetry(retries) { ListRead(failure = it) }
 
-    // Starts from what the opening screen showed, so the page needs no read for its first frame.
+    // Starts from what the opening screen showed, so the page needs no read for its first frame; build falls back to it.
     private val sources: StateFlow<Sources?> =
         combine(
             anime.observeAnime(id),
@@ -101,22 +102,22 @@ class TitleViewModel(
     // What the page shows of [id], itself or a related title, for the screen it opens.
     fun summaryOf(id: AnimeId): TitleSummary? {
         val sources = sources.value ?: return null
-        val details = sources.details.takeIf { id == this.id }
-        val anime =
-            (
-                if (id == this.id) {
-                    sources.anime
-                } else {
-                    sources.details
-                        ?.related
-                        ?.firstOrNull { it.anime.id == id }
-                        ?.anime
-                }
-            )
-                ?: sources.list.entries[id]?.anime
-                ?: return null
-        return TitleSummary(anime, details, sources.list.entries, sources.airing, sources.session)
+        if (sources.list.failure != null) return null
+        val entry = sources.list.entries[id]
+        val details = detailsOf(sources)
+        if (id == this.id) {
+            val page = details?.let { pageSummary(it, sources.list.entries, sources.airing) }
+            return TitleSummary(animeOf(sources) ?: return null, entry, sources.airing[id], sources.session, page)
+        }
+        // A related row knows less of a title than its list entry does.
+        val anime = entry?.anime ?: details?.related?.firstOrNull { it.anime.id == id }?.anime ?: return null
+        return TitleSummary(anime, entry, sources.airing[id], sources.session)
     }
+
+    // The fullest of the store's title, the list entry's and the summary's.
+    private fun animeOf(sources: Sources): Anime? = sources.anime ?: sources.list.entries[id]?.anime ?: opened?.anime
+
+    private fun detailsOf(sources: Sources): AnimeDetails? = sources.details ?: opened?.page?.details
 
     fun onEvent(event: TitleEvent) {
         when (event) {
@@ -141,20 +142,21 @@ class TitleViewModel(
         detailsWaitShown: Boolean,
     ): TitleState {
         val entry = sources.list.entries[id]
-        val anime = sources.anime ?: entry?.anime
+        val anime = animeOf(sources)
+        val details = detailsOf(sources)
         val session = sources.session
         val listFailure = sources.list.failure
         return when {
             listFailure != null -> TitleState.Failed(listFailure, session)
             anime == null -> failure?.let { TitleState.Failed(it, session) } ?: TitleState.Loading(session)
-            sources.details == null && failure != null -> TitleState.Failed(failure, session)
+            details == null && failure != null -> TitleState.Failed(failure, session)
             else ->
                 TitleState.Shown(
                     TitlePage.of(
                         anime,
                         entry,
                         sources.airing[id],
-                        sources.details,
+                        details,
                         sources.list.entries.mapValues { it.value.status },
                         titleLanguage,
                         clock,
@@ -168,7 +170,7 @@ class TitleViewModel(
 
     private fun shownPage(): TitlePage? = (state.value as? TitleState.Shown)?.page
 
-    // With details already shown, a failed refresh is a message and the page stays (section 7.2).
+    // With details already shown, or a summary, a failed refresh is a message and the page stays (section 7.2).
     private fun refresh() {
         refreshed = true
         failure.value = null
@@ -182,7 +184,9 @@ class TitleViewModel(
         viewModelScope.launch {
             val result = anime.refresh(id)
             if (result !is Outcome.Failure) return@launch
-            if (anime.observeDetails(id).first() != null) {
+            if (opened != null || anime.observeDetails(id).first() != null) {
+                detailsWait?.cancel()
+                detailsWaitShown.value = false
                 if (result.error != DataError.SessionExpired) messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
             } else {
                 failure.value = result.error

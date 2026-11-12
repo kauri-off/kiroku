@@ -389,7 +389,7 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
-    // Section 9.4: opened from a row, the page has the summary, however late the store answers.
+    // Section 9.4: opened from a row, the page has the summary before the store answers.
     @Test
     fun `a page opened with a summary shows it at once, before the store answers`() =
         runTest(dispatcher) {
@@ -414,15 +414,76 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
+    // A title opened from a related row is not stored yet: the page stays, and a failed refresh is a message.
+    @Test
+    fun `a page opened with a summary keeps it while the store does not hold the title, and after a failed refresh`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope).apply { titlesUnstored.value = true }
+            val anime = FixtureAnime.notOnListAiring
+            val summary = TitleSummary(anime, null, null, graph.session.observeSession().first())
+            val messages = ShellMessages(scope, graph.list)
+            val title = title(graph, anime.id, SavedStateHandle(), messages, summary)
+            showing(title.state)
+            advanceUntilIdle()
+            assertEquals(anime, (title.state.value as TitleState.Shown).page.anime)
+            assertNull(messages.current.value)
+
+            graph.demo.server.offline.value = true
+            title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            val shown = title.state.value as TitleState.Shown
+            assertEquals(anime, shown.page.anime)
+            assertFalse(shown.detailsWaitShown)
+            assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), messages.current.value?.message)
+            scope.cancel()
+        }
+
+    // A related row knows less of a title than the list entry and the store do, which win as soon as they are known.
+    @Test
+    fun `the list entry's and the store's title win over a related row's, also for the summary the page hands on`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val entries =
+                graph.list
+                    .observeEntries()
+                    .first()
+                    .associateBy { it.anime.id }
+            val full = FixtureAnime.exactToWatch
+            val partial = full.copy(meanScore = null, rank = null, malEpisodes = null)
+            val details = FixtureDetails.all.single { it.id == FixtureAnime.premiereYear.id }
+            val fromRow =
+                details.copy(related = details.related.map { if (it.anime.id == full.id) it.copy(anime = partial) else it })
+            val session = graph.session.observeSession().first()
+            val page = pageSummary(fromRow, entries, graph.airing.observeAiring().first())
+            val premiere = TitleSummary(FixtureAnime.premiereYear, entries[FixtureAnime.premiereYear.id], null, session, page)
+            graph.readsHeld = true
+            val parent = title(graph, FixtureAnime.premiereYear.id, SavedStateHandle(), ShellMessages(scope, graph.list), premiere)
+            assertTrue(fromRow.related.any { it.anime == partial })
+            assertEquals(full, parent.summaryOf(full.id)?.anime)
+            assertEquals(entries[full.id], parent.summaryOf(full.id)?.entry)
+
+            val opened = TitleSummary(partial, entries[full.id], null, session)
+            val title = title(graph, full.id, SavedStateHandle(), ShellMessages(scope, graph.list), opened)
+            assertEquals(full, (title.state.value as TitleState.Shown).page.anime)
+            graph.readsHeld = false
+            graph.titlesUnstored.value = true
+            showing(title.state)
+            advanceUntilIdle()
+            assertEquals(full, (title.state.value as TitleState.Shown).page.anime)
+            scope.cancel()
+        }
+
     // What the List shows of the title.
     private suspend fun summary(graph: TestGraph): TitleSummary {
-        val entries =
-            graph.list
-                .observeEntries()
-                .first()
-                .associateBy { it.anime.id }
-        val anime = entries.getValue(FixtureAnime.exactToWatch.id).anime
-        return TitleSummary(anime, null, entries, graph.airing.observeAiring().first(), graph.session.observeSession().first())
+        val entry = graph.list.observeEntry(FixtureAnime.exactToWatch.id).first()!!
+        return TitleSummary(
+            entry.anime,
+            entry,
+            graph.airing.observeAiring().first()[entry.anime.id],
+            graph.session.observeSession().first(),
+        )
     }
 
     private fun title(
