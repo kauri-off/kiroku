@@ -473,7 +473,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | Component | Built from | Purpose |
 |---|---|---|
 | `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element, an optional long press that screen readers are offered too. "+1" keeps one place and one size on every row, prominent while the row has episodes to watch and quiet once the user has caught up |
+| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element, an optional long press with haptic feedback that screen readers are offered too. "+1" keeps one place and one size on every row, prominent while the row has episodes to watch and quiet once the user has caught up |
 | `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
 | `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
 | `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence |
