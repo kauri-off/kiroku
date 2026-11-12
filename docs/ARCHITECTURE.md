@@ -650,7 +650,8 @@ episode total, the year, the premiere and a related title each appear in one pla
 scrolling, for a title of up to two lines.
 
 **Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
-render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 until the details arrive.
+render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 once the wait has lasted
+a second, until the details arrive.
 Only a page opened with no data at all (a deep link) uses the full-screen loading state.
 
 **Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
@@ -661,13 +662,13 @@ order of items 2 to 8 does not change, and the above-the-fold rule stays.
 
 ### 9.5 Edit sheet
 
-A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it edits;
-the status as five single-choice toggle buttons in a wrapping row; an `EpisodeStepper`; a score slider 0 to 10 with the
-score names; start and finish dates; a text button "Remove from list" (asks for confirmation); "Save", on screen without
-scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before "Save", and "Save" writes
-exactly what the sheet shows, an automatic status change (W7) included. The count has no ceiling (W9). Dismissing the
-sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come
-after 1.0.
+A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
+edits; the status as a connected group of five single-choice toggle buttons, in as few rows as fit; an
+`EpisodeStepper`; a score slider 0 to 10 with the score names; start and finish dates; a text button "Remove from
+list" (asks for confirmation); "Save", on screen without scrolling whenever the keyboard is closed. Limit: nothing
+else. Nothing is written before "Save", and "Save" writes exactly what the sheet shows, an automatic status change
+(W7) included. The count has no ceiling (W9). Dismissing the sheet with unsaved changes, by swipe or Back, asks
+"Discard changes?". Rewatching, tags, comments and priority come after 1.0.
 
 ### 9.6 Search
 
