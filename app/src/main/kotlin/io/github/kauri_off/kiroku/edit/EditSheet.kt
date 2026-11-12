@@ -87,6 +87,7 @@ import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.component.stepButtonMargin
+import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
@@ -516,7 +517,7 @@ private fun DateInput(
             },
         interactionSource = presses,
         modifier =
-            Modifier.fillMaxWidth().semantics {
+            Modifier.withoutAutofill().fillMaxWidth().semantics {
                 onClick(choose) {
                     open()
                     true

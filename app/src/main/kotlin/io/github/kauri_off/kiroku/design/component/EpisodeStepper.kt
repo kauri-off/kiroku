@@ -139,10 +139,11 @@ internal fun EpisodeStepperLayout(
                     total,
                     if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else OutlinedTextFieldDefaults.colors().disabledTextColor,
                 ),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onDone() }),
             modifier =
                 fieldModifier
+                    .withoutAutofill()
                     .weight(1f, fill = false)
                     .width(fieldWidth(maxOf(text.length, current.toString().length), total))
                     .onFocusChanged {

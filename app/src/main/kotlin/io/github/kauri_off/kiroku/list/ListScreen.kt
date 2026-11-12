@@ -62,6 +62,7 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
+import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
@@ -277,7 +278,7 @@ private fun FilterField(
                 focusedIndicatorColor = surface,
                 unfocusedIndicatorColor = surface,
             ),
-        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+        modifier = Modifier.withoutAutofill().fillMaxWidth().focusRequester(focus),
     )
     LaunchedEffect(Unit) { focus.requestFocus() }
 }
