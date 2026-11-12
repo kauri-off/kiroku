@@ -1,0 +1,78 @@
+package io.github.kauri_off.kiroku.scenario
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.design.theme.Sizes
+import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.notShown
+
+// The names of the scenarios that are on, in the panel's order.
+fun Scenario.names(): List<Int> =
+    buildList {
+        if (offline) add(R.string.scenarios_offline)
+        if (sessionExpired) add(R.string.design_session_expired)
+        if (slow) add(R.string.scenarios_slow)
+        when (writes) {
+            WriteFault.None -> Unit
+            WriteFault.Refused -> add(R.string.scenarios_name_writes_refused)
+            WriteFault.ServerError -> add(R.string.scenarios_name_write_errors)
+        }
+        when (store) {
+            StoreFault.None -> Unit
+            StoreFault.WritesFail -> add(R.string.scenarios_name_store_writes_fail)
+            StoreFault.Unreadable -> add(R.string.scenarios_name_store_unreadable)
+        }
+    }
+
+// The marker on the end edge of [area], a little below its middle, where every screen has content under its bars.
+@Composable
+fun EdgeMarker(
+    scenario: Scenario,
+    area: Modifier,
+    onClick: () -> Unit,
+) = Box(area.fillMaxSize().padding(top = Spacing.xxl)) { ScenarioMarker(scenario, onClick, Modifier.align(Alignment.CenterEnd)) }
+
+// A tab narrower than every screen's side margin, so it covers nothing; spoken with what is on, a tap opens the panel.
+@Composable
+fun ScenarioMarker(
+    scenario: Scenario,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!scenario.active) return
+    val names = scenario.names().map { stringResource(it) }.joinToString(stringResource(R.string.common_separator))
+    val spoken = stringResource(R.string.scenarios_marker_spoken, names)
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(topStartPercent = HALF, bottomStartPercent = HALF),
+            color = MaterialTheme.colorScheme.error,
+            modifier =
+                modifier
+                    .size(width = Spacing.m, height = Sizes.touchTarget)
+                    .testTag(MARKER_TAG)
+                    .semantics { contentDescription = spoken },
+        ) {}
+    }
+}
+
+private const val HALF = 50
+
+// The marker's test tag: narrower than 48 dp, so it fits the screen's side margin.
+val MARKER_TAG = notShown("scenario-marker")

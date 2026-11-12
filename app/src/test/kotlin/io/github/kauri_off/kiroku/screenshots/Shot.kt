@@ -40,6 +40,7 @@ import com.google.android.apps.common.testing.accessibility.framework.integratio
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
+import io.github.kauri_off.kiroku.scenario.MARKER_TAG
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.hamcrest.Matchers
@@ -135,7 +136,7 @@ class Shot private constructor(
         }
     }
 
-    // The laid-out size, not Compose's enlarged hit area. The stock sheet's 32 dp drag handle is the one exemption.
+    // The laid-out size, not Compose's enlarged hit area. Exempt: the stock sheet's 32 dp drag handle and the debug marker.
     fun touchTargetProblems(): List<String> {
         settle()
         val minimum = TOUCH_TARGET_DP * density - 0.5f
@@ -146,7 +147,7 @@ class Shot private constructor(
                     .descendants()
                     .filter { SemanticsActions.OnClick in it.config && it.layoutInfo.isPlaced && it.takesTouches() }
                     .filter { it.layoutInfo.width < minimum || it.layoutInfo.height < minimum }
-                    .filterNot { it.label() == dragHandle }
+                    .filterNot { it.label() == dragHandle || it.config.getOrNull(SemanticsProperties.TestTag) == MARKER_TAG }
                     .map { node ->
                         val width = node.layoutInfo.width / density
                         val height = node.layoutInfo.height / density
