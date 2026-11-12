@@ -15,6 +15,7 @@ import androidx.core.view.children
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,12 +25,13 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
-// The marker is over the app exactly while a scenario is on, sheets included; with all off the app's views are a release build's.
+// The debug menu's tab is over the app from after its first frame on, sheets included, and turns red while a scenario is on.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ScenarioOverlayTest {
@@ -49,15 +51,17 @@ class ScenarioOverlayTest {
     private fun markers() = ScenarioOverlay.markers(compose.activity)
 
     @Test
-    fun `the marker shows while a scenario is on, is spoken with their names, and opens the panel`() {
+    fun `the tab opens the menu, and is spoken as the menu, or with the scenarios' names while any is on`() {
         settle()
-        assertEquals(emptyList<View>(), markers())
+        assertEquals(1, markers().size)
+        compose.onNodeWithContentDescription("Debug menu").performClick()
+        assertEquals(DebugMenuActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity.component?.className)
 
         scenarios.set(Scenario(offline = true, slow = true))
         settle()
         assertEquals(1, markers().size)
         compose.onNodeWithContentDescription("Simulated: Offline\u00A0· Slow").performClick()
-        assertEquals(ScenarioActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity.component?.className)
+        assertEquals(DebugMenuActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity.component?.className)
 
         compose.activityRule.scenario.recreate()
         settle()
@@ -65,15 +69,27 @@ class ScenarioOverlayTest {
 
         scenarios.set(Scenario())
         settle()
-        assertEquals(emptyList<View>(), markers())
+        assertEquals(1, markers().size)
+        compose.onNodeWithContentDescription("Debug menu").assertExists()
     }
 
     @Test
-    fun `the marker takes a touch only on its tab, at the window's end edge, and lets every other through`() {
-        scenarios.set(Scenario(offline = true))
+    fun `the tab joins the app only after its first frame, so start-up draws what a release build draws`() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).create().start()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(emptyList<View>(), ScenarioOverlay.markers(controller.get()))
+
+        controller.resume().visible()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(1, ScenarioOverlay.markers(controller.get()).size)
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `the tab takes a touch only on itself, at the window's end edge, and lets every other through`() {
         settle()
         val marker = markers().single()
-        val tab = compose.onNodeWithContentDescription("Simulated: Offline").fetchSemanticsNode().boundsInWindow
+        val tab = compose.onNodeWithContentDescription("Debug menu").fetchSemanticsNode().boundsInWindow
         assertEquals(marker.width.toFloat(), tab.right, 1f)
         assertTrue(tab.width < marker.resources.displayMetrics.density * Spacing.l.value)
 
@@ -83,8 +99,7 @@ class ScenarioOverlayTest {
     }
 
     @Test
-    fun `the marker is over a sheet too, and leaves with it`() {
-        scenarios.set(Scenario(offline = true))
+    fun `the tab is over a sheet too`() {
         settle()
         compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).performTouchInput { longClick() }
         settle()
@@ -95,10 +110,6 @@ class ScenarioOverlayTest {
             val siblings = (marker.parent as ViewGroup).children.filter { it !== marker }
             assertTrue(siblings.all { it.z < marker.z })
         }
-
-        scenarios.set(Scenario())
-        settle()
-        assertEquals(emptyList<View>(), markers())
     }
 
     // Robolectric moves no window focus when a sheet opens; the system moves it from the activity to the sheet.

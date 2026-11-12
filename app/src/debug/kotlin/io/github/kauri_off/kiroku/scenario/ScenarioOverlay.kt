@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.core.graphics.Insets
+import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.children
@@ -39,18 +40,20 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.ThemeSettings
 import io.github.kauri_off.kiroku.design.theme.isDark
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
-// While a scenario is on, the marker is over every full window of the app, sheets included; with all off, nothing is.
+// The debug menu's tab over every full window of the app, sheets included, added after the app's first frame.
 object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
     private val TAG = notShown("scenario-marker")
 
@@ -61,19 +64,24 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
         savedInstanceState: Bundle?,
     ) {
         if (activity !is MainActivity) return
-        val scenarios = activity.scenarios ?: return
+        val scenario = activity.scenarios?.scenario ?: MutableStateFlow(Scenario())
         activity.lifecycleScope.launch {
             activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                val active = scenarios.scenario.map { it.active }.distinctUntilChanged()
-                combine(active, windowsChanged(activity)) { on, _ -> on }.collect { on ->
-                    if (on) show(activity, scenarios) else hide(activity)
-                }
+                afterNextFrame(activity.window.decorView)
+                windowsChanged(activity).collect { show(activity, scenario) }
             }
         }
     }
 
-    // The markers shown, one in each full window of the activity.
+    // The tabs shown, one in each full window of the activity.
     fun markers(activity: Activity): List<View> = windows(activity).mapNotNull { it.findViewWithTag(TAG) }
+
+    // So the frames of start-up are a release build's.
+    private suspend fun afterNextFrame(view: View) =
+        suspendCancellableCoroutine { continuation ->
+            val listener = OneShotPreDrawListener.add(view) { view.post { continuation.resume(Unit) } }
+            continuation.invokeOnCancellation { listener.removeListener() }
+        }
 
     // A sheet or dialog opening or closing moves the focus between the activity's windows.
     private fun windowsChanged(activity: Activity) =
@@ -85,26 +93,22 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
             awaitClose { decor.viewTreeObserver.removeOnWindowFocusChangeListener(listener) }
         }
 
-    // A sheet's layout is raised for its shadow; the marker is drawn and touched above it.
+    // A sheet's layout is raised for its shadow; the tab is drawn and touched above it.
     private fun show(
         activity: ComponentActivity,
-        scenarios: Scenarios,
+        scenario: StateFlow<Scenario>,
     ) {
         windows(activity).forEach { window ->
             val content = window.findViewById<ViewGroup>(android.R.id.content) ?: return@forEach
-            val marker = content.findViewWithTag(TAG) ?: marker(activity, scenarios).also(content::addView)
+            val marker = content.findViewWithTag(TAG) ?: marker(activity, scenario).also(content::addView)
             val above = content.children.filter { it !== marker }.maxOfOrNull { it.z } ?: 0f
             if (marker.z <= above) marker.translationZ = above - marker.elevation + 1
         }
     }
 
-    private fun hide(activity: Activity) {
-        markers(activity).forEach { (it.parent as? ViewGroup)?.removeView(it) }
-    }
-
     private fun marker(
         activity: ComponentActivity,
-        scenarios: Scenarios,
+        scenario: StateFlow<Scenario>,
     ) = ComposeView(activity).apply {
         tag = TAG
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -114,8 +118,8 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
         setContent {
             val settings = ThemeSettings()
             KirokuTheme(settings.isDark(), settings.dynamicColor) {
-                val scenario by scenarios.scenario.collectAsScreenState()
-                EdgeMarker(scenario, visibleArea(), onClick = { activity.startActivity(ScenarioActivity.intent(activity)) })
+                val current by scenario.collectAsScreenState()
+                EdgeMarker(current, visibleArea(), onClick = { activity.startActivity(DebugMenuActivity.intent(activity)) })
             }
         }
     }

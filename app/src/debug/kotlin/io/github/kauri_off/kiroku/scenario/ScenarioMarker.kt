@@ -48,21 +48,25 @@ fun EdgeMarker(
     onClick: () -> Unit,
 ) = Box(area.fillMaxSize().padding(top = Spacing.xxl)) { ScenarioMarker(scenario, onClick, Modifier.align(Alignment.CenterEnd)) }
 
-// A tab narrower than every screen's side margin, so it covers nothing; spoken with what is on, a tap opens the panel.
+// A tab narrower than every screen's side margin that opens the debug menu; red and spoken with what is on while a scenario is.
 @Composable
 fun ScenarioMarker(
     scenario: Scenario,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (!scenario.active) return
-    val names = scenario.names().map { stringResource(it) }.joinToString(stringResource(R.string.common_separator))
-    val spoken = stringResource(R.string.scenarios_marker_spoken, names)
+    val spoken =
+        if (scenario.active) {
+            val names = scenario.names().map { stringResource(it) }.joinToString(stringResource(R.string.common_separator))
+            stringResource(R.string.scenarios_marker_spoken, names)
+        } else {
+            stringResource(R.string.debug_menu_title)
+        }
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(topStartPercent = HALF, bottomStartPercent = HALF),
-            color = MaterialTheme.colorScheme.error,
+            color = if (scenario.active) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
             modifier =
                 modifier
                     .size(width = Spacing.m, height = Sizes.touchTarget)
