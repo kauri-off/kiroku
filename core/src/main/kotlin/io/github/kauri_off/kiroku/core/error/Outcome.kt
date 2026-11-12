@@ -5,6 +5,9 @@ sealed interface DataError {
 
     data object ServerError : DataError
 
+    // The device's own store failed.
+    data object StorageError : DataError
+
     data object Refused : DataError
 
     data object InvalidRequest : DataError

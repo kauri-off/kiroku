@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -21,8 +22,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -34,6 +40,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.time.Clock
 import java.time.LocalDate
 import kotlin.time.Duration
@@ -55,13 +62,15 @@ abstract class ListEngineContract {
 
     private inner class Subject(
         val server: DemoServer,
-        val local: LocalList,
+        store: LocalList,
         scope: CoroutineScope,
     ) {
         val signedIn = MutableStateFlow(true)
+        val mal = FaultyRemote(remote(server))
+        val local = DatabaseLike(store)
         val list = engine(scope)
 
-        fun engine(scope: CoroutineScope): ListRepository = ListEngine(remote(server), local, signedIn, fixtures.clock, scope)
+        fun engine(scope: CoroutineScope): ListRepository = ListEngine(mal, local, signedIn, fixtures.clock, scope)
 
         fun serverWatched(anime: Anime) = server.entry(anime.id)?.values?.watchedEpisodes
 
@@ -73,6 +82,64 @@ abstract class ListEngineContract {
             anime: Anime,
             watched: Int?,
         ) = server.editOnWebsite(anime, watched?.let { checkNotNull(server.entry(anime.id)).values.copy(watchedEpisodes = it) })
+    }
+
+    // A client of MAL that counts the entries it is asked for, and throws while told to, as one with a bug does.
+    private class FaultyRemote(
+        private val inner: RemoteList,
+    ) : RemoteList {
+        @Volatile
+        var throwing = false
+
+        @Volatile
+        var entryReads = 0
+
+        override suspend fun fetch(): Outcome<List<ListEntry>> = fault().let { inner.fetch() }
+
+        override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+            entryReads++
+            fault()
+            return inner.fetchEntry(id)
+        }
+
+        override suspend fun put(
+            anime: Anime,
+            values: ListValues?,
+        ): Outcome<ListEntry?> = fault().let { inner.put(anime, values) }
+
+        private fun fault() {
+            if (throwing) throw IOException("MAL's client failed")
+        }
+    }
+
+    // A store as a database is: its query emits again after every write, changed or not, and it can fail.
+    private class DatabaseLike(
+        private val inner: LocalList,
+    ) : LocalList {
+        @Volatile
+        var throwing = false
+
+        private val writes = MutableStateFlow(0)
+
+        override fun observeEntries(): Flow<List<ListEntry>> =
+            flow {
+                fault()
+                emitAll(combine(inner.observeEntries(), writes) { entries, _ -> entries })
+            }
+
+        override suspend fun read(id: AnimeId): StoredEntry? = fault().let { inner.read(id) }
+
+        override suspend fun readAll(): Map<AnimeId, StoredEntry> = fault().let { inner.readAll() }
+
+        override suspend fun write(entries: Map<AnimeId, StoredEntry?>) {
+            fault()
+            inner.write(entries)
+            writes.update { it + 1 }
+        }
+
+        private fun fault() {
+            if (throwing) throw IOException("The disk is full")
+        }
     }
 
     // A store that takes its time, as a database does.
@@ -893,6 +960,203 @@ abstract class ListEngineContract {
             assertEquals(emptyList<ListRequest>(), s.server.requests)
             assertEquals(12, s.serverWatched(anime))
             assertEquals(12, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `W2 a failure after an answered request returns to the value MAL confirmed meanwhile`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            val shown = checkNotNull(s.shown(anime.id)).values
+            advanceTimeBy(1500.milliseconds)
+            assertEquals(13, s.serverWatched(anime))
+
+            s.server.failingWrites.value = true
+            settle()
+
+            assertEquals(13, s.shownWatched(anime))
+            assertEquals(listOf(WriteFailure(DataError.ServerError, ListWrite.Save(anime, shown))), failures)
+        }
+
+    @Test
+    fun `a failed addition does not stay on the list, and Retry adds the title`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.notOnListAiring
+            val values = checkNotNull(fixtures.entryFor(FixtureAnime.premiereDate.id)).values
+            s.server.offline.value = true
+
+            s.list.write(ListWrite.Save(anime, values))
+            assertEquals(values, s.shown(anime.id)?.values)
+            settle()
+
+            assertNull(s.shown(anime.id))
+            assertEquals(listOf(WriteFailure(DataError.NoConnection, ListWrite.Save(anime, values))), failures)
+            s.server.offline.value = false
+            s.list.write(failures.single().retry)
+            settle()
+            assertEquals(values, s.server.entry(anime.id)?.values)
+            assertEquals(values, s.shown(anime.id)?.values)
+        }
+
+    @Test
+    fun `W5 a title whose write failed is in the next sync`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+
+            s.server.failingWrites.value = false
+            s.editOnWebsite(anime, 20)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(20, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `signed out, the list shows nothing, and it is back at the next sign-in`() =
+        runTest {
+            val s = subject()
+            val seen = observe(s)
+            s.signedIn.value = false
+            runCurrent()
+            assertEquals(emptyList<ListEntry>(), seen.last())
+
+            s.signedIn.value = true
+            runCurrent()
+            assertEquals(fixtures.entries.toSet(), seen.last().toSet())
+        }
+
+    @Test
+    fun `edits and sends waiting at a sign-out are never sent, also after the next sign-in`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            repeat(3) { s.list.write(ListWrite.MarkNextWatched(anime)) }
+            val sent = async { s.list.send(ListWrite.MarkWatched(FixtureAnime.oneShortOfTotal, 12)) }
+            advanceTimeBy(500.milliseconds)
+
+            s.signedIn.value = false
+            runCurrent()
+            s.signedIn.value = true
+            settle()
+
+            assertEquals(listOf(ListRequest(anime.id, s.server.entry(anime.id)?.values)), s.server.requests)
+            assertEquals(Outcome.Failure(DataError.SessionExpired), sent.await())
+            assertEquals(0, s.mal.entryReads)
+            assertEquals(12, s.shownWatched(anime))
+            assertEquals(emptyList<WriteFailure>(), failures)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(13, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `N9 a send whose read spans a sign-out and a sign-in writes nothing`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val sent = async { s.list.send(ListWrite.MarkWatched(anime, 13)) }
+            advanceTimeBy(500.milliseconds)
+
+            s.signedIn.value = false
+            runCurrent()
+            s.signedIn.value = true
+            settle()
+
+            assertEquals(Outcome.Failure(DataError.SessionExpired), sent.await())
+            assertEquals(emptyList<ListRequest>(), s.server.requests)
+        }
+
+    @Test
+    fun `a sync across a sign-out and a sign-in stores nothing it downloaded`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.editOnWebsite(anime, 20)
+            val sync = async { s.list.sync() }
+            advanceTimeBy(1500.milliseconds)
+            assertEquals(1, s.server.listDownloads)
+
+            s.signedIn.value = false
+            runCurrent()
+            s.signedIn.value = true
+
+            assertEquals(Outcome.Failure(DataError.SessionExpired), sync.await())
+            assertEquals(12, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a client of MAL that throws fails the one call as a server error, and the list goes on`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.mal.throwing = true
+
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            assertEquals(12, s.shownWatched(anime))
+            assertEquals(DataError.ServerError, failures.single().error)
+            assertEquals(Outcome.Failure(DataError.ServerError), s.list.sync())
+            assertEquals(Outcome.Failure(DataError.ServerError), s.list.send(ListWrite.MarkWatched(anime, 13)))
+
+            s.mal.throwing = false
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(13, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a store that throws fails the one call as a storage error, and the list goes on`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.local.throwing = true
+            val seen = observe(s)
+
+            assertNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            runCurrent()
+            assertEquals(listOf(WriteFailure(DataError.StorageError, ListWrite.MarkNextWatched(anime))), failures)
+            assertEquals(Outcome.Failure(DataError.StorageError), s.list.sync())
+            assertEquals(emptyList<List<ListEntry>>(), seen)
+
+            s.local.throwing = false
+            settle()
+            assertEquals(12, seen.watched(anime))
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
+            assertEquals(13, seen.watched(anime))
+        }
+
+    @Test
+    fun `a store that fails under an answer drops the waiting edits and offers Retry of the last one`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            val shown = checkNotNull(s.shown(anime.id)).values
+
+            s.local.throwing = true
+            advanceTimeBy(1500.milliseconds)
+            s.local.throwing = false
+            settle()
+
+            assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
+            assertEquals(listOf(WriteFailure(DataError.StorageError, ListWrite.Save(anime, shown))), failures)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(13, s.shownWatched(anime))
         }
 
     private companion object {

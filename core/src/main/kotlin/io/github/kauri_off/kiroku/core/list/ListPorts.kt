@@ -38,7 +38,7 @@ data class StoredEntry(
 
 // What a store does for the user's list. Every call is atomic, and the engine is the only one that writes.
 interface LocalList {
-    // The shown entries in a stable order, again after every write that changes them.
+    // The shown entries in a stable order, after every write; an equal list may come again.
     fun observeEntries(): Flow<List<ListEntry>>
 
     suspend fun read(id: AnimeId): StoredEntry?

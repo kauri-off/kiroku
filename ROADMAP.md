@@ -90,7 +90,20 @@ Not to forget:
 - The title page walks the sequel chain (one request per title, cached) and shows the watch order, so a film
   between seasons does not hide the next season.
 - Confirm on recorded responses how MAL answers a watched count above its total (invariant W9).
-- The list's database store and MAL client in `:data` pass `:core`'s `ListEngineContract`, as demo mode's pair does.
+- The list's database store in `:data` passes `:core`'s `ListEngineContract`; the MAL client is held to `RemoteList`
+  by tests on recorded responses. `InMemoryLocalList` then moves to the test fixtures.
+- `RemoteList.fetch` is the whole list or a failure (`nsfw=true`, pages in an order edits do not change, any failed
+  page fails it), since a title missing from it leaves the list.
+- `StoredEntry` carries the whole `Anime`: decide how list rows and the titles table relate, so that the title
+  page's refresh and a list write do not overwrite each other.
+- The list engine takes the session, not a boolean: expired keeps the list readable and sends nothing (S6), and
+  each sign-in is told apart from the one before. Clearing the list at sign-out (S9) goes through the engine. A
+  write refused for the session offers no Retry.
+- The engine persists the time of its last successful sync, and W5's restore clears it, so the sync owed after a
+  restart is kept until one succeeds, also when the app starts signed out.
+- `ShellMessages` drops a waiting Undo or Retry when its title's values change, not only its time stamp.
+- Confirm on recorded responses what MAL's PATCH answers with, and whether it can clear a start or finish date (the
+  Undo of a completing step, W3 and W7).
 - The orchestrator moves the client id from the untracked `clientid.txt` into `~/.gradle/gradle.properties`. No
   agent reads that file or the value, and only the orchestrator may check that no recorded file contains it.
 - The task that starts using the client id puts the secret `MAL_CLIENT_ID` back on CI's debug build step.
@@ -156,6 +169,8 @@ Not to forget:
   survive a restart, and a refresh must not overwrite the episode it plants. It measures the delay of the
   notification and whether the re-check reached the network, which settles item 5 of section 13.
 - The "Mark watched" action is tested on an Android level before 12 as well as on a current one (N9).
+- An edit sheet opened before a "Mark watched" and saved after it sends the older count, since the last value shown
+  wins (W1); decide whether the action's episode survives a save that did not change the count.
 - By hand on Android 13 or later: deny the permission, see "Blocked in system settings", grant it in the system
   settings, return, see the state updated, receive the test notification.
 
