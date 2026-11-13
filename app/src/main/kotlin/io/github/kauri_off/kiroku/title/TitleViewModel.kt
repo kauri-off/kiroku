@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.title
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -37,7 +38,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
-import kotlin.time.Duration.Companion.seconds
 
 // One title's page. The page is rebuilt with TitlePage.of whenever a source changes; the moment is held apart from
 // it. Navigation events are the route's.
@@ -191,7 +191,7 @@ class TitleViewModel(
                 val wait =
                     if (asked == Asked.Opening) {
                         launch {
-                            delay(DETAILS_PATIENCE)
+                            delay(PATIENCE)
                             waitShown.value = true
                         }
                     } else {
@@ -232,8 +232,5 @@ class TitleViewModel(
 
     private companion object {
         val EXPANDED = notShown("synopsisExpanded")
-
-        // Within a second the flow of use is not interrupted, so a shorter wait shows no indicator.
-        val DETAILS_PATIENCE = 1.seconds
     }
 }
