@@ -125,6 +125,12 @@ abstract class ListEngineContract {
         private val session: () -> Session?,
     ) : RemoteList {
         val putsUnder = CopyOnWriteArrayList<Session?>()
+        val readsUnder = CopyOnWriteArrayList<Session?>()
+        val fetchesUnder = CopyOnWriteArrayList<Session?>()
+
+        // Runs when MAL has answered a write, before the engine hears the answer.
+        @Volatile
+        var afterPut: () -> Unit = {}
 
         @Volatile
         var throwing: Exception? = null
@@ -135,10 +141,15 @@ abstract class ListEngineContract {
         @Volatile
         var answering: (Anime) -> Anime = { it }
 
-        override suspend fun fetch(): Outcome<List<ListEntry>> = fault().let { inner.fetch() }.also { fault() }
+        override suspend fun fetch(): Outcome<List<ListEntry>> {
+            fetchesUnder += session()
+            fault()
+            return inner.fetch().also { fault() }
+        }
 
         override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
             entryReads++
+            readsUnder += session()
             fault()
             return inner.fetchEntry(id).answered().also { fault() }
         }
@@ -149,7 +160,11 @@ abstract class ListEngineContract {
         ): Outcome<ListEntry?> {
             putsUnder += session()
             fault()
-            return inner.put(anime, values).answered().also { fault() }
+            return inner
+                .put(anime, values)
+                .also { afterPut() }
+                .answered()
+                .also { fault() }
         }
 
         private fun Outcome<ListEntry?>.answered() =
@@ -2124,6 +2139,59 @@ abstract class ListEngineContract {
                 sentUnder += s.mal.putsUnder
             }
             assertEquals(setOf<Session?>(a), sentUnder)
+        }
+
+    @Test
+    fun `N9 a send asks and writes under no other session than the one it was decided in`() =
+        runTest {
+            val sentUnder = mutableSetOf<Session?>()
+            for (reads in 1..8) {
+                val s = subject()
+                val sent = async(start = CoroutineStart.UNDISPATCHED) { s.list.send(ListWrite.MarkWatched(FixtureAnime.exactToWatch, 13)) }
+                s.readsUntilNext = reads
+                settle()
+                sent.await()
+                val under = s.mal.readsUnder + s.mal.putsUnder
+                assertEquals("the session changed at its read number $reads", emptyList<Session?>(), under.filter { it != a })
+                sentUnder += s.mal.putsUnder
+            }
+            assertEquals(setOf<Session?>(a), sentUnder)
+        }
+
+    @Test
+    fun `S6 a sync downloads under no session that is not signed in, whenever the session expires`() =
+        runTest {
+            val fetchedUnder = mutableSetOf<Session?>()
+            for (reads in 1..8) {
+                val s = subject()
+                s.next = expired
+                val synced = async(start = CoroutineStart.UNDISPATCHED) { s.list.sync() }
+                s.readsUntilNext = reads
+                settle()
+                synced.await()
+                assertEquals("the session expired at its read number $reads", emptyList<Session?>(), s.mal.fetchesUnder.filter { it != a })
+                fetchedUnder += s.mal.fetchesUnder
+            }
+            assertEquals(setOf<Session?>(a), fetchedUnder)
+        }
+
+    @Test
+    fun `a request that fails in the engine after its sign-in ended, unheard of yet, reports no failure to the next list`() =
+        runTest {
+            for (ended in listOf(Session.SignedOut, b)) {
+                val s = subject()
+                val failures = failures(s)
+                s.mal.afterPut = { s.session.value = ended }
+                s.mal.answering = { FixtureAnime.exactCaughtUp }
+                s.local.calls.clear()
+
+                s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+                settle()
+
+                assertEquals("after $ended", 1, s.unexpected.size)
+                assertEquals("after $ended", emptyList<WriteFailure>(), failures)
+                assertEquals("after $ended", listOf("write", "clear"), s.local.writes)
+            }
         }
 
     @Test
