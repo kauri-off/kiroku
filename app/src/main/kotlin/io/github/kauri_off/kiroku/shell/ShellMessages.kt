@@ -127,6 +127,12 @@ class ShellMessages(
         waiting -= stale.toSet()
     }
 
+    // A message whose action could overwrite a newer edit still tells what happened, as one without Retry does.
+    private fun withoutAction(posted: Posted) {
+        val at = waiting.indexOfFirst { it.posted == posted }
+        if (at >= 0) waiting[at] = Waiting(posted.copy(message = posted.message.copy(action = null)), watch = null)
+    }
+
     // A waiting Undo or Retry is dropped once its title's values differ from those it would write over.
     private fun watch(posted: Posted): Job? {
         val id = posted.message.title ?: return null
@@ -143,7 +149,7 @@ class ShellMessages(
                     break
                 } catch (_: DataException) {
                     // A Retry's failure has no values: a read after the store returns may hold a newer edit.
-                    if (start == null) break
+                    if (start == null) return@launch withoutAction(posted)
                     delay(minOf(REREAD * 2.0.pow(failures++), REREAD_LONGEST))
                 }
             }

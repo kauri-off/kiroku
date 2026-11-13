@@ -280,9 +280,9 @@ class ShellMessagesTest {
 
     // A failure carries what Retry writes, not what it writes over; read first after the store returns, it may be newer.
     @Test
-    fun `a waiting Retry posted while the list cannot be read is dropped, as nothing knows what it would write over`() {
+    fun `a waiting Retry posted while the list cannot be read is shown without its Retry, as nothing knows what it would write over`() {
         waitingThroughFailure(failed(1)) { runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) } }
-        assertEquals(listOf(otherFailed), shownInTurn())
+        assertEquals(listOf(otherFailed, ShellMessage(ShellMessage.Text.CouldNotSave)), shownInTurn())
     }
 
     // Each failed read of the store is logged by the list, so a store that stays broken is read seldom, yet still read.
