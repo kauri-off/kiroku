@@ -2,6 +2,10 @@ package io.github.kauri_off.kiroku.search
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -11,7 +15,9 @@ import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.screenshots.Shot
+import io.github.kauri_off.kiroku.screenshots.SystemBars
 import io.github.kauri_off.kiroku.screenshots.Variant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -72,6 +78,8 @@ class SearchScreenTest {
             show(results(digits, paged))
             compose.onNodeWithText("Open title #$digits").assertExists()
         }
+        show(results(digits, Paged.Shown(emptyList())))
+        compose.onNodeWithText("Nothing found for “$digits”").assertExists()
         compose.onNodeWithText("Open title #$digits").performClick()
         compose.waitForIdle()
         assertEquals(SearchEvent.Open(id), events.last())
@@ -102,6 +110,15 @@ class SearchScreenTest {
         compose.onNodeWithText("This season").assertExists()
     }
 
+    @Test
+    fun `the search bar's edges are the rows' content edges`() {
+        show(SearchFixtureStates.results)
+        val field = compose.onNode(hasSetTextAction()).getUnclippedBoundsInRoot()
+        val row = compose.onNode(hasText(FixtureAnime.exactToWatch.titles.romaji) and hasClickAction()).getUnclippedBoundsInRoot()
+        assertEquals(row.left + Spacing.l, field.left)
+        assertEquals(row.right - Spacing.l, field.right)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `at most five recent searches are shown`() {
         SearchContent.Start(List(MAX_RECENT_SEARCHES + 1) { it.toString() })
@@ -125,6 +142,27 @@ class SearchScreenTest {
     }
 }
 
+// On a wide window the bar and the rows share the centred content width.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w840dp-h600dp")
+class SearchScreenWideTest {
+    private val compose = composeRule()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    @Test
+    fun `the search bar's edges are the rows' content edges`() {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) { SearchScreen(SearchFixtureStates.results, {}, SnackbarHostState()) }
+        }
+        val field = compose.onNode(hasSetTextAction()).getUnclippedBoundsInRoot()
+        val row = compose.onNode(hasText(FixtureAnime.exactToWatch.titles.romaji) and hasClickAction()).getUnclippedBoundsInRoot()
+        assertEquals(row.left + Spacing.l, field.left)
+        assertEquals(row.right - Spacing.l, field.right)
+    }
+}
+
 // The search field, under the bar and in the search view's own window, is offered neither to autofill nor to a
 // password manager.
 @RunWith(io.github.kauri_off.kiroku.screenshots.ScreenshotRunner::class)
@@ -143,5 +181,27 @@ class SearchFieldAutofillTest {
                     assertEquals(emptyList<String>(), fields.filter { it.second }.map { it.first })
                 }
         }
+    }
+}
+
+// With the keyboard up in the search view, the end of a long result list scrolls to just above the keyboard.
+@RunWith(io.github.kauri_off.kiroku.screenshots.ScreenshotRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class SearchViewKeyboardTest {
+    @Test
+    fun theLastResultEndsAtTheKeyboard() {
+        val query = SearchFixtureStates.query
+        val state = SearchFixtureStates.state(query, SearchContent.Results(query, Paged.Shown(SearchFixtureStates.rows(query))), expanded = true)
+        val variant = Variant.EnLight
+        Shot.launch(variant, keyboard = true) { SearchScreen(state, {}, SnackbarHostState()) }.use { shot ->
+            assertTrue(shot.scrollRangeDp() > 0)
+            val keyboardTop = shot.windowHeightPx - shot.dpToPx(SystemBars.KEYBOARD_DP)
+            val gap = keyboardTop - shot.scrolledContentBottomPx()
+            assertTrue("the last row ends ${gap / shot.dpToPx(1)} dp above the keyboard", gap >= 0f && gap <= shot.dpToPx(MAX_GAP_DP))
+        }
+    }
+
+    private companion object {
+        const val MAX_GAP_DP = 16
     }
 }

@@ -34,7 +34,7 @@ object SearchFixtureStates {
                     BrowseList.ThisSeason -> set.anime.filter { it.airingStatus != AiringStatus.Finished }.map { hit(it) }
                     BrowseList.TopAiring ->
                         byRank(set.anime.filter { it.airingStatus == AiringStatus.Airing }).mapIndexed { i, anime -> hit(anime, i + 1) }
-                    BrowseList.TopRated -> byRank(set.anime).map { hit(it, it.rank) }
+                    BrowseList.TopRated -> byRank(set.anime).mapIndexed { i, anime -> hit(anime, i + 1) }
                     BrowseList.MostPopular ->
                         set.anime
                             .sortedByDescending { set.details[it.id]?.statistics?.members ?: 0 }

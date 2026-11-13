@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.design.theme.isLargeText
 
 // A supporting line of a row; a highlighted line is the "to watch" figure, in the tertiary colour.
 data class RowLine(
@@ -94,18 +95,20 @@ private fun Trailing(trailing: RowTrailing) {
     }
 }
 
-// In a caption role, centred with the row's text; the star is as tall as the caption's line, so it grows with the text.
+// In a caption role, centred with the row's text; the star is as tall as the caption's line. With large text the
+// number stands alone, so the title keeps the width that tells it from its neighbours.
 @Composable
 private fun MalScore(trailing: RowTrailing.MalScore) {
     val style = MaterialTheme.typography.labelLarge
     val spoken = stringResource(R.string.design_mal_score, trailing.text)
     val star = with(LocalDensity.current) { style.lineHeight.toDp() }
+    val large = isLargeText()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
     ) {
-        Icon(painterResource(R.drawable.ic_star), contentDescription = null, modifier = Modifier.size(star))
+        if (!large) Icon(painterResource(R.drawable.ic_star), contentDescription = null, modifier = Modifier.size(star))
         Text(trailing.text, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

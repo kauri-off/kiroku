@@ -83,7 +83,7 @@ class SubScreenTest {
         assertEquals(
             listOf(
                 "Watching\u00A0· 5\u00A0/\u00A012",
-                "Watching\u00A0· 5",
+                "Watching\u00A0· watched\u00A05",
                 "Planned",
                 "Planned\u00A0· 2\u00A0/\u00A012",
                 "Completed",

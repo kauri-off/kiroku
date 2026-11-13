@@ -5,17 +5,11 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -88,9 +82,15 @@ fun SearchScreen(
         modifier = modifier,
         // The bar's own container is clear; this one hides the rows that scroll under it, up to the screen's top edge.
         topBar = {
-            Surface(color = MaterialTheme.colorScheme.surface) {
-                Column {
-                    AppBarWithSearch(state = bar, inputField = field)
+            Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // With the bar's own inset, the field's edges are the rows' content edges.
+                    AppBarWithSearch(
+                        state = bar,
+                        inputField = field,
+                        modifier = Modifier.widthIn(max = Sizes.contentMaxWidth),
+                        contentPadding = PaddingValues(horizontal = Spacing.s),
+                    )
                     if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(SearchEvent.SignIn) })
                 }
             }
@@ -106,14 +106,8 @@ fun SearchScreen(
         colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         WindowWithoutAutofill()
-        Body(
-            state.content,
-            events,
-            WindowInsets.systemBars
-                .union(WindowInsets.ime)
-                .only(WindowInsetsSides.Bottom)
-                .asPaddingValues(),
-        )
+        // The view already keeps its content clear of the navigation bar and the keyboard.
+        Body(state.content, events, PaddingValues())
     }
 }
 
@@ -133,7 +127,7 @@ private fun SearchField(
             keyboard?.hide()
             onEvent(SearchEvent.Submit)
         },
-        modifier = Modifier.withoutAutofill(),
+        modifier = Modifier.withoutAutofill().fillMaxWidth(),
         // The field is spoken as "Search" already.
         placeholder = { Text(stringResource(R.string.search_placeholder), Modifier.clearAndSetSemantics {}) },
         leadingIcon = {
@@ -191,8 +185,8 @@ private fun LazyListScope.start(
     }
 }
 
-// A query of digits alone has the row that opens the title of that id above its results, also while they load or
-// when there are none.
+// A query of digits alone has the row that opens the title of that id above its results, and above the state that
+// stands in for them.
 @Composable
 private fun Results(
     content: SearchContent.Results,
@@ -201,7 +195,7 @@ private fun Results(
 ) {
     val openId = content.openId
     val results = content.results
-    if (results is Paged.Shown && (results.items.isNotEmpty() || openId != null)) {
+    if (results is Paged.Shown && results.items.isNotEmpty()) {
         CentredList(padding) {
             if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent) }
             pagedRows(

@@ -1,6 +1,21 @@
 package io.github.kauri_off.kiroku.search
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.RowTrailing
+import io.github.kauri_off.kiroku.design.theme.LARGE_TEXT
+import io.github.kauri_off.kiroku.design.theme.Spacing
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
@@ -16,6 +31,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -64,6 +80,7 @@ class ResultRowTest {
                 row(FixtureAnime.premiereYear, values(ListStatus.Planned, 0)),
                 row(FixtureAnime.prequel, values(ListStatus.Completed, 24)),
                 row(FixtureAnime.notOnListAiring, null, rank = 7),
+                row(FixtureAnime.unknownTotal, values(ListStatus.Watching, 1118)),
             )
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) { Column { rows.forEach { ResultAnimeRow(it, onClick = {}) } } }
@@ -77,6 +94,7 @@ class ResultRowTest {
                 "Completed",
                 "7. ${FixtureAnime.notOnListAiring.titles.romaji}",
                 "TV · 2025 · 12 episodes",
+                "Watching · watched 1118",
             )
         for (text in texts) compose.onNode(hasPlainText(text), useUnmergedTree = true).assertExists()
         compose.onNode(hasPlainText("Completed · 24 / 24"), useUnmergedTree = true).assertDoesNotExist()
@@ -94,3 +112,39 @@ fun hasPlainText(text: String) =
             .orEmpty()
             .any { it.text.replace('\u00A0', ' ') == text }
     }
+
+// With large text the score gives the title room: the number stands alone, without its star.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w411dp-h891dp")
+class MalScoreWidthTest {
+    private val compose = composeRule()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private fun extra(fontScale: Float): Dp {
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    Column {
+                        AnimeRow("One", null, {}, trailing = RowTrailing.MalScore("8.71"))
+                        Text("8.71", style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("number"))
+                    }
+                }
+            }
+        }
+        val score = compose.onNodeWithContentDescription("MAL score 8.71", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val number = compose.onNodeWithTag("number").getUnclippedBoundsInRoot()
+        return (score.right - score.left) - (number.right - number.left)
+    }
+
+    @Test
+    fun `the star goes with large text and stays below it`() {
+        assertTrue(extra(LARGE_TEXT) <= 1.dp)
+    }
+
+    @Test
+    fun `below large text the star is beside the score`() {
+        assertTrue(extra(1f) > Spacing.s)
+    }
+}
