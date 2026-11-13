@@ -30,13 +30,14 @@ class Demo(
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
-    val store = DemoStore(fixtures.entries)
+    val store = DemoStore(fixtures.entries, fixtures.session.signIn)
 
     private val signedIn = MutableStateFlow(true)
 
     val session: SessionRepository = DemoSessionRepository(signedIn, server, fixtures.session)
 
-    val list: ListRepository = ListEngine(server, store, signedIn, clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
+    val list: ListRepository =
+        ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
 
     private val details = DemoAnimeRepository(fixtures, server)
 

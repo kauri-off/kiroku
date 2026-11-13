@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
 import java.time.LocalDate
 
 interface SessionRepository {
@@ -144,6 +145,9 @@ interface ListSource {
     fun observeEntries(): Flow<List<ListEntry>>
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
+
+    // When the whole list was last downloaded; null when it never was, or when a sync is owed (W5).
+    fun observeSyncedAt(): Flow<Instant?>
 
     suspend fun sync(): Outcome<Unit>
 }
