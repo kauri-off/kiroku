@@ -97,8 +97,8 @@ class ListTabMotion(
     // The last page reported as rested on, so the tab the screen hears back from it is not taken as a request.
     private var reported = pager.currentPage
 
-    // The pages composed on each side of the one shown: its neighbours first, then one more per frame, up to all.
-    var ahead by mutableIntStateOf(1)
+    // The pages composed on each side of the one shown: none in the List's first frame, then one more per frame, up to all.
+    var ahead by mutableIntStateOf(0)
         private set
 
     private val all: Int get() = pager.pageCount - 1
