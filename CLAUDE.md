@@ -95,6 +95,9 @@ log, and exits with:
 Do not start a Gradle daemon, do not change the memory settings in `gradle.properties` without a measurement, and do
 not use the queue kinds `full`, `batch` or `long`.
 
+`/tmp` is a RAM disk here: bulky scratch (recording frames, extracted files) goes under the worktree's `build/` and
+is deleted before the hand-off.
+
 ## The worktree rule
 
 - One task, one branch, one git worktree. Never work in the main checkout.
