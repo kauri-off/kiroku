@@ -121,6 +121,23 @@ private class SwipeHarness(
         millis: Long = SLOW_MS,
     ) = compose.onNodeWithText(text).performTouchInput { swipe(center, center + Offset(by.toPx(), 0f), millis) }
 
+    // A slow drag from the middle of the message by [fraction] of its width, released after a pause if [held].
+    fun release(
+        fraction: Float,
+        held: Boolean,
+    ) {
+        val item = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).getUnclippedBoundsInRoot()
+        val width = item.right - item.left - MARGINS
+        compose.onNodeWithText("Could not save").performTouchInput {
+            val total = width.toPx() * fraction + viewConfiguration.touchSlop
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(total / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+            if (held) advanceEventTime(HELD_MS)
+            up()
+        }
+        compose.waitForIdle()
+    }
+
     fun left(text: String) = compose.onNodeWithText(text).getUnclippedBoundsInRoot().left
 
     companion object {
@@ -130,6 +147,14 @@ private class SwipeHarness(
         val SHORT = 30.dp
         const val FAST_MS = 150L
         const val SLOW_MS = 1_000L
+
+        // The stock margin on both sides of the message.
+        val MARGINS = 24.dp
+
+        // Two seconds in steps of a frame: moving, and well under the fling speed for any message's width.
+        const val SLOW_STEPS = 125
+        const val SLOW_STEP_MS = 16L
+        const val HELD_MS = 500L
     }
 }
 
@@ -194,6 +219,23 @@ class SwipedMessageTest {
             compose.waitForIdle()
             assertEquals(before.values.watchedEpisodes, watched())
             assertNull(messages.current.value)
+        }
+
+    // Below the fling speed the place of the release decides, held still or still moving: half the message's width.
+    @Test
+    fun `a slow or held release past half the message's width dismisses it, and short of half returns it`() =
+        with(harness) {
+            show()
+            post(failed(1), failed(2), failed(3), moved)
+            compose.waitForIdle()
+            release(fraction = 0.4f, held = true)
+            assertEquals(failed(1), messages.current.value?.message)
+            release(fraction = 0.4f, held = false)
+            assertEquals(failed(1), messages.current.value?.message)
+            release(fraction = 0.6f, held = true)
+            assertEquals(failed(2), messages.current.value?.message)
+            release(fraction = 0.6f, held = false)
+            assertEquals(failed(3), messages.current.value?.message)
         }
 
     // The person threw the Undo away: a recreation does not bring it back, and nothing is written.

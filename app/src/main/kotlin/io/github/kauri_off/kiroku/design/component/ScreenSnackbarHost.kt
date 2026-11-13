@@ -14,7 +14,6 @@ import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.SnackbarDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SwipeToDismissBoxDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,12 +47,10 @@ fun ScreenSnackbarHost(snackbars: SnackbarHostState) {
 
 private enum class Swiped { No, ToStart, ToEnd }
 
-// A swipe either way dismisses as a timeout does; SwipeToDismissBox is not used, as its settle ignores the system's scale.
+// Swiped past half its width or flung either way, a message is dismissed as by its timeout.
 @Composable
 private fun SwipeableSnackbar(data: SnackbarData) {
     val state = remember(data) { AnchoredDraggableState(Swiped.No) }
-    val threshold = SwipeToDismissBoxDefaults.positionalThreshold
-    val positional = remember { threshold }
     val system = rememberCoroutineScope().coroutineContext[MotionDurationScale]
     val scheme = MaterialTheme.motionScheme
     val settle = remember(scheme, system) { AtSystemScale(scheme.fastEffectsSpec<Float>()) { system?.scaleFactor ?: 1f } }
@@ -79,7 +76,7 @@ private fun SwipeableSnackbar(data: SnackbarData) {
                     state = state,
                     orientation = Orientation.Horizontal,
                     enabled = state.settledValue == Swiped.No,
-                    flingBehavior = AnchoredDraggableDefaults.flingBehavior(state, positional, settle),
+                    flingBehavior = AnchoredDraggableDefaults.flingBehavior(state, AnchoredDraggableDefaults.PositionalThreshold, settle),
                 ).offset { IntOffset(state.offset.takeUnless { it.isNaN() }?.roundToInt() ?: 0, 0) },
         action =
             action?.let {
