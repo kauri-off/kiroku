@@ -38,6 +38,7 @@ import com.github.takahirom.roborazzi.checkRoboAccessibility
 import com.github.takahirom.roborazzi.fetchRobolectricWindowRoots
 import com.google.android.apps.common.testing.accessibility.framework.checks.SpeakableTextPresentCheck
 import com.google.android.apps.common.testing.accessibility.framework.integrations.espresso.AccessibilityViewCheckException
+import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
@@ -85,6 +86,13 @@ class Shot private constructor(
         val bitmap = screen.copy(Bitmap.Config.ARGB_8888, true)
         SystemBars.draw(Canvas(bitmap), activity.window, density, keyboard)
         return bitmap
+    }
+
+    // Under Robolectric what a wait brings is laid out only once the window is drawn.
+    private fun patience() {
+        advance(PATIENCE.inWholeMilliseconds + PATIENCE_FRAMES * FRAME.toMillis())
+        windows().forEach { it.draw(Canvas(scratch)) }
+        settle()
     }
 
     // Lets time pass on the main looper one frame at a time, as on a device.
@@ -224,10 +232,14 @@ class Shot private constructor(
         val node = largestScrollable(windows().last(), SemanticsProperties.VerticalScrollAxisRange) ?: return 0
         val step = node.boundsInRoot.height
         var total = 0f
-        while (node.config[SemanticsProperties.VerticalScrollAxisRange].let { it.value() < it.maxValue() }) {
-            val moved = scrollBy(node, Offset(0f, step)).y
-            if (moved < 0.5f) break
-            total += moved
+        // Content composed by the scroll is given the patience too, so a loading state in it has its indicator.
+        repeat(2) {
+            while (node.config[SemanticsProperties.VerticalScrollAxisRange].let { it.value() < it.maxValue() }) {
+                val moved = scrollBy(node, Offset(0f, step)).y
+                if (moved < 0.5f) break
+                total += moved
+            }
+            if (it == 0) patience()
         }
         return ceil(total / density).toInt()
     }
@@ -393,6 +405,7 @@ class Shot private constructor(
         const val ONE_LOOP_INDICATOR = "oneLoopIndicator"
 
         private val FRAME = Duration.ofMillis(16)
+        private const val PATIENCE_FRAMES = 2
         private const val MAX_FRAMES = 600
         private const val STILL_FRAMES = 2
         private val scratch = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
@@ -442,8 +455,10 @@ class Shot private constructor(
                     .postCreate(null)
                     .resume()
                     .visible()
+                // As after a wait that outlasts the patience, and the frames that compose its indicator.
                 return Shot(controller, keyboard, restore).apply {
                     settle()
+                    patience()
                     awaitOverlays()
                 }
             } catch (failure: Throwable) {

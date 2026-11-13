@@ -73,7 +73,7 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
         val scenario = activity.scenarios?.scenario ?: MutableStateFlow(Scenario())
         activity.lifecycleScope.launch {
             activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                afterNextFrame(activity.window.decorView)
+                activity.splash?.awaitDrawn() ?: afterNextFrame(activity.window.decorView)
                 windowsChanged(activity).collect { show(activity, scenario) }
             }
         }
@@ -82,7 +82,7 @@ object ScenarioOverlay : Application.ActivityLifecycleCallbacks {
     // The tabs shown, one in each full window of the activity.
     fun markers(activity: Activity): List<View> = windows(activity).mapNotNull { it.findViewWithTag(TAG) }
 
-    // So the frames of start-up are a release build's.
+    // After the splash's hold, so the frames of start-up and the splash's time are a release build's.
     private suspend fun afterNextFrame(view: View) =
         suspendCancellableCoroutine { continuation ->
             val listener = OneShotPreDrawListener.add(view) { view.post { continuation.resume(Unit) } }

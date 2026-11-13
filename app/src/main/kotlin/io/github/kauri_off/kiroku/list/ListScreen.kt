@@ -47,15 +47,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
@@ -95,7 +101,7 @@ fun ListScreen(
     val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
     val motion = rememberListTabMotion(pager)
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.withoutTravelledTaps(),
         topBar = {
             Column {
                 TopBar(state.filterText, state.owner, showActions = tabs != null, onEvent = onEvent)
@@ -105,7 +111,7 @@ fun ListScreen(
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        val body = Modifier.padding(top = padding.calculateTopPadding())
+        val body = Modifier.belowBars(padding)
         when (val content = state.content) {
             ListContent.Loading -> ScreenState(ScreenState.Loading, body)
             ListContent.SignedOut ->
@@ -199,6 +205,39 @@ private fun Pages(
         Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown, padding, onEvent)
     }
 }
+
+// The bars' height read in layout, since the tab row arrives in the frame that composes the rows.
+private fun Modifier.belowBars(padding: PaddingValues): Modifier =
+    layout { measurable, constraints ->
+        val top = padding.calculateTopPadding().roundToPx()
+        val placeable = measurable.measure(constraints.offset(vertical = -top))
+        layout(placeable.width, placeable.height + top) { placeable.place(0, top) }
+    }
+
+// A pointer lifted beyond touch slop from its down is no tap, moves seen or not, unless a scroll took it.
+private fun Modifier.withoutTravelledTaps(): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val downs = mutableMapOf<PointerId, Offset>()
+            val travelled = mutableSetOf<PointerId>()
+            val taken = mutableSetOf<PointerId>()
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                for (change in event.changes) {
+                    if (change.changedToDownIgnoreConsumed()) downs[change.id] = change.position
+                    val down = downs[change.id] ?: continue
+                    if ((change.position - down).getDistance() > viewConfiguration.touchSlop) travelled += change.id
+                    if (change.changedToUpIgnoreConsumed() && change.id in travelled && change.id !in taken) change.consume()
+                }
+                val pressed = event.changes.any { it.pressed }
+                if (pressed) {
+                    awaitPointerEvent(PointerEventPass.Final).changes.forEach {
+                        if (it.isConsumed && !it.changedToDownIgnoreConsumed()) taken += it.id
+                    }
+                }
+            } while (pressed)
+        }
+    }
 
 // The unfiltered rows and the filtered ones keep separate scroll positions, so ending the filter returns the user
 // to where they were. A new order or filter text replaces the rows at once, from the top; only rows leaving or

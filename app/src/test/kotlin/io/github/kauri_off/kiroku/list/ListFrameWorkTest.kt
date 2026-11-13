@@ -180,10 +180,10 @@ class ListFrameWorkTest {
     }
 
     @Test
-    fun `the List's first frame composes the shown page and its neighbour, and each later frame one more page`() {
+    fun `the List's first frame composes only the shown page, and each later frame one more page`() {
         val pages = firstFrames()
-        assertEquals("pages composed per frame: $pages", listOf(2, 1, 1, 1), pages.filter { it > 0 })
-        assertEquals("pages composed per frame: $pages", 2, pages.first())
+        assertEquals("pages composed per frame: $pages", listOf(1, 1, 1, 1, 1), pages.filter { it > 0 })
+        assertEquals("pages composed per frame: $pages", 1, pages.first())
     }
 
     @Test
