@@ -39,7 +39,7 @@ class ScoredLineTest {
             KirokuTheme(dark = false, dynamicColor = false) {
                 val measurer = rememberTextMeasurer()
                 val style = MaterialTheme.typography.bodyMedium
-                val facts = "TV · 2023 · 24 episodes"
+                val facts = "TV\u00A0· 2023\u00A0· 24\u00A0episodes"
                 text = scoredLineText(facts, "8.55", stringResource(R.string.design_score_separator))
                 val star = text.getStringAnnotations(INLINE_CONTENT, 0, text.length).single()
                 val width = measurer.measure(facts, style).size.width + SLACK_PX
