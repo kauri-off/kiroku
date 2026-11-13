@@ -3,8 +3,6 @@ package io.github.kauri_off.kiroku.search
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
@@ -12,6 +10,8 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction

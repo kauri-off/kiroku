@@ -199,7 +199,12 @@ class SearchViewKeyboardTest {
     @Test
     fun theLastResultEndsAtTheKeyboard() {
         val query = SearchFixtureStates.query
-        val state = SearchFixtureStates.state(query, SearchContent.Results(query, Paged.Shown(SearchFixtureStates.rows(query))), expanded = true)
+        val state =
+            SearchFixtureStates.state(
+                query,
+                SearchContent.Results(query, Paged.Shown(SearchFixtureStates.rows(query))),
+                expanded = true,
+            )
         val variant = Variant.EnLight
         Shot.launch(variant, keyboard = true) { SearchScreen(state, {}, SnackbarHostState()) }.use { shot ->
             assertTrue(shot.scrollRangeDp() > 0)
