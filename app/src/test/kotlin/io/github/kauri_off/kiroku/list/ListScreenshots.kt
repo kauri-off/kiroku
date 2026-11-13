@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
@@ -12,6 +13,8 @@ import io.github.kauri_off.kiroku.shell.ShellMessage
 // The page and the indicator on it end within a component's entrance.
 private const val TAB_SWITCH = MotionBounds.ENTER
 private const val FRAME = 16L
+private const val PHONE_LONG_SIDE = 891
+private const val PHONE_SHORT_SIDE = 411
 
 class ListScreenshots : ScreenshotRegistry() {
     private fun screen(
@@ -35,6 +38,11 @@ class ListScreenshots : ScreenshotRegistry() {
             case("sort-sheet-last-updated", content = screen(ListFixtureStates.sortSheetLastUpdated)),
             case("sort-sheet-score-lowest", content = screen(ListFixtureStates.sortSheetScoreLowest)),
             case("sort-sheet-start-date", content = screen(ListFixtureStates.sortSheetStartDate)),
+            case(
+                "sort-sheet-landscape",
+                window = WindowSize(PHONE_LONG_SIDE, PHONE_SHORT_SIDE),
+                content = screen(ListFixtureStates.sortSheetScoreLowest),
+            ),
             case("watching-by-score", content = screen(ListFixtureStates.watchingByScore)),
             case("watching-by-start-date", content = screen(ListFixtureStates.watchingByStartDate)),
             case("planned-by-start-date", content = screen(ListFixtureStates.plannedByStartDate)),

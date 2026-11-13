@@ -301,6 +301,7 @@ class ListViewModelTest {
             s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
             assertEquals(SortDirection.Descending, s.page().direction)
             val highest = s.ids()
+            val planned = s.page(ListStatus.Planned)
             s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
             assertFalse(s.state.sortSheetOpen)
@@ -318,9 +319,12 @@ class ListViewModelTest {
                 s.ids(),
             )
             assertTrue(s.ids() != highest)
+            assertSame(planned, s.page(ListStatus.Planned))
             assertEquals(2, s.page().ordering)
             assertEquals(0, s.page(ListStatus.Planned).ordering)
+            s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
+            assertFalse(s.state.sortSheetOpen)
             assertEquals(2, s.page().ordering)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertEquals(SortDirection.Ascending, s.page().direction)
@@ -337,7 +341,9 @@ class ListViewModelTest {
     fun `sorted by score or start date, a row shows that value, in the tab sorted so only`() =
         test { s ->
             s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
-            assertTrue(s.page().rows.all { it.sortedBy is SortedBy.Score })
+            val scores = set.entries.filter { it.status == ListStatus.Watching }.associate { it.anime.id to it.values.score }
+            assertEquals(s.page().rows.map { r -> scores.getValue(r.id)?.let(SortedBy::Score) }, s.page().rows.map { it.sortedBy })
+            assertTrue(s.page().rows.any { it.sortedBy != null })
             assertTrue(s.page(ListStatus.Planned).rows.all { it.sortedBy == null })
             s.list.onEvent(ListEvent.SelectSort(ListSort.StartDate))
             assertTrue(s.page().rows.all { it.sortedBy is SortedBy.StartYear })

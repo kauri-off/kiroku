@@ -8,8 +8,11 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import java.text.CollationKey
+import java.text.Collator
 import java.time.Instant
 import java.time.LocalDate
+import java.util.Locale
 
 enum class ListSort { UpNext, Title, LastUpdated, Score, StartDate }
 
@@ -35,8 +38,7 @@ fun defaultSort(
     withAiring: Boolean,
 ): ListSort = if (ListSort.UpNext in sortsFor(status, withAiring)) ListSort.UpNext else ListSort.LastUpdated
 
-// Orders entries once, when the app starts, a tab's sort or direction changes or the list is refreshed. An entry without
-// the key goes last in both directions; equal keys go by title, A to Z.
+// A missing key goes last in both directions; equal keys go by title A to Z, then by id.
 fun order(
     entries: List<ListEntry>,
     sort: ListSort,
@@ -45,7 +47,8 @@ fun order(
     direction: SortDirection? = sort.defaultDirection,
     title: (ListEntry) -> String,
 ): List<ListEntry> {
-    val byTitle = compareBy<ListEntry, String>(String.CASE_INSENSITIVE_ORDER) { title(it) }
+    val titles = titleKeys(entries, title)
+    val byTitle = compareBy<ListEntry> { titles.getValue(it.anime.id) }
     val ascending = direction != SortDirection.Descending
     val comparator: Comparator<ListEntry> =
         when (sort) {
@@ -56,6 +59,15 @@ fun order(
             ListSort.StartDate -> keyed(ascending) { it.anime.startDate?.firstDay() }
         }
     return entries.sortedWith(comparator.then(byTitle).thenBy { it.anime.id.value })
+}
+
+// Root Unicode collation, case ignored: a letter with a macron or accent sorts with its base letter, in any language.
+private fun titleKeys(
+    entries: List<ListEntry>,
+    title: (ListEntry) -> String,
+): Map<AnimeId, CollationKey> {
+    val collator = Collator.getInstance(Locale.ROOT).apply { strength = Collator.SECONDARY }
+    return entries.associate { it.anime.id to collator.getCollationKey(title(it)) }
 }
 
 private fun <K : Comparable<K>> keyed(

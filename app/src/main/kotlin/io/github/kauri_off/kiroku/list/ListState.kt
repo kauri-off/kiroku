@@ -74,9 +74,7 @@ data class ListPage(
     val sort: ListSort,
     val sorts: List<ListSort>,
     val rows: List<ListRow>,
-    // Changes whenever the tab's order is computed again (app start, refresh, a new sort or direction), which starts
-    // the page from the top; rows animate only between states with the same value. A tab switch or a return from a
-    // title does not change it.
+    // Changes whenever the tab's order is computed again, which starts its page from the top; rows animate only within one.
     val ordering: Int = 0,
     val direction: SortDirection? = sort.defaultDirection,
 )
@@ -96,7 +94,7 @@ data class ListRow(
 // What line 2 adds after its own words so that the tab's order can be read off the rows.
 sealed interface SortedBy {
     data class Score(
-        val score: Int?,
+        val score: Int,
     ) : SortedBy
 
     data class StartYear(
@@ -179,9 +177,7 @@ sealed interface ListEvent {
     data object Back : ListEvent
 }
 
-// One row from :core's airing phase, the one the title page reads too: line 2's premiere and line 3 are never decided
-// here. Another user's list has no airing data, so its row has progress or score and no third line. Sorted by score or
-// start date, line 2 also shows that value unless it shows it already.
+// One row from :core's airing phase, as on the title page; sorted by score or start date, line 2 also shows that value.
 fun listRow(
     entry: ListEntry,
     airing: Airing?,
@@ -203,7 +199,7 @@ fun listRow(
     val line3 = aired?.toWatch?.let(Line3::ToWatch) ?: aired?.next?.let(Line3::NextEpisode)
     val sortedBy =
         when {
-            sort == ListSort.Score && line2 !is Line2.Score -> SortedBy.Score(values.score)
+            sort == ListSort.Score && line2 !is Line2.Score -> values.score?.let(SortedBy::Score)
             sort == ListSort.StartDate && line2 !is Line2.Premieres -> anime.startDate?.year?.let(SortedBy::StartYear)
             else -> null
         }

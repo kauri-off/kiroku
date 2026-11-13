@@ -590,9 +590,10 @@ sign-in button disabled, and "Sign-in failed, try again".
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
 tab, one "+1" button.
 
-- **Line 2** is always words of one shape: the user's progress ("Watched 12 of 24"; the total is left out when
+- **Line 2** is one line in the base variants: the user's progress ("Watched 12 of 24"; the total is left out when
   unknown, and the count is written as it is, also above the total, W9). For a title that has not aired yet it is the
-  premiere, and in the Completed tab the user's score.
+  premiere, and in the Completed tab the user's score. In a tab sorted by score or start date, a row that has that
+  value and does not show it already adds it after «·»: the score as a star and the number, or the start year.
 - **Line 3** exists only for an airing title: "to watch", in the `tertiary` colour, when there are episodes to watch;
   otherwise the next episode, when its time is known exactly.
 - A row never shows the aired count: "to watch" carries it, and the title page shows it.
@@ -603,22 +604,22 @@ progress bar.
 **Default order.** Watching is sorted by default as "Up next": titles with episodes to watch first, the most recently
 aired on top; then titles with a known time for the next episode or the premiere, the soonest first; then the rest, by
 last update. "Up next" groups a row only by what the row shows, so the order never contradicts the rows. The other
-tabs default to "Last updated". The sort chosen for each tab is remembered.
+tabs default to "Last updated". The sort and direction chosen for each tab are remembered.
 
 **Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's sort
-is changed, and on pull-to-refresh, and only then does the tab's page start from the top. An edit, a sync, an air time
-passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position, and update
-rows in place. Two things do change the visible rows: a row whose title no longer belongs to the tab leaves at once,
-and Undo puts it back in the same place; a title that joins the tab appears at the end until the order is next
-computed.
+or direction is changed, and on pull-to-refresh, and only then does the tab's page start from the top. An edit, a
+sync, an air time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll
+position, and update rows in place. Two things do change the visible rows: a row whose title no longer belongs to the
+tab leaves at once, and Undo puts it back in the same place; a title that joins the tab appears at the end until the
+order is next computed.
 
 **Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens the
 entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
-clearing the field ends it. Sort opens a bottom sheet with at most five options. "+1" answers with a snackbar that
-offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves Watching and the
-snackbar says where it went; Undo puts back the count, the status and the dates. After a row leaves its tab, a "+1"
-on a row that moved up is not applied until the rows have stood still a moment, so a tap meant for the row that left
-lands on no other.
+clearing the field ends it. Sort opens a bottom sheet with at most five sorts and, for every sort but "Up next", a
+choice of its direction. "+1" answers with a snackbar that offers Undo, and works at and above the total (W9). When it
+completes the title (W7), the row leaves Watching and the snackbar says where it went; Undo puts back the count, the
+status and the dates. After a row leaves its tab, a "+1" on a row that moved up is not applied until the rows have
+stood still a moment, so a tap meant for the row that left lands on no other.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.

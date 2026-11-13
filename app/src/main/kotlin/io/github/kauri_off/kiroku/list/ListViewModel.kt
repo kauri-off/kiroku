@@ -48,8 +48,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort or direction), so they are
-// kept here.
+// The user's own list. Its orders are fixed at moments (first load, Refresh, a new sort or direction), so they live here.
 class ListViewModel(
     private val list: ListSource,
     private val airing: AiringRepository,
@@ -112,7 +111,7 @@ class ListViewModel(
         val refreshes: Int,
     )
 
-    // Pages written against [now] in [zone]: kept while what they show, the zone and the clock within [now, until) hold.
+    // Pages written against [now] in [zone]; until a Refresh or [until], pages built again keep [now].
     private class Built(
         val shown: Shown,
         val content: ListContent,
@@ -217,8 +216,11 @@ class ListViewModel(
                 model.refreshes,
             )
         val instant = clock.instant()
+        val current =
+            built?.takeIf { instant >= it.now && instant < it.until && it.zone == clock.zone && it.shown.refreshes == shown.refreshes }
         val pages =
-            built?.takeIf { it.shown == shown && instant >= it.now && instant < it.until && it.zone == clock.zone }
+            current?.takeIf { it.shown == shown }
+                ?: current?.let { built(model, filter, shown, it.now) }?.takeIf { instant < it.until }
                 ?: built(model, filter, shown, instant)
         return ListState(
             owner = ListOwner.Me,
@@ -245,7 +247,13 @@ class ListViewModel(
                 .mapNotNull { it.nextEpisode?.airsAt?.takeIf(now::isBefore) }
                 .minOrNull()
         val until = nextAirTime?.coerceAtMost(midnight) ?: midnight
-        return Built(shown, content(model, filter, today), now, until, clock.zone).also { built = it }
+        return Built(shown, content(model, filter, today).sharing(built?.content), now, until, clock.zone).also { built = it }
+    }
+
+    // A tab whose page did not change keeps the same object, so that its page is not composed again.
+    private fun ListContent.sharing(before: ListContent?): ListContent {
+        if (this !is ListContent.Tabs || before !is ListContent.Tabs) return this
+        return ListContent.Tabs(pages.mapValues { (status, page) -> before.pages[status]?.takeIf { it == page } ?: page })
     }
 
     private fun content(

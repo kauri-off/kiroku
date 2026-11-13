@@ -23,7 +23,7 @@ class ListText(
 ) {
     private val times = AirTimeText(context, now, zone)
 
-    // Line 2, followed by the value the tab is sorted by when the row has one: "Watched 12 of 24 · Score 8", "… · 2025".
+    // Line 2, followed by the value the tab is sorted by when the row has one: "Watched 12 of 24 · ★ 10", "… · 2025".
     fun line2(
         line: Line2,
         sortedBy: SortedBy?,
@@ -31,9 +31,7 @@ class ListText(
 
     private fun sortedBy(value: SortedBy): String =
         when (value) {
-            is SortedBy.Score ->
-                value.score?.let { context.getString(R.string.list_sorted_by_score, it) }
-                    ?: context.getString(R.string.list_sorted_by_not_scored)
+            is SortedBy.Score -> context.getString(R.string.list_sorted_by_score, value.score)
             is SortedBy.StartYear -> value.year.toString()
         }
 

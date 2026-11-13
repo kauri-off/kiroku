@@ -20,6 +20,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Year
 import java.time.YearMonth
+import java.util.Locale
 
 class ListOrderTest {
     private val set = Fixtures.reference
@@ -183,6 +184,26 @@ class ListOrderTest {
         val entries = listOf(same2, g, same1, a, b)
         assertEquals(listOf(a, b, g, same1, same2), sorted(entries, ListSort.Title, SortDirection.Ascending))
         assertEquals(listOf(same1, same2, g, b, a), sorted(entries, ListSort.Title, SortDirection.Descending))
+    }
+
+    @Test
+    fun `titles follow the root collation without case, a macron or accent beside its base letter, in any language`() {
+        val names = listOf("Zetman", "Ōkami", "Naruto", "Pokémon", "pokemon", "akira")
+        val entries = names.map { entry(it, Instant.EPOCH) }
+        val ascending = listOf("akira", "Naruto", "Ōkami", "pokemon", "Pokémon", "Zetman")
+        val default = Locale.getDefault()
+        try {
+            listOf(Locale.ENGLISH, Locale.forLanguageTag("ru"), Locale.JAPANESE).forEach { locale ->
+                Locale.setDefault(locale)
+                assertEquals(ascending, sorted(entries, ListSort.Title, SortDirection.Ascending).map { it.anime.titles.romaji })
+                assertEquals(
+                    ascending.reversed(),
+                    sorted(entries, ListSort.Title, SortDirection.Descending).map { it.anime.titles.romaji },
+                )
+            }
+        } finally {
+            Locale.setDefault(default)
+        }
     }
 
     @Test

@@ -41,6 +41,7 @@ setting decide.
 | Progress in a list row | `Watched 12 of 24` / `Watched 212` | `Просмотрено 12 из 24` / `Просмотрено 212` | The second form when the total is unknown. The count is written as it is, also above the total. A line may break after the verb, never inside `12 of 24` |
 | Progress beside a status | `Watching · 12 / 24` | `Смотрю · 12 / 24` | In search results and "See all" |
 | Aired count | `14 aired` / `~14 aired` | `Вышло 14` / `Вышло ~14` | Without the total. "~" marks an estimate |
+| The value a List tab is sorted by | `Watched 12 of 24 · ★ 10` / `… · 2025` | `Просмотрено 12 из 24 · ★ 10` / `… · 2025` | After line 2's own words. The user's score as the star and the number, the start date as its year. A wrap falls after «·» |
 | Episodes to watch | `2 to watch` / `~2 to watch` | `К просмотру: 2` / `К просмотру: ~2` | The colon avoids a plural. Lower case after «·»: `· к просмотру: 2` |
 | Next episode | `Episode 15 · Sat 17:30` | `Серия 15 · сб 17:30` | One form everywhere. The time is "today" / «сегодня», "tomorrow" / «завтра», the weekday within six days, then the date (`14 Nov, 17:30` / `14 нояб., 17:30`), in lower case, because an air time always follows other text. A wrap falls before «·» |
 | Premiere, time known | `Premieres Sat 17:30` | `Премьера сб 17:30` | Time as for the next episode. No colon |

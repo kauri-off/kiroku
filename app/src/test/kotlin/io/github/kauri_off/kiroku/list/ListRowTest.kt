@@ -8,6 +8,8 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -35,10 +37,10 @@ class ListRowTest {
     }
 
     @Test
-    fun `sorted by score or start date, line 2 is followed by that value, with or without one`() {
+    fun `sorted by score or start date, line 2 is followed by that value, and an unscored row adds nothing`() {
         assertEquals(SortedBy.Score(8), row(FixtureAnime.exactToWatch, sort = ListSort.Score).sortedBy)
-        assertEquals(SortedBy.Score(null), row(FixtureAnime.exactCaughtUp, sort = ListSort.Score).sortedBy)
-        assertEquals(SortedBy.Score(null), row(FixtureAnime.premiereDate, sort = ListSort.Score).sortedBy)
+        assertNull(row(FixtureAnime.exactCaughtUp, sort = ListSort.Score).sortedBy)
+        assertNull(row(FixtureAnime.premiereDate, sort = ListSort.Score).sortedBy)
         assertEquals(
             SortedBy.StartYear(2025),
             row(FixtureAnime.exactToWatch, sort = ListSort.StartDate).sortedBy,
@@ -47,7 +49,19 @@ class ListRowTest {
             SortedBy.StartYear(2024),
             row(FixtureAnime.film, sort = ListSort.StartDate).sortedBy,
         )
-        assertEquals(SortedBy.Score(null), row(FixtureAnime.exactCaughtUp, readOnly = true, sort = ListSort.Score).sortedBy)
+        assertNull(row(FixtureAnime.exactCaughtUp, readOnly = true, sort = ListSort.Score).sortedBy)
+    }
+
+    @Test
+    fun `the sheet offers a sort's own direction first, as core defines it, and both directions`() {
+        ListSort.entries.forEach { sort ->
+            assertEquals(sort.name, sort.defaultDirection, sort.directions().firstOrNull()?.first)
+            if (sort.defaultDirection !=
+                null
+            ) {
+                assertEquals(sort.name, SortDirection.entries.toSet(), sort.directions().map { it.first }.toSet())
+            }
+        }
     }
 
     @Test

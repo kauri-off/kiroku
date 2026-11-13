@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.list
 
+import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -11,6 +13,7 @@ import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -31,9 +34,10 @@ object ListFixtureStates {
         shown: List<ListEntry> = ordered,
         readOnly: Boolean = false,
         direction: SortDirection? = sort.defaultDirection,
+        schedule: Map<AnimeId, Airing> = set.airing,
     ): List<ListRow> {
         val now = shown.associateBy { it.anime.id }
-        val airing = if (readOnly) emptyMap() else set.airing
+        val airing = if (readOnly) emptyMap() else schedule
         return order(ordered.filter { it.status == status }, sort, airing::get, today, direction) { it.anime.titles.romaji }
             .mapNotNull { now[it.anime.id]?.takeIf { entry -> entry.status == status } }
             .map { listRow(it, airing[it.anime.id], today, TitleLanguage.Romaji, readOnly, sort) }
@@ -103,6 +107,32 @@ object ListFixtureStates {
 
     val sortSheet = watching.copy(sortSheetOpen = true)
 
+    // The widest line 2 a Watching row has: three-digit counts, a score of 10, episodes to watch and "+1".
+    private const val LONG_TOTAL = 366
+    private const val LONG_WATCHED = 120
+    private const val LONG_AIRED = 122
+    private const val TOP_SCORE = 10
+
+    private val longShow =
+        edited(FixtureAnime.exactToWatch) {
+            it.copy(
+                anime = it.anime.copy(malEpisodes = LONG_TOTAL),
+                values = it.values.copy(watchedEpisodes = LONG_WATCHED, score = TOP_SCORE),
+            )
+        }
+
+    private val longShowAiring =
+        set.airing + (
+            FixtureAnime.exactToWatch.id to
+                set.airing.getValue(FixtureAnime.exactToWatch.id).let {
+                    it.copy(
+                        aired = AiredCount.Exact(LONG_AIRED),
+                        total = LONG_TOTAL,
+                        nextEpisode = it.nextEpisode?.copy(number = LONG_AIRED + 1),
+                    )
+                }
+        )
+
     // [status] ordered by [sort] in [direction], each row showing the value it is sorted by where it has one.
     fun sorted(
         status: ListStatus,
@@ -110,12 +140,12 @@ object ListFixtureStates {
         direction: SortDirection? = sort.defaultDirection,
         readOnly: Boolean = false,
     ): ListState {
-        val entries = if (readOnly) set.otherUserEntries else set.entries
+        val entries = if (readOnly) set.otherUserEntries else longShow
         val page =
             ListPage(
                 sort,
                 sortsFor(status, withAiring = !readOnly),
-                rows(status, sort, entries, readOnly = readOnly, direction = direction),
+                rows(status, sort, entries, readOnly = readOnly, direction = direction, schedule = longShowAiring),
                 direction = direction,
             )
         val tabs = tabs(entries, readOnly, override = mapOf(status to page))
