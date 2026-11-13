@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.search
 import androidx.compose.foundation.text.input.TextFieldState
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -12,24 +13,28 @@ import io.github.kauri_off.kiroku.core.repository.BrowseList
 // Search's and the browse lists' states over the fixture set, for previews, screenshots and the debug build.
 object SearchFixtureStates {
     private val set = Fixtures.reference
-    private val entries = set.entries.associateBy { it.anime.id }
+    private val standIn = standIn(set)
 
-    // Searches the fixture titles in every language, as MAL does; browses them as the demo server does.
-    val standIn: SearchStandIn =
-        object : SearchStandIn {
+    // Searches [set]'s titles in every language, as MAL does, and browses them as the demo server does.
+    fun standIn(set: FixtureSet): SearchStandIn {
+        val entries = set.entries.associateBy { it.anime.id }
+
+        fun hit(
+            anime: Anime,
+            rank: Int? = null,
+        ) = SearchHit(anime, entries[anime.id], rank)
+        return object : SearchStandIn {
             override val recent: List<String> get() = SearchFixtureStates.recent
 
             override fun search(query: String): List<SearchHit> =
                 set.anime
                     .filter { anime ->
-                        with(
-                            anime.titles,
-                        ) { (listOfNotNull(romaji, english, japanese) + synonyms).any { it.contains(query, ignoreCase = true) } }
-                    }.map(::hit)
+                        with(anime.titles) { (listOfNotNull(romaji, english, japanese) + synonyms).any { it.contains(query, ignoreCase = true) } }
+                    }.map { hit(it) }
 
             override fun browse(list: BrowseList): List<SearchHit> =
                 when (list) {
-                    BrowseList.ThisSeason -> set.anime.filter { it.airingStatus != AiringStatus.Finished }.map(::hit)
+                    BrowseList.ThisSeason -> set.anime.filter { it.airingStatus != AiringStatus.Finished }.map { hit(it) }
                     BrowseList.TopAiring ->
                         byRank(set.anime.filter { it.airingStatus == AiringStatus.Airing }).mapIndexed { i, anime -> hit(anime, i + 1) }
                     BrowseList.TopRated -> byRank(set.anime).map { hit(it, it.rank) }
@@ -39,11 +44,7 @@ object SearchFixtureStates {
                             .mapIndexed { i, anime -> hit(anime, i + 1) }
                 }
         }
-
-    private fun hit(
-        anime: Anime,
-        rank: Int? = null,
-    ) = SearchHit(anime, entries[anime.id], rank)
+    }
 
     private fun byRank(anime: List<Anime>) = anime.filter { it.rank != null }.sortedBy { it.rank }
 

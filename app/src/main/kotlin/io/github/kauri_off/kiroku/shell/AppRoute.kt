@@ -61,8 +61,9 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
 fun appEntries(
     graph: AppGraph,
     messages: ShellMessages,
-): ShellEntries =
-    { navigator, snackbars ->
+): ShellEntries {
+    val standIn = searchStandIn(graph)
+    return { navigator, snackbars ->
         val signIn = { navigator.open(NotBuiltKey(NotBuilt.SignIn)) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
         val back = { navigator.back() }
@@ -77,7 +78,6 @@ fun appEntries(
             )
         }
         entry<SearchRoot> {
-            val standIn = searchStandIn
             if (standIn == null) {
                 NotBuiltDestination(graph, Destination.Search, signIn, snackbars)
             } else {
@@ -85,7 +85,7 @@ fun appEntries(
             }
         }
         entry<BrowseKey> { key ->
-            searchStandIn?.let { BrowseRoute(it, key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
+            standIn?.let { BrowseRoute(it, key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         }
         entry<ProfileRoot> { NotBuiltDestination(graph, Destination.Profile, signIn, snackbars) }
         entry<TitleKey> { key ->
@@ -108,6 +108,7 @@ fun appEntries(
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
     }
+}
 
 // Search in a release and Profile until their milestones: the placeholder, with the session banner of S6.
 @Composable

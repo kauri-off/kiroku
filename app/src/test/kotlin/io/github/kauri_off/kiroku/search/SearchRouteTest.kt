@@ -15,6 +15,7 @@ import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Rule
@@ -104,6 +106,26 @@ class SearchRouteTest {
         compose.onNode(inView(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertDoesNotExist()
         compose.onNode(inView(SearchFixtureStates.recent.first())).assertExists()
     }
+
+    @Test
+    fun `a title's status follows the list, also after an edit made elsewhere`() {
+        search()
+        compose.onNode(hasSetTextAction() and !hasAnyAncestor(isDialog())).performClick()
+        settle()
+        compose.onNode(typing).performKeyInput {
+            pressKey(Key.K)
+            pressKey(Key.A)
+            pressKey(Key.G)
+        }
+        settle()
+        compose.onNode(inView(watching)).assertExists()
+        scope.launch { graph.list.write(ListWrite.Remove(FixtureAnime.exactToWatch)) }
+        settle()
+        compose.onNode(inView(watching)).assertDoesNotExist()
+        compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertExists()
+    }
+
+    private val watching = "Watching\u00A0· 12\u00A0/\u00A024"
 
     private companion object {
         const val SETTLE_ROUNDS = 5

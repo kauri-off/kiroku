@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,10 +16,13 @@ import androidx.compose.runtime.setValue
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -40,13 +44,14 @@ fun SearchRoute(
     val query = rememberTextFieldState()
     var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(standIn.recent.take(MAX_RECENT_SEARCHES)) }
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
+    val listed by listedEntries(graph)
     val text = query.text.toString().trim()
     val hits = remember(standIn, text) { if (text.isEmpty()) emptyList() else standIn.search(text) }
     val content =
         if (text.isEmpty()) {
             SearchContent.Start(recent)
         } else {
-            SearchContent.Results(text, Paged.Shown(hits.map { resultRow(it.anime, it.entry?.values, graph.titleLanguage) }))
+            SearchContent.Results(text, Paged.Shown(hits.map { resultRow(it.anime, it.entryIn(listed)?.values, graph.titleLanguage) }))
         }
 
     fun keep(searched: String) {
@@ -66,7 +71,7 @@ fun SearchRoute(
                 is SearchEvent.Open -> {
                     keep(text)
                     val hit = hits.firstOrNull { it.anime.id == event.id }
-                    onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entry, airing = null, session = session) })
+                    onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entryIn(listed), airing = null, session = session) })
                 }
                 SearchEvent.LoadMore, SearchEvent.Retry -> Unit
                 SearchEvent.SignIn -> onSignIn()
@@ -88,8 +93,9 @@ fun BrowseRoute(
     onSignIn: () -> Unit,
 ) {
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
+    val listed by listedEntries(graph)
     val hits = remember(standIn, key) { standIn.browse(key.list) }
-    val rows = Paged.Shown(hits.map { resultRow(it.anime, it.entry?.values, graph.titleLanguage, it.rank) })
+    val rows = Paged.Shown(hits.map { resultRow(it.anime, it.entryIn(listed)?.values, graph.titleLanguage, it.rank) })
     BrowseScreen(
         BrowseState(key.list, rows, sessionExpired = session == Session.Expired),
         onEvent = { event ->
@@ -97,7 +103,7 @@ fun BrowseRoute(
                 BrowseEvent.Back -> onBack()
                 is BrowseEvent.Open -> {
                     val hit = hits.firstOrNull { it.anime.id == event.id }
-                    onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entry, airing = null, session = session) })
+                    onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entryIn(listed), airing = null, session = session) })
                 }
                 BrowseEvent.LoadMore, BrowseEvent.Retry -> Unit
                 BrowseEvent.SignIn -> onSignIn()
@@ -106,5 +112,18 @@ fun BrowseRoute(
         snackbars = snackbars,
     )
 }
+
+// The user's list as it is now, so a status changed elsewhere in the app shows here; null until it is read.
+@Composable
+private fun listedEntries(graph: AppGraph): State<Map<AnimeId, ListEntry>?> =
+    remember(graph) {
+        graph.list
+            .observeEntries()
+            .map<List<ListEntry>, Map<AnimeId, ListEntry>?> { entries -> entries.associateBy { it.anime.id } }
+            .catch { emit(null) }
+    }.collectAsScreenState(initial = null)
+
+// The title's entry on the user's list once it is read, and the stand-in's until then.
+private fun SearchHit.entryIn(listed: Map<AnimeId, ListEntry>?): ListEntry? = if (listed == null) entry else listed[anime.id]
 
 private val recentSaver = listSaver<MutableState<List<String>>, String>(save = { it.value }, restore = { mutableStateOf(it) })
