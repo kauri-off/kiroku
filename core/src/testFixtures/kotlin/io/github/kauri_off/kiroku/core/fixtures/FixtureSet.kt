@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
 import java.time.Clock
@@ -37,7 +38,7 @@ data class FixtureSet(
 ) {
     val now: Instant get() = clock.instant()
 
-    val session: Session get() = Session.SignedIn(user.name)
+    val session: Session.SignedIn get() = Session.SignedIn(SignInId("demo"))
 
     fun anime(id: AnimeId): Anime = anime.single { it.id == id }
 
