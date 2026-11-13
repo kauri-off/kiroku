@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -28,21 +29,20 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 internal class DemoSessionRepository(
-    private val signedIn: MutableStateFlow<Boolean>,
+    private val signIn: MutableStateFlow<SignInId?>,
     private val server: DemoServer,
-    private val signIn: Session.SignedIn,
 ) : SessionRepository {
     override fun observeSession(): Flow<Session> =
-        combine(signedIn, server.sessionExpired) { signedIn, expired ->
+        combine(signIn, server.sessionExpired) { signIn, expired ->
             when {
-                !signedIn -> Session.SignedOut
-                expired -> Session.Expired
-                else -> signIn
+                signIn == null -> Session.SignedOut
+                expired -> Session.Expired(signIn)
+                else -> Session.SignedIn(signIn)
             }
         }
 
     override suspend fun signOut() {
-        signedIn.value = false
+        signIn.value = null
     }
 }
 
@@ -143,9 +143,9 @@ internal class DemoSearchRepository(
 internal class DemoUserRepository(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
-    private val signedIn: MutableStateFlow<Boolean>,
+    private val signIn: MutableStateFlow<SignInId?>,
 ) : UserRepository {
-    override fun observeOwnProfile(): Flow<UserProfile?> = signedIn.map { if (it) fixtures.user else null }
+    override fun observeOwnProfile(): Flow<UserProfile?> = signIn.map { if (it != null) fixtures.user else null }
 
     override suspend fun refreshOwnProfile(): Outcome<Unit> = server.load(needsSignIn = true).toOutcome()
 
