@@ -6,7 +6,6 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -14,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -50,6 +51,15 @@ internal val RENEW_AFTER: Duration = Duration.ofDays(7)
 
 internal const val KEY_ALIAS = "kiroku.session"
 
+// An exception without its message, which could quote a token: its type and its stack.
+internal class SessionFailure(
+    cause: Exception,
+) : Exception(cause.javaClass.name) {
+    init {
+        stackTrace = cause.stackTrace
+    }
+}
+
 // The session over [file], which no other object may read or write, sealed with a key from the Android Keystore.
 internal fun malSession(
     file: File,
@@ -59,7 +69,13 @@ internal fun malSession(
     unexpected: (Throwable) -> Unit,
 ): MalSession {
     val files = scope + Dispatchers.IO + SupervisorJob(scope.coroutineContext[Job])
-    return MalSession(TokenStore(file, TokenFormat(AesGcmCipher { keystoreKey(KEY_ALIAS) }), files), endpoint, clock, scope, unexpected)
+    return MalSession(
+        TokenStore(file, TokenFormat(AesGcmCipher(KeystoreKeys(KEY_ALIAS)), file.name), files),
+        endpoint,
+        clock,
+        scope,
+        unexpected,
+    )
 }
 
 // The one owner of the tokens in its process: every authorised request and every change of the tokens goes through it.
@@ -86,7 +102,7 @@ class MalSession internal constructor(
 
     private val read =
         scope.async(start = CoroutineStart.LAZY) {
-            val stored = gate.withLock { store.read().also(::set) }
+            val stored = gate.withLock { guarded<Stored>(Stored.SignedOut) { store.read() }.also { state.value = it } }
             if (stored is Stored.SignedIn && due(stored.tokens)) scope.launch { renew(stored.tokens) }
         }
 
@@ -97,53 +113,81 @@ class MalSession internal constructor(
         }
 
     override suspend fun signOut() {
-        change {
-            store.write(Stored.SignedOut)
-            set(Stored.SignedOut)
+        guarded(Unit) {
+            change {
+                written(Stored.SignedOut)
+                state.value = Stored.SignedOut
+            }
         }
     }
 
     // A new sign-in with the tokens MAL granted; nobody is signed in when they cannot be stored.
     internal suspend fun signIn(grant: TokenGrant): Outcome<Unit> =
-        change {
-            val signedIn = Stored.SignedIn(Tokens(UUID.randomUUID().toString(), grant.access, grant.refresh, now()))
-            if (store.write(signedIn)) {
-                set(signedIn)
-                Outcome.Success(Unit)
-            } else {
-                Outcome.Failure(DataError.StorageError)
+        guarded(Outcome.Failure(DataError.StorageError)) {
+            change {
+                val signedIn = Stored.SignedIn(Tokens(UUID.randomUUID().toString(), grant.access, grant.refresh, now()))
+                if (written(signedIn)) {
+                    state.value = signedIn
+                    Outcome.Success(Unit)
+                } else {
+                    Outcome.Failure(DataError.StorageError)
+                }
             }
         }
 
     // S5: a rejected token leads to one refresh, shared with every request rejected beside this one, and one retry.
-    internal suspend fun <T> authorised(request: AuthorisedRequest<T>): Outcome<T> {
-        val first = tokens() ?: return expired
-        when (val attempt = request.send(first.access)) {
-            is Attempt.Answered -> return attempt.outcome
-            Attempt.Rejected -> Unit
-        }
-        val second =
-            when (val renewed = renew(first)) {
-                is Outcome.Failure -> return renewed
-                is Outcome.Success -> (renewed.value as? Stored.SignedIn)?.tokens?.takeIf { it.signIn == first.signIn } ?: return expired
+    internal suspend fun <T> authorised(request: AuthorisedRequest<T>): Outcome<T> =
+        guarded(Outcome.Failure(DataError.ServerError)) {
+            val first = tokens() ?: return expired
+            when (val attempt = request.send(first.access)) {
+                is Attempt.Answered -> return attempt.outcome
+                Attempt.Rejected -> Unit
             }
-        return when (val attempt = request.send(second.access)) {
-            is Attempt.Answered -> attempt.outcome
-            Attempt.Rejected -> expired
+            val second =
+                when (val renewed = renew(first)) {
+                    is Outcome.Failure -> return renewed
+                    is Outcome.Success ->
+                        (renewed.value as? Stored.SignedIn)?.tokens?.takeIf { it.signIn == first.signIn } ?: return expired
+                }
+            when (val attempt = request.send(second.access)) {
+                is Attempt.Answered -> attempt.outcome
+                Attempt.Rejected -> expired
+            }
         }
-    }
 
     // S7: for whatever starts work without a screen; the session itself does it when it is first read.
     suspend fun renewIfDue() {
-        val tokens = tokens() ?: return
-        if (due(tokens)) renew(tokens)
+        guarded(Unit) {
+            val tokens = tokens() ?: return
+            if (due(tokens)) renew(tokens)
+        }
     }
 
     private fun now(): Long = clock.instant().epochSecond
 
-    private fun due(tokens: Tokens): Boolean = now() - tokens.obtainedAt >= RENEW_AFTER.seconds
+    // Tokens dated in the future were dated by a clock that was wrong, and are due.
+    private fun due(tokens: Tokens): Boolean = (now() - tokens.obtainedAt).let { it < 0 || it >= RENEW_AFTER.seconds }
 
-    private fun set(stored: Stored) = synchronized(lock) { state.value = stored }
+    // Whatever [block] throws is reported and becomes [otherwise], unless the caller itself was cancelled.
+    private suspend inline fun <T> guarded(
+        otherwise: T,
+        block: () -> T,
+    ): T =
+        try {
+            block()
+        } catch (e: Exception) {
+            if (e is CancellationException) currentCoroutineContext().ensureActive()
+            unexpected(SessionFailure(e))
+            otherwise
+        }
+
+    // A value that was not written is reported: the next process starts with what the file still holds.
+    private suspend fun written(value: Stored): Boolean =
+        guarded(false) {
+            val failure = store.write(value)
+            if (failure != null) unexpected(SessionFailure(failure))
+            failure == null
+        }
 
     // The tokens once no change of them is running.
     private suspend fun tokens(): Tokens? {
@@ -159,50 +203,37 @@ class MalSession internal constructor(
 
     // The session after [used] were refreshed, by this call or by the one already running for them.
     private suspend fun renew(used: Tokens): Outcome<Stored> {
-        val result =
-            synchronized(lock) {
-                val now = checkNotNull(state.value)
-                val running = renewal
-                when {
-                    (now as? Stored.SignedIn)?.tokens !== used -> CompletableDeferred(Outcome.Success(now))
-                    running?.tokens === used -> running.result
-                    else -> scope.async { gate.withLock { refresh(used) } }.also { renewal = Renewal(used, it) }
-                }
-            }
-        return result.await()
+        val running = synchronized(lock) { renewal?.takeIf { it.tokens === used }?.result ?: registered(used) }
+        running.start()
+        return running.await()
     }
 
-    // S6: only MAL's rejection ends the session. New tokens that cannot be stored still serve this process.
+    // Registered before it starts, and gone from there however it ends.
+    private fun registered(used: Tokens): Deferred<Outcome<Stored>> {
+        val refresh = scope.async(start = CoroutineStart.LAZY) { gate.withLock { refresh(used) } }
+        renewal = Renewal(used, refresh)
+        refresh.invokeOnCompletion { synchronized(lock) { if (renewal?.result === refresh) renewal = null } }
+        return refresh
+    }
+
+    // S6: only MAL's rejection ends the session. Tokens that a refresh or a sign-in has replaced are not refreshed.
     private suspend fun refresh(used: Tokens): Outcome<Stored> {
         val now = checkNotNull(state.value)
-        val result =
-            if ((now as? Stored.SignedIn)?.tokens !== used) {
-                Outcome.Success(now)
-            } else {
-                when (val answer = ask(refreshGrant(used.refresh))) {
-                    is TokenResult.Granted ->
-                        Outcome.Success(Stored.SignedIn(Tokens(used.signIn, answer.grant.access, answer.grant.refresh, now())))
-                    TokenResult.Rejected -> Outcome.Success(Stored.Expired(used.signIn))
-                    is TokenResult.Failed -> Outcome.Failure(answer.error)
-                }
+        if ((now as? Stored.SignedIn)?.tokens !== used) return Outcome.Success(now)
+        val next =
+            when (val answer = ask(refreshGrant(used.refresh))) {
+                is TokenResult.Granted -> Stored.SignedIn(Tokens(used.signIn, answer.grant.access, answer.grant.refresh, now()))
+                TokenResult.Rejected -> Stored.Expired(used.signIn)
+                is TokenResult.Failed -> return Outcome.Failure(answer.error)
             }
-        if (result is Outcome.Success && result.value !== now) store.write(result.value)
-        synchronized(lock) {
-            if (result is Outcome.Success) state.value = result.value
-            if (renewal?.tokens === used) renewal = null
-        }
-        return result
+        // New tokens that cannot be stored still serve this process.
+        written(next)
+        state.value = next
+        return Outcome.Success(next)
     }
 
     private suspend fun ask(grant: Map<String, String>): TokenResult =
-        try {
-            endpoint.post(grant).read()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            unexpected(e)
-            TokenResult.Failed(DataError.ServerError)
-        }
+        guarded(TokenResult.Failed(DataError.ServerError)) { endpoint.post(grant).read() }
 
     private companion object {
         val expired = Outcome.Failure(DataError.SessionExpired)

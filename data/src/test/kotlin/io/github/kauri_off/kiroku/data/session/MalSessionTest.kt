@@ -1,16 +1,21 @@
 package io.github.kauri_off.kiroku.data.session
 
+import androidx.datastore.core.Serializer
 import app.cash.turbine.test
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -25,7 +30,8 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.security.ProviderException
+import java.io.InputStream
+import java.io.OutputStream
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -65,13 +71,16 @@ class MalSessionTest {
             val id = signedIn().now()
             val reading = CountDownLatch(1)
             val read = CountDownLatch(1)
-            val real = AesGcmCipher { fixture.key }
+            val real = fixture.cipher
             val slow =
                 object : TokenCipher by real {
-                    override fun open(sealed: ByteArray): ByteArray {
+                    override fun open(
+                        sealed: ByteArray,
+                        bound: ByteArray,
+                    ): ByteArray {
                         reading.countDown()
                         read.await()
-                        return real.open(sealed)
+                        return real.open(sealed, bound)
                     }
                 }
             try {
@@ -109,15 +118,36 @@ class MalSessionTest {
         }
 
     @Test
+    fun everySignInIsANewOneAlsoWithTheSameTokensAfterASignOutOrAnExpiry() =
+        test {
+            val grant = TokenGrant("access-1", "refresh-1")
+            val session = fixture.open()
+            val ids = mutableListOf<Session>()
+            session.signIn(grant)
+            ids += session.now()
+            session.signIn(grant)
+            ids += session.now()
+            session.signOut()
+            session.signIn(grant)
+            ids += session.now()
+            fixture.answer = { TokenReply.Answer(400, "") }
+            session.authorised(FakeMal().request)
+            assertTrue(session.now() is Session.Expired)
+            session.signIn(grant)
+            ids += session.now()
+            val next = fixture.reopen()
+            assertEquals(ids.last(), next.now())
+            next.signIn(grant)
+            ids += next.now()
+
+            assertTrue("$ids", ids.all { it is Session.SignedIn })
+            assertEquals("$ids", ids.size, ids.toSet().size)
+        }
+
+    @Test
     fun aSignInThatCannotBeStoredSignsNobodyIn() =
         test {
-            val unsealing =
-                object : TokenCipher {
-                    override fun seal(plain: ByteArray): ByteArray = throw ProviderException("no Keystore")
-
-                    override fun open(sealed: ByteArray): ByteArray = throw ProviderException("no Keystore")
-                }
-            val session = fixture.open(unsealing)
+            val session = fixture.open(FailingCipher(fixture.cipher, opens = false, seals = false))
             assertEquals(Outcome.Failure(DataError.StorageError), session.signIn(TokenGrant("access-1", "refresh-1")))
             assertEquals(Session.SignedOut, session.now())
             val mal = FakeMal("access-1")
@@ -170,8 +200,7 @@ class MalSessionTest {
             assertEquals(id, session.now())
         }
 
-    // All ten are sent before any is answered. They run one at a time, so each is parked in the refresh before the
-    // next goes on, and the token endpoint answers only after the last of them.
+    // All ten are sent before one is answered, and the token endpoint answers once each of them waits for it.
     private suspend fun tenRejectedAtOnce(
         session: MalSession,
         mal: FakeMal,
@@ -325,10 +354,212 @@ class MalSessionTest {
         test {
             val session = signedIn()
             val id = session.now()
-            val thrown = IllegalStateException("broken")
-            fixture.answer = { throw thrown }
+            lateinit var thrown: Exception
+            fixture.answer = { grant -> throw IllegalStateException("could not post $grant").also { thrown = it } }
             assertEquals(Outcome.Failure(DataError.ServerError), session.authorised(FakeMal().request))
-            assertEquals(listOf<Throwable>(thrown), fixture.unexpected)
+            // Its type and its stack are reported, and not its message, which holds the refresh token.
+            val reported = fixture.unexpected.single()
+            assertEquals("java.lang.IllegalStateException", reported.message)
+            assertEquals(thrown.stackTrace.toList(), reported.stackTrace.toList())
+            assertTrue("refresh-1" in thrown.message.orEmpty())
+            assertFalse("refresh-1" in reported.stackTraceToString())
+            assertEquals(id, session.now())
+        }
+
+    @Test
+    fun anExceptionOfARequestIsReportedAndIsAnOutcome() =
+        test {
+            val session = signedIn()
+            assertEquals(Outcome.Failure(DataError.ServerError), session.authorised<Unit> { throw IllegalStateException("sent $it") })
+            assertEquals(listOf("java.lang.IllegalStateException"), fixture.reported)
+            assertFalse("access-1" in fixture.unexpected.single().stackTraceToString())
+            assertEquals(Outcome.Success("access-1"), session.authorised(FakeMal("access-1").request))
+        }
+
+    @Test
+    fun howeverARefreshEndsTheNextRejectedRequestStartsANewOne() =
+        test {
+            val session = signedIn()
+            val id = session.now()
+            val endings =
+                listOf<suspend () -> TokenReply>(
+                    { TokenReply.NoAnswer(DataError.NoConnection) },
+                    { TokenReply.Answer(500, "") },
+                    { throw IllegalStateException("broken") },
+                    { throw CancellationException("not the refresh's own") },
+                    { withTimeout(1) { awaitCancellation() } },
+                )
+            for ((earlier, ending) in endings.withIndex()) {
+                fixture.answer = { ending() }
+                val outcome = session.authorised(FakeMal().request)
+                assertTrue("$earlier: $outcome", outcome is Outcome.Failure && outcome.error != DataError.SessionExpired)
+                assertEquals(earlier + 1, fixture.grants.size)
+                assertTrue("$earlier", fixture.sessionScope.isActive)
+                assertEquals(id, session.now())
+            }
+            // After a refresh that succeeded, too.
+            for (next in 2..3) {
+                fixture.answer = { granted("access-$next", "refresh-$next") }
+                assertEquals(Outcome.Success("access-$next"), session.authorised(FakeMal("access-$next").request))
+                assertEquals(refreshGrant("refresh-${next - 1}"), fixture.grants.last())
+            }
+            assertEquals(endings.size + 2, fixture.grants.size)
+            assertEquals(id, session.now())
+        }
+
+    @Test
+    fun aRefreshThatWasCancelledIsAnOutcomeAndTheNextRejectedRequestStartsANewOne() =
+        test {
+            val session = signedIn()
+            val asked = CompletableDeferred<Unit>()
+            fixture.answer = {
+                asked.complete(Unit)
+                awaitCancellation()
+            }
+            val waiting = async { session.authorised(FakeMal().request) }
+            asked.await()
+            fixture.sessionScope.coroutineContext.job.children
+                .forEach { it.cancel() }
+            assertEquals(Outcome.Failure(DataError.ServerError), waiting.await())
+            assertTrue(fixture.sessionScope.isActive)
+
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+            assertEquals(2, fixture.grants.size)
+        }
+
+    @Test
+    fun onADispatcherThatRunsAtOnceARefreshAnsweredWithoutSuspendingLeavesNothingBehind() =
+        test {
+            val session = fixture.open(dispatcher = Dispatchers.Unconfined)
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            fixture.answer = { TokenReply.NoAnswer(DataError.NoConnection) }
+            assertEquals(Outcome.Failure(DataError.NoConnection), session.authorised(FakeMal().request))
+
+            fixture.answer = { granted("access-2", "refresh-2") }
+            val mal = FakeMal("access-2")
+            assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
+            assertEquals(listOf("access-1", "access-2"), mal.sent)
+            assertEquals(2, fixture.grants.size)
+        }
+
+    @Test
+    fun aRequestRejectedAfterAnothersRefreshFinishedRetriesWithTheNewTokenAndAsksForNoSecondRefresh() =
+        test {
+            val session = signedIn()
+            val id = session.now()
+            // MAL revokes a refresh token once it was used.
+            fixture.answer = { if (fixture.grants.size == 1) granted("access-2", "refresh-2") else TokenReply.Answer(400, "") }
+            val mal = FakeMal("access-2")
+            val parked = CompletableDeferred<Unit>()
+            val answered = CompletableDeferred<Unit>()
+            val sent = mutableListOf<String>()
+            val late =
+                async {
+                    session.authorised { token ->
+                        sent += token
+                        if (token == "access-1") {
+                            parked.complete(Unit)
+                            answered.await()
+                        }
+                        mal.request.send(token)
+                    }
+                }
+            parked.await()
+            assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
+            assertEquals(1, fixture.grants.size)
+
+            answered.complete(Unit)
+            assertEquals(Outcome.Success("access-2"), late.await())
+            assertEquals(listOf("access-1", "access-2"), sent)
+            assertEquals(listOf(refreshGrant("refresh-1")), fixture.grants)
+            assertEquals(id, session.now())
+        }
+
+    @Test
+    fun aRefreshedPairThatCannotBeWrittenIsReportedAndServesThisProcess() =
+        test {
+            val cipher = FailingCipher(fixture.cipher)
+            val session = fixture.open(cipher)
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            val id = session.now()
+            cipher.seals = false
+            fixture.answer = { granted("access-2", "refresh-2") }
+            val mal = FakeMal("access-2")
+            assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
+            assertEquals(listOf("java.io.IOException"), fixture.reported)
+            assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
+            assertEquals(listOf("access-1", "access-2", "access-2"), mal.sent)
+            assertEquals(1, fixture.grants.size)
+            assertEquals(id, session.now())
+            // The file still holds the pair MAL has replaced: that is what the report is about.
+            assertTrue(stored().contains(" access-1 refresh-1 "))
+        }
+
+    // A store that works until [broken], then throws what no caller of a store expects.
+    private class BreakingFormat(
+        private val real: Serializer<Stored>,
+        var broken: Boolean = false,
+    ) : Serializer<Stored> by real {
+        override suspend fun readFrom(input: InputStream): Stored =
+            if (broken) throw IllegalStateException("broken") else real.readFrom(input)
+
+        override suspend fun writeTo(
+            t: Stored,
+            output: OutputStream,
+        ) = if (broken) throw IllegalStateException("broken") else real.writeTo(t, output)
+    }
+
+    @Test
+    fun anExceptionOfTheStoreDuringARefreshIsReportedAndRefreshingGoesOn() =
+        test {
+            val format = BreakingFormat(fixture.format())
+            val session = fixture.open(format = format)
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            format.broken = true
+            for (next in 2..3) {
+                fixture.answer = { granted("access-$next", "refresh-$next") }
+                assertEquals(Outcome.Success("access-$next"), session.authorised(FakeMal("access-$next").request))
+                assertEquals(refreshGrant("refresh-${next - 1}"), fixture.grants.last())
+            }
+            assertEquals(2, fixture.grants.size)
+            assertEquals(List(2) { "java.lang.IllegalStateException" }, fixture.reported)
+            assertTrue(fixture.sessionScope.isActive)
+        }
+
+    @Test
+    fun aStoreThatThrowsWhenReadIsSignedOutAndReported() =
+        test {
+            signedIn().now()
+            fixture.close()
+            val session = fixture.open(format = BreakingFormat(fixture.format(), broken = true))
+            assertEquals(Session.SignedOut, session.now())
+            assertEquals(listOf("java.lang.IllegalStateException"), fixture.reported)
+            val mal = FakeMal("access-1")
+            assertEquals(expired, session.authorised(mal.request))
+            assertEquals(emptyList<String>(), mal.sent)
+            assertEquals(Outcome.Failure(DataError.StorageError), session.signIn(TokenGrant("access-1", "refresh-1")))
+            session.signOut()
+            session.renewIfDue()
+            assertEquals(Session.SignedOut, session.now())
+            assertTrue(fixture.sessionScope.isActive)
+        }
+
+    @Test
+    fun tokensDatedInTheFutureAreDue() =
+        test {
+            val session = signedIn()
+            val id = session.now()
+            fixture.clock.advance(Duration.ofSeconds(-1))
+            fixture.answer = { granted("access-2", "refresh-2") }
+            session.renewIfDue()
+            assertEquals(listOf(refreshGrant("refresh-1")), fixture.grants)
+
+            // The renewed pair is dated by the clock as it is now.
+            session.renewIfDue()
+            fixture.clock.advance(RENEW_AFTER - Duration.ofSeconds(1))
+            session.renewIfDue()
+            assertEquals(1, fixture.grants.size)
             assertEquals(id, session.now())
         }
 
@@ -387,9 +618,15 @@ class MalSessionTest {
                 asked.complete(Unit)
                 answer.await()
             }
-            val request = launch { session.authorised(FakeMal().request) }
+            var returned = false
+            val request =
+                launch {
+                    session.authorised(FakeMal().request)
+                    returned = true
+                }
             asked.await()
             request.cancelAndJoin()
+            assertFalse(returned)
             answer.complete(granted("access-2", "refresh-2"))
 
             val mal = FakeMal("access-2")
@@ -496,12 +733,56 @@ class MalSessionTest {
         }
 
     @Test
-    fun aStoreThatCannotBeReadIsSignedOut() =
+    fun aFileThatNamesNoSignInIsSignedOut() =
         test {
             fixture.file.writeBytes(byteArrayOf(1, 2, 3))
             val session = fixture.open()
             assertEquals(Session.SignedOut, session.now())
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access-1", "refresh-1")))
             assertTrue(fixture.reopen().now() is Session.SignedIn)
+        }
+
+    @Test
+    fun aStartThatCannotOpenTheTokensIsExpiredForItsSignInAndTheNextStartRecovers() =
+        test {
+            val id = (signedIn().now() as Session.SignedIn).signIn
+            val file = fixture.file.readBytes().toList()
+            val session = fixture.reopen(FailingCipher(fixture.cipher, opens = false))
+            session.observeSession().test {
+                assertEquals(Session.Expired(id), awaitItem())
+                expectNoEvents()
+            }
+            // Nothing is sent, and the file is as it was.
+            val mal = FakeMal("access-1")
+            assertEquals(expired, session.authorised(mal.request))
+            session.renewIfDue()
+            assertEquals(emptyList<String>(), mal.sent)
+            assertEquals(emptyList<Map<String, String>>(), fixture.grants)
+            assertEquals(file, fixture.file.readBytes().toList())
+
+            val next = fixture.reopen()
+            assertEquals(Session.SignedIn(id), next.now())
+            assertEquals(Outcome.Success("access-1"), next.authorised(mal.request))
+        }
+
+    @Test
+    fun afterAStartThatCannotOpenTheTokensASignOutOrANewSignInStillWorks() =
+        test {
+            val id = (signedIn().now() as Session.SignedIn).signIn
+            val closed = FailingCipher(fixture.cipher, opens = false)
+            val session = fixture.reopen(closed)
+            assertEquals(Session.Expired(id), session.now())
+            session.signIn(TokenGrant("access-2", "refresh-2"))
+            val other = session.now()
+            assertTrue(other is Session.SignedIn)
+            assertNotEquals(Session.SignedIn(id), other)
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+
+            val again = fixture.reopen(closed)
+            assertEquals(Session.Expired((other as Session.SignedIn).signIn), again.now())
+            again.signOut()
+            assertEquals(Session.SignedOut, again.now())
+            assertEquals(0L, fixture.file.length())
+            assertEquals(Session.SignedOut, fixture.reopen().now())
         }
 }

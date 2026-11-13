@@ -5,6 +5,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -16,7 +18,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
-import java.security.ProviderException
 
 // S8, on the file alone; the Keystore's key is the device test's.
 @RunWith(RobolectricTestRunner::class)
@@ -25,15 +26,15 @@ class TokenStoreTest {
     val folder = TemporaryFolder()
 
     private val fixtures = mutableListOf<SessionFixture>()
-    private val old = Stored.SignedIn(Tokens("sign-in", "old-access", "old-refresh", 100))
-    private val new = Stored.SignedIn(Tokens("sign-in", "new-access", "new-refresh", 200))
+    private val old = Stored.SignedIn(Tokens(SIGN_IN, "old-access", "old-refresh", 100))
+    private val new = Stored.SignedIn(Tokens(SIGN_IN, "new-access", "new-refresh", 200))
 
     private fun fixture(directory: File = folder.newFolder()) = SessionFixture(directory).also { fixtures += it }
 
     @After
     fun close() = runBlocking { fixtures.forEach { it.close() } }
 
-    private suspend fun SessionFixture.reread(format: Serializer<Stored> = TokenFormat(AesGcmCipher { key })): Stored {
+    private suspend fun SessionFixture.reread(format: Serializer<Stored> = format()): Stored {
         close()
         return store(format).read()
     }
@@ -43,23 +44,24 @@ class TokenStoreTest {
         runBlocking {
             val fixture = fixture()
             assertEquals("signed out", fixture.store().read().text())
-            for (value in listOf(old, new, Stored.Expired("sign-in"), old, Stored.Expired("other"), Stored.SignedOut)) {
-                assertTrue(fixture.apply { close() }.store().write(value))
+            for (value in listOf(old, new, Stored.Expired(SIGN_IN), old, Stored.Expired(OTHER_SIGN_IN), Stored.SignedOut)) {
+                assertNull(fixture.apply { close() }.store().write(value))
                 assertEquals(value.text(), fixture.reread().text())
             }
         }
 
     @Test
-    fun theFileHoldsNoTokenInTheClearAndNoneAtAllOnceTheyAreGone() =
+    fun theFileHoldsTheSignInAndNoTokenInTheClearAndNoneAtAllOnceTheyAreGone() =
         runBlocking {
             val fixture = fixture()
             val store = fixture.store()
             store.write(old)
             val sealed = fixture.file.readBytes().toString(Charsets.ISO_8859_1)
-            assertTrue(sealed.length > "old-access old-refresh".length)
-            for (secret in listOf("old-access", "old-refresh")) assertFalse(secret in sealed)
-            store.write(Stored.Expired("sign-in"))
-            assertEquals("\u0000sign-in", fixture.file.readText())
+            assertTrue(sealed.startsWith("\u0001$SIGN_IN"))
+            assertTrue(sealed.length > "\u0001$SIGN_IN old-access old-refresh".length)
+            for (secret in listOf("old-access", "old-refresh", "access", "refresh")) assertFalse(secret in sealed)
+            store.write(Stored.Expired(SIGN_IN))
+            assertEquals("\u0000$SIGN_IN", fixture.file.readText())
             store.write(Stored.SignedOut)
             assertEquals(0L, fixture.file.length())
         }
@@ -89,8 +91,7 @@ class TokenStoreTest {
             val before = fixture()
             before.store().write(old)
             before.close()
-            val key = before.key
-            val format = TokenFormat(AesGcmCipher { key })
+            val format = before.format()
 
             var cuts = 0
             while (true) {
@@ -101,14 +102,14 @@ class TokenStoreTest {
                     CutFormat(format, cuts) {
                         left = folder.newFolder().also { live.file.parentFile!!.copyRecursively(it) }
                     }
-                val written = live.store(cutting).write(new)
+                val failure = live.store(cutting).write(new)
                 val directory = left
                 if (directory == null) {
-                    assertTrue(written)
+                    assertNull(failure)
                     assertEquals(new.text(), live.reread(format).text())
                     break
                 }
-                assertFalse(written)
+                assertNotNull(failure)
                 assertEquals("cut after $cuts bytes", old.text(), fixture(directory).store(format).read().text())
                 assertEquals("after the failed write", old.text(), live.reread(format).text())
                 cuts++
@@ -118,26 +119,30 @@ class TokenStoreTest {
         }
 
     @Test
-    fun aFileThatCannotBeReadIsSignedOutAndTheNextWriteReplacesIt() =
+    fun aFileThatNamesNoSignInIsSignedOutAndTheNextWriteReplacesIt() =
         runBlocking {
             val sealed = fixture().apply { store().write(old) }.file.readBytes()
-            val unreadable =
+            val id = SIGN_IN.encodeToByteArray()
+            val nameless =
                 listOf(
                     byteArrayOf(1),
                     byteArrayOf(7, 7, 7),
                     byteArrayOf(0),
-                    sealed.copyOf(sealed.size - 1),
                     sealed.copyOf(20),
-                    sealed.clone().also { it[it.size / 2] = (it[it.size / 2] + 1).toByte() },
-                    // Sealed with a key this store does not have.
-                    sealed,
+                    sealed.clone().also { it[5] = 'x'.code.toByte() },
+                    byteArrayOf(7) + sealed.drop(1),
+                    byteArrayOf(0) + "PNG\u0000 and what else a foreign file has".encodeToByteArray().copyOf(36),
+                    byteArrayOf(0) + SIGN_IN.uppercase().encodeToByteArray(),
+                    byteArrayOf(0) + id + id,
+                    byteArrayOf(0) + id.copyOf(35),
                 )
-            for (bytes in unreadable) {
+            for ((index, bytes) in nameless.withIndex()) {
                 val fixture = fixture()
                 fixture.file.writeBytes(bytes)
                 val store = fixture.store()
-                assertEquals("signed out", store.read().text())
-                assertTrue(store.write(new))
+                assertEquals("$index", "signed out", store.read().text())
+                assertEquals("$index", bytes.toList(), fixture.file.readBytes().toList())
+                assertNull(store.write(new))
                 assertEquals(new.text(), fixture.reread().text())
             }
         }
@@ -150,23 +155,45 @@ class TokenStoreTest {
             assertEquals("signed out", fixture.store().read().text())
         }
 
-    private class FailingCipher(
-        private val real: TokenCipher,
-        var opens: Boolean = true,
-        var seals: Boolean = true,
-    ) : TokenCipher {
-        override fun seal(plain: ByteArray): ByteArray = if (seals) real.seal(plain) else throw ProviderException("no Keystore")
-
-        override fun open(sealed: ByteArray): ByteArray = if (opens) real.open(sealed) else throw ProviderException("no Keystore")
-    }
+    @Test
+    fun tokensThatDoNotOpenLeaveTheirSignInExpiredAndTheFileAsItIs() =
+        runBlocking {
+            val source = fixture()
+            source.store().write(old)
+            val sealed = source.file.readBytes()
+            val other = fixture()
+            val closed = FailingCipher(source.cipher, opens = false)
+            // What the file holds, and the format that reads it: the first four with the key that sealed it.
+            val unopened =
+                listOf(
+                    sealed.copyOf(sealed.size - 1) to source.format(),
+                    sealed.clone().also { it[it.size - 20] = (it[it.size - 20] + 1).toByte() } to source.format(),
+                    sealed.copyOf(37) to source.format(),
+                    sealed to source.format(name = "another"),
+                    sealed to other.format(),
+                    sealed to source.format(closed),
+                )
+            for ((index, case) in unopened.withIndex()) {
+                val (bytes, format) = case
+                closed.opens = false
+                val fixture = fixture()
+                fixture.file.writeBytes(bytes)
+                val store = fixture.store(format)
+                assertEquals("$index", "expired $SIGN_IN", store.read().text())
+                assertEquals("$index", bytes.toList(), fixture.file.readBytes().toList())
+                closed.opens = true
+                assertNull(store.write(new))
+                assertEquals("$index", new.text(), fixture.reread(format).text())
+            }
+        }
 
     @Test
-    fun aReadThatFailedLeavesTheSessionForTheNextProcess() =
+    fun aStartThatCannotOpenTheTokensLeavesThemForTheNext() =
         runBlocking {
             val fixture = fixture()
             fixture.store().write(old)
-            val failing = FailingCipher(AesGcmCipher { fixture.key }, opens = false)
-            assertEquals("signed out", fixture.reread(TokenFormat(failing)).text())
+            val failing = FailingCipher(fixture.cipher, opens = false)
+            assertEquals("expired $SIGN_IN", fixture.reread(fixture.format(failing)).text())
             assertEquals(old.text(), fixture.reread().text())
         }
 
@@ -176,8 +203,8 @@ class TokenStoreTest {
             val fixture = fixture()
             fixture.store().write(old)
             fixture.close()
-            val store = fixture.store(TokenFormat(FailingCipher(AesGcmCipher { fixture.key }, seals = false)))
-            assertFalse(store.write(new))
+            val store = fixture.store(fixture.format(FailingCipher(fixture.cipher, seals = false)))
+            assertNotNull(store.write(new))
             assertEquals(old.text(), store.read().text())
             assertEquals(old.text(), fixture.reread().text())
         }

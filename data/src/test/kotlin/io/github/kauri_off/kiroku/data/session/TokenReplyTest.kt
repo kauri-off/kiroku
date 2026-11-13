@@ -59,7 +59,7 @@ class TokenReplyTest {
 
     @Test
     fun noTextOfTheTokensHoldsOne() {
-        val tokens = Tokens("sign-in", "secret-access", "secret-refresh", 0)
+        val tokens = Tokens(SIGN_IN, "secret-access", "secret-refresh", 0)
         val texts =
             listOf(
                 tokens,

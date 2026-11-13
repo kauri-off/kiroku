@@ -1,6 +1,8 @@
 package io.github.kauri_off.kiroku.data.session
 
+import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
+import android.security.keystore.KeyProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
@@ -21,6 +23,7 @@ import org.junit.Test
 import java.io.File
 import java.security.KeyStore
 import java.time.Clock
+import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
 
@@ -89,15 +92,31 @@ class KeystoreSessionTest {
         }
 
     @Test
-    fun withoutItsKeyTheStoreIsSignedOutAndANewSignInWorks() =
+    fun withoutItsKeyTheSignInIsExpiredAndANewSignInWorks() =
         runBlocking {
-            open().signIn(TokenGrant("device-access-token", "device-refresh-token"))
+            val first = open()
+            first.signIn(TokenGrant("device-access-token", "device-refresh-token"))
+            val id = (first.observeSession().first() as Session.SignedIn).signIn
             open()
             keystore.deleteEntry(KEY_ALIAS)
             val session = open()
-            assertEquals(Session.SignedOut, session.observeSession().first())
+            assertEquals(Session.Expired(id), session.observeSession().first())
             assertEquals(emptyList<String>(), session.sent())
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("new-access", "new-refresh")))
             assertEquals(listOf("new-access"), open().sent())
+        }
+
+    @Test
+    fun aKeyThatSealsNothingIsReplaced() =
+        runBlocking {
+            val unfit =
+                KeyGenParameterSpec
+                    .Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
+                    .build()
+            KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply { init(unfit) }.generateKey()
+            assertEquals(Outcome.Success(Unit), open().signIn(TokenGrant("device-access-token", "device-refresh-token")))
+            assertEquals(listOf("device-access-token"), open().sent())
         }
 }

@@ -11,6 +11,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.GeneralSecurityException
+import java.util.UUID
 
 // One per file and process: a second one on the same file fails at its first use.
 internal class TokenStore(
@@ -20,7 +21,7 @@ internal class TokenStore(
 ) {
     private val store = DataStoreFactory.create(serializer = format, scope = scope) { file }
 
-    // A file that cannot be read is signed out, and is left as it is until the next write.
+    // A file that names no sign-in is signed out, and is left as it is until the next write.
     suspend fun read(): Stored =
         try {
             store.data.first()
@@ -28,8 +29,8 @@ internal class TokenStore(
             Stored.SignedOut
         }
 
-    // False when the value could not be written; the file then holds what it held.
-    suspend fun write(value: Stored): Boolean {
+    // The failure when the value could not be written; the file then holds what it held.
+    suspend fun write(value: Stored): IOException? {
         var wasRead = false
         val update: suspend (Stored) -> Stored = {
             wasRead = true
@@ -37,46 +38,67 @@ internal class TokenStore(
         }
         try {
             store.updateData(update)
-            return true
-        } catch (_: IOException) {
-            if (wasRead) return false
+            return null
+        } catch (e: IOException) {
+            if (wasRead) return e
         }
         // What the file held could not be read, so nothing is lost by replacing it.
         file.delete()
         return try {
             store.updateData(update)
-            true
-        } catch (_: IOException) {
-            false
+            null
+        } catch (e: IOException) {
+            e
         }
     }
 }
 
-// An empty file is signed out; EXPIRED comes before the expired sign-in's id, SEALED before the sealed tokens.
+// An empty file is signed out; else a marker and the sign-in's id in the clear, and after SEALED the sealed tokens.
 internal class TokenFormat(
     private val cipher: TokenCipher,
+    private val name: String,
 ) : Serializer<Stored> {
     override val defaultValue: Stored = Stored.SignedOut
 
+    // Tokens that do not open leave their sign-in expired for this process, and the file as it is.
     override suspend fun readFrom(input: InputStream): Stored {
         val bytes = input.readBytes()
+        if (bytes.isEmpty()) return Stored.SignedOut
+        val signIn = signInIn(bytes) ?: throw CorruptionException(UNREADABLE)
         return when {
-            bytes.isEmpty() -> Stored.SignedOut
-            bytes.size > 1 && bytes[0] == EXPIRED -> Stored.Expired(bytes.decodeToString(startIndex = 1))
-            else -> Stored.SignedIn(unsealed(bytes))
+            bytes[0] == EXPIRED && bytes.size == HEAD -> Stored.Expired(signIn)
+            bytes[0] == SEALED -> unsealed(bytes)?.let(Stored::SignedIn) ?: Stored.Expired(signIn)
+            else -> throw CorruptionException(UNREADABLE)
         }
     }
 
-    // The cause is left out: a parser's message quotes its input.
-    private fun unsealed(bytes: ByteArray): Tokens =
-        try {
-            if (bytes[0] != SEALED) throw CorruptionException(UNREADABLE)
-            json.decodeFromString<Tokens>(cipher.open(bytes.copyOfRange(1, bytes.size)).decodeToString())
-        } catch (_: GeneralSecurityException) {
-            throw CorruptionException(UNREADABLE)
-        } catch (_: RuntimeException) {
-            throw CorruptionException(UNREADABLE)
+    // Only a well-formed id counts: a foreign file is not an expired session.
+    private fun signInIn(bytes: ByteArray): String? {
+        if (bytes.size < HEAD) return null
+        val text = bytes.decodeToString(1, HEAD)
+        return try {
+            text.takeIf { UUID.fromString(it).toString() == it }
+        } catch (_: IllegalArgumentException) {
+            null
         }
+    }
+
+    private fun unsealed(bytes: ByteArray): Tokens? =
+        try {
+            json.decodeFromString<Tokens>(cipher.open(bytes.copyOfRange(HEAD, bytes.size), bound(bytes)).decodeToString())
+        } catch (_: GeneralSecurityException) {
+            null
+        } catch (_: RuntimeException) {
+            null
+        }
+
+    // The marker, the id and the file's name: tokens moved under another of them do not open.
+    private fun bound(head: ByteArray): ByteArray = head.copyOf(HEAD) + name.encodeToByteArray()
+
+    private fun head(
+        marker: Byte,
+        signIn: String,
+    ): ByteArray = byteArrayOf(marker) + signIn.encodeToByteArray()
 
     override suspend fun writeTo(
         t: Stored,
@@ -84,23 +106,26 @@ internal class TokenFormat(
     ) {
         when (t) {
             Stored.SignedOut -> Unit
-            is Stored.Expired -> output.write(byteArrayOf(EXPIRED) + t.signIn.encodeToByteArray())
-            is Stored.SignedIn -> output.write(byteArrayOf(SEALED) + sealed(t.tokens))
+            is Stored.Expired -> output.write(head(EXPIRED, t.signIn))
+            is Stored.SignedIn -> output.write(sealed(t.tokens))
         }
     }
 
-    private fun sealed(tokens: Tokens): ByteArray =
-        try {
-            cipher.seal(json.encodeToString(tokens).encodeToByteArray())
+    private fun sealed(tokens: Tokens): ByteArray {
+        val head = head(SEALED, tokens.signIn)
+        return try {
+            head + cipher.seal(json.encodeToString(tokens).encodeToByteArray(), bound(head))
         } catch (e: GeneralSecurityException) {
             throw IOException(UNSEALABLE, e)
         } catch (e: RuntimeException) {
             throw IOException(UNSEALABLE, e)
         }
+    }
 
     private companion object {
         const val EXPIRED: Byte = 0
         const val SEALED: Byte = 1
+        const val HEAD = 37
         const val UNREADABLE = "The token file cannot be read"
         const val UNSEALABLE = "The tokens cannot be sealed"
         val json = Json { ignoreUnknownKeys = true }

@@ -98,8 +98,9 @@ From MAL's authorization reference:
 - The only grant is the authorization code grant with PKCE, and **only the `plain` PKCE method**: the code
   challenge equals the code verifier, 43 to 128 characters. Kiroku's client has no secret. This is the strongest
   flow MAL offers: an app that intercepts the redirect cannot redeem the code without the verifier.
-- The reference contradicts itself on the access token's lifetime, so Kiroku trusts only the `expires_in` it
-  receives. The refresh token lives one month. A refresh returns a new pair and revokes the old one.
+- The reference contradicts itself on the access token's lifetime, so Kiroku assumes no lifetime: it refreshes
+  when MAL rejects the access token. The refresh token lives one month. A refresh returns a new pair and revokes
+  the old one.
 
 | Value | Release build | Debug build |
 |---|---|---|
