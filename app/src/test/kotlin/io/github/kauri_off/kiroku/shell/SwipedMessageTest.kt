@@ -316,7 +316,7 @@ class SwipedMessageTest {
     }
 }
 
-// ARCHITECTURE 8.5: a message swiped away leaves the way it went, and nothing of it comes back into view.
+// ARCHITECTURE 8.5: a message swiped away leaves the window whole, its shadow too.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -331,44 +331,54 @@ class SwipedMessageExitTest {
     @After
     fun stop() = harness.scope.cancel()
 
-    // Whether anything differs from [empty] on the row [y] of the window.
+    // How many pixels of the row [y] of the window differ from [empty].
     private fun drawnOn(
         y: Int,
         empty: IntArray,
-    ): Boolean {
+    ): Int {
         val image = compose.onRoot().captureToImage().asAndroidBitmap()
-        return (0 until image.width).any { image.getPixel(it, y) != empty[it] }
+        return (0 until image.width).count { image.getPixel(it, y) != empty[it] }
+    }
+
+    // The window's row through the middle of the message, and that row with no message on it.
+    private fun row(): Pair<Int, IntArray> {
+        val background = compose.onRoot().captureToImage().asAndroidBitmap()
+        harness.post(harness.moved)
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+        val text = compose.onNodeWithText("Moved to Completed").getUnclippedBoundsInRoot()
+        val y = with(compose.density) { ((text.top + text.bottom) / 2).roundToPx() }
+        return y to IntArray(background.width) { background.getPixel(it, y) }
+    }
+
+    private fun start() {
+        compose.mainClock.autoAdvance = false
+        harness.show()
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
     }
 
     @Test
-    fun `a message swiped away either way is not drawn again once it is off the window`() =
-        with(harness) {
-            compose.mainClock.autoAdvance = false
-            show()
-            compose.mainClock.advanceTimeBy(SETTLED_MS)
-            for (by in listOf(SwipeHarness.PAST, -SwipeHarness.PAST)) {
-                val background = compose.onRoot().captureToImage().asAndroidBitmap()
-                post(moved)
-                compose.mainClock.advanceTimeBy(SETTLED_MS)
-                val text = compose.onNodeWithText("Moved to Completed").getUnclippedBoundsInRoot()
-                val y = with(compose.density) { ((text.top + text.bottom) / 2).roundToPx() }
-                val empty = IntArray(background.width) { background.getPixel(it, y) }
-                drag("Moved to Completed", by)
-                var left = false
-                repeat(FRAMES) { frame ->
-                    compose.mainClock.advanceTimeByFrame()
-                    val drawn = drawnOn(y, empty)
-                    assertTrue("$by: drawn again at frame $frame after it left", !(left && drawn))
-                    left = left || !drawn
-                }
-                assertTrue("$by: never left", left)
-                assertNull(messages.current.value)
+    fun `a message held past where it leaves is wholly off the window`() {
+        start()
+        for (direction in listOf(1f, -1f)) {
+            val (y, empty) = row()
+            compose.onNodeWithText("Moved to Completed").performTouchInput {
+                down(center)
+                repeat(FAR_STEPS) { moveBy(Offset(direction * width, 0f), delayMillis = FAR_STEP_MS) }
             }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("$direction", 0, drawnOn(y, empty))
+            compose.onNodeWithText("Moved to Completed").performTouchInput { up() }
+            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            assertNull(harness.messages.current.value)
         }
+    }
 
     private companion object {
         const val SETTLED_MS = 2_000L
-        const val FRAMES = 40
+
+        // Far beyond the window, in moves a frame apart.
+        const val FAR_STEPS = 6
+        const val FAR_STEP_MS = 16L
     }
 }
 

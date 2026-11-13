@@ -29,8 +29,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import io.github.kauri_off.kiroku.design.theme.AtSystemScale
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -60,12 +60,14 @@ private fun SwipeableSnackbar(data: SnackbarData) {
         data.dismiss()
     }
     val action = data.visuals.actionLabel
+    val density = LocalDensity.current
     Snackbar(
         modifier =
             Modifier
                 .padding(Spacing.m)
                 .onSizeChanged {
-                    val width = it.width.toFloat()
+                    // With both margins, as SwipeToDismissBox moves it, so neither it nor its shadow stays in view.
+                    val width = it.width + with(density) { (Spacing.m * 2).toPx() }
                     state.updateAnchors(
                         DraggableAnchors {
                             Swiped.ToStart at -width
@@ -78,9 +80,7 @@ private fun SwipeableSnackbar(data: SnackbarData) {
                     orientation = Orientation.Horizontal,
                     enabled = state.settledValue == Swiped.No,
                     flingBehavior = AnchoredDraggableDefaults.flingBehavior(state, AnchoredDraggableDefaults.PositionalThreshold, settle),
-                ).offset { IntOffset(state.offset.takeUnless { it.isNaN() }?.roundToInt() ?: 0, 0) }
-                // Gone once swiped off, so the host's shrinking exit does not pull it back into view.
-                .drawWithContent { if (state.settledValue == Swiped.No) drawContent() },
+                ).offset { IntOffset(state.offset.takeUnless { it.isNaN() }?.roundToInt() ?: 0, 0) },
         action =
             action?.let {
                 {
