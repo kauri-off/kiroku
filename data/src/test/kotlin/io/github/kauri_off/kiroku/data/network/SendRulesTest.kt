@@ -23,6 +23,7 @@ import org.junit.Test
 import java.io.IOException
 import java.net.SocketTimeoutException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 // Section 6.4: a write is sent once; a read may be asked again.
@@ -206,12 +207,13 @@ class SendRulesTest {
     }
 
     @Test
-    fun `a read reaches the server three times at most when its connection drops each time`() {
+    fun `a read reaches the server no more often than it may be asked when its connection drops each time`() {
+        network.repeatReadsAfter = listOf(1.milliseconds)
         useConnection()
         repeat(4) { network.api.enqueue(dropped()) }
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { read() })
-        assertEquals(listOf("GET", "GET", "GET", "GET"), sent())
+        assertEquals(listOf("GET", "GET", "GET"), sent())
     }
 
     @Test
