@@ -9,12 +9,15 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -69,11 +72,26 @@ class SignInScreenTest {
             .config
             .getOrNull(SemanticsProperties.LiveRegion)
 
+    private fun mark() = compose.onNodeWithTag(SignInTags.mark, useUnmergedTree = true).fetchSemanticsNode()
+
     @Test
     fun theScreenShowsItsBudgetAndNothingElse() {
         show(SignInState.Ready)
         assertEquals(expected(SENTENCE), shown())
         assertEquals(null, liveRegion(SENTENCE))
+        val mark = mark()
+        assertTrue(mark.layoutInfo.isPlaced)
+        assertEquals(null, mark.config.getOrNull(SemanticsProperties.ContentDescription))
+        val sentence = compose.onNodeWithText(SENTENCE, useUnmergedTree = true).fetchSemanticsNode()
+        assertTrue(mark.boundsInRoot.bottom <= sentence.boundsInRoot.top)
+    }
+
+    @Test
+    @Config(qualifiers = "en-w360dp-h320dp-xhdpi", fontScale = 2f)
+    fun theMarkIsTheFirstToGiveWayWhenTheWindowHasNoRoomForIt() {
+        show(SignInState.Ready)
+        assertFalse(mark().layoutInfo.isPlaced)
+        assertEquals(expected(SENTENCE), shown())
     }
 
     @Test
