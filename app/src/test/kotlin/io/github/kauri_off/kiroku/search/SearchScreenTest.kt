@@ -141,6 +141,23 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `a new query that ends on the same row asks for its own next page`() {
+        val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready)))
+        // A shorter query whose first page is the same title.
+        show(results(SearchFixtureStates.query.take(5), Paged.Shown(rows.take(1), More.Ready)))
+        assertEquals(listOf(SearchEvent.LoadMore, SearchEvent.LoadMore), events)
+    }
+
+    @Test
+    fun `the same page shown again asks for nothing more`() {
+        val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
+        show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Ready)))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.toList(), More.Ready)))
+        assertEquals(listOf(SearchEvent.LoadMore), events)
+    }
+
+    @Test
     fun `a failed further page keeps the rows and offers Retry`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
         show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Failed(DataError.Refused))))

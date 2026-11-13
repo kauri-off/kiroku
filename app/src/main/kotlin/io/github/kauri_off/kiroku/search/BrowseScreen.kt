@@ -53,6 +53,7 @@ fun BrowseScreen(
                 } else {
                     SubScreenBody.List {
                         pagedRows(
+                            state.list,
                             rows.items,
                             rows.more,
                             R.string.search_browse_failed,

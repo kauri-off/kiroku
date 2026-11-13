@@ -210,6 +210,7 @@ private fun Results(
         CentredList(padding) {
             if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent) }
             pagedRows(
+                content.query,
                 results.items,
                 results.more,
                 R.string.search_failed,

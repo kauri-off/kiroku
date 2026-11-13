@@ -58,7 +58,7 @@ fun SearchRoute(
         if (searched.isNotEmpty()) recent = (listOf(searched) + recent).distinct().take(MAX_RECENT_SEARCHES)
     }
     SearchScreen(
-        SearchState(query, expanded = false, content, sessionExpired = session == Session.Expired),
+        SearchState(query, expanded = false, content, sessionExpired = session is Session.Expired),
         onEvent = { event ->
             when (event) {
                 SearchEvent.Submit -> keep(text)
@@ -97,7 +97,7 @@ fun BrowseRoute(
     val hits = remember(standIn, key) { standIn.browse(key.list) }
     val rows = Paged.Shown(hits.map { resultRow(it.anime, it.entryIn(listed)?.values, graph.titleLanguage, it.rank) })
     BrowseScreen(
-        BrowseState(key.list, rows, sessionExpired = session == Session.Expired),
+        BrowseState(key.list, rows, sessionExpired = session is Session.Expired),
         onEvent = { event ->
             when (event) {
                 BrowseEvent.Back -> onBack()

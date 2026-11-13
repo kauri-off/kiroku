@@ -18,4 +18,5 @@
     <string name="design_episode_plus">Plus one episode</string>
     <string name="design_episode_total">" /\u00A0%d"</string>
     <string name="design_mal_score">MAL score %1$s</string>
+    <string name="design_score_separator" translatable="false">" ·\u00A0"</string>
 </resources>

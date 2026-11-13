@@ -23,7 +23,9 @@ import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // The rows of the pages loaded, then what follows them: the next page's wait, or its failure with Retry.
+// [list] names what the rows are of (a query, a browse list), so a new list asks for its next page as an old one does.
 internal fun LazyListScope.pagedRows(
+    list: Any,
     rows: List<ResultRow>,
     more: More,
     @StringRes failed: Int,
@@ -37,10 +39,10 @@ internal fun LazyListScope.pagedRows(
         More.Ready, More.Loading ->
             item(key = MORE, contentType = MORE) {
                 LoadingMore()
-                // Asks for the next page when the end comes into view, and again with each page that arrives there.
+                // Asks for the next page when the end comes into view, and again with each page or list that ends there.
                 if (more == More.Ready) {
                     val load by rememberUpdatedState(onLoadMore)
-                    LaunchedEffect(rows.size) { load() }
+                    LaunchedEffect(list, rows.lastOrNull()?.id) { load() }
                 }
             }
         is More.Failed ->

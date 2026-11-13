@@ -133,7 +133,7 @@ private fun MalScore(trailing: RowTrailing.MalScore) {
     }
 }
 
-// A supporting line with the star and the score after it; the star never parts from its number.
+// A supporting line with the star and the score after it; a wrap falls before the score's "·", never after it.
 @Composable
 private fun ScoredLine(
     line: RowLine?,
@@ -141,22 +141,12 @@ private fun ScoredLine(
 ) {
     val separator = stringResource(R.string.common_separator)
     val spoken = listOfNotNull(line?.text, stringResource(R.string.design_mal_score, score.text)).joinToString(separator)
-    val text =
-        buildAnnotatedString {
-            line?.let {
-                append(it.text)
-                append(separator)
-            }
-            appendInlineContent(STAR)
-            append(NO_BREAK_SPACE)
-            append(score.text)
-        }
     val star =
-        InlineTextContent(Placeholder(1.em, 1.em, PlaceholderVerticalAlign.TextCenter)) {
+        InlineTextContent(scorePlaceholder) {
             Icon(painterResource(R.drawable.ic_star), contentDescription = null, modifier = Modifier.fillMaxSize())
         }
     Text(
-        text,
+        scoredLineText(line?.text, score.text, stringResource(R.string.design_score_separator)),
         inlineContent = mapOf(STAR to star),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -164,7 +154,24 @@ private fun ScoredLine(
     )
 }
 
-private val STAR = notShown("star")
+internal fun scoredLineText(
+    line: String?,
+    score: String,
+    separator: String,
+): AnnotatedString =
+    buildAnnotatedString {
+        line?.let {
+            append(it)
+            append(separator)
+        }
+        appendInlineContent(STAR)
+        append(NO_BREAK_SPACE)
+        append(score)
+    }
+
+internal val scorePlaceholder = Placeholder(1.em, 1.em, PlaceholderVerticalAlign.TextCenter)
+
+internal val STAR = notShown("star")
 private const val NO_BREAK_SPACE = '\u00A0'
 
 // The button's visible edge, not its touch target, ends on the content edge.
