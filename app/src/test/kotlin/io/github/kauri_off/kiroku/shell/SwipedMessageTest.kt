@@ -4,8 +4,11 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +47,7 @@ import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListEvent
 import io.github.kauri_off.kiroku.list.ListFixtureStates
+import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -109,6 +113,12 @@ private class SwipeHarness(
         text: String,
         by: Dp,
         millis: Long = FAST_MS,
+    ) = compose.onNodeWithText(text).performTouchInput { swipe(center, center + Offset(by.toPx(), 0f), millis) }
+
+    fun dragFrom(
+        text: String,
+        by: Dp,
+        millis: Long = SLOW_MS,
     ) = compose.onNodeWithText(text).performTouchInput { swipe(center, center + Offset(by.toPx(), 0f), millis) }
 
     fun left(text: String) = compose.onNodeWithText(text).getUnclippedBoundsInRoot().left
@@ -215,6 +225,23 @@ class SwipedMessageTest {
             compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).performSemanticsAction(SemanticsActions.Dismiss)
             compose.waitForIdle()
             assertEquals(moved, messages.current.value?.message)
+        }
+
+    // Without the List's guard, the swipe's own moves keep the action from taking the gesture for a tap.
+    @Test
+    fun `a swipe that starts on the action returns or dismisses the message and never runs the action`() =
+        with(harness) {
+            show()
+            val before = watched()
+            post(moved)
+            compose.waitForIdle()
+            dragFrom("Undo", SwipeHarness.SHORT)
+            compose.waitForIdle()
+            assertEquals(moved, messages.current.value?.message)
+            dragFrom("Undo", -SwipeHarness.PAST, SwipeHarness.FAST_MS)
+            compose.waitForIdle()
+            assertNull(messages.current.value)
+            assertEquals(before, watched())
         }
 
     // The swipe takes the message's own area, no more: its margin is no wider a dead zone than before.
@@ -434,5 +461,36 @@ class SwipedMessageOverPagesTest {
         assertEquals(rest, compose.onNodeWithText(row).getUnclippedBoundsInRoot().left)
         assertTrue("$events", events.none { it is ListEvent.SelectTab })
         compose.onNode(hasText("Watching") and isSelectable()).assertIsSelected()
+    }
+
+    // The List's guard keeps a travelled finger from tapping; the swipe still takes the gesture it starts on the action.
+    @Test
+    fun `on the List a swipe or a drag that starts on the action never runs it`() {
+        var result: SnackbarResult? = null
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                LaunchedEffect(Unit) { result = host.showSnackbar("Episode 13 watched", "Undo", duration = SnackbarDuration.Indefinite) }
+                ListScreen(ListFixtureStates.watching, {}, host)
+            }
+        }
+        compose.waitForIdle()
+        val rest = compose.onNodeWithText("Episode 13 watched").getUnclippedBoundsInRoot().left
+        compose.onNodeWithText("Undo").performTouchInput {
+            swipe(center, center + Offset(SwipeHarness.SHORT.toPx(), 0f), SwipeHarness.SLOW_MS)
+        }
+        compose.waitForIdle()
+        assertNull(result)
+        assertEquals(rest, compose.onNodeWithText("Episode 13 watched").getUnclippedBoundsInRoot().left)
+        compose.onNodeWithText("Undo").performTouchInput {
+            swipe(center, center - Offset(0f, SwipeHarness.SHORT.toPx()), SwipeHarness.SLOW_MS)
+        }
+        compose.waitForIdle()
+        assertNull(result)
+        compose.onNodeWithText("Undo").performTouchInput {
+            swipe(center, center - Offset(SwipeHarness.PAST.toPx(), 0f), SwipeHarness.FAST_MS)
+        }
+        compose.waitForIdle()
+        assertEquals(SnackbarResult.Dismissed, result)
     }
 }
