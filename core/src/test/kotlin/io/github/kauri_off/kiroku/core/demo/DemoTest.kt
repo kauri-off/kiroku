@@ -217,7 +217,7 @@ class DemoTest {
 
             assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
             assertEquals(Fixtures.reference.entries.toSet(), demo.server.entries().toSet())
-            assertEquals(Session.SignedIn(Fixtures.reference.user.name), demo.session.observeSession().first())
+            assertEquals(Fixtures.reference.session, demo.session.observeSession().first())
             assertNull(demo.anime.observeDetails(id).first())
             assertEquals(kotlin.time.Duration.ZERO, demo.server.latency)
             val failures = failures(demo)
@@ -287,7 +287,7 @@ class DemoTest {
     fun `signing out leaves no list and no profile`() =
         runTest {
             val demo = demo()
-            assertEquals(Session.SignedIn(Fixtures.reference.user.name), demo.session.observeSession().first())
+            assertEquals(Fixtures.reference.session, demo.session.observeSession().first())
             assertEquals(Fixtures.reference.user, demo.user.observeOwnProfile().first())
             demo.session.signOut()
             assertEquals(Session.SignedOut, demo.session.observeSession().first())

@@ -59,41 +59,47 @@ build needs is `platforms;android-37.2`; the client id is not needed for any che
 
 ## The queue rule (the maintainer's machine)
 
-This machine is shared with another project. Every Gradle run, emulator run and `adb` call goes through the shared
-job queue by way of `tools/gw` and `tools/emu`, including short ones; run them from inside your worktree. Never call
-`./gradlew`, `gradle`, `emulator` or `adb` directly: `adb` is used only inside `tools/emu run`, where it reaches that
-job's emulator and nothing else. Never touch the other project's virtual devices (`~/.android/avd*`), snapshots or
-jobs.
+Many agents build here at once. Every Gradle run, emulator run and `adb` call goes through Kiroku's job queue,
+`tools/q`, by way of `tools/gw` and `tools/emu`, including short ones; run them from inside your worktree.
+Never call `./gradlew`, `gradle`, `emulator` or `adb` directly: `adb` is used only inside `tools/emu run`, where it
+reaches that job's emulator and nothing else. Never touch a virtual device outside `~/.android/kiroku`.
 
 - `tools/gw [--kind test|check] <gradle arguments>` runs Gradle as a job. The default kind is `test` (one module,
-  filtered tests, a few screens); use `check` for whole-project runs. Gradle sees no device: a task that needs one
-  (`connected…`, `install…`) runs only as `tools/emu run tools/gw <task>`. Gradle managed devices are not used:
-  they start emulators outside `tools/emu`.
+  filtered tests, a few screens); use `check` for whole-project runs: the kind sets the memory the queue reserves.
+  Gradle sees no device: a task that needs one (`connected…`, `install…`) runs only as
+  `tools/emu run tools/gw <task>`. Gradle managed devices are not used: they start emulators outside `tools/emu`.
 - `tools/emu run <command> [args…]` (several commands: `tools/emu run sh -c '…'`) boots Kiroku's own API 36
   emulator from a clean state in the slot the queue assigns, runs the command in the worktree with `adb` on the
   `PATH`, then stops the command and the emulator. A run takes a minute or more, so expect exit 75 at first. The
-  emulator's log is `build/emu/emulator-<port>.log`. The queue counts an emu job like a `check` job, but one that
-  runs Gradle needs about 3 GiB more for the emulator: build first (`tools/gw assembleDebug
-  assembleDebugAndroidTest`), then run only the device task, which Gradle runs there with two workers.
+  emulator's log is `build/emu/emulator-<port>.log`. The emulator takes most of the job's memory: build first
+  (`tools/gw assembleDebug assembleDebugAndroidTest`), then run only the device task, which Gradle runs there
+  with two workers.
 - `tools/emu smoke <apk>` installs and launches the APK; it passes when the app reaches the foreground without a
   crash or an ANR, and writes two screenshots, the logcat and the crash buffer to `build/emu/smoke/`.
-- `tools/emu ps` lists running Kiroku emulators. `tools/selftest` tests both wrappers against a fake queue and SDK.
+- `tools/emu ps` lists running Kiroku emulators, `tools/q` the jobs and what each queued one waits for.
+  `tools/selftest` tests the queue and both wrappers with fake jobs.
 
-A call waits up to 100 seconds. When the job has ended, it prints the job's last 60 lines and the path of its full
-log, and exits with:
+A job's temporary files go to the directory the queue gives it (`$TMPDIR`, on disk, removed when the job ends) and
+never to `/tmp`, which is memory here.
+
+A call waits up to 100 seconds. When the job has ended, it prints the job's last 60 lines, the path of its full
+log and its memory peak, and exits with:
 
 | Exit | Meaning | What to do |
 |---|---|---|
 | 0 | Passed | |
 | 1, other | Gradle's or the command's own code. If it was 2, 69, 75, 76 or 125, the wrapper reports 1 and prints "… exited <n>, reported as 1" | Read the output |
-| 2 | The wrapper refused the call (arguments, kind, unknown job id, worktree); nothing ran | Fix the call |
+| 2 | The call was refused (arguments, kind, job id, worktree, branch behind `main`, main checkout behind it); nothing ran | Fix what the message names, or try again in a minute when it says so |
 | 69 | `tools/emu` only: no emulator could be started, or it died; the reason is printed | Not your command's result: run it once more; if it repeats, stop and report the reason |
 | 75 | The job is queued or running, or the queue could not report on it | Run the printed `--wait <id>` command again, as often as needed; do not start the job again |
-| 76 | The job is stalled | If the output explains the wait, wait again; otherwise stop it with `/home/anon/Projects/th_08/tools/q kill <id>` |
-| 125 | The job was stopped (`q kill`, or its worktree was removed) | Start it again if you still need the result |
+| 76 | The job is stalled | If the output explains the wait, wait again; otherwise stop it with `tools/q kill <id>` |
+| 125 | The job was stopped (`tools/q kill`, its worktree was removed, or the system killed it for lack of memory) | Start it again if you still need the result |
 
-Do not start a Gradle daemon, do not change the memory settings in `gradle.properties` without a measurement, and do
-not use the queue kinds `full`, `batch` or `long`.
+Do not start a Gradle daemon, and do not change the memory settings in `gradle.properties` or the limits in
+`tools/q.conf` without a measurement.
+
+`/tmp` is a RAM disk here: bulky scratch (recording frames, extracted files) goes under the worktree's `build/` and
+is deleted before the hand-off.
 
 ## The worktree rule
 
