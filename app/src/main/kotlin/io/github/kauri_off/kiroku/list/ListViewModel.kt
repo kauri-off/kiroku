@@ -214,7 +214,7 @@ class ListViewModel(
             sortSheetOpen = model.sortSheetOpen,
             filter = filter,
             refreshing = model.refreshing,
-            sessionExpired = session == Session.Expired,
+            sessionExpired = session is Session.Expired,
             now = pages.now,
         )
     }

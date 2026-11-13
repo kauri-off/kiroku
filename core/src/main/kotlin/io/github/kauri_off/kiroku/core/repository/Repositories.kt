@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -71,8 +72,27 @@ sealed interface ListWrite {
         override val anime: Anime get() = change.anime
     }
 
+    // Applies the failed write again as a new edit (W2).
+    data class Retry(
+        val failure: WriteFailure,
+    ) : ListWrite {
+        override val anime: Anime get() = failure.write.anime
+    }
+
     // "+1", the stepper and "Mark watched" move the count by a step rather than set it (section 7.3).
-    val steps: Boolean get() = this is MarkWatched || this is MarkNextWatched || this is StepWatched
+    val steps: Boolean
+        get() = this is MarkWatched || this is MarkNextWatched || this is StepWatched || (this is Retry && failure.write.steps)
+
+    // An Undo and a Retry belong to the list they were made in, and no other list takes them.
+    val bound: Boolean get() = this is Undo || this is Retry
+
+    val list: SignInId?
+        get() =
+            when (this) {
+                is Undo -> change.list
+                is Retry -> failure.list
+                else -> null
+            }
 
     fun applyTo(
         current: ListEntry?,
@@ -97,14 +117,16 @@ sealed interface ListWrite {
                     it.values.withWatched((it.values.watchedEpisodes + by).coerceAtLeast(0), it.anime.malEpisodes, today)
                 }
             is Undo -> change.revert(current)
+            is Retry -> failure.write.applyTo(current, today)
         }
 }
 
-// What one write did to its entry, read and applied as one step, so no other write comes between them (W3).
+// What one write did to its entry in the list of one sign-in, read and applied as one step (W3).
 data class ListChange(
     val before: ListEntry?,
     val after: ListEntry?,
     val stepped: Boolean,
+    val list: SignInId,
 ) {
     init {
         require(before != null || after != null)
@@ -134,10 +156,14 @@ data class ListChange(
     }
 }
 
+// A write that failed in the list of one sign-in; no sign-in when it was refused signed out.
 data class WriteFailure(
     val error: DataError,
-    val retry: ListWrite,
-)
+    val write: ListWrite,
+    val list: SignInId?,
+) {
+    val retry: ListWrite get() = ListWrite.Retry(this)
+}
 
 // The list as a screen sees it: read and synced, never written, so a write can only go through the shell.
 interface ListSource {
@@ -157,6 +183,7 @@ interface ListRepository : ListSource {
     fun observeWriteFailures(): Flow<WriteFailure>
 
     // Applies the write locally, whole even when its caller is cancelled; null when it changed nothing or was refused.
+    // A refusal is a write failure: `SessionExpired`, or `ListEnded` for an Undo or a Retry of another list.
     suspend fun write(write: ListWrite): ListChange?
 
     suspend fun send(write: ListWrite): Outcome<Unit>

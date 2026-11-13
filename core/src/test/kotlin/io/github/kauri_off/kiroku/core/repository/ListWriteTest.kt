@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.SignInId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -109,14 +110,17 @@ class ListWriteTest {
         now: ListValues?,
     ) = change.undo.applyTo(now?.let(::entry), today)
 
-    private val completing = ListChange(entry(watching(11)), entry(ListValues(ListStatus.Completed, 12, 8, earlier, day)), stepped = true)
+    private val list = SignInId("a")
+
+    private val completing =
+        ListChange(entry(watching(11)), entry(ListValues(ListStatus.Completed, 12, 8, earlier, day)), stepped = true, list)
 
     @Test
     fun `W3 Undo of a step takes back that step only, after later steps`() {
-        val change = ListChange(entry(watching(12)), entry(watching(13)), stepped = true)
+        val change = ListChange(entry(watching(12)), entry(watching(13)), stepped = true, list)
         assertEquals(watching(14), undo(change, watching(15)))
         assertEquals(watching(12), undo(change, watching(13)))
-        assertEquals(watching(0), undo(ListChange(entry(watching(0)), entry(watching(3)), stepped = true), watching(1)))
+        assertEquals(watching(0), undo(ListChange(entry(watching(0)), entry(watching(3)), stepped = true, list), watching(1)))
     }
 
     @Test
@@ -135,16 +139,16 @@ class ListWriteTest {
 
     @Test
     fun `W3 a typed count goes back only while it is still the count`() {
-        val typed = ListChange(entry(watching(9)), entry(watching(20)), stepped = false)
+        val typed = ListChange(entry(watching(9)), entry(watching(20)), stepped = false, list)
         assertEquals(watching(9).copy(score = 6), undo(typed, watching(20).copy(score = 6)))
         assertEquals(watching(21), undo(typed, watching(21)))
     }
 
     @Test
     fun `W3 Undo removes an entry the change added and brings back one it removed`() {
-        val added = ListChange(null, entry(watching(0)), stepped = false)
+        val added = ListChange(null, entry(watching(0)), stepped = false, list)
         assertNull(undo(added, watching(2)))
-        val removed = ListChange(entry(watching(4)), null, stepped = false)
+        val removed = ListChange(entry(watching(4)), null, stepped = false, list)
         assertEquals(watching(4), undo(removed, null))
         assertEquals(watching(1), undo(removed, watching(1)))
         assertNull(undo(completing, null))
