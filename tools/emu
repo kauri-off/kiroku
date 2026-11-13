@@ -5,15 +5,14 @@ USAGE="usage: tools/emu run CMD [ARGS...]   boot Kiroku's emulator as a queue jo
        tools/emu --wait ID           wait again for a job that is not finished
        tools/emu ps                  list running Kiroku emulators (no job)
 CMD runs in the worktree with adb on PATH; adb reaches this job's emulator and nothing else.
-Waits up to 100 s, then prints the job's last 60 lines and the path of its full log.
+Waits up to 100 s, then prints the job's last 60 lines, the path of its full log and its memory peak.
 Exit: CMD's code (1 = failed); 69 no emulator could be started, 75 not finished, 76 stalled, 125 job stopped,
 2 refused (nothing ran)."
 . "$(dirname "$0")/queue.sh"
 
 IMAGE='system-images;android-36;google_apis;x86_64'
 AVD=kiroku
-SLOTS=2
-PORT_BASE=${HOOK[port_base]:-5600}
+PORT_BASE=${HOOK[port_base]:-5640}
 K=${HOOK[avd_root]:-$(realpath -m -- "$HOME/.android")/kiroku}
 SLOT=
 PORT=
@@ -25,7 +24,7 @@ signalled=0
 kiroku_emulators() {
   local p argv e
   for p in /proc/[0-9]*; do
-    argv=$(tr '\0' ' ' < "$p/cmdline" 2> /dev/null) || continue
+    argv=$({ tr '\0' ' ' < "$p/cmdline"; } 2> /dev/null) || continue
     [[ $argv == *emulator* || $argv == *qemu-system* ]] || continue
     [[ " $argv " == *" -avd $AVD "* ]] || continue
     { mapfile -d '' -t e < "$p/environ"; } 2> /dev/null || continue
@@ -57,10 +56,9 @@ port_busy() {
 
 # The slot the queue gave this job, checked, and this slot's private adb environment.
 slot_env() {
-  [[ ${QEMU_SLOT:-} =~ ^[0-9]$ ]] && ((QEMU_SLOT < SLOTS)) && [[ ${QEMU_PORT:-} == $((PORT_BASE + 20 * QEMU_SLOT)) ]] ||
-    die "QEMU_SLOT and QEMU_PORT are not a slot of the queue (${QEMU_SLOT:-unset}, ${QEMU_PORT:-unset})"
-  SLOT=$QEMU_SLOT
-  PORT=$QEMU_PORT
+  [[ ${KIROKU_Q_SLOT:-} =~ ^[0-9]$ ]] || die "KIROKU_Q_SLOT is not a slot of the queue (${KIROKU_Q_SLOT:-unset})"
+  SLOT=$KIROKU_Q_SLOT
+  PORT=$((PORT_BASE + 4 * SLOT))
   # shellcheck disable=SC2086
   export ANDROID_SERIAL=emulator-$PORT ANDROID_ADB_SERVER_PORT=$((PORT + 10000)) $ADB_ISOLATION
   # shellcheck disable=SC2086
@@ -96,16 +94,16 @@ run_pids() {
 
 claim_run() {
   local l name
-  exec 8> "$K/run-slot$SLOT.lock"
+  exec 8> "$K/run-$PORT.lock"
   flock -w "${HOOK[lock_wait]:-10}" 8 ||
     nodevice "processes of an earlier Kiroku run in slot $SLOT are still alive (tools/emu ps)"
-  for l in "$K"/run-slot[0-9].lock; do
+  for l in "$K"/run-[0-9]*.lock; do
     name=$(basename "$l" .lock)
-    [[ -e $l && $name != "run-slot$SLOT" ]] || continue
+    [[ -e $l && $name != "run-$PORT" ]] || continue
     (flock -n 7 && rm_in "$K" "$name") 7< "$l" || true
   done
-  rm_in "$K" "run-slot$SLOT" || nodevice "the run directory of slot $SLOT cannot be cleared"
-  RUN=$K/run-slot$SLOT
+  rm_in "$K" "run-$PORT" || nodevice "the run directory of slot $SLOT cannot be cleared"
+  RUN=$K/run-$PORT
   mkdir -p "$RUN/home/.android" "$RUN/xdg" "$RUN/tmp" "$RUN/bin"
   chmod 700 "$RUN" "$RUN/xdg"
   export TMPDIR=$RUN/tmp
@@ -131,10 +129,10 @@ EOF
 }
 
 ensure_avd() {
-  local home=$K/avd-slot$SLOT
+  local home=$K/avd-$PORT
   if [[ -L $home || ! -f $home/.complete ]]; then
     [[ -d $ANDROID_HOME/${IMAGE//;//} ]] || { echo "system image missing: run sdkmanager \"$IMAGE\"" >&2; return 1; }
-    rm_in "$K" "avd-slot$SLOT" || return 1
+    rm_in "$K" "avd-$PORT" || return 1
     mkdir -p "$home"
     echo no | ANDROID_AVD_HOME=$home "$ANDROID_HOME"/cmdline-tools/latest/bin/avdmanager -s \
       create avd -n "$AVD" -k "$IMAGE" -d pixel_7 > /dev/null || return 1
@@ -207,19 +205,15 @@ shut_down() {
   fi
   if ((${#pids[@]})); then
     echo "emulator $ANDROID_SERIAL: processes of this run left: ${pids[*]}" >&2
-  elif rm_in "$K" "run-slot$SLOT"; then
+  elif rm_in "$K" "run-$PORT"; then
     [[ -z $emu_pid ]] || echo "emulator $ANDROID_SERIAL shut down; nothing of this run is left"
   fi
 }
 
 finish() {
-  local rc=$1 peak
+  local rc=$1
   trap 'signalled=1' TERM HUP INT
-  if [[ -n $RUN ]]; then
-    shut_down
-    peak=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)/memory.peak
-    [[ ! -r $peak ]] || echo "tools/emu: memory peak of this job $(($(< "$peak") / 1048576)) MiB"
-  fi
+  [[ -z $RUN ]] || shut_down
   exit "$rc"
 }
 
