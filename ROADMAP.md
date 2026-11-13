@@ -317,10 +317,7 @@ on the Russian strings so far are fixed.
   **Needs:** nothing.
   **Check:** the tests and the frames image section 8.5 asks for; the owner judges the gesture on his phone.
 
-- [ ] **M2-29 Messages that are the only way back.** A waiting Undo or Retry is watched again when the list is
-  read again after a failure, and is dropped when its title's values change, not only its time stamp.
-  **Needs:** nothing.
-  **Check:** `ShellMessagesTest`: both cases fail on the code of today.
+- [x] **M2-29 Messages that are the only way back.**
 
 - [ ] **M2-30 List fling cost.** The one long frame of a fling of a long tab back to the top is explained with
   measurements on the preview build, and what is the app's own is removed. The hand-off says, with numbers,
