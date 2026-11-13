@@ -55,7 +55,7 @@ class AndroidDeviceTest {
     }
 
     @Test
-    fun `the library asks for the network and its state`() {
+    fun `the library asks for the network, as OkHttp declares, and for its state`() {
         val asked =
             context.packageManager
                 .getPackageInfo(
