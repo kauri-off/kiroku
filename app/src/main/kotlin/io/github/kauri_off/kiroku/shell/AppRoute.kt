@@ -119,5 +119,5 @@ private fun NotBuiltDestination(
     snackbars: SnackbarHostState,
 ) {
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
-    PlaceholderScreen(PlaceholderState(destination, sessionExpired = session == Session.Expired), { onSignIn() }, snackbars)
+    PlaceholderScreen(PlaceholderState(destination, sessionExpired = session is Session.Expired), { onSignIn() }, snackbars)
 }

@@ -373,6 +373,32 @@ class ShellMessagesTest {
         )
     }
 
+    // An Undo of a list that has ended is refused for good: a Retry of it could only be refused again.
+    @Test
+    fun `an Undo refused because its list has ended offers no Retry`() {
+        val shell = ShellViewModel(graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        val change = runBlocking { checkNotNull(graph.list.write(ListWrite.MarkNextWatched(anime))) }
+        runBlocking { graph.demo.session.signOut() }
+        compose.waitForIdle()
+        runBlocking { graph.list.write(change.undo) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        assertNull(
+            shell.messages.current.value
+                ?.message
+                ?.action,
+        )
+    }
+
     // W2: a later "+1" on another title does not take the failed save's Retry away.
     @Test
     fun `a failed save keeps its Retry through a newer message, and Retry writes`() {

@@ -36,7 +36,7 @@ sealed interface DetailsState {
     ) : DetailsState
 }
 
-val DetailsState.sessionExpired: Boolean get() = session == Session.Expired
+val DetailsState.sessionExpired: Boolean get() = session is Session.Expired
 
 sealed interface Fact {
     data class RomajiTitle(
