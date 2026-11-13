@@ -18,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
@@ -29,6 +31,7 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -310,6 +313,62 @@ class SwipedMessageTest {
     private companion object {
         // Inside the stock 12 dp margin above the message.
         val MARGIN_TOUCH = 4.dp
+    }
+}
+
+// ARCHITECTURE 8.5: a message swiped away leaves the way it went, and nothing of it comes back into view.
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SwipedMessageExitTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    // Whether anything differs from [empty] on the row [y] of the window.
+    private fun drawnOn(
+        y: Int,
+        empty: IntArray,
+    ): Boolean {
+        val image = compose.onRoot().captureToImage().asAndroidBitmap()
+        return (0 until image.width).any { image.getPixel(it, y) != empty[it] }
+    }
+
+    @Test
+    fun `a message swiped away either way is not drawn again once it is off the window`() =
+        with(harness) {
+            compose.mainClock.autoAdvance = false
+            show()
+            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            for (by in listOf(SwipeHarness.PAST, -SwipeHarness.PAST)) {
+                val background = compose.onRoot().captureToImage().asAndroidBitmap()
+                post(moved)
+                compose.mainClock.advanceTimeBy(SETTLED_MS)
+                val text = compose.onNodeWithText("Moved to Completed").getUnclippedBoundsInRoot()
+                val y = with(compose.density) { ((text.top + text.bottom) / 2).roundToPx() }
+                val empty = IntArray(background.width) { background.getPixel(it, y) }
+                drag("Moved to Completed", by)
+                var left = false
+                repeat(FRAMES) { frame ->
+                    compose.mainClock.advanceTimeByFrame()
+                    val drawn = drawnOn(y, empty)
+                    assertTrue("$by: drawn again at frame $frame after it left", !(left && drawn))
+                    left = left || !drawn
+                }
+                assertTrue("$by: never left", left)
+                assertNull(messages.current.value)
+            }
+        }
+
+    private companion object {
+        const val SETTLED_MS = 2_000L
+        const val FRAMES = 40
     }
 }
 
