@@ -377,8 +377,8 @@ was chosen against, and why:
   state where they would be (section 9.4) and, as that may be below the first screen, a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
-  replaced, another of its kind waits behind it while its title is unchanged, and its time runs only while the user
-  can see and tap it. Ordinary messages are not queued.
+  replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
+  while the user can see and tap it. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
 
