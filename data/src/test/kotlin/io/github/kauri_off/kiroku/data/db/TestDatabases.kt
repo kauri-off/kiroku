@@ -24,14 +24,15 @@ class TestDatabases : ExternalResource() {
     // Every statement Room ran, once for each time it ran, of any database opened here.
     val statements = mutableListOf<String>()
 
+    // Over the pool the app uses, where a transaction has a thread of its own, or over Room's own when [inline].
     fun open(
         scope: TestScope,
-        dispatcher: TestDispatcher = scope.dispatcher,
+        inline: Boolean = false,
     ): KirokuDatabase =
         KirokuDatabase
             .builder(RuntimeEnvironment.getApplication(), name = null)
-            .setDriver(Recording(AndroidSQLiteDriver()))
-            .setQueryCoroutineContext(dispatcher)
+            .setDriver(Recording(AndroidSQLiteDriver(), pooled = !inline))
+            .setQueryCoroutineContext(scope.dispatcher)
             .build()
             .also { opened += it }
 
@@ -39,7 +40,10 @@ class TestDatabases : ExternalResource() {
 
     private inner class Recording(
         private val driver: SQLiteDriver,
+        private val pooled: Boolean,
     ) : SQLiteDriver {
+        override val hasConnectionPool: Boolean get() = pooled
+
         override fun open(fileName: String): SQLiteConnection {
             val connection = driver.open(fileName)
             return object : SQLiteConnection by connection {

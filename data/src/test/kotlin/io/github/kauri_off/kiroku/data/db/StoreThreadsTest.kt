@@ -68,6 +68,8 @@ class StoreThreadsTest {
 
     private val driver =
         object : SQLiteDriver {
+            override val hasConnectionPool: Boolean get() = true
+
             override fun open(fileName: String): SQLiteConnection {
                 val connection = AndroidSQLiteDriver().open(fileName)
                 return object : SQLiteConnection by connection {
