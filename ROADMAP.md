@@ -211,7 +211,8 @@ on the Russian strings so far are fixed.
   middle page fails the download; the request carries `nsfw=true` and the order.
 
 - [ ] **M2-16 [A] Database: the titles and the list's store.** The database of section 7.1 for titles (summary,
-  details, related titles) and the list (shown values, confirmed values, the unconfirmed mark, the sync time),
+  details, related titles) and the list (shown values, confirmed values, the unconfirmed mark, the sync time, the
+  sign-in the list belongs to),
   with the port M2-06 settled. A title's refresh and a list write do not overwrite each other, and a stored
   value is never replaced by a missing one. The list is one shared flow, rows are mapped off the main thread, an
   entry that did not change stays the same object, and one entry can be observed by itself. Version 1 of the
