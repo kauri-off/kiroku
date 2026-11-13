@@ -25,10 +25,13 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
+import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
-import io.github.kauri_off.kiroku.outlastPatience
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 // The loading, empty and error states of every screen. Each fills the space it is given and centres itself in it;
 // a message is announced when it appears.
@@ -59,14 +62,14 @@ fun ScreenState(
     Box(modifier.fillMaxSize().padding(horizontal = Spacing.l, vertical = Spacing.xl), contentAlignment = Alignment.Center) {
         when (state) {
             ScreenState.Loading -> {
-                // The state is announced at once; only a wait that outlasts the patience draws the indicator, so none flashes.
+                // Named and in its place at once; drawn once the wait outlasts the patience, timed on the main looper.
                 var waited by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
-                    outlastPatience()
+                    withContext(Dispatchers.Main) { delay(PATIENCE) }
                     waited = true
                 }
                 val loading = stringResource(R.string.design_loading)
-                Box(Modifier.semantics { contentDescription = loading }) { if (waited) WaitIndicator() }
+                WaitIndicator(Modifier.semantics { contentDescription = loading }, shown = waited)
             }
             is ScreenState.Empty -> Message(state.message, state.action)
             is ScreenState.Error -> Message(state.message, StateAction(stringResource(R.string.design_retry), state.onRetry))

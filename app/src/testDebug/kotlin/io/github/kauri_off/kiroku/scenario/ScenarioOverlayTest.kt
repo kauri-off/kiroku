@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.core.view.children
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
+import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -33,6 +34,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import kotlin.time.toJavaDuration
 
 // The debug menu's tab is over the app from after its first frame on, sheets included, and turns red while a scenario is on.
 @RunWith(RobolectricTestRunner::class)
@@ -83,7 +85,8 @@ class ScenarioOverlayTest {
         assertEquals(emptyList<View>(), ScenarioOverlay.markers(controller.get()))
 
         controller.resume().visible()
-        shadowOf(Looper.getMainLooper()).idle()
+        // The first frame is drawn once the List has its rows, at the latest when the splash's patience is out.
+        shadowOf(Looper.getMainLooper()).idleFor(PATIENCE.toJavaDuration())
         assertEquals(1, ScenarioOverlay.markers(controller.get()).size)
         controller.pause().stop().destroy()
     }

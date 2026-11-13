@@ -12,6 +12,8 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.registered
@@ -24,8 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// The List's rows as they first appear: drawn where they settle, and a finger that travels beyond touch slop never
-// activates a row or its "+", however its events are batched into frames.
+// The List as its rows first appear, and pointers released beyond touch slop, however their events reach the frames.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ListFirstRowsTest {
@@ -38,13 +39,8 @@ class ListFirstRowsTest {
     private var state by mutableStateOf(ListFixtureStates.loading)
 
     private val plusOne = "Plus one episode"
-    private val firstTitle get() =
-        (ListFixtureStates.watching.content as ListContent.Tabs)
-            .pages
-            .getValue(
-                ListStatus.Watching,
-            ).rows[0]
-            .title
+    private val watchingRows get() = (ListFixtureStates.watching.content as ListContent.Tabs).pages.getValue(ListStatus.Watching).rows
+    private val firstTitle get() = watchingRows[0].title
 
     private fun plus() = compose.onAllNodesWithContentDescription(plusOne)[0]
 
@@ -147,6 +143,35 @@ class ListFirstRowsTest {
                 up()
             }
         assertEquals(1, opened.count { it is ListEvent.Open })
+    }
+
+    @Test
+    fun `a second finger leaping from the plus one while another rests on a row does not add an episode`() {
+        list(firstFrame = false)
+        val resting =
+            compose
+                .onAllNodesWithText(watchingRows[1].title)[0]
+                .fetchSemanticsNode()
+                .boundsInRoot.center
+        val from = plus().fetchSemanticsNode().boundsInRoot.center
+        compose.onRoot().performTouchInput {
+            down(0, resting)
+            down(1, from)
+            updatePointerTo(1, Offset(from.x - LEAP * density, from.y))
+            up(1)
+            up(0)
+        }
+        compose.waitForIdle()
+        assertEquals(emptyList<ListEvent>(), events.filter { it is ListEvent.PlusOne || it == ListEvent.Open(watchingRows[0].id) })
+    }
+
+    @Test
+    fun `a leap from a tab or the filter action does nothing`() {
+        list(firstFrame = false)
+        compose.onAllNodesWithText("Completed")[0].performTouchInput { leapDown() }
+        compose.onNodeWithContentDescription("Filter by title").performTouchInput { leapDown() }
+        compose.waitForIdle()
+        assertEquals(emptyList<ListEvent>(), events.filter { it is ListEvent.SelectTab || it == ListEvent.StartFilter })
     }
 
     private companion object {

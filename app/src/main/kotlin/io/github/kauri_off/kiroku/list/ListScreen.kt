@@ -47,8 +47,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
@@ -98,7 +101,7 @@ fun ListScreen(
     val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
     val motion = rememberListTabMotion(pager)
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.withoutTravelledTaps(),
         topBar = {
             Column {
                 TopBar(state.filterText, state.owner, showActions = tabs != null, onEvent = onEvent)
@@ -189,8 +192,7 @@ private fun Pages(
                         motion.touching = false
                     }
                 }
-            }.withoutTravelledTaps()
-            .nestedScroll(motion.gate),
+            }.nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,
         key = { statuses[it] },
         flingBehavior =
@@ -204,8 +206,7 @@ private fun Pages(
     }
 }
 
-// The top bar's height read when laid out: the tab row comes in the frame that composes the rows, so a height read
-// while composing them would still be the bar's alone, and the rows would be drawn a tab row too high.
+// The bars' height read in layout, since the tab row arrives in the frame that composes the rows.
 private fun Modifier.belowBars(padding: PaddingValues): Modifier =
     layout { measurable, constraints ->
         val top = padding.calculateTopPadding().roundToPx()
@@ -213,23 +214,28 @@ private fun Modifier.belowBars(padding: PaddingValues): Modifier =
         layout(placeable.width, placeable.height + top) { placeable.place(0, top) }
     }
 
-// A finger that went further than touch slop is not a tap, also when no move of it reached the screen before it
-// lifted (as when every move came during a long frame): its release is kept from the rows unless a scroll took it.
+// A pointer lifted beyond touch slop from its down is no tap, moves seen or not, unless a scroll took it.
 private fun Modifier.withoutTravelledTaps(): Modifier =
     pointerInput(Unit) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            var travelled = false
-            var taken = false
-            while (true) {
-                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                travelled = travelled || (change.position - down.position).getDistance() > viewConfiguration.touchSlop
-                if (change.changedToUpIgnoreConsumed()) {
-                    if (travelled && !taken) change.consume()
-                    break
+            val downs = mutableMapOf<PointerId, Offset>()
+            val travelled = mutableSetOf<PointerId>()
+            val taken = mutableSetOf<PointerId>()
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                for (change in event.changes) {
+                    if (change.changedToDownIgnoreConsumed()) downs[change.id] = change.position
+                    val down = downs[change.id] ?: continue
+                    if ((change.position - down).getDistance() > viewConfiguration.touchSlop) travelled += change.id
+                    if (change.changedToUpIgnoreConsumed() && change.id in travelled && change.id !in taken) change.consume()
                 }
-                taken = taken || awaitPointerEvent(PointerEventPass.Final).changes.any { it.id == down.id && it.isConsumed }
-            }
+                val pressed = event.changes.any { it.pressed }
+                if (pressed) {
+                    awaitPointerEvent(PointerEventPass.Final).changes.forEach {
+                        if (it.isConsumed && !it.changedToDownIgnoreConsumed()) taken += it.id
+                    }
+                }
+            } while (pressed)
         }
     }
 

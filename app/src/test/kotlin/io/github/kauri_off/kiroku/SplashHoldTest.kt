@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku
 
+import android.os.Bundle
 import android.os.Looper
 import android.view.View
 import androidx.compose.runtime.CompositionLocalProvider
@@ -16,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -72,6 +74,14 @@ class SplashHoldTest {
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
         assertFalse("kept after the patience", splash.keeping)
         assertFalse(view.viewTreeObserver.dispatchOnPreDraw())
+    }
+
+    @Test
+    fun `a start keeps the splash and a restored or recreated window does not`() {
+        val start = checkNotNull(splashHold(view(), savedInstanceState = null)) { "no hold at a start" }
+        start.hold()
+        assertTrue(start.keeping)
+        assertNull(splashHold(view(), savedInstanceState = Bundle()))
     }
 
     @Test
