@@ -34,7 +34,7 @@ class Demo(
 
     private val signedIn = MutableStateFlow(true)
 
-    val session: SessionRepository = DemoSessionRepository(signedIn, server, fixtures.user.name)
+    val session: SessionRepository = DemoSessionRepository(signedIn, server, fixtures.session)
 
     val list: ListRepository = ListEngine(server, store, signedIn, clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
 
