@@ -118,10 +118,7 @@ on the Russian strings so far are fixed.
   **Check:** `tools/gw :core:test`: the contract suite holds a test for each sentence above that fails on the
   engine of today, and the in-memory store and demo mode pass it.
 
-- [ ] **M2-07 [L] Sign-in screen.** The stateless screen of section 9.2 on fixture states: default, no client id,
-  the sign-in being completed, failed; no view model, no network.
-  **Needs:** nothing.
-  **Check:** the rubric on `signin/*`.
+- [x] **M2-07 [L] Sign-in screen.**
 
 - [ ] **M2-08 [A] Sign-in flow.** S1 to S4: the authorisation with PKCE in the user's browser, the redirect URI
   as its own constant per build type (section 3.1), the redirect accepted once, only for a sign-in this app
