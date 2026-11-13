@@ -112,7 +112,7 @@ claim_run() {
 
 # adb for this run: its server, device and key directory in any environment; nothing that reaches another one.
 adb_shim() {
-  cp --reflink=auto -- "$ANDROID_HOME/platform-tools/adb" "$RUN/bin/sdk-adb" || return 1
+  cp --reflink=auto -- "$ANDROID_HOME/platform-tools/adb" "$RUN/sdk-adb" || return 1
   cat > "$RUN/bin/adb" << EOF
 #!/usr/bin/env bash
 a=("\$@")
@@ -132,8 +132,8 @@ while ((\${#a[@]})); do
 done
 unset $ADB_REDIRECTS
 export ANDROID_SERIAL=$ANDROID_SERIAL ANDROID_ADB_SERVER_PORT=$ANDROID_ADB_SERVER_PORT ADB_REJECT_KILL_SERVER=1
-export $ADB_ISOLATION
-HOME=$(printf %q "$RUN/home") exec $(printf %q "$RUN/bin/sdk-adb") "\$@"
+export KIROKU_RUN=$KIROKU_RUN $ADB_ISOLATION
+HOME=$(printf %q "$RUN/home") exec $(printf %q "$RUN/sdk-adb") "\$@"
 EOF
   chmod +x "$RUN/bin/adb"
 }
