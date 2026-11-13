@@ -11,7 +11,7 @@
     <string name="search_open_id">Открыть тайтл №%1$d</string>
     <string name="search_no_results">По запросу «%1$s» ничего не найдено</string>
     <string name="search_failed">Не удалось выполнить поиск</string>
-    <string name="search_loading_more">Загрузка</string>
+    <string name="search_loading_more">Загрузка ещё</string>
     <string name="search_browse_empty">В этой подборке пока нет тайтлов</string>
     <string name="search_browse_failed">Не удалось загрузить подборку</string>
 </resources>
