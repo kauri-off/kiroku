@@ -40,6 +40,8 @@ data class FixtureSet(
 
     val session: Session.SignedIn get() = Session.SignedIn(SignInId("demo"))
 
+    val expired: Session.Expired get() = Session.Expired(session.signIn)
+
     fun anime(id: AnimeId): Anime = anime.single { it.id == id }
 
     fun entryFor(id: AnimeId): ListEntry? = entries.firstOrNull { it.anime.id == id }

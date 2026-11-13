@@ -70,7 +70,7 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("synopsis-expanded") {
                 Screen(TitleFixtures.of(FixtureAnime.exactToWatch, moment = TitleMoment(synopsisExpanded = true)))
             },
-            case("session-expired") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired)) },
+            case("session-expired") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, session = Fixtures.reference.expired)) },
             case("added-snackbar") { Screen(TitleFixtures.added, TitleFixtures.addedMessage) },
             case("completed-snackbar") { Screen(TitleFixtures.completed, TitleFixtures.completedMessage) },
             case("above-total") { Screen(TitleFixtures.aboveTotal) },

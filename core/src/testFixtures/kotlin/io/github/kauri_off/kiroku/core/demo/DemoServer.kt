@@ -53,6 +53,9 @@ class DemoServer(
 
     private val guard = Any()
     private val list = entries.associateBy { it.anime.id }.toMutableMap()
+
+    // A title's data is MAL's own: what a write says of it counts only for a title MAL has not seen.
+    private val titles = entries.associateTo(mutableMapOf()) { it.anime.id to it.anime }
     private val received = mutableListOf<ListRequest>()
     private var downloads = 0
 
@@ -71,6 +74,14 @@ class DemoServer(
         synchronized(guard) { store(anime, values) }
     }
 
+    // MAL's data of a title changes, as when its score moves; an entry of the title keeps its values and its time.
+    fun retitle(anime: Anime) {
+        synchronized(guard) {
+            titles[anime.id] = anime
+            list[anime.id]?.let { list[anime.id] = it.copy(anime = anime) }
+        }
+    }
+
     // Every failure off and the list back to [entries], as a new server would have it.
     fun reset(
         entries: List<ListEntry>,
@@ -82,6 +93,8 @@ class DemoServer(
         synchronized(guard) {
             list.clear()
             entries.associateByTo(list) { it.anime.id }
+            titles.clear()
+            entries.associateTo(titles) { it.anime.id to it.anime }
         }
     }
 
@@ -150,7 +163,8 @@ class DemoServer(
         anime: Anime,
         values: ListValues?,
     ) {
-        if (values == null) list.remove(anime.id) else list[anime.id] = ListEntry(anime, values, clock.instant())
+        val known = titles.getOrPut(anime.id) { anime }
+        if (values == null) list.remove(anime.id) else list[anime.id] = ListEntry(known, values, clock.instant())
     }
 }
 
