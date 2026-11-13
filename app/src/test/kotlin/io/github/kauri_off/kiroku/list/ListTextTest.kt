@@ -69,6 +69,28 @@ class ListTextTest {
 
     @Test
     @Config(qualifiers = "ru")
+    fun `russian line 2 is followed by the value the tab is sorted by, after a dot in lower case`() {
+        val text = text()
+        val progress = Line2.Progress(12, 24)
+        assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A0оценка:\u00A08", text.line2(progress, SortedBy.Score(8)))
+        assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A0без оценки", text.line2(progress, SortedBy.Score(null)))
+        assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A02025", text.line2(progress, SortedBy.StartYear(2025)))
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `english line 2 is followed by the score or the start year`() {
+        val text = text()
+        val progress = Line2.Progress(12, 24)
+        assertEquals("Watched 12\u00A0of\u00A024", text.line2(progress, null))
+        assertEquals("Watched 12\u00A0of\u00A024 ·\u00A0Score\u00A08", text.line2(progress, SortedBy.Score(8)))
+        assertEquals("Watched 12\u00A0of\u00A024 ·\u00A0Not scored", text.line2(progress, SortedBy.Score(null)))
+        assertEquals("Watched 12\u00A0of\u00A024 ·\u00A02025", text.line2(progress, SortedBy.StartYear(2025)))
+        assertEquals("Score\u00A08 ·\u00A02024", text.line2(Line2.Score(8), SortedBy.StartYear(2024)))
+    }
+
+    @Test
+    @Config(qualifiers = "ru")
     fun `the list writes air times exactly as the title page does`() {
         val context = RuntimeEnvironment.getApplication()
         val times = AirTimeText(context, now, zone)

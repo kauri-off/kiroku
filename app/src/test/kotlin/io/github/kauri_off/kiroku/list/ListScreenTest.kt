@@ -22,6 +22,8 @@ import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -47,6 +49,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
@@ -228,6 +231,23 @@ class ListScreenTest {
         compose.onNodeWithText("Up next").assertDoesNotExist()
         compose.onNodeWithText("Start date").performClick()
         assertEquals(listOf(ListEvent.SelectSort(ListSort.StartDate)), events)
+    }
+
+    @Test
+    fun `the sort sheet offers the chosen sort's two directions, its own first, and sends the other`() {
+        show(ListFixtureStates.sortSheetScoreLowest)
+        compose.onNodeWithText("Highest first").assertIsDisplayed().assertIsOff()
+        compose.onNodeWithText("Lowest first").assertIsDisplayed().assertIsOn()
+        compose.onNodeWithText("Lowest first").performClick()
+        compose.onNodeWithText("Highest first").performClick()
+        assertEquals(listOf(ListEvent.SelectDirection(SortDirection.Descending)), events)
+    }
+
+    @Test
+    fun `with up next chosen the sort sheet offers no direction`() {
+        show(ListFixtureStates.sortSheet)
+        listOf("A to Z", "Z to A", "Newest first", "Oldest first", "Highest first", "Lowest first", "Earliest first", "Latest first")
+            .forEach { compose.onNodeWithText(it).assertDoesNotExist() }
     }
 
     @Test

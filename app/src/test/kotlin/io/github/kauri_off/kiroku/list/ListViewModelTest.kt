@@ -297,6 +297,7 @@ class ListViewModelTest {
     @Test
     fun `a direction orders only its tab again from the top, and a new sort starts in its own direction`() =
         test { s ->
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Completed))
             s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
             assertEquals(SortDirection.Descending, s.page().direction)
             val highest = s.ids()
@@ -305,7 +306,13 @@ class ListViewModelTest {
             assertFalse(s.state.sortSheetOpen)
             assertEquals(SortDirection.Ascending, s.page().direction)
             assertEquals(
-                order(set.entries.filter { it.status == ListStatus.Watching }, ListSort.Score, set.airing::get, today, SortDirection.Ascending) {
+                order(
+                    set.entries.filter { it.status == ListStatus.Completed },
+                    ListSort.Score,
+                    set.airing::get,
+                    today,
+                    SortDirection.Ascending,
+                ) {
                     it.anime.titles.romaji
                 }.map { it.anime.id },
                 s.ids(),
@@ -319,12 +326,11 @@ class ListViewModelTest {
             assertEquals(SortDirection.Ascending, s.page().direction)
             s.list.onEvent(ListEvent.SelectSort(ListSort.LastUpdated))
             assertEquals(SortDirection.Descending, s.page().direction)
-            s.list.onEvent(ListEvent.SelectSort(ListSort.UpNext))
-            assertNull(s.page().direction)
-            assertEquals(upNext(), s.ids())
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Watching))
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
             assertNull(s.page().direction)
             assertEquals(upNext(), s.ids())
+            assertEquals(0, s.page().ordering)
         }
 
     @Test
@@ -334,7 +340,7 @@ class ListViewModelTest {
             assertTrue(s.page().rows.all { it.sortedBy is SortedBy.Score })
             assertTrue(s.page(ListStatus.Planned).rows.all { it.sortedBy == null })
             s.list.onEvent(ListEvent.SelectSort(ListSort.StartDate))
-            assertTrue(s.page().rows.all { it.sortedBy is SortedBy.Started })
+            assertTrue(s.page().rows.all { it.sortedBy is SortedBy.StartYear })
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertTrue(s.page().rows.all { it.sortedBy == null })
         }

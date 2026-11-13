@@ -28,8 +28,6 @@
     <string name="list_line2_sorted_by">%1$s ·\u00A0%2$s</string>
     <string name="list_sorted_by_score">оценка:\u00A0%1$d</string>
     <string name="list_sorted_by_not_scored">без оценки</string>
-    <string name="list_sorted_by_started">начало:\u00A0%1$s</string>
-    <string name="list_sorted_by_starts">начало:\u00A0%1$s</string>
     <string name="list_empty">В «%1$s» нет тайтлов</string>
     <string name="list_empty_action">Поиск</string>
     <string name="list_no_matches">Нет тайтлов с таким названием</string>

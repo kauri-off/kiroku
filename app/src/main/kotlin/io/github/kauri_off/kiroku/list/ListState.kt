@@ -13,7 +13,6 @@ import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import java.time.Instant
 import java.time.LocalDate
@@ -100,8 +99,8 @@ sealed interface SortedBy {
         val score: Int?,
     ) : SortedBy
 
-    data class Started(
-        val date: PartialDate,
+    data class StartYear(
+        val year: Int,
     ) : SortedBy
 }
 
@@ -205,7 +204,7 @@ fun listRow(
     val sortedBy =
         when {
             sort == ListSort.Score && line2 !is Line2.Score -> SortedBy.Score(values.score)
-            sort == ListSort.StartDate && line2 !is Line2.Premieres -> anime.startDate?.let(SortedBy::Started)
+            sort == ListSort.StartDate && line2 !is Line2.Premieres -> anime.startDate?.year?.let(SortedBy::StartYear)
             else -> null
         }
     return ListRow(

@@ -28,8 +28,6 @@
     <string name="list_line2_sorted_by">%1$s ·\u00A0%2$s</string>
     <string name="list_sorted_by_score">Score\u00A0%1$d</string>
     <string name="list_sorted_by_not_scored">Not scored</string>
-    <string name="list_sorted_by_started">Started\u00A0%1$s</string>
-    <string name="list_sorted_by_starts">Starts\u00A0%1$s</string>
     <string name="list_empty">No titles in %1$s</string>
     <string name="list_empty_action">Search</string>
     <string name="list_no_matches">No titles match the filter</string>

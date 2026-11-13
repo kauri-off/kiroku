@@ -28,9 +28,37 @@ class ListRowTest {
     private fun row(
         anime: Anime,
         readOnly: Boolean = false,
+        sort: ListSort? = null,
     ): ListRow {
         val entry = set.entryFor(anime.id)!!
-        return listRow(entry, set.airing[anime.id], today, TitleLanguage.Romaji, readOnly)
+        return listRow(entry, set.airing[anime.id], today, TitleLanguage.Romaji, readOnly, sort)
+    }
+
+    @Test
+    fun `sorted by score or start date, line 2 is followed by that value, with or without one`() {
+        assertEquals(SortedBy.Score(8), row(FixtureAnime.exactToWatch, sort = ListSort.Score).sortedBy)
+        assertEquals(SortedBy.Score(null), row(FixtureAnime.exactCaughtUp, sort = ListSort.Score).sortedBy)
+        assertEquals(SortedBy.Score(null), row(FixtureAnime.premiereDate, sort = ListSort.Score).sortedBy)
+        assertEquals(
+            SortedBy.StartYear(2025),
+            row(FixtureAnime.exactToWatch, sort = ListSort.StartDate).sortedBy,
+        )
+        assertEquals(
+            SortedBy.StartYear(2024),
+            row(FixtureAnime.film, sort = ListSort.StartDate).sortedBy,
+        )
+        assertEquals(SortedBy.Score(null), row(FixtureAnime.exactCaughtUp, readOnly = true, sort = ListSort.Score).sortedBy)
+    }
+
+    @Test
+    fun `a row says what it is sorted by only once, and nothing when sorted by another key`() {
+        assertNull(row(FixtureAnime.film, sort = ListSort.Score).sortedBy)
+        assertEquals(Line2.Score(8), row(FixtureAnime.film, sort = ListSort.Score).line2)
+        assertNull(row(FixtureAnime.premiereDate, sort = ListSort.StartDate).sortedBy)
+        assertNull(row(FixtureAnime.premiereUnannounced, sort = ListSort.StartDate).sortedBy)
+        listOf(ListSort.UpNext, ListSort.Title, ListSort.LastUpdated, null).forEach { sort ->
+            assertNull(row(FixtureAnime.exactToWatch, sort = sort).sortedBy)
+        }
     }
 
     @Test

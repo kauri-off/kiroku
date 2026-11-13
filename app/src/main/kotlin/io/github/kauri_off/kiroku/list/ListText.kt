@@ -9,14 +9,9 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.SortDirection.Ascending
 import io.github.kauri_off.kiroku.core.list.SortDirection.Descending
-import io.github.kauri_off.kiroku.core.model.PartialDate
-import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.AirTimeText
-import io.github.kauri_off.kiroku.text.DAY_MONTH_YEAR
 import io.github.kauri_off.kiroku.text.premiereText
-import io.github.kauri_off.kiroku.text.skeletonFormat
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 // The words of a list row, in the device's language, time zone and 12- or 24-hour setting. Air times are written by
@@ -27,9 +22,8 @@ class ListText(
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
     private val times = AirTimeText(context, now, zone)
-    private val today = now.atZone(zone).toLocalDate()
 
-    // Line 2, followed by the value the tab is sorted by when the row has one: "Watched 12 of 24 · Score 8".
+    // Line 2, followed by the value the tab is sorted by when the row has one: "Watched 12 of 24 · Score 8", "… · 2025".
     fun line2(
         line: Line2,
         sortedBy: SortedBy?,
@@ -40,22 +34,8 @@ class ListText(
             is SortedBy.Score ->
                 value.score?.let { context.getString(R.string.list_sorted_by_score, it) }
                     ?: context.getString(R.string.list_sorted_by_not_scored)
-            is SortedBy.Started ->
-                context.getString(
-                    if (value.date.firstDay() > today) R.string.list_sorted_by_starts else R.string.list_sorted_by_started,
-                    date(value.date),
-                )
+            is SortedBy.StartYear -> value.year.toString()
         }
-
-    // A start date by its precision, with the year, months abbreviated and never broken: "3 Oct 2025", "Oct 2025", "2025".
-    private fun date(date: PartialDate): String {
-        val locale = context.resources.configuration.locales[0]
-        return when (date) {
-            is PartialDate.Day -> skeletonFormat(locale, DAY_MONTH_YEAR).format(date.date)
-            is PartialDate.Month -> skeletonFormat(locale, MONTH_YEAR_SHORT).format(date.yearMonth)
-            is PartialDate.OnlyYear -> date.year.toString()
-        }.replace(' ', '\u00A0')
-    }
 
     fun line2(line: Line2): String =
         when (line) {
@@ -82,15 +62,6 @@ class ListText(
 
     fun premiere(premiere: Premiere): String = premiereText(context, times, premiere, withYear = false)
 }
-
-private fun PartialDate.firstDay(): LocalDate =
-    when (this) {
-        is PartialDate.Day -> date
-        is PartialDate.Month -> yearMonth.atDay(1)
-        is PartialDate.OnlyYear -> value.atDay(1)
-    }
-
-private val MONTH_YEAR_SHORT = notShown("MMMy")
 
 // The two directions of a sort, worded for that sort, its own one first; "Up next" has none.
 fun ListSort.directions(): List<Pair<SortDirection, Int>> =
