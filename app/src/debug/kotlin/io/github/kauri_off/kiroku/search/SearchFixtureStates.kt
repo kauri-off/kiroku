@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 
 // Search's and the browse lists' states over the fixture set, for previews, screenshots and the debug build.
@@ -26,11 +27,7 @@ object SearchFixtureStates {
         return object : SearchStandIn {
             override val recent: List<String> get() = SearchFixtureStates.recent
 
-            override fun search(query: String): List<SearchHit> =
-                set.anime
-                    .filter { anime ->
-                        with(anime.titles) { (listOfNotNull(romaji, english, japanese) + synonyms).any { it.contains(query, ignoreCase = true) } }
-                    }.map { hit(it) }
+            override fun search(query: String): List<SearchHit> = set.anime.filter { it.titles.contain(query) }.map { hit(it) }
 
             override fun browse(list: BrowseList): List<SearchHit> =
                 when (list) {
@@ -45,6 +42,9 @@ object SearchFixtureStates {
                 }
         }
     }
+
+    private fun Titles.contain(query: String) =
+        (listOfNotNull(romaji, english, japanese) + synonyms).any { it.contains(query, ignoreCase = true) }
 
     private fun byRank(anime: List<Anime>) = anime.filter { it.rank != null }.sortedBy { it.rank }
 
