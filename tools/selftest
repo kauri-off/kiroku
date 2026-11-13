@@ -21,7 +21,7 @@ cleanup() {
     [[ -d $p ]] && systemctl --user stop "kiroku-q-$(basename "$p")" 2> /dev/null
   done
   wait 2> /dev/null
-  rm -rf "$T"
+  rm -rf "$T" "${DISK:-$T}"
 }
 trap cleanup EXIT
 
@@ -418,7 +418,8 @@ job run sh -c 'cd app && ../tools/gw :app:connectedDebugAndroidTest'
 ok "gw inside an emu job runs Gradle in place, against this job's device" \
   '[[ $rc == 0 && ! -e $F/q.calls ]] && has gradle.env "ANDROID_SERIAL=emulator-$port" &&
   has gradle.env "ANDROID_ADB_SERVER_PORT=$aport"'
-ok "  in its own worktree, with two workers" '[[ $(< "$F/gradle.pwd") == "$W" ]] && has gradle.args --max-workers=2'
+ok "  in its own worktree, with two workers and the run's temporary directory" '[[ $(< "$F/gradle.pwd") == "$W" ]] &&
+  has gradle.args --max-workers=2 && has gradle.env "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=$AVDR/run-$port/tmp"'
 job run tools/emu run true
 ok "emu cannot start another emulator inside an emu job" '[[ $rc == 1 && $out == *"inside an emu job"* && ! -e $F/q.calls ]]'
 
@@ -460,7 +461,12 @@ done
 
 # tools/q itself: every job below is a real unit of the systemd user manager that runs a fake command
 if ! systemctl --user show-environment > /dev/null 2>&1; then
-  echo "SKIP tools/q: no systemd user manager here, so the queue's own rules are not tested"
+  if [[ -n ${KIROKU_SELFTEST_REQUIRE_Q:-} ]]; then
+    echo "FAIL tools/q: no systemd user manager here, and KIROKU_SELFTEST_REQUIRE_Q asks for the queue's own tests"
+    fails=$((fails + 1))
+  else
+    echo "SKIP tools/q: no systemd user manager here, so the queue's own rules are not tested"
+  fi
   echo "$fails failed"
   exit $((fails != 0))
 fi
@@ -480,7 +486,16 @@ conf() {
       check 300 5 no wide 1 $((threads / 2 + 1)) no alloc 100 1 no
   } > "$W/tools/q.conf"
 }
-avail() { printf 'MemAvailable: %s kB\nSwapFree: %s kB\n' $(($1 * 1024)) $((${2:-0} * 1024)) > "$T/meminfo"; }
+avail() { echo "MemAvailable: $(($1 * 1024)) kB" > "$T/meminfo"; }
+swaps() {
+  printf 'Filename Type Size Used Priority\n/swapfile file %s 0 -1\n/dev/zram0 partition %s 0 100\n' \
+    $(($1 * 1024)) $(($2 * 1024)) > "$T/swaps"
+}
+cache_mib() {
+  python3 -c 'import json, sys
+cg = json.load(open(sys.argv[1]))["jobs"][sys.argv[2]]["cg"]
+print(next(int(l.split()[1]) for l in open(cg + "/memory.stat") if l.startswith("file ")) >> 20)' "$QS/state.json" "$1"
+}
 q() { "$W/tools/q" "$@"; }
 sub() { local kind=$1; shift; q submit --kind "$kind" -C "$W" -- "$@"; }
 st() {
@@ -505,11 +520,12 @@ drain() {
   local d
   for d in "$QS"/jobs/*/; do q kill "$(basename "$d")" > /dev/null 2>&1; done
 }
-printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" cpus=16 lock_wait=1 boot_timeout=20 smoke_delay=0 \
+printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" "swaps=$T/swaps" cpus=16 lock_wait=1 boot_timeout=20 smoke_delay=0 \
   > "$W/tools/test-hooks"
 
 conf
 avail 100000
+swaps 0 0
 a=$(sub small sleep 3) b=$(sub small sleep 3) c=$(sub small sleep 3) d=$(sub small sh -c 'echo "$KIROKU_Q_WORKERS"')
 ok "q runs jobs while their declared memory fits the budget" 'is "$a" state running && is "$b" state running && is "$c" state running'
 ok "q keeps a job that does not fit the budget waiting, and says why" 'is "$d" why budget && [[ $(st "$d" state) == queued ]]'
@@ -539,6 +555,21 @@ b=$(sub alloc true)
 ok "q sets aside what a running job declared and has not used yet" 'is "$b" why memory'
 finished "$a" "$b"
 ok "  and no longer once the job has used it" '[[ $(st "$b" state) == done ]] && le "$b" end "$a" end'
+DISK=$(cd "$SRC/.." && pwd)/build/selftest-$$
+mkdir -p "$DISK"
+if [[ $(stat -f -c %T "$DISK") == tmpfs ]]; then
+  echo "SKIP file cache: $DISK is not on a disk"
+else
+  a=$(sub alloc sh -c 'head -c 120000000 /dev/zero > "$1/cache"; : > "$FAKE/cache.written"; sleep 3' sh "$DISK")
+  for _ in {1..80}; do [[ -e $F/cache.written ]] && break; sleep 0.1; done
+  cached=$(cache_mib "$a")
+  b=$(sub alloc true)
+  sleep 1
+  ok "a job that has filled file cache over its figure and allocated nothing" '[[ ${cached:-0} -ge 100 ]]'
+  ok "  still has its whole figure set aside" '[[ $(st "$a" state) == running && $(st "$b" state) == queued && $(st "$b" why) == memory ]]'
+  finished "$a" "$b"
+fi
+rm -rf "$DISK"
 
 conf
 avail 100000
@@ -558,15 +589,18 @@ ok "q keeps the place of a job that has waited longer than its patience" 'is "$c
 finished "$a" "$b" "$big" "$c"
 ok "  so the large job starts before the later small one" \
   'le "$big" start "$c" start && [[ $(st "$big" state) == done && $(st "$c" state) == done ]]'
-conf patience_s=1 emu_slots=1
-a=$(sub emu sleep 4)
+conf patience_s=1
+a=$(sub emu sleep 4) b=$(sub emu sleep 4)
 is "$a" state running
-b=$(sub emu true)
+is "$b" state running
+c=$(sub emu true)
 sleep 1.5
-c=$(sub small true)
-finished "$c"
-ok "q starts a later job beside what a waiting job needs" '[[ $(st "$c" state) == done && $(st "$b" why) == slot ]]'
-finished "$a" "$b"
+d=$(sub small true)
+finished "$d"
+ok "an emulator job that has waited past its patience for a slot keeps the slot, not its memory: a job that fits the budget only without it starts" \
+  '[[ $(st "$d" state) == done && $(st "$c" state) == queued && $(st "$c" why) == slot ]]'
+finished "$a" "$b" "$c"
+ok "  and the emulator job starts when a slot is free" 'le "$a" end "$c" start && [[ $(st "$c" state) == done ]]'
 
 conf
 a=$(sub emu sh -c 'echo "$KIROKU_Q_SLOT"; sleep 2') b=$(sub emu sh -c 'echo "$KIROKU_Q_SLOT"; sleep 3')
@@ -579,19 +613,25 @@ ok "  and gives it the slot that became free" '[[ $(< "$QS/jobs/$c/out.log") == 
 
 conf force_s=1.5
 avail 100
-a=$(sub small sleep 3)
+swaps 1000 0
+a=$(sub small sleep 3) b=$(sub small true)
 sleep 2.5
-ok "q does not start a job that neither available memory nor free swap can hold" \
-  '[[ $(st "$a" state) == queued && $(st "$a" why) == memory ]]'
-avail 100 1000
-ok "q starts the first job on swap when nothing runs and it has waited" \
+ok "q does not start a job on swap while less than half its figure is available, and q ps says so" \
+  '[[ $(st "$a" state) == queued && $(st "$a" why) == short && $(q ps) == *"too little to start on swap"* ]]'
+avail 200
+swaps 0 1000
+sleep 1
+ok "  nor when the swap that would cover the rest is zram" '[[ $(st "$a" state) == queued && $(st "$a" why) == short ]]'
+swaps 1000 0
+ok "q starts the first job on swap when nothing runs, it has waited, half its figure is available and disk swap covers the rest" \
   'is "$a" state running && [[ $(st "$a" forced) == True ]]'
-b=$(sub small true)
-sleep 2
-ok "  but not while a job runs" '[[ $(st "$b" state) == queued && $(st "$b" why) == memory ]]'
+sleep 1
+ok "  but only the first of two waiting jobs, and no other while a job runs" \
+  '[[ $(st "$a" state) == running && $(st "$b" state) == queued && $(st "$b" why) == memory ]]'
 finished "$a" "$b"
 ok "  and q wait says so" 'le "$a" end "$b" start && [[ $(q wait "$b") == *"started on swap, without the available memory"* ]]'
 avail 100000
+swaps 0 0
 
 conf
 a=$(sub small sh -c 'trap "" TERM; sleep 60 & echo $! > "$FAKE/kill.child"; wait')
@@ -663,6 +703,8 @@ run env FAKE_GRADLE_RC=0 tools/gw :core:test --tests '*A B*'
 ok "gw runs Gradle as a job of tools/q, with the kind's workers, and reports its memory peak" \
   '[[ $rc == 0 && $out == *"gradle line 80"*"exit 0; full output: $QS/jobs/"*"test job waited"*"memory peak "*" MiB of 600 declared"* ]] &&
   has gradle.args --max-workers=3 && has gradle.args "*A B*"'
+ok "  and gives Gradle's JVMs the job's temporary directory" \
+  'grep -qx "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=$QS/jobs/[0-9a-f-]*/tmp" "$F/gradle.env"'
 run tools/gw --kind check lint
 ok "gw --kind check runs with that kind's workers" '[[ $rc == 0 ]] && has gradle.args --max-workers=5'
 FAKE_GRADLE_RC=1 run tools/gw :core:test
@@ -705,11 +747,12 @@ mv "$W/tools/q" "$T/q.away"
 out=$(cd "$T/wt2" && tools/gw :core:test 2>&1)
 rc=$?
 mv "$T/q.away" "$W/tools/q"
-ok "a worktree is refused while the main checkout has no tools/q" '[[ $rc == 2 && $out == *"has no tools/q"*"newest main"* ]]'
+ok "a worktree is refused while the main checkout has no tools/q, and told to try again" \
+  '[[ $rc == 2 && $out == *"has no tools/q yet"*"try again in a minute"* ]]'
 out=$(q submit --api 0 --kind test -C "$W" -- true 2>&1)
 ok "wrappers older than the queue are told to merge main" '[[ $? == 2 && $out == *"merge main"* ]]'
 out=$(q submit --api 99 --kind test -C "$W" -- true 2>&1)
-ok "wrappers newer than the queue are told to update the main checkout" '[[ $? == 2 && $out == *"main checkout"* ]]'
+ok "wrappers newer than the queue are told to try again" '[[ $? == 2 && $out == *"main checkout, try again in a minute"* ]]'
 
 out=$(q stats)
 ok "q stats reports waits, runs and memory peaks per kind, and what jobs waited for" \

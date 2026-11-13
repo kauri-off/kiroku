@@ -30,6 +30,7 @@ done
 
 if in_emu_job; then
   cd "$SELF"
+  export JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=$TMPDIR${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}"
   exec "$SELF/gradlew" --no-daemon --max-workers=2 "$@"
 fi
 for a; do
@@ -40,6 +41,7 @@ done
 
 qsubmit gw "$kind" sh -c 'export ANDROID_SERIAL=kiroku-no-device ANDROID_ADB_SERVER_PORT=15599 '"$ADB_ISOLATION"'
 unset '"$ADB_REDIRECTS"'
+export JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=$TMPDIR${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}"
 ./gradlew --no-daemon --max-workers="$KIROKU_Q_WORKERS" "$@"
 rc=$?
 case $rc in 2 | 69 | 75 | 76 | 125) echo "tools/gw: Gradle exited $rc, reported as 1"; rc=1 ;; esac

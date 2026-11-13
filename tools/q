@@ -10,14 +10,16 @@ the state is in $XDG_STATE_HOME/kiroku-queue (default ~/.local/state), outside e
 systemd user unit, kiroku-q-ID, so its memory and CPU are measured and nothing of it outlives it.
 The limits are data in tools/q.conf. A queued job starts when all of this holds:
   budget  the declared memory of the running jobs plus its own fits the budget;
-  memory  the machine's available memory, less what running jobs declared but have not used yet, covers its own
-          figure plus the margin;
+  memory  the machine's available memory, less what running jobs declared but have not used yet (file cache is
+          not use: it still counts as available), covers its own figure plus the margin;
   cpu     the workers of the running jobs plus its own fit the machine's threads less the reserve;
   slot    an emulator slot is free, for a kind that takes one;
   order   jobs are looked at in the order they came and the first that fits starts, so a small job passes a
           large one that does not fit. A job that has waited longer than patience_s keeps its place: what it
-          needs is set aside, and a later job starts only beside that.
-When nothing runs and the first job has waited force_s for available memory, it starts if free swap covers the rest.
+          needs is set aside (only the slot, while a slot is what it waits for), and a later job starts only
+          beside that.
+When nothing runs and the first job has waited force_s for available memory, it starts if half its figure is
+available and free swap that is not zram covers the rest.
 A running job that prints nothing and uses no CPU for stall_s is reported as stalled; it is not killed. A job
 whose worktree is removed is cancelled. A job's environment has KIROKU_Q_WORKERS and, with a slot, KIROKU_Q_SLOT.
 TMPDIR is a directory of the job's own in the state directory, on disk, removed when the job ends.
@@ -35,7 +37,8 @@ EXIT_PENDING, EXIT_STALLED, EXIT_STOPPED = 75, 76, 125
 STALL_CPU = 0.02
 KEEP_DAYS, KEEP_JOBS = 14, 300
 SECRET = re.compile(r"TOKEN|SECRET|PASS|AUTH|COOKIE|CREDENTIAL|PRIVATE|API_?KEY|SESSION")
-REASONS = {"budget": "the memory budget", "memory": "available memory", "cpu": "worker threads",
+REASONS = {"budget": "the memory budget", "memory": "available memory",
+           "short": "available memory, too little to start on swap", "cpu": "worker threads",
            "slot": "an emulator slot", "order": "a job that has waited longer", "config": "a readable tools/q.conf"}
 TICK = os.sysconf("SC_CLK_TCK")
 
@@ -82,7 +85,7 @@ def main_copy():
     main = os.path.realpath(out[0][:-5])
     if main == os.path.realpath(out[1]): return None
     q = f"{main}/tools/q"
-    if not os.path.isfile(q): die(f"q: the main checkout {main} has no tools/q: bring it to the newest main")
+    if not os.path.isfile(q): die(f"q: the main checkout {main} has no tools/q yet: the maintainer is updating it, try again in a minute")
     return q
 
 
@@ -136,8 +139,21 @@ def cg_stat(cg, name, key):
 
 
 def claimed(e):
-    """MiB of its declared memory a running job has taken so far."""
-    return ((cg_int(e.get("cg"), "memory.current") or 0) + (cg_int(e.get("cg"), "memory.swap.current") or 0)) >> 20
+    """MiB of its declared memory a running job has taken so far; file cache is left out, as it is still available."""
+    cg = e.get("cg")
+    return (sum(cg_stat(cg, "memory.stat", k) or 0 for k in ("anon", "shmem")) + (cg_int(cg, "memory.swap.current") or 0)) >> 20
+
+
+def disk_swap_free():
+    """MiB free on swap that is not zram, which only moves pages inside the RAM."""
+    free = 0
+    try:
+        with open(HOOK.get("swaps", "/proc/swaps")) as f:
+            for l in f.readlines()[1:]:
+                p = l.split()
+                if len(p) >= 4 and not os.path.basename(p[0]).startswith("zram"): free += int(p[2]) - int(p[3])
+    except (OSError, ValueError): pass
+    return free // 1024
 
 
 # ---- state ----------------------------------------------------------------------------------------------------
@@ -151,7 +167,7 @@ class Locked:
         fcntl.flock(self.f, fcntl.LOCK_EX)
         self.s = rjson(f"{STATE}/state.json") or {"format": FORMAT, "seq": 0, "jobs": {}}
         if self.s.get("format", 0) > FORMAT:
-            die(f"q: {STATE} was written by a newer tools/q: bring the main checkout to the newest main")
+            die(f"q: {STATE} was written by a newer tools/q: the maintainer is updating the main checkout, try again in a minute")
         self.was = json.dumps(self.s, sort_keys=True)
         return self.s
 
@@ -194,9 +210,9 @@ def decide(s, i, conf, mem):
 
     def blocked(k, hold):
         mem, workers, slots, taken = (a + b * hold for a, b in zip(use, held))
+        if k["slot"] and slots >= conf["slots"]: return "slot"
         if mem + k["mem"] > conf["budget"]: return "budget"
         if workers + k["workers"] > conf["cpu"]: return "cpu"
-        if k["slot"] and slots >= conf["slots"]: return "slot"
         if avail - taken < k["mem"] + conf["margin"]: return "memory"
 
     first = True
@@ -207,14 +223,15 @@ def decide(s, i, conf, mem):
             continue
         need = [k["mem"], k["workers"], int(k["slot"]), k["mem"]]
         why = blocked(k, True)
-        forced = (why == "memory" and first and not run and now() - e["submit"] >= conf["force"]
-                  and avail + mem.get("SwapFree", 0) >= k["mem"] + conf["margin"])
+        due = why == "memory" and first and not run and now() - e["submit"] >= conf["force"]
+        forced = due and avail >= k["mem"] / 2 and avail + disk_swap_free() >= k["mem"] + conf["margin"]
         if why is None or forced:
             if j == i: return True, "forced" if forced else None
             use = [a + b for a, b in zip(use, need)]
         elif j == i:
-            return False, blocked(k, False) or "order"
+            return False, "short" if due else blocked(k, False) or "order"
         elif now() - e["submit"] >= conf["patience"]:
+            if blocked(k, False) == "slot": need = [0, 0, 1, 0]
             held = [a + b for a, b in zip(held, need)]
         first = False
     return False, "config"
@@ -378,7 +395,9 @@ def cmd_submit(a):
         else: api = int(v)
     a = a[1:]
     if api < API: die("q: tools/gw and tools/emu of this worktree are older than the queue: merge main into this branch")
-    if api > API: die(f"q: {HERE} is older than tools/gw and tools/emu of this worktree: bring the main checkout to the newest main")
+    if api > API:
+        die(f"q: {HERE} is older than tools/gw and tools/emu of this worktree: the maintainer is updating the main"
+            " checkout, try again in a minute")
     try: conf = load_conf()
     except ConfError as x: die(f"q: {x}")
     if kind not in conf["kinds"] or not a: die(f"q: submit needs --kind {'|'.join(conf['kinds'])} and a command")

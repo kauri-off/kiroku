@@ -89,11 +89,11 @@ log and its memory peak, and exits with:
 |---|---|---|
 | 0 | Passed | |
 | 1, other | Gradle's or the command's own code. If it was 2, 69, 75, 76 or 125, the wrapper reports 1 and prints "… exited <n>, reported as 1" | Read the output |
-| 2 | The call was refused (arguments, kind, job id, worktree, branch behind `main`); nothing ran | Fix what the message names |
+| 2 | The call was refused (arguments, kind, job id, worktree, branch behind `main`, main checkout behind it); nothing ran | Fix what the message names, or try again in a minute when it says so |
 | 69 | `tools/emu` only: no emulator could be started, or it died; the reason is printed | Not your command's result: run it once more; if it repeats, stop and report the reason |
 | 75 | The job is queued or running, or the queue could not report on it | Run the printed `--wait <id>` command again, as often as needed; do not start the job again |
 | 76 | The job is stalled | If the output explains the wait, wait again; otherwise stop it with `tools/q kill <id>` |
-| 125 | The job was stopped (`tools/q kill`, or its worktree was removed) | Start it again if you still need the result |
+| 125 | The job was stopped (`tools/q kill`, its worktree was removed, or the system killed it for lack of memory) | Start it again if you still need the result |
 
 Do not start a Gradle daemon, and do not change the memory settings in `gradle.properties` or the limits in
 `tools/q.conf` without a measurement.
