@@ -15,6 +15,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.time.Duration
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 // Section 2.3's rows for MAL, and that a request ends in an answer whatever happens to it.
@@ -96,6 +98,20 @@ class MalErrorsTest {
         )
         assertEquals(failed(DataError.Refused), read(anotherUsersList = true))
         assertEquals(Duration.ofHours(1), network.http.backOff.remaining())
+    }
+
+    @Test
+    fun `the time a refusal names may be a date`() {
+        val until = network.clock.now.plus(Duration.ofHours(2)).atZone(ZoneOffset.UTC)
+        network.always(
+            MockResponse
+                .Builder()
+                .code(403)
+                .setHeader("Retry-After", DateTimeFormatter.RFC_1123_DATE_TIME.format(until))
+                .build(),
+        )
+        assertEquals(failed(DataError.Refused), read())
+        assertEquals(Duration.ofHours(2), network.http.backOff.remaining())
     }
 
     @Test
