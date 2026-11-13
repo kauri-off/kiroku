@@ -490,7 +490,7 @@ several components for one job, these are the choices:
 
 | Job | Choice | Why |
 |---|---|---|
-| A wait of unknown length for a whole screen, and pull-to-refresh | The loading indicator | One sign for "this screen is being fetched" |
+| A wait of unknown length for a whole screen, and pull-to-refresh | The loading indicator; for a whole screen, once the wait has lasted as long as the title page's (section 9.4) | One sign for "this screen is being fetched" |
 | A wait for part of a screen already shown, and progress of counted work | The wavy linear progress indicator | The wave says that work is running, and stops when it does |
 | A share of a whole that does not change | The flat linear progress indicator | Nothing is running, so nothing waves |
 | One of a few options, all visible | A connected button group of toggle buttons, in as few rows as fit | The chosen one differs in colour and in shape, not in colour alone, and choosing one moves no other |
@@ -501,6 +501,8 @@ several components for one job, these are the choices:
 | The navigation bar on phones | The short navigation bar | More room for content |
 | Top app bars | The small top app bar | A large or flexible bar spends the first screen on a title the user knows |
 | Lists of content | Plain list items, not segmented ones | A container around every row is a card used as decoration |
+
+At a start the system's splash stays until the List has content, for no longer than the title page's wait.
 
 Expressive means that only decorate are not used: wavy sliders, images clipped to or morphing between shapes, split
 buttons, floating toolbars, the FAB menu, button groups that resize under the finger, vibrant colour variants.
@@ -573,10 +575,10 @@ by the owner before the layout task starts. New content defaults to "behind a ta
 
 ### 9.2 Sign-in
 
-Must show: the app name; one sentence; a "Sign in with MyAnimeList" button; a "Browse without an account" text
-button; the line "Unofficial. Not affiliated with MyAnimeList." Limit: nothing else. In a build without a client id
-(section 3.3) the sentence is replaced by "This build has no MyAnimeList client id" and the sign-in button is
-disabled.
+Must show: Back; the app's mark and name; one sentence; a "Sign in with MyAnimeList" button; a "Browse without an
+account" text button; the line "Unofficial. Not affiliated with MyAnimeList." Limit: nothing else. The sentence
+gives way to the state: "This build has no MyAnimeList client id" (section 3.3) and "Signing in…", both with the
+sign-in button disabled, and "Sign-in failed, try again".
 
 ### 9.3 List (the start screen)
 
