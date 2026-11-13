@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name" tools:ignore="UnusedResources">Kiroku</string>
+<resources>
+    <string name="app_name">Kiroku</string>
     <string name="app_name_debug">Kiroku debug</string>
     <string name="app_name_preview">Kiroku preview</string>
 </resources>
