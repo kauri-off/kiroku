@@ -219,7 +219,10 @@ class ProfileScreenTest {
                 .action!!
                 .invoke(results)
             val layout = results.single()
-            assertFalse("${layout.layoutInput.text} runs past its width", layout.hasVisualOverflow)
+            // Centred text is narrower than its paragraph, so every line is checked against the width it may take.
+            val width = layout.layoutInput.constraints.maxWidth
+            val inside = (0 until layout.lineCount).all { layout.getLineLeft(it) >= 0f && layout.getLineRight(it) <= width }
+            assertTrue("${layout.layoutInput.text} runs past its width", inside)
             val breaks = (0 until layout.lineCount - 1).map { layout.getLineEnd(it) }
             assertTrue("${layout.layoutInput.text} breaks at $breaks", breaks.all { it == verb.length })
         }
