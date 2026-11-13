@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
@@ -69,6 +70,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.sign
 
 // The shell's messages on the host a screen draws, over a surface that counts the taps that reach it.
 private class SwipeHarness(
@@ -132,7 +134,7 @@ private class SwipeHarness(
         val item = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).getUnclippedBoundsInRoot()
         val width = item.right - item.left - MARGINS
         compose.onNodeWithText("Could not save").performTouchInput {
-            val total = width.toPx() * fraction + viewConfiguration.touchSlop
+            val total = width.toPx() * fraction + fraction.sign * viewConfiguration.touchSlop
             down(center)
             repeat(SLOW_STEPS) { moveBy(Offset(total / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
             if (held) advanceEventTime(HELD_MS)
@@ -146,7 +148,7 @@ private class SwipeHarness(
     companion object {
         val PAST = 200.dp
 
-        // Short of the stock threshold of 56 dp, and slow enough to be no fling.
+        // Well short of half any message's width, and slow enough to be no fling.
         val SHORT = 30.dp
         const val FAST_MS = 150L
         const val SLOW_MS = 1_000L
@@ -316,6 +318,36 @@ class SwipedMessageTest {
     }
 }
 
+// On a wide window the rule is still half the message's width, though its way to the window's edge is longer.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w900dp-h411dp")
+class SwipedMessageWideTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    @Test
+    fun `a release held still past half the message's width dismisses it either way, and short of half returns it`() =
+        with(harness) {
+            show()
+            post(failed(1), failed(2), moved)
+            compose.waitForIdle()
+            release(fraction = 0.4f, held = true)
+            release(fraction = -0.4f, held = true)
+            assertEquals(failed(1), messages.current.value?.message)
+            release(fraction = 0.6f, held = true)
+            assertEquals(failed(2), messages.current.value?.message)
+            release(fraction = -0.6f, held = true)
+            assertEquals(moved, messages.current.value?.message)
+        }
+}
+
 // ARCHITECTURE 8.5: a message swiped away leaves the window whole, its shadow too.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -356,27 +388,69 @@ class SwipedMessageExitTest {
         compose.mainClock.advanceTimeBy(SETTLED_MS)
     }
 
-    @Test
-    fun `a message held past where it leaves is wholly off the window`() {
+    private fun heldFarIsOff(
+        text: String,
+        direction: Float,
+        y: Int,
+        empty: IntArray,
+    ) {
+        compose.onNodeWithText(text).performTouchInput {
+            down(center)
+            repeat(FAR_STEPS) { moveBy(Offset(direction * FAR.toPx(), 0f), delayMillis = FAR_STEP_MS) }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("$direction", 0, drawnOn(y, empty))
+        compose.onNodeWithText(text).performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+    }
+
+    private fun shellMessagesHeldFarAreOff() {
         start()
         for (direction in listOf(1f, -1f)) {
             val (y, empty) = row()
-            compose.onNodeWithText("Moved to Completed").performTouchInput {
-                down(center)
-                repeat(FAR_STEPS) { moveBy(Offset(direction * width, 0f), delayMillis = FAR_STEP_MS) }
-            }
-            compose.mainClock.advanceTimeByFrame()
-            assertEquals("$direction", 0, drawnOn(y, empty))
-            compose.onNodeWithText("Moved to Completed").performTouchInput { up() }
-            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            heldFarIsOff("Moved to Completed", direction, y, empty)
             assertNull(harness.messages.current.value)
+        }
+    }
+
+    @Test
+    fun `a message held past where it leaves is wholly off the window`() = shellMessagesHeldFarAreOff()
+
+    // At most 600 dp wide and centred, the message has further to go than its own width.
+    @Test
+    @Config(qualifiers = "en-w900dp-h411dp")
+    fun `on a wide window a message held past where it leaves is wholly off the window`() = shellMessagesHeldFarAreOff()
+
+    // The rail is drawn over the pane beside it: the message passes under it to the window's edge.
+    @Test
+    @Config(qualifiers = "en-w840dp-h600dp")
+    fun `in the rail layout a message held past where it leaves is wholly out of view`() {
+        var message by mutableStateOf<ShellMessage?>(null)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(snackbars = rememberHostShowing(message)) } }
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+        val shown =
+            listOf(
+                harness.moved to "Moved to Completed",
+                ShellMessage(ShellMessage.Text.EpisodeWatched(13)) to "Episode\u00A013 watched",
+            )
+        for ((direction, posted) in listOf(-1f, 1f).zip(shown)) {
+            val background = compose.onRoot().captureToImage().asAndroidBitmap()
+            Snapshot.withMutableSnapshot { message = posted.first }
+            Snapshot.sendApplyNotifications()
+            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            val text = compose.onNodeWithText(posted.second).getUnclippedBoundsInRoot()
+            val y = with(compose.density) { ((text.top + text.bottom) / 2).roundToPx() }
+            heldFarIsOff(posted.second, direction, y, IntArray(background.width) { background.getPixel(it, y) })
+            compose.onNodeWithText(posted.second).assertDoesNotExist()
         }
     }
 
     private companion object {
         const val SETTLED_MS = 2_000L
 
-        // Far beyond the window, in moves a frame apart.
+        // Far beyond the widest window, in moves a frame apart.
+        val FAR = 300.dp
         const val FAR_STEPS = 6
         const val FAR_STEP_MS = 16L
     }
@@ -445,6 +519,61 @@ class SwipedMessageMotionTest {
         assertIdle()
     }
 
+    // Effects springs only: a message let go short of half comes back to its place and never past it.
+    private fun returnsWithoutPassing(held: Boolean) {
+        val rest = shown()
+        compose.onNodeWithText("Could not save").performTouchInput {
+            down(center)
+            repeat(RETURN_STEPS) { moveBy(Offset(SwipeHarness.SHORT.toPx() * 2 / RETURN_STEPS, 0f), delayMillis = RETURN_STEP_MS) }
+            if (held) advanceEventTime(SwipeHarness.HELD_MS)
+            up()
+        }
+        var elapsed = 0L
+        while (elapsed < MotionBounds.CHANGE) {
+            compose.mainClock.advanceTimeByFrame()
+            elapsed += FRAME_MS
+            val now = harness.left("Could not save")
+            assertTrue("held $held: at ${now - rest} after $elapsed ms", now.value >= rest.value - 0.5f)
+        }
+        assertEquals(rest.value, harness.left("Could not save").value, 0.5f)
+    }
+
+    @Test
+    fun `a message let go while moving comes back without passing its place`() = returnsWithoutPassing(held = false)
+
+    @Test
+    fun `a message let go held still comes back without passing its place`() = returnsWithoutPassing(held = true)
+
+    // ARCHITECTURE 7.2: its time runs only while it can be seen and tapped; under a finger it stops, and let go it starts again.
+    @Test
+    fun `a message's time stops while a finger holds it and starts again in full when it is let go`() {
+        shown()
+        compose.mainClock.advanceTimeBy(BEFORE_HOLD_MS)
+        compose.onNodeWithText("Could not save").performTouchInput {
+            down(center)
+            moveBy(Offset(SwipeHarness.SHORT.toPx() * 2, 0f), delayMillis = FRAME_MS)
+        }
+        compose.mainClock.advanceTimeBy(HOLD_MS)
+        assertEquals(
+            harness.failed(1),
+            harness.messages.current.value
+                ?.message,
+        )
+        compose.onNodeWithText("Could not save").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(LONG_MS - SECOND_MS)
+        assertEquals(
+            harness.failed(1),
+            harness.messages.current.value
+                ?.message,
+        )
+        compose.mainClock.advanceTimeBy(2 * SECOND_MS)
+        assertEquals(
+            harness.moved,
+            harness.messages.current.value
+                ?.message,
+        )
+    }
+
     @Test
     fun `a swipe past the threshold ends within the time of a change`() {
         shown()
@@ -490,6 +619,17 @@ class SwipedMessageMotionTest {
 
     private companion object {
         const val SETTLED_MS = 2_000L
+        const val FRAME_MS = 16L
+
+        // Sixty dp in about a second: well under the fling speed.
+        const val RETURN_STEPS = 60
+        const val RETURN_STEP_MS = 16L
+
+        // The stock host's time for a message with an action.
+        const val LONG_MS = 10_000L
+        const val SECOND_MS = 1_000L
+        const val BEFORE_HOLD_MS = 6_000L
+        const val HOLD_MS = 12_000L
     }
 }
 
