@@ -1,6 +1,11 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -29,6 +34,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -127,7 +133,80 @@ class SearchRouteTest {
 
     private val watching = "Watching\u00A0· 12\u00A0/\u00A024"
 
+    // Under the bar, not in the search view.
+    private fun underBar(text: String) = hasText(text) and !hasAnyAncestor(isDialog())
+
+    @Test
+    fun `searching a recent search again moves it to the top without a second row`() {
+        search()
+        val again = SearchFixtureStates.recent[2]
+        compose.onNode(underBar(again)).performClick()
+        settle()
+        compose.onNode(hasContentDescription("Clear search") and !hasAnyAncestor(isDialog())).performClick()
+        settle()
+        val top = compose.onNode(underBar(again)).getUnclippedBoundsInRoot().top
+        val first = compose.onNode(underBar(SearchFixtureStates.recent[0])).getUnclippedBoundsInRoot().top
+        assertTrue(top < first)
+        compose.onNode(underBar(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertExists()
+    }
+
+    @Test
+    fun `a query of spaces is no query, and is not kept`() {
+        search()
+        compose.onNode(hasSetTextAction() and !hasAnyAncestor(isDialog())).performClick()
+        settle()
+        compose.onNode(typing).performKeyInput {
+            pressKey(Key.Spacebar)
+            pressKey(Key.Spacebar)
+        }
+        settle()
+        compose.onNode(inView("Recent searches")).assertExists()
+        compose.onNode(hasText("Nothing found", substring = true)).assertDoesNotExist()
+        compose.onNode(typing).performImeAction()
+        settle()
+        compose.onNode(inView(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertExists()
+    }
+
     private companion object {
         const val SETTLE_ROUNDS = 5
+    }
+}
+
+// The field's text and the recent searches survive a rotation and the process being recreated.
+@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SearchRouteRestoreTest {
+    private val main = StandardTestDispatcher()
+    private val compose = composeRule()
+
+    @get:Rule
+    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose))
+
+    private val scope = CoroutineScope(SupervisorJob() + main)
+    private val graph = TestGraph(Demo(Fixtures.reference, scope))
+
+    @After
+    fun stop() = scope.cancel()
+
+    @Test
+    fun `the search text and the recent searches are restored`() {
+        val restore = StateRestorationTester(compose)
+        val standIn = SearchFixtureStates.standIn(Fixtures.reference)
+        restore.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SearchRoute(standIn, graph, remember { SnackbarHostState() }, { _, _ -> }, onBrowse = {}, onSignIn = {})
+            }
+        }
+        val searched = SearchFixtureStates.recent[3]
+        compose.onNodeWithText(searched).performClick()
+        compose.waitForIdle()
+        restore.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText(searched)).assertExists()
+        compose.onNodeWithContentDescription("Clear search").performClick()
+        compose.waitForIdle()
+        val top = compose.onNodeWithText(searched).getUnclippedBoundsInRoot().top
+        assertTrue(top < compose.onNodeWithText(SearchFixtureStates.recent[0]).getUnclippedBoundsInRoot().top)
     }
 }

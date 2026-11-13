@@ -133,6 +133,14 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `a page that arrives with another after it asks again while the end stays in view`() {
+        val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready)))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(2), More.Ready)))
+        assertEquals(listOf(SearchEvent.LoadMore, SearchEvent.LoadMore), events)
+    }
+
+    @Test
     fun `a failed further page keeps the rows and offers Retry`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
         show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Failed(DataError.Refused))))

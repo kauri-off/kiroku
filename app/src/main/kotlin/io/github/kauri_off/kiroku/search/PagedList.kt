@@ -37,10 +37,10 @@ internal fun LazyListScope.pagedRows(
         More.Ready, More.Loading ->
             item(key = MORE, contentType = MORE) {
                 LoadingMore()
-                // Composed as the end of the list comes into view, which asks for the next page.
+                // Asks for the next page when the end comes into view, and again with each page that arrives there.
                 if (more == More.Ready) {
                     val load by rememberUpdatedState(onLoadMore)
-                    LaunchedEffect(Unit) { load() }
+                    LaunchedEffect(rows.size) { load() }
                 }
             }
         is More.Failed ->
