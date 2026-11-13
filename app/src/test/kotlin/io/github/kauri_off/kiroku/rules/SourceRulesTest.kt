@@ -207,6 +207,15 @@ class SourceRulesTest {
     }
 
     @Test
+    fun theLoadingIndicatorsGraceIsTheOneDelayItsFileMayWrite() {
+        val grace = "@Composable\nfun A() {\n    LaunchedEffect(Unit) { $PATIENCE_WAIT; shown = true }\n}\n"
+        assertEquals(emptyList<String>(), motionLiteralProblems(PATIENCE_SOURCE, grace))
+        assertEquals(1, motionLiteralProblems("A.kt", grace).size)
+        assertEquals(1, motionLiteralProblems(PATIENCE_SOURCE, grace.replace(PATIENCE_WAIT, "delay(250)")).size)
+        assertTrue(appSources().single { relative(it) == PATIENCE_SOURCE }.readText().contains(PATIENCE_WAIT))
+    }
+
+    @Test
     fun aDelayIsAnAnimationValueOnlyInUserInterfaceCode() {
         val composable = "@Composable\nfun A() {\n    LaunchedEffect(x) { delay(250); shown = true }\n}\n"
         assertEquals(1, motionLiteralProblems("A.kt", composable).size)
