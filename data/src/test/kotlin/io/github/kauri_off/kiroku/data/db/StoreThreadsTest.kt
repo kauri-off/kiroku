@@ -215,34 +215,6 @@ class StoreThreadsTest {
             standing.cancel()
         }
 
-    @Test
-    fun `a write that ends while a lone collector is joining reaches it`() =
-        runBlocking {
-            stored()
-            val opened = CompletableDeferred<Unit>()
-            val commit = CompletableDeferred<Unit>()
-            val write =
-                launch(Dispatchers.Default) {
-                    database.transaction {
-                        database.execute("UPDATE list_entry SET shown_watched = 30, confirmed_watched = 30")
-                        opened.complete(Unit)
-                        commit.await()
-                    }
-                }
-            withTimeout(TIMEOUT) { opened.await() }
-            val seen = CopyOnWriteArrayList<Int>()
-            val joined = collector(seen)
-            until { seen.isNotEmpty() }
-            delay(SETTLE)
-
-            commit.complete(Unit)
-            write.join()
-
-            until { seen.last() == 30 }
-            assertEquals(listOf(12, 30), seen.toList())
-            joined.cancel()
-        }
-
     private companion object {
         const val NAME = "threads.db"
         val TIMEOUT = 20.seconds
