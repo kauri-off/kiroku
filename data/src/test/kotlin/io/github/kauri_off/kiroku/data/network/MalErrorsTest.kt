@@ -102,7 +102,10 @@ class MalErrorsTest {
 
     @Test
     fun `the time a refusal names may be a date`() {
-        val until = network.clock.now.plus(Duration.ofHours(2)).atZone(ZoneOffset.UTC)
+        val until =
+            network.clock.now
+                .plus(Duration.ofHours(2))
+                .atZone(ZoneOffset.UTC)
         network.always(
             MockResponse
                 .Builder()
