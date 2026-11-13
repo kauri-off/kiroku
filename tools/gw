@@ -3,6 +3,7 @@ set -euo pipefail
 USAGE="usage: tools/gw [--kind test|check] GRADLE_ARGS...   run Gradle as a queue job (default kind: test)
        tools/gw --wait ID                           wait again for a job that is not finished
 Run it inside its worktree. Gradle sees no device; device tasks run as: tools/emu run tools/gw TASK.
+There a connected task fails (exit 1) when it ran no test.
 Waits up to 100 s, then prints the job's last 60 lines, the path of its full log and its memory peak.
 Exit: Gradle's code (1 = failed); 75 not finished, 76 stalled, 125 job stopped, 2 refused (nothing ran)."
 . "$(dirname "$0")/queue.sh"
@@ -31,7 +32,31 @@ done
 if in_emu_job; then
   cd "$SELF"
   export JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=$TMPDIR${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}"
-  exec "$SELF/gradlew" --no-daemon --max-workers=2 "$@"
+  connected=0
+  for a; do [[ $a != -* && ${a##*:} =~ ^connected[A-Z] ]] && connected=1; done
+  ((connected)) || exec "$SELF/gradlew" --no-daemon --max-workers=2 "$@"
+  # AGP reports success when its test engine cannot reach the device, so the results are checked here.
+  stamp=$(mktemp)
+  rc=0
+  "$SELF/gradlew" --no-daemon --max-workers=2 "$@" || rc=$?
+  ((rc == 0)) || exit "$rc"
+  total=0 files=0
+  while IFS= read -r -d '' f; do
+    n=$(grep -o -m1 'tests="[0-9]*"' "$f" | tr -dc 0-9) || n=0
+    files=$((files + 1)) total=$((total + ${n:-0}))
+    if ((${n:-0} == 0)); then
+      echo "DEVICE TESTS FAILED: ${f#"$SELF"/} ran no test: the device could not be reached, or no test was found" \
+        "(see the output above)"
+      exit 1
+    fi
+  done < <(find "$SELF" -path "$SELF/.git" -prune -o -path '*/build/outputs/androidTest-results/connected/*' \
+    -name 'TEST-*.xml' -newer "$stamp" -print0)
+  if ((files == 0)); then
+    echo "DEVICE TESTS FAILED: the connected task wrote no test result, so no device test ran"
+    exit 1
+  fi
+  echo "tools/gw: $total device tests ran on $ANDROID_SERIAL ($files result files)"
+  exit 0
 fi
 for a; do
   if [[ $a != -* && ${a##*:} =~ ^(install|uninstall|connected)[A-Z] ]]; then

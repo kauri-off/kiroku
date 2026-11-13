@@ -18,6 +18,7 @@ SLOT=
 PORT=
 RUN=
 emu_pid=
+OWN_ADB=()
 cmd_pid=
 signalled=0
 
@@ -109,23 +110,41 @@ claim_run() {
   export TMPDIR=$RUN/tmp
 }
 
-# adb for this run: its own key directory, and no option or command that reaches another server or device.
+# adb for this run: its server, device and key directory in any environment; nothing that reaches another one.
 adb_shim() {
+  cp --reflink=auto -- "$ANDROID_HOME/platform-tools/adb" "$RUN/bin/sdk-adb" || return 1
   cat > "$RUN/bin/adb" << EOF
 #!/usr/bin/env bash
 a=("\$@")
+no() {
+  echo "adb: \$1 is not available inside tools/emu" >&2
+  exit 2
+}
 while ((\${#a[@]})); do
   case \${a[0]} in
     -s | -t) a=("\${a[@]:2}") ;;
-    -H* | -P* | -L* | -a | connect | pair | mdns | kill-server)
-      echo "adb: \${a[0]} is not available inside tools/emu" >&2; exit 2 ;;
+    -P) [[ \${a[1]:-} == $ANDROID_ADB_SERVER_PORT ]] || no "-P \${a[1]:-}"; a=("\${a[@]:2}") ;;
+    -P$ANDROID_ADB_SERVER_PORT) a=("\${a[@]:1}") ;;
+    -H* | -P* | -L* | -a | connect | pair | mdns | kill-server) no "\${a[0]}" ;;
     -*) a=("\${a[@]:1}") ;;
     *) break ;;
   esac
 done
-HOME=$(printf %q "$RUN/home") exec $(printf %q "$ANDROID_HOME/platform-tools/adb") "\$@"
+unset $ADB_REDIRECTS
+export ANDROID_SERIAL=$ANDROID_SERIAL ANDROID_ADB_SERVER_PORT=$ANDROID_ADB_SERVER_PORT ADB_REJECT_KILL_SERVER=1
+export $ADB_ISOLATION
+HOME=$(printf %q "$RUN/home") exec $(printf %q "$RUN/bin/sdk-adb") "\$@"
 EOF
   chmod +x "$RUN/bin/adb"
+}
+
+# Runs a command with this run's adb at the SDK's path: Gradle's worker processes keep only the locale and HOME.
+own_adb() {
+  OWN_ADB=(unshare --user --map-root-user --mount sh -c 'mount --bind "$2" "$3" && shift 3 &&
+    exec unshare --user --map-user="${0%:*}" --map-group="${0#*:}" "$@"' "$(id -u):$(id -g)" own "$RUN/bin/adb"
+    "$ANDROID_HOME/platform-tools/adb")
+  [[ $("${OWN_ADB[@]}" sh -c 'cmp -s "$1" "$2" && id -u' sh "$RUN/bin/adb" "$ANDROID_HOME/platform-tools/adb" \
+    2> /dev/null) == "$(id -u)" ]]
 }
 
 ensure_avd() {
@@ -153,7 +172,8 @@ boot() {
   done
   claim_run
   ensure_avd || nodevice "the AVD could not be prepared (see above)"
-  adb_shim
+  adb_shim || nodevice "the SDK's adb cannot be copied to the run directory"
+  own_adb || nodevice "the command cannot be given this run's adb (unshare or mount failed)"
   export PATH=$RUN/bin:$ANDROID_HOME/platform-tools:$PATH
   adb start-server > /dev/null 2>&1 || nodevice "adb server did not start on port $ANDROID_ADB_SERVER_PORT"
   mkdir -p "$(dirname "$log")"
@@ -270,7 +290,7 @@ job() {
     run) shift ;;
     smoke) set -- "$SELF/tools/emu" _smoke "$2" ;;
   esac
-  setsid "$@" &
+  setsid "${OWN_ADB[@]}" "$@" &
   cmd_pid=$!
   wait "$cmd_pid" || rc=$?
   echo "tools/emu: the command exited $rc"
