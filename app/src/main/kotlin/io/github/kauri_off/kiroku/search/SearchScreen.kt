@@ -33,6 +33,7 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
@@ -85,10 +86,13 @@ fun SearchScreen(
     val field = @Composable { SearchField(state.query, bar, events) }
     Scaffold(
         modifier = modifier,
+        // The bar's own container is clear; this one hides the rows that scroll under it, up to the screen's top edge.
         topBar = {
-            Column {
-                AppBarWithSearch(state = bar, inputField = field)
-                if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(SearchEvent.SignIn) })
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Column {
+                    AppBarWithSearch(state = bar, inputField = field)
+                    if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(SearchEvent.SignIn) })
+                }
             }
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
