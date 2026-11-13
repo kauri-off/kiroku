@@ -51,8 +51,7 @@ import java.time.LocalDate
 import kotlin.time.Duration.Companion.seconds
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
-// [sessions] gives each collector the session as it is and then every change, and nothing before it is known; until
-// then the engine reads nothing, sends nothing and answers no call.
+// [sessions] replays the session to each collector; before it gives one, nothing is read, sent or answered.
 // [unexpected] hears of the exceptions it did not expect: the store's, MAL's client's, and its own in background work.
 class ListEngine(
     remote: RemoteList,
@@ -89,8 +88,7 @@ class ListEngine(
         cause: Throwable,
     ) : Exception(cause)
 
-    // MAL's client throwing fails the one call: an IOException as no connection, not signed in as expired, else
-    // reported. An answer about another title is the engine's own exception, and none of it is stored.
+    // MAL's client throwing fails the one call: an IOException as no connection, not signed in as expired, else reported.
     private val mal =
         object : RemoteList {
             override suspend fun fetch() = remoteCall { remote.fetch() }
@@ -102,6 +100,7 @@ class ListEngine(
                 values: ListValues?,
             ) = remoteCall { remote.put(anime, values) }.about(anime.id)
 
+            // An answer about another title is the engine's own exception, and nothing of it is stored.
             private fun Outcome<ListEntry?>.about(id: AnimeId) =
                 also { check(it !is Outcome.Success || it.value == null || it.value.anime.id == id) { WRONG_TITLE } }
         }
@@ -144,8 +143,7 @@ class ListEngine(
     // A failed request starts a new epoch of its title, which the requests still waiting from the old one are not in.
     private val epochs = mutableMapOf<AnimeId, Int>()
 
-    // A sign-out and a new sign-in start a new list: nothing accepted for an earlier one is sent, and no answer to
-    // one is stored.
+    // A sign-out and a new sign-in start a new list: nothing accepted for an earlier one is sent or stored.
     private var list = 0
 
     // The session the store was last made to agree with.
@@ -233,8 +231,7 @@ class ListEngine(
 
     override fun observeSyncedAt(): Flow<Instant?> = shown(null) { syncedAt }
 
-    // Signed out there is nothing to show; otherwise what the store has, once it holds the list of this session. A
-    // store that cannot be read is tried a few times in a row, and then the flow ends with a storage error.
+    // Nothing signed out, else the store's own once it holds this session's list; it is tried a few times in a row.
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun <T> shown(
         nothing: T,
@@ -359,9 +356,8 @@ class ListEngine(
         queue.trySend(request)
     }
 
-    // W4: a title edited since the download began keeps its values; every other one becomes what MAL has. Entries
-    // are compared without their titles, so the store is handed those alone whose values or time MAL has changed, and
-    // the data of every title on the list, whatever became of its entry.
+    // W4: a title edited since the download began keeps its values; every other one becomes what MAL has.
+    // Entries are compared without their titles; every title's data goes to the store, whatever became of its entry.
     private suspend fun download(): Outcome<Unit> =
         try {
             val (since, began) = locked { changes to list }
@@ -416,8 +412,7 @@ class ListEngine(
         if (failure != null) failures.tryEmit(failure)
     }
 
-    // A request the store or the engine itself failed under is a failed write (W2), its Retry carries the title's
-    // last edit, and the title is in the next sync (W5).
+    // A request the store or the engine failed under is a failed write (W2); its Retry carries the title's last edit.
     private suspend fun lost(
         put: Put,
         error: DataError,
@@ -481,7 +476,7 @@ class ListEngine(
     private suspend fun current(request: Request): Boolean = locked { settled is Session.SignedIn && list == request.list }
 
     // MAL's answer is the confirmed entry, and the shown one when no edit is waiting and its values differ from it.
-    // Of the answer's title data nothing is stored, unless the store does not know the title.
+    // Nothing of the answer's title data is stored, unless the store does not know the title.
     private suspend fun confirm(
         anime: Anime,
         answer: ListRecord?,
@@ -502,8 +497,7 @@ class ListEngine(
         if (title == null && next != null) local.add(anime, next) else local.write(mapOf(id to next))
     }
 
-    // Makes the store agree with the session: signed out it holds nothing (S9), a sign-in other than the list's owner
-    // starts from nothing, and the same sign-in or an expired session keeps what is stored (S6).
+    // The store agrees with the session: nothing signed out (S9), a new list for another sign-in, else as stored (S6).
     private suspend fun settle() {
         val session = sessions.first()
         if (session == settled) return

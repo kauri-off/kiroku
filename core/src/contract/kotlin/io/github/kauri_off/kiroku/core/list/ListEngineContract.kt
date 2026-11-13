@@ -141,9 +141,8 @@ abstract class ListEngineContract {
         }
     }
 
-    // A store as a database is: a query emits again after every write, changed or not, and it can fail: on every
-    // call, on its next queries, under its running queries, only on writes, as a full disk does, or with its writes
-    // held until [writeGate] completes. It keeps what the engine called and what each download handed it.
+    // A store as a database is: a query emits again after every write, changed or not, and it fails as told to.
+    // It keeps what the engine called and what each download handed it.
     private class DatabaseLike(
         private val inner: LocalList,
     ) : LocalList {
@@ -1899,6 +1898,22 @@ abstract class ListEngineContract {
                     .entries,
             )
             assertEquals(fixtures.now, s.syncedAt())
+        }
+
+    @Test
+    fun `an entry that did not change stays the same object in the store's list`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val before = s.store.observeEntries().first()
+
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            runCurrent()
+            val after = s.store.observeEntries().first()
+
+            assertEquals(13, after.single { it.anime.id == anime.id }.values.watchedEpisodes)
+            assertEquals(before.size, after.size)
+            for ((old, new) in before.zip(after)) if (old.anime.id != anime.id) assertTrue(old === new)
         }
 
     @Test

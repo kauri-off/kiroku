@@ -10,8 +10,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 
-// A store that lives as long as its process. A title keeps the place it first had, also after it left the list, and
-// an entry that did not change stays the same object.
+// A store that lives as long as its process. A title keeps the place it first had, also after it left the list.
 class InMemoryLocalList(
     entries: List<ListEntry> = emptyList(),
     owner: SignInId? = null,

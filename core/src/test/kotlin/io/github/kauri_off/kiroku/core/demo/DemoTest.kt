@@ -276,10 +276,14 @@ class DemoTest {
             val demo = demo()
             demo.server.sessionExpired.value = true
             assertEquals(Session.Expired, demo.session.observeSession().first())
+            val failures = failures(demo)
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
             assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
             assertEquals(Outcome.Failure(DataError.SessionExpired), demo.list.sync())
+            assertEquals(listOf(DataError.SessionExpired), failures.map { it.error })
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(0, demo.server.listDownloads)
             assertEquals(Outcome.Success(Unit), demo.anime.refresh(FixtureAnime.exactToWatch.id))
         }
 
