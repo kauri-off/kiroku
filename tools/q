@@ -1,0 +1,738 @@
+#!/usr/bin/env -S python3 -I
+"""usage: tools/q [ps]                  jobs running and queued, and what each queued job waits for
+       tools/q top [--once]          the same with output tails and the machine's memory, refreshed
+       tools/q stats [--since 24h]   waits, runs and memory peaks per kind, and what jobs waited for
+       tools/q kill ID               stop a queued or running job and wait until nothing of it is left
+       tools/q submit --kind KIND [--label TEXT] [-C DIR] -- CMD...   prints the job's id (tools/gw, tools/emu)
+       tools/q wait ID [--max SECONDS] [--tail N]     exit: the job's code, 75 not finished, 76 stalled, 125 stopped
+Kiroku's job queue for Gradle and emulator runs on one machine. Every worktree runs the main checkout's copy;
+the state is in $XDG_STATE_HOME/kiroku-queue (default ~/.local/state), outside every worktree. Each job is a
+systemd user unit, kiroku-q-ID, so its memory and CPU are measured and nothing of it outlives it.
+The limits are data in tools/q.conf. A queued job starts when all of this holds:
+  budget  the declared memory of the running jobs plus its own fits the budget;
+  memory  the machine's available memory, less what running jobs declared but have not used yet (file cache is
+          not use: it still counts as available), covers its own figure plus the margin;
+  cpu     the workers of the running jobs plus its own fit the machine's threads less the reserve;
+  slot    an emulator slot is free, for a kind that takes one;
+  order   jobs are looked at in the order they came and the first that fits starts, so a small job passes a
+          large one that does not fit. A job that has waited longer than patience_s keeps its place: what it
+          needs is set aside (only the slot, while a slot is what it waits for), and a later job starts only
+          beside that.
+When nothing runs and the first job has waited force_s for available memory, it starts if half its figure is
+available and free swap that is not zram covers the rest.
+A running job that prints nothing and uses no CPU for stall_s is reported as stalled; it is not killed. A job
+whose worktree is removed is cancelled. A job's environment has KIROKU_Q_WORKERS and, with a slot, KIROKU_Q_SLOT.
+TMPDIR is a directory of the job's own in the state directory, on disk, removed when the job ends.
+KIROKU_Q_HERE=1 runs this copy instead of the main checkout's, for work on the queue itself."""
+import configparser, fcntl, json, os, random, re, shutil, signal, subprocess, sys, time
+
+API = 1
+FORMAT = 1
+HERE = os.path.realpath(__file__)
+TOOLS = os.path.dirname(HERE)
+CONF = f"{TOOLS}/q.conf"
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "kiroku-queue")
+UNIT = "kiroku-q-"
+EXIT_PENDING, EXIT_STALLED, EXIT_STOPPED = 75, 76, 125
+STALL_CPU = 0.02
+KEEP_DAYS, KEEP_JOBS = 14, 300
+SECRET = re.compile(r"TOKEN|SECRET|PASS|AUTH|COOKIE|CREDENTIAL|PRIVATE|API_?KEY|SESSION")
+REASONS = {"budget": "the memory budget", "memory": "available memory",
+           "short": "available memory, too little to start on swap", "cpu": "worker threads",
+           "slot": "an emulator slot", "order": "a job that has waited longer", "config": "a readable tools/q.conf"}
+TICK = os.sysconf("SC_CLK_TCK")
+
+
+def die(m, rc=2):
+    print(m, file=sys.stderr)
+    sys.exit(rc)
+
+
+def now(): return time.time()
+def jdir(i): return f"{STATE}/jobs/{i}"
+
+
+def rjson(p, d=None):
+    try:
+        with open(p) as f: return json.load(f)
+    except (OSError, ValueError): return d
+
+
+def wjson(p, o):
+    t = f"{p}.tmp{os.getpid()}"
+    with os.fdopen(os.open(t, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f: json.dump(o, f)
+    os.replace(t, p)
+
+
+def test_hooks():
+    """Settings of the self-test, read only from an untracked copy of tools/."""
+    p = f"{TOOLS}/test-hooks"
+    if not os.path.isfile(p): return {}
+    if subprocess.run(["git", "-C", TOOLS, "ls-files", "--error-unmatch", "q"], capture_output=True).returncode == 0:
+        return {}
+    with open(p) as f: return dict(l.rstrip("\n").split("=", 1) for l in f if "=" in l)
+
+
+HOOK = test_hooks()
+
+
+def main_copy():
+    """tools/q of the main checkout when this copy is in a linked worktree, else None."""
+    r = subprocess.run(["git", "-C", TOOLS, "rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel"],
+                       capture_output=True, text=True)
+    out = r.stdout.split("\n")
+    if r.returncode or len(out) < 2 or not out[0].endswith("/.git"): return None
+    main = os.path.realpath(out[0][:-5])
+    if main == os.path.realpath(out[1]): return None
+    q = f"{main}/tools/q"
+    if not os.path.isfile(q): die(f"q: the main checkout {main} has no tools/q yet: the maintainer is updating it, try again in a minute")
+    return q
+
+
+# ---- limits ---------------------------------------------------------------------------------------------------
+
+class ConfError(Exception): pass
+
+
+def load_conf():
+    p = configparser.ConfigParser(inline_comment_prefixes=("#",))
+    try:
+        with open(CONF) as f: p.read_file(f)
+        q = p["queue"]
+        c = {"budget": q.getint("budget_mib"), "margin": q.getint("margin_mib"), "cpu_reserve": q.getint("cpu_reserve"),
+             "slots": q.getint("emu_slots"), "patience": q.getfloat("patience_s"), "force": q.getfloat("force_s"),
+             "poll": q.getfloat("poll_s"), "stall": q.getfloat("stall_s"), "grace": q.getfloat("kill_grace_s"),
+             "kinds": {k: {"mem": p[k].getint("mem_mib"), "workers": p[k].getint("workers"),
+                           "slot": p[k].getboolean("slot", fallback=False)} for k in p.sections() if k != "queue"}}
+    except (OSError, KeyError, ValueError, configparser.Error) as x:
+        raise ConfError(f"{CONF}: {x!r}")
+    flat = [v for k, v in c.items() if k != "kinds"] + [v for k in c["kinds"].values() for v in k.values()]
+    if any(v is None or v < 0 for v in flat) or c["poll"] <= 0 or not 1 <= c["slots"] <= 10 or not c["kinds"]:
+        raise ConfError(f"{CONF}: a value is missing or out of range")
+    c["cpu"] = int(HOOK.get("cpus") or os.cpu_count() or 1) - c["cpu_reserve"]
+    for name, k in c["kinds"].items():
+        if not 0 < k["mem"] <= c["budget"] or not 0 < k["workers"] <= c["cpu"]:
+            raise ConfError(f"{CONF}: a job of kind {name} could never start (budget {c['budget']} MiB, {c['cpu']} workers)")
+    return c
+
+
+def meminfo():
+    out = {}
+    with open(HOOK.get("meminfo", "/proc/meminfo")) as f:
+        for l in f:
+            k, _, v = l.partition(":")
+            out[k] = int(v.split()[0]) // 1024
+    return out
+
+
+def cg_int(cg, name):
+    try:
+        with open(f"{cg}/{name}") as f: return int(f.read())
+    except (OSError, ValueError, TypeError): return None
+
+
+def cg_stat(cg, name, key):
+    try:
+        with open(f"{cg}/{name}") as f:
+            return next(int(l.split()[1]) for l in f if l.startswith(key + " "))
+    except (OSError, ValueError, StopIteration): return None
+
+
+def claimed(e):
+    """MiB of its declared memory a running job has taken so far; file cache is left out, as it is still available."""
+    cg = e.get("cg")
+    return (sum(cg_stat(cg, "memory.stat", k) or 0 for k in ("anon", "shmem")) + (cg_int(cg, "memory.swap.current") or 0)) >> 20
+
+
+def disk_swap_free():
+    """MiB free on swap that is not zram, which only moves pages inside the RAM."""
+    free = 0
+    try:
+        with open(HOOK.get("swaps", "/proc/swaps")) as f:
+            for l in f.readlines()[1:]:
+                p = l.split()
+                if len(p) >= 4 and not os.path.basename(p[0]).startswith("zram"): free += int(p[2]) - int(p[3])
+    except (OSError, ValueError): pass
+    return free // 1024
+
+
+# ---- state ----------------------------------------------------------------------------------------------------
+
+class Locked:
+    """The queue's state file under an exclusive lock."""
+    def __enter__(self):
+        os.makedirs(STATE, mode=0o700, exist_ok=True)
+        os.makedirs(f"{STATE}/jobs", mode=0o700, exist_ok=True)
+        self.f = open(f"{STATE}/state.lock", "a")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+        self.s = rjson(f"{STATE}/state.json") or {"format": FORMAT, "seq": 0, "jobs": {}}
+        if self.s.get("format", 0) > FORMAT:
+            die(f"q: {STATE} was written by a newer tools/q: the maintainer is updating the main checkout, try again in a minute")
+        self.was = json.dumps(self.s, sort_keys=True)
+        return self.s
+
+    def __exit__(self, *a):
+        if json.dumps(self.s, sort_keys=True) != self.was: wjson(f"{STATE}/state.json", self.s)
+        self.f.close()
+
+
+def alive(pid):
+    try: os.kill(pid, 0); return True
+    except ProcessLookupError: return False
+    except PermissionError: return True
+
+
+def prune(s):
+    """Drops jobs whose unit died or never started, and marks them lost."""
+    for i, e in list(s["jobs"].items()):
+        if (e.get("pid") and not alive(e["pid"])) or (not e.get("pid") and now() - e["submit"] > 60):
+            del s["jobs"][i]
+            st, job = rjson(f"{jdir(i)}/status.json", {}), rjson(f"{jdir(i)}/job.json")
+            if job and st.get("state") in ("queued", "running"):
+                st["reason"] = "its unit died"
+                record(i, job, st, "lost", EXIT_STOPPED)
+
+
+def order(s):
+    return sorted(((i, e) for i, e in s["jobs"].items() if e["state"] == "queued"), key=lambda x: x[1]["seq"])
+
+
+def running(s):
+    return [e for e in s["jobs"].values() if e["state"] == "running"]
+
+
+def decide(s, i, conf, mem):
+    """Whether queued job i starts now, else what it waits for: the rule of the usage text."""
+    run, avail = running(s), mem.get("MemAvailable", 0)
+    use = [sum(e["mem"] for e in run), sum(e["workers"] for e in run), sum("slot" in e for e in run),
+           sum(max(0, e["mem"] - claimed(e)) for e in run)]
+    held = [0, 0, 0, 0]
+
+    def blocked(k, hold):
+        mem, workers, slots, taken = (a + b * hold for a, b in zip(use, held))
+        if k["slot"] and slots >= conf["slots"]: return "slot"
+        if mem + k["mem"] > conf["budget"]: return "budget"
+        if workers + k["workers"] > conf["cpu"]: return "cpu"
+        if avail - taken < k["mem"] + conf["margin"]: return "memory"
+
+    first = True
+    for j, e in order(s):
+        k = conf["kinds"].get(e["kind"])
+        if k is None:
+            if j == i: break
+            continue
+        need = [k["mem"], k["workers"], int(k["slot"]), k["mem"]]
+        why = blocked(k, True)
+        due = why == "memory" and first and not run and now() - e["submit"] >= conf["force"]
+        forced = due and avail >= k["mem"] / 2 and avail + disk_swap_free() >= k["mem"] + conf["margin"]
+        if why is None or forced:
+            if j == i: return True, "forced" if forced else None
+            use = [a + b for a, b in zip(use, need)]
+        elif j == i:
+            return False, "short" if due else blocked(k, False) or "order"
+        elif now() - e["submit"] >= conf["patience"]:
+            if blocked(k, False) == "slot": need = [0, 0, 1, 0]
+            held = [a + b for a, b in zip(held, need)]
+        first = False
+    return False, "config"
+
+
+def drop_tmp(i):
+    """Removes a job's temporary directory and returns the MiB it held."""
+    p, blocks = f"{jdir(i)}/tmp", 0
+    if not os.path.isdir(p): return None
+    for r, _, fs in os.walk(p):
+        for f in fs:
+            try: blocks += os.lstat(os.path.join(r, f)).st_blocks
+            except OSError: pass
+    shutil.rmtree(p, ignore_errors=True)
+    return blocks * 512 >> 20
+
+
+def record(i, job, st, state, rc, cg=None):
+    """Writes a job's outcome to its status file and to the log, and removes its temporary directory."""
+    st.update(state=state, end=now(), rc=rc, tmp_mib=drop_tmp(i), **usage(cg))
+    for k in ("stall", "why"): st.pop(k, None)
+    wjson(f"{jdir(i)}/status.json", st)
+    start = st.get("start")
+    rec = {"id": i, "kind": job["kind"], "label": job["label"], "cwd": job["cwd"], "cmd": job["cmd"], "status": state,
+           "rc": rc, "submit": job["submit"], "start": start, "end": st["end"],
+           "wait": round((start or st["end"]) - job["submit"], 1), "run": round(st["end"] - start, 1) if start else None,
+           **{k: st.get(k) for k in ("mem", "workers", "slot", "forced", "avail", "waits", "stalled", "peak_mib",
+                                     "swap_peak_mib", "oom_kills", "cpu_s", "tmp_mib", "reason")}}
+    with open(f"{STATE}/log.jsonl", "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.write(json.dumps(rec) + "\n")
+
+
+def read_log():
+    out = []
+    try:
+        with open(f"{STATE}/log.jsonl") as f:
+            for l in f:
+                try: out.append(json.loads(l))
+                except ValueError: pass
+    except OSError: pass
+    return out
+
+
+def gc_jobs(s):
+    """Removes temporary directories left by ended jobs, and old job directories; log.jsonl keeps their records."""
+    for n, i in enumerate(sorted(os.listdir(f"{STATE}/jobs"), reverse=True)):
+        d = jdir(i)
+        if i in s["jobs"]: continue
+        shutil.rmtree(f"{d}/tmp", ignore_errors=True)
+        try: old = n >= KEEP_JOBS and now() - os.path.getmtime(d) >= KEEP_DAYS * 86400
+        except OSError: continue
+        if old and rjson(f"{d}/status.json", {}).get("state") not in ("queued", "running"):
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def summary(s, conf, mem):
+    run, q = running(s), order(s)
+    oldest = max((now() - e["submit"] for _, e in q), default=0)
+    lim = (f" ({sum(e['mem'] for e in run)} of {conf['budget']} MiB declared, {sum(e['workers'] for e in run)} of"
+           f" {conf['cpu']} workers, {sum('slot' in e for e in run)} of {conf['slots']} emulators)") if conf else ""
+    return (f"q: {len(run)} running{lim}, {len(q)} queued" + (f" (oldest {oldest:.0f} s)" if q else "")
+            + f"; {mem.get('MemAvailable', 0)} MiB available")
+
+
+def try_conf():
+    try: return load_conf()
+    except ConfError as x:
+        print(f"q: {x}", file=sys.stderr)
+        return None
+
+
+# ---- a job's processes ----------------------------------------------------------------------------------------
+
+def own_cgroup():
+    try:
+        with open("/proc/self/cgroup") as f:
+            d = next("/sys/fs/cgroup" + l[3:].strip() for l in f if l.startswith("0::"))
+        return d if os.path.isfile(f"{d}/cgroup.procs") else None
+    except (OSError, StopIteration): return None
+
+
+def tree_pids(cg):
+    try:
+        with open(f"{cg}/cgroup.procs") as f: return [int(x) for x in f.read().split() if int(x) != os.getpid()]
+    except (OSError, ValueError): return []
+
+
+def tree_cpu(cg):
+    t = os.times()
+    return (cg_stat(cg, "cpu.stat", "usage_usec") or 0) / 1e6 - t.user - t.system
+
+
+def kill_tree(cg, root, sig):
+    try: os.killpg(root, sig)
+    except (ProcessLookupError, PermissionError): pass
+    for p in tree_pids(cg):
+        try: os.kill(p, sig)
+        except (ProcessLookupError, PermissionError): pass
+
+
+def blocked_threads(pids, top=6):
+    """What the threads of pids wait in, the ones with most CPU time first."""
+    g = {}
+    for p in pids:
+        try: tids = os.listdir(f"/proc/{p}/task")
+        except OSError: continue
+        for t in tids:
+            try:
+                with open(f"/proc/{p}/task/{t}/stat") as f: raw = f.read()
+                with open(f"/proc/{p}/task/{t}/wchan") as f: wchan = f.read().strip() or "-"
+                fields = raw.rpartition(")")[2].split()
+                key = (raw[raw.find("(") + 1:raw.rfind(")")], "running" if fields[0] == "R" else wchan)
+                n, c = g.get(key, (0, 0.0))
+                g[key] = (n + 1, c + (int(fields[11]) + int(fields[12])) / TICK)
+            except (OSError, ValueError, IndexError): continue
+    rows = sorted(g.items(), key=lambda x: (-x[1][1], -x[1][0]))[:top]
+    return ", ".join(f"{c} {w}" + (f" x{n}" if n > 1 else "") + f" ({cpu:.0f} s)" for (c, w), (n, cpu) in rows) or "no threads"
+
+
+class Watchdog:
+    """Stall check of a running job: its CPU time and the growth of its output over the last `win` seconds."""
+    def __init__(self, cg, out, win):
+        self.cg, self.out, self.win = cg, out, win
+        self.samples, self.size, self.grew = [], -1, now()
+
+    def check(self):
+        t, c = now(), tree_cpu(self.cg)
+        self.samples.append((t, c))
+        while len(self.samples) > 1 and self.samples[1][0] <= t - self.win: self.samples.pop(0)
+        try: size = os.path.getsize(self.out)
+        except OSError: size = 0
+        if size != self.size: self.size, self.grew = size, t
+        t0, c0 = self.samples[0]
+        if t - self.grew < self.win or t0 > t - self.win: return None
+        use = max(0.0, (c - c0) / (t - t0))
+        if use >= STALL_CPU: return None
+        return {"reason": f"no output for {t - self.grew:.0f} s, {100 * use:.2f} % of one core over {t - t0:.0f} s",
+                "threads": blocked_threads(tree_pids(self.cg))}
+
+
+def usage(cg):
+    mib = lambda v: None if v is None else v >> 20
+    cpu = cg_stat(cg, "cpu.stat", "usage_usec")
+    return {"peak_mib": mib(cg_int(cg, "memory.peak")), "swap_peak_mib": mib(cg_int(cg, "memory.swap.peak")),
+            "oom_kills": cg_stat(cg, "memory.events", "oom_kill"), "cpu_s": None if cpu is None else round(cpu / 1e6, 1)}
+
+
+# ---- commands -------------------------------------------------------------------------------------------------
+
+def cmd_submit(a):
+    kind, label, cwd, api = None, "", os.getcwd(), API
+    while a and a[0] != "--":
+        o = a.pop(0)
+        if o not in ("--kind", "--label", "-C", "--api") or not a: die(__doc__)
+        v = a.pop(0)
+        if o == "--kind": kind = v
+        elif o == "--label": label = v
+        elif o == "-C": cwd = os.path.realpath(v)
+        elif not v.isdigit(): die(__doc__)
+        else: api = int(v)
+    a = a[1:]
+    if api < API: die("q: tools/gw and tools/emu of this worktree are older than the queue: merge main into this branch")
+    if api > API:
+        die(f"q: {HERE} is older than tools/gw and tools/emu of this worktree: the maintainer is updating the main"
+            " checkout, try again in a minute")
+    try: conf = load_conf()
+    except ConfError as x: die(f"q: {x}")
+    if kind not in conf["kinds"] or not a: die(f"q: submit needs --kind {'|'.join(conf['kinds'])} and a command")
+    if not os.path.isdir(cwd): die(f"q: no directory {cwd}")
+    i = time.strftime("%Y%m%d-%H%M%S") + "-" + "".join(random.choices("0123456789abcdef", k=4))
+    d, t = jdir(i), now()
+    os.makedirs(STATE, mode=0o700, exist_ok=True)
+    os.makedirs(d, mode=0o700)
+    wjson(f"{d}/job.json", {"id": i, "cmd": a, "cwd": cwd, "label": label, "kind": kind, "submit": t})
+    wjson(f"{d}/env.json", {k: v for k, v in os.environ.items() if not SECRET.search(k)})
+    wjson(f"{d}/status.json", {"state": "queued", "submit": t})
+    with Locked() as s:
+        gc_jobs(s)
+        s["seq"] += 1
+        s["jobs"][i] = {"state": "queued", "kind": kind, "seq": s["seq"], "submit": t, "label": label, "cwd": cwd,
+                        "pid": None}
+    r = subprocess.run(["systemd-run", "--user", "-q", "--collect", "--unit", UNIT + i, "--slice", "kiroku-queue.slice",
+                        f"--working-directory={STATE}", "--description", f"Kiroku queue: {kind} {label}",
+                        "-p", "Nice=10", "-p", "LimitCORE=0", "-p", "OOMScoreAdjust=300", "-p", "TimeoutStopSec=20",
+                        "-E", f"XDG_STATE_HOME={os.path.dirname(STATE)}", "/usr/bin/python3", "-I", HERE, "_run", i],
+                       capture_output=True, text=True)
+    if r.returncode:
+        with Locked() as s: s["jobs"].pop(i, None)
+        wjson(f"{d}/status.json", {"state": "failed-to-start", "submit": t, "end": now(), "rc": 1})
+        die(f"q: systemd-run failed: {r.stderr.strip()}")
+    print(i)
+
+
+def finish(i, job, st, state, rc, cg=None):
+    record(i, job, st, state, rc, cg)
+    with Locked() as s: s["jobs"].pop(i, None)
+
+
+def cmd_run(a):
+    """The body of a job's unit: waits for its turn, runs the command, records the outcome."""
+    i = a[0]
+    d = jdir(i)
+    job, env, st = rjson(f"{d}/job.json"), rjson(f"{d}/env.json"), rjson(f"{d}/status.json")
+    cg = own_cgroup()
+    child, term, waits = None, [], []
+
+    def on_term(*_):
+        if not term: term.append(now())
+        if child: kill_tree(cg, child.pid, signal.SIGTERM)
+    signal.signal(signal.SIGTERM, on_term)
+
+    with Locked() as s:
+        if i in s["jobs"]: s["jobs"][i].update(pid=os.getpid(), cg=cg)
+    conf = e = None
+    while True:
+        try: conf = load_conf()
+        except ConfError: pass
+        mem = meminfo()
+        with Locked() as s:
+            prune(s)
+            e = s["jobs"].get(i)
+            if e is None or e.get("cancel") or term: break
+            if not os.path.isdir(job["cwd"]):
+                e["cancel"] = "worktree removed"
+                break
+            ok, why = decide(s, i, conf, mem) if conf else (False, "config")
+            if ok:
+                k = conf["kinds"][job["kind"]]
+                e.update(state="running", start=now(), mem=k["mem"], workers=k["workers"])
+                if k["slot"]: e["slot"] = min(set(range(conf["slots"])) - {x["slot"] for x in running(s) if "slot" in x})
+                st.update(forced=why == "forced", avail=mem.get("MemAvailable"))
+                break
+        if waits and waits[-1][2] == why: waits[-1][1] = now()
+        else: waits.append([waits[-1][1] if waits else job["submit"], now(), why])
+        if st.get("why") != why:
+            st["why"] = why
+            wjson(f"{d}/status.json", st)
+        time.sleep(conf["poll"] if conf else 1)
+    st["waits"] = [[round(t0, 1), round(t1, 1), w] for t0, t1, w in waits]
+    if not e or e.get("state") != "running":
+        st["reason"] = (e or {}).get("cancel") or "cancelled"
+        return finish(i, job, st, "cancelled", EXIT_STOPPED, cg)
+    st.update(state="running", start=e["start"], **{k: e[k] for k in ("mem", "workers", "slot") if k in e})
+    wjson(f"{d}/status.json", st)
+    os.makedirs(f"{d}/tmp", mode=0o700, exist_ok=True)
+    env.update(KIROKU_Q_JOB=i, KIROKU_Q_WORKERS=str(e["workers"]), TMPDIR=f"{d}/tmp")
+    env.pop("KIROKU_Q_SLOT", None)
+    if "slot" in e: env["KIROKU_Q_SLOT"] = str(e["slot"])
+    with os.fdopen(os.open(f"{d}/out.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as out:
+        try:
+            child = subprocess.Popen(job["cmd"], cwd=job["cwd"], env=env, stdout=out, stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL, start_new_session=True)
+        except OSError as x:
+            out.write(f"q: cannot start {job['cmd']}: {x}\n".encode())
+            return finish(i, job, st, "failed", 127, cg)
+        wd = Watchdog(cg, f"{d}/out.log", conf["stall"])
+        killed = False
+        while True:
+            try:
+                child.wait(conf["poll"])
+                break
+            except subprocess.TimeoutExpired: pass
+            if not os.path.isdir(job["cwd"]) and not term:
+                st["reason"] = "worktree removed"
+                on_term()
+            if term and not killed and now() - term[0] >= conf["grace"]:
+                kill_tree(cg, child.pid, signal.SIGKILL)
+                killed = True
+            stall = None if term else wd.check()
+            if stall and not st.get("stall"): st["stalled"] = st.get("stalled", 0) + 1
+            if stall != st.get("stall"):
+                st["stall"] = stall
+                wjson(f"{d}/status.json", st)
+        if term: kill_tree(cg, child.pid, signal.SIGKILL)
+    rc = child.returncode
+    if term:
+        with Locked() as s: why = (s["jobs"].get(i) or {}).get("cancel")
+        st.setdefault("reason", why or "cancelled")
+        return finish(i, job, st, "cancelled", EXIT_STOPPED, cg)
+    finish(i, job, st, "done" if rc == 0 else "failed", rc if rc >= 0 else 128 - rc, cg)
+
+
+def resolve(i):
+    if os.path.isdir(jdir(i)): return i
+    m = [x for x in os.listdir(f"{STATE}/jobs") if x.endswith(i) or x.startswith(i)] if os.path.isdir(f"{STATE}/jobs") else []
+    if len(m) == 1: return m[0]
+    die(f"no job {i}" if not m else f"ambiguous job {i}: {' '.join(m)}", 1)
+
+
+def pct(v, p):
+    v = sorted(x for x in v if x is not None)
+    return v[min(len(v) - 1, int(p / 100 * len(v)))] if v else None
+
+
+def median_run(kind):
+    return pct([x["run"] for x in read_log() if x.get("kind") == kind and x.get("rc") == 0][-20:], 50)
+
+
+def job_line(job, st):
+    start, end = st.get("start"), st.get("end") or now()
+    out = f"q: {job['kind']} job waited {(start or end) - job['submit']:.0f} s"
+    if start: out += f", ran {end - start:.0f} s with {st.get('workers')} workers"
+    if st.get("peak_mib") is not None:
+        out += f", memory peak {st['peak_mib']} MiB" + (f" of {st['mem']} declared" if st.get("mem") else "")
+        if st.get("swap_peak_mib"): out += f" and {st['swap_peak_mib']} MiB of swap"
+    if st.get("forced"): out += "; started on swap, without the available memory it asks for"
+    if st.get("oom_kills"): out += f"; the kernel killed {st['oom_kills']} of its processes for lack of memory"
+    return out
+
+
+def cmd_wait(a):
+    mx, tail, i = 540.0, 40, None
+    while a:
+        o = a.pop(0)
+        if o == "--max" and a: mx = float(a.pop(0))
+        elif o == "--tail" and a: tail = int(a.pop(0))
+        elif i is None and not o.startswith("-"): i = o
+        else: die(__doc__)
+    if i is None: die(__doc__)
+    i = resolve(i)
+    job = rjson(f"{jdir(i)}/job.json")
+    t0 = now()
+    while True:
+        st = rjson(f"{jdir(i)}/status.json", {})
+        if st.get("state") not in ("queued", "running") or st.get("stall") or now() - t0 >= mx: break
+        with Locked() as s: prune(s)
+        time.sleep(min(0.5, max(0.05, mx - (now() - t0))))
+    conf, mem = try_conf(), meminfo()
+    with Locked() as s:
+        prune(s)
+        summ = summary(s, conf, mem)
+        ahead = [j for j, _ in order(s)]
+    st = rjson(f"{jdir(i)}/status.json", {})
+    if st.get("state") == "queued":
+        pos = f"position {ahead.index(i) + 1} of {len(ahead)}, " if i in ahead else ""
+        print(f"queued: {pos}waited {now() - job['submit']:.0f} s"
+              + (f", waiting for {REASONS[st['why']]}" if st.get("why") else ""))
+        print(summ)
+        sys.exit(EXIT_PENDING)
+    if st.get("state") == "running":
+        if st.get("stall"):
+            print(f"STALLED: job {i}: {st['stall']['reason']}\n  its threads: {st['stall']['threads']}\n  it is not killed")
+            print(summ)
+            sys.exit(EXIT_STALLED)
+        med = median_run(job["kind"])
+        print(f"running for {now() - st['start']:.0f} s" + (f"; {job['kind']} jobs take about {med:.0f} s" if med else ""))
+        print(summ)
+        sys.exit(EXIT_PENDING)
+    out = f"{jdir(i)}/out.log"
+    try:
+        with open(out, errors="replace") as f: lines = f.readlines()
+    except OSError: lines = []
+    for l in lines[-tail:] if tail > 0 else []: sys.stdout.write(l)
+    rc = st.get("rc", 1)
+    print(f"job {i} {st.get('state')}{' (' + st['reason'] + ')' if st.get('reason') else ''}, exit {rc}; full output: {out}")
+    print(job_line(job, st))
+    print(summ)
+    sys.exit(rc)
+
+
+def cmd_kill(a):
+    if len(a) != 1: die(__doc__)
+    i = resolve(a[0])
+    job = rjson(f"{jdir(i)}/job.json")
+    conf = try_conf()
+    grace = conf["grace"] if conf else 10
+    with Locked() as s:
+        e = s["jobs"].get(i)
+        if e is None:
+            print(f"job {i} is not queued or running")
+            return
+        e["cancel"] = "killed"
+        state = e["state"]
+    unit = UNIT + i
+    if state == "running": subprocess.run(["systemctl", "--user", "kill", "-s", "TERM", "--kill-whom=main", unit], capture_output=True)
+    t0 = now()
+    while now() - t0 < grace + 30:
+        st = rjson(f"{jdir(i)}/status.json", {})
+        if st.get("state") not in ("queued", "running"):
+            print(f"job {i} {st.get('state')} ({st.get('reason', '-')}) after {now() - t0:.0f} s")
+            return
+        time.sleep(0.2)
+    subprocess.run(["systemctl", "--user", "kill", "-s", "KILL", unit], capture_output=True)
+    subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True)
+    st = rjson(f"{jdir(i)}/status.json", {})
+    if st.get("state") in ("queued", "running"):
+        st["reason"] = "killed with its unit"
+        finish(i, job, st, "cancelled", EXIT_STOPPED)
+    print(f"job {i} cancelled (killed with its unit after {now() - t0:.0f} s)")
+
+
+def where(cwd):
+    m = re.search(r"/worktrees/[^/]+/([^/]+)", cwd)
+    return m.group(1) if m else os.path.basename(cwd)
+
+
+def frame(tails):
+    conf, mem = try_conf(), meminfo()
+    with Locked() as s:
+        prune(s)
+        rows = sorted(((i, e) for i, e in s["jobs"].items() if e["state"] == "running"), key=lambda x: x[1]["start"]) + order(s)
+        summ = summary(s, conf, mem)
+    out = [f"{'ID':20} {'state':7} {'kind':5} {'label':24} {'worktree':12} {'waited':>7} {'ran':>6}  memory, or what it waits for"]
+    for i, e in rows:
+        st = rjson(f"{jdir(i)}/status.json", {})
+        head = f"{i:20} {'stalled' if st.get('stall') else e['state']:7} {e['kind']:5} {e['label'][:24]:24} {where(e['cwd'])[:12]:12}"
+        if e["state"] == "running":
+            out.append(f"{head} {e['start'] - e['submit']:6.0f}s {now() - e['start']:5.0f}s  {claimed(e)} of {e['mem']} MiB"
+                       + (f", emulator slot {e['slot']}" if "slot" in e else "") + (", forced" if st.get("forced") else ""))
+            if st.get("stall"): out.append(f"  stalled: {st['stall']['reason']}; its threads: {st['stall']['threads']}")
+            if tails:
+                try:
+                    with open(f"{jdir(i)}/out.log", errors="replace") as f: last = f.readlines()[-tails:]
+                except OSError: last = []
+                out += ["    " + l[:150].rstrip() for l in last]
+        else:
+            out.append(f"{head} {now() - e['submit']:6.0f}s {'-':>6}  {REASONS.get(st.get('why'), '-')}")
+    out.append(summ)
+    if tails:
+        try:
+            with open("/proc/loadavg") as f: load = " ".join(f.read().split()[:3])
+            with open("/proc/pressure/memory") as f: psi = f.readline().split()[1]
+        except OSError: load, psi = "-", "-"
+        out.append(f"load {load} of {os.cpu_count()} threads; swap free {mem.get('SwapFree', 0)} of {mem.get('SwapTotal', 0)}"
+                   f" MiB; memory pressure {psi}; {time.strftime('%H:%M:%S')}")
+    return "\n".join(out) + "\n"
+
+
+def cmd_ps(a):
+    if a: die(__doc__)
+    sys.stdout.write(frame(0))
+
+
+def cmd_top(a):
+    if a not in ([], ["--once"]): die(__doc__)
+    while True:
+        sys.stdout.write(("" if a else "\x1b[H\x1b[2J") + frame(3))
+        sys.stdout.flush()
+        if a: return
+        try: time.sleep(2)
+        except KeyboardInterrupt: return
+
+
+def parse_dur(v):
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd]?)", v)
+    if not m: die(f"q: bad duration {v}")
+    return float(m.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(2)]
+
+
+def union(spans):
+    tot, end = 0.0, 0.0
+    for a, b in sorted(spans):
+        if b > end:
+            tot += b - max(a, end)
+            end = b
+    return tot
+
+
+def cmd_stats(a):
+    since = 86400.0
+    if a[:1] == ["--since"] and len(a) == 2: since = parse_dur(a[1])
+    elif a: die(__doc__)
+    t0 = now() - since
+    hist = [x for x in read_log() if (x.get("end") or 0) >= t0]
+    conf = try_conf()
+    f = lambda v: "-" if v is None else f"{v:.0f}"
+    print(f"q stats since {time.strftime('%Y-%m-%d %H:%M', time.localtime(t0))}: {len(hist)} jobs; times in s, memory in MiB")
+    print(f"{'kind':6} {'jobs':>5} {'ok':>5} {'wait p50':>8} {'p90':>5} {'max':>5} {'run p50':>8} {'p90':>5} {'max':>5}"
+          f" {'peak p50':>9} {'p90':>6} {'max':>6} {'declared':>8} {'over':>5} {'swap max':>8} {'cores':>5}")
+    for k in sorted({x["kind"] for x in hist}):
+        h = [x for x in hist if x["kind"] == k]
+        w, r, p = ([x.get(c) for x in h] for c in ("wait", "run", "peak_mib"))
+        ran = [x for x in h if x.get("run") and x.get("cpu_s") is not None]
+        cores = sum(x["cpu_s"] for x in ran) / sum(x["run"] for x in ran) if ran else None
+        over = sum(1 for x in h if x.get("peak_mib") and x.get("mem") and x["peak_mib"] > x["mem"])
+        decl = conf["kinds"][k]["mem"] if conf and k in conf["kinds"] else None
+        print(f"{k:6} {len(h):5} {sum(x.get('rc') == 0 for x in h):5} {f(pct(w, 50)):>8} {f(pct(w, 90)):>5} {f(pct(w, 100)):>5}"
+              f" {f(pct(r, 50)):>8} {f(pct(r, 90)):>5} {f(pct(r, 100)):>5} {f(pct(p, 50)):>9} {f(pct(p, 90)):>6}"
+              f" {f(pct(p, 100)):>6} {f(decl):>8} {over:5} {f(pct([x.get('swap_peak_mib') for x in h], 100)):>8}"
+              f" {'-' if cores is None else f'{cores:.1f}':>5}")
+    print("over: jobs whose peak passed the memory declared for them; cores: CPU time by run time")
+    print("what queued jobs waited for (time during which at least one job waited for it; all jobs' waits added up):")
+    for why, text in REASONS.items():
+        spans = [(max(s0, t0), s1) for x in hist for s0, s1, w in x.get("waits") or [] if w == why and s1 > t0]
+        if spans: print(f"  {text:30} {union(spans):8.0f} s {sum(b - c for c, b in spans):8.0f} s")
+    print(f"started on swap, without the available memory they ask for: {sum(1 for x in hist if x.get('forced'))};"
+          f" with processes killed by the kernel for lack of memory: {sum(1 for x in hist if x.get('oom_kills'))};"
+          f" stalled: {sum(1 for x in hist if x.get('stalled'))}")
+
+
+def main():
+    a = sys.argv[1:]
+    if a[:1] != ["_run"] and not os.environ.get("KIROKU_Q_HERE"):
+        q = main_copy()
+        if q and q != HERE: os.execv(q, [q] + a)
+    cmds = {"submit": cmd_submit, "_run": cmd_run, "wait": cmd_wait, "ps": cmd_ps, "top": cmd_top, "stats": cmd_stats,
+            "kill": cmd_kill}
+    if a and a[0] not in cmds: die(__doc__)
+    cmds[a[0] if a else "ps"](a[1:])
+
+
+if __name__ == "__main__":
+    main()
