@@ -198,7 +198,7 @@ class TitleScreenTest {
             show(shown)
             compose.onNodeWithText("Session expired").assertDoesNotExist()
         }
-        for (shown in states(Session.Expired)) {
+        for (shown in states(Session.Expired(Fixtures.reference.session.signIn))) {
             show(shown)
             compose.onNodeWithText("Session expired").assertIsDisplayed()
             sends(TitleEvent.SignIn) { compose.onNodeWithText("Sign in").performClick() }

@@ -52,7 +52,7 @@ internal class TokenStore(
     }
 }
 
-// An empty file is signed out, the one byte EXPIRED is an expired session, anything else is SEALED and the tokens.
+// An empty file is signed out; EXPIRED comes before the expired sign-in's id, SEALED before the sealed tokens.
 internal class TokenFormat(
     private val cipher: TokenCipher,
 ) : Serializer<Stored> {
@@ -62,7 +62,7 @@ internal class TokenFormat(
         val bytes = input.readBytes()
         return when {
             bytes.isEmpty() -> Stored.SignedOut
-            bytes.size == 1 && bytes[0] == EXPIRED -> Stored.Expired
+            bytes.size > 1 && bytes[0] == EXPIRED -> Stored.Expired(bytes.decodeToString(startIndex = 1))
             else -> Stored.SignedIn(unsealed(bytes))
         }
     }
@@ -84,7 +84,7 @@ internal class TokenFormat(
     ) {
         when (t) {
             Stored.SignedOut -> Unit
-            Stored.Expired -> output.write(byteArrayOf(EXPIRED))
+            is Stored.Expired -> output.write(byteArrayOf(EXPIRED) + t.signIn.encodeToByteArray())
             is Stored.SignedIn -> output.write(byteArrayOf(SEALED) + sealed(t.tokens))
         }
     }

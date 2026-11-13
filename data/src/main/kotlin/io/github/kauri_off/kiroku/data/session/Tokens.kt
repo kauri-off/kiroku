@@ -18,5 +18,8 @@ internal sealed interface Stored {
         val tokens: Tokens,
     ) : Stored
 
-    data object Expired : Stored
+    // The sign-in whose tokens MAL rejected.
+    class Expired(
+        val signIn: String,
+    ) : Stored
 }

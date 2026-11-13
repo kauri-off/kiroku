@@ -36,7 +36,7 @@ internal fun granted(
 internal fun Stored.text(): String =
     when (this) {
         Stored.SignedOut -> "signed out"
-        Stored.Expired -> "expired"
+        is Stored.Expired -> "expired $signIn"
         is Stored.SignedIn -> "${tokens.signIn} ${tokens.access} ${tokens.refresh} ${tokens.obtainedAt}"
     }
 

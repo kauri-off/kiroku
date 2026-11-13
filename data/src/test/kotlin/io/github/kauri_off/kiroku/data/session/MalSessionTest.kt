@@ -226,12 +226,13 @@ class MalSessionTest {
     fun tenRequestsRejectedAtOnceShareARefreshThatMalRejected() =
         test {
             val session = signedIn()
+            val id = (session.now() as Session.SignedIn).signIn
             val mal = FakeMal()
             val outcomes = tenRejectedAtOnce(session, mal, TokenReply.Answer(401, ""))
             assertEquals(List(10) { expired }, outcomes)
             assertEquals(1, fixture.grants.size)
             assertEquals(List(10) { "access-1" }, mal.sent)
-            assertEquals(Session.Expired, session.now())
+            assertEquals(Session.Expired(id), session.now())
         }
 
     @Test
@@ -240,22 +241,52 @@ class MalSessionTest {
             val session = signedIn()
             val mal = FakeMal()
             fixture.answer = { TokenReply.Answer(400, "") }
+            val id = (session.now() as Session.SignedIn).signIn
             session.observeSession().test {
-                assertTrue(awaitItem() is Session.SignedIn)
+                assertEquals(Session.SignedIn(id), awaitItem())
                 assertEquals(expired, session.authorised(mal.request))
-                assertEquals(Session.Expired, awaitItem())
+                assertEquals(Session.Expired(id), awaitItem())
             }
             assertEquals(listOf("access-1"), mal.sent)
 
             // Nothing is sent or refreshed any more, in this process or the next.
             assertEquals(expired, session.authorised(mal.request))
             session.renewIfDue()
-            assertEquals(1L, fixture.file.length())
+            assertEquals("\u0000${id.value}", fixture.file.readText())
             val next = fixture.reopen()
-            assertEquals(Session.Expired, next.now())
+            assertEquals(Session.Expired(id), next.now())
             assertEquals(expired, next.authorised(mal.request))
             assertEquals(listOf("access-1"), mal.sent)
             assertEquals(1, fixture.grants.size)
+        }
+
+    @Test
+    fun anExpiredSessionNamesItsSignInUntilASignOutOrANewSignIn() =
+        test {
+            val first = signedIn()
+            val id = (first.now() as Session.SignedIn).signIn
+            fixture.answer = { TokenReply.Answer(400, "") }
+            first.authorised(FakeMal().request)
+            assertEquals(Session.Expired(id), fixture.reopen().now())
+
+            val signedOut = fixture.reopen()
+            assertEquals(Session.Expired(id), signedOut.now())
+            signedOut.signOut()
+            assertEquals(Session.SignedOut, signedOut.now())
+            assertEquals(0L, fixture.file.length())
+            assertEquals(Session.SignedOut, fixture.reopen().now())
+
+            // The next sign-in that expires is another one.
+            val second = fixture.reopen()
+            second.signIn(TokenGrant("access-2", "refresh-2"))
+            val other = (second.now() as Session.SignedIn).signIn
+            assertNotEquals(id, other)
+            second.authorised(FakeMal().request)
+            assertEquals(Session.Expired(other), second.now())
+            val third = fixture.reopen()
+            assertEquals(Session.Expired(other), third.now())
+            third.signIn(TokenGrant("access-3", "refresh-3"))
+            assertNotEquals(other, (third.now() as Session.SignedIn).signIn)
         }
 
     @Test
@@ -449,7 +480,7 @@ class MalSessionTest {
     @Test
     fun oldTokensThatMalRejectsAtTheStartEndInExpired() =
         test {
-            signedIn().now()
+            val id = signedIn().now()
             fixture.clock.advance(RENEW_AFTER)
             val seen = CompletableDeferred<Unit>()
             fixture.answer = {
@@ -457,9 +488,9 @@ class MalSessionTest {
                 TokenReply.Answer(400, "")
             }
             fixture.reopen().observeSession().test {
-                assertTrue(awaitItem() is Session.SignedIn)
+                assertEquals(id, awaitItem())
                 seen.complete(Unit)
-                assertEquals(Session.Expired, awaitItem())
+                assertEquals(Session.Expired((id as Session.SignedIn).signIn), awaitItem())
             }
             assertFalse(stored().contains("refresh-1"))
         }

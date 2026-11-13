@@ -275,7 +275,7 @@ class DemoTest {
         runTest {
             val demo = demo()
             demo.server.sessionExpired.value = true
-            assertEquals(Session.Expired, demo.session.observeSession().first())
+            assertEquals(Session.Expired(Fixtures.reference.session.signIn), demo.session.observeSession().first())
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
             assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())

@@ -182,7 +182,7 @@ class MalSession internal constructor(
                 when (val answer = ask(refreshGrant(used.refresh))) {
                     is TokenResult.Granted ->
                         Outcome.Success(Stored.SignedIn(Tokens(used.signIn, answer.grant.access, answer.grant.refresh, now())))
-                    TokenResult.Rejected -> Outcome.Success(Stored.Expired)
+                    TokenResult.Rejected -> Outcome.Success(Stored.Expired(used.signIn))
                     is TokenResult.Failed -> Outcome.Failure(answer.error)
                 }
             }
@@ -212,7 +212,7 @@ class MalSession internal constructor(
                 when (this) {
                     Stored.SignedOut -> Session.SignedOut
                     is Stored.SignedIn -> Session.SignedIn(SignInId(tokens.signIn))
-                    Stored.Expired -> Session.Expired
+                    is Stored.Expired -> Session.Expired(SignInId(signIn))
                 }
     }
 }

@@ -196,8 +196,8 @@ class SubScreenTest {
         }
         var screen: @Composable () -> Unit by mutableStateOf({})
         show { screen() }
-        for (session in listOf(SubScreenFixtures.session, Session.Expired)) {
-            val expired = session == Session.Expired
+        for (session in listOf(SubScreenFixtures.session, Session.Expired(Fixtures.reference.session.signIn))) {
+            val expired = session is Session.Expired
             related(session).forEach { state ->
                 val events = mutableListOf<RelatedEvent>()
                 screen = { RelatedScreen(state, onEvent = { events += it }, snackbars = snackbars) }

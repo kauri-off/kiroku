@@ -93,7 +93,11 @@ class TitleAboveTheFoldTest {
         var longest: TitleState.Shown? = null
         for (count in 1..words.size) {
             val title = words.take(count).joinToString(" ")
-            val shown = TitleFixtures.of(anime.copy(titles = anime.titles.copy(romaji = title)), session = Session.Expired)
+            val shown =
+                TitleFixtures.of(
+                    anime.copy(titles = anime.titles.copy(romaji = title)),
+                    session = Session.Expired(Fixtures.reference.session.signIn),
+                )
             val lines = show(shown)
             if (lines > 2) break
             if (lines == 2) longest = shown
@@ -121,7 +125,7 @@ class TitleAboveTheFoldTest {
                 TitleFixtures.plannedScored,
                 TitleFixtures.firstEpisodeAired,
                 TitleFixtures.added,
-                TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired),
+                TitleFixtures.of(FixtureAnime.exactToWatch, session = Session.Expired(Fixtures.reference.session.signIn)),
             )
         val problems = mutableListOf<String>()
         var twoLineCases = 0

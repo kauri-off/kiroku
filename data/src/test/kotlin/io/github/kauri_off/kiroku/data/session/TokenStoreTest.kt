@@ -43,7 +43,7 @@ class TokenStoreTest {
         runBlocking {
             val fixture = fixture()
             assertEquals("signed out", fixture.store().read().text())
-            for (value in listOf(old, new, Stored.Expired, old, Stored.SignedOut)) {
+            for (value in listOf(old, new, Stored.Expired("sign-in"), old, Stored.Expired("other"), Stored.SignedOut)) {
                 assertTrue(fixture.apply { close() }.store().write(value))
                 assertEquals(value.text(), fixture.reread().text())
             }
@@ -58,8 +58,8 @@ class TokenStoreTest {
             val sealed = fixture.file.readBytes().toString(Charsets.ISO_8859_1)
             assertTrue(sealed.length > "old-access old-refresh".length)
             for (secret in listOf("old-access", "old-refresh")) assertFalse(secret in sealed)
-            store.write(Stored.Expired)
-            assertEquals(1L, fixture.file.length())
+            store.write(Stored.Expired("sign-in"))
+            assertEquals("\u0000sign-in", fixture.file.readText())
             store.write(Stored.SignedOut)
             assertEquals(0L, fixture.file.length())
         }
@@ -125,7 +125,7 @@ class TokenStoreTest {
                 listOf(
                     byteArrayOf(1),
                     byteArrayOf(7, 7, 7),
-                    byteArrayOf(0, 0),
+                    byteArrayOf(0),
                     sealed.copyOf(sealed.size - 1),
                     sealed.copyOf(20),
                     sealed.clone().also { it[it.size / 2] = (it[it.size / 2] + 1).toByte() },

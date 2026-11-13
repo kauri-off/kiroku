@@ -36,7 +36,7 @@ internal class DemoSessionRepository(
         combine(signedIn, server.sessionExpired) { signedIn, expired ->
             when {
                 !signedIn -> Session.SignedOut
-                expired -> Session.Expired
+                expired -> Session.Expired(signIn.signIn)
                 else -> signIn
             }
         }

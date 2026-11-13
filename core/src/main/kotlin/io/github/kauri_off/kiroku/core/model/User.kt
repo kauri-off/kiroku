@@ -10,7 +10,9 @@ sealed interface Session {
         val signIn: SignInId,
     ) : Session
 
-    data object Expired : Session
+    data class Expired(
+        val signIn: SignInId,
+    ) : Session
 }
 
 @JvmInline

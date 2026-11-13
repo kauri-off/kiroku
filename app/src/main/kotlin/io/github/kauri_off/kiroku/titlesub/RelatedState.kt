@@ -32,7 +32,7 @@ sealed interface RelatedState {
     ) : RelatedState
 }
 
-val RelatedState.sessionExpired: Boolean get() = session == Session.Expired
+val RelatedState.sessionExpired: Boolean get() = session is Session.Expired
 
 data class RelatedGroup(
     val relation: RelationType,
