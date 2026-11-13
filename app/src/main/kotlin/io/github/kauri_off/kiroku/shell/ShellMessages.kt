@@ -1,38 +1,24 @@
 package io.github.kauri_off.kiroku.shell
 
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.kauri_off.kiroku.R
-import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
-import io.github.kauri_off.kiroku.design.component.MessageCovers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.pow
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 // A snackbar a screen posts and the shell shows, so it outlives the screen and its view model (ARCHITECTURE 6.2).
 data class ShellMessage(
@@ -107,6 +93,11 @@ class ShellMessages(
         val watch: Job?,
     )
 
+    // The values an Undo or a Retry would write over.
+    private class Start(
+        val values: ListValues?,
+    )
+
     private val waiting = mutableListOf<Waiting>()
 
     private var serial = 0L
@@ -125,21 +116,42 @@ class ShellMessages(
         write: ListWrite,
         message: (ListChange) -> ShellMessage? = { null },
     ) {
+        forget(write.anime.id)
         scope.launch { list.write(write)?.let(message)?.let(::post) }
     }
 
-    // A waiting Undo or Retry is dropped once its title is written, so it never acts on values it did not see.
+    // A waiting Undo or Retry of a title the shell writes would act on values it did not see.
+    private fun forget(id: AnimeId) {
+        val stale = waiting.filter { it.posted.message.title == id }
+        stale.forEach { it.watch?.cancel() }
+        waiting -= stale.toSet()
+    }
+
+    // A message whose action could overwrite a newer edit still tells what happened, as one without Retry does.
+    private fun withoutAction(posted: Posted) {
+        val at = waiting.indexOfFirst { it.posted == posted }
+        if (at >= 0) waiting[at] = Waiting(posted.copy(message = posted.message.copy(action = null)), watch = null)
+    }
+
+    // A waiting Undo or Retry is dropped once its title's values differ from those it would write over.
     private fun watch(posted: Posted): Job? {
         val id = posted.message.title ?: return null
+        val undone = ((posted.message.action as? ShellMessage.Action.Undo)?.write as? ListWrite.Undo)?.change
         return scope.launch {
-            try {
-                list
-                    .observeEntry(id)
-                    .distinctUntilChanged()
-                    .drop(1)
-                    .first()
-            } catch (_: DataException) {
-                return@launch
+            var start = undone?.let { Start(it.after?.values) }
+            var failures = 0
+            while (true) {
+                try {
+                    list.observeEntry(id).map { it?.values }.first { values ->
+                        val from = start ?: Start(values).also { start = it }
+                        values != from.values
+                    }
+                    break
+                } catch (_: DataException) {
+                    // A Retry's failure has no values: a read after the store returns may hold a newer edit.
+                    if (start == null) return@launch withoutAction(posted)
+                    delay(minOf(REREAD * 2.0.pow(failures++), REREAD_LONGEST))
+                }
             }
             waiting.removeAll { it.posted == posted }
         }
@@ -150,95 +162,30 @@ class ShellMessages(
         posted: Posted,
         actionPerformed: Boolean,
     ) {
+        if (actionPerformed) {
+            when (val action = posted.message.action) {
+                is ShellMessage.Action.Undo -> write(action.write)
+                is ShellMessage.Action.Retry -> write(action.write)
+                is ShellMessage.Action.Change -> requested.value = action.id
+                null -> Unit
+            }
+        }
         if (shown.value == posted) {
             val next = waiting.removeFirstOrNull()
             next?.watch?.cancel()
             shown.value = next?.posted
-        }
-        if (!actionPerformed) return
-        when (val action = posted.message.action) {
-            is ShellMessage.Action.Undo -> write(action.write)
-            is ShellMessage.Action.Retry -> write(action.write)
-            is ShellMessage.Action.Change -> requested.value = action.id
-            null -> Unit
         }
     }
 
     fun editTaken(id: AnimeId) {
         requested.compareAndSet(id, null)
     }
-}
 
-// A message that must stay runs only while it can be seen and tapped (section 7.2), and starts again in full after.
-@OptIn(ExperimentalCoroutinesApi::class)
-@Composable
-fun ShownMessages(
-    messages: ShellMessages,
-    host: SnackbarHostState,
-    covers: MessageCovers = remember { MessageCovers() },
-) {
-    val posted = messages.current.collectAsScreenState().value
-    val text = posted?.message?.text?.let { text(it) }
-    val action = posted?.message?.action?.let { actionLabel(it) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val window = LocalWindowInfo.current
-    LaunchedEffect(posted, lifecycle, window, covers) {
-        if (posted == null || text == null) return@LaunchedEffect
-        val result =
-            if (posted.message.mustStay) {
-                combine(lifecycle.currentStateFlow, snapshotFlow { window.isWindowFocused && !covers.covered }) { state, seen ->
-                    seen && state.isAtLeast(Lifecycle.State.STARTED)
-                }.distinctUntilChanged()
-                    .mapLatest { seen -> if (seen) host.show(text, action) else null }
-                    .filterNotNull()
-                    .first()
-            } else {
-                host.show(text, action)
-            }
-        messages.ended(posted, result == SnackbarResult.ActionPerformed)
+    internal companion object {
+        // Past the engine's own read attempts and within a Long snackbar, so a waiting message is read before its turn.
+        val REREAD = 5.seconds
+
+        // Each failed read is logged, so a store that stays broken is read this seldom at most.
+        val REREAD_LONGEST = 5.minutes
     }
 }
-
-suspend fun SnackbarHostState.show(
-    text: String,
-    action: String?,
-): SnackbarResult =
-    showSnackbar(
-        text,
-        actionLabel = action,
-        duration =
-            if (action ==
-                null
-            ) {
-                SnackbarDuration.Short
-            } else {
-                SnackbarDuration.Long
-            },
-    )
-
-@Composable
-fun text(text: ShellMessage.Text): String =
-    when (text) {
-        is ShellMessage.Text.EpisodeWatched -> stringResource(R.string.list_episode_watched, text.episode)
-        ShellMessage.Text.MovedToCompleted -> stringResource(R.string.common_moved_to_completed)
-        ShellMessage.Text.AddedToPlanned -> stringResource(R.string.title_added_to_planned)
-        is ShellMessage.Text.RefreshFailed ->
-            stringResource(
-                when (text.error) {
-                    DataError.NoConnection -> R.string.common_no_connection
-                    DataError.Refused -> R.string.common_refused
-                    else -> R.string.common_could_not_refresh
-                },
-            )
-        ShellMessage.Text.CouldNotSave -> stringResource(R.string.shell_could_not_save)
-    }
-
-@Composable
-fun actionLabel(action: ShellMessage.Action): String =
-    stringResource(
-        when (action) {
-            is ShellMessage.Action.Undo -> R.string.common_undo
-            is ShellMessage.Action.Retry -> R.string.design_retry
-            is ShellMessage.Action.Change -> R.string.title_change
-        },
-    )
