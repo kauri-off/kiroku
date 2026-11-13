@@ -11,6 +11,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -20,9 +25,13 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
+import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 // The loading, empty and error states of every screen. Each fills the space it is given and centres itself in it;
 // a message is announced when it appears.
@@ -53,8 +62,14 @@ fun ScreenState(
     Box(modifier.fillMaxSize().padding(horizontal = Spacing.l, vertical = Spacing.xl), contentAlignment = Alignment.Center) {
         when (state) {
             ScreenState.Loading -> {
+                // Named and in its place at once; drawn once the wait outlasts the patience, timed on the main looper.
+                var waited by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    withContext(Dispatchers.Main) { delay(PATIENCE) }
+                    waited = true
+                }
                 val loading = stringResource(R.string.design_loading)
-                WaitIndicator(Modifier.semantics { contentDescription = loading })
+                WaitIndicator(Modifier.semantics { contentDescription = loading }, shown = waited)
             }
             is ScreenState.Empty -> Message(state.message, state.action)
             is ScreenState.Error -> Message(state.message, StateAction(stringResource(R.string.design_retry), state.onRetry))
