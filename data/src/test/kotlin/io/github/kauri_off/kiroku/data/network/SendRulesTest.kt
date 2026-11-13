@@ -208,9 +208,11 @@ class SendRulesTest {
     @Test
     fun `a read reaches the server three times at most when its connection drops each time`() {
         useConnection()
-        network.always(dropped())
+        repeat(4) { network.api.enqueue(dropped()) }
+        network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { read() })
-        assertEquals(1 + 3, network.api.requestCount)
+        assertEquals(listOf("GET", "GET", "GET", "GET"), sent())
+        assertEquals(2, network.log.size - 1)
     }
 
     @Test
