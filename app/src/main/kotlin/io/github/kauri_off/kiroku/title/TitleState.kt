@@ -60,7 +60,7 @@ sealed interface DetailsWait {
     ) : DetailsWait
 }
 
-val TitleState.sessionExpired: Boolean get() = session == Session.Expired
+val TitleState.sessionExpired: Boolean get() = session is Session.Expired
 
 // What the page shows from stored data. Only [of] builds it and it has no public copy, so a derived value cannot
 // disagree with its source.

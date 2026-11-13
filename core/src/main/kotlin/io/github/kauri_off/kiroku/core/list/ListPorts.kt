@@ -59,11 +59,9 @@ data class StoredList(
     val syncedAt: Instant?,
 )
 
-// What a store does for the user's list. Every call is atomic, and only the engine calls a writing one.
-// An entry is written without its title: a title's data comes in through [download] and [add] alone.
+// A store of the list. Each call is atomic, only the engine writes, and title data comes in by [download] and [add] alone.
 interface LocalList {
-    // The shown entries with their titles' data as stored, in a stable order, after every change; an equal list may
-    // come again, and an entry that did not change is the same object in it.
+    // The shown entries with titles, in stable order, after every change; equal lists may repeat, unchanged entries stay the same objects.
     fun observeEntries(): Flow<List<ListEntry>>
 
     // One title's shown entry, and nothing for a change to another title.
@@ -86,8 +84,7 @@ interface LocalList {
         entry: StoredEntry,
     )
 
-    // A download of the whole list: every title's data, kept by the store's own rules, the changed entries, the time.
-    // One that changes nothing wakes no observer.
+    // A whole download: every title's data, kept by the store's own rules, the changed entries, the time; a no-op wakes no observer.
     suspend fun download(
         titles: List<Anime>,
         entries: Map<AnimeId, StoredEntry?>,

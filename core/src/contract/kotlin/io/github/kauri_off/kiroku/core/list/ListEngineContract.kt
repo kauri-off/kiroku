@@ -71,6 +71,7 @@ abstract class ListEngineContract {
     private val today = PartialDate.Day(LocalDate.now(fixtures.clock))
     private val a = Session.SignedIn(SignInId("a"))
     private val b = Session.SignedIn(SignInId("b"))
+    private val expired = Session.Expired(a.signIn)
 
     // When the store's list was downloaded, before the engine's clock.
     private val seededAt = fixtures.now.minusSeconds(3600)
@@ -83,14 +84,26 @@ abstract class ListEngineContract {
         session: Session?,
     ) {
         val session = MutableStateFlow(session)
-        val mal = FaultyRemote(remote(server))
+
+        // The session becomes [next] at this many of its reads from now; 0 leaves it alone.
+        @Volatile
+        var readsUntilNext = 0
+
+        @Volatile
+        var next: Session = b
+
+        private val sessions =
+            flow {
+                if (readsUntilNext > 0 && --readsUntilNext == 0) this@Subject.session.value = next
+                emitAll(this@Subject.session.filterNotNull())
+            }
+        val mal = FaultyRemote(remote(server)) { this.session.value }
         val local = DatabaseLike(store)
         val clock = FaultyClock(fixtures.clock)
         val unexpected = mutableListOf<Throwable>()
         val list = engine(scope)
 
-        fun engine(scope: CoroutineScope): ListRepository =
-            ListEngine(mal, local, session.filterNotNull(), clock, scope) { unexpected += it }
+        fun engine(scope: CoroutineScope): ListRepository = ListEngine(mal, local, sessions, clock, scope) { unexpected += it }
 
         suspend fun syncedAt() = list.observeSyncedAt().first()
 
@@ -106,11 +119,13 @@ abstract class ListEngineContract {
         ) = server.editOnWebsite(anime, watched?.let { checkNotNull(server.entry(anime.id)).values.copy(watchedEpisodes = it) })
     }
 
-    // A client of MAL that counts the entries it is asked for, and throws, before or after its call, while told to.
-    // Its answers about one title can carry other data of the title, or be about another title altogether.
+    // A client of MAL that throws while told to, answers with other titles or data, and keeps the session of each write.
     private class FaultyRemote(
         private val inner: RemoteList,
+        private val session: () -> Session?,
     ) : RemoteList {
+        val putsUnder = CopyOnWriteArrayList<Session?>()
+
         @Volatile
         var throwing: Exception? = null
 
@@ -131,7 +146,11 @@ abstract class ListEngineContract {
         override suspend fun put(
             anime: Anime,
             values: ListValues?,
-        ): Outcome<ListEntry?> = fault().let { inner.put(anime, values) }.answered().also { fault() }
+        ): Outcome<ListEntry?> {
+            putsUnder += session()
+            fault()
+            return inner.put(anime, values).answered().also { fault() }
+        }
 
         private fun Outcome<ListEntry?>.answered() =
             if (this is Outcome.Success) Outcome.Success(value?.let { it.copy(anime = answering(it.anime)) }) else this
@@ -141,8 +160,7 @@ abstract class ListEngineContract {
         }
     }
 
-    // A store as a database is: a query emits again after every write, changed or not, and it fails as told to.
-    // It keeps what the engine called and what each download handed it.
+    // A store as a database is: a query emits after every write, changed or not; it fails as told to and keeps its calls.
     private class DatabaseLike(
         private val inner: LocalList,
     ) : LocalList {
@@ -340,6 +358,12 @@ abstract class ListEngineContract {
         return seen
     }
 
+    private fun failed(
+        error: DataError,
+        write: ListWrite,
+        list: SignInId? = a.signIn,
+    ) = WriteFailure(error, write, list)
+
     private fun TestScope.failures(subject: Subject): List<WriteFailure> {
         val seen = mutableListOf<WriteFailure>()
         backgroundScope.launch { subject.list.observeWriteFailures().collect { seen += it } }
@@ -530,7 +554,7 @@ abstract class ListEngineContract {
             assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
             val failure = failures.single()
             assertEquals(DataError.ServerError, failure.error)
-            assertEquals(ListWrite.Save(anime, shown), failure.retry)
+            assertEquals(ListWrite.Save(anime, shown), failure.write)
 
             s.server.failingWrites.value = false
             s.list.write(failure.retry)
@@ -558,7 +582,7 @@ abstract class ListEngineContract {
             assertNull(s.list.observeEntry(anime.id).first())
             settle()
             assertEquals(s.server.entry(anime.id), s.list.observeEntry(anime.id).first())
-            assertEquals(WriteFailure(DataError.NoConnection, ListWrite.Remove(anime)), failures.single())
+            assertEquals(failed(DataError.NoConnection, ListWrite.Remove(anime)), failures.single())
         }
 
     @Test
@@ -836,7 +860,7 @@ abstract class ListEngineContract {
             assertEquals(emptyList<ListRequest>(), s.server.requests)
             assertEquals(0, s.server.listDownloads)
             assertEquals(0, s.mal.entryReads)
-            assertEquals(listOf(WriteFailure(DataError.SessionExpired, ListWrite.MarkNextWatched(anime))), failures)
+            assertEquals(listOf(failed(DataError.SessionExpired, ListWrite.MarkNextWatched(anime), list = null)), failures)
         }
 
     @Test
@@ -874,7 +898,7 @@ abstract class ListEngineContract {
             s.list.write(ListWrite.Save(anime, before.values))
             settle()
 
-            assertEquals(listOf(WriteFailure(DataError.ServerError, ListWrite.Save(anime, before.values))), failures)
+            assertEquals(listOf(failed(DataError.ServerError, ListWrite.Save(anime, before.values))), failures)
             assertEquals(12, s.shownWatched(anime))
             assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
         }
@@ -1146,7 +1170,7 @@ abstract class ListEngineContract {
             settle()
 
             assertEquals(13, s.shownWatched(anime))
-            assertEquals(listOf(WriteFailure(DataError.ServerError, ListWrite.Save(anime, shown))), failures)
+            assertEquals(listOf(failed(DataError.ServerError, ListWrite.Save(anime, shown))), failures)
         }
 
     @Test
@@ -1163,7 +1187,7 @@ abstract class ListEngineContract {
             settle()
 
             assertNull(s.shown(anime.id))
-            assertEquals(listOf(WriteFailure(DataError.NoConnection, ListWrite.Save(anime, values))), failures)
+            assertEquals(listOf(failed(DataError.NoConnection, ListWrite.Save(anime, values))), failures)
             s.server.offline.value = false
             s.list.write(failures.single().retry)
             settle()
@@ -1311,7 +1335,7 @@ abstract class ListEngineContract {
 
             assertNull(s.list.write(ListWrite.MarkNextWatched(anime)))
             runCurrent()
-            assertEquals(listOf(WriteFailure(DataError.StorageError, ListWrite.MarkNextWatched(anime))), failures)
+            assertEquals(listOf(failed(DataError.StorageError, ListWrite.MarkNextWatched(anime))), failures)
             assertEquals(emptyList<List<ListEntry>>(), seen)
 
             s.local.throwing = false
@@ -1345,7 +1369,7 @@ abstract class ListEngineContract {
             settle()
 
             assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
-            assertEquals(listOf(WriteFailure(DataError.StorageError, ListWrite.Save(anime, shown))), failures)
+            assertEquals(listOf(failed(DataError.StorageError, ListWrite.Save(anime, shown))), failures)
             assertEquals(Outcome.Success(Unit), s.list.sync())
             assertEquals(13, s.shownWatched(anime))
         }
@@ -1365,7 +1389,7 @@ abstract class ListEngineContract {
 
             assertEquals(12, s.shownWatched(anime))
             assertFalse(checkNotNull(s.local.read(anime.id)?.entry).unconfirmed)
-            assertEquals(listOf(WriteFailure(DataError.StorageError, ListWrite.Save(anime, shown))), failures)
+            assertEquals(listOf(failed(DataError.StorageError, ListWrite.Save(anime, shown))), failures)
             s.list.write(failures.single().retry)
             settle()
             assertEquals(listOf(13, 14), s.server.requests.map { it.values?.watchedEpisodes })
@@ -1583,7 +1607,7 @@ abstract class ListEngineContract {
             val seen = observe(s)
             val failures = failures(s)
             val anime = FixtureAnime.exactToWatch
-            s.session.value = Session.Expired
+            s.session.value = expired
             runCurrent()
 
             assertNull(s.list.write(ListWrite.MarkNextWatched(anime)))
@@ -1598,7 +1622,7 @@ abstract class ListEngineContract {
             assertEquals(0, s.server.listDownloads)
             assertEquals(0, s.mal.entryReads)
             // The error the shell offers no Retry for.
-            assertEquals(listOf(WriteFailure(DataError.SessionExpired, ListWrite.MarkNextWatched(anime))), failures)
+            assertEquals(listOf(failed(DataError.SessionExpired, ListWrite.MarkNextWatched(anime))), failures)
         }
 
     @Test
@@ -1608,13 +1632,13 @@ abstract class ListEngineContract {
             val failures = failures(s)
             val anime = FixtureAnime.exactToWatch
             val change = checkNotNull(s.list.write(ListWrite.MarkNextWatched(anime)))
-            s.session.value = Session.Expired
+            s.session.value = expired
             settle()
 
             assertEquals(emptyList<ListRequest>(), s.server.requests)
             assertEquals(fixtures.entryFor(anime.id), s.shown(anime.id))
             assertEquals(
-                listOf(WriteFailure(DataError.SessionExpired, ListWrite.Save(anime, checkNotNull(change.after).values))),
+                listOf(failed(DataError.SessionExpired, ListWrite.Save(anime, checkNotNull(change.after).values))),
                 failures,
             )
         }
@@ -1661,7 +1685,7 @@ abstract class ListEngineContract {
             assertEquals(emptyList<WriteFailure>(), failures)
 
             assertEquals(Outcome.Success(Unit), s.list.sync())
-            s.session.value = Session.Expired
+            s.session.value = Session.Expired(b.signIn)
             runCurrent()
             assertEquals(s.server.entries().toSet(), seen.last().toSet())
             val c = Session.SignedIn(SignInId("c"))
@@ -1672,14 +1696,17 @@ abstract class ListEngineContract {
         }
 
     @Test
-    fun `a start under another sign-in than the stored list's shows nothing of it, one under its own or expired keeps it`() =
+    fun `a start shows the stored list to its own sign-in alone, signed in or expired`() =
         runTest {
-            val other = subject(session = b)
-            assertEquals(emptyList<ListEntry>(), other.list.observeEntries().first())
-            assertEquals(StoredList(b.signIn, syncedAt = null), other.local.state())
-            assertEquals(emptyMap<AnimeId, StoredEntry>(), other.local.readAll())
+            for (session in listOf(b, Session.Expired(b.signIn))) {
+                val other = subject(session = session)
+                assertEquals(emptyList<ListEntry>(), other.list.observeEntries().first())
+                assertNull(other.list.observeEntry(FixtureAnime.exactToWatch.id).first())
+                assertEquals(StoredList(b.signIn, syncedAt = null), other.local.state())
+                assertEquals(emptyMap<AnimeId, StoredEntry>(), other.local.readAll())
+            }
 
-            for (session in listOf(a, Session.Expired)) {
+            for (session in listOf(a, expired)) {
                 val same = subject(session = session)
                 settle()
                 assertEquals(
@@ -1981,13 +2008,178 @@ abstract class ListEngineContract {
 
             assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
             assertEquals(12, s.shownWatched(anime))
-            assertEquals(listOf(WriteFailure(DataError.ServerError, ListWrite.Save(anime, shown))), failures)
+            assertEquals(listOf(failed(DataError.ServerError, ListWrite.Save(anime, shown))), failures)
             assertEquals(1, s.unexpected.size)
 
             s.mal.answering = { it }
             s.editOnWebsite(anime, 20)
             assertEquals(Outcome.Success(Unit), s.list.sync())
             assertEquals(20, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `S6 a sync waiting behind a running one downloads nothing once the session expired or the user signed out`() =
+        runTest {
+            for (ended in listOf(expired, Session.SignedOut)) {
+                val s = subject()
+                val running = async { s.list.sync() }
+                runCurrent()
+                val waiting = async { s.list.sync() }
+                advanceTimeBy(500.milliseconds)
+                s.session.value = ended
+                settle()
+
+                assertEquals(Outcome.Failure(DataError.SessionExpired), running.await())
+                assertEquals(Outcome.Failure(DataError.SessionExpired), waiting.await())
+                assertEquals("after $ended", 1, s.server.listDownloads)
+            }
+        }
+
+    @Test
+    fun `a Retry made in one sign-in's list is refused once that list has ended, and changes and sends nothing`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.server.offline.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            val failure = failures.single()
+            assertEquals(a.signIn, failure.list)
+            val refused = failed(DataError.ListEnded, failure.write)
+            s.local.calls.clear()
+
+            s.session.value = Session.SignedOut
+            runCurrent()
+            assertNull(s.list.write(failure.retry))
+            s.session.value = b
+            s.server.offline.value = false
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertNull(s.list.write(failure.retry))
+            assertEquals(Outcome.Failure(DataError.ListEnded), s.list.send(failure.retry))
+            settle()
+
+            assertEquals(emptyList<ListRequest>(), s.server.requests)
+            assertEquals(0, s.mal.entryReads)
+            assertEquals(12, s.shownWatched(anime))
+            assertEquals(listOf(failure, refused, refused), failures)
+            assertEquals(emptyList<String>(), s.local.writes.filter { it == "write" || it == "add" })
+        }
+
+    @Test
+    fun `an Undo made in one sign-in's list is refused once that list has ended, and changes and sends nothing`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            val change = checkNotNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            assertEquals(a.signIn, change.list)
+            settle()
+            val sent = s.server.requests
+
+            s.session.value = Session.SignedOut
+            runCurrent()
+            s.session.value = b
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertNull(s.list.write(change.undo))
+            assertEquals(Outcome.Failure(DataError.ListEnded), s.list.send(change.undo))
+            settle()
+
+            assertEquals(sent, s.server.requests)
+            assertEquals(13, s.shownWatched(anime))
+            assertEquals(listOf(failed(DataError.ListEnded, change.undo)), failures)
+        }
+
+    @Test
+    fun `an Undo and a Retry of the sign-in that expired fail as the session does, and work again in no other list`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            val change = checkNotNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            settle()
+            s.session.value = expired
+            runCurrent()
+
+            assertNull(s.list.write(change.undo))
+            runCurrent()
+            assertEquals(listOf(failed(DataError.SessionExpired, change.undo)), failures)
+            s.session.value = b
+            assertNull(s.list.write(failures.single().retry))
+            runCurrent()
+            assertEquals(failed(DataError.ListEnded, change.undo), failures.last())
+            assertEquals(1, s.server.requests.size)
+        }
+
+    @Test
+    fun `a queued edit is never sent under another session than the one it was decided in`() =
+        runTest {
+            val sentUnder = mutableSetOf<Session?>()
+            for (reads in 1..8) {
+                val s = subject()
+                s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+                s.readsUntilNext = reads
+                settle()
+                assertEquals("the session changed at its read number $reads", emptyList<Session?>(), s.mal.putsUnder.filter { it != a })
+                sentUnder += s.mal.putsUnder
+            }
+            assertEquals(setOf<Session?>(a), sentUnder)
+        }
+
+    @Test
+    fun `S9 a sign-out whose clear failed shows nothing, and the list is cleared at the next use`() =
+        runTest {
+            val anime = FixtureAnime.exactToWatch
+            val uses =
+                listOf<suspend (ListRepository) -> Unit>(
+                    { it.observeEntries().first() },
+                    { it.observeSyncedAt().first() },
+                    { it.write(ListWrite.MarkNextWatched(anime)) },
+                    { it.sync() },
+                    { it.send(ListWrite.MarkWatched(anime, 13)) },
+                )
+            for ((index, use) in uses.withIndex()) {
+                val s = subject()
+                s.local.failingWrites = true
+                s.session.value = Session.SignedOut
+                runCurrent()
+
+                assertEquals(emptyList<ListEntry>(), s.list.observeEntries().first())
+                assertNull(s.list.observeEntry(anime.id).first())
+                assertNull(s.syncedAt())
+                assertEquals(fixtures.entries.size, s.local.readAll().size)
+
+                s.local.failingWrites = false
+                use(s.list)
+                assertEquals("after use $index", emptyMap<AnimeId, StoredEntry>(), s.local.readAll())
+                assertEquals(StoredList(owner = null, syncedAt = null), s.local.state())
+            }
+        }
+
+    @Test
+    fun `a store that stays broken is reported once, and again only after it worked`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.local.throwing = true
+            backgroundScope.launch { runCatching { s.list.observeEntries().collect {} } }
+            advanceTimeBy(10.minutes)
+            assertEquals(3, s.local.subscriptions)
+            assertNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            assertEquals(Outcome.Failure(DataError.StorageError), s.list.sync())
+            assertEquals(listOf("The store cannot be opened"), s.unexpected.map { it.message })
+
+            s.local.throwing = false
+            assertEquals(12, s.shownWatched(anime))
+            s.local.throwing = true
+            assertEquals(Outcome.Failure(DataError.StorageError), s.list.sync())
+            assertEquals(2, s.unexpected.size)
+
+            s.local.throwing = false
+            s.local.failingWrites = true
+            assertNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            assertNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            assertEquals(3, s.unexpected.size)
         }
 
     private companion object {

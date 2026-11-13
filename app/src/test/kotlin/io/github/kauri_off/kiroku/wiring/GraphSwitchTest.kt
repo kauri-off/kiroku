@@ -55,7 +55,7 @@ class GraphSwitchTest {
             assertNull(graph.list.write(write))
             runCurrent()
 
-            assertEquals(listOf(WriteFailure(DataError.SessionExpired, write)), failures)
+            assertEquals(listOf(WriteFailure(DataError.SessionExpired, write, list = null)), failures)
             assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.sync())
             assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.send(write))
         }
