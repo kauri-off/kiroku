@@ -1,8 +1,6 @@
 package io.github.kauri_off.kiroku.search
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -11,8 +9,10 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -23,12 +23,12 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowTrailing
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.LARGE_TEXT
-import io.github.kauri_off.kiroku.design.theme.Spacing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -113,7 +113,7 @@ fun hasPlainText(text: String) =
             .any { it.text.replace('\u00A0', ' ') == text }
     }
 
-// With large text the score gives the title room: the number stands alone, without its star.
+// With large text the score gives the title room: it leaves the trailing slot for the end of the first line.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class MalScoreWidthTest {
@@ -122,29 +122,39 @@ class MalScoreWidthTest {
     @get:Rule
     val rule: TestRule = registered(compose)
 
-    private fun extra(fontScale: Float): Dp {
+    private val title = "Kagerou Toshokan: Hajimari no Shou, Natsuyasumi Tokubetsu-hen"
+
+    // How much narrower the title is beside a score than in the same row without one.
+    private fun narrower(fontScale: Float): Dp {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                 KirokuTheme(dark = false, dynamicColor = false) {
                     Column {
-                        AnimeRow("One", null, {}, trailing = RowTrailing.MalScore("8.71"))
-                        Text("8.71", style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("number"))
+                        AnimeRow(title, null, {}, Modifier.testTag("scored"), listOf(RowLine("TV · 2019")), RowTrailing.MalScore("8.71"))
+                        AnimeRow(title, null, {}, Modifier.testTag("plain"), listOf(RowLine("TV · 2019")))
                     }
                 }
             }
         }
-        val score = compose.onNodeWithContentDescription("MAL score 8.71", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val number = compose.onNodeWithTag("number").getUnclippedBoundsInRoot()
-        return (score.right - score.left) - (number.right - number.left)
+
+        fun width(tag: String) =
+            compose
+                .onNode(hasText(title) and hasAnyAncestor(hasTestTag(tag)), useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+                .let { it.right - it.left }
+        return width("plain") - width("scored")
     }
 
     @Test
-    fun `the star goes with large text and stays below it`() {
-        assertTrue(extra(LARGE_TEXT) <= 1.dp)
+    fun `with large text the title keeps its whole width and the line still names the score`() {
+        assertTrue(narrower(LARGE_TEXT) <= 1.dp)
+        compose.onNode(hasText("TV · 2019\u00A0· MAL score 8.71"), useUnmergedTree = true).assertExists()
     }
 
     @Test
-    fun `below large text the star is beside the score`() {
-        assertTrue(extra(1f) > Spacing.s)
+    fun `below large text the score is beside the title`() {
+        narrower(1f)
+        compose.onNodeWithContentDescription("MAL score 8.71", useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("TV · 2019") and hasAnyAncestor(hasTestTag("scored")), useUnmergedTree = true).assertExists()
     }
 }

@@ -5,12 +5,17 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -83,14 +88,20 @@ fun SearchScreen(
         // The bar's own container is clear; this one hides the rows that scroll under it, up to the screen's top edge.
         topBar = {
             Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // With the bar's own inset, the field's edges are the rows' content edges.
-                    AppBarWithSearch(
-                        state = bar,
-                        inputField = field,
-                        modifier = Modifier.widthIn(max = Sizes.contentMaxWidth),
-                        contentPadding = PaddingValues(horizontal = Spacing.s),
-                    )
+                Column {
+                    // Inset and then centred as the rows are, so the field's edges are the rows' content edges.
+                    Box(
+                        Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        AppBarWithSearch(
+                            state = bar,
+                            inputField = field,
+                            windowInsets = SearchBarDefaults.windowInsets.only(WindowInsetsSides.Top),
+                            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth),
+                            contentPadding = PaddingValues(horizontal = Spacing.s),
+                        )
+                    }
                     if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(SearchEvent.SignIn) })
                 }
             }
