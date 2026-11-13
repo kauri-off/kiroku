@@ -9,7 +9,6 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -377,7 +376,7 @@ class TitleViewModelTest {
     @Test
     fun `the session reaches the page's state`() =
         test { s ->
-            assertEquals(Session.SignedIn("kiroku_demo"), s.state.session)
+            assertEquals(Fixtures.reference.session, s.state.session)
             s.graph.demo.server.sessionExpired.value = true
             advanceUntilIdle()
             assertTrue(s.state.sessionExpired)
