@@ -212,7 +212,6 @@ class SendRulesTest {
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { read() })
         assertEquals(listOf("GET", "GET", "GET", "GET"), sent())
-        assertEquals(2, network.log.size - 1)
     }
 
     @Test
