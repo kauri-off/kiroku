@@ -26,7 +26,6 @@ import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import java.time.Clock
 
@@ -60,7 +59,7 @@ internal class LiveGraph(
                 ): Outcome<ListEntry?> = unavailable
             },
             InMemoryLocalList(),
-            MutableStateFlow(false),
+            session.observeSession(),
             clock,
             scope,
             unexpected,

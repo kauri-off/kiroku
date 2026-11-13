@@ -15,7 +15,8 @@ class ShellViewModel(
     init {
         viewModelScope.launch {
             list.observeWriteFailures().collect { failure ->
-                val retry = ShellMessage.Action.Retry(failure.retry).takeUnless { failure.error == DataError.SessionExpired }
+                val refused = failure.error == DataError.SessionExpired || failure.error == DataError.ListEnded
+                val retry = ShellMessage.Action.Retry(failure.retry).takeUnless { refused }
                 messages.post(ShellMessage(ShellMessage.Text.CouldNotSave, retry))
             }
         }
