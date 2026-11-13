@@ -429,7 +429,14 @@ class ListEngine(
                 epochs[id] = put.epoch + 1
                 pending.remove(id)
                 try {
-                    save(id, local.read(id)?.entry?.confirmed?.let { StoredEntry.settled(it) })
+                    save(
+                        id,
+                        local
+                            .read(id)
+                            ?.entry
+                            ?.confirmed
+                            ?.let { StoredEntry.settled(it) },
+                    )
                 } catch (_: StoreFailure) {
                 }
                 accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put

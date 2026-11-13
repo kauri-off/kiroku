@@ -38,7 +38,8 @@ class InMemoryLocalList(
 
     override suspend fun read(id: AnimeId): StoredTitle? = synchronized(guard) { titles[id]?.let { StoredTitle(it, stored[id]) } }
 
-    override suspend fun readAll(): Map<AnimeId, StoredEntry> = synchronized(guard) { titles.keys.mapNotNull { id -> stored[id]?.let { id to it } }.toMap() }
+    override suspend fun readAll(): Map<AnimeId, StoredEntry> =
+        synchronized(guard) { titles.keys.filter { it in stored }.associateWith { stored.getValue(it) } }
 
     override suspend fun write(entries: Map<AnimeId, StoredEntry?>) {
         synchronized(guard) {
@@ -99,7 +100,8 @@ class InMemoryLocalList(
         for ((id, anime) in titles) {
             val record = stored[id]?.shown ?: continue
             val old = before[id]
-            now[id] = if (old != null && old.anime === anime && old.record == record) old else ListEntry(anime, record.values, record.updatedAt)
+            now[id] =
+                if (old != null && old.anime === anime && old.record == record) old else ListEntry(anime, record.values, record.updatedAt)
         }
         if (now.size != before.size || now.any { (id, entry) -> before[id] !== entry }) shown.value = now
     }

@@ -1564,7 +1564,14 @@ abstract class ListEngineContract {
             settle()
 
             assertEquals(13, seen.watched(anime))
-            assertEquals(13, written.await()?.after?.values?.watchedEpisodes)
+            assertEquals(
+                13,
+                written
+                    .await()
+                    ?.after
+                    ?.values
+                    ?.watchedEpisodes,
+            )
             assertEquals(Outcome.Success(Unit), synced.await())
             assertEquals(Outcome.Success(Unit), sent.await())
             assertEquals(13, s.serverWatched(anime))
@@ -1676,7 +1683,13 @@ abstract class ListEngineContract {
             for (session in listOf(a, Session.Expired)) {
                 val same = subject(session = session)
                 settle()
-                assertEquals(fixtures.entries.toSet(), same.list.observeEntries().first().toSet())
+                assertEquals(
+                    fixtures.entries.toSet(),
+                    same.list
+                        .observeEntries()
+                        .first()
+                        .toSet(),
+                )
                 assertEquals(StoredList(a.signIn, seededAt), same.local.state())
                 assertEquals(emptyList<String>(), same.local.writes)
                 assertEquals(0, same.server.listDownloads)
@@ -1844,12 +1857,23 @@ abstract class ListEngineContract {
             assertEquals(Outcome.Success(Unit), s.list.sync())
             val first = s.local.downloads.single()
             assertEquals(emptyMap<AnimeId, StoredEntry?>(), first.entries)
-            assertEquals(s.server.entries().map { it.anime }.toSet(), first.titles.toSet())
+            assertEquals(
+                s.server
+                    .entries()
+                    .map { it.anime }
+                    .toSet(),
+                first.titles.toSet(),
+            )
             assertEquals(checkNotNull(fixtures.entryFor(renewed.id)).copy(anime = renewed), s.shown(renewed.id))
 
             s.editOnWebsite(edited, 9)
             assertEquals(Outcome.Success(Unit), s.list.sync())
-            assertEquals(setOf(edited.id), s.local.downloads.last().entries.keys)
+            assertEquals(
+                setOf(edited.id),
+                s.local.downloads
+                    .last()
+                    .entries.keys,
+            )
             assertEquals(listOf("download", "download"), s.local.writes)
         }
 
@@ -1868,7 +1892,12 @@ abstract class ListEngineContract {
 
             assertEquals(1, lists.size)
             assertEquals(1, entries.size)
-            assertEquals(emptyMap<AnimeId, StoredEntry?>(), s.local.downloads.single().entries)
+            assertEquals(
+                emptyMap<AnimeId, StoredEntry?>(),
+                s.local.downloads
+                    .single()
+                    .entries,
+            )
             assertEquals(fixtures.now, s.syncedAt())
         }
 
