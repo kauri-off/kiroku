@@ -5,14 +5,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.kauri_off.kiroku.core.error.DataError
 
-// The fixture user as the signed-in one; of other names, the fixtures' public and private lists, and no one else.
+// The fixture user as the signed-in one; of other names, the fixtures' public lists and private one, and no one else.
 internal val profileStandIn: ProfileStandIn? =
     object : ProfileStandIn {
         override val own: ProfileContent = ProfileFixtureStates.own
 
         override fun other(name: String): ProfileContent =
             when {
-                name.equals(ProfileFixtureStates.set.otherUserName, ignoreCase = true) -> ProfileFixtureStates.other
+                ProfileFixtureStates.publicNames.any { it.equals(name, ignoreCase = true) } -> ProfileFixtureStates.other
                 name.equals(ProfileFixtureStates.set.privateUserName, ignoreCase = true) -> ProfileContent.Failed(DataError.PrivateList)
                 else -> ProfileContent.Failed(DataError.UnknownUser)
             }
@@ -21,6 +21,6 @@ internal val profileStandIn: ProfileStandIn? =
             private set
 
         override fun opened(name: String) {
-            recent = recent.withOpened(name)
+            if (other(name) != ProfileContent.Failed(DataError.UnknownUser)) recent = recent.withOpened(name)
         }
     }

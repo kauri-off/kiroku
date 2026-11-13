@@ -10,6 +10,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,8 @@ sealed interface ScreenState {
     data class Empty(
         val message: String,
         val action: StateAction? = null,
+        // A second way on, as a text button under the action.
+        val secondary: StateAction? = null,
     ) : ScreenState
 
     data class Error(
@@ -56,7 +59,7 @@ fun ScreenState(
                 val loading = stringResource(R.string.design_loading)
                 WaitIndicator(Modifier.semantics { contentDescription = loading })
             }
-            is ScreenState.Empty -> Message(state.message, state.action)
+            is ScreenState.Empty -> Message(state.message, state.action, state.secondary)
             is ScreenState.Error -> Message(state.message, StateAction(stringResource(R.string.design_retry), state.onRetry))
         }
     }
@@ -66,6 +69,7 @@ fun ScreenState(
 private fun Message(
     message: String,
     action: StateAction?,
+    secondary: StateAction? = null,
 ) {
     Column(
         Modifier
@@ -79,6 +83,11 @@ private fun Message(
             style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading),
             textAlign = TextAlign.Center,
         )
-        if (action != null) Button(onClick = action.onClick, shapes = ButtonDefaults.shapes()) { Text(action.label) }
+        if (action != null || secondary != null) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                if (action != null) Button(onClick = action.onClick, shapes = ButtonDefaults.shapes()) { Text(action.label) }
+                if (secondary != null) TextButton(onClick = secondary.onClick, shapes = ButtonDefaults.shapes()) { Text(secondary.label) }
+            }
+        }
     }
 }

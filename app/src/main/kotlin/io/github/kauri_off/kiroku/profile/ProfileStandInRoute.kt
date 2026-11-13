@@ -23,7 +23,7 @@ internal interface ProfileStandIn {
 
     fun other(name: String): ProfileContent
 
-    // The names opened last, newest first.
+    // The names opened last that turned out to exist, newest first.
     val recent: List<String>
 
     fun opened(name: String)
@@ -81,7 +81,7 @@ internal fun ProfileStandInRoute(
             ProfileEvent.Retry, ProfileEvent.Refresh -> Unit
             is ProfileEvent.OpenStatistics -> navigator.open(ProfileNotBuiltKey(event.screen.notBuilt(), name))
             ProfileEvent.ViewList -> navigator.open(ProfileNotBuiltKey(ProfileNotBuilt.UserList, name))
-            ProfileEvent.StartOpenProfile -> typed = ""
+            is ProfileEvent.StartOpenProfile -> typed = event.name
             is ProfileEvent.TypeName -> typed = event.text
             is ProfileEvent.OpenProfile -> {
                 typed = null

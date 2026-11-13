@@ -88,7 +88,12 @@ fun appEntries(
             }
         }
         entry<OtherProfileKey> { key ->
-            profileStandIn?.let { ProfileStandInRoute(it, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars) }
+            val standIn = profileStandIn
+            if (standIn == null) {
+                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
+            } else {
+                ProfileStandInRoute(standIn, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars)
+            }
         }
         entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
         entry<TitleKey> { key ->

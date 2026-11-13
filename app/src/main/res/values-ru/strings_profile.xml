@@ -17,12 +17,12 @@
     <string name="profile_could_not_load">Не удалось загрузить профиль</string>
     <string name="profile_private_list">Этот список скрыт</string>
     <string name="profile_unknown_user">На MyAnimeList нет пользователя с таким именем</string>
-    <string name="profile_loading_list">Загружено\u00A0%1$s\u00A0из\u00A0%2$s</string>
+    <string name="profile_loading_list">Загружено %1$s\u00A0из\u00A0%2$s</string>
     <plurals name="profile_loading_list_unknown_total">
-        <item quantity="one">Загружен\u00A0%1$s\u00A0тайтл</item>
-        <item quantity="few">Загружено\u00A0%1$s\u00A0тайтла</item>
-        <item quantity="many">Загружено\u00A0%1$s\u00A0тайтлов</item>
-        <item quantity="other">Загружено\u00A0%1$s\u00A0тайтла</item>
+        <item quantity="one">Загружен %1$s\u00A0тайтл</item>
+        <item quantity="few">Загружено %1$s\u00A0тайтла</item>
+        <item quantity="many">Загружено %1$s\u00A0тайтлов</item>
+        <item quantity="other">Загружено %1$s\u00A0тайтла</item>
     </plurals>
     <string name="profile_user_name">Имя пользователя</string>
     <string name="profile_recent">Недавние</string>

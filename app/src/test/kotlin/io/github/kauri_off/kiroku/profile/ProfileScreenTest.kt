@@ -7,9 +7,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -49,6 +54,7 @@ class ProfileScreenTest {
     @Test
     fun theOwnProfileShowsItsBudget() {
         show(fixtures.me())
+        compose.onNodeWithTag(ProfileTags.avatar, useUnmergedTree = true).assertExists()
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("kiroku_demo").assertExists()
         compose.onNodeWithText("Joined\u00A02019").assertExists()
@@ -64,13 +70,15 @@ class ProfileScreenTest {
         compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
         compose.onNodeWithContentDescription("View list").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").assertDoesNotExist()
-        assertEquals(listOf(ProfileEvent.OpenSettings, ProfileEvent.StartOpenProfile), events)
+        assertEquals(listOf(ProfileEvent.OpenSettings, ProfileEvent.StartOpenProfile()), events)
     }
 
     @Test
     fun anotherUserIsNamedInTheBarWithBackAndOffersTheirList() {
         show(fixtures.of(fixtures.otherName, fixtures.other))
         compose.onNodeWithText(fixtures.otherName).assertExists()
+        compose.onNodeWithTag(ProfileTags.avatar, useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Joined", substring = true, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open another profile").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
@@ -82,7 +90,8 @@ class ProfileScreenTest {
     @Test
     fun aListWithNothingOnItHasNoMeanScore() {
         show(fixtures.me(ProfileContent.Shown(fixtures.set.user, fixtures.nothing)))
-        compose.onNodeWithText("0.0", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithText("0", useUnmergedTree = true).onFirst().assertExists()
+        compose.onNodeWithText("0.0", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("No mean score", useUnmergedTree = true).assertExists()
     }
 
@@ -106,6 +115,13 @@ class ProfileScreenTest {
     @Test
     @Config(fontScale = 1.3f)
     fun theThreeNumbersShareOneRowBelowLargeText() {
+        show(fixtures.me())
+        assertFalse(stacked())
+    }
+
+    @Test
+    @Config(fontScale = 1.45f)
+    fun theThreeNumbersShareOneRowJustBelowLargeText() {
         show(fixtures.me())
         assertFalse(stacked())
     }
@@ -142,13 +158,17 @@ class ProfileScreenTest {
         show(fixtures.me(ProfileContent.SignedOut))
         compose.onNodeWithText("Sign in with MyAnimeList to see your profile here").assertExists()
         compose.onNodeWithText("Sign in").performClick()
-        assertEquals(listOf(ProfileEvent.SignIn), events)
+        compose.onNodeWithText("Open another profile").performClick()
+        assertEquals(listOf(ProfileEvent.SignIn, ProfileEvent.StartOpenProfile()), events)
     }
 
     @Test
     fun aPrivateListAndAnUnknownNameSayWhatTheyAreAndOfferAnotherName() {
         val cases =
-            mapOf(DataError.PrivateList to "This list is private", DataError.UnknownUser to "MyAnimeList has no user with this name")
+            listOf(
+                Triple(fixtures.privateName, DataError.PrivateList, "This list is private"),
+                Triple(fixtures.unknownName, DataError.UnknownUser, "MyAnimeList has no user with this name"),
+            )
         var state by mutableStateOf(fixtures.of(fixtures.privateName, ProfileContent.Failed(DataError.PrivateList)))
         compose.setContent {
             KirokuTheme(
@@ -156,13 +176,14 @@ class ProfileScreenTest {
                 dynamicColor = false,
             ) { ProfileScreen(state, { events += it }, SnackbarHostState()) }
         }
-        for ((error, message) in cases) {
-            state = fixtures.of(fixtures.privateName, ProfileContent.Failed(error))
+        for ((name, error, message) in cases) {
+            state = fixtures.of(name, ProfileContent.Failed(error))
             compose.onNodeWithText(message).assertExists()
             compose.onNodeWithText("Retry").assertDoesNotExist()
             compose.onNodeWithText("Open another profile").performClick()
         }
-        assertEquals(List(2) { ProfileEvent.StartOpenProfile }, events)
+        // The dialog starts empty after a private list and from the name that was not found.
+        assertEquals(listOf(ProfileEvent.StartOpenProfile(), ProfileEvent.StartOpenProfile(fixtures.unknownName)), events)
     }
 
     @Test
@@ -176,7 +197,32 @@ class ProfileScreenTest {
     @Test
     fun aLongListLoadsWithItsProgressLine() {
         show(fixtures.of(fixtures.otherName, ProfileContent.ListLoading(3_000, 12_400)))
-        compose.onNodeWithText("Loading\u00A03,000\u00A0of\u00A012,400").assertExists()
+        val line = "Loading 3,000\u00A0of\u00A012,400"
+        compose.onNodeWithText(line).assertExists()
+        assertEquals(1, compose.onAllNodes(hasText(line) or hasContentDescription(line)).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    @Config(qualifiers = "ru-w360dp-h640dp-xhdpi", fontScale = 2f)
+    fun bothProgressLinesWrapAfterTheVerbWithLargeText() {
+        val lines = listOf(ProfileContent.ListLoading(3_000, 12_400), ProfileContent.ListLoading(1_200, null))
+        var state by mutableStateOf(fixtures.of(fixtures.otherName, lines[0]))
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ProfileScreen(state, {}, SnackbarHostState()) } }
+        val verb = "Загружено "
+        for (content in lines) {
+            state = fixtures.of(fixtures.otherName, content)
+            val results = mutableListOf<TextLayoutResult>()
+            compose
+                .onNodeWithText(verb, substring = true, useUnmergedTree = true)
+                .fetchSemanticsNode()
+                .config[SemanticsActions.GetTextLayoutResult]
+                .action!!
+                .invoke(results)
+            val layout = results.single()
+            assertFalse("${layout.layoutInput.text} runs past its width", layout.hasVisualOverflow)
+            val breaks = (0 until layout.lineCount - 1).map { layout.getLineEnd(it) }
+            assertTrue("${layout.layoutInput.text} breaks at $breaks", breaks.all { it == verb.length })
+        }
     }
 
     @Test
@@ -186,6 +232,20 @@ class ProfileScreenTest {
         compose.onNodeWithText(fixtures.recent[2]).performClick()
         compose.onNodeWithText("Cancel").performClick()
         assertEquals(listOf(ProfileEvent.OpenProfile(fixtures.recent[2]), ProfileEvent.DismissOpenProfile), events)
+    }
+
+    @Test
+    fun theDialogScrollsBetweenItsTitleAndItsButtons() {
+        show(fixtures.me().copy(openProfile = OpenProfile("", fixtures.recent)))
+        compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Recent"))).assertExists()
+        compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Cancel"))).assertDoesNotExist()
+    }
+
+    @Test
+    fun theDialogOpensTheNameInAPastedProfileLink() {
+        show(fixtures.me().copy(openProfile = OpenProfile("https://myanimelist.net/profile/${fixtures.otherName}?view=all", emptyList())))
+        compose.onNodeWithText("Open").performClick()
+        assertEquals(listOf(ProfileEvent.OpenProfile(fixtures.otherName)), events)
     }
 
     @Test

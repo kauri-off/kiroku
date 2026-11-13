@@ -174,11 +174,12 @@ object FixtureUser {
             other(FixtureAnime.plannedFinished, ListStatus.Planned, 0, null),
         )
 
-    // Longer than MAL allows a user name to be, so no real user has one.
-    val unknownName: String = "nobody_by_that_name"
+    // 24 characters, beyond any plausible user-name limit (MAL's is believed to be 16), so no real account has these.
+    val unknownName: String = "nobody_by_that_name_here"
+    val guestNames: List<String> = listOf("kiroku_fixture_guest_one", "kiroku_fixture_guest_two", "kiroku_fixture_guest_ten")
 
     // Names opened earlier for the Profile's "Open another profile", newest first.
-    val openedNames: List<String> = listOf("sample_viewer", "quiet_viewer", "kiroku_guest_one", "kiroku_guest_two", "kiroku_guest_three")
+    val openedNames: List<String> = listOf("sample_viewer", "quiet_viewer") + guestNames
 
     private fun other(
         anime: Anime,

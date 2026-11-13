@@ -31,6 +31,9 @@ object ProfileFixtureStates {
 
     val unknownName: String get() = FixtureUser.unknownName
 
+    // The users whose list is public: the large one under every name but the private one.
+    val publicNames: List<String> get() = listOf(otherName) + FixtureUser.guestNames
+
     // Five names opened earlier, newest first.
     val recent: List<String> get() = FixtureUser.openedNames
 

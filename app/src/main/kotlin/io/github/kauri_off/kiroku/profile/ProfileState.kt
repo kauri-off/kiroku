@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.profile
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.notShown
 
 data class ProfileState(
     val owner: ProfileOwner,
@@ -82,7 +83,10 @@ sealed interface ProfileEvent {
 
     data object ViewList : ProfileEvent
 
-    data object StartOpenProfile : ProfileEvent
+    // Opens the dialog with [name] in its field.
+    data class StartOpenProfile(
+        val name: String = "",
+    ) : ProfileEvent
 
     data class TypeName(
         val text: String,
@@ -101,5 +105,15 @@ const val RECENT_PROFILES = 5
 fun List<String>.withOpened(name: String): List<String> =
     (listOf(name) + filterNot { it.equals(name, ignoreCase = true) }).take(RECENT_PROFILES)
 
-// What the dialog opens: the name as typed, without the blanks around it; null when there is none.
-fun OpenProfile.nameToOpen(): String? = name.trim().ifEmpty { null }
+// What the dialog opens: the name typed or taken from a pasted profile link; null when there is none.
+fun OpenProfile.nameToOpen(): String? = profileName(name)
+
+// The user name in a myanimelist.net profile link, with or without its scheme, "www.", a trailing slash or a query;
+// any other text is taken as a name, without the blanks around it.
+fun profileName(text: String): String? {
+    val trimmed = text.trim()
+    return (profileLink.matchEntire(trimmed)?.groupValues?.get(1) ?: trimmed).ifEmpty { null }
+}
+
+private val profileLink =
+    Regex(notShown("""(?:https?://)?(?:www\.)?myanimelist\.net/profile/([^/?#\s]+)/?(?:[?#]\S*)?"""), RegexOption.IGNORE_CASE)

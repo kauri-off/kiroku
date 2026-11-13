@@ -49,6 +49,8 @@
     <string name="gallery_broadcast_value">По субботам в\u00A017:30</string>
     <string name="gallery_empty">В «Запланировано» нет тайтлов</string>
     <string name="gallery_sign_in">Войти</string>
+    <string name="gallery_signed_out">Войдите через MyAnimeList, чтобы видеть здесь свой профиль</string>
+    <string name="gallery_open_another">Открыть другой профиль</string>
     <string name="gallery_no_connection">Нет соединения</string>
     <string name="gallery_no_score">Нет оценки</string>
 </resources>

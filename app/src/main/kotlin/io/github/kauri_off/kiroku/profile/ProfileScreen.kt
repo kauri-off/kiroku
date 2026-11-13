@@ -5,12 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -126,27 +124,32 @@ fun ProfileScreen(
                     ScreenState.Empty(
                         stringResource(R.string.profile_signed_out),
                         StateAction(stringResource(R.string.profile_sign_in)) { onEvent(ProfileEvent.SignIn) },
+                        StateAction(stringResource(R.string.profile_open_another)) { onEvent(ProfileEvent.StartOpenProfile()) },
                     ),
                     body,
                 )
             is ProfileContent.ListLoading -> ListProgress(content, body)
-            is ProfileContent.Failed -> ScreenState(failedState(content.error, onEvent), body)
+            is ProfileContent.Failed -> ScreenState(failedState(content.error, state.owner, onEvent), body)
             is ProfileContent.Shown -> Shown(content, state, onEvent, padding)
         }
     }
     state.openProfile?.let { OpenProfileDialog(it, onEvent) }
 }
 
-// A list that cannot be read says why; a private list or an unknown name offers another name instead of Retry.
+// A list that cannot be read says why; a private list or an unknown name offers another name instead of Retry, and
+// for an unknown name the dialog starts from the name that was not found.
 @Composable
 private fun failedState(
     error: DataError,
+    owner: ProfileOwner,
     onEvent: (ProfileEvent) -> Unit,
 ): ScreenState {
-    val another = StateAction(stringResource(R.string.profile_open_another)) { onEvent(ProfileEvent.StartOpenProfile) }
+    val label = stringResource(R.string.profile_open_another)
+    val another = StateAction(label) { onEvent(ProfileEvent.StartOpenProfile()) }
+    val retype = StateAction(label) { onEvent(ProfileEvent.StartOpenProfile((owner as? ProfileOwner.Other)?.name.orEmpty())) }
     return when (error) {
         DataError.PrivateList -> ScreenState.Empty(stringResource(R.string.profile_private_list), another)
-        DataError.UnknownUser -> ScreenState.Empty(stringResource(R.string.profile_unknown_user), another)
+        DataError.UnknownUser -> ScreenState.Empty(stringResource(R.string.profile_unknown_user), retype)
         DataError.NoConnection -> ScreenState.Error(stringResource(R.string.common_no_connection)) { onEvent(ProfileEvent.Retry) }
         DataError.Refused -> ScreenState.Error(stringResource(R.string.common_refused)) { onEvent(ProfileEvent.Retry) }
         else -> ScreenState.Error(stringResource(R.string.profile_could_not_load)) { onEvent(ProfileEvent.Retry) }
@@ -161,21 +164,22 @@ private fun ListProgress(
     modifier: Modifier,
 ) {
     val loaded = countText(progress.loaded)
+    val total = progress.total?.takeIf { it > 0 }
     val line =
-        progress.total?.let { stringResource(R.string.profile_loading_list, loaded, countText(it)) }
+        total?.let { stringResource(R.string.profile_loading_list, loaded, countText(it)) }
             ?: pluralStringResource(R.plurals.profile_loading_list_unknown_total, progress.loaded, loaded)
     Box(
         modifier.fillMaxSize().padding(horizontal = Spacing.l, vertical = Spacing.xl),
         contentAlignment = Alignment.Center,
     ) {
+        // One node for a screen reader: the line, read once, with the indicator's progress.
         Column(
-            Modifier.widthIn(max = Sizes.messageMaxWidth),
+            Modifier.widthIn(max = Sizes.messageMaxWidth).semantics(mergeDescendants = true) {},
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
-            val total = progress.total
-            val indicator = Modifier.fillMaxWidth().semantics { contentDescription = line }
-            if (total != null && total > 0) {
+            val indicator = Modifier.fillMaxWidth()
+            if (total != null) {
                 LinearWavyProgressIndicator(
                     progress = { (progress.loaded.toFloat() / total).coerceIn(0f, 1f) },
                     modifier = indicator.testTag(COUNTED_WAVY_INDICATOR),
@@ -239,6 +243,7 @@ private fun Avatar(url: String?) {
     Box(
         Modifier
             .size(Sizes.avatar)
+            .testTag(ProfileTags.avatar)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
@@ -327,12 +332,16 @@ internal fun rowWidths(
 
 @Composable
 private fun daysText(days: Double): String =
-    NumberFormat
-        .getNumberInstance(currentLocale())
-        .apply {
-            minimumFractionDigits = 1
-            maximumFractionDigits = 1
-        }.format(days)
+    if (days == 0.0) {
+        countText(0)
+    } else {
+        NumberFormat
+            .getNumberInstance(currentLocale())
+            .apply {
+                minimumFractionDigits = 1
+                maximumFractionDigits = 1
+            }.format(days)
+    }
 
 @Composable
 private fun Statuses(
@@ -356,10 +365,9 @@ private fun Rows(
         for (screen in ProfileStatistics.entries) {
             LinkRow(stringResource(screen.label()), opensScreen = true) { onEvent(ProfileEvent.OpenStatistics(screen)) }
         }
-        Spacer(Modifier.height(Spacing.s))
         when (owner) {
             ProfileOwner.Me ->
-                LinkRow(stringResource(R.string.profile_open_another), opensScreen = false) { onEvent(ProfileEvent.StartOpenProfile) }
+                LinkRow(stringResource(R.string.profile_open_another), opensScreen = false) { onEvent(ProfileEvent.StartOpenProfile()) }
             is ProfileOwner.Other ->
                 LinkRow(
                     stringResource(R.string.profile_view_list),
@@ -395,6 +403,7 @@ internal fun ProfileStatistics.label(): Int =
 private val STATUS_ORDER = listOf(ListStatus.Watching, ListStatus.Completed, ListStatus.OnHold, ListStatus.Dropped, ListStatus.Planned)
 
 internal object ProfileTags {
+    val avatar = notShown("profile-avatar")
     val nameField = notShown("profile-name-field")
 }
 

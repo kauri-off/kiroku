@@ -66,4 +66,40 @@ class ProfileStateTest {
     fun numbersWhoseLongestWordsDoNotFitAreStacked() {
         assertNull(rowWidths(listOf(130, 100, 80), width = 320, gap = 10))
     }
+
+    @Test
+    fun aPastedProfileLinkGivesItsName() {
+        val forms =
+            listOf(
+                "https://myanimelist.net/profile/sample_viewer",
+                "http://myanimelist.net/profile/sample_viewer",
+                "https://www.myanimelist.net/profile/sample_viewer/",
+                "myanimelist.net/profile/sample_viewer",
+                "www.myanimelist.net/profile/sample_viewer",
+                "  https://myanimelist.net/profile/sample_viewer?view=animelist&status=1 ",
+                "https://MyAnimeList.net/profile/sample_viewer/#top",
+            )
+        for (form in forms) assertEquals(form, "sample_viewer", profileName(form))
+    }
+
+    @Test
+    fun anythingElseIsTakenAsAName() {
+        assertEquals("sample_viewer", profileName(" sample_viewer "))
+        assertEquals("https://example.com/profile/x", profileName("https://example.com/profile/x"))
+        assertEquals("myanimelist.net/anime/1", profileName("myanimelist.net/anime/1"))
+        assertEquals("myanimelist.net/profile/", profileName("myanimelist.net/profile/"))
+        assertNull(profileName("  "))
+    }
+
+    @Test
+    fun theStandInRemembersOnlyNamesThatExist() {
+        val standIn = checkNotNull(profileStandIn)
+        val before = standIn.recent
+        standIn.opened(fixtures.unknownName)
+        assertEquals(before, standIn.recent)
+        standIn.opened(fixtures.privateName)
+        assertEquals(fixtures.privateName, standIn.recent.first())
+        standIn.opened(fixtures.recent.last())
+        assertEquals(fixtures.recent.last(), standIn.recent.first())
+    }
 }

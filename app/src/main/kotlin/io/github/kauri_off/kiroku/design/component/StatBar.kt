@@ -62,7 +62,8 @@ fun StatBar(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+        // A static share has no end of progress to mark, and a stop dot would read as a small share.
+        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth(), drawStopIndicator = {})
     }
 }
 

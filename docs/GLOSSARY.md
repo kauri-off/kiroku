@@ -69,8 +69,6 @@ Wording decided before its feature exists. A row leaves this table when its reso
 | No client id in this build | This build has no MyAnimeList client id | В этой сборке нет идентификатора клиента MyAnimeList | |
 | Unofficial notice | Unofficial. Not affiliated with MyAnimeList. | Неофициальное приложение. Не связано с MyAnimeList. | |
 | Open a title by its id | Open title #12345 | Открыть тайтл №12345 | Search, for a query of digits only |
-| Profile summary | Days watched / Mean score | Дней просмотра / Средняя оценка | |
-| Settings | Settings | Настройки | |
 
 ## Rules
 

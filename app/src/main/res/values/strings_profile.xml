@@ -18,7 +18,7 @@
     <string name="profile_could_not_load">Could not load the profile</string>
     <string name="profile_private_list">This list is private</string>
     <string name="profile_unknown_user">MyAnimeList has no user with this name</string>
-    <string name="profile_loading_list">Loading\u00A0%1$s\u00A0of\u00A0%2$s</string>
+    <string name="profile_loading_list">Loading %1$s\u00A0of\u00A0%2$s</string>
     <plurals name="profile_loading_list_unknown_total">
         <item quantity="one">%1$s\u00A0title loaded</item>
         <item quantity="other">%1$s\u00A0titles loaded</item>
