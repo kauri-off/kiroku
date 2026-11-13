@@ -245,6 +245,13 @@ class ProfileScreenTest {
     }
 
     @Test
+    @Config(qualifiers = "en-w891dp-h411dp-xhdpi")
+    fun inAShortWindowTheWholeDialogScrolls() {
+        show(fixtures.me().copy(openProfile = OpenProfile("", fixtures.recent)))
+        compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Cancel")) and hasAnyDescendant(hasText("User name"))).assertExists()
+    }
+
+    @Test
     fun theDialogOpensTheNameInAPastedProfileLink() {
         show(fixtures.me().copy(openProfile = OpenProfile("https://myanimelist.net/profile/${fixtures.otherName}?view=all", emptyList())))
         compose.onNodeWithText("Open").performClick()

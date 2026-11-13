@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.profile.ProfileFixtureStates.me
 import io.github.kauri_off.kiroku.profile.ProfileFixtureStates.of
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
@@ -33,6 +34,9 @@ class ProfileScreenshots : ScreenshotRegistry() {
             case("unknown-name") { Screen(of(fixtures.unknownName, ProfileContent.Failed(DataError.UnknownUser))) },
             case("open-profile") { Screen(me().copy(openProfile = OpenProfile("", emptyList()))) },
             case("open-profile-recent") { Screen(me().copy(openProfile = OpenProfile("", fixtures.recent))) },
+            case("open-profile-landscape", window = WindowSize(widthDp = 891, heightDp = 411)) {
+                Screen(me().copy(openProfile = OpenProfile(fixtures.otherName, fixtures.recent)))
+            },
             case("open-profile-typed") {
                 Screen(me().copy(openProfile = OpenProfile(fixtures.otherName, fixtures.recent)))
             },
