@@ -42,7 +42,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 // On real threads, over a database file. A row that cannot be mapped fails where it is mapped, and the failure's
-// trace says where that was; a read of the list can be held back once its rows are read.
+// trace says where that was; a read of the list can be held back before it starts or once its rows are read.
 @RunWith(RobolectricTestRunner::class)
 class StoreThreadsTest {
     private object StoreThread : CoroutineDispatcher() {
@@ -56,10 +56,17 @@ class StoreThreadsTest {
         private fun onStoreThread(block: Runnable) = block.run()
     }
 
-    // A read of the list that waits, with its rows read, until it is released.
-    private class Hold {
+    // A read of the list that waits until it is released: [before] it reads a row, or else with its rows read.
+    private class Hold(
+        val before: Boolean = false,
+    ) {
         val reached = CountDownLatch(1)
         val released = CountDownLatch(1)
+
+        fun park() {
+            reached.countDown()
+            check(released.await(TIMEOUT.inWholeSeconds, TimeUnit.SECONDS))
+        }
     }
 
     // What the coming reads of the list do, in their order: wait at a hold, or pass at null.
@@ -77,7 +84,18 @@ class StoreThreadsTest {
                         val statement = connection.prepare(sql)
                         if (!sql.endsWith("ORDER BY e.title_id")) return statement
                         return object : SQLiteStatement by statement {
-                            override fun step(): Boolean = statement.step().also { more -> if (!more) read() }
+                            private var started = false
+                            private var hold: Hold? = null
+
+                            override fun step(): Boolean {
+                                if (!started) hold = holds.poll()?.orElse(null)
+                                if (!started) hold?.takeIf { it.before }?.park()
+                                started = true
+                                val more = statement.step()
+                                if (!more) reads.incrementAndGet()
+                                if (!more) hold?.takeUnless { it.before }?.park()
+                                return more
+                            }
                         }
                     }
                 }
@@ -101,19 +119,14 @@ class StoreThreadsTest {
         context.deleteDatabase(NAME)
     }
 
-    private fun read() {
-        reads.incrementAndGet()
-        val hold = holds.poll()?.orElse(null) ?: return
-        hold.reached.countDown()
-        check(hold.released.await(TIMEOUT.inWholeSeconds, TimeUnit.SECONDS))
-    }
-
     private suspend fun until(condition: () -> Boolean) = withTimeout(TIMEOUT) { while (!condition()) delay(POLL) }
 
     private fun watched(count: Int) = StoredEntry.settled(entry.record.copy(values = entry.values.copy(watchedEpisodes = count)))
 
-    private fun CoroutineScope.collector(seen: MutableList<Int>) =
-        launch(Dispatchers.Default) { list.observeEntries().collect { seen += it.single().values.watchedEpisodes } }
+    private fun CoroutineScope.collector(
+        seen: MutableList<Int>,
+        list: RoomLocalList = this@StoreThreadsTest.list,
+    ) = launch(Dispatchers.Default) { list.observeEntries().collect { seen += it.single().values.watchedEpisodes } }
 
     private fun Throwable.mappedOnStoreThread() =
         generateSequence(this) { it.cause }.any { cause -> cause.stackTrace.any { it.methodName == "onStoreThread" } }
@@ -211,6 +224,38 @@ class StoreThreadsTest {
             next.released.countDown()
             until { beside.last() == 21 }
             assertEquals(listOf(12, 20, 21), beside.toList())
+            joined.cancel()
+            standing.cancel()
+        }
+
+    // The store maps on several threads here, so only its own order keeps two reads apart.
+    @Test
+    fun `a read that began later is never of an older list than one that began before it`() =
+        runBlocking {
+            stored()
+            val list = RoomLocalList(database, sharing, Dispatchers.Default)
+            val beside = CopyOnWriteArrayList<Int>()
+            val standing = collector(beside, list)
+            until { beside.isNotEmpty() && reads.get() >= 2 }
+            val own = Hold(before = true)
+            val next = Hold()
+
+            holds += Optional.of(own)
+            val seen = CopyOnWriteArrayList<Int>()
+            val joined = collector(seen, list)
+            until { own.reached.count == 0L }
+            holds += listOf(Optional.empty(), Optional.of(next))
+            list.write(mapOf(anime.id to watched(20)))
+            delay(SETTLE)
+            list.write(mapOf(anime.id to watched(21)))
+            delay(SETTLE)
+            own.released.countDown()
+            delay(SETTLE)
+            val shown = seen.toList()
+            next.released.countDown()
+            until { beside.last() == 21 }
+
+            assertEquals(listOf(21), shown)
             joined.cancel()
             standing.cancel()
         }
