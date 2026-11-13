@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListEngine
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListRepository
@@ -32,9 +33,11 @@ class Demo(
 
     val store = DemoStore(fixtures.entries, fixtures.session.signIn)
 
-    private val signedIn = MutableStateFlow(true)
+    // Null while signed out; a sign-in after a sign-out is a new one, with its own list.
+    private val signIn = MutableStateFlow<SignInId?>(fixtures.session.signIn)
+    private var signIns = 1
 
-    val session: SessionRepository = DemoSessionRepository(signedIn, server, fixtures.session)
+    val session: SessionRepository = DemoSessionRepository(signIn, server)
 
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
@@ -47,7 +50,7 @@ class Demo(
 
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
-    val user: UserRepository = DemoUserRepository(fixtures, server, signedIn)
+    val user: UserRepository = DemoUserRepository(fixtures, server, signIn)
 
     // Whether an edit is on its way to MAL.
     val saving: Boolean get() = server.writing.value > 0 || store.unconfirmed.value
@@ -68,7 +71,7 @@ class Demo(
         server.reset(fixtures.entries, latency)
         store.reset()
         details.forget()
-        signedIn.value = true
+        if (signIn.value == null) signIn.value = SignInId("demo-${++signIns}")
         return list.sync()
     }
 

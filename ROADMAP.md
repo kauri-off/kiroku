@@ -90,16 +90,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-03 [O] Frame for the first wave.**
 
-- [ ] **M2-04 [A] Network foundation.** One HTTP client for MAL, shared by every caller and later by the image
-  loader, built on first use and never on the main thread. MAL's two hosts (the API and the sign-in) are
-  parameters, so a test or a stand-in can take their place. Every failure of a request is a typed error of section
-  2.3 and never an exception outside `:data`; statuses are told apart by their code alone, since no answer's shape
-  is known yet. Refused requests make background work back off; a read may be repeated, a write is sent once
-  (section 6.4). Tokens and the client id reach no log.
-  **Needs:** M2-03.
-  **Check:** tests against a local server: each MAL row of section 2.3's table gives its error; a write whose
-  connection drops is sent once; the log of a request carrying both credentials holds neither; a release build
-  with R8 still passes its guards.
+- [x] **M2-04 [A] Network foundation.**
 
 - [ ] **M2-05 [A] Tokens and session.** S4 to S8. The tokens have one owner per process, through which every
   authorised request goes; the session is signed out, signed in or expired, and has no value before the token
