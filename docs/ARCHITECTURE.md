@@ -89,6 +89,9 @@ AniList (from live queries):
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). |
 | An optional source (after 1.0) | Any failure | Its section collapses to one line, "Unavailable · Retry", and never blocks or delays the rest of the page. |
 
+The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the
+internet.
+
 ## 3. Sign-in with MAL
 
 ### 3.1 External constraints
