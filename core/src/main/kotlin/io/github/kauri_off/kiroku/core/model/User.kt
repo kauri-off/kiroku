@@ -10,6 +10,7 @@ sealed interface Session {
         val signIn: SignInId,
     ) : Session
 
+    // The sign-in whose tokens MAL no longer takes; its list stays its own.
     data class Expired(
         val signIn: SignInId,
     ) : Session

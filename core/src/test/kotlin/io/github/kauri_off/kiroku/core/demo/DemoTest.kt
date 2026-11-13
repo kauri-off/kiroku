@@ -217,13 +217,34 @@ class DemoTest {
 
             assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
             assertEquals(Fixtures.reference.entries.toSet(), demo.server.entries().toSet())
-            assertEquals(Fixtures.reference.session, demo.session.observeSession().first())
+            val session = demo.session.observeSession().first()
+            assertTrue(session is Session.SignedIn && session != Fixtures.reference.session)
             assertNull(demo.anime.observeDetails(id).first())
             assertEquals(kotlin.time.Duration.ZERO, demo.server.latency)
             val failures = failures(demo)
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
             assertEquals(emptyList<WriteFailure>(), failures)
+        }
+
+    @Test
+    fun `an Undo from before a sign-out is refused once the demo is signed in again`() =
+        runTest {
+            val demo = demo()
+            val failures = failures(demo)
+            val anime = FixtureAnime.exactToWatch
+            val change = checkNotNull(demo.list.write(ListWrite.MarkNextWatched(anime)))
+            settle()
+            demo.session.signOut()
+            assertEquals(Outcome.Success(Unit), demo.reset())
+            val sent = demo.server.requests
+
+            assertNull(demo.list.write(change.undo))
+            settle()
+
+            assertEquals(listOf(DataError.ListEnded), failures.map { it.error })
+            assertEquals(sent, demo.server.requests)
+            assertEquals(Fixtures.reference.entryFor(anime.id), demo.list.observeEntry(anime.id).first())
         }
 
     @Test
@@ -276,10 +297,14 @@ class DemoTest {
             val demo = demo()
             demo.server.sessionExpired.value = true
             assertEquals(Session.Expired(Fixtures.reference.session.signIn), demo.session.observeSession().first())
+            val failures = failures(demo)
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
             assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
             assertEquals(Outcome.Failure(DataError.SessionExpired), demo.list.sync())
+            assertEquals(listOf(DataError.SessionExpired), failures.map { it.error })
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+            assertEquals(0, demo.server.listDownloads)
             assertEquals(Outcome.Success(Unit), demo.anime.refresh(FixtureAnime.exactToWatch.id))
         }
 

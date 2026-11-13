@@ -94,18 +94,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-05 [A] Tokens and session.**
 
-- [ ] **M2-06 [A] List engine for a database.** In `:core` only. The engine takes the session: signed out it
-  shows and sends nothing; expired it keeps the list readable, sends nothing and fails a write without Retry (S6,
-  W2); a new sign-in is a new list, and a sign-out clears the stored list through the engine (S9); it does
-  nothing before the session is known. The time of the last successful sync is stored, W5's restore clears it,
-  and the list source can say it. A title's data and an entry's values are apart at the store's port: title data
-  enters the store only from a download and with a title new to the store, an edit writes values alone, and a
-  sync that changes nothing writes nothing. A store that cannot be read is tried three times in a row, not three
-  times in all; an exception while a queued edit is sent does not leave its title out of later syncs. The
-  hand-off states the port for the orchestrator's approval before M2-16 starts.
-  **Needs:** M2-03.
-  **Check:** `tools/gw :core:test`: the contract suite holds a test for each sentence above that fails on the
-  engine of today, and the in-memory store and demo mode pass it.
+- [x] **M2-06 [A] List engine for a database.**
 
 - [x] **M2-07 [L] Sign-in screen.**
 

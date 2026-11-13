@@ -169,7 +169,7 @@ class TitleStateTest {
         val page = TitleFixtures.page(FixtureAnime.exactToWatch)
         val states: (Session) -> List<TitleState> =
             { listOf(TitleState.Loading(it), TitleState.Failed(DataError.NoConnection, it), TitleState.Shown(page, it)) }
-        states(Session.Expired(Fixtures.reference.session.signIn)).forEach { assertTrue("$it", it.sessionExpired) }
+        states(Fixtures.reference.expired).forEach { assertTrue("$it", it.sessionExpired) }
         states(set.session).forEach { assertFalse("$it", it.sessionExpired) }
         states(Session.SignedOut).forEach { assertFalse("$it", it.sessionExpired) }
     }

@@ -25,9 +25,7 @@ class RelatedScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("single") { Screen(SubScreenFixtures.related(FixtureAnime.premiereYear)) },
-            case("session-expired") {
-                Screen(SubScreenFixtures.related(FixtureAnime.premiereYear, Session.Expired(Fixtures.reference.session.signIn)))
-            },
+            case("session-expired") { Screen(SubScreenFixtures.related(FixtureAnime.premiereYear, Fixtures.reference.expired)) },
         )
 }
 
