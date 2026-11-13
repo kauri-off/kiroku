@@ -73,7 +73,7 @@ class ListTextTest {
         val text = text()
         val progress = Line2.Progress(12, 24)
         assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A0оценка:\u00A08", text.line2(progress, SortedBy.Score(8)))
-        assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A0без оценки", text.line2(progress, SortedBy.Score(null)))
+        assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A0без\u00A0оценки", text.line2(progress, SortedBy.Score(null)))
         assertEquals("Просмотрено 12\u00A0из\u00A024 ·\u00A02025", text.line2(progress, SortedBy.StartYear(2025)))
     }
 
@@ -84,7 +84,7 @@ class ListTextTest {
         val progress = Line2.Progress(12, 24)
         assertEquals("Watched 12\u00A0of\u00A024", text.line2(progress, null))
         assertEquals("Watched 12\u00A0of\u00A024 ·\u00A0Score\u00A08", text.line2(progress, SortedBy.Score(8)))
-        assertEquals("Watched 12\u00A0of\u00A024 ·\u00A0Not scored", text.line2(progress, SortedBy.Score(null)))
+        assertEquals("Watched 12\u00A0of\u00A024 ·\u00A0Not\u00A0scored", text.line2(progress, SortedBy.Score(null)))
         assertEquals("Watched 12\u00A0of\u00A024 ·\u00A02025", text.line2(progress, SortedBy.StartYear(2025)))
         assertEquals("Score\u00A08 ·\u00A02024", text.line2(Line2.Score(8), SortedBy.StartYear(2024)))
     }
