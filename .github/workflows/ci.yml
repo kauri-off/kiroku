@@ -27,8 +27,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Queue wrapper self-test
+      - name: Queue self-test
         run: tools/selftest
+        env:
+          KIROKU_SELFTEST_REQUIRE_Q: "1"
 
       - name: Install the SDK platform
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
