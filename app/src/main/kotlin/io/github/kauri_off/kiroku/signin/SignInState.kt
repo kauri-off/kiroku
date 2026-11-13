@@ -17,4 +17,6 @@ sealed interface SignInEvent {
     data object SignIn : SignInEvent
 
     data object Browse : SignInEvent
+
+    data object Back : SignInEvent
 }

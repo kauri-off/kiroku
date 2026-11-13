@@ -1,7 +1,7 @@
 package io.github.kauri_off.kiroku.signin
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
@@ -24,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -32,9 +35,24 @@ import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
-import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+
+// What each state puts in the sentence's place, and whether it can start a sign-in.
+private class Form(
+    @param:StringRes val sentence: Int,
+    val canSignIn: Boolean,
+    val announced: Boolean = false,
+    val isError: Boolean = false,
+)
+
+private fun SignInState.form(): Form =
+    when (this) {
+        SignInState.Ready -> Form(R.string.signin_sentence, canSignIn = true)
+        SignInState.NoClientId -> Form(R.string.signin_no_client_id, canSignIn = false)
+        SignInState.Completing -> Form(R.string.signin_signing_in, canSignIn = false, announced = true)
+        SignInState.Failed -> Form(R.string.signin_failed, canSignIn = true, announced = true, isError = true)
+    }
 
 // The app's name in the top app bar; the sentence and both buttons in the middle; the unofficial notice at the foot.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,14 +65,22 @@ fun SignInScreen(
 ) {
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                navigationIcon = { BackIcon(onEvent) },
+            )
+        },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        if (state == SignInState.Completing) {
-            ScreenState(ScreenState.Loading, Modifier.padding(padding))
-        } else {
-            Body(state, onEvent, Modifier.padding(padding))
-        }
+        Body(state, onEvent, Modifier.padding(padding))
+    }
+}
+
+@Composable
+private fun BackIcon(onEvent: (SignInEvent) -> Unit) {
+    IconButton(onClick = { onEvent(SignInEvent.Back) }) {
+        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
     }
 }
 
@@ -77,7 +103,7 @@ private fun Body(
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Spacer(Modifier)
-            Choices(state, onEvent)
+            Choices(state.form(), onEvent)
             Notice(Modifier.padding(top = Spacing.xxl))
         }
     }
@@ -85,14 +111,14 @@ private fun Body(
 
 @Composable
 private fun Choices(
-    state: SignInState,
+    form: Form,
     onEvent: (SignInEvent) -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Sentence(state)
+        Sentence(form)
         Button(
             onClick = { onEvent(SignInEvent.SignIn) },
-            enabled = state != SignInState.NoClientId,
+            enabled = form.canSignIn,
             shapes = ButtonDefaults.shapesFor(PrimaryButtonHeight),
             contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight),
             modifier =
@@ -117,24 +143,19 @@ private fun Choices(
     }
 }
 
-// The one sentence: why to sign in, why this build cannot, or that the last attempt failed.
+// The one sentence: why to sign in, why this build cannot, that a sign-in is completing, or that it failed.
 @Composable
-private fun Sentence(state: SignInState) {
-    val failed = state == SignInState.Failed
-    val text =
-        when (state) {
-            SignInState.NoClientId -> R.string.signin_no_client_id
-            SignInState.Failed -> R.string.signin_failed
-            else -> R.string.signin_sentence
-        }
-    Box(Modifier.widthIn(max = Sizes.messageMaxWidth).semantics { if (failed) liveRegion = LiveRegionMode.Polite }) {
-        Text(
-            stringResource(text),
-            style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading),
-            color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-    }
+private fun Sentence(form: Form) {
+    Text(
+        stringResource(form.sentence),
+        style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading),
+        color = if (form.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
+        modifier =
+            Modifier
+                .widthIn(max = Sizes.messageMaxWidth)
+                .semantics { if (form.announced) liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 @Composable

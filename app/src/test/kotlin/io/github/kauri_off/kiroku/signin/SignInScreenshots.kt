@@ -9,7 +9,7 @@ import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
 import io.github.kauri_off.kiroku.screenshots.shown
 
-class SigninScreenshots : ScreenshotRegistry() {
+class SignInScreenshots : ScreenshotRegistry() {
     override val content = contentCase { Screen(SignInState.Ready) }
     override val loading = shown { Screen(SignInState.Completing) }
     override val empty = notShown("The sign-in screen shows no data, so it has nothing to be empty of.")
