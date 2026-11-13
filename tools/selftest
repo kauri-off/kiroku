@@ -466,7 +466,7 @@ if ! systemctl --user show-environment > /dev/null 2>&1; then
 fi
 export XDG_STATE_HOME=$T/state
 QS=$XDG_STATE_HOME/kiroku-queue
-threads=$(nproc)
+threads=16
 
 conf() {
   local -A v=([budget_mib]=1000 [margin_mib]=100 [cpu_reserve]=0 [emu_slots]=2 [patience_s]=100 [force_s]=100
@@ -505,7 +505,7 @@ drain() {
   local d
   for d in "$QS"/jobs/*/; do q kill "$(basename "$d")" > /dev/null 2>&1; done
 }
-printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" lock_wait=1 boot_timeout=20 smoke_delay=0 \
+printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" cpus=16 lock_wait=1 boot_timeout=20 smoke_delay=0 \
   > "$W/tools/test-hooks"
 
 conf

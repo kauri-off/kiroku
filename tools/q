@@ -106,7 +106,7 @@ def load_conf():
     flat = [v for k, v in c.items() if k != "kinds"] + [v for k in c["kinds"].values() for v in k.values()]
     if any(v is None or v < 0 for v in flat) or c["poll"] <= 0 or not 1 <= c["slots"] <= 10 or not c["kinds"]:
         raise ConfError(f"{CONF}: a value is missing or out of range")
-    c["cpu"] = (os.cpu_count() or 1) - c["cpu_reserve"]
+    c["cpu"] = int(HOOK.get("cpus") or os.cpu_count() or 1) - c["cpu_reserve"]
     for name, k in c["kinds"].items():
         if not 0 < k["mem"] <= c["budget"] or not 0 < k["workers"] <= c["cpu"]:
             raise ConfError(f"{CONF}: a job of kind {name} could never start (budget {c['budget']} MiB, {c['cpu']} workers)")
