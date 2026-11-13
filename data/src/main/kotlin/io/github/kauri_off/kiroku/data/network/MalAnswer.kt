@@ -17,8 +17,8 @@ internal sealed interface MalAnswer<out T> {
     data object Rejected : MalAnswer<Nothing>
 }
 
-// The outcome of a request that carried the client id alone, where no other credentials can be tried.
-internal fun <T> MalAnswer<T>.toOutcome(): Outcome<T> =
+// Only for a request that carried the client id alone, where no other credentials can be tried.
+internal fun <T> MalAnswer<T>.clientIdOutcome(): Outcome<T> =
     when (this) {
         is MalAnswer.Success -> Outcome.Success(value)
         is MalAnswer.Failed -> Outcome.Failure(error)

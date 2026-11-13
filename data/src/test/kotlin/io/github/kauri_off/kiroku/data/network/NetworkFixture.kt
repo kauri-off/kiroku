@@ -79,6 +79,7 @@ internal class NetworkFixture : ExternalResource() {
     val log = CopyOnWriteArrayList<String>()
     val unexpected = CopyOnWriteArrayList<Throwable>()
     var online = true
+    var repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds)
     private val mainThread = Thread.currentThread()
 
     val http by lazy {
@@ -95,17 +96,19 @@ internal class NetworkFixture : ExternalResource() {
             clock = clock,
             unexpected = unexpected::add,
             log = log::add,
-            repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds),
+            repeatReadsAfter = repeatReadsAfter,
         )
     }
     val things by lazy { http.api(Things::class) }
     val signInThings by lazy { http.signIn(Things::class) }
 
     // Every request to the API from now on gets this answer.
-    fun always(response: MockResponse) {
+    fun always(response: MockResponse) = answers { response }
+
+    fun answers(answer: (RecordedRequest) -> MockResponse) {
         api.dispatcher =
             object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse = response
+                override fun dispatch(request: RecordedRequest): MockResponse = answer(request)
             }
     }
 
@@ -127,10 +130,12 @@ internal class NetworkFixture : ExternalResource() {
         fun answer(
             code: Int = 200,
             body: String = THING,
+            type: String = "application/json; charset=utf-8",
         ): MockResponse =
             MockResponse
                 .Builder()
                 .code(code)
+                .setHeader("Content-Type", type)
                 .body(body)
                 .build()
 

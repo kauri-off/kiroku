@@ -4,8 +4,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
 
-// One line per request sent, made of its method, host, path, the names of its query and how it ended: no header,
-// no value of the query and no body, so no token and no client id.
+// One line per request tried: method, host, path, the names of its query and how it ended; no header, value or body.
 internal class RequestLog(
     private val log: (String) -> Unit,
 ) : Interceptor {
@@ -24,8 +23,12 @@ internal class RequestLog(
         try {
             return chain.proceed(request).also { ended(it.code.toString()) }
         } catch (e: IOException) {
-            ended(e.javaClass.simpleName)
+            val neverTried = chain.call().isCanceled() && request.tag(Wire::class.java)?.tried != true
+            if (!neverTried) ended(how(e))
             throw e
         }
     }
+
+    private fun how(e: IOException): String =
+        if (e is NotSentAgain) e.status?.toString() ?: (e.failure ?: e).javaClass.simpleName else e.javaClass.simpleName
 }

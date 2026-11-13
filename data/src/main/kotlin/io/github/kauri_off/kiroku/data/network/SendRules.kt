@@ -5,10 +5,10 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
-import java.io.InterruptedIOException
 import java.net.ProtocolException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 internal const val CLIENT_ID_HEADER = "X-MAL-CLIENT-ID"
 
@@ -27,7 +27,7 @@ internal class UserAgent(
         )
 }
 
-// The client id goes to MAL's API alone, on a request that carries no token; a redirect does not take it elsewhere.
+// The client id goes to MAL's API alone and with no token; set per send, so a redirect takes it nowhere else.
 internal class ClientId(
     private val api: HttpUrl,
     private val value: String,
@@ -41,44 +41,65 @@ internal class ClientId(
     }
 }
 
-// A read that got no answer, or a server error for one, is asked again after each of [repeatAfter]; never one that
-// timed out or was made offline. A write is marked, so that [WriteOnce] knows it.
-internal class SendRules(
-    private val repeatAfter: List<Duration>,
-    private val online: () -> Boolean,
-) : Interceptor {
+// What the requests of one [MalHttp.call] put on the network, over all its tries.
+internal class Sends(
+    private val limit: Int,
+) {
+    private val reads = ConcurrentHashMap<HttpUrl, AtomicInteger>()
+
+    @Volatile
+    var wrote = false
+
+    // No read of these can be sent once more.
+    val spent: Boolean get() = reads.values.any { it.get() >= limit }
+
+    fun mayRead(url: HttpUrl): Boolean = reads.computeIfAbsent(url) { AtomicInteger() }.incrementAndGet() <= limit
+}
+
+// What one request put on the network, and how its last send ended.
+internal class Wire {
+    val written = AtomicBoolean()
+
+    @Volatile
+    var tried = false
+
+    @Volatile
+    var status: Int? = null
+
+    @Volatile
+    var failure: IOException? = null
+}
+
+// OkHttp was about to send a request that may not be sent again; the request ends as its last send did.
+internal class NotSentAgain(
+    val status: Int?,
+    val failure: IOException?,
+) : ProtocolException()
+
+internal object MarkSends : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (!request.isRead) return chain.proceed(request.newBuilder().tag(Sent::class.java, Sent()).build())
-        var repeats = 0
-        while (true) {
-            val wait = repeatAfter.getOrNull(repeats++)
-            try {
-                val response = chain.proceed(request)
-                if (wait == null || response.code !in 500..599) return response
-                response.close()
-            } catch (e: IOException) {
-                if (wait == null || e is InterruptedIOException || chain.call().isCanceled() || !online()) throw e
-            }
-            try {
-                Thread.sleep(wait.inWholeMilliseconds)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw InterruptedIOException()
-            }
-        }
+        if (!request.isRead) request.tag(Sends::class.java)?.wrote = true
+        return chain.proceed(request.newBuilder().tag(Wire::class.java, Wire()).build())
     }
 }
 
-internal class Sent : AtomicBoolean()
-
-// A write goes over the network once, whatever would send it again: a dropped connection, a redirect, a server
-// asking for it once more.
-internal object WriteOnce : Interceptor {
+// On the network a write goes once and a read of one call as often as the call may ask, whatever OkHttp would resend.
+internal object SendLimits : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val sent = request.tag(Sent::class.java)
-        if (sent != null && !request.isRead && !sent.compareAndSet(false, true)) throw ProtocolException("A write is sent once")
-        return chain.proceed(request)
+        val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
+        val allowed =
+            if (request.isRead) request.tag(Sends::class.java)?.mayRead(request.url) != false else !wire.written.getAndSet(true)
+        if (!allowed) throw NotSentAgain(wire.status, wire.failure)
+        wire.tried = true
+        wire.status = null
+        wire.failure = null
+        try {
+            return chain.proceed(request).also { wire.status = it.code }
+        } catch (e: IOException) {
+            wire.failure = e
+            throw e
+        }
     }
 }

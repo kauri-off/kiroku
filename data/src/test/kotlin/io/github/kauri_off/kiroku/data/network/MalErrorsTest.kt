@@ -4,7 +4,12 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.dropped
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import mockwebserver3.MockResponse
 import mockwebserver3.SocketEffect
@@ -133,7 +138,7 @@ class MalErrorsTest {
     @Test
     fun `rejected credentials are their own answer, and an invalid request where only the client id was sent`() {
         assertEquals(MalAnswer.Rejected, readAnswered(401))
-        assertEquals(Outcome.Failure(DataError.InvalidRequest), MalAnswer.Rejected.toOutcome())
+        assertEquals(Outcome.Failure(DataError.InvalidRequest), MalAnswer.Rejected.clientIdOutcome())
         assertEquals(Duration.ZERO, network.http.backOff.remaining())
     }
 
@@ -156,7 +161,7 @@ class MalErrorsTest {
 
     @Test
     fun `an answer that cannot be read is a server error, reported without its text`() {
-        val bodies = listOf("""{"value":"${NetworkFixture.TOKEN}"}""", """{"other":"${NetworkFixture.TOKEN}"}""", NetworkFixture.TOKEN, "")
+        val bodies = listOf("""{"value":"${NetworkFixture.TOKEN}"}""", """{"other":"${NetworkFixture.TOKEN}"}""", NetworkFixture.TOKEN)
         for (body in bodies) {
             network.api.enqueue(answer(body = body))
             assertEquals(body, failed(DataError.ServerError), read())
@@ -169,11 +174,26 @@ class MalErrorsTest {
     }
 
     @Test
+    fun `a success that is not MAL's answer is a server error, asked once and not reported`() {
+        val notMals =
+            listOf(
+                answer(body = "<html><body>Sign in to this network</body></html>", type = "text/html"),
+                answer(body = ""),
+                answer(204, body = ""),
+            )
+        for (response in notMals) {
+            network.api.enqueue(response)
+            assertEquals(failed(DataError.ServerError), read())
+        }
+        assertEquals(notMals.size, network.api.requestCount)
+        assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
     fun `an answer cut off in its body is a server error`() {
-        network.api.enqueue(
-            MockResponse
-                .Builder()
-                .body("""{"value":""" + " ".repeat(100_000) + "7}")
+        network.always(
+            answer(body = """{"value":""" + " ".repeat(100_000) + "7}")
+                .newBuilder()
                 .onResponseBody(SocketEffect.CloseSocket())
                 .build(),
         )
@@ -192,6 +212,36 @@ class MalErrorsTest {
             }
         assertEquals(failed(DataError.ServerError), answer)
         assertEquals("java.lang.IllegalStateException", network.unexpected.single().message)
+    }
+
+    @Test
+    fun `a cancellation inside the request, with the caller not cancelled, is a server error and is reported`() {
+        var asked = 0
+        val answer =
+            runBlocking {
+                network.http.call {
+                    asked++
+                    withTimeout(10) { awaitCancellation() }
+                }
+            }
+        assertEquals(failed(DataError.ServerError), answer)
+        assertEquals(1, asked)
+        assertEquals("kotlinx.coroutines.TimeoutCancellationException", network.unexpected.single().message)
+    }
+
+    @Test
+    fun `an answer to a request sent before a refusal does not end the wait`() {
+        network.answers {
+            if (it.method == "GET") answer().newBuilder().headersDelay(500, TimeUnit.MILLISECONDS).build() else answer(429)
+        }
+        runBlocking {
+            val held = async(Dispatchers.Default) { network.http.call { things.read() } }
+            withTimeout(5000) { while (network.api.requestCount < 1) delay(10) }
+            assertEquals(failed(DataError.Refused), network.http.call { things.write(1) })
+            assertEquals(MalBackOff.First, network.http.backOff.remaining())
+            assertEquals(MalAnswer.Success(Thing(7)), held.await())
+        }
+        assertEquals(MalBackOff.First, network.http.backOff.remaining())
     }
 
     @Test

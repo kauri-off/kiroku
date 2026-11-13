@@ -9,11 +9,22 @@ class MalBackOff(
     private val clock: Clock,
 ) {
     private var wait: Duration? = null
+    private var length: Duration = Duration.ZERO
     private var until: Instant = Instant.MIN
+    private var requests = 0L
+    private var refusedAt = 0L
 
-    // Zero when background work may call MAL.
+    // Zero when background work may call MAL; never more than the wait that was set, also when the clock is set back.
     @Synchronized
-    fun remaining(): Duration = Duration.between(clock.instant(), until).coerceAtLeast(Duration.ZERO)
+    fun remaining(): Duration {
+        val now = clock.instant()
+        if (until > now + length) until = now + length
+        return Duration.between(now, until).coerceAtLeast(Duration.ZERO)
+    }
+
+    // Taken when a request is sent, so that its answer is known to be older or newer than a refusal.
+    @Synchronized
+    internal fun mark(): Long = ++requests
 
     // A refusal after a wait that ran out doubles the wait; one inside a wait starts the same wait again.
     @Synchronized
@@ -22,15 +33,20 @@ class MalBackOff(
         val next =
             when (val last = wait) {
                 null -> First
-                else -> if (now < until) last else last.multipliedBy(2).coerceAtMost(Longest)
+                else -> if (remaining() > Duration.ZERO) last else last.multipliedBy(2).coerceAtMost(Longest)
             }
         wait = next
-        until = now + maxOf(next, (retryAfter ?: Duration.ZERO).coerceAtMost(Longest))
+        length = maxOf(next, (retryAfter ?: Duration.ZERO).coerceAtMost(Longest))
+        until = now + length
+        refusedAt = ++requests
     }
 
+    // An answer to a request sent before the last refusal says nothing about MAL since then.
     @Synchronized
-    internal fun answered() {
+    internal fun answered(mark: Long) {
+        if (mark < refusedAt) return
         wait = null
+        length = Duration.ZERO
         until = Instant.MIN
     }
 

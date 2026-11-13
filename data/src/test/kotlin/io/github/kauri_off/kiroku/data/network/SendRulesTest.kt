@@ -3,17 +3,27 @@ package io.github.kauri_off.kiroku.data.network
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.dropped
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import mockwebserver3.MockResponse
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.io.IOException
 import java.net.SocketTimeoutException
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 // Section 6.4: a write is sent once; a read may be asked again.
 class SendRulesTest {
@@ -40,6 +50,7 @@ class SendRulesTest {
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
         assertEquals(listOf("GET", "PATCH"), sent())
+        assertFalse(network.log.last(), "NotSentAgain" in network.log.last())
     }
 
     @Test
@@ -63,6 +74,7 @@ class SendRulesTest {
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
         assertEquals(listOf("PATCH"), sent())
+        assertTrue(network.log.single(), " 503 " in network.log.single())
     }
 
     @Test
@@ -77,6 +89,30 @@ class SendRulesTest {
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
         assertEquals(listOf("PATCH"), sent())
+    }
+
+    @Test
+    fun `a write answered with a request timeout is sent once and ends as that answer`() {
+        network.online = false
+        network.api.enqueue(answer(408))
+        network.api.enqueue(answer())
+        assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
+        assertEquals(listOf("PATCH"), sent())
+        assertTrue(network.log.single(), " 408 " in network.log.single())
+    }
+
+    @Test
+    fun `a write the server answers with another address to read is sent once and that address is read`() {
+        network.api.enqueue(
+            MockResponse
+                .Builder()
+                .code(303)
+                .setHeader("Location", "/v2/thing")
+                .build(),
+        )
+        network.api.enqueue(answer())
+        assertEquals(MalAnswer.Success(Thing(7)), call { write(1) })
+        assertEquals(listOf("PATCH", "GET"), sent())
     }
 
     @Test
@@ -135,19 +171,121 @@ class SendRulesTest {
     }
 
     @Test
-    fun `a read that timed out is asked once`() {
-        val asked = AtomicInteger()
+    fun `a read that got no answer is asked three times, and once when it timed out`() {
+        var asked = 0
+        runBlocking {
+            network.http.call<Unit> {
+                asked++
+                throw IOException()
+            }
+        }
+        assertEquals(3, asked)
+        asked = 0
+        runBlocking {
+            network.http.call<Unit> {
+                asked++
+                throw SocketTimeoutException()
+            }
+        }
+        assertEquals(1, asked)
+    }
+
+    @Test
+    fun `a read reaches the server three times at most when the server asks for it again each time`() {
+        network.always(
+            MockResponse
+                .Builder()
+                .code(503)
+                .setHeader("Retry-After", "0")
+                .build(),
+        )
+        assertEquals(MalAnswer.Failed(DataError.ServerError), call { read() })
+        assertEquals(3, network.api.requestCount)
+        assertEquals(2, network.log.size)
+        assertTrue(network.log.toString(), network.log.all { " 503 " in it })
+    }
+
+    @Test
+    fun `a read reaches the server three times at most when its connection drops each time`() {
+        useConnection()
+        network.always(dropped())
+        assertEquals(MalAnswer.Failed(DataError.ServerError), call { read() })
+        assertEquals(1 + 3, network.api.requestCount)
+    }
+
+    @Test
+    fun `a read answered with a request timeout reaches the server three times at most`() {
+        network.always(answer(408))
+        assertEquals(MalAnswer.Failed(DataError.ServerError), call { read() })
+        assertTrue(network.api.requestCount in 1..3)
+    }
+
+    @Test
+    fun `a read whose call was cancelled is asked once`() {
+        network.repeatReadsAfter = listOf(Duration.ZERO, Duration.ZERO)
+        var asked = 0
+        val cancelled =
+            runBlocking {
+                val read =
+                    async {
+                        network.http.call<Unit> {
+                            asked++
+                            currentCoroutineContext().cancel()
+                            throw IOException()
+                        }
+                    }
+                read.join()
+                read.isCancelled
+            }
+        assertTrue(cancelled)
+        assertEquals(1, asked)
+    }
+
+    @Test
+    fun `a read cancelled while it waits to be asked again is not sent again and leaves no line`() {
+        network.repeatReadsAfter = listOf(30.seconds)
+        network.always(answer(503))
+        runBlocking {
+            val read = async(Dispatchers.Default) { network.http.call { things.read() } }
+            withTimeout(5.seconds) { while (network.log.isEmpty()) delay(10) }
+            delay(100)
+            withTimeout(2.seconds) { read.cancelAndJoin() }
+            delay(100)
+        }
+        assertEquals(1, network.api.requestCount)
+        assertEquals(1, network.log.size)
+    }
+
+    @Test
+    fun `reads that wait to be asked again hold no write back`() {
+        network.repeatReadsAfter = listOf(30.seconds)
+        network.answers { if (it.method == "GET") answer(503) else answer() }
+        runBlocking {
+            val reads = List(20) { async(Dispatchers.Default) { network.http.call { things.read() } } }
+            withTimeout(5.seconds) { while (network.api.requestCount < 20) delay(10) }
+            assertEquals(MalAnswer.Success(Thing(7)), withTimeout(2.seconds) { network.http.call { things.write(1) } })
+            assertTrue(reads.none { it.isCompleted })
+            withTimeout(2.seconds) { reads.forEach { it.cancelAndJoin() } }
+        }
+        assertEquals(21, network.api.requestCount)
+    }
+
+    @Test
+    fun `a request cancelled before it was tried leaves no line, and one that could not connect leaves one`() {
+        val log = mutableListOf<String>()
         val client =
             OkHttpClient
                 .Builder()
-                .addInterceptor(SendRules(listOf(1.milliseconds)) { true })
-                .addInterceptor {
-                    asked.incrementAndGet()
-                    throw SocketTimeoutException()
-                }.build()
-        assertThrows(SocketTimeoutException::class.java) {
-            client.newCall(Request.Builder().url(network.api.url("/")).build()).execute()
-        }
-        assertEquals(1, asked.get())
+                .addInterceptor(MarkSends)
+                .addInterceptor(RequestLog(log::add))
+                .addNetworkInterceptor(SendLimits)
+                .build()
+        val request = Request.Builder().url(network.api.url("/")).build()
+        val cancelled = client.newCall(request).apply { cancel() }
+        assertThrows(IOException::class.java) { cancelled.execute() }
+        assertTrue(log.toString(), log.isEmpty())
+        network.api.close()
+        assertThrows(IOException::class.java) { client.newCall(request).execute() }
+        assertEquals(1, log.size)
     }
 }

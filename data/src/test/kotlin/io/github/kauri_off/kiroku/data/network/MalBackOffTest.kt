@@ -51,7 +51,7 @@ class MalBackOffTest {
         backOff.refused(null)
         pass(MalBackOff.First)
         backOff.refused(null)
-        backOff.answered()
+        backOff.answered(backOff.mark())
         assertEquals(Duration.ZERO, backOff.remaining())
         backOff.refused(null)
         assertEquals(MalBackOff.First, backOff.remaining())
@@ -61,11 +61,36 @@ class MalBackOffTest {
     fun `the time MAL names is waited for when it is longer, up to the longest`() {
         backOff.refused(Duration.ofHours(1))
         assertEquals(Duration.ofHours(1), backOff.remaining())
-        backOff.answered()
+        backOff.answered(backOff.mark())
         backOff.refused(Duration.ofSeconds(5))
         assertEquals(MalBackOff.First, backOff.remaining())
-        backOff.answered()
+        backOff.answered(backOff.mark())
         backOff.refused(Duration.ofDays(30))
         assertEquals(MalBackOff.Longest, backOff.remaining())
+        backOff.answered(backOff.mark())
+        backOff.refused(Duration.ofSeconds(-5))
+        assertEquals(MalBackOff.First, backOff.remaining())
+    }
+
+    @Test
+    fun `an answer to a request sent before the refusal does not end the wait`() {
+        val before = backOff.mark()
+        backOff.refused(null)
+        backOff.answered(before)
+        assertEquals(MalBackOff.First, backOff.remaining())
+        backOff.answered(backOff.mark())
+        assertEquals(Duration.ZERO, backOff.remaining())
+    }
+
+    @Test
+    fun `a clock set back does not lengthen the wait`() {
+        backOff.refused(null)
+        pass(Duration.ofMinutes(5))
+        clock.now -= Duration.ofDays(1)
+        assertEquals(MalBackOff.First, backOff.remaining())
+        pass(MalBackOff.First.minusSeconds(1))
+        assertEquals(Duration.ofSeconds(1), backOff.remaining())
+        pass(Duration.ofSeconds(1))
+        assertEquals(Duration.ZERO, backOff.remaining())
     }
 }
