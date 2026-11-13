@@ -575,10 +575,10 @@ by the owner before the layout task starts. New content defaults to "behind a ta
 
 ### 9.2 Sign-in
 
-Must show: the app name; one sentence; a "Sign in with MyAnimeList" button; a "Browse without an account" text
-button; the line "Unofficial. Not affiliated with MyAnimeList." Limit: nothing else. In a build without a client id
-(section 3.3) the sentence is replaced by "This build has no MyAnimeList client id" and the sign-in button is
-disabled.
+Must show: Back; the app's mark and name; one sentence; a "Sign in with MyAnimeList" button; a "Browse without an
+account" text button; the line "Unofficial. Not affiliated with MyAnimeList." Limit: nothing else. The sentence
+gives way to the state: "This build has no MyAnimeList client id" (section 3.3) and "Signing in…", both with the
+sign-in button disabled, and "Sign-in failed, try again".
 
 ### 9.3 List (the start screen)
 
