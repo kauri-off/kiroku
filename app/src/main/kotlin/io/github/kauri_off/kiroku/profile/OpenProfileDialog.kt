@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -106,8 +107,9 @@ internal fun OpenProfileDialog(
         dismissButton = {
             TextButton(onClick = { onEvent(ProfileEvent.DismissOpenProfile) }) { Text(stringResource(R.string.profile_cancel)) }
         },
-        // At the window's side margin, as the edit sheet's dialogs are.
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.padding(horizontal = Spacing.xl),
+        // At the window's side margin, as the edit sheet's dialogs are, and above the keyboard: an edge-to-edge
+        // dialog window is not resized for it.
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        modifier = Modifier.safeDrawingPadding().padding(horizontal = Spacing.xl),
     )
 }
