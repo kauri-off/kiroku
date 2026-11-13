@@ -95,12 +95,20 @@ const val PAGE_MOTION_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/d
 // That value's curve and its use, the only animation values its file may write.
 val pageMotion = listOf("tween<Float>(millis, easing = decelerate)", "Easing { 1f - (1f - it) * (1f - it) }")
 
+// The full-screen loading indicator's grace, the title page's patience: a wait before showing a state, not motion.
+const val PATIENCE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/design/component/ScreenState.kt"
+
+// That wait, the only delay its file may write.
+const val PATIENCE_WAIT = "delay(PATIENCE)"
+
+private val allowances = mapOf(PAGE_MOTION_SOURCE to pageMotion, PATIENCE_SOURCE to listOf(PATIENCE_WAIT))
+
 fun motionLiteralProblems(
     name: String,
     source: String,
 ): List<String> {
     val parsed = KotlinSource(source).code
-    val code = if (name == PAGE_MOTION_SOURCE) pageMotion.fold(parsed) { code, allowed -> code.replace(allowed, "") } else parsed
+    val code = allowances[name].orEmpty().fold(parsed) { code, allowed -> code.replace(allowed, "") }
     val rules = if (interfaceCode.containsMatchIn(code)) motionLiterals + interfaceMotionLiterals else motionLiterals
     val lines = code.lines()
     val literal =
