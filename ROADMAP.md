@@ -88,13 +88,7 @@ on the Russian strings so far are fixed.
   **Needs:** nothing.
   **Check:** `grep -c '^kiroku\.record' ~/.gradle/gradle.properties` prints 2.
 
-- [ ] **M2-03 [O] Frame for the first wave.** One pull request by the orchestrator, with no behaviour: `:data`
-  gets the libraries M2 uses (network, serialisation, database with an exported schema, preferences, browser) and
-  its test setup, so the tasks that start together do not edit one build file; a signed-in session identifies its
-  sign-in and carries no user name, which belongs to the profile.
-  **Needs:** nothing.
-  **Check:** `tools/gw --kind check ktlintCheck lint test assembleDebug assembleRelease` passes, the release guards
-  included.
+- [x] **M2-03 [O] Frame for the first wave.**
 
 - [ ] **M2-04 [A] Network foundation.** One HTTP client for MAL, shared by every caller and later by the image
   loader, built on first use and never on the main thread. MAL's two hosts (the API and the sign-in) are

@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
     id("com.google.devtools.ksp")
+    alias(libs.plugins.room)
 }
 
 android {
@@ -31,6 +33,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    sourceSets.named("test") {
+        assets.directories += "schemas"
+    }
+
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
         warningsAsErrors = false
@@ -38,10 +48,32 @@ android {
     }
 }
 
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
+// A schema exported in the same run reaches the unit tests' assets.
+tasks.named { it.endsWith("UnitTestAssets") }.configureEach { mustRunAfter("copyRoomSchemas") }
+
 dependencies {
     api(project(":core"))
+    implementation(libs.okhttp)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.kotlinx.serialization)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    implementation(libs.datastore)
+    implementation(libs.datastore.preferences)
+    implementation(libs.browser)
+
     testImplementation(project(":core")) {
         capabilities { requireFeature("contract") }
     }
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.okhttp.mockwebserver3)
+    testImplementation(libs.room.testing)
 }
