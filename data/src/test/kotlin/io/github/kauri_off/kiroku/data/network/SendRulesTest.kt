@@ -25,7 +25,7 @@ class SendRulesTest {
     private fun <T> call(request: suspend Things.() -> T): MalAnswer<T> = runBlocking { network.http.call { things.request() } }
 
     // The methods of the requests that reached the server, in order.
-    private fun received(): List<String> = List(network.api.requestCount) { network.api.takeRequest().method }
+    private fun sent(): List<String> = List(network.api.requestCount) { network.api.received().method }
 
     // A connection that has carried a request is one OkHttp by itself would replace and send on again.
     private fun useConnection() {
@@ -39,7 +39,7 @@ class SendRulesTest {
         network.api.enqueue(dropped())
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
-        assertEquals(listOf("GET", "PATCH"), received())
+        assertEquals(listOf("GET", "PATCH"), sent())
     }
 
     @Test
@@ -48,7 +48,7 @@ class SendRulesTest {
         network.api.enqueue(dropped())
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { remove() })
-        assertEquals(listOf("GET", "DELETE"), received())
+        assertEquals(listOf("GET", "DELETE"), sent())
     }
 
     @Test
@@ -62,7 +62,7 @@ class SendRulesTest {
         )
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
-        assertEquals(listOf("PATCH"), received())
+        assertEquals(listOf("PATCH"), sent())
     }
 
     @Test
@@ -76,7 +76,7 @@ class SendRulesTest {
         )
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
-        assertEquals(listOf("PATCH"), received())
+        assertEquals(listOf("PATCH"), sent())
     }
 
     @Test
@@ -84,7 +84,7 @@ class SendRulesTest {
         network.api.enqueue(answer(500))
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Failed(DataError.ServerError), call { write(1) })
-        assertEquals(listOf("PATCH"), received())
+        assertEquals(listOf("PATCH"), sent())
     }
 
     @Test
@@ -93,7 +93,7 @@ class SendRulesTest {
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Rejected, call { write(1) })
         assertEquals(MalAnswer.Success(Thing(7)), call { write(1) })
-        assertEquals(listOf("PATCH", "PATCH"), received())
+        assertEquals(listOf("PATCH", "PATCH"), sent())
     }
 
     @Test

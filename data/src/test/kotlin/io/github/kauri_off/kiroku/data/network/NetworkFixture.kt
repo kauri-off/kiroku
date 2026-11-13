@@ -20,6 +20,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
@@ -56,6 +57,9 @@ internal interface Things {
         @Field("token") tokenInBody: String,
     ): Thing
 }
+
+// The next request the server received; a test fails, and does not wait, when none arrives.
+internal fun MockWebServer.received(): RecordedRequest = checkNotNull(takeRequest(5, TimeUnit.SECONDS)) { "No request arrived" }
 
 internal class TestClock(
     var now: Instant = Instant.parse("2026-11-13T12:00:00Z"),

@@ -43,7 +43,7 @@ class MalErrorsTest {
     fun `an answer is its body`() {
         network.api.enqueue(answer())
         assertEquals(MalAnswer.Success(Thing(7)), read())
-        assertEquals("/v2/thing", network.api.takeRequest().target)
+        assertEquals("/v2/thing", network.api.received().target)
     }
 
     @Test

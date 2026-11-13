@@ -45,7 +45,7 @@ class CredentialsTest {
         call { signInThings.exchange(bearer(TOKEN), CLIENT_ID, TOKEN, CLIENT_ID, TOKEN) }
         call { signInThings.exchange(bearer(TOKEN), CLIENT_ID, TOKEN, CLIENT_ID, TOKEN) }
 
-        val sent = List(5) { network.api.takeRequest() } + List(2) { network.signIn.takeRequest() }
+        val sent = List(5) { network.api.received() } + List(2) { network.signIn.received() }
         assertEquals(CLIENT_ID, sent[0].headers[CLIENT_ID_HEADER])
         assertEquals("Bearer $TOKEN", sent[1].headers[AUTHORIZATION])
         val exchanges = sent.filter { it.method == "POST" }
@@ -77,11 +77,11 @@ class CredentialsTest {
         call { things.readAs(bearer(TOKEN)) }
         call { signInThings.read() }
 
-        assertEquals(CLIENT_ID, network.api.takeRequest().headers[CLIENT_ID_HEADER])
-        val asUser = network.api.takeRequest()
+        assertEquals(CLIENT_ID, network.api.received().headers[CLIENT_ID_HEADER])
+        val asUser = network.api.received()
         assertEquals("Bearer $TOKEN", asUser.headers[AUTHORIZATION])
         assertNull(asUser.headers[CLIENT_ID_HEADER])
-        assertNull(network.signIn.takeRequest().headers[CLIENT_ID_HEADER])
+        assertNull(network.signIn.received().headers[CLIENT_ID_HEADER])
     }
 
     @Test
@@ -95,8 +95,8 @@ class CredentialsTest {
         )
         network.signIn.enqueue(answer())
         assertEquals(MalAnswer.Success(Thing(7)), call { things.read() })
-        assertEquals(CLIENT_ID, network.api.takeRequest().headers[CLIENT_ID_HEADER])
-        assertNull(network.signIn.takeRequest().headers[CLIENT_ID_HEADER])
+        assertEquals(CLIENT_ID, network.api.received().headers[CLIENT_ID_HEADER])
+        assertNull(network.signIn.received().headers[CLIENT_ID_HEADER])
     }
 
     @Test
@@ -114,7 +114,7 @@ class CredentialsTest {
                     .close()
             }
         }
-        val sent = List(2) { network.api.takeRequest() } + network.signIn.takeRequest()
+        val sent = List(2) { network.api.received() } + network.signIn.received()
         assertEquals(List(3) { "Kiroku/1.2.3" }, sent.map { it.headers["User-Agent"] })
     }
 }
