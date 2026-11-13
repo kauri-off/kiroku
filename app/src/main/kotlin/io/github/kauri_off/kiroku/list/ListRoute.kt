@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kauri_off.kiroku.KeepSplash
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
@@ -29,6 +30,7 @@ fun ListRoute(
         }
     val editor = editSheetViewModel(graph, messages)
     val state by list.state.collectAsScreenState()
+    if (state.content == ListContent.Loading) KeepSplash()
     ListScreen(
         state = state.copy(typed = ListState.Typed(list.filter)),
         onEvent = { event ->
