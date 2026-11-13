@@ -5,12 +5,18 @@ import java.time.LocalDate
 sealed interface Session {
     data object SignedOut : Session
 
+    // One sign-in: a refresh of its tokens keeps it, signing in again makes a new one.
     data class SignedIn(
-        val userName: String,
+        val signIn: SignInId,
     ) : Session
 
     data object Expired : Session
 }
+
+@JvmInline
+value class SignInId(
+    val value: String,
+)
 
 data class UserProfile(
     val name: String,
