@@ -30,4 +30,7 @@ object Sizes {
 
     // The stock tab's padding either side of its label, which the tab indicator leaves out.
     val tabLabelPadding: Dp = 16.dp
+
+    // The app's mark on the sign-in screen: it names the app without outweighing the sign-in button.
+    val signInMark: Dp = 56.dp
 }

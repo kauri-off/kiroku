@@ -64,10 +64,7 @@ Wording decided before its feature exists. A row leaves this table when its reso
 | Progress, Android 11 and earlier | Saving… on the channel "Saving changes" | Сохранение… / Сохранение изменений | |
 | Notification summary | 3 new episodes | %d новая серия, новые серии, новых серий | |
 | Status panel | Upcoming / Recently sent | Ближайшие / Недавно отправленные | |
-| Sign-in | Sign in with MyAnimeList / Browse without an account | Войти через MyAnimeList / Продолжить без аккаунта | |
 | Sign out | Sign out | Выйти | |
-| No client id in this build | This build has no MyAnimeList client id | В этой сборке нет идентификатора клиента MyAnimeList | |
-| Unofficial notice | Unofficial. Not affiliated with MyAnimeList. | Неофициальное приложение. Не связано с MyAnimeList. | |
 | Open a title by its id | Open title #12345 | Открыть тайтл №12345 | Search, for a query of digits only |
 
 ## Rules
