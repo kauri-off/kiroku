@@ -31,6 +31,15 @@ class ListScreenshots : ScreenshotRegistry() {
             case("on-hold", content = screen(ListFixtureStates.onHold)),
             case("dropped", content = screen(ListFixtureStates.dropped)),
             case("sort-sheet", content = screen(ListFixtureStates.sortSheet)),
+            case("sort-sheet-title", content = screen(ListFixtureStates.sortSheetTitle)),
+            case("sort-sheet-last-updated", content = screen(ListFixtureStates.sortSheetLastUpdated)),
+            case("sort-sheet-score-lowest", content = screen(ListFixtureStates.sortSheetScoreLowest)),
+            case("sort-sheet-start-date", content = screen(ListFixtureStates.sortSheetStartDate)),
+            case("watching-by-score", content = screen(ListFixtureStates.watchingByScore)),
+            case("watching-by-start-date", content = screen(ListFixtureStates.watchingByStartDate)),
+            case("planned-by-start-date", content = screen(ListFixtureStates.plannedByStartDate)),
+            case("completed-by-score", content = screen(ListFixtureStates.completedByScore)),
+            case("completed-by-start-date", content = screen(ListFixtureStates.completedByStartDate)),
             case("filtering", keyboard = true, content = screen(ListFixtureStates.filtering)),
             case("refreshing", content = screen(ListFixtureStates.refreshing)),
             case("undo-snackbar", content = screen(ListFixtureStates.undoSnackbar, ListFixtureStates.undoMessage)),
@@ -42,6 +51,7 @@ class ListScreenshots : ScreenshotRegistry() {
             case("signed-out", content = screen(ListFixtureStates.signedOut)),
             case("session-expired", content = screen(ListFixtureStates.sessionExpired)),
             case("read-only", content = screen(ListFixtureStates.readOnly)),
+            case("read-only-by-score", content = screen(ListFixtureStates.readOnlyByScore)),
         )
 
     // "+1" completes the top title: its row fades out and the rows below close up, a change inside the list.

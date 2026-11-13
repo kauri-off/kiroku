@@ -8,9 +8,12 @@ import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.airingPhase
 import io.github.kauri_off.kiroku.core.airing.episodeTotal
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import java.time.Instant
 import java.time.LocalDate
@@ -67,15 +70,16 @@ sealed interface ListContent {
     }
 }
 
-// One tab: its rows, filtered when a filter is typed, in the order last computed for [sort].
+// One tab: its rows, filtered when a filter is typed, in the order last computed for [sort] and [direction].
 data class ListPage(
     val sort: ListSort,
     val sorts: List<ListSort>,
     val rows: List<ListRow>,
-    // Changes whenever the tab's order is computed again (app start, refresh, a new sort), which starts the page from
-    // the top; rows animate only between states with the same value. A tab switch or a return from a title does not
-    // change it.
+    // Changes whenever the tab's order is computed again (app start, refresh, a new sort or direction), which starts
+    // the page from the top; rows animate only between states with the same value. A tab switch or a return from a
+    // title does not change it.
     val ordering: Int = 0,
+    val direction: SortDirection? = sort.defaultDirection,
 )
 
 enum class ListFailure { NoConnection, Refused, Other }
@@ -87,7 +91,19 @@ data class ListRow(
     val line2: Line2,
     val line3: Line3?,
     val plusOne: Boolean,
+    val sortedBy: SortedBy? = null,
 )
+
+// What line 2 adds after its own words so that the tab's order can be read off the rows.
+sealed interface SortedBy {
+    data class Score(
+        val score: Int?,
+    ) : SortedBy
+
+    data class Started(
+        val date: PartialDate,
+    ) : SortedBy
+}
 
 sealed interface Line2 {
     // `Watched 12 of 24`, or `Watched 212` with no known total; never capped by the total.
@@ -147,6 +163,10 @@ sealed interface ListEvent {
         val sort: ListSort,
     ) : ListEvent
 
+    data class SelectDirection(
+        val direction: SortDirection,
+    ) : ListEvent
+
     data object DismissSort : ListEvent
 
     data object Refresh : ListEvent
@@ -161,13 +181,15 @@ sealed interface ListEvent {
 }
 
 // One row from :core's airing phase, the one the title page reads too: line 2's premiere and line 3 are never decided
-// here. Another user's list has no airing data, so its row has progress or score and no third line.
+// here. Another user's list has no airing data, so its row has progress or score and no third line. Sorted by score or
+// start date, line 2 also shows that value unless it shows it already.
 fun listRow(
     entry: ListEntry,
     airing: Airing?,
     today: LocalDate,
     language: TitleLanguage,
     readOnly: Boolean = false,
+    sort: ListSort? = null,
 ): ListRow {
     val anime = entry.anime
     val values = entry.values
@@ -180,6 +202,12 @@ fun listRow(
         }
     val aired = (phase as? AiringPhase.Aired)?.takeIf { line2 is Line2.Progress }
     val line3 = aired?.toWatch?.let(Line3::ToWatch) ?: aired?.next?.let(Line3::NextEpisode)
+    val sortedBy =
+        when {
+            sort == ListSort.Score && line2 !is Line2.Score -> SortedBy.Score(values.score)
+            sort == ListSort.StartDate && line2 !is Line2.Premieres -> anime.startDate?.let(SortedBy::Started)
+            else -> null
+        }
     return ListRow(
         id = anime.id,
         title = anime.titles.preferred(language),
@@ -187,5 +215,6 @@ fun listRow(
         line2 = line2,
         line3 = line3,
         plusOne = !readOnly && entry.status == ListStatus.Watching,
+        sortedBy = sortedBy,
     )
 }

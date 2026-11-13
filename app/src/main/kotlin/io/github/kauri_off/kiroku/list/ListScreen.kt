@@ -65,9 +65,9 @@ import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
-import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.CoversMessages
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.RowLine
@@ -141,7 +141,7 @@ fun ListScreen(
         }
     }
     val page = state.page
-    if (state.sortSheetOpen && page != null) SortSheet(page.sort, page.sorts, onEvent)
+    if (state.sortSheetOpen && page != null) SortSheet(page, onEvent)
 }
 
 // What every page shows besides its own rows; a tab switch changes none of it, so no page or row is composed again.
@@ -403,7 +403,7 @@ private fun Rows(
                     onClick = { onEvent(ListEvent.Open(row.id)) },
                     lines =
                         listOfNotNull(
-                            RowLine(text.line2(row.line2)),
+                            RowLine(text.line2(row.line2, row.sortedBy)),
                             row.line3?.let { RowLine(text.line3(it), highlighted = it is Line3.ToWatch) },
                         ),
                     trailing =
@@ -431,10 +431,10 @@ private fun Rows(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortSheet(
-    selected: ListSort,
-    sorts: List<ListSort>,
+    page: ListPage,
     onEvent: (ListEvent) -> Unit,
 ) {
+    val selected = page.sort
     CoversMessages()
     ModalBottomSheet(
         onDismissRequest = { onEvent(ListEvent.DismissSort) },
@@ -447,7 +447,7 @@ private fun SortSheet(
             modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s).semantics { heading() },
         )
         Column(Modifier.selectableGroup().padding(bottom = Spacing.s)) {
-            sorts.forEach { sort ->
+            page.sorts.forEach { sort ->
                 ListItem(
                     selected = sort == selected,
                     onClick = { onEvent(ListEvent.SelectSort(sort)) },
@@ -462,6 +462,16 @@ private fun SortSheet(
                     content = { Text(stringResource(sort.labelRes())) },
                 )
             }
+        }
+        // "Up next" is a grouping, not a scale: with it chosen there is no direction to choose.
+        val directions = selected.directions()
+        if (directions.isNotEmpty()) {
+            ConnectedChoice(
+                labels = directions.map { stringResource(it.second) },
+                chosen = directions.indexOfFirst { it.first == page.direction },
+                onChoose = { onEvent(ListEvent.SelectDirection(directions[it].first)) },
+                modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l),
+            )
         }
     }
 }
