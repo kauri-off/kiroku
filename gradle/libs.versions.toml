@@ -23,6 +23,7 @@ retrofit = "3.0.0"
 coil = "3.6.3"
 junit = "4.13.2"
 robolectric = "4.17"
+androidx-test-runner = "1.7.0"
 roborazzi = "1.78.0"
 turbine = "1.2.1"
 ktlint-gradle = "14.2.0"
@@ -71,6 +72,7 @@ coil-test = { module = "io.coil-kt.coil3:coil-test", version.ref = "coil" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-accessibility-check = { module = "io.github.takahirom.roborazzi:roborazzi-accessibility-check", version.ref = "roborazzi" }
