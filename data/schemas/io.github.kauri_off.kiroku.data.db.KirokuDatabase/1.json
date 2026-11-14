@@ -1,0 +1,475 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "773d868ce6aab7a58bcd465a18af7e36",
+    "entities": [
+      {
+        "tableName": "title",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster_url` TEXT, `media_type` TEXT, `airing_status` TEXT NOT NULL, `episodes` INTEGER, `start_date` TEXT, `broadcast_day` INTEGER, `broadcast_time` TEXT, `mean_score` REAL, `rank` INTEGER, `genres` TEXT, `episode_duration` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "romaji",
+            "columnName": "romaji",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "english",
+            "columnName": "english",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "japanese",
+            "columnName": "japanese",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "synonyms",
+            "columnName": "synonyms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "posterUrl",
+            "columnName": "poster_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mediaType",
+            "columnName": "media_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "airingStatus",
+            "columnName": "airing_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodes",
+            "columnName": "episodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "start_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "broadcastDay",
+            "columnName": "broadcast_day",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "broadcastTime",
+            "columnName": "broadcast_time",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "meanScore",
+            "columnName": "mean_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rank",
+            "columnName": "rank",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "genres",
+            "columnName": "genres",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "episodeDuration",
+            "columnName": "episode_duration",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "title_details",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `synopsis` TEXT, `end_date` TEXT, `season_year` INTEGER, `season` TEXT, `source` TEXT, `studios` TEXT NOT NULL, `rating` TEXT, `fetched_at` INTEGER NOT NULL, `statistics_watching` INTEGER, `statistics_completed` INTEGER, `statistics_on_hold` INTEGER, `statistics_dropped` INTEGER, `statistics_planned` INTEGER, `statistics_members` INTEGER, PRIMARY KEY(`title_id`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "synopsis",
+            "columnName": "synopsis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "end_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seasonYear",
+            "columnName": "season_year",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "studios",
+            "columnName": "studios",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetched_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "statistics.watching",
+            "columnName": "statistics_watching",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.completed",
+            "columnName": "statistics_completed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.onHold",
+            "columnName": "statistics_on_hold",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.dropped",
+            "columnName": "statistics_dropped",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.planned",
+            "columnName": "statistics_planned",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.members",
+            "columnName": "statistics_members",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "title_relation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `related_id` INTEGER NOT NULL, `relation` TEXT NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`related_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relatedId",
+            "columnName": "related_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relation",
+            "columnName": "relation",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_title_relation_related_id",
+            "unique": false,
+            "columnNames": [
+              "related_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_title_relation_related_id` ON `${TABLE_NAME}` (`related_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "title",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "related_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "title_recommendation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `recommended_id` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`recommended_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recommendedId",
+            "columnName": "recommended_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_title_recommendation_recommended_id",
+            "unique": false,
+            "columnNames": [
+              "recommended_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_title_recommendation_recommended_id` ON `${TABLE_NAME}` (`recommended_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "title",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recommended_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "list_entry",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `unconfirmed` INTEGER NOT NULL, `shown_status` TEXT, `shown_watched` INTEGER, `shown_score` INTEGER, `shown_start_date` TEXT, `shown_finish_date` TEXT, `shown_updated_at` INTEGER, `confirmed_status` TEXT, `confirmed_watched` INTEGER, `confirmed_score` INTEGER, `confirmed_start_date` TEXT, `confirmed_finish_date` TEXT, `confirmed_updated_at` INTEGER, PRIMARY KEY(`title_id`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unconfirmed",
+            "columnName": "unconfirmed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shown.status",
+            "columnName": "shown_status",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shown.watched",
+            "columnName": "shown_watched",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "shown.score",
+            "columnName": "shown_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "shown.startDate",
+            "columnName": "shown_start_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shown.finishDate",
+            "columnName": "shown_finish_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shown.updatedAt",
+            "columnName": "shown_updated_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.status",
+            "columnName": "confirmed_status",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confirmed.watched",
+            "columnName": "confirmed_watched",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.score",
+            "columnName": "confirmed_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.startDate",
+            "columnName": "confirmed_start_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confirmed.finishDate",
+            "columnName": "confirmed_finish_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confirmed.updatedAt",
+            "columnName": "confirmed_updated_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "list_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `owner` TEXT, `synced_at` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "syncedAt",
+            "columnName": "synced_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '773d868ce6aab7a58bcd465a18af7e36')"
+    ]
+  }
+}
