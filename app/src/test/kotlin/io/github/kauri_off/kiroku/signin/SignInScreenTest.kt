@@ -114,6 +114,16 @@ class SignInScreenTest {
     }
 
     @Test
+    fun onDemoDataTheSentenceSaysThereIsNoAccountAndOnlyBrowsingIsLeft() {
+        show(SignInState.NoAccount)
+        assertEquals(expected(NO_ACCOUNT), shown())
+        assertEquals(null, liveRegion(NO_ACCOUNT))
+        compose.onNodeWithText(SIGN_IN).assertIsNotEnabled().performClick()
+        compose.onNodeWithText(BROWSE).assertIsEnabled().performClick()
+        assertEquals(listOf(SignInEvent.Browse), events)
+    }
+
+    @Test
     fun aSignInBeingCompletedSaysSoAndLeavesBrowsingOpen() {
         show(SignInState.Completing)
         assertEquals(expected(SIGNING_IN), shown())
@@ -138,6 +148,7 @@ class SignInScreenTest {
         const val BACK = "Back"
         const val SENTENCE = "Keep track of your list and know when new episodes air"
         const val NO_CLIENT_ID = "This build has no MyAnimeList client id"
+        const val NO_ACCOUNT = "Demo data has no MyAnimeList account to sign in to"
         const val SIGNING_IN = "Signing in…"
         const val FAILED = "Sign-in failed, try again"
         const val SIGN_IN = "Sign in with MyAnimeList"
