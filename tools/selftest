@@ -257,6 +257,8 @@ run tools/gw :core:test --kind check
 ok "gw refuses --kind after the Gradle arguments" '[[ $rc == 2 && $out == *"must come first"* && ! -e $F/q.calls ]]'
 run tools/gw -p /elsewhere build
 ok "gw refuses another project directory" '[[ $rc == 2 && $out == *"only its own worktree"* && ! -e $F/q.calls ]]'
+run tools/gw help -- -Pkiroku.malClientId=x
+ok "gw refuses --, after which Gradle reads no property" '[[ $rc == 2 && $out == *"-- is not allowed"* && ! -e $F/q.calls ]]'
 run tools/gw :app:installDebug
 ok "gw refuses a device task outside an emu job and names the right call" \
   '[[ $rc == 2 && $out == *"tools/emu run tools/gw :app:installDebug"* && ! -e $F/q.calls ]]'
@@ -321,8 +323,7 @@ for p in -Pkiroku.malClientId=own -Pkiroku.malClientId "-P kiroku.malClientId=ow
 done
 run env MAL_CLIENT_ID=env-id tools/gw --client-id :data:recordMalAnswers
 ok "gw --client-id leaves the machine's client id to Gradle and adds no property, so recordMalAnswers is the one task" \
-  '[[ $rc == 0 && $(grep -v "^-" "$F/gradle.args") == :data:recordMalAnswers ]] && ! grep -q kiroku.malClientId "$F/gradle.args" &&
-  has gradle.env MAL_CLIENT_ID=env-id'
+  '[[ $rc == 0 && $(grep -v "^-" "$F/gradle.args") == :data:recordMalAnswers ]] && ! grep -q kiroku.malClientId "$F/gradle.args"'
 for o in "--client-id --kind check" "--kind check --client-id"; do
   run tools/gw $o lint
   ok "gw takes $o in either order" '[[ $rc == 0 ]] && grep -qx check "$F/q.calls" && ! grep -q kiroku.malClientId "$F/gradle.args"'
@@ -658,8 +659,11 @@ drain() {
   local d
   for d in "$QS"/jobs/*/; do q kill "$(basename "$d")" > /dev/null 2>&1; done
 }
-printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" "swaps=$T/swaps" cpus=16 lock_wait=1 boot_timeout=20 smoke_delay=0 \
-  > "$W/tools/test-hooks"
+qhooks() {
+  printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" "swaps=$T/swaps" cpus=16 lock_wait=1 boot_timeout=20 \
+    smoke_delay=0 "$@" > "$W/tools/test-hooks"
+}
+qhooks
 
 conf
 avail 100000
@@ -696,6 +700,7 @@ ok "  and no longer once the job has used it" '[[ $(st "$b" state) == done ]] &&
 ok "q records a job's anonymous memory peak beside its cgroup peak" \
   '[[ $(st "$a" anon_peak_mib) -ge 100 && $(st "$a" peak_mib) -ge $(st "$a" anon_peak_mib) ]] &&
   grep -q "\"id\": \"$a\".*\"peak_mib\": [0-9]*, \"anon_peak_mib\": [0-9]" "$QS/log.jsonl"'
+ok "  and q wait shows that figure" '[[ $(q wait "$a") == *" with file cache and $(st "$a" anon_peak_mib) MiB without, of 100 declared"* ]]'
 DISK=$(cd "$SRC/.." && pwd)/build/selftest-$$
 mkdir -p "$DISK"
 if [[ $(stat -f -c %T "$DISK") == tmpfs ]]; then
@@ -840,6 +845,15 @@ ok "a busy job and a printing job are not stalled" \
   '[[ $(st "$b" state) == done && $(st "$c" state) == done && -z $(st "$b" stalled)$(st "$c" stalled) ]]'
 q kill "$a" > /dev/null
 
+conf
+mkdir "$T/nocg"
+qhooks "cgroup=$T/nocg"
+a=$(sub small python3 -c 'import time; b = b"x" * (50 << 20); time.sleep(1.5)')
+finished "$a"
+qhooks
+ok "a job whose memory statistics cannot be read logs no anonymous peak, not 0" \
+  '[[ $(st "$a" state) == done && -z $(st "$a" anon_peak_mib) ]] && grep -q "\"id\": \"$a\".*\"anon_peak_mib\": null" "$QS/log.jsonl"'
+
 # the wrappers through tools/q
 conf
 run env FAKE_GRADLE_RC=0 tools/gw :core:test --tests '*A B*'
@@ -850,6 +864,10 @@ ok "  and gives Gradle's JVMs the job's temporary directory" \
   'grep -qx "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=$QS/jobs/[0-9a-f-]*/tmp" "$F/gradle.env"'
 run tools/gw --kind check lint
 ok "gw --kind check runs with that kind's workers" '[[ $rc == 0 ]] && has gradle.args --max-workers=5'
+run env MAL_CLIENT_ID=env-id tools/gw --client-id :core:test
+b=$(sed -n '1s/^job \([^ ]*\) .*/\1/p' <<< "$out")
+ok "the queue does not save a client id from the environment with a job" \
+  '[[ $rc == 0 && -s $QS/jobs/$b/env.json ]] && ! grep -q CLIENT_ID "$QS/jobs/$b/env.json" "$F/gradle.env"'
 FAKE_GRADLE_RC=1 run tools/gw :core:test
 ok "gw exits with the code of Gradle in the job" '[[ $rc == 1 && $out == *"failed, exit 1; full output:"* ]]'
 run tools/emu run adb devices
@@ -910,6 +928,11 @@ echo "{\"id\": \"old\", \"kind\": \"old\", \"status\": \"done\", \"rc\": 0, \"su
 out=$(q stats)
 ok "q stats still reads a log line written before the anonymous peak was recorded" \
   '[[ $? == 0 && $(awk "\$1 == \"old\" { print \$10, \$13 }" <<< "$out") == "500 -" ]]'
+for i in {1..20}; do
+  echo "{\"id\": \"known-$i\", \"kind\": \"known\", \"status\": \"done\", \"rc\": 0, \"submit\": $t, \"start\": $t, \"end\": $t, \"wait\": 0, \"run\": 5, \"peak_mib\": $((5000 + i * 10)), \"anon_peak_mib\": $((i * 10))}"
+done >> "$QS/log.jsonl"
+ok "q stats gives the p50, p90 and max of both peaks" \
+  '[[ $(q stats | awk "\$1 == \"known\" { print \$10, \$11, \$12, \$13, \$14, \$15 }") == "5110 5190 5200 110 190 200" ]]'
 
 summary
 ((fails == 0))

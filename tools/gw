@@ -33,6 +33,7 @@ for a; do
   case $a in
     --kind | --kind=* | --client-id | --wait) die "$a must come first" ;;
     -p | --project-dir | --project-dir=*) die "$a is not allowed: tools/gw builds only its own worktree, $SELF" ;;
+    --) die "-- is not allowed: Gradle takes no arguments after it" ;;
   esac
 done
 

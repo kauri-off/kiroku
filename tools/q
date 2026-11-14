@@ -36,7 +36,7 @@ UNIT = "kiroku-q-"
 EXIT_PENDING, EXIT_STALLED, EXIT_STOPPED = 75, 76, 125
 STALL_CPU = 0.02
 KEEP_DAYS, KEEP_JOBS = 14, 300
-SECRET = re.compile(r"TOKEN|SECRET|PASS|AUTH|COOKIE|CREDENTIAL|PRIVATE|API_?KEY|SESSION")
+SECRET = re.compile(r"TOKEN|SECRET|PASS|AUTH|COOKIE|CREDENTIAL|PRIVATE|API_?KEY|SESSION|CLIENT_?ID")
 REASONS = {"budget": "the memory budget", "memory": "available memory",
            "short": "available memory, too little to start on swap", "cpu": "worker threads",
            "slot": "an emulator slot", "order": "a job that has waited longer", "config": "a readable tools/q.conf"}
@@ -139,13 +139,15 @@ def cg_stat(cg, name, key):
 
 
 def anon_mib(cg):
-    """MiB of anonymous memory, shared memory and swap in a cgroup: its use without the file cache."""
-    return (sum(cg_stat(cg, "memory.stat", k) or 0 for k in ("anon", "shmem")) + (cg_int(cg, "memory.swap.current") or 0)) >> 20
+    """MiB of anonymous memory, shared memory and swap in a cgroup: its use without the file cache; None if unreadable."""
+    anon = cg_stat(cg, "memory.stat", "anon")
+    if anon is None: return None
+    return (anon + (cg_stat(cg, "memory.stat", "shmem") or 0) + (cg_int(cg, "memory.swap.current") or 0)) >> 20
 
 
 def claimed(e):
     """MiB of its declared memory a running job has taken so far; file cache is left out, as it is still available."""
-    return anon_mib(e.get("cg"))
+    return anon_mib(e.get("cg")) or 0
 
 
 def disk_swap_free():
@@ -311,6 +313,7 @@ def try_conf():
 # ---- a job's processes ----------------------------------------------------------------------------------------
 
 def own_cgroup():
+    if "cgroup" in HOOK: return HOOK["cgroup"]
     try:
         with open("/proc/self/cgroup") as f:
             d = next("/sys/fs/cgroup" + l[3:].strip() for l in f if l.startswith("0::"))
@@ -493,9 +496,10 @@ def cmd_run(a):
             out.write(f"q: cannot start {job['cmd']}: {x}\n".encode())
             return finish(i, job, st, "failed", 127, cg)
         wd = Watchdog(cg, f"{d}/out.log", conf["stall"])
-        killed, anon = False, 0
+        killed, anon = False, None
         while True:
-            if cg: anon = max(anon, anon_mib(cg))
+            a = anon_mib(cg)
+            if a is not None: anon = max(anon or 0, a)
             try:
                 child.wait(conf["poll"])
                 break
@@ -512,7 +516,7 @@ def cmd_run(a):
                 st["stall"] = stall
                 wjson(f"{d}/status.json", st)
         if term: kill_tree(cg, child.pid, signal.SIGKILL)
-    if cg: st["anon_peak_mib"] = anon
+    if anon is not None: st["anon_peak_mib"] = anon
     rc = child.returncode
     if term:
         with Locked() as s: why = (s["jobs"].get(i) or {}).get("cancel")

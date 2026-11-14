@@ -41,7 +41,7 @@ its code, assets or credentials. `clientid.txt` is the owner's: never read, prin
 ## Build and checks
 
 Run these through `tools/gw` on the maintainer's machine (next section). Elsewhere, run `./gradlew` with the same
-arguments, without `--kind …`. `tools/gw tasks` lists the tasks.
+arguments, without `tools/gw`'s options. `tools/gw tasks` lists the tasks.
 
 | Purpose | Command |
 |---|---|
