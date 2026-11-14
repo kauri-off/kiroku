@@ -13,6 +13,12 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.profile.OtherProfileKey
+import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
+import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
+import io.github.kauri_off.kiroku.profile.ProfileOwner
+import io.github.kauri_off.kiroku.profile.ProfileStandInRoute
+import io.github.kauri_off.kiroku.profile.profileStandIn
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
@@ -87,7 +93,23 @@ fun appEntries(
         entry<BrowseKey> { key ->
             standIn?.let { BrowseRoute(it, key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         }
-        entry<ProfileRoot> { NotBuiltDestination(graph, Destination.Profile, signIn, snackbars) }
+        entry<ProfileRoot> {
+            val profile = profileStandIn
+            if (profile == null) {
+                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
+            } else {
+                ProfileStandInRoute(profile, ProfileOwner.Me, graph, navigator, signIn, snackbars)
+            }
+        }
+        entry<OtherProfileKey> { key ->
+            val profile = profileStandIn
+            if (profile == null) {
+                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
+            } else {
+                ProfileStandInRoute(profile, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars)
+            }
+        }
+        entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,
