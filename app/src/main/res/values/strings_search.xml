@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_placeholder">Search anime</string>
+    <string name="search_clear">Clear search</string>
+    <string name="search_recent">Recent searches</string>
+    <string name="search_browse">Browse</string>
+    <string name="search_this_season">This season</string>
+    <string name="search_top_airing">Top airing</string>
+    <string name="search_top_rated">Top rated</string>
+    <string name="search_most_popular">Most popular</string>
+    <string name="search_open_id">Open title #%1$d</string>
+    <string name="search_ranked_title" translatable="false">%1$d.\u00A0%2$s</string>
+    <string name="search_no_results">Nothing found for “%1$s”</string>
+    <string name="search_failed">Could not search</string>
+    <string name="search_loading_more">Loading more</string>
+    <string name="search_browse_empty">This list has no titles yet</string>
+    <string name="search_browse_failed">Could not load this list</string>
+</resources>
