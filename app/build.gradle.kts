@@ -30,6 +30,13 @@ check(malClientId.matches(Regex("[A-Za-z0-9._-]*"))) {
     "The MAL client id may contain only letters, digits, '.', '_' and '-'"
 }
 
+// A build type's OAuth redirect as registered with MAL: a constant of its own, never made from the application id.
+fun com.android.build.api.dsl.ApplicationBuildType.oauthRedirect(uri: String) {
+    manifestPlaceholders["oauthScheme"] = uri.substringBefore("://")
+    manifestPlaceholders["oauthHost"] = uri.substringAfter("://")
+    buildConfigField("String", "OAUTH_REDIRECT", "\"$uri\"")
+}
+
 android {
     namespace = "io.github.kauri_off.kiroku"
     compileSdk {
@@ -79,8 +86,10 @@ android {
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "@string/app_name_debug"
             manifestPlaceholders["debugMenuShortcuts"] = "@xml/debug_menu_shortcuts_debug"
+            oauthRedirect("io.github.kauri-off.kiroku.debug://oauth")
         }
         release {
+            oauthRedirect("io.github.kauri-off.kiroku://oauth")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
@@ -91,6 +100,7 @@ android {
             applicationIdSuffix = ".preview"
             manifestPlaceholders["appLabel"] = "@string/app_name_preview"
             manifestPlaceholders["debugMenuShortcuts"] = "@xml/debug_menu_shortcuts_preview"
+            oauthRedirect("io.github.kauri-off.kiroku.preview://oauth")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
             isProfileable = true
@@ -594,7 +604,274 @@ abstract class VerifyShortcuts : DefaultTask() {
     }
 }
 
+// What a merged manifest gets wrong about its build type's redirect, registered with MAL; nothing when it is right.
+object RedirectRule {
+    const val ANDROID = "http://schemas.android.com/apk/res/android"
+    const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
+    const val VIEW = "android.intent.action.VIEW"
+    const val DEFAULT = "android.intent.category.DEFAULT"
+    const val BROWSABLE = "android.intent.category.BROWSABLE"
+    private val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
+
+    // An intent filter: its actions and categories, the attributes of each of its data elements, and whatever else it holds.
+    data class Filter(
+        val actions: List<String>,
+        val categories: Set<String>,
+        val data: List<Map<String, String>>,
+        val other: List<String> = emptyList(),
+    )
+
+    fun parse(manifest: File): org.w3c.dom.Document =
+        javax.xml.parsers.DocumentBuilderFactory
+            .newInstance()
+            .apply { isNamespaceAware = true }
+            .newDocumentBuilder()
+            .parse(manifest)
+
+    // Only a filter with data or the browser's category takes an address; one activity has one, this one, and a browser reaches it.
+    fun problems(
+        manifest: org.w3c.dom.Document,
+        redirect: String,
+        alsoExported: Set<String>,
+    ): List<String> {
+        val components = COMPONENTS.flatMap { manifest.getElementsByTagName(it).elements() }
+        val takers =
+            components
+                .filter { component ->
+                    component.filters().any { BROWSABLE in it.categories || it.data.isNotEmpty() || it.other.isNotEmpty() }
+                }.map { it.name() }
+        val own = components.filter { it.name() == ACTIVITY }.flatMap { it.filters() }
+        val browser =
+            Filter(
+                listOf(VIEW),
+                setOf(DEFAULT, BROWSABLE),
+                listOf(mapOf("scheme" to redirect.substringBefore("://"), "host" to redirect.substringAfter("://"))),
+            )
+        val exported = components.filter { it.getAttributeNS(ANDROID, "exported") == "true" }.mapTo(mutableSetOf()) { it.name() }
+        val shut =
+            components.any {
+                it.name() == ACTIVITY && (it.getAttributeNS(ANDROID, "enabled") == "false" || it.hasAttributeNS(ANDROID, "permission"))
+            }
+        return listOfNotNull(
+            "Addresses are taken by $takers, not by $ACTIVITY alone".takeIf { takers != listOf(ACTIVITY) },
+            "$ACTIVITY takes $own, not $redirect from a browser and nothing else".takeIf { own != listOf(browser) },
+            "$ACTIVITY is disabled or asks for a permission, so no browser reaches it".takeIf { shut },
+            "Other apps can start $exported, not ${alsoExported + ACTIVITY}".takeIf { exported != alsoExported + ACTIVITY },
+        )
+    }
+
+    private fun org.w3c.dom.NodeList.elements() = (0 until length).map { item(it) as org.w3c.dom.Element }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(ANDROID, "name")
+
+    private fun org.w3c.dom.Element.filters(): List<Filter> =
+        getElementsByTagName("intent-filter").elements().map { filter ->
+            val parts = filter.getElementsByTagName("*").elements().groupBy { it.tagName }
+            Filter(
+                actions = parts["action"].orEmpty().map { it.name() },
+                categories = parts["category"].orEmpty().mapTo(mutableSetOf()) { it.name() },
+                data =
+                    parts["data"].orEmpty().map { data ->
+                        (0 until data.attributes.length).map { data.attributes.item(it) }.associate { it.localName to it.nodeValue }
+                    },
+                other = (parts.keys - setOf("action", "category", "data")).sorted(),
+            )
+        }
+}
+
+// The redirect activity alone takes an address, the build type's redirect from a browser, and nothing else is newly exported.
+abstract class VerifyRedirect : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:Input
+    abstract val redirect: Property<String>
+
+    @get:Input
+    abstract val alsoExported: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val problems = RedirectRule.problems(RedirectRule.parse(manifest.get().asFile), redirect.get(), alsoExported.get())
+        check(problems.isEmpty()) { problems.joinToString("\n") }
+        report.get().asFile.writeText(
+            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}; exported besides it: ${alsoExported.get()}\n",
+        )
+    }
+}
+
+// Holds the rule above to a manifest made wrong in one way at a time: each way has to be a problem.
+abstract class VerifyRedirectRule : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:Input
+    abstract val redirect: Property<String>
+
+    @get:Input
+    abstract val alsoExported: SetProperty<String>
+
+    @get:Input
+    abstract val launcher: Property<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val scheme = redirect.get().substringBefore("://")
+        val host = redirect.get().substringAfter("://")
+        val android = RedirectRule.ANDROID
+        val main: (org.w3c.dom.Document) -> org.w3c.dom.Element = { it.component("activity", launcher.get()) }
+        val own: (org.w3c.dom.Document) -> org.w3c.dom.Element = { it.component("activity", RedirectRule.ACTIVITY) }
+        val ownFilter: (
+            org.w3c.dom.Document,
+        ) -> org.w3c.dom.Element = { own(it).getElementsByTagName("intent-filter").item(0) as org.w3c.dom.Element }
+        val ownData: (
+            org.w3c.dom.Document,
+        ) -> org.w3c.dom.Element = { ownFilter(it).getElementsByTagName("data").item(0) as org.w3c.dom.Element }
+        val wrong =
+            mapOf<String, (org.w3c.dom.Document) -> Unit>(
+                // Another taker of an address: the launcher is exported already, so only its filter is new.
+                "the launcher takes the scheme by sspPrefix" to
+                    { main(it).filter(listOf(mapOf("scheme" to scheme, "sspPrefix" to "//$host"))) },
+                "the launcher takes a web address, not from a browser" to
+                    { main(it).filter(listOf(mapOf("scheme" to "https", "host" to "myanimelist.net")), browsable = false) },
+                "the launcher has the browser's category and no data" to { main(it).filter(emptyList()) },
+                "the launcher's filter holds an element that is no data" to
+                    { main(it).filter(emptyList(), browsable = false).appendChild(it.createElement("uri-relative-filter-group")) },
+                "another component takes the scheme" to { it.added("activity-alias").filter(listOf(mapOf("scheme" to scheme))) },
+                // The redirect activity's own filter is not exactly the redirect from a browser.
+                "the redirect activity has a second filter" to
+                    { own(it).filter(listOf(mapOf("scheme" to "https", "host" to "myanimelist.net"))) },
+                "its filter has a second scheme" to { ownFilter(it).addData(mapOf("scheme" to "https")) },
+                "its filter has another action" to { ownFilter(it).named("action", "android.intent.action.SEND") },
+                "its filter has another category" to { ownFilter(it).named("category", "android.intent.category.LAUNCHER") },
+                "its filter holds another element" to { ownFilter(it).appendChild(it.createElement("uri-relative-filter-group")) },
+                "its filter lacks the browser's category" to { document ->
+                    val categories = ownFilter(document).getElementsByTagName("category")
+                    val browsable =
+                        (0 until categories.length).map { categories.item(it) as org.w3c.dom.Element }.single {
+                            it.name() ==
+                                RedirectRule.BROWSABLE
+                        }
+                    browsable.parentNode.removeChild(browsable)
+                },
+                "its data has a path" to { ownData(it).setAttributeNS(android, "android:path", "/") },
+                "its data has another host" to { ownData(it).setAttributeNS(android, "android:host", "${host}2") },
+                "its data has another scheme" to { ownData(it).setAttributeNS(android, "android:scheme", "$scheme.x") },
+                // No browser reaches the redirect activity.
+                "the redirect activity is not exported" to { own(it).setAttributeNS(android, "android:exported", "false") },
+                "the redirect activity is disabled" to { own(it).setAttributeNS(android, "android:enabled", "false") },
+                "the redirect activity asks for a permission" to
+                    { own(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
+                "there is no redirect activity" to { own(it).let { activity -> activity.parentNode.removeChild(activity) } },
+                // Something else is newly open to other apps.
+                "another activity is exported" to { it.added("activity").setAttributeNS(android, "android:exported", "true") },
+                "another provider is exported" to { it.added("provider").setAttributeNS(android, "android:exported", "true") },
+            )
+
+        fun problems(change: (org.w3c.dom.Document) -> Unit): List<String> =
+            RedirectRule.problems(RedirectRule.parse(manifest.get().asFile).also(change), redirect.get(), alsoExported.get())
+        check(problems {}.isEmpty()) { "The manifest as it is: ${problems {}}" }
+        val passed = wrong.filterValues { problems(it).isEmpty() }.keys
+        check(passed.isEmpty()) { "The redirect check lets these wrong manifests pass: $passed" }
+        report.get().asFile.writeText(wrong.keys.joinToString("\n", postfix = "\n"))
+    }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(RedirectRule.ANDROID, "name")
+
+    private fun org.w3c.dom.Document.component(
+        kind: String,
+        name: String,
+    ): org.w3c.dom.Element {
+        val all = getElementsByTagName(kind)
+        return (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.single { it.name() == name }
+    }
+
+    // A component of the test's own, not exported.
+    private fun org.w3c.dom.Document.added(kind: String): org.w3c.dom.Element {
+        val component = createElement(kind)
+        component.setAttributeNS(RedirectRule.ANDROID, "android:name", "io.github.kauri_off.kiroku.Planted")
+        component.setAttributeNS(RedirectRule.ANDROID, "android:exported", "false")
+        getElementsByTagName("application").item(0).appendChild(component)
+        return component
+    }
+
+    private fun org.w3c.dom.Element.named(
+        tag: String,
+        name: String,
+    ) {
+        appendChild(ownerDocument.createElement(tag).also { it.setAttributeNS(RedirectRule.ANDROID, "android:name", name) })
+    }
+
+    private fun org.w3c.dom.Element.addData(attributes: Map<String, String>) {
+        val data = ownerDocument.createElement("data")
+        attributes.forEach { (name, value) -> data.setAttributeNS(RedirectRule.ANDROID, "android:$name", value) }
+        appendChild(data)
+    }
+
+    // A filter for a view from a browser with these data elements.
+    private fun org.w3c.dom.Element.filter(
+        data: List<Map<String, String>>,
+        browsable: Boolean = true,
+    ): org.w3c.dom.Element {
+        val filter = ownerDocument.createElement("intent-filter")
+        appendChild(filter)
+        filter.named("action", RedirectRule.VIEW)
+        filter.named("category", RedirectRule.DEFAULT)
+        if (browsable) filter.named("category", RedirectRule.BROWSABLE)
+        data.forEach { filter.addData(it) }
+        return filter
+    }
+}
+
+// Section 3.1's redirects as MAL has them, and what else each build type lets another app start.
+val registeredRedirects =
+    mapOf(
+        "release" to "io.github.kauri-off.kiroku://oauth",
+        "debug" to "io.github.kauri-off.kiroku.debug://oauth",
+        "preview" to "io.github.kauri-off.kiroku.preview://oauth",
+    )
+val launcherActivity = "io.github.kauri_off.kiroku.MainActivity"
+val scenarioTile = "io.github.kauri_off.kiroku.scenario.ScenarioTile"
+val profileInstaller = "androidx.profileinstaller.ProfileInstallReceiver"
+val composePreview = "androidx.compose.ui.tooling.PreviewActivity"
+val exportedBesidesTheRedirect =
+    mapOf(
+        "release" to setOf(launcherActivity, profileInstaller),
+        "debug" to setOf(launcherActivity, profileInstaller, scenarioTile, composePreview),
+        "preview" to setOf(launcherActivity, profileInstaller, scenarioTile),
+    )
+
 androidComponents {
+    onVariants { variant ->
+        val name = variant.name.replaceFirstChar { it.uppercase() }
+        val verified =
+            tasks.register<VerifyRedirect>("verify${name}Redirect") {
+                manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                redirect.set(registeredRedirects.getValue(variant.buildType!!))
+                alsoExported.set(exportedBesidesTheRedirect.getValue(variant.buildType!!))
+                report.set(layout.buildDirectory.file("reports/redirect-${variant.name}.txt"))
+            }
+        tasks.named { it == "assemble$name" || it == "test" }.configureEach { dependsOn(verified) }
+        if (variant.buildType == "debug") {
+            val rule =
+                tasks.register<VerifyRedirectRule>("verifyRedirectRule") {
+                    manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                    redirect.set(registeredRedirects.getValue("debug"))
+                    alsoExported.set(exportedBesidesTheRedirect.getValue("debug"))
+                    launcher.set(launcherActivity)
+                    report.set(layout.buildDirectory.file("reports/redirect-rule.txt"))
+                }
+            tasks.named { it == "assembleDebug" || it == "test" }.configureEach { dependsOn(rule) }
+        }
+    }
     onVariants { variant ->
         if (variant.buildType !in setOf("debug", "preview")) return@onVariants
         val name = variant.name.replaceFirstChar { it.uppercase() }

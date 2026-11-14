@@ -105,13 +105,13 @@ From MAL's authorization reference:
   when MAL rejects the access token. The refresh token lives one month. A refresh returns a new pair and revokes
   the old one.
 
-| Value | Release build | Debug build |
-|---|---|---|
-| Application id | `io.github.kauri_off.kiroku` | `io.github.kauri_off.kiroku.debug` |
-| OAuth redirect URI | `io.github.kauri-off.kiroku://oauth` | `io.github.kauri-off.kiroku.debug://oauth` |
-| MAL client id | one registered client (app type "android", no secret) for both | same |
+| Value | Release build | Debug build | Preview build |
+|---|---|---|---|
+| Application id | `io.github.kauri_off.kiroku` | `io.github.kauri_off.kiroku.debug` | `io.github.kauri_off.kiroku.preview` |
+| OAuth redirect URI | `io.github.kauri-off.kiroku://oauth` | `io.github.kauri-off.kiroku.debug://oauth` | `io.github.kauri-off.kiroku.preview://oauth` |
+| MAL client id | one registered client (app type "android", no secret) for all three | same | same |
 
-- The two redirect URIs are the ones registered with MAL. **A redirect URI is its own constant per build type,
+- The three redirect URIs are the ones registered with MAL. **A redirect URI is its own constant per build type,
   never derived from the application id**: an underscore is not legal in a URI scheme. The URIs stay lower case,
   because browsers lowercase schemes and Android matches them case-sensitively.
 - A debug build installs next to the release build, with its own data, and is labelled "Kiroku debug".
