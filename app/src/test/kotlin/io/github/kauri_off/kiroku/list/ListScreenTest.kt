@@ -272,12 +272,16 @@ class ListScreenTest {
     }
 
     @Test
-    fun `a row is spoken with the value its tab is sorted by, as line 2 shows it`() {
+    fun `a row is spoken with the value its tab is sorted by, the star as the word for the score`() {
         show(ListFixtureStates.watchingByScore)
         compose
             .onNode(
-                hasText("Kagerou Toshokan 2nd Season") and hasText("Watched 120\u00A0of\u00A0366\u00A0· ★\u00A010") and hasClickAction(),
+                hasText(
+                    "Kagerou Toshokan 2nd Season",
+                ) and hasText("Watched 120\u00A0of\u00A0366\u00A0· Score\u00A010") and hasClickAction(),
             ).assertExists()
+        compose.onAllNodes(hasText("★", substring = true)).assertCountEquals(0)
+        compose.onAllNodes(hasText("★", substring = true), useUnmergedTree = true).assertCountEquals(0)
         compose
             .onNode(
                 hasText("Gekkou Kishidan") and hasText("Watched 6\u00A0of\u00A013") and hasClickAction(),

@@ -14,6 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -21,6 +24,8 @@ import io.github.kauri_off.kiroku.design.theme.Spacing
 data class RowLine(
     val text: String,
     val highlighted: Boolean = false,
+    // What a screen reader hears in place of [text], when a symbol in it has a word.
+    val spoken: String? = null,
 )
 
 // The one trailing element a row may have: a short value such as the MAL score, or the "+1" button.
@@ -72,10 +77,11 @@ const val MAX_SUPPORTING_LINES = 2
 
 @Composable
 private fun SupportingLine(line: RowLine) {
+    val spoken = line.spoken?.let { Modifier.clearAndSetSemantics { text = AnnotatedString(it) } } ?: Modifier
     if (line.highlighted) {
-        Text(line.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+        Text(line.text, spoken, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
     } else {
-        Text(line.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(line.text, spoken, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

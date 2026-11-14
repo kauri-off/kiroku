@@ -29,6 +29,15 @@ class ListText(
         sortedBy: SortedBy?,
     ): String = sortedBy?.let { context.getString(R.string.list_line2_sorted_by, line2(line), sortedBy(it)) } ?: line2(line)
 
+    // Line 2 as a screen reader hears it, where it differs: the score's star said as the glossary's word.
+    fun spokenLine2(
+        line: Line2,
+        sortedBy: SortedBy?,
+    ): String? =
+        (sortedBy as? SortedBy.Score)?.let {
+            context.getString(R.string.list_line2_sorted_by, line2(line), context.getString(R.string.list_score, it.score))
+        }
+
     private fun sortedBy(value: SortedBy): String =
         when (value) {
             is SortedBy.Score -> context.getString(R.string.list_sorted_by_score, value.score)

@@ -406,7 +406,7 @@ private fun Rows(
                     onClick = { onEvent(ListEvent.Open(row.id)) },
                     lines =
                         listOfNotNull(
-                            RowLine(text.line2(row.line2, row.sortedBy)),
+                            RowLine(text.line2(row.line2, row.sortedBy), spoken = text.spokenLine2(row.line2, row.sortedBy)),
                             row.line3?.let { RowLine(text.line3(it), highlighted = it is Line3.ToWatch) },
                         ),
                     trailing =

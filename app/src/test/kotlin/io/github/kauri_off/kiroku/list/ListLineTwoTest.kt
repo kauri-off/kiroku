@@ -1,13 +1,12 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
@@ -23,6 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.roundToInt
 
 // ARCHITECTURE 9.3: line 2 with the value a tab is sorted by is one line on a 411 dp phone, "+1" and line 3 present.
 @RunWith(RobolectricTestRunner::class)
@@ -50,29 +50,18 @@ class ListLineTwoTest {
         )
     }
 
-    private fun measure(text: String): String {
-        val results = mutableListOf<TextLayoutResult>()
-        compose
-            .onAllNodesWithText(text, useUnmergedTree = true)[0]
-            .fetchSemanticsNode()
-            .config[SemanticsActions.GetTextLayoutResult]
-            .action!!
-            .invoke(results)
-        val layout = results.single()
-        val density = compose.density.density
-        return "needs ${layout.multiParagraph.intrinsics.maxIntrinsicWidth / density} dp of " +
-            "${layout.layoutInput.constraints.maxWidth / density} dp"
-    }
-
-    private fun lineCount(text: String): Int {
-        val results = mutableListOf<TextLayoutResult>()
-        compose
-            .onAllNodesWithText(text, useUnmergedTree = true)[0]
-            .fetchSemanticsNode()
-            .config[SemanticsActions.GetTextLayoutResult]
-            .action!!
-            .invoke(results)
-        return results.single().lineCount
+    // Lines on screen, from the line's height: a line spoken otherwise exposes no text layout.
+    private fun lineCount(
+        found: String,
+        scale: Float,
+    ): Int {
+        val height =
+            compose
+                .onAllNodesWithText(found, useUnmergedTree = true)[0]
+                .fetchSemanticsNode()
+                .size.height
+        val line = with(Density(compose.density.density, scale)) { Typography().bodyMedium.lineHeight.toPx() }
+        return (height / line).roundToInt()
     }
 
     private fun check(scales: List<Float>) {
@@ -93,8 +82,8 @@ class ListLineTwoTest {
                 val text = ListText(compose.activity, state.now)
                 for (row in rows) {
                     val line = text.line2(row.line2, row.sortedBy)
-                    val lines = lineCount(line)
-                    if (lines != 1) problems += "$sort at $scale: \"$line\" takes $lines lines, ${measure(line)}"
+                    val lines = lineCount(text.spokenLine2(row.line2, row.sortedBy) ?: line, scale)
+                    if (lines != 1) problems += "$sort at $scale: \"$line\" takes $lines lines"
                 }
             }
         }
