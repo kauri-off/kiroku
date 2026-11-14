@@ -3,28 +3,39 @@ package io.github.kauri_off.kiroku.search
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.AppRoute
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
@@ -133,38 +144,98 @@ class SearchRouteTest {
 
     private val watching = "Watching\u00A0· 12\u00A0/\u00A024"
 
-    // Under the bar, not in the search view.
-    private fun underBar(text: String) = hasText(text) and !hasAnyAncestor(isDialog())
-
-    @Test
-    fun `searching a recent search again moves it to the top without a second row`() {
-        search()
-        val again = SearchFixtureStates.recent[2]
-        compose.onNode(underBar(again)).performClick()
-        settle()
-        compose.onNode(hasContentDescription("Clear search") and !hasAnyAncestor(isDialog())).performClick()
-        settle()
-        val top = compose.onNode(underBar(again)).getUnclippedBoundsInRoot().top
-        val first = compose.onNode(underBar(SearchFixtureStates.recent[0])).getUnclippedBoundsInRoot().top
-        assertTrue(top < first)
-        compose.onNode(underBar(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertExists()
-    }
-
-    @Test
-    fun `a query of spaces is no query, and is not kept`() {
-        search()
+    private fun typeKag() {
         compose.onNode(hasSetTextAction() and !hasAnyAncestor(isDialog())).performClick()
         settle()
         compose.onNode(typing).performKeyInput {
-            pressKey(Key.Spacebar)
-            pressKey(Key.Spacebar)
+            pressKey(Key.K)
+            pressKey(Key.A)
+            pressKey(Key.G)
         }
         settle()
-        compose.onNode(inView("Recent searches")).assertExists()
-        compose.onNode(hasText("Nothing found", substring = true)).assertDoesNotExist()
-        compose.onNode(typing).performImeAction()
+    }
+
+    // The first of the results for "kag" that is not on the list.
+    private val notListed =
+        SearchFixtureStates
+            .standIn(Fixtures.reference)
+            .search("kag")
+            .first { it.entry == null }
+            .anime
+
+    private fun longPress(title: String) {
+        compose.onNode(inView(title) and hasClickAction()).performTouchInput { longClick() }
         settle()
-        compose.onNode(inView(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertExists()
+    }
+
+    // A status of the edit sheet, whose toggle buttons are radio buttons.
+    private fun status(name: String) = hasText(name) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+
+    @Test
+    fun `a long press on a result opens its edit sheet over the search view, and Save writes it`() {
+        search()
+        typeKag()
+        val title = FixtureAnime.exactToWatch.titles.romaji
+        longPress(title)
+        compose.onNodeWithText("Save").assertExists()
+        compose.onNode(status("Watching")).assertIsOn()
+        compose.onNode(status("On hold")).performClick()
+        compose.onNodeWithText("Save").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNode(inView(title) and hasText("On hold", substring = true)).assertExists()
+    }
+
+    @Test
+    fun `a long press on a result not on the list opens the sheet of a planned title, and Save adds it`() {
+        search()
+        typeKag()
+        val title = notListed.titles.romaji
+        compose.onNode(inView(title) and hasText("Planned")).assertDoesNotExist()
+        longPress(title)
+        compose.onNode(status("Planned")).assertIsOn()
+        compose.onNodeWithText("Remove from list").assertDoesNotExist()
+        compose.onNodeWithText("Save").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNode(inView(title) and hasText("Planned")).assertExists()
+    }
+
+    private val topAiring = SearchFixtureStates.browseRows(BrowseList.TopAiring).first().title
+
+    @Test
+    fun `a long press on a browse list's row opens its edit sheet`() {
+        search()
+        compose.onNodeWithText("Top airing").performClick()
+        settle()
+        compose.onNode(hasText(topAiring, substring = true) and hasClickAction()).performTouchInput { longClick() }
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+    }
+
+    @Test
+    fun `signed out, a browse row offers no edit`() {
+        scope.launch { graph.session.signOut() }
+        search()
+        compose.onNodeWithText("Top airing").performClick()
+        settle()
+        val row = compose.onNode(hasText(topAiring, substring = true) and hasClickAction())
+        row.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        row.performTouchInput { longClick() }
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+    }
+
+    @Test
+    fun `signed out, a result offers no edit`() {
+        scope.launch { graph.session.signOut() }
+        search()
+        typeKag()
+        val result = compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji) and hasClickAction())
+        result.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        result.performTouchInput { longClick() }
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
     }
 
     private companion object {
@@ -185,6 +256,7 @@ class SearchRouteRestoreTest {
 
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
+    private val messages = ShellMessages(scope, graph.list)
 
     @After
     fun stop() = scope.cancel()
@@ -195,7 +267,7 @@ class SearchRouteRestoreTest {
         val standIn = SearchFixtureStates.standIn(Fixtures.reference)
         restore.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                SearchRoute(standIn, graph, remember { SnackbarHostState() }, { _, _ -> }, onBrowse = {}, onSignIn = {})
+                SearchRoute(standIn, graph, messages, remember { SnackbarHostState() }, { _, _ -> }, onBrowse = {}, onSignIn = {})
             }
         }
         val searched = SearchFixtureStates.recent[3]

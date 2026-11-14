@@ -238,16 +238,13 @@ class ListScreenTest {
     }
 
     @Test
-    fun `the sort sheet offers the chosen sort's two directions, its own first, and sends either, the chosen one too`() {
+    fun `the sort sheet offers the chosen sort's two directions, its own first, and sends the other one`() {
         show(ListFixtureStates.sortSheetScoreLowest)
         compose.onNodeWithText("Highest first").assertIsDisplayed().assertIsOff()
         compose.onNodeWithText("Lowest first").assertIsDisplayed().assertIsOn()
         compose.onNodeWithText("Lowest first").performClick()
         compose.onNodeWithText("Highest first").performClick()
-        assertEquals(
-            listOf(ListEvent.SelectDirection(SortDirection.Ascending), ListEvent.SelectDirection(SortDirection.Descending)),
-            events,
-        )
+        assertEquals(listOf(ListEvent.SelectDirection(SortDirection.Descending)), events)
     }
 
     @Test

@@ -108,7 +108,7 @@ fun SearchScreen(
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        Body(state.content, events, padding)
+        Body(state.content, state.editable, events, padding)
     }
     // The view's rows are list items on the surface, as under the bar, so the view is the surface too.
     ExpandedFullScreenSearchBar(
@@ -118,7 +118,7 @@ fun SearchScreen(
     ) {
         WindowWithoutAutofill()
         // The view already keeps its content clear of the navigation bar and the keyboard.
-        Body(state.content, events, PaddingValues())
+        Body(state.content, state.editable, events, PaddingValues())
     }
 }
 
@@ -168,12 +168,13 @@ private fun SearchField(
 @Composable
 private fun Body(
     content: SearchContent,
+    editable: Boolean,
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
 ) {
     when (content) {
         is SearchContent.Start -> CentredList(padding) { start(content.recent, onEvent) }
-        is SearchContent.Results -> Results(content, onEvent, padding)
+        is SearchContent.Results -> Results(content, editable, onEvent, padding)
     }
 }
 
@@ -201,6 +202,7 @@ private fun LazyListScope.start(
 @Composable
 private fun Results(
     content: SearchContent.Results,
+    editable: Boolean,
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
 ) {
@@ -215,6 +217,7 @@ private fun Results(
                 results.more,
                 R.string.search_failed,
                 onOpen = { onEvent(SearchEvent.Open(it)) },
+                onEdit = if (editable) ({ onEvent(SearchEvent.Edit(it)) }) else null,
                 onLoadMore = { onEvent(SearchEvent.LoadMore) },
                 onRetry = { onEvent(SearchEvent.Retry) },
             )

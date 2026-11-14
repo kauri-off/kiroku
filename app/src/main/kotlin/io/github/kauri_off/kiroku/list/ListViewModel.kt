@@ -319,13 +319,10 @@ class ListViewModel(
         return if (next != current) copy(orders = next) else this
     }
 
-    // A new sort starts in its own direction.
+    // A new sort starts in its own direction. A choice leaves the sheet open; only its dismissal closes it.
     private fun selectSort(sort: ListSort) {
         val tab = model.value.tab
-        if (model.value.sorts.getValue(tab) == sort) {
-            model.update { it.copy(sortSheetOpen = false) }
-            return
-        }
+        if (model.value.sorts.getValue(tab) == sort) return
         saved[sortKey(tab)] = sort.name
         reorder(tab, sort, sort.defaultDirection)
     }
@@ -333,10 +330,7 @@ class ListViewModel(
     private fun selectDirection(direction: SortDirection) {
         val tab = model.value.tab
         val sort = model.value.sorts.getValue(tab)
-        if (sort.defaultDirection == null || model.value.directions.getValue(tab) == direction) {
-            model.update { it.copy(sortSheetOpen = false) }
-            return
-        }
+        if (sort.defaultDirection == null || model.value.directions.getValue(tab) == direction) return
         reorder(tab, sort, direction)
     }
 
@@ -348,7 +342,6 @@ class ListViewModel(
         saved[directionKey(tab)] = direction?.name
         model.update { model ->
             model.copy(
-                sortSheetOpen = false,
                 sorts = model.sorts + (tab to sort),
                 directions = model.directions + (tab to direction),
                 orders = model.orders?.let { it + (tab to model.ordered(tab, sort, direction)) },

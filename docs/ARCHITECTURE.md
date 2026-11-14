@@ -714,6 +714,8 @@ else. Nothing is written before "Save", and "Save" writes exactly what the sheet
 - A query that is only digits shows one extra row above the results, "Open title #<id>", which opens the title page
   of that MAL id. Limit: nothing else is added to the results.
 - A browse list uses the same row, with the rank in front of the title for ranked lists.
+- A long press on a result or on a browse list's row opens the title's edit sheet, as on the List; a title not on
+  the list starts from the values "Add to list" gives it.
 - No filters in 1.0 (section 2.2).
 
 ### 9.7 Profile
