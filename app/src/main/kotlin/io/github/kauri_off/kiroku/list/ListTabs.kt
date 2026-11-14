@@ -95,6 +95,9 @@ class ListTabMotion(
 
     private var tap: Any? = null
 
+    // The tab row, told when a tap lands and when it ends.
+    internal val row = TabRowLayout(this)
+
     // The last page reported as rested on, so the tab the screen hears back from it is not taken as a request.
     private var reported = pager.currentPage
 
@@ -109,17 +112,22 @@ class ListTabMotion(
         get() = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, (pager.pageCount - 1).toFloat())
 
     // A tap's glide: from where the header was to the tapped tab, as the one sliding page goes from [slideFrom].
-    private var glideFrom by mutableFloatStateOf(0f)
+    internal var glideFrom by mutableFloatStateOf(0f)
+        private set
     private var slideFrom by mutableStateOf<Float?>(null)
 
-    // After a drag catches a tap's glide, how far the header still is from the pager, in tabs; it eases to nothing.
+    // After a drag catches a tap's glide, how far the header was from the pager, in tabs; [caught] eases it to nothing.
     private var lag by mutableFloatStateOf(0f)
     private var lagReturn: Job? = null
 
-    // Where the tab row is drawn: the pager's position plus [lag], or during a tap the glide by the sliding page's progress.
+    // From 1 when a drag catches a tap to 0: what is left of the header's and the row's way back to the pager.
+    internal var caught by mutableFloatStateOf(0f)
+        private set
+
+    // Where the tab row is drawn: the pager's position plus what is left of [lag], or during a tap the glide by the page's progress.
     val header: Float
         get() {
-            val target = tapTarget ?: return (position + lag).coerceIn(0f, all.toFloat())
+            val target = tapTarget ?: return (position + lag * caught).coerceIn(0f, all.toFloat())
             val start = slideFrom ?: return glideFrom
             val way = target - start
             val progress = if (way == 0f) 1f else ((position - start) / way).coerceIn(0f, 1f)
@@ -204,12 +212,13 @@ class ListTabMotion(
     // A page further than one away is first put next to its tab, so only the last page slides; the header glides.
     fun select(index: Int) {
         if (tapTarget == index || (tapTarget == null && !pager.isScrollInProgress && position == index.toFloat())) return
+        row.tapLands()
         val token = Any()
         val gliding = header != position
         glideFrom = header
         slideFrom = null
         lagReturn?.cancel()
-        lag = 0f
+        caught = 0f
         tap = token
         tapTarget = index
         scope.launch {
@@ -229,22 +238,24 @@ class ListTabMotion(
                 arrived = true
             } finally {
                 if (tap === token) {
+                    val away = row.tapEnds(arrived)
                     val shown = header
                     tap = null
                     tapTarget = null
                     slideFrom = null
-                    if (!arrived && shown != position) ease(shown - position)
+                    if (!arrived && (away || shown != position)) ease(shown - position)
                 }
             }
         }
     }
 
-    // A drag that catches a glide takes the pager; the header comes back to it on the theme's slow effects spring.
+    // A drag that catches a glide takes the pager; the header and the row come back to it on the theme's slow effects spring.
     private fun ease(from: Float) {
         lag = from
+        caught = 1f
         lagReturn =
             scope.launch {
-                animate(lag, 0f, animationSpec = motionScheme.slowEffectsSpec()) { value, _ -> lag = value }
+                animate(1f, 0f, animationSpec = motionScheme.slowEffectsSpec()) { value, _ -> caught = value }
             }
     }
 }
@@ -278,7 +289,7 @@ internal fun ListTabs(
     motion: ListTabMotion,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val row = remember(motion) { TabRowLayout(motion) }
+    val row = motion.row
     val selected = motion.selected
     LaunchedEffect(row) { row.forgetHand() }
     val overscroll = rememberOverscrollEffect()
@@ -327,7 +338,7 @@ internal fun ListTabs(
                         .overscroll(overscroll)
                         .scrollable(row.byHand, Orientation.Horizontal, overscroll, reverseDirection = reverse)
                         .semantics {
-                            horizontalScrollAxisRange = ScrollAxisRange({ row.scroll(motion.header) }, { row.max.toFloat() })
+                            horizontalScrollAxisRange = ScrollAxisRange({ row.scroll() }, { row.max.toFloat() })
                             scrollBy { x, _ -> row.byHand.dispatchRawDelta(x) != 0f }
                         },
                 measurePolicy = row,
@@ -365,38 +376,80 @@ internal class TabRowLayout(
     private val motion: ListTabMotion,
 ) : MultiContentMeasurePolicy {
     // A scroll by hand, on top of the pager's, made at [handAt]; it fades out as the pager moves a page from there.
+    // During a tap it is on top of the tap's movement and does not fade.
     private var hand by mutableFloatStateOf(0f)
     private var handAt by mutableFloatStateOf(0f)
+
+    // Where the row was shown when the current tap landed.
+    private var tapFrom by mutableFloatStateOf(0f)
+
+    // How far a tap that a drag caught left the row from the pager's scroll; it goes as [ListTabMotion.caught] does.
+    private var left by mutableFloatStateOf(0f)
 
     private var places by mutableStateOf(TabPlaces(listOf(0), emptyList(), 0))
 
     val max: Int get() = places.max
 
-    fun scroll(position: Float): Float {
-        val fade = (1f - abs(position - handAt)).coerceAtLeast(0f)
-        return (places.scroll(position) + hand * fade).coerceIn(0f, places.max.toFloat())
+    // The row's scroll: the pager's, or during a tap one movement from where the tap found it to the tapped tab.
+    fun scroll(): Float {
+        val header = motion.header
+        val target = motion.tapTarget
+        val shown =
+            if (target == null || places.labels.isEmpty()) {
+                places.scroll(header) + hand * (1f - abs(header - handAt)).coerceAtLeast(0f) + left * motion.caught
+            } else {
+                tapped(target, header) + hand
+            }
+        return shown.coerceIn(0f, places.max.toFloat())
+    }
+
+    // The tap's progress is the header's, from where it glided from to the tapped tab.
+    private fun tapped(
+        target: Int,
+        header: Float,
+    ): Float {
+        val from = motion.glideFrom
+        val progress = if (target.toFloat() == from) 1f else ((header - from) / (target - from)).coerceIn(0f, 1f)
+        return tapFrom + (places.centring(target) - tapFrom) * progress
+    }
+
+    fun tapLands() {
+        tapFrom = scroll()
+        hand = 0f
+    }
+
+    // The row goes on from where it is shown: a caught tap's way back is eased, an arrived one's hand stays. True when away.
+    fun tapEnds(arrived: Boolean): Boolean {
+        val away = scroll() - places.scroll(motion.header)
+        hand = if (arrived) away else 0f
+        handAt = motion.header
+        left = if (arrived) 0f else away
+        return abs(away) >= 1f
     }
 
     val byHand =
         ScrollableState { delta ->
-            val position = motion.header
-            val now = scroll(position)
+            val header = motion.header
+            val target = motion.tapTarget
+            val now = scroll()
             val next = (now + delta).coerceIn(0f, places.max.toFloat())
-            hand = next - places.scroll(position)
-            handAt = position
+            if (target == null || places.labels.isEmpty()) {
+                hand = next - places.scroll(header) - left * motion.caught
+                handAt = header
+            } else {
+                hand = next - tapped(target, header)
+            }
             next - now
         }
 
     // A tab given focus by a key is centred like a selected one.
     fun reveal(index: Int) {
-        val position = motion.header
-        hand = places.centring(index) - places.scroll(position)
-        handAt = position
+        byHand.dispatchRawDelta(places.centring(index) - scroll())
     }
 
     // Once the pager is a page or more from where the hand left the row, its scroll is the pager's alone again.
     suspend fun forgetHand() {
-        snapshotFlow { hand != 0f && abs(motion.header - handAt) >= 1f }.collect { if (it) hand = 0f }
+        snapshotFlow { hand != 0f && motion.tapTarget == null && abs(motion.header - handAt) >= 1f }.collect { if (it) hand = 0f }
     }
 
     // A full-width child of fixed size: the stock indicator inside it is measured at the blend of the two labels' widths.
@@ -432,7 +485,7 @@ internal class TabRowLayout(
         places = measured
         val bar = indicator.map { it.measure(Constraints(minWidth = measured.width, maxWidth = measured.width, maxHeight = height)) }
         return layout(constraints.maxWidth, height) {
-            val scroll = scroll(motion.header).roundToInt()
+            val scroll = scroll().roundToInt()
             placeables.forEachIndexed { index, placeable -> placeable.placeRelative(measured.lefts[index] - scroll, 0) }
             bar.forEach { it.placeRelative(-scroll, height - it.height) }
         }

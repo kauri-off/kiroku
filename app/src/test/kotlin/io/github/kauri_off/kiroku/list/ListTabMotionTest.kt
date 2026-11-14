@@ -58,6 +58,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 // The tab row is drawn from the pager's position: through a drag, its settle and a tap (ARCHITECTURE 8.5).
 @RunWith(RobolectricTestRunner::class)
@@ -620,20 +621,24 @@ class ListTabMotionTest {
             compose.mainClock.advanceTimeByFrame()
             assertRowAt(pagerPosition(rest))
         }
-        // A tap's header glides; the row's scroll is taken from it, as the indicator is.
-        tab("Watching").performClick()
-        repeat(MAX_FRAMES) {
-            compose.mainClock.advanceTimeByFrame()
-            assertRowAt(headerPosition())
-        }
+        // A tap's header glides; the row goes straight from where it was to the tab's place, by the glide's progress.
+        tapRowFrames(target = 0)
         assertRowAt(pagerPosition(rest))
-        tab("Dropped").performClick()
-        repeat(MAX_FRAMES) {
-            compose.mainClock.advanceTimeByFrame()
-            assertRowAt(headerPosition())
-        }
+        tapRowFrames(target = 4)
         assertRowAt(4f)
         assertIdle()
+    }
+
+    private fun tapRowFrames(target: Int) {
+        val from = headerPosition()
+        val start = rowScroll()
+        tab(labels[target]).performClick()
+        val to = expectedScroll(target.toFloat())
+        repeat(MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            val progress = (headerPosition() - from) / (target - from)
+            assertEquals("the row at the tap's progress $progress", start + (to - start) * progress, rowScroll(), TOLERANCE)
+        }
     }
 
     // A2's mA: a row scrolled by hand goes back to the pager's scroll over the page's own move, not in one frame.
@@ -678,6 +683,145 @@ class ListTabMotionTest {
         tab("Completed").performClick()
         compose.mainClock.advanceTimeBy(SETTLED)
         assertEquals("no scroll by hand is left once the page has moved on", pagerScroll, rowScroll(), TOLERANCE)
+        assertIdle()
+    }
+
+    private fun rowMax(): Float = bounds(tab(labels.last())).right.value + rowScroll() - pageWidth
+
+    // Drags the tab row by hand past its end; the selected first tab is then off the row.
+    private fun scrollRowToEnd() {
+        tab("Planned").performTouchInput {
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(-width * END_DRAG / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+            advanceEventTime(SLOW_STEP_MS * SLOW_STEPS)
+            up()
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals("scrolled by hand to the end", rowMax(), rowScroll(), TOLERANCE)
+        assertTrue("the selected tab's title is off the row", label("Watching").right.value <= 0f)
+    }
+
+    // Frame by frame, the row goes from [from] towards [to] and never back, ending there with the page on [target].
+    private fun assertRowMovesOnce(
+        from: Float,
+        target: Int,
+        rest: Float,
+    ): Int {
+        val to = expectedScroll(target.toFloat())
+        var last = from
+        var moving = 0
+        repeat(MAX_FRAMES) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            val now = rowScroll()
+            assertTrue("frame $frame: the row at $now, outside $from..$to", now in minOf(from, to) - STILL..maxOf(from, to) + STILL)
+            assertTrue("frame $frame: the row went from $last to $now, away from $to", (now - last) * sign(to - from) >= -STILL)
+            if (abs(target - pagerPosition(rest)) > ARRIVING) {
+                assertTrue("frame $frame: the row at $now has arrived before the page", from == to || abs(now - to) > TOLERANCE)
+            }
+            if (abs(now - last) > STILL) moving++
+            last = now
+        }
+        assertEquals("the page has arrived", target.toFloat(), pagerPosition(rest), SETTLE_EPSILON)
+        assertEquals("the row has arrived with it", to, rowScroll(), STILL)
+        tab(labels[target]).assertIsSelected()
+        return moving
+    }
+
+    // The owner's case: the row scrolled by hand to its end, a tap on a tab moves it once, from where it is shown to
+    // the tab's place, with the page's slide; already there, it does not move.
+    private fun tapFromScrolledRow(target: String): Int {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        scrollRowToEnd()
+        val from = rowScroll()
+        tab(target).performClick()
+        val moving = assertRowMovesOnce(from, labels.indexOf(target), rest)
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertRowAt(labels.indexOf(target).toFloat())
+        assertIdle()
+        return moving
+    }
+
+    @Test
+    @Config(qualifiers = NARROW)
+    fun `a tap on a far tab after the row was scrolled by hand moves the row once, towards the tab`() {
+        val moving = tapFromScrolledRow("Completed")
+        assertTrue("the row moved in $moving frames", moving >= GLIDE_FRAMES)
+    }
+
+    @Test
+    @Config(qualifiers = NARROW)
+    fun `a tap on the next tab after the row was scrolled by hand moves the row once, towards the tab`() {
+        tapFromScrolledRow("Planned")
+    }
+
+    @Test
+    @Config(qualifiers = NARROW)
+    fun `a tap on a tab the row is already at after a scroll by hand leaves the row where it is`() {
+        assertEquals(0, tapFromScrolledRow("Dropped"))
+    }
+
+    @Test
+    @Config(qualifiers = NARROW)
+    fun `a second tap during the row's movement moves it on from where it is to the second tab`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        scrollRowToEnd()
+        tab("Completed").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(TAB_SWITCH_MS / 8)
+        val from = rowScroll()
+        assertTrue(
+            "part-way: $from in ${expectedScroll(2f)}..${rowMax()}",
+            from < rowMax() - TOLERANCE && from > expectedScroll(2f) + TOLERANCE,
+        )
+        tab("Watching").performClick()
+        assertRowMovesOnce(from, 0, rest)
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertRowAt(0f)
+        assertEquals(ListStatus.Watching, state.tab)
+        assertIdle()
+    }
+
+    // The row comes back to the pager with the header, on the slow effects spring: no frame jumps.
+    @Test
+    @Config(qualifiers = NARROW)
+    fun `a drag that catches a tap after a scroll by hand brings the row back to the pager with no jump`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        scrollRowToEnd()
+        tab("Completed").performClick()
+        repeat(CATCH_FRAMES + 2) { compose.mainClock.advanceTimeByFrame() }
+        var header = headerPosition()
+        var row = rowScroll()
+        val gap = abs(row - expectedScroll(header))
+        assertTrue("caught with the row away from the pager's scroll: $gap", gap > HAND)
+        compose.onRoot().performTouchInput { down(center) }
+        val steps = mutableListOf<String>()
+
+        fun frame() {
+            compose.mainClock.advanceTimeByFrame()
+            val nextHeader = headerPosition()
+            val nextRow = rowScroll()
+            steps += "h%.2f r%.1f".format(nextHeader, nextRow)
+            val pagers = abs(expectedScroll(nextHeader) - expectedScroll(header))
+            assertTrue(
+                "a step of ${abs(nextRow - row)} with the pager's $pagers: $steps",
+                abs(nextRow - row) <= pagers + gap * RETURN_STEP + TOLERANCE,
+            )
+            header = nextHeader
+            row = nextRow
+        }
+        repeat(DRAG_FRAMES) {
+            compose.onRoot().performTouchInput { moveBy(Offset(width * 0.03f, 0f), delayMillis = 0) }
+            frame()
+        }
+        compose.onRoot().performTouchInput { up() }
+        repeat(MAX_FRAMES) { frame() }
+        val page = pagerPosition(rest)
+        assertEquals("the page has settled", page.roundToInt().toFloat(), page, SETTLE_EPSILON)
+        assertRowAt(page)
+        tab(labels[page.roundToInt()]).assertIsSelected()
         assertIdle()
     }
 
@@ -738,6 +882,9 @@ class ListTabMotionTest {
         const val GLIDE_FRAMES = 6
         const val FLICK = 0.2f
         const val FLICK_SETTLE_MS = 220L
+        const val END_DRAG = 4f
+        const val NARROW = "en-w360dp-h2000dp"
+        const val ARRIVING = 0.1f
     }
 }
 
@@ -773,6 +920,38 @@ class ListTabMotionOffTest {
         val label = compose.onAllNodesWithText("Dropped", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
         val shown = compose.onNodeWithTag(INDICATOR, useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertEquals(label.left.value, shown.left.value, 1.5f)
+    }
+
+    // The row scrolled by hand to its end, a tap on a far tab puts the row at that tab's place with the page.
+    @Test
+    fun `a tap after a scroll by hand puts the row at the tab at once`() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { FixtureListScreen(ListFixtureStates.watching) } }
+        compose.mainClock.advanceTimeBy(2_000)
+        val screen =
+            compose
+                .onRoot()
+                .getUnclippedBoundsInRoot()
+                .width.value
+
+        fun tab(text: String) = compose.onNode(hasText(text) and isSelectable())
+
+        fun bounds(text: String) = tab(text).getUnclippedBoundsInRoot()
+        tab("Planned").performTouchInput {
+            down(center)
+            repeat(10) { moveBy(Offset(-screen.dp.toPx() / 10, 0f), delayMillis = 50) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+        assertEquals("scrolled by hand to the end", screen, bounds("Dropped").right.value, 1.5f)
+        tab("Completed").performClick()
+        repeat(2) { compose.mainClock.advanceTimeByFrame() }
+        val completed = bounds("Completed")
+        val scroll = -bounds("Watching").left.value
+        val max = bounds("Dropped").right.value + scroll - screen
+        val centring = (completed.left.value + scroll - (screen - completed.width.value) / 2).coerceIn(0f, max)
+        assertEquals(centring, scroll, 1.5f)
+        tab("Completed").assertIsSelected()
     }
 
     // ARCHITECTURE 8.5: with animations off a released swipe is on its page at once.
