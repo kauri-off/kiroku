@@ -538,7 +538,8 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page.
+  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page, and on a tap moves
+  once, from where it is shown to the tab's place.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme, and only from its
   effects springs, because the spatial ones overshoot: fast for a change inside a component and for an exit, default
   for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
