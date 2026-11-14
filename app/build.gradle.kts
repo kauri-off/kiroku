@@ -325,7 +325,7 @@ abstract class VerifyReleasePackage : DefaultTask() {
             }
         }
 
-    // Every android:name in a manifest, a class in full; an anchor is a component named only to add to it.
+    // Every android:name a manifest adds, a class in full; an anchor is a component named only to add to it.
     private fun manifestNames(
         manifest: File,
         withAnchors: Boolean = true,
@@ -338,9 +338,10 @@ abstract class VerifyReleasePackage : DefaultTask() {
         return (0 until elements.length).mapNotNullTo(mutableSetOf()) { index ->
             val element = elements.item(index) as org.w3c.dom.Element
             val anchor = element.tagName in COMPONENTS && element.attributes.length == 1
+            val removed = element.getAttributeNS(TOOLS, "node") == "remove"
             element
                 .getAttributeNS(ANDROID, "name")
-                .takeIf { it.isNotEmpty() && (withAnchors || !anchor) }
+                .takeIf { it.isNotEmpty() && !removed && (withAnchors || !anchor) }
                 ?.let { if (it.startsWith('.')) namespace.get() + it else it }
         }
     }
@@ -418,6 +419,7 @@ abstract class VerifyReleasePackage : DefaultTask() {
 
     private companion object {
         const val ANDROID = "http://schemas.android.com/apk/res/android"
+        const val TOOLS = "http://schemas.android.com/tools"
         const val RES_TABLE_PACKAGE = 0x0200
         const val PACKAGE_KEY_STRINGS = 276
         val COMPONENTS = setOf("activity", "activity-alias", "service", "receiver", "provider")
