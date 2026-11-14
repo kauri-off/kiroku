@@ -10,8 +10,9 @@ import io.github.kauri_off.kiroku.wiring.appGraph
 class RedirectActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // An intent the system replays from the recent tasks is not a redirect.
-        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) appGraph.signIn.redirected(intent.dataString.orEmpty())
+        // Neither the activity made again nor an intent the system replays from the recent tasks is a redirect.
+        val arrived = savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
+        if (arrived) appGraph.signIn.redirected(intent.dataString.orEmpty())
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
         finish()
     }

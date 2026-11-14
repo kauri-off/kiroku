@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.signin
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.repository.SignIn
@@ -72,8 +73,11 @@ class RedirectActivityTest {
     private fun redirects(): List<String> = (application as SignInGraphApplication).graph.signIn.redirects
 
     // The redirect activity is gone and the app's own screen is on top of what was there.
-    private fun assertTheAppCameBack(intent: Intent) {
-        val activity = Robolectric.buildActivity(RedirectActivity::class.java, intent).create().get()
+    private fun assertTheAppCameBack(
+        intent: Intent,
+        saved: Bundle? = null,
+    ) {
+        val activity = Robolectric.buildActivity(RedirectActivity::class.java, intent).create(saved).get()
         assertTrue(activity.isFinishing)
         val started = shadowOf(application).nextStartedActivity
         assertEquals(MainActivity::class.java.name, started.component?.className)
@@ -99,6 +103,12 @@ class RedirectActivityTest {
     @Test
     fun `an intent replayed from the recent tasks is no redirect`() {
         assertTheAppCameBack(view(redirect).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY))
+        assertEquals(emptyList<String>(), redirects())
+    }
+
+    @Test
+    fun `the activity made again for its redirect does not hand it over twice`() {
+        assertTheAppCameBack(view(redirect), saved = Bundle())
         assertEquals(emptyList<String>(), redirects())
     }
 
