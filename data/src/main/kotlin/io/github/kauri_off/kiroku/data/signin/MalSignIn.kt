@@ -15,6 +15,8 @@ import io.github.kauri_off.kiroku.data.session.TokenResult
 import io.github.kauri_off.kiroku.data.session.read
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -116,7 +118,8 @@ class MalSignIn internal constructor(
         if (!guarded(false) { browser.open(address) }) failed(SignInFailure.NoBrowser)
     }
 
-    // Counted in and, however its handling ends, counted out again: the step cannot stay at being completed.
+    // Counted in and, as its handling starts even in a scope that has ended, always counted out: no step stays at being completed.
+    @OptIn(DelicateCoroutinesApi::class)
     override fun redirected(uri: String) {
         val arrival =
             synchronized(lock) {
@@ -124,8 +127,14 @@ class MalSignIn internal constructor(
                 shown()
                 ++arrivals
             }
-        var dealt: Dealt? = null
-        scope.launch { turns.withLock { dealt = taken(uri) } }.invokeOnCompletion { closed(arrival, dealt) }
+        scope.launch(start = CoroutineStart.ATOMIC) {
+            var dealt: Dealt? = null
+            try {
+                turns.withLock { dealt = taken(uri) }
+            } finally {
+                closed(arrival, dealt)
+            }
+        }
     }
 
     override fun acknowledge(step: SignInStep) {

@@ -96,7 +96,7 @@ internal class SignInFixture(
     suspend fun idle() {
         val work = checkNotNull(scope).coroutineContext.job
         while (true) {
-            val running = work.children.filter { it !== files && it.isActive }.toList()
+            val running = work.children.filter { it !== files && !it.isCompleted }.toList()
             if (running.isEmpty()) return
             running.forEach { it.join() }
         }

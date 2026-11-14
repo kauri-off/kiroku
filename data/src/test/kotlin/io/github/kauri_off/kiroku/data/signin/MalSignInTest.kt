@@ -404,6 +404,17 @@ class MalSignInTest {
         }
 
     @Test
+    fun aRedirectThatArrivesWhenTheFlowsWorkHasEndedLeavesNoSigningIn() =
+        test {
+            val signIn = fixture.open()
+            fixture.close()
+
+            signIn.redirected("$REDIRECT?code=$CODE&state=any")
+
+            assertEquals(SignInStep.None, signIn.ended())
+        }
+
+    @Test
     fun aRedirectThatFailsDoesNotHideASignInThatWasNotAcknowledged() =
         test {
             mal()
