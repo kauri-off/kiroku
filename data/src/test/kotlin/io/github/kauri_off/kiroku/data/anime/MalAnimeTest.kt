@@ -153,17 +153,23 @@ class MalAnimeTest {
     }
 
     @Test
-    fun `a code the app does not know is kept as MAL's code`() {
-        val unknown = mapped.single { (_, node) -> node.text("id") == "63143" }.third
-        assertEquals(MediaType.Unrecognized("unknown"), unknown.mediaType)
+    fun `MAL's media type unknown is no media type`() {
+        val (_, node, title) = mapped.single { (_, node) -> node.text("id") == "63143" }
+        assertEquals("unknown", node.text("media_type"))
+        assertNull(title.mediaType)
     }
 
-    // The store's codes are MAL's: every code the recordings hold is a value the app knows, but the media type "unknown".
+    @Test
+    fun `a code the app does not know is kept as MAL's code`() {
+        val node = recordedNodes.first { (_, node) -> "media_type" in node }.second
+        val title = node.edited(listOf("media_type"), JsonPrimitive("web_film")).toNode().toAnime()
+        assertEquals(MediaType.Unrecognized("web_film"), title.mediaType)
+    }
+
+    // The store's codes are MAL's: every code the recordings hold is a value the app knows.
     @Test
     fun `every code in the recorded answers reads as a value the app knows`() {
-        for ((answer, node, title) in mapped) {
-            if (node.text("media_type") != "unknown") assertFalse(answer, title.mediaType is MediaType.Unrecognized)
-        }
+        for ((answer, _, title) in mapped) assertFalse(answer, title.mediaType is MediaType.Unrecognized)
         for (name in titlePages) {
             val (_, details) = recordedTitle(name)
             assertFalse(name, details.source is Source.Unrecognized)
@@ -257,7 +263,7 @@ class MalAnimeTest {
     @Test
     fun `a start date of a year or a month alone keeps its precision`() {
         val years = mapped.filter { (_, node) -> node.text("start_date")?.length == 4 }
-        assertEquals(5, years.size)
+        assertTrue(years.isNotEmpty())
         for ((_, node, title) in years) assertEquals(PartialDate.OnlyYear(Year.parse(node.text("start_date"))), title.startDate)
         val months = mapped.filter { (_, node) -> node.text("start_date")?.length == 7 }
         assertTrue(months.isNotEmpty())

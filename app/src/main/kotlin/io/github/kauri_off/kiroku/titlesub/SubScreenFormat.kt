@@ -7,47 +7,18 @@ import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.Source
-import io.github.kauri_off.kiroku.core.model.malCodeAsText
 import io.github.kauri_off.kiroku.text.clockTime
 import io.github.kauri_off.kiroku.text.currentLocale
+import io.github.kauri_off.kiroku.text.named
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
 
 @Composable
-internal fun sourceName(source: Source): String =
-    when (source) {
-        Source.Original -> stringResource(R.string.titlesub_source_original)
-        Source.Manga -> stringResource(R.string.titlesub_source_manga)
-        Source.FourKomaManga -> stringResource(R.string.titlesub_source_4_koma_manga)
-        Source.WebManga -> stringResource(R.string.titlesub_source_web_manga)
-        Source.DigitalManga -> stringResource(R.string.titlesub_source_digital_manga)
-        Source.Novel -> stringResource(R.string.titlesub_source_novel)
-        Source.LightNovel -> stringResource(R.string.titlesub_source_light_novel)
-        Source.WebNovel -> stringResource(R.string.titlesub_source_web_novel)
-        Source.VisualNovel -> stringResource(R.string.titlesub_source_visual_novel)
-        Source.Game -> stringResource(R.string.titlesub_source_game)
-        Source.CardGame -> stringResource(R.string.titlesub_source_card_game)
-        Source.Book -> stringResource(R.string.titlesub_source_book)
-        Source.PictureBook -> stringResource(R.string.titlesub_source_picture_book)
-        Source.Radio -> stringResource(R.string.titlesub_source_radio)
-        Source.Music -> stringResource(R.string.titlesub_source_music)
-        Source.MixedMedia -> stringResource(R.string.titlesub_source_mixed_media)
-        Source.Other -> stringResource(R.string.titlesub_source_other)
-        is Source.Unrecognized -> malCodeAsText(source.malCode)
-    }
+internal fun sourceName(source: Source): String = source.named { stringResource(it) }
 
 @Composable
-internal fun ratingName(rating: AgeRating): String =
-    when (rating) {
-        AgeRating.AllAges -> stringResource(R.string.titlesub_rating_all_ages)
-        AgeRating.Children -> stringResource(R.string.titlesub_rating_children)
-        AgeRating.Teens13 -> stringResource(R.string.titlesub_rating_teens_13)
-        AgeRating.Violence17 -> stringResource(R.string.titlesub_rating_violence_17)
-        AgeRating.MildNudity -> stringResource(R.string.titlesub_rating_mild_nudity)
-        AgeRating.Hentai -> stringResource(R.string.titlesub_rating_hentai)
-        is AgeRating.Unrecognized -> malCodeAsText(rating.malCode)
-    }
+internal fun ratingName(rating: AgeRating): String = rating.named { stringResource(it) }
 
 // "23 min", "1 h 58 min"; under a minute in seconds.
 @Composable

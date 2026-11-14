@@ -1,0 +1,116 @@
+{
+    "id": 4037,
+    "title": "Cowboy Bebop: Yose Atsume Blues",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/10/54341.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/10/54341l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Yoseatsume Blues",
+            "Cowboy Bebop Session XX",
+            "Cowboy Bebop Episode 27 Session XX",
+            "Cowboy Bebop Session XX: Mish-Mash Blues"
+        ],
+        "en": "Cowboy Bebop: Session XX - Mish-Mash Blues",
+        "ja": "カウボーイビバップ よせあつめブルース"
+    },
+    "media_type": "tv_special",
+    "status": "finished_airing",
+    "num_episodes": 1,
+    "start_date": "1998-06-26",
+    "mean": 7.41,
+    "rank": 2618,
+    "genres": [
+        {
+            "id": 50,
+            "name": "Adult Cast"
+        },
+        {
+            "id": 24,
+            "name": "Sci-Fi"
+        },
+        {
+            "id": 29,
+            "name": "Space"
+        }
+    ],
+    "average_episode_duration": 1620,
+    "end_date": "1998-06-26",
+    "synopsis": "Due to the violence portrayed in the Cowboy Bebop world…\n\n(Source: AniDB)",
+    "start_season": {
+        "year": 1998,
+        "season": "spring"
+    },
+    "source": "original",
+    "studios": [
+        {
+            "id": 14,
+            "name": "Sunrise"
+        }
+    ],
+    "rating": "r",
+    "statistics": {
+        "status": {
+            "watching": "1157",
+            "completed": "31812",
+            "on_hold": "716",
+            "dropped": "471",
+            "plan_to_watch": "20202"
+        },
+        "num_list_users": 54358
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 1,
+                "title": "Cowboy Bebop",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/4/19644.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/4/19644l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Cowboy Bebop",
+                    "ja": "カウボーイビバップ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "1998-04-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:00"
+                },
+                "mean": 8.75,
+                "rank": 51,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 29,
+                        "name": "Space"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "relation_type": "full_story",
+            "relation_type_formatted": "Full story"
+        }
+    ],
+    "recommendations": []
+}

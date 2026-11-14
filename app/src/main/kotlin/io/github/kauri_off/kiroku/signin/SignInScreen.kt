@@ -54,6 +54,7 @@ private fun SignInState.form(): Form =
     when (this) {
         SignInState.Ready -> Form(R.string.signin_sentence, canSignIn = true)
         SignInState.NoClientId -> Form(R.string.signin_no_client_id, canSignIn = false)
+        SignInState.NoAccount -> Form(R.string.signin_no_account, canSignIn = false)
         SignInState.Completing -> Form(R.string.signin_signing_in, canSignIn = false, announced = true)
         SignInState.Failed -> Form(R.string.signin_failed, canSignIn = true, announced = true, isError = true)
     }
@@ -191,7 +192,7 @@ private fun Choices(
     }
 }
 
-// The one sentence: why to sign in, why this build cannot, that a sign-in is completing, or that it failed.
+// The one sentence: why to sign in, why this build or its data cannot, that a sign-in is completing, or that it failed.
 @Composable
 private fun Sentence(form: Form) {
     Text(

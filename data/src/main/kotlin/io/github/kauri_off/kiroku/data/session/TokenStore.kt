@@ -27,12 +27,15 @@ internal class TokenStore(
     private val store = DataStoreFactory.create(serializer = format, scope = scope) { file }
 
     // A file that names no sign-in is signed out and is left until the next write; one that cannot be read at all throws.
-    suspend fun read(): Stored =
-        try {
+    suspend fun read(): Stored {
+        // A process that died while it replaced the file left its half-written successor, which no one reads.
+        withContext(Dispatchers.IO) { File(file.path + NEXT).delete() }
+        return try {
             store.data.first()
         } catch (_: CorruptionException) {
             Stored.SignedOut
         }
+    }
 
     // The failure when the value could not be written; the file then holds what it held.
     suspend fun write(value: Stored): IOException? {
