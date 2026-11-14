@@ -75,13 +75,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
-- [ ] **M2-02 [O] Names for recording.** The owner writes two user names into the same file, outside the
-  repository: `kiroku.recordPublicUser`, a user with a public list of more than 1000 entries, and
-  `kiroku.recordPrivateUser`, a user whose list is private. He registers the preview build's redirect URI with MAL
-  if he decides so (section 3.1).
-  **Needs:** nothing.
-  **Check:** `grep -c '^kiroku\.record' ~/.gradle/gradle.properties` prints 2.
-
+- [x] **M2-02 [O] Names for recording.**
 - [x] **M2-03 [O] Frame for the first wave.**
 
 - [x] **M2-04 [A] Network foundation.**
