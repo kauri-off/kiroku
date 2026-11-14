@@ -31,7 +31,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 @RunWith(RobolectricTestRunner::class)
@@ -345,6 +347,44 @@ class MalSignInTest {
             assertEquals(SignInStep.None, signIn.step.value)
             assertEquals(emptyList<SignInFailure>(), fixture.failures.toList())
             assertEquals(1, grants.size)
+        }
+
+    @Test
+    fun aRepeatDealtWithTheMomentItsSignInGivesUpItsTurnIsNotAFailure() =
+        test {
+            val reached = CompletableDeferred<Unit>()
+            val answer = CompletableDeferred<TokenReply>()
+            fixture.sessions.answer = {
+                reached.complete(Unit)
+                answer.await()
+            }
+            val threads = HandOverThreads()
+            try {
+                val signIn = fixture.open(dispatcher = threads)
+                val redirect = redirectOf(fixture.started(signIn))
+                signIn.redirected(redirect)
+                reached.await()
+                val exchanging = fixture.work()
+                signIn.redirected(redirect)
+                val repeat = (fixture.work() - exchanging).single()
+                threads.settle()
+                // The sign-in's thread stands still where it hands the turn on, until the repeat has been dealt with.
+                val over = CountDownLatch(1)
+                repeat.invokeOnCompletion { over.countDown() }
+                val dealtWithFirst = CopyOnWriteArrayList<Boolean>()
+                threads.onHandOver = { dealtWithFirst += over.await(5, TimeUnit.SECONDS) }
+
+                answer.complete(granted("access-1", "refresh-1"))
+
+                assertEquals(SignInStep.SignedIn, signIn.ended())
+                fixture.idle()
+                assertEquals(listOf(true), dealtWithFirst.distinct())
+                assertEquals(emptyList<SignInFailure>(), fixture.failures.toList())
+                assertEquals(SignInStep.SignedIn, signIn.step.value)
+                assertEquals(1, grants.size)
+            } finally {
+                threads.close()
+            }
         }
 
     @Test

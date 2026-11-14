@@ -129,10 +129,18 @@ class MalSignIn internal constructor(
             }
         scope.launch(start = CoroutineStart.ATOMIC) {
             var dealt: Dealt? = null
+            var mine = false
             try {
-                turns.withLock { dealt = taken(uri) }
+                turns.lock()
+                mine = true
+                dealt = taken(uri)
             } finally {
-                closed(arrival, dealt)
+                // Before the turn is given up: the next redirect is dealt with knowing how this one ended.
+                try {
+                    closed(arrival, dealt)
+                } finally {
+                    if (mine) turns.unlock()
+                }
             }
         }
     }
