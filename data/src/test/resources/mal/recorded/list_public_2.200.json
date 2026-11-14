@@ -1,0 +1,478 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 62584,
+                "title": "Hikaru ga Shinda Natsu 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1489/152265.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1489/152265l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hikanatsu"
+                    ],
+                    "en": "The Summer Hikaru Died Season 2",
+                    "ja": "光が死んだ夏 第二期"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "genres": [
+                    {
+                        "id": 14,
+                        "name": "Horror"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "list_status": {
+                "status": "plan_to_watch",
+                "score": 0,
+                "num_episodes_watched": 0,
+                "is_rewatching": false,
+                "updated_at": "2022-09-19T03:24:56+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 36296,
+                "title": "Hinamatsuri",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1580/93526.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1580/93526l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hina Festival"
+                    ],
+                    "en": "Hinamatsuri",
+                    "ja": "ヒナまつり"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2018-04-06",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "21:00"
+                },
+                "mean": 8.11,
+                "rank": 590,
+                "genres": [
+                    {
+                        "id": 53,
+                        "name": "Childcare"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 68,
+                        "name": "Organized Crime"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 31,
+                        "name": "Super Power"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "list_status": {
+                "status": "plan_to_watch",
+                "score": 0,
+                "num_episodes_watched": 0,
+                "is_rewatching": false,
+                "updated_at": "2022-02-11T17:07:04+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 62100,
+                "title": "Hirayasumi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1371/160291.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1371/160291l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ひらやすみ"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027-01",
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "list_status": {
+                "status": "plan_to_watch",
+                "score": 0,
+                "num_episodes_watched": 0,
+                "is_rewatching": false,
+                "updated_at": "2022-08-05T18:45:00+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 8768,
+                "title": "Hiyokoi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/27766.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/27766l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ひよ恋"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2010-07-30",
+                "mean": 7.26,
+                "rank": 3435,
+                "genres": [
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    }
+                ],
+                "average_episode_duration": 1358
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 9,
+                "num_episodes_watched": 1,
+                "is_rewatching": false,
+                "updated_at": "2022-03-15T15:09:52+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 42897,
+                "title": "Horimiya",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1695/111486.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1695/111486l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hori-san and Miyamura-kun"
+                    ],
+                    "en": "Horimiya",
+                    "ja": "ホリミヤ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2021-01-10",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:30"
+                },
+                "mean": 8.18,
+                "rank": 489,
+                "genres": [
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1432
+            },
+            "list_status": {
+                "status": "on_hold",
+                "score": 0,
+                "num_episodes_watched": 5,
+                "is_rewatching": false,
+                "updated_at": "2022-10-09T17:29:03+00:00",
+                "start_date": "2022-06-16"
+            }
+        },
+        {
+            "node": {
+                "id": 9760,
+                "title": "Hoshi wo Ou Kodomo",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1000/133740.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1000/133740l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Children who Chase Lost Voices from Deep Below",
+                        "Journey to Agartha"
+                    ],
+                    "en": "Children Who Chase Lost Voices",
+                    "ja": "星を追う子ども"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2011-05-07",
+                "mean": 7.5,
+                "rank": 2226,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 6960
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 1,
+                "num_episodes_watched": 1,
+                "is_rewatching": false,
+                "updated_at": "2022-06-14T13:17:20+00:00",
+                "start_date": "2022-01-30",
+                "finish_date": "2022-03-31"
+            }
+        },
+        {
+            "node": {
+                "id": 578,
+                "title": "Hotaru no Haka",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1485/141208.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1485/141208l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Tombstone for Fireflies"
+                    ],
+                    "en": "Grave of the Fireflies",
+                    "ja": "火垂るの墓"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1988-04-16",
+                "mean": 8.55,
+                "rank": 141,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    }
+                ],
+                "average_episode_duration": 5280
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 9,
+                "num_episodes_watched": 1,
+                "is_rewatching": false,
+                "updated_at": "2022-02-22T23:26:22+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 63293,
+                "title": "Hotaru no Yomeiri",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1172/159893.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1172/159893l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Firefly Wedding",
+                    "ja": "ホタルの嫁入り"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-09",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "23:30"
+                },
+                "mean": 7.74,
+                "rank": 1356,
+                "genres": [
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1375
+            },
+            "list_status": {
+                "status": "watching",
+                "score": 0,
+                "num_episodes_watched": 4,
+                "is_rewatching": false,
+                "updated_at": "2022-11-23T03:01:07+00:00",
+                "start_date": "2020-10-20"
+            }
+        },
+        {
+            "node": {
+                "id": 10408,
+                "title": "Hotarubi no Mori e",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1599/112267.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1599/112267l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Light of a Firefly Forest"
+                    ],
+                    "en": "Into the Forest of Fireflies' Light",
+                    "ja": "蛍火の杜へ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2011-09-17",
+                "mean": 8.26,
+                "rank": 377,
+                "genres": [
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 2700
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 9,
+                "num_episodes_watched": 1,
+                "is_rewatching": false,
+                "updated_at": "2022-08-12T22:42:32+00:00",
+                "start_date": "2021-02-12",
+                "finish_date": "2021-02-20"
+            }
+        },
+        {
+            "node": {
+                "id": 60260,
+                "title": "Hotel Inhumans",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1900/150443.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1900/150443l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Hotel Inhumans",
+                    "ja": "ホテル・インヒューマンズ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2025-07-06",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "23:45"
+                },
+                "mean": 6.73,
+                "rank": 6544,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 68,
+                        "name": "Organized Crime"
+                    }
+                ],
+                "average_episode_duration": 1414
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 1,
+                "num_episodes_watched": 13,
+                "is_rewatching": false,
+                "updated_at": "2022-02-18T03:15:40+00:00",
+                "start_date": "2020-09-17",
+                "finish_date": "2020-11-16"
+            }
+        }
+    ],
+    "paging": {
+        "previous": "https://api.myanimelist.net/v2/users/public-user/animelist?offset=0&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration%2Clist_status%7Bstatus%2Cscore%2Cnum_episodes_watched%2Cstart_date%2Cfinish_date%2Cupdated_at%7D&nsfw=true&sort=anime_title&limit=10",
+        "next": "https://api.myanimelist.net/v2/users/public-user/animelist?offset=20&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration%2Clist_status%7Bstatus%2Cscore%2Cnum_episodes_watched%2Cstart_date%2Cfinish_date%2Cupdated_at%7D&nsfw=true&sort=anime_title&limit=10"
+    }
+}
