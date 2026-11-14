@@ -55,14 +55,7 @@ English, light and dark, on demo data. No MAL client id is needed.
 - [x] **M1-13 [A] Wiring and demo mode.**
 - [x] **M1-14 View models, routes and the first APK.**
 
-- [ ] **M1-15 [O] Owner's look and calibration.** The owner installs the APK and checks: the app opens on the List
-  with demo data; a row opens the title page; "+1" changes the progress and offers Undo; the phone's language and
-  theme change the app. The owner then reviews three more rendered screenshots with the rubric: List `watching` and
-  Title `airing-on-list` in `en-light`, and List `watching` in `ru-large` as the example of the rubric's `ru-large`
-  rule (its section 3), with each wrap marked as following from the font scale or not.
-  **Needs:** M1-14.
-  **Check:** `docs/calibration/` holds the three images and their reviews; the owner's remarks are filed as
-  tasks.
+- [x] **M1-15 [O] Owner's look.**
 
 ## M2. Sign-in, the real list, the real title page
 

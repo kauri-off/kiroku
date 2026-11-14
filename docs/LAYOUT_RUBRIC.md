@@ -27,9 +27,7 @@ cannot show):
   reviewed, and a state missing without a reason is a missing image;
 - `ACCESSIBILITY.txt`, the result of the automatic accessibility check;
 - `RENDERED_AT`, one directory up, which must name the commit under review and must not say "dirty";
-- the screen's budget in `docs/ARCHITECTURE.md` section 9, the design system in section 8, and `docs/GLOSSARY.md`;
-- the calibration set in `docs/calibration/`, once it exists (roadmap step M1-15): screenshots with the owner's
-  remarks, read before the first cycle to align the scale.
+- the screen's budget in `docs/ARCHITECTURE.md` section 9, the design system in section 8, and `docs/GLOSSARY.md`.
 
 **The reduced set.** For a screen that changed only through the theme or a shared component, the reviewer looks at
 the content case in all seven variants, with its `__full` images and the bounds image, and reviews the screen from those.
@@ -91,7 +89,7 @@ automatic failures and every other defect count at full size there too.
 | Noticeable | A user would notice it, but the screen still works as intended |
 | Structural | The screen's arrangement itself is wrong for this criterion |
 
-Examples of each size, for the three criteria where the size is most often disputed. The calibration set shows more.
+Examples of each size, for the three criteria where the size is most often disputed.
 
 | Criterion | Minor | Noticeable | Structural |
 |---|---|---|---|

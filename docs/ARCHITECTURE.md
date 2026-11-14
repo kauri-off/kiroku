@@ -848,7 +848,7 @@ The keyboard is a block of fixed height, without keys or suggestions. Text scale
 scales above 1.03, non-linearly, on every Android version. A looping animation is held at one frame, and a loop
 written by hand is not detected.
 
-Screenshots are build output and are not committed, except the calibration set of the rubric; CI uploads the full set,
+Screenshots are build output and are not committed; CI uploads the full set,
 rendered from GitHub's merge commit. Fonts rasterise differently between operating systems, so images are compared
 only when rendered on the same machine.
 
