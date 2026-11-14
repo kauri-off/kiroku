@@ -495,6 +495,7 @@ class MalSessionTest {
             val mal = FakeMal("access-2")
             assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
             assertEquals(listOf("java.io.IOException"), fixture.reported)
+            assertFalse(fixture.unexpected.single() is TokensNotOpened)
             assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
             assertEquals(listOf("access-1", "access-2", "access-2"), mal.sent)
             assertEquals(1, fixture.grants.size)
@@ -769,6 +770,7 @@ class MalSessionTest {
             // Reported by its type: the message is the Keystore's own.
             assertEquals(listOf("java.security.ProviderException"), fixture.reported)
             assertFalse("no Keystore" in fixture.unexpected.single().stackTraceToString())
+            assertTrue(fixture.unexpected.single() is TokensNotOpened)
 
             val next = fixture.reopen()
             assertEquals(Session.SignedIn(id), next.now())
@@ -826,6 +828,7 @@ class MalSessionTest {
             assertEquals(file, fixture.file.readBytes().toList())
             assertEquals(listOf("java.io.IOException"), fixture.reported)
             assertFalse("title" in fixture.unexpected.single().stackTraceToString())
+            assertFalse(fixture.unexpected.single() is TokensNotOpened)
 
             disk.failing = false
             assertEquals(id, session.now())

@@ -53,6 +53,15 @@ internal class TokenStore(
     }
 }
 
+// Stored tokens that did not open, as a report without the exception's message: its type and its stack.
+class TokensNotOpened internal constructor(
+    cause: Exception,
+) : Exception(cause.javaClass.name) {
+    init {
+        stackTrace = cause.stackTrace
+    }
+}
+
 // An empty file is signed out; else a marker and the sign-in's id in the clear, and after SEALED the sealed tokens.
 internal class TokenFormat(
     private val cipher: TokenCipher,
@@ -95,7 +104,7 @@ internal class TokenFormat(
         }
 
     private fun unopened(e: Exception): Tokens? {
-        unexpected(SessionFailure(e))
+        unexpected(TokensNotOpened(e))
         return null
     }
 

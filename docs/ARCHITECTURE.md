@@ -136,7 +136,8 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
 - **S8.** Tokens are stored encrypted with a key from the Android Keystore, written so that an interrupted write
   cannot lose the session, and excluded, like the settings, from cloud backup and device transfer. Tokens that
   cannot be read never crash the app and never clear what is stored: the session is expired for that run. A store
-  whose sign-in cannot be read either means signed out.
+  whose sign-in cannot be read either means signed out. A file that cannot be read at all signs nobody out: the
+  session has no value until it is read.
 - **S9.** Signing out removes the tokens and everything stored about the user.
 
 ### 3.3 The client id
@@ -351,11 +352,12 @@ was chosen against, and why:
   (detekt's current line is alpha).
 - **Not used at all:** a chart library, AppCompat, `kotlinx-datetime`, a paging library, Google Play Services,
   Firebase, any closed-source dependency (which keeps F-Droid possible).
-- **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included, and a debug build
-  without a client id starts in it. Demo data follows the device's date, so every weekday and weekly slot in it stays
-  what it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
-  fixtures. Debug builds and the preview build (the release build's code on the demo) have a debug menu that makes
-  the demo fail and resets it. A release build holds none of it.
+- **Demo mode:** a debug build can run entirely on the fixtures, held in memory, writes included. Debug and preview
+  builds start on the source chosen in their debug menu, the real account or the demo, each with its own stores;
+  without a choice, on the demo when the build has no client id. Demo data follows the device's date, so every
+  weekday and weekly slot in it stays what it claims, and every "today" does on a device between UTC−9 and UTC+8. A
+  new process starts again from the fixtures. Debug builds and the preview build (the release build's code) have a
+  debug menu that makes the demo fail and resets it. A release build holds none of it.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.
