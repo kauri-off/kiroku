@@ -371,6 +371,8 @@ was chosen against, and why:
   holds everything shown from cache: titles, the user's list, related titles, airing data, the record of announced
   episodes, the user's profile. Cached data is refreshed when it is shown stale, on pull-to-refresh, and by
   periodic background work.
+- A screen counts as shown while it is on top and started, and as shown again only after its state's stop timeout;
+  a load that failed for want of a connection is repeated once when the connection returns while it is shown.
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
 - A value is stored under MAL's own code, so a code the app learns later needs no migration.
@@ -628,10 +630,11 @@ order is next computed.
 **Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens the
 entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
 clearing the field ends it. Sort opens a bottom sheet with at most five sorts and, for every sort but "Up next", a
-choice of its direction. "+1" answers with a snackbar that offers Undo, and works at and above the total (W9). When it
-completes the title (W7), the row leaves Watching and the snackbar says where it went; Undo puts back the count, the
-status and the dates. After a row leaves its tab, a "+1" on a row that moved up is not applied until the rows have
-stood still a moment, so a tap meant for the row that left lands on no other.
+choice of its direction. A choice applies at once; the sheet stays open until it is dismissed. "+1" answers with a
+snackbar that offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves
+Watching and the snackbar says where it went; Undo puts back the count, the status and the dates. After a row leaves its
+tab, a "+1" on a row that moved up is not applied until the rows have stood still a moment, so a tap meant for the row
+that left lands on no other.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.
@@ -714,6 +717,8 @@ else. Nothing is written before "Save", and "Save" writes exactly what the sheet
 - A query that is only digits shows one extra row above the results, "Open title #<id>", which opens the title page
   of that MAL id. Limit: nothing else is added to the results.
 - A browse list uses the same row, with the rank in front of the title for ranked lists.
+- A long press on a result or a browse row opens the title's edit sheet, as on the List; a title not on the list
+  starts from what "Add to list" gives it. Signed out, a row has no long press.
 - No filters in 1.0 (section 2.2).
 
 ### 9.7 Profile

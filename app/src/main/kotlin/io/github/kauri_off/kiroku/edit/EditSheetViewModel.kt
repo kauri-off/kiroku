@@ -46,15 +46,19 @@ class EditSheetViewModel(
         restored = true
         saved.get<Long>(ID)?.let { id ->
             val sheet = SavedSheet.read(saved)
-            if (sheet == null || sheet.closing) forget() else load(AnimeId(id), sheet)
+            if (sheet == null || sheet.closing) forget() else load(AnimeId(id), sheet, known = null)
         }
     }
 
-    fun open(id: AnimeId) {
+    // [known] stands in for the title when it is neither on the list nor in the store, as a search result's may be.
+    fun open(
+        id: AnimeId,
+        known: Anime? = null,
+    ) {
         restored = true
         if (shown.value != null || loading) return
         saved[ID] = id.value
-        load(id, null)
+        load(id, null, known)
     }
 
     fun onEvent(event: EditSheetEvent) {
@@ -82,6 +86,7 @@ class EditSheetViewModel(
     private fun load(
         id: AnimeId,
         restored: SavedSheet?,
+        known: Anime?,
     ) {
         loading = true
         viewModelScope.launch {
@@ -93,7 +98,7 @@ class EditSheetViewModel(
                     forget()
                     return@launch
                 }
-            val found = entry?.anime ?: animeRepository.observeAnime(id).first()
+            val found = entry?.anime ?: animeRepository.observeAnime(id).first() ?: known
             loading = false
             if (found == null) {
                 forget()

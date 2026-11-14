@@ -32,12 +32,18 @@ internal fun LazyListScope.pagedRows(
     more: More,
     @StringRes failed: Int,
     onOpen: (AnimeId) -> Unit,
+    onEdit: ((AnimeId) -> Unit)?,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     colors: ListItemColors? = null,
 ) {
     items(rows, key = { it.id.value }, contentType = { ROW }) { row ->
-        ResultAnimeRow(row, onClick = { onOpen(row.id) }, colors = colors ?: ListItemDefaults.colors())
+        ResultAnimeRow(
+            row,
+            onClick = { onOpen(row.id) },
+            onEdit = onEdit?.let { { it(row.id) } },
+            colors = colors ?: ListItemDefaults.colors(),
+        )
     }
     when (more) {
         More.None -> Unit

@@ -59,6 +59,7 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
+import io.github.kauri_off.kiroku.design.component.WindowSnackbarHost
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -83,7 +84,7 @@ fun SearchScreen(
     var bars by rememberSaveable { mutableIntStateOf(0) }
     val bar = key(bars) { rememberBar() }
     val events: (SearchEvent) -> Unit = { event ->
-        if (event is SearchEvent.Open || event is SearchEvent.Browse) bars++
+        if (event is SearchEvent.Open || event is SearchEvent.Browse || event is SearchEvent.SignIn) bars++
         onEvent(event)
     }
     val colors = SearchBarDefaults.containedColors(bar)
@@ -112,15 +113,21 @@ fun SearchScreen(
                 }
             }
         },
-        snackbarHost = { ScreenSnackbarHost(snackbars) },
+        // While the view is open, its own host shows the messages.
+        snackbarHost = { if (bar.currentValue != SearchBarValue.Expanded) ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        Body(state.content, events, padding, ListItemDefaults.colors())
+        Body(state.content, state.editable, events, padding, ListItemDefaults.colors())
     }
     // The field itself moves from the bar into the view, whose own container fades in behind it.
     ExpandedFullScreenContainedSearchBar(state = bar, inputField = field, colors = colors) {
         WindowWithoutAutofill()
+        // The view is a window over the screen's: it shows the session banner and the shell's messages itself.
+        if (state.sessionExpired) SessionBanner(onSignIn = { events(SearchEvent.SignIn) })
         // The view already keeps its content clear of the navigation bar and the keyboard.
-        Body(state.content, events, PaddingValues(), viewRows(colors))
+        Box(Modifier.fillMaxSize()) {
+            Body(state.content, state.editable, events, PaddingValues(), viewRows(colors))
+            WindowSnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter))
+        }
     }
 }
 
@@ -176,13 +183,14 @@ private fun SearchField(
 @Composable
 private fun Body(
     content: SearchContent,
+    editable: Boolean,
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
     rows: ListItemColors,
 ) {
     when (content) {
         is SearchContent.Start -> CentredList(padding) { start(content.recent, onEvent, rows) }
-        is SearchContent.Results -> Results(content, onEvent, padding, rows)
+        is SearchContent.Results -> Results(content, editable, onEvent, padding, rows)
     }
 }
 
@@ -211,6 +219,7 @@ private fun LazyListScope.start(
 @Composable
 private fun Results(
     content: SearchContent.Results,
+    editable: Boolean,
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
     rows: ListItemColors,
@@ -226,6 +235,7 @@ private fun Results(
                 results.more,
                 R.string.search_failed,
                 onOpen = { onEvent(SearchEvent.Open(it)) },
+                onEdit = if (editable) ({ onEvent(SearchEvent.Edit(it)) }) else null,
                 onLoadMore = { onEvent(SearchEvent.LoadMore) },
                 onRetry = { onEvent(SearchEvent.Retry) },
                 colors = rows,

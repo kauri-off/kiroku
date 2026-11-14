@@ -19,6 +19,9 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.edit.EditSheetRoute
+import io.github.kauri_off.kiroku.edit.editSheetViewModel
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.catch
@@ -31,11 +34,13 @@ data class BrowseKey(
 ) : NavKey
 
 // Search over the stand-in's titles until its data layer exists: no view model and no network. The field's text is
-// held here and changed only by the field and inside an event.
+// held here and changed only by the field and inside an event. A long press opens the edit sheet; "Change" is left to
+// the title's page.
 @Composable
 fun SearchRoute(
     standIn: SearchStandIn,
     graph: AppGraph,
+    messages: ShellMessages,
     snackbars: SnackbarHostState,
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onBrowse: (BrowseList) -> Unit,
@@ -45,6 +50,7 @@ fun SearchRoute(
     var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(standIn.recent.take(MAX_RECENT_SEARCHES)) }
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     val listed by listedEntries(graph)
+    val editor = editSheetViewModel(graph, messages)
     val text = query.text.toString().trim()
     val hits = remember(standIn, text) { if (text.isEmpty()) emptyList() else standIn.search(text) }
     val content =
@@ -58,7 +64,7 @@ fun SearchRoute(
         if (searched.isNotEmpty()) recent = (listOf(searched) + recent).distinct().take(MAX_RECENT_SEARCHES)
     }
     SearchScreen(
-        SearchState(query, expanded = false, content, sessionExpired = session is Session.Expired),
+        SearchState(query, expanded = false, content, sessionExpired = session is Session.Expired, editable = session.hasList()),
         onEvent = { event ->
             when (event) {
                 SearchEvent.Submit -> keep(text)
@@ -73,12 +79,14 @@ fun SearchRoute(
                     val hit = hits.firstOrNull { it.anime.id == event.id }
                     onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entryIn(listed), airing = null, session = session) })
                 }
+                is SearchEvent.Edit -> editor.open(event.id, hits.firstOrNull { it.anime.id == event.id }?.anime)
                 SearchEvent.LoadMore, SearchEvent.Retry -> Unit
                 SearchEvent.SignIn -> onSignIn()
             }
         },
         snackbars = snackbars,
     )
+    EditSheetRoute(editor, messages, takes = { false })
 }
 
 // A browse list over the stand-in's titles, all on one page.
@@ -87,6 +95,7 @@ fun BrowseRoute(
     standIn: SearchStandIn,
     key: BrowseKey,
     graph: AppGraph,
+    messages: ShellMessages,
     snackbars: SnackbarHostState,
     onBack: () -> Unit,
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
@@ -94,10 +103,11 @@ fun BrowseRoute(
 ) {
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     val listed by listedEntries(graph)
+    val editor = editSheetViewModel(graph, messages)
     val hits = remember(standIn, key) { standIn.browse(key.list) }
     val rows = Paged.Shown(hits.map { resultRow(it.anime, it.entryIn(listed)?.values, graph.titleLanguage, it.rank) })
     BrowseScreen(
-        BrowseState(key.list, rows, sessionExpired = session is Session.Expired),
+        BrowseState(key.list, rows, sessionExpired = session is Session.Expired, editable = session.hasList()),
         onEvent = { event ->
             when (event) {
                 BrowseEvent.Back -> onBack()
@@ -105,13 +115,18 @@ fun BrowseRoute(
                     val hit = hits.firstOrNull { it.anime.id == event.id }
                     onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entryIn(listed), airing = null, session = session) })
                 }
+                is BrowseEvent.Edit -> editor.open(event.id, hits.firstOrNull { it.anime.id == event.id }?.anime)
                 BrowseEvent.LoadMore, BrowseEvent.Retry -> Unit
                 BrowseEvent.SignIn -> onSignIn()
             }
         },
         snackbars = snackbars,
     )
+    EditSheetRoute(editor, messages, takes = { false })
 }
+
+// A signed-in or expired session has a list to edit; signed out there is none, and nothing a save could reach.
+private fun Session?.hasList(): Boolean = this is Session.SignedIn || this is Session.Expired
 
 // The user's list as it is now, so a status changed elsewhere in the app shows here; null until it is read.
 @Composable

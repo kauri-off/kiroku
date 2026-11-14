@@ -6,6 +6,8 @@ import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
@@ -31,6 +33,9 @@ class SearchScreenshots : ScreenshotRegistry() {
             case("loading-more", content = screen(SearchFixtureStates.loadingMore)),
             case("more-failed", content = screen(SearchFixtureStates.moreFailed)),
             case("session-expired", content = screen(SearchFixtureStates.sessionExpired)),
+            // The open view shows the session banner and the shell's messages itself.
+            case("search-view-session-expired", content = screen(SearchFixtureStates.searchView.copy(sessionExpired = true))),
+            case("typing-snackbar", keyboard = true) { Screen(SearchFixtureStates.typing, snackbar = true) },
         )
 
     // A tap on the bar opens the search view and Back closes it, the stock component's own motion.
@@ -53,6 +58,17 @@ class SearchScreenshots : ScreenshotRegistry() {
 }
 
 @Composable
-private fun Screen(state: SearchState) = SearchScreen(state, onEvent = {}, snackbars = remember { SnackbarHostState() })
+private fun Screen(
+    state: SearchState,
+    snackbar: Boolean = false,
+) {
+    val snackbars = remember { SnackbarHostState() }
+    if (snackbar) {
+        val message = stringResource(R.string.shell_could_not_save)
+        val retry = stringResource(R.string.design_retry)
+        LaunchedEffect(Unit) { snackbars.showSnackbar(message, actionLabel = retry) }
+    }
+    SearchScreen(state, onEvent = {}, snackbars = snackbars)
+}
 
 private const val EARLY_MILLIS = 50L

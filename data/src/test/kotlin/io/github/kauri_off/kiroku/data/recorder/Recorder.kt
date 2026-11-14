@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.bearer
 import io.github.kauri_off.kiroku.data.session.refreshGrant
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -61,6 +62,8 @@ internal fun recorderHttp(
         device =
             object : Device {
                 override fun isOnline() = true
+
+                override fun observeOnline() = flowOf(true)
 
                 override fun isMainThread() = false
             },

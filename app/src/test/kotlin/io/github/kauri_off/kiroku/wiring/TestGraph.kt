@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -40,6 +42,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -65,10 +68,16 @@ class TestGraph(
 
     override val clock = demo.clock
     override val session: SessionRepository = CountedSession(demo.session, counter)
+    private val syncCount = AtomicInteger()
+
+    // The list syncs asked for so far.
+    val syncs: Int get() = syncCount.get()
+
     override val list: ListRepository =
         CountedList(
             demo.list.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it },
             counter,
+            syncCount,
         )
 
     // While true, the list's store cannot be read.
@@ -89,6 +98,15 @@ class TestGraph(
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
+
+    // While set, the connection says this whatever the demo's server does, as when a request and the system disagree.
+    val connectionSays = MutableStateFlow<Boolean?>(null)
+
+    override val connection: Connection =
+        object : Connection {
+            override fun observeOnline(): Flow<Boolean> =
+                combine(demo.connection.observeOnline(), connectionSays) { online, says -> says ?: online }.distinctUntilChanged()
+        }
 
     companion object {
         fun over(
@@ -113,7 +131,13 @@ private class Readers {
 private class CountedList(
     private val inner: ListRepository,
     private val readers: Readers,
+    private val syncs: AtomicInteger,
 ) : ListRepository by inner {
+    override suspend fun sync(): Outcome<Unit> {
+        syncs.incrementAndGet()
+        return inner.sync()
+    }
+
     override fun observeEntries(): Flow<List<ListEntry>> = readers.of(inner.observeEntries())
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = readers.of(inner.observeEntry(id))
@@ -128,6 +152,8 @@ private class CountedAnime(
     override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(stored(inner.observeAnime(id)))
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = readers.of(stored(inner.observeDetails(id)))
+
+    override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = readers.of(stored(inner.observeRefreshedAt(id)))
 
     private fun <T> stored(flow: Flow<T?>): Flow<T?> = combine(flow, unstored) { value, unstored -> value.takeUnless { unstored } }
 
@@ -184,7 +210,7 @@ private class SlowWrites(
 fun TestScope.foregroundScope(): CoroutineScope = CoroutineScope(coroutineContext.minusKey(Job) + Job())
 
 // A screen collecting [state] until the returned job is cancelled.
-fun TestScope.showing(state: Flow<*>): Job = backgroundScope.launch { state.collect() }
+fun TestScope.showing(vararg flows: Flow<*>): Job = backgroundScope.launch { flows.forEach { launch { it.collect() } } }
 
 // View models run their work on Dispatchers.Main, which a plain JVM test has to provide.
 @OptIn(ExperimentalCoroutinesApi::class)

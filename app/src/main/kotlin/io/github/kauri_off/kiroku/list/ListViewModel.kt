@@ -5,6 +5,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -22,6 +23,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -29,7 +31,9 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +57,7 @@ class ListViewModel(
     private val list: ListSource,
     private val airing: AiringRepository,
     session: SessionRepository,
+    connection: Connection,
     private val clock: Clock,
     private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
@@ -93,8 +98,10 @@ class ListViewModel(
         )
     private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val retries = MutableStateFlow(0)
-    private var firstSyncStarted = false
-    private var firstSyncDone = false
+    private var syncing: Job? = null
+
+    // The first sync ended, or the stored list was fresh: a list read from now on is ordered as it comes.
+    private var settled = false
     private var entriesLoaded = false
 
     // What the pages are built from; a tab switch, the sort sheet or the refresh indicator changes none of it.
@@ -132,8 +139,12 @@ class ListViewModel(
                 launch { session.observeSession().collect { session -> model.update { it.copy(session = session) } } }
                 emitAll(combine(model, snapshotFlow { typed.value }, ::build))
             }
-        }.onStart { firstSync() }
-            .stateIn(viewModelScope, WhileShown, build(model.value, typed.value))
+        }.stateIn(viewModelScope, WhileShown, build(model.value, typed.value))
+
+    private val loads = ShownLoads(viewModelScope, connection, ::syncIfStale, ::syncUnlessSyncing)
+
+    // Collected while the List is shown; showing it syncs a stale list.
+    val shown: StateFlow<Unit> get() = loads.shown
 
     fun onEvent(event: ListEvent) {
         when (event) {
@@ -149,19 +160,30 @@ class ListViewModel(
             ListEvent.DismissSort -> model.update { it.copy(sortSheetOpen = false) }
             is ListEvent.SelectSort -> selectSort(event.sort)
             is ListEvent.SelectDirection -> selectDirection(event.direction)
-            ListEvent.Refresh -> viewModelScope.launch { sync(fromUser = true) }
+            ListEvent.Refresh -> startSync(fromUser = true)
             ListEvent.Retry -> {
                 retries.update { it + 1 }
-                viewModelScope.launch { sync(fromUser = false) }
+                startSync(fromUser = false)
             }
             is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
     }
 
-    private fun firstSync() {
-        if (firstSyncStarted) return
-        firstSyncStarted = true
-        viewModelScope.launch { sync(fromUser = false) }
+    private suspend fun syncIfStale() {
+        if (list.stale(clock.instant())) {
+            syncUnlessSyncing()
+        } else if (!settled) {
+            settled = true
+            model.update { if (it.orders == null && entriesLoaded) it.orderedAll() else it }
+        }
+    }
+
+    private fun startSync(fromUser: Boolean) {
+        syncing = viewModelScope.launch { sync(fromUser) }
+    }
+
+    private fun syncUnlessSyncing() {
+        if (syncing?.isActive != true) startSync(fromUser = false)
     }
 
     private fun reading(): Flow<Unit> =
@@ -178,7 +200,7 @@ class ListViewModel(
             val read = model.copy(airing = schedule, entries = list.associateBy { it.anime.id })
             when {
                 read.orders != null -> read.withJoinedAppended()
-                list.isNotEmpty() || firstSyncDone -> read.orderedAll()
+                list.isNotEmpty() || settled -> read.orderedAll()
                 else -> read
             }
         }
@@ -319,13 +341,10 @@ class ListViewModel(
         return if (next != current) copy(orders = next) else this
     }
 
-    // A new sort starts in its own direction.
+    // A new sort starts in its own direction. A choice leaves the sheet open; only its dismissal closes it.
     private fun selectSort(sort: ListSort) {
         val tab = model.value.tab
-        if (model.value.sorts.getValue(tab) == sort) {
-            model.update { it.copy(sortSheetOpen = false) }
-            return
-        }
+        if (model.value.sorts.getValue(tab) == sort) return
         saved[sortKey(tab)] = sort.name
         reorder(tab, sort, sort.defaultDirection)
     }
@@ -333,10 +352,7 @@ class ListViewModel(
     private fun selectDirection(direction: SortDirection) {
         val tab = model.value.tab
         val sort = model.value.sorts.getValue(tab)
-        if (sort.defaultDirection == null || model.value.directions.getValue(tab) == direction) {
-            model.update { it.copy(sortSheetOpen = false) }
-            return
-        }
+        if (sort.defaultDirection == null || model.value.directions.getValue(tab) == direction) return
         reorder(tab, sort, direction)
     }
 
@@ -348,7 +364,6 @@ class ListViewModel(
         saved[directionKey(tab)] = direction?.name
         model.update { model ->
             model.copy(
-                sortSheetOpen = false,
                 sorts = model.sorts + (tab to sort),
                 directions = model.directions + (tab to direction),
                 orders = model.orders?.let { it + (tab to model.ordered(tab, sort, direction)) },
@@ -380,8 +395,10 @@ class ListViewModel(
     // Pull-to-refresh, and a first sync with nothing ordered yet, order the list from what the sync brought.
     private suspend fun sync(fromUser: Boolean) {
         model.update { it.copy(failure = null, refreshing = it.refreshing || fromUser) }
+        loads.started()
         val result = list.sync()
-        firstSyncDone = true
+        settled = true
+        loads.ended((result as? Outcome.Failure)?.error)
         when (result) {
             is Outcome.Success ->
                 if (fromUser || model.value.orders == null) {

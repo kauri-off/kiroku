@@ -1,0 +1,617 @@
+{
+    "id": 10321,
+    "title": "Uta no☆Prince-sama♪ Maji Love 1000%",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/6/30248.webp",
+        "large": "https://cdn.myanimelist.net/images/anime/6/30248l.webp"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Uta no Prince-sama Maji Love 1000%",
+            "UtaPri"
+        ],
+        "en": "Uta no Prince Sama",
+        "ja": "うたの☆プリンスさまっ♪ マジLOVE1000%"
+    },
+    "media_type": "tv",
+    "status": "finished_airing",
+    "num_episodes": 13,
+    "start_date": "2011-07-03",
+    "mean": 7.01,
+    "rank": 4908,
+    "genres": [
+        {
+            "id": 4,
+            "name": "Comedy"
+        },
+        {
+            "id": 61,
+            "name": "Idols (Male)"
+        },
+        {
+            "id": 43,
+            "name": "Josei"
+        },
+        {
+            "id": 19,
+            "name": "Music"
+        },
+        {
+            "id": 73,
+            "name": "Reverse Harem"
+        },
+        {
+            "id": 22,
+            "name": "Romance"
+        },
+        {
+            "id": 23,
+            "name": "School"
+        }
+    ],
+    "average_episode_duration": 1500,
+    "end_date": "2011-09-24",
+    "synopsis": "Haruka Nanami, an aspiring composer from the countryside,…\n\nUpon her arrival, Haruka soon learns that everyone on…\n\n[Written by MAL Rewrite]",
+    "start_season": {
+        "year": 2011,
+        "season": "summer"
+    },
+    "source": "visual_novel",
+    "studios": [
+        {
+            "id": 56,
+            "name": "A-1 Pictures"
+        }
+    ],
+    "rating": "pg_13",
+    "statistics": {
+        "status": {
+            "watching": "8935",
+            "completed": "142199",
+            "on_hold": "5259",
+            "dropped": "10753",
+            "plan_to_watch": "41148"
+        },
+        "num_list_users": 208294
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 12711,
+                "title": "Uta no☆Prince-sama♪ Maji Love 2000%",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/44019.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/44019l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Uta no Prince-sama Maji Love 1000% 2",
+                        "UtaPri 2"
+                    ],
+                    "en": "Uta no Prince Sama 2",
+                    "ja": "うたの☆プリンスさまっ♪ マジLOVE2000%"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2013-04-04",
+                "mean": 7.17,
+                "rank": 4025,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 61,
+                        "name": "Idols (Male)"
+                    },
+                    {
+                        "id": 43,
+                        "name": "Josei"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "sequel",
+            "relation_type_formatted": "Sequel"
+        }
+    ],
+    "recommendations": [
+        {
+            "node": {
+                "id": 1579,
+                "title": "Kiniro no Corda: Primo Passo",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1565/153275.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1565/153275l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kin'iro no Chord",
+                        "Kiniro no Chord",
+                        "Kin-iro no Corda: Primo Passo",
+                        "The Golden Chord"
+                    ],
+                    "en": "La corda d'oro: primo passo",
+                    "ja": "金色のコルダ ～primo passo～"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2006-10-02",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "01:00"
+                },
+                "mean": 7.4,
+                "rank": 2685,
+                "genres": [
+                    {
+                        "id": 43,
+                        "name": "Josei"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1466
+            },
+            "num_recommendations": 31
+        },
+        {
+            "node": {
+                "id": 853,
+                "title": "Ouran Koukou Host Club",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/71992.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/71992l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Ohran Koko Host Club",
+                        "Ouran Koukou Hosutobu",
+                        "Ouran Koukou Host Bu",
+                        "OHSHC"
+                    ],
+                    "en": "Ouran High School Host Club",
+                    "ja": "桜蘭高校ホスト部"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "2006-04-05",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:50"
+                },
+                "mean": 8.16,
+                "rank": 523,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 81,
+                        "name": "Crossdressing"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    }
+                ],
+                "average_episode_duration": 1401
+            },
+            "num_recommendations": 13
+        },
+        {
+            "node": {
+                "id": 15085,
+                "title": "Amnesia",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1311/128738.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1311/128738l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Amnesia",
+                    "ja": "AMNESIA"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2013-01-07",
+                "mean": 5.97,
+                "rank": 11240,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 11
+        },
+        {
+            "node": {
+                "id": 21563,
+                "title": "Kamigami no Asobi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/60703.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/60703l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kamigami no Asobi: Ludere deorum",
+                        "Kamiaso"
+                    ],
+                    "en": "Kamigami no Asobi",
+                    "ja": "神々の悪戯"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2014-04-06",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "01:00"
+                },
+                "mean": 6.99,
+                "rank": 4989,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 43,
+                        "name": "Josei"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1423
+            },
+            "num_recommendations": 8
+        },
+        {
+            "node": {
+                "id": 33046,
+                "title": "B-Project: Kodou*Ambitious",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/4/79984.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/4/79984l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "B-PROJECT～鼓動＊アンビシャス～"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2016-07-03",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:30"
+                },
+                "mean": 6.59,
+                "rank": 7496,
+                "genres": [
+                    {
+                        "id": 61,
+                        "name": "Idols (Male)"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 8
+        },
+        {
+            "node": {
+                "id": 7705,
+                "title": "Starry☆Sky",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/27459.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/27459l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "スタ☆スカ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "2010-12-23",
+                "mean": 6.09,
+                "rank": 10629,
+                "genres": [
+                    {
+                        "id": 43,
+                        "name": "Josei"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 696
+            },
+            "num_recommendations": 7
+        },
+        {
+            "node": {
+                "id": 33299,
+                "title": "Magic-Kyun! Renaissance",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/80828.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/80828l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Maji-Kyun! Renaissance"
+                    ],
+                    "en": "Magic-Kyun! Renaissance",
+                    "ja": "マジきゅんっ！ルネッサンス"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2016-10-02",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "22:30"
+                },
+                "mean": 7,
+                "rank": 4941,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 80,
+                        "name": "Visual Arts"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "num_recommendations": 7
+        },
+        {
+            "node": {
+                "id": 4722,
+                "title": "Skip Beat!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/84022.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/84022l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Skip Beat!",
+                    "ja": "スキップ・ビート！"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2008-10-06",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "02:00"
+                },
+                "mean": 8.07,
+                "rank": 664,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 64,
+                        "name": "Love Polygon"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    },
+                    {
+                        "id": 75,
+                        "name": "Showbiz"
+                    }
+                ],
+                "average_episode_duration": 1449
+            },
+            "num_recommendations": 6
+        },
+        {
+            "node": {
+                "id": 15605,
+                "title": "Brothers Conflict",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/51409.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/51409l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "BroCon"
+                    ],
+                    "en": "Brothers Conflict",
+                    "ja": "BROTHERS CONFLICT"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2013-07-02",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "19:30"
+                },
+                "mean": 5.87,
+                "rank": 11789,
+                "genres": [
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 5
+        },
+        {
+            "node": {
+                "id": 30375,
+                "title": "Starmyu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/75765.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/75765l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Koukou Hoshi Kageki",
+                        "High School Star Musical",
+                        "Starmu"
+                    ],
+                    "en": "Starmyu",
+                    "ja": "高校星歌劇［スタミュ］"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2015-10-06",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "00:00"
+                },
+                "mean": 6.88,
+                "rank": 5611,
+                "genres": [
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 70,
+                        "name": "Performing Arts"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 5
+        }
+    ]
+}

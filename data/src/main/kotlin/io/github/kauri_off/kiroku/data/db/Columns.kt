@@ -70,12 +70,13 @@ internal fun partialDateOf(column: String): PartialDate =
     }
 
 // The codes of one type's values, MAL's own. One the app does not recognise is stored as MAL gave it, so a version that knows it reads it.
-internal class Codes<T : Any>(
+class Codes<T : Any>(
     known: List<T>,
     private val unrecognized: ((String) -> T)? = null,
     private val code: (T) -> String,
 ) {
-    private val values = known.associateBy(code)
+    // Every value the app knows, by its code.
+    val values: Map<String, T> = known.associateBy(code)
 
     init {
         check(values.size == known.size)
@@ -87,8 +88,8 @@ internal class Codes<T : Any>(
     fun of(column: String): T = values[column] ?: unrecognized?.invoke(column) ?: error("No value has the stored code")
 }
 
-// Codes no recording holds: g, pg, r+, winter, dropped, spin_off, parent_story, full_story, alternative_setting, every source but four.
-internal val listStatuses =
+// Codes no recording holds: g, dropped, every source but original, manga, light_novel, visual_novel and game.
+val listStatuses =
     Codes(ListStatus.entries) {
         when (it) {
             ListStatus.Watching -> "watching"
@@ -99,7 +100,7 @@ internal val listStatuses =
         }
     }
 
-internal val airingStatuses =
+val airingStatuses =
     Codes(AiringStatus.entries) {
         when (it) {
             AiringStatus.NotYetAired -> "not_yet_aired"
@@ -108,7 +109,7 @@ internal val airingStatuses =
         }
     }
 
-internal val seasons =
+val seasons =
     Codes(Season.entries) {
         when (it) {
             Season.Winter -> "winter"
@@ -118,7 +119,7 @@ internal val seasons =
         }
     }
 
-internal val mediaTypes =
+val mediaTypes =
     Codes(
         listOf(
             MediaType.Tv,
@@ -147,7 +148,7 @@ internal val mediaTypes =
         }
     }
 
-internal val sources =
+val sources =
     Codes(
         listOf(
             Source.Original,
@@ -192,7 +193,7 @@ internal val sources =
         }
     }
 
-internal val ageRatings =
+val ageRatings =
     Codes(
         listOf(
             AgeRating.AllAges,
@@ -215,7 +216,7 @@ internal val ageRatings =
         }
     }
 
-internal val relationTypes =
+val relationTypes =
     Codes(RelationType.known, RelationType::Unrecognized) {
         when (it) {
             RelationType.Prequel -> "prequel"

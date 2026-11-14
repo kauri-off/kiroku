@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mal_airing">Airing</string>
+    <string name="mal_finished">Finished</string>
+    <string name="mal_season_winter">Winter\u00A0%d</string>
+    <string name="mal_season_spring">Spring\u00A0%d</string>
+    <string name="mal_season_summer">Summer\u00A0%d</string>
+    <string name="mal_season_fall">Fall\u00A0%d</string>
+</resources>

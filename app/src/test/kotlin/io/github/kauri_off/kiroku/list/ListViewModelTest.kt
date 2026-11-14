@@ -67,7 +67,7 @@ class ListViewModelTest {
         val list: ListViewModel,
         private val test: TestScope,
     ) {
-        var screen: Job = test.showing(list.state)
+        var screen: Job = test.showing(list.state, list.shown)
 
         // What the screen shows once the events so far have been handled; a frame applies the typed filter first.
         val state: ListState
@@ -98,7 +98,8 @@ class ListViewModelTest {
         val scope = foregroundScope()
         val graph = TestGraph(demo(scope), lateObservers, slowWrites).apply { listUnreadable = unreadable }
         val messages = ShellMessages(scope, graph.list)
-        val list = ListViewModel(graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, saved, messages)
+        val list =
+            ListViewModel(graph.list, graph.airing, graph.session, graph.connection, graph.clock, graph.titleLanguage, saved, messages)
         val subject = Subject(graph, saved, messages, list, this)
         advanceUntilIdle()
         body(subject)
@@ -270,7 +271,7 @@ class ListViewModelTest {
         }
 
     @Test
-    fun `the sort sheet opens, closes, and a new sort orders only its tab again`() =
+    fun `the sort sheet opens, stays open after a choice until dismissed, and a new sort orders only its tab again`() =
         test { s ->
             s.list.onEvent(ListEvent.OpenSort)
             assertTrue(s.state.sortSheetOpen)
@@ -278,7 +279,7 @@ class ListViewModelTest {
             assertFalse(s.state.sortSheetOpen)
             s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
-            assertFalse(s.state.sortSheetOpen)
+            assertTrue(s.state.sortSheetOpen)
             assertEquals(ListSort.Title, s.page().sort)
             assertEquals(
                 s
@@ -292,6 +293,9 @@ class ListViewModelTest {
             assertEquals(0, s.page(ListStatus.Planned).ordering)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertEquals(1, s.page().ordering)
+            assertTrue(s.state.sortSheetOpen)
+            s.list.onEvent(ListEvent.DismissSort)
+            assertFalse(s.state.sortSheetOpen)
         }
 
     @Test
@@ -304,7 +308,7 @@ class ListViewModelTest {
             val planned = s.page(ListStatus.Planned)
             s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
-            assertFalse(s.state.sortSheetOpen)
+            assertTrue(s.state.sortSheetOpen)
             assertEquals(SortDirection.Ascending, s.page().direction)
             assertEquals(
                 order(
@@ -322,9 +326,8 @@ class ListViewModelTest {
             assertSame(planned, s.page(ListStatus.Planned))
             assertEquals(2, s.page().ordering)
             assertEquals(0, s.page(ListStatus.Planned).ordering)
-            s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
-            assertFalse(s.state.sortSheetOpen)
+            assertTrue(s.state.sortSheetOpen)
             assertEquals(2, s.page().ordering)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertEquals(SortDirection.Ascending, s.page().direction)
@@ -512,7 +515,7 @@ class ListViewModelTest {
             s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             advanceUntilIdle()
             assertEquals(0, s.graph.readers)
-            s.screen = showing(s.list.state)
+            s.screen = showing(s.list.state, s.list.shown)
             runCurrent()
             assertTrue(s.graph.readers > 0)
             val row = s.page().rows.single { it.id == FixtureAnime.exactToWatch.id }
@@ -525,7 +528,7 @@ class ListViewModelTest {
             val downloads = s.graph.demo.server.listDownloads
             s.screen.cancel()
             advanceTimeBy(ROTATION + STOPPED_AFTER)
-            s.screen = showing(s.list.state)
+            s.screen = showing(s.list.state, s.list.shown)
             runCurrent()
             advanceUntilIdle()
             assertEquals(downloads, s.graph.demo.server.listDownloads)
@@ -635,6 +638,7 @@ class ListViewModelTest {
                     graph.list,
                     graph.airing,
                     graph.session,
+                    graph.connection,
                     graph.clock,
                     graph.titleLanguage,
                     SavedStateHandle(),
@@ -645,13 +649,48 @@ class ListViewModelTest {
             assertEquals(0, graph.readers)
             assertEquals(downloads, graph.demo.server.listDownloads)
             assertEquals(ListContent.Loading, list.state.value.content)
-            val screen = showing(list.state)
+            val screen = showing(list.state, list.shown)
             runCurrent()
             assertTrue(graph.readers > 0)
             advanceUntilIdle()
             assertEquals(downloads + 1, graph.demo.server.listDownloads)
             screen.cancel()
             scope.cancel()
+        }
+
+    @Test
+    fun `a list synced moments ago is shown from the store with no sync, an empty one too, also when drawn before shown`() =
+        runTest(dispatcher) {
+            for (entries in listOf(set.entries, emptyList())) {
+                val scope = foregroundScope()
+                val graph = TestGraph(Demo(set.copy(entries = entries), scope))
+                graph.list.sync()
+                val list =
+                    ListViewModel(
+                        graph.list,
+                        graph.airing,
+                        graph.session,
+                        graph.connection,
+                        graph.clock,
+                        graph.titleLanguage,
+                        SavedStateHandle(),
+                        ShellMessages(scope, graph.list),
+                    )
+                // Drawn first, as under a back gesture, then shown: the stored list is read before it is known fresh.
+                val drawn = showing(list.state)
+                runCurrent()
+                advanceUntilIdle()
+                val screen = showing(list.shown)
+                runCurrent()
+                advanceUntilIdle()
+                assertEquals(1, graph.syncs)
+                val pages = (list.state.value.content as ListContent.Tabs).pages
+                assertEquals(entries.size, pages.values.sumOf { it.rows.size })
+                drawn.cancel()
+                screen.cancel()
+                list.viewModelScope.cancel()
+                scope.cancel()
+            }
         }
 
     @Test

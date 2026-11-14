@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import java.time.Clock
@@ -32,7 +33,8 @@ internal class LiveParts(
     val scope: CoroutineScope,
     val unexpected: (Throwable) -> Unit,
     log: ((String) -> Unit)? = null,
-    device: Device = AndroidDevice(context),
+    // The requests' judgement of the connection and the screens' are this one device's.
+    val device: Device = AndroidDevice(context),
 ) {
     // The only HTTP client of the source.
     val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log)
@@ -45,7 +47,8 @@ internal class LiveParts(
 internal class LiveGraph(
     parts: LiveParts,
     listStore: (LiveParts) -> LocalList = ::liveListStore,
-) : AppGraph {
+) : AppGraph,
+    SignInOwner {
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
@@ -55,6 +58,8 @@ internal class LiveGraph(
     override val airing by lazy { liveAiring(parts) }
     override val search by lazy { liveSearch(parts) }
     override val user by lazy { liveUser(parts, account) }
+    override val connection by lazy { liveConnection(parts) }
+    override val signIn by lazy { liveSignIn(parts, account) }
 
     // For whatever is about to end the process: a session nobody asked for has nothing to write.
     suspend fun writeOwed() {

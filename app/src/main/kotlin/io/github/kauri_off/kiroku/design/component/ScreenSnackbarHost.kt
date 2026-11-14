@@ -190,11 +190,16 @@ private fun SnackbarDuration.millis(
 private const val SHORT_MS = 4_000L
 private const val LONG_MS = 10_000L
 
-// The sheets and dialogs open over the screens, under which a snackbar can be neither seen nor tapped.
+// The sheets and dialogs open over the screens, under which a snackbar can be neither seen nor tapped, and the windows
+// over the screens that show the messages themselves.
 class MessageCovers {
     private var open by mutableIntStateOf(0)
+    private var hosts by mutableIntStateOf(0)
 
     val covered: Boolean get() = open > 0
+
+    // A window that shows the messages has the focus, though the screens' own window does not.
+    val hostedAbove: Boolean get() = hosts > 0
 
     internal fun opened() {
         open++
@@ -203,9 +208,34 @@ class MessageCovers {
     internal fun closed() {
         open--
     }
+
+    internal fun hostOpened() {
+        hosts++
+    }
+
+    internal fun hostClosed() {
+        hosts--
+    }
 }
 
 val LocalMessageCovers = staticCompositionLocalOf<MessageCovers?> { null }
+
+// The shell's snackbar host in a window over the screens, as the open search view; it counts while that window has the focus.
+@Composable
+fun WindowSnackbarHost(
+    snackbars: SnackbarHostState,
+    modifier: Modifier = Modifier,
+) {
+    if (!LocalOnTop.current) return
+    val covers = LocalMessageCovers.current
+    if (covers != null && LocalWindowInfo.current.isWindowFocused) {
+        DisposableEffect(covers) {
+            covers.hostOpened()
+            onDispose { covers.hostClosed() }
+        }
+    }
+    SnackbarHost(snackbars, modifier) { SwipeableSnackbar(it) }
+}
 
 // Called by a sheet or a dialog for as long as it is open.
 @Composable

@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import java.time.Instant
 
 // The titles of a live source, of which nothing is known and nothing can be fetched yet.
 @Suppress("UNUSED_PARAMETER")
@@ -16,6 +17,8 @@ internal fun liveTitles(parts: LiveParts): AnimeRepository =
         override fun observeAnime(id: AnimeId): Flow<Anime?> = flowOf(null)
 
         override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = flowOf(null)
+
+        override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = flowOf(null)
 
         override suspend fun refresh(id: AnimeId): Outcome<Unit> = Outcome.Failure(DataError.ServerError)
     }

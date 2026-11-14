@@ -119,6 +119,9 @@ internal fun JsonObject.toTitle(): MalTitle {
     return MalTitle(anime, MalJson.decodeFromJsonElement(PageNode.serializer(), this).toDetails(anime.id))
 }
 
+// MAL's media type for a title whose type it does not know yet.
+const val NO_MEDIA_TYPE = "unknown"
+
 // MAL's zero and empty values are absent; a code the app does not know stays MAL's code.
 internal fun AnimeNode.toAnime(): Anime =
     Anime(
@@ -132,7 +135,7 @@ internal fun AnimeNode.toAnime(): Anime =
             ),
         posterUrl = mainPicture?.medium?.present(),
         largePosterUrl = mainPicture?.large?.present()?.takeIf { mainPicture.medium?.present() != null },
-        mediaType = mediaType?.present()?.let(mediaTypes::of),
+        mediaType = mediaType?.present()?.takeIf { it != NO_MEDIA_TYPE }?.let(mediaTypes::of),
         airingStatus = airingStatuses.of(status),
         malEpisodes = episodes.takeIf { it > 0 },
         startDate = startDate?.present()?.let(::partialDateOf),

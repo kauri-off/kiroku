@@ -43,7 +43,16 @@ class ImmediateMainTest {
             val shell = ShellViewModel(graph.list)
             val messages = shell.messages
             val list =
-                ListViewModel(graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, SavedStateHandle(), messages)
+                ListViewModel(
+                    graph.list,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    messages,
+                )
             val title =
                 TitleViewModel(
                     id,
@@ -51,21 +60,33 @@ class ImmediateMainTest {
                     graph.list,
                     graph.airing,
                     graph.session,
+                    graph.connection,
                     graph.clock,
                     graph.titleLanguage,
                     SavedStateHandle(),
                     messages,
                     summary,
                 )
-            val related = RelatedViewModel(id, graph.anime, graph.list, graph.airing, graph.session, graph.titleLanguage, summary)
-            val details = DetailsViewModel(id, graph.anime, graph.session, graph.titleLanguage, graph.clock, summary)
+            val related =
+                RelatedViewModel(
+                    id,
+                    graph.anime,
+                    graph.list,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.clock,
+                    graph.titleLanguage,
+                    summary,
+                )
+            val details = DetailsViewModel(id, graph.anime, graph.session, graph.connection, graph.titleLanguage, graph.clock, summary)
             val editor =
                 EditSheetViewModel(graph.list, graph.anime, graph.airing, graph.clock, graph.titleLanguage, SavedStateHandle(), messages)
             assertEquals(0, graph.readers)
             assertEquals(0, graph.refreshes)
             assertTrue(title.state.value is TitleState.Shown)
 
-            listOf(list.state, title.state, related.state, details.state).forEach { showing(it) }
+            showing(list.state, list.shown, title.state, title.shown, related.state, related.shown, details.state, details.shown)
             editor.restore()
             editor.open(id)
             advanceUntilIdle()

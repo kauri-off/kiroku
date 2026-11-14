@@ -33,7 +33,6 @@ fun ConnectedChoice(
     onChoose: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    reselect: Boolean = false,
 ) {
     val widths = toggleButtonWidths(labels)
     val gap = ButtonGroupDefaults.ConnectedSpaceBetween
@@ -46,7 +45,7 @@ fun ConnectedChoice(
                         val selected = index == chosen
                         ToggleButton(
                             checked = selected,
-                            onCheckedChange = { if (!selected || reselect) onChoose(index) },
+                            onCheckedChange = { if (!selected) onChoose(index) },
                             enabled = enabled,
                             shapes = connectedShapes(first = place == 0, last = place == row.lastIndex),
                             modifier = Modifier.weight(widths[index].value).semantics { role = Role.RadioButton },

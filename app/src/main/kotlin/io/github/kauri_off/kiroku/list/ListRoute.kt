@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.KeepSplash
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -26,10 +27,20 @@ fun ListRoute(
 ) {
     val list =
         viewModel {
-            ListViewModel(graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, createSavedStateHandle(), messages)
+            ListViewModel(
+                graph.list,
+                graph.airing,
+                graph.session,
+                graph.connection,
+                graph.clock,
+                graph.titleLanguage,
+                createSavedStateHandle(),
+                messages,
+            )
         }
     val editor = editSheetViewModel(graph, messages)
     val state by list.state.collectAsScreenState()
+    CountAsShown(list.shown)
     if (state.content == ListContent.Loading) KeepSplash()
     ListScreen(
         state = state.copy(typed = ListState.Typed(list.filter)),
