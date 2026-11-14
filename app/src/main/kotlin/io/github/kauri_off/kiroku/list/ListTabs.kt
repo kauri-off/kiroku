@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.design.theme.AtSystemScale
 import io.github.kauri_off.kiroku.design.theme.PageSettle
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
@@ -261,7 +262,7 @@ fun rememberListTabMotion(pager: PagerState): ListTabMotion {
             pager,
             scope,
             PageSettle(density),
-            PageSettle(density) { durationScale?.scaleFactor ?: 1f },
+            AtSystemScale(PageSettle(density)) { durationScale?.scaleFactor ?: 1f },
             motionScheme,
             reverse,
         ).apply {

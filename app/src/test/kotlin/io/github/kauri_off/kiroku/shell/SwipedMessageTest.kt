@@ -1,0 +1,742 @@
+package io.github.kauri_off.kiroku.shell
+
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Recomposer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
+import io.github.kauri_off.kiroku.design.registered
+import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.list.FixtureListScreen
+import io.github.kauri_off.kiroku.list.ListEvent
+import io.github.kauri_off.kiroku.list.ListFixtureStates
+import io.github.kauri_off.kiroku.list.ListScreen
+import io.github.kauri_off.kiroku.wiring.TestGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import kotlin.math.sign
+
+// The shell's messages on the host a screen draws, over a surface that counts the taps that reach it.
+private class SwipeHarness(
+    val compose: AndroidComposeTestRule<*, ComponentActivity>,
+) {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val graph = TestGraph(Demo(Fixtures.reference, scope))
+    val messages = ShellMessages(scope, graph.list)
+    val anime = FixtureAnime.exactToWatch
+    var composed by mutableStateOf(true)
+    var direction by mutableStateOf(LayoutDirection.Ltr)
+    var taps = 0
+
+    fun show() =
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                    Box(Modifier.fillMaxSize().clickable { taps++ })
+                    if (composed) {
+                        val host = remember { SnackbarHostState() }
+                        ShownMessages(messages, host)
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { ScreenSnackbarHost(host) }
+                    }
+                }
+            }
+        }
+
+    fun post(vararg posted: ShellMessage) = compose.runOnUiThread { posted.forEach(messages::post) }
+
+    fun watched() =
+        runBlocking {
+            graph.list
+                .observeEntry(anime.id)
+                .first()
+                ?.values
+                ?.watchedEpisodes
+        }
+
+    fun failed(episode: Int) = ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(ListWrite.SetWatched(anime, episode)))
+
+    val moved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(anime)))
+
+    // A drag from the middle of the message's text by [by], over [millis]; a negative [by] is to the left.
+    fun drag(
+        text: String,
+        by: Dp,
+        millis: Long = FAST_MS,
+    ) = compose.onNodeWithText(text).performTouchInput { swipe(center, center + Offset(by.toPx(), 0f), millis) }
+
+    fun dragFrom(
+        text: String,
+        by: Dp,
+        millis: Long = SLOW_MS,
+    ) = compose.onNodeWithText(text).performTouchInput { swipe(center, center + Offset(by.toPx(), 0f), millis) }
+
+    // A slow drag from the middle of the message by [fraction] of its width, released after a pause if [held].
+    fun release(
+        fraction: Float,
+        held: Boolean,
+    ) {
+        val item = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).getUnclippedBoundsInRoot()
+        val width = item.right - item.left - MARGINS
+        compose.onNodeWithText("Could not save").performTouchInput {
+            val total = width.toPx() * fraction + fraction.sign * viewConfiguration.touchSlop
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(total / SLOW_STEPS, 0f), delayMillis = SLOW_STEP_MS) }
+            if (held) advanceEventTime(HELD_MS)
+            up()
+        }
+        compose.waitForIdle()
+    }
+
+    fun left(text: String) = compose.onNodeWithText(text).getUnclippedBoundsInRoot().left
+
+    companion object {
+        val PAST = 200.dp
+
+        // Well short of half any message's width, and slow enough to be no fling.
+        val SHORT = 30.dp
+        const val FAST_MS = 150L
+        const val SLOW_MS = 1_000L
+
+        // The stock margin on both sides of the message.
+        val MARGINS = 24.dp
+
+        // Two seconds in steps of a frame: moving, and well under the fling speed for any message's width.
+        const val SLOW_STEPS = 125
+        const val SLOW_STEP_MS = 16L
+        const val HELD_MS = 500L
+    }
+}
+
+// A message swiped away either way is dismissed as when its time runs out (ARCHITECTURE 7.2).
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SwipedMessageTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    private fun swipesAwayEitherWay() =
+        with(harness) {
+            show()
+            val before = watched()
+            post(failed(1), moved, failed(2))
+            compose.waitForIdle()
+            drag("Could not save", SwipeHarness.PAST)
+            compose.waitForIdle()
+            assertEquals(moved, messages.current.value?.message)
+            compose.onNodeWithText("Moved to Completed").assertExists()
+            drag("Moved to Completed", -SwipeHarness.PAST)
+            compose.waitForIdle()
+            assertEquals(failed(2), messages.current.value?.message)
+            compose.onNodeWithText("Moved to Completed").assertDoesNotExist()
+            assertEquals("a swipe ran an action", before, watched())
+        }
+
+    @Test
+    fun `a message swiped past the threshold either way is dismissed and the next waiting one is shown`() = swipesAwayEitherWay()
+
+    @Test
+    fun `in a right-to-left layout a message is swiped away either way too`() {
+        harness.direction = LayoutDirection.Rtl
+        swipesAwayEitherWay()
+    }
+
+    @Test
+    fun `a short swipe returns the message, and its action still works`() =
+        with(harness) {
+            show()
+            val before = runBlocking { graph.list.observeEntry(anime.id).first()!! }
+            val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
+            val message = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo))
+            post(message)
+            compose.waitForIdle()
+            val rest = left("Moved to Completed")
+            drag("Moved to Completed", SwipeHarness.SHORT, SwipeHarness.SLOW_MS)
+            compose.waitForIdle()
+            assertEquals(message, messages.current.value?.message)
+            assertEquals(rest.value, left("Moved to Completed").value, 0.5f)
+            drag("Moved to Completed", -SwipeHarness.SHORT, SwipeHarness.SLOW_MS)
+            compose.waitForIdle()
+            assertEquals(rest.value, left("Moved to Completed").value, 0.5f)
+            compose.onNodeWithText("Undo").performClick()
+            compose.waitForIdle()
+            assertEquals(before.values.watchedEpisodes, watched())
+            assertNull(messages.current.value)
+        }
+
+    // Below the fling speed the place of the release decides, held still or still moving: half the message's width.
+    @Test
+    fun `a slow or held release past half the message's width dismisses it, and short of half returns it`() =
+        with(harness) {
+            show()
+            post(failed(1), failed(2), failed(3), moved)
+            compose.waitForIdle()
+            release(fraction = 0.4f, held = true)
+            assertEquals(failed(1), messages.current.value?.message)
+            release(fraction = 0.4f, held = false)
+            assertEquals(failed(1), messages.current.value?.message)
+            release(fraction = 0.6f, held = true)
+            assertEquals(failed(2), messages.current.value?.message)
+            release(fraction = 0.6f, held = false)
+            assertEquals(failed(3), messages.current.value?.message)
+        }
+
+    // The person threw the Undo away: a recreation does not bring it back, and nothing is written.
+    @Test
+    fun `a swiped message that must stay is gone after a recreation and its Undo is not run`() =
+        with(harness) {
+            show()
+            val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
+            val after = watched()
+            post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)))
+            compose.waitForIdle()
+            drag("Moved to Completed", -SwipeHarness.PAST)
+            compose.waitForIdle()
+            composed = false
+            compose.waitForIdle()
+            composed = true
+            compose.waitForIdle()
+            compose.onNodeWithText("Moved to Completed").assertDoesNotExist()
+            assertNull(messages.current.value)
+            assertEquals(after, watched())
+        }
+
+    @Test
+    fun `a screen reader can dismiss a message, and the next waiting one is shown`() =
+        with(harness) {
+            show()
+            post(failed(1), moved)
+            compose.waitForIdle()
+            compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).performSemanticsAction(SemanticsActions.Dismiss)
+            compose.waitForIdle()
+            assertEquals(moved, messages.current.value?.message)
+        }
+
+    // Without the List's guard, the swipe's own moves keep the action from taking the gesture for a tap.
+    @Test
+    fun `a swipe that starts on the action returns or dismisses the message and never runs the action`() =
+        with(harness) {
+            show()
+            val before = watched()
+            post(moved)
+            compose.waitForIdle()
+            dragFrom("Undo", SwipeHarness.SHORT)
+            compose.waitForIdle()
+            assertEquals(moved, messages.current.value?.message)
+            dragFrom("Undo", -SwipeHarness.PAST, SwipeHarness.FAST_MS)
+            compose.waitForIdle()
+            assertNull(messages.current.value)
+            assertEquals(before, watched())
+        }
+
+    // The swipe takes the message's own area, no more: its margin is no wider a dead zone than before.
+    @Test
+    fun `a touch in the message's margin reaches the screen under it`() =
+        with(harness) {
+            show()
+            post(moved)
+            compose.waitForIdle()
+            val item = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss))
+            item.performTouchInput { click(Offset(centerX, MARGIN_TOUCH.toPx())) }
+            compose.waitForIdle()
+            assertEquals(1, taps)
+            item.performTouchInput {
+                swipe(
+                    Offset(centerX, MARGIN_TOUCH.toPx()),
+                    Offset(centerX + SwipeHarness.PAST.toPx(), MARGIN_TOUCH.toPx()),
+                )
+            }
+            compose.waitForIdle()
+            assertEquals(moved, messages.current.value?.message)
+        }
+
+    private companion object {
+        // Inside the stock 12 dp margin above the message.
+        val MARGIN_TOUCH = 4.dp
+    }
+}
+
+// On a wide window the rule is still half the message's width, though its way to the window's edge is longer.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w900dp-h411dp")
+class SwipedMessageWideTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    @Test
+    fun `a release held still past half the message's width dismisses it either way, and short of half returns it`() =
+        with(harness) {
+            show()
+            post(failed(1), failed(2), moved)
+            compose.waitForIdle()
+            release(fraction = 0.4f, held = true)
+            release(fraction = -0.4f, held = true)
+            assertEquals(failed(1), messages.current.value?.message)
+            release(fraction = 0.6f, held = true)
+            assertEquals(failed(2), messages.current.value?.message)
+            release(fraction = -0.6f, held = true)
+            assertEquals(moved, messages.current.value?.message)
+        }
+}
+
+// ARCHITECTURE 8.5: a message swiped away leaves the window whole, its shadow too.
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SwipedMessageExitTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    // How many pixels of the row [y] of the window differ from [empty].
+    private fun drawnOn(
+        y: Int,
+        empty: IntArray,
+    ): Int {
+        val image = compose.onRoot().captureToImage().asAndroidBitmap()
+        return (0 until image.width).count { image.getPixel(it, y) != empty[it] }
+    }
+
+    // The window's row through the middle of the message, and that row with no message on it.
+    private fun row(): Pair<Int, IntArray> {
+        val background = compose.onRoot().captureToImage().asAndroidBitmap()
+        harness.post(harness.moved)
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+        val text = compose.onNodeWithText("Moved to Completed").getUnclippedBoundsInRoot()
+        val y = with(compose.density) { ((text.top + text.bottom) / 2).roundToPx() }
+        return y to IntArray(background.width) { background.getPixel(it, y) }
+    }
+
+    private fun start() {
+        compose.mainClock.autoAdvance = false
+        harness.show()
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+    }
+
+    private fun heldFarIsOff(
+        text: String,
+        direction: Float,
+        y: Int,
+        empty: IntArray,
+    ) {
+        compose.onNodeWithText(text).performTouchInput {
+            down(center)
+            repeat(FAR_STEPS) { moveBy(Offset(direction * FAR.toPx(), 0f), delayMillis = FAR_STEP_MS) }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("$direction", 0, drawnOn(y, empty))
+        compose.onNodeWithText(text).performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+    }
+
+    private fun shellMessagesHeldFarAreOff() {
+        start()
+        for (direction in listOf(1f, -1f)) {
+            val (y, empty) = row()
+            heldFarIsOff("Moved to Completed", direction, y, empty)
+            assertNull(harness.messages.current.value)
+        }
+    }
+
+    @Test
+    fun `a message held past where it leaves is wholly off the window`() = shellMessagesHeldFarAreOff()
+
+    // At most 600 dp wide and centred, the message has further to go than its own width.
+    @Test
+    @Config(qualifiers = "en-w900dp-h411dp")
+    fun `on a wide window a message held past where it leaves is wholly off the window`() = shellMessagesHeldFarAreOff()
+
+    // The rail is drawn over the pane beside it: the message passes under it to the window's edge.
+    @Test
+    @Config(qualifiers = "en-w840dp-h600dp")
+    fun `in the rail layout a message held past where it leaves is wholly out of view`() {
+        var message by mutableStateOf<ShellMessage?>(null)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(snackbars = rememberHostShowing(message)) } }
+        compose.mainClock.advanceTimeBy(SETTLED_MS)
+        val shown =
+            listOf(
+                harness.moved to "Moved to Completed",
+                ShellMessage(ShellMessage.Text.EpisodeWatched(13)) to "Episode\u00A013 watched",
+            )
+        for ((direction, posted) in listOf(-1f, 1f).zip(shown)) {
+            val background = compose.onRoot().captureToImage().asAndroidBitmap()
+            Snapshot.withMutableSnapshot { message = posted.first }
+            Snapshot.sendApplyNotifications()
+            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            val text = compose.onNodeWithText(posted.second).getUnclippedBoundsInRoot()
+            val y = with(compose.density) { ((text.top + text.bottom) / 2).roundToPx() }
+            heldFarIsOff(posted.second, direction, y, IntArray(background.width) { background.getPixel(it, y) })
+            compose.onNodeWithText(posted.second).assertDoesNotExist()
+        }
+    }
+
+    private companion object {
+        const val SETTLED_MS = 2_000L
+
+        // Far beyond the widest window, in moves a frame apart.
+        val FAR = 300.dp
+        const val FAR_STEPS = 6
+        const val FAR_STEP_MS = 16L
+    }
+}
+
+// ARCHITECTURE 8.5: the message follows the finger, and settles from the theme's fast effects spring.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SwipedMessageMotionTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    private fun shown(): Dp =
+        with(harness) {
+            compose.mainClock.autoAdvance = false
+            show()
+            post(failed(1), moved)
+            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            left("Could not save")
+        }
+
+    private fun assertIdle() {
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(Recomposer.runningRecomposers.value.none { it.hasPendingWork })
+    }
+
+    private fun followsTheFinger(direction: LayoutDirection) {
+        harness.direction = direction
+        val rest = shown()
+        val by = SwipeHarness.SHORT
+        compose.onNodeWithText("Could not save").performTouchInput {
+            down(center)
+            moveBy(Offset(by.toPx(), 0f), delayMillis = 100)
+            moveBy(Offset(by.toPx(), 0f), delayMillis = 100)
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val held = harness.left("Could not save") - rest
+        assertTrue("$direction: moved by $held for a finger moved by ${by * 2}", held > by && held <= by * 2)
+        compose.onNodeWithText("Could not save").performTouchInput { up() }
+    }
+
+    @Test
+    fun `the message follows the finger`() = followsTheFinger(LayoutDirection.Ltr)
+
+    @Test
+    fun `in a right-to-left layout the message follows the finger too`() = followsTheFinger(LayoutDirection.Rtl)
+
+    @Test
+    fun `a short swipe is back at rest within the time of a change, and nothing runs after`() {
+        val rest = shown()
+        harness.drag("Could not save", SwipeHarness.SHORT, SwipeHarness.SLOW_MS)
+        compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
+        assertEquals(rest.value, harness.left("Could not save").value, 0.5f)
+        assertEquals(
+            harness.failed(1),
+            harness.messages.current.value
+                ?.message,
+        )
+        assertIdle()
+    }
+
+    // Effects springs only: let go held still short of half, it comes back to its place and never past it.
+    @Test
+    fun `a message let go held still comes back without passing its place`() {
+        val rest = shown()
+        compose.onNodeWithText("Could not save").performTouchInput {
+            down(center)
+            repeat(RETURN_STEPS) { moveBy(Offset(SwipeHarness.SHORT.toPx() * 2 / RETURN_STEPS, 0f), delayMillis = RETURN_STEP_MS) }
+            advanceEventTime(SwipeHarness.HELD_MS)
+            up()
+        }
+        var elapsed = 0L
+        while (elapsed < MotionBounds.CHANGE) {
+            compose.mainClock.advanceTimeByFrame()
+            elapsed += FRAME_MS
+            val now = harness.left("Could not save")
+            assertTrue("at ${now - rest} after $elapsed ms", now.value >= rest.value - 0.5f)
+        }
+        assertEquals(rest.value, harness.left("Could not save").value, 0.5f)
+    }
+
+    // ARCHITECTURE 7.2: its time runs only while it can be seen and tapped; under a finger it stops, and let go it starts again.
+    @Test
+    fun `a message's time stops while a finger holds it and starts again in full when it is let go`() {
+        shown()
+        compose.mainClock.advanceTimeBy(BEFORE_HOLD_MS)
+        compose.onNodeWithText("Could not save").performTouchInput {
+            down(center)
+            moveBy(Offset(SwipeHarness.SHORT.toPx() * 2, 0f), delayMillis = FRAME_MS)
+        }
+        compose.mainClock.advanceTimeBy(HOLD_MS)
+        assertEquals(
+            harness.failed(1),
+            harness.messages.current.value
+                ?.message,
+        )
+        compose.onNodeWithText("Could not save").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(LONG_MS - SECOND_MS)
+        assertEquals(
+            harness.failed(1),
+            harness.messages.current.value
+                ?.message,
+        )
+        compose.mainClock.advanceTimeBy(2 * SECOND_MS)
+        assertEquals(
+            harness.moved,
+            harness.messages.current.value
+                ?.message,
+        )
+    }
+
+    @Test
+    fun `a swipe past the threshold ends within the time of a change`() {
+        shown()
+        harness.drag("Could not save", SwipeHarness.PAST)
+        compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
+        assertEquals(
+            harness.moved,
+            harness.messages.current.value
+                ?.message,
+        )
+    }
+
+    @Test
+    fun `a returning message caught mid-flight goes where the new swipe sends it`() {
+        shown()
+        harness.drag("Could not save", SwipeHarness.SHORT, SwipeHarness.SLOW_MS)
+        compose.mainClock.advanceTimeByFrame()
+        harness.drag("Could not save", -SwipeHarness.PAST)
+        compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
+        assertEquals(
+            harness.moved,
+            harness.messages.current.value
+                ?.message,
+        )
+    }
+
+    @Test
+    fun `a leaving message caught mid-flight and brought back stays`() {
+        val rest = shown()
+        harness.drag("Could not save", SwipeHarness.PAST)
+        compose.mainClock.advanceTimeByFrame()
+        val out = harness.left("Could not save") - rest
+        assertTrue("$out", out > 0.dp)
+        harness.drag("Could not save", -out, SwipeHarness.SLOW_MS)
+        compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
+        assertEquals(
+            harness.failed(1),
+            harness.messages.current.value
+                ?.message,
+        )
+        assertEquals(rest.value, harness.left("Could not save").value, 0.5f)
+    }
+
+    private companion object {
+        const val SETTLED_MS = 2_000L
+        const val FRAME_MS = 16L
+
+        // Sixty dp in about a second.
+        const val RETURN_STEPS = 60
+        const val RETURN_STEP_MS = 16L
+
+        // The stock host's time for a message with an action.
+        const val LONG_MS = 10_000L
+        const val SECOND_MS = 1_000L
+        const val BEFORE_HOLD_MS = 6_000L
+        const val HOLD_MS = 12_000L
+    }
+}
+
+// ARCHITECTURE 8.5: with the system's animations off, a released swipe ends at once.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SwipedMessageMotionOffTest {
+    private val compose =
+        createAndroidComposeRule<ComponentActivity>(
+            effectContext =
+                object : MotionDurationScale {
+                    override val scaleFactor = 0f
+                },
+        )
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    private val harness = SwipeHarness(compose)
+
+    @After
+    fun stop() = harness.scope.cancel()
+
+    private fun frames(count: Int) = repeat(count) { compose.mainClock.advanceTimeByFrame() }
+
+    @Test
+    fun `a swipe past the threshold shows the next message, and a short one is back, by the next frames`() {
+        with(harness) {
+            compose.mainClock.autoAdvance = false
+            show()
+            post(failed(1), moved)
+            compose.mainClock.advanceTimeBy(SETTLED_MS)
+            val rest = left("Could not save")
+            drag("Could not save", SwipeHarness.SHORT, SwipeHarness.SLOW_MS)
+            frames(2)
+            assertEquals(rest.value, left("Could not save").value, 0.5f)
+            drag("Could not save", SwipeHarness.PAST)
+            frames(4)
+            assertEquals(moved, messages.current.value?.message)
+            compose.onNodeWithText("Could not save").assertDoesNotExist()
+            compose.onNodeWithText("Moved to Completed").assertExists()
+        }
+    }
+
+    private companion object {
+        const val SETTLED_MS = 2_000L
+    }
+}
+
+// The message lies over the List's pages: a swipe on it moves the message, not the pager under it.
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "en-w411dp-h891dp")
+class SwipedMessageOverPagesTest {
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule
+    val rule: TestRule = registered(compose)
+
+    @Test
+    fun `a swipe on the message does not turn the List's page`() {
+        val events = mutableListOf<ListEvent>()
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                FixtureListScreen(ListFixtureStates.watching, ListFixtureStates.undoMessage) { events += it }
+            }
+        }
+        compose.waitForIdle()
+        val row =
+            ListFixtureStates.watching.page!!
+                .rows
+                .first()
+                .title
+        val rest = compose.onNodeWithText(row).getUnclippedBoundsInRoot().left
+        compose.onNodeWithText("Episode\u00A013 watched").performTouchInput {
+            swipe(center, center - Offset(SwipeHarness.PAST.toPx(), 0f), SwipeHarness.FAST_MS)
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Episode\u00A013 watched").assertDoesNotExist()
+        assertEquals(rest, compose.onNodeWithText(row).getUnclippedBoundsInRoot().left)
+        assertTrue("$events", events.none { it is ListEvent.SelectTab })
+        compose.onNode(hasText("Watching") and isSelectable()).assertIsSelected()
+    }
+
+    // The List's guard keeps a travelled finger from tapping; the swipe still takes the gesture it starts on the action.
+    @Test
+    fun `on the List a swipe or a drag that starts on the action never runs it`() {
+        var result: SnackbarResult? = null
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                LaunchedEffect(Unit) { result = host.showSnackbar("Episode 13 watched", "Undo", duration = SnackbarDuration.Indefinite) }
+                ListScreen(ListFixtureStates.watching, {}, host)
+            }
+        }
+        compose.waitForIdle()
+        val rest = compose.onNodeWithText("Episode 13 watched").getUnclippedBoundsInRoot().left
+        compose.onNodeWithText("Undo").performTouchInput {
+            swipe(center, center + Offset(SwipeHarness.SHORT.toPx(), 0f), SwipeHarness.SLOW_MS)
+        }
+        compose.waitForIdle()
+        assertNull(result)
+        assertEquals(rest, compose.onNodeWithText("Episode 13 watched").getUnclippedBoundsInRoot().left)
+        compose.onNodeWithText("Undo").performTouchInput {
+            swipe(center, center - Offset(0f, SwipeHarness.SHORT.toPx()), SwipeHarness.SLOW_MS)
+        }
+        compose.waitForIdle()
+        assertNull(result)
+        compose.onNodeWithText("Undo").performTouchInput {
+            swipe(center, center - Offset(SwipeHarness.PAST.toPx(), 0f), SwipeHarness.FAST_MS)
+        }
+        compose.waitForIdle()
+        assertEquals(SnackbarResult.Dismissed, result)
+    }
+}

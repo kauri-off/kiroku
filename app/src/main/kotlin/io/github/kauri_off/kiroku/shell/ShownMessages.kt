@@ -15,6 +15,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.design.component.MessageCovers
+import io.github.kauri_off.kiroku.design.component.TimedMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -55,19 +56,7 @@ fun ShownMessages(
 suspend fun SnackbarHostState.show(
     text: String,
     action: String?,
-): SnackbarResult =
-    showSnackbar(
-        text,
-        actionLabel = action,
-        duration =
-            if (action ==
-                null
-            ) {
-                SnackbarDuration.Short
-            } else {
-                SnackbarDuration.Long
-            },
-    )
+): SnackbarResult = showSnackbar(TimedMessage(text, action, if (action == null) SnackbarDuration.Short else SnackbarDuration.Long))
 
 @Composable
 fun text(text: ShellMessage.Text): String =

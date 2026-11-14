@@ -216,6 +216,15 @@ class SourceRulesTest {
     }
 
     @Test
+    fun aMessagesTimeIsTheOneDelayTheSnackbarHostsFileMayWrite() {
+        val time = "@Composable\nfun A() {\n    LaunchedEffect(x) { $MESSAGE_TIME_WAIT; data.dismiss() }\n}\n"
+        assertEquals(emptyList<String>(), motionLiteralProblems(MESSAGE_TIME_SOURCE, time))
+        assertEquals(1, motionLiteralProblems("A.kt", time).size)
+        assertEquals(1, motionLiteralProblems(MESSAGE_TIME_SOURCE, time.replace(MESSAGE_TIME_WAIT, "delay(250)")).size)
+        assertTrue(appSources().single { relative(it) == MESSAGE_TIME_SOURCE }.readText().contains(MESSAGE_TIME_WAIT))
+    }
+
+    @Test
     fun aDelayIsAnAnimationValueOnlyInUserInterfaceCode() {
         val composable = "@Composable\nfun A() {\n    LaunchedEffect(x) { delay(250); shown = true }\n}\n"
         assertEquals(1, motionLiteralProblems("A.kt", composable).size)
