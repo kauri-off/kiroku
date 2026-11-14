@@ -3,7 +3,7 @@
     <string name="common_separator">"\u00A0· "</string>
     <string name="common_list_separator">", "</string>
     <string name="common_status_progress">%1$s\u00A0· %2$d\u00A0/\u00A0%3$d</string>
-    <string name="common_status_count">%1$s\u00A0· %2$d</string>
+    <string name="common_status_count">%1$s\u00A0· просмотрено\u00A0%2$d</string>
     <string name="common_status_watching">Смотрю</string>
     <string name="common_status_planned">Запланировано</string>
     <string name="common_status_completed">Просмотрено</string>
