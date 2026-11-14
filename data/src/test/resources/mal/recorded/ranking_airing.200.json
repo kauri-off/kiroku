@@ -1,0 +1,497 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 61469,
+                "title": "Steel Ball Run: JoJo no Kimyou na Bouken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1065/158884.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1065/158884l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "JoJo's Bizarre Adventure Part 7: Steel Ball Run",
+                        "JoJo no Kimyou na Bouken Part 7: Steel Ball Run",
+                        "SBR"
+                    ],
+                    "en": "Steel Ball Run: JoJo's Bizarre Adventure",
+                    "ja": "スティール・ボール・ラン ジョジョの奇妙な冒険"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-03-19",
+                "mean": 9.03,
+                "rank": 10,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 3,
+                        "name": "Racing"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1620
+            },
+            "ranking": {
+                "rank": 1
+            }
+        },
+        {
+            "node": {
+                "id": 61967,
+                "title": "Black Clover 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1857/160133.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1857/160133l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Black Clover Season 2",
+                    "ja": "ブラッククローバー 2nd season"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-10-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "23:00"
+                },
+                "mean": 8.89,
+                "rank": 26,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1430
+            },
+            "ranking": {
+                "rank": 2
+            }
+        },
+        {
+            "node": {
+                "id": 21,
+                "title": "One Piece",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1244/138851.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "OP"
+                    ],
+                    "en": "One Piece",
+                    "ja": "ONE PIECE"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "1999-10-20",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "23:15"
+                },
+                "mean": 8.72,
+                "rank": 62,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "ranking": {
+                "rank": 3
+            }
+        },
+        {
+            "node": {
+                "id": 50250,
+                "title": "Chiikawa",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1783/121944.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1783/121944l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Chiikawa",
+                    "ja": "ちいかわ"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2022-04-04",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "07:40"
+                },
+                "mean": 8.63,
+                "rank": 94,
+                "genres": [
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 90
+            },
+            "ranking": {
+                "rank": 4
+            }
+        },
+        {
+            "node": {
+                "id": 61987,
+                "title": "Kusuriya no Hitorigoto 3rd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1028/160277.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1028/160277l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Pharmacist's Monologue",
+                        "Drugstore Soliloquy"
+                    ],
+                    "en": "The Apothecary Diaries Season 3",
+                    "ja": "薬屋のひとりごと 第3期"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-02",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "23:00"
+                },
+                "mean": 8.6,
+                "rank": 117,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 67,
+                        "name": "Medical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "ranking": {
+                "rank": 5
+            }
+        },
+        {
+            "node": {
+                "id": 55809,
+                "title": "Xian Ni",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1289/149708.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1289/149708l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "RI"
+                    ],
+                    "en": "Renegade Immortal",
+                    "ja": "仙逆"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 180,
+                "start_date": "2023-09-25",
+                "mean": 8.47,
+                "rank": 181,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "ranking": {
+                "rank": 6
+            }
+        },
+        {
+            "node": {
+                "id": 60988,
+                "title": "Tian Guan Cifu Short Films",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1174/149943.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1174/149943l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "天官賜福 短片",
+                        "TGCF"
+                    ],
+                    "en": "Heaven Official's Blessing Short Films",
+                    "ja": "天官賜福 全新动画短片"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2025-02-12",
+                "mean": 8.45,
+                "rank": 199,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    }
+                ],
+                "average_episode_duration": 480
+            },
+            "ranking": {
+                "rank": 7
+            }
+        },
+        {
+            "node": {
+                "id": 51039,
+                "title": "Doupo Cangqiong: Nian Fan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1419/126374.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1419/126374l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Fights Break Sphere 5th Season",
+                        "BTTH",
+                        "Battle Through The Heavens 5th Season",
+                        "Doupo Cangqiong: Nian Fan 1-4",
+                        "斗破苍穹年番1-4"
+                    ],
+                    "en": "Fights Break Sphere 5",
+                    "ja": "斗破苍穹年番"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 219,
+                "start_date": "2022-07-31",
+                "mean": 8.38,
+                "rank": 252,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "ranking": {
+                "rank": 8
+            }
+        },
+        {
+            "node": {
+                "id": 64534,
+                "title": "Koori no Jouheki 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1963/159754.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1963/159754l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "The Ramparts of Ice Season 2",
+                    "ja": "氷の城壁 第2期"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 13,
+                "start_date": "2026-10-02",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "23:56"
+                },
+                "mean": 8.33,
+                "rank": 298,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1435
+            },
+            "ranking": {
+                "rank": 9
+            }
+        },
+        {
+            "node": {
+                "id": 56524,
+                "title": "Tunshi Xingkong 4th Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1335/138907.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1335/138907l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "吞噬星空 宇宙篇",
+                        "Tunshi Xingkong: Yuzhou Pian",
+                        "Swallowed Star 5th Season"
+                    ],
+                    "en": "Swallowed Star 4th Season",
+                    "ja": "吞噬星空 第四季"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 175,
+                "start_date": "2023-10-03",
+                "mean": 8.32,
+                "rank": 319,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    }
+                ],
+                "average_episode_duration": 1260
+            },
+            "ranking": {
+                "rank": 10
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/anime/ranking?offset=10&ranking_type=airing&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    }
+}

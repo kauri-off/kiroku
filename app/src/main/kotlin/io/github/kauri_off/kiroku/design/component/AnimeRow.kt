@@ -16,6 +16,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -38,6 +39,13 @@ import io.github.kauri_off.kiroku.notShown
 data class RowLine(
     val text: String,
     val highlighted: Boolean = false,
+    val score: RowScore? = null,
+)
+
+// A score drawn after a line's words as a star and [text]; screen readers hear [spoken] for both.
+data class RowScore(
+    val text: String,
+    val spoken: String,
 )
 
 // The one trailing element a row may have: the MAL score, or the "+1" button.
@@ -84,7 +92,7 @@ fun AnimeRow(
             if (scoreBelow != null) {
                 {
                     Column {
-                        ScoredLine(lines.firstOrNull(), scoreBelow)
+                        ScoredLine(lines.firstOrNull()?.text, RowScore(scoreBelow.text, malScoreSpoken(scoreBelow)))
                         lines.drop(1).forEach { SupportingLine(it) }
                     }
                 }
@@ -102,7 +110,9 @@ const val MAX_SUPPORTING_LINES = 2
 
 @Composable
 private fun SupportingLine(line: RowLine) {
-    if (line.highlighted) {
+    if (line.score != null) {
+        ScoredLine(line.text, line.score)
+    } else if (line.highlighted) {
         Text(line.text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
     } else {
         Text(line.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -121,7 +131,7 @@ private fun Trailing(trailing: RowTrailing) {
 @Composable
 private fun MalScore(trailing: RowTrailing.MalScore) {
     val style = MaterialTheme.typography.labelLarge
-    val spoken = stringResource(R.string.design_mal_score, trailing.text)
+    val spoken = malScoreSpoken(trailing)
     val star = with(LocalDensity.current) { style.lineHeight.toDp() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -136,23 +146,32 @@ private fun MalScore(trailing: RowTrailing.MalScore) {
 // A supporting line with the star and the score after it; a wrap falls before the score's "·", never after it.
 @Composable
 private fun ScoredLine(
-    line: RowLine?,
-    score: RowTrailing.MalScore,
+    words: String?,
+    score: RowScore,
 ) {
     val separator = stringResource(R.string.common_separator)
-    val spoken = listOfNotNull(line?.text, stringResource(R.string.design_mal_score, score.text)).joinToString(separator)
+    val spoken = listOfNotNull(words, score.spoken).joinToString(separator)
+    val drawn = remember { DrawnTitle() }
     val star =
         InlineTextContent(scorePlaceholder) {
             Icon(painterResource(R.drawable.ic_star), contentDescription = null, modifier = Modifier.fillMaxSize())
         }
     Text(
-        scoredLineText(line?.text, score.text, stringResource(R.string.design_score_separator)),
+        scoredLineText(words, score.text, stringResource(R.string.design_score_separator)),
         inlineContent = mapOf(STAR to star),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.clearAndSetSemantics { this.text = AnnotatedString(spoken) },
+        modifier =
+            Modifier.clearAndSetSemantics {
+                this.text = AnnotatedString(spoken)
+                this[DrawnTitleKey] = drawn
+            },
+        onTextLayout = { drawn.layout = it },
     )
 }
+
+@Composable
+private fun malScoreSpoken(score: RowTrailing.MalScore): String = stringResource(R.string.design_mal_score, score.text)
 
 internal fun scoredLineText(
     line: String?,

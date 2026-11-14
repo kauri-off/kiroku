@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -65,9 +67,9 @@ import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
-import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
+import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.CoversMessages
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.RowLine
@@ -141,7 +143,7 @@ fun ListScreen(
         }
     }
     val page = state.page
-    if (state.sortSheetOpen && page != null) SortSheet(page.sort, page.sorts, onEvent)
+    if (state.sortSheetOpen && page != null) SortSheet(page, onEvent)
 }
 
 // What every page shows besides its own rows; a tab switch changes none of it, so no page or row is composed again.
@@ -202,7 +204,7 @@ private fun Pages(
                 snapPositionalThreshold = PAGE_TURN,
             ),
     ) { index ->
-        Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown, padding, onEvent)
+        Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown.filter, shown.owner, shown.now, padding, onEvent)
     }
 }
 
@@ -246,21 +248,22 @@ private fun Modifier.withoutTravelledTaps(): Modifier =
 private fun Page(
     status: ListStatus,
     page: ListPage,
-    shown: Shown,
+    filter: String,
+    owner: ListOwner,
+    now: Instant,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
     val positions = rememberSaveableStateHolder()
-    val filter = shown.filter
     // Keyed by whether the rows are unfiltered.
     positions.SaveableStateProvider(filter.isEmpty()) {
         key(page.sort, page.ordering, filter) {
             if (page.rows.isEmpty()) {
                 // A list, so that an empty tab can be pulled to refresh too.
-                val empty = emptyState(filter, shown.owner, status, onEvent)
+                val empty = emptyState(filter, owner, status, onEvent)
                 LazyColumn(Modifier.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
             } else {
-                Rows(page.rows, shown.owner, shown.now, padding, onEvent)
+                Rows(page.rows, owner, now, padding, onEvent)
             }
         }
     }
@@ -403,7 +406,7 @@ private fun Rows(
                     onClick = { onEvent(ListEvent.Open(row.id)) },
                     lines =
                         listOfNotNull(
-                            RowLine(text.line2(row.line2)),
+                            text.line2(row.line2, row.sortedBy),
                             row.line3?.let { RowLine(text.line3(it), highlighted = it is Line3.ToWatch) },
                         ),
                     trailing =
@@ -431,8 +434,7 @@ private fun Rows(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortSheet(
-    selected: ListSort,
-    sorts: List<ListSort>,
+    page: ListPage,
     onEvent: (ListEvent) -> Unit,
 ) {
     CoversMessages()
@@ -441,28 +443,51 @@ private fun SortSheet(
         sheetState = rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
     ) {
         WindowWithoutAutofill()
-        Text(
-            stringResource(R.string.list_sort_by),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s).semantics { heading() },
-        )
-        Column(Modifier.selectableGroup().padding(bottom = Spacing.s)) {
-            sorts.forEach { sort ->
-                ListItem(
-                    selected = sort == selected,
-                    onClick = { onEvent(ListEvent.SelectSort(sort)) },
-                    leadingContent = { RadioButton(selected = sort == selected, onClick = null) },
-                    // The radio button states the choice; the row keeps the sheet's colour.
-                    colors =
-                        ListItemDefaults.colors(
-                            containerColor = BottomSheetDefaults.ContainerColor,
-                            selectedContainerColor = BottomSheetDefaults.ContainerColor,
-                            selectedContentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    content = { Text(stringResource(sort.labelRes())) },
-                )
-            }
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+            SortChoices(page, onEvent)
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortChoices(
+    page: ListPage,
+    onEvent: (ListEvent) -> Unit,
+) {
+    val selected = page.sort
+    Text(
+        stringResource(R.string.list_sort_by),
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s).semantics { heading() },
+    )
+    Column(Modifier.selectableGroup().padding(bottom = Spacing.s)) {
+        page.sorts.forEach { sort ->
+            ListItem(
+                selected = sort == selected,
+                onClick = { onEvent(ListEvent.SelectSort(sort)) },
+                leadingContent = { RadioButton(selected = sort == selected, onClick = null) },
+                // The radio button states the choice; the row keeps the sheet's colour.
+                colors =
+                    ListItemDefaults.colors(
+                        containerColor = BottomSheetDefaults.ContainerColor,
+                        selectedContainerColor = BottomSheetDefaults.ContainerColor,
+                        selectedContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                content = { Text(stringResource(sort.labelRes())) },
+            )
+        }
+    }
+    // "Up next" is a grouping, not a scale: with it chosen there is no direction to choose.
+    val directions = selected.directions()
+    if (directions.isNotEmpty()) {
+        ConnectedChoice(
+            labels = directions.map { stringResource(it.second) },
+            chosen = directions.indexOfFirst { it.first == page.direction },
+            onChoose = { onEvent(ListEvent.SelectDirection(directions[it].first)) },
+            modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l),
+            reselect = true,
+        )
     }
 }
 

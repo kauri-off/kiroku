@@ -21,7 +21,7 @@ row. The owner is the final authority on the Russian column.
 | Undo | Undo | Отменить | Only for Undo. A dialog is dismissed with Cancel / «Отмена»; unsaved changes with Discard / Keep editing, «Не сохранять» / «Вернуться» |
 | Edit | Edit / Change | Изменить | A row's long press and its spoken action; the action of the "Added" snackbar |
 | The user's score | Your score / Not scored / Rate | Ваша оценка / Без оценки / Оценить | |
-| MAL's score and rank | MAL score / Ranked #12 | Оценка MAL / №12 в рейтинге | Never the bare number, except in front of the title in a ranked browse list (`1.`) and as a row's score after a star (`★ 8.71`), spoken "MAL score 8.71" |
+| MAL's score and rank | MAL score / Ranked #12 | Оценка MAL / №12 в рейтинге | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms) |
 | The default sort | Up next | На очереди | |
 | Synopsis, Related, Details | Synopsis, Related, Details | Описание, Связанное, Подробности | |
 | Airing status | Airing / Finished / Not yet aired | Выходит / Завершено / Ещё не вышло | |
@@ -41,6 +41,7 @@ setting decide.
 | Progress in a list row | `Watched 12 of 24` / `Watched 212` | `Просмотрено 12 из 24` / `Просмотрено 212` | The second form when the total is unknown. The count is written as it is, also above the total. A line may break after the verb, never inside `12 of 24` |
 | Progress beside a status | `Watching · 12 / 24` / `Watching · watched 212` | `Смотрю · 12 / 24` / `Смотрю · просмотрено 212` | In search results and "See all". The second form when the total is unknown, with the List's word in lower case |
 | Aired count | `14 aired` / `~14 aired` | `Вышло 14` / `Вышло ~14` | Without the total. "~" marks an estimate |
+| A score after a star | `★ 8.71` / `Watched 12 of 24 · ★ 10` | `★ 8,71` / `Просмотрено 12 из 24 · ★ 10` | MAL's score in a row, and the user's after line 2 in a List tab sorted by score. The star never parts from its number and is spoken as the score's name: "MAL score 8.71", "Score 10". A wrap falls before the score's «·» |
 | Episodes to watch | `2 to watch` / `~2 to watch` | `К просмотру: 2` / `К просмотру: ~2` | The colon avoids a plural. Lower case after «·»: `· к просмотру: 2` |
 | Next episode | `Episode 15 · Sat 17:30` | `Серия 15 · сб 17:30` | One form everywhere. The time is "today" / «сегодня», "tomorrow" / «завтра», the weekday within six days, then the date (`14 Nov, 17:30` / `14 нояб., 17:30`), in lower case, because an air time always follows other text. A wrap falls before «·» |
 | Premiere, time known | `Premieres Sat 17:30` | `Премьера сб 17:30` | Time as for the next episode. No colon |

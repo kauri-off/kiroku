@@ -4,6 +4,8 @@ import android.provider.Settings
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.RowScore
 import io.github.kauri_off.kiroku.text.AirTimeText
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -65,6 +67,29 @@ class ListTextTest {
         assertEquals("Premieres January\u00A02027", text.premiere(Premiere.InMonth(YearMonth.of(2027, 1))))
         assertEquals("Premieres\u00A02027", text.premiere(Premiere.InYear(Year.of(2027))))
         assertEquals("Not scored", text.line2(Line2.Score(null)))
+    }
+
+    @Test
+    @Config(qualifiers = "ru")
+    fun `russian line 2 is followed by the value the tab is sorted by, the score spoken by its name`() {
+        val text = text()
+        val progress = Line2.Progress(12, 24)
+        assertEquals(
+            RowLine("Просмотрено 12\u00A0из\u00A024", score = RowScore("10", "Оценка:\u00A010")),
+            text.line2(progress, SortedBy.Score(10)),
+        )
+        assertEquals(RowLine("Просмотрено 12\u00A0из\u00A024\u00A0· 2025"), text.line2(progress, SortedBy.StartYear(2025)))
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `english line 2 is followed by the score or the start year`() {
+        val text = text()
+        val progress = Line2.Progress(12, 24)
+        assertEquals(RowLine("Watched 12\u00A0of\u00A024"), text.line2(progress, null))
+        assertEquals(RowLine("Watched 12\u00A0of\u00A024", score = RowScore("8", "Score\u00A08")), text.line2(progress, SortedBy.Score(8)))
+        assertEquals(RowLine("Watched 12\u00A0of\u00A024\u00A0· 2025"), text.line2(progress, SortedBy.StartYear(2025)))
+        assertEquals(RowLine("Score\u00A08\u00A0· 2024"), text.line2(Line2.Score(8), SortedBy.StartYear(2024)))
     }
 
     @Test

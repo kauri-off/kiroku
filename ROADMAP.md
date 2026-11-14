@@ -101,19 +101,7 @@ on the Russian strings so far are fixed.
   all; the reporter's output for an exception whose message holds a title does not hold it; the tests that
   skipped themselves with a client id are gone or run. The release guards pass.
 
-- [ ] **M2-10 [A] Recorder for answers that need only the client id.** The build task of section 11.1, run by
-  agents through `tools/gw`: a list of requests kept in the repository, the field sets written once for the
-  recorder and the clients alike, and a sanitiser that replaces the two user names wherever MAL repeats them and
-  keeps at most ten entries of a list page. First recordings: titles (airing, finished, a film, not yet aired, one
-  with no related titles, one with an unknown episode count, one adult title with adult content on and off); an
-  unknown title; the public list in three pages, the private list and an unknown user name; a request with an
-  invalid token and a refresh with an invalid refresh token.
-  **Needs:** M2-01, M2-04; the three list answers need M2-02.
-  **Check:** `tools/gw :data:<the task>` writes the files; with `-Pkiroku.malClientId=` it fails with "no client
-  id" before any request; the task is in no build or check; tests: a planted answer leaves the sanitiser without
-  its user name, and no header is written; every file among the recorded answers is named by a recorder's list.
-  Only the orchestrator checks that no file holds the client id:
-  `grep -rlF "$(sed -n 's/^kiroku\.malClientId=//p' ~/.gradle/gradle.properties)" data/src` prints nothing.
+- [x] **M2-10 [A] Recorder for answers that need only the client id.**
 
 - [ ] **M2-11 Sign-in in the app.** The sign-in route and its view model join M2-07 to M2-08: the List's
   signed-out state, the session banner and a title page lead to it, "Browse without an account" goes to Search, a
@@ -220,9 +208,9 @@ on the Russian strings so far are fixed.
   nothing, a stale one refreshes once; a failed load is repeated once when the connection returns and not again
   while it stays.
 
-- [ ] **M2-23 List state for a real store.** The sort of each tab is kept across restarts, in the preferences
-  store, which `:data` gains here. The List's state is produced off the main thread, and a change to one entry
-  rebuilds its row and its tab alone.
+- [ ] **M2-23 List state for a real store.** The sort and direction of each tab are kept across restarts, in the
+  preferences store, which `:data` gains here. The List's state is produced off the main thread, and a change to one
+  entry rebuilds its row and its tab alone.
   **Needs:** M2-22.
   **Check:** tests: a new process over the same store shows the chosen sorts; after a "+1" every other row is
   the same object and one row recomposes; no state is built on the main thread.

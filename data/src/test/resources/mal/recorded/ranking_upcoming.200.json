@@ -1,0 +1,463 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 62516,
+                "title": "Dandadan 3rd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1671/154516.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1671/154516l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Dan Da Dan Season 3",
+                    "ja": "ダンダダン 第3期"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027",
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 1
+            }
+        },
+        {
+            "node": {
+                "id": 59068,
+                "title": "Dungeon Meshi Season 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1830/158890.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1830/158890l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Dungeon Food"
+                    ],
+                    "en": "Delicious in Dungeon Season 2",
+                    "ja": "ダンジョン飯 Season2"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027-10",
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 47,
+                        "name": "Gourmet"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 2
+            }
+        },
+        {
+            "node": {
+                "id": 57584,
+                "title": "Kage no Jitsuryokusha ni Naritakute! Movie: Zankyou-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1797/156362.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1797/156362l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Eminence in Shadow Movie: Lost Echoes Arc"
+                    ],
+                    "en": "The Eminence in Shadow: Lost Echoes",
+                    "ja": "劇場版 陰の実力者 になりたくて！残響編"
+                },
+                "media_type": "movie",
+                "status": "not_yet_aired",
+                "num_episodes": 1,
+                "start_date": "2027",
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 72,
+                        "name": "Reincarnation"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 3
+            }
+        },
+        {
+            "node": {
+                "id": 61006,
+                "title": "Bocchi the Rock! 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1142/148003.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1142/148003l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Bocchi the Rock! Season 2",
+                    "ja": "ぼっち・ざ・ろっく！ 2期"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "genres": [
+                    {
+                        "id": 52,
+                        "name": "CGDCT"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 4
+            }
+        },
+        {
+            "node": {
+                "id": 63816,
+                "title": "Sousou no Frieren: Ougonkyou-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1619/156313.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1619/156313l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Frieren at the Funeral Season 3"
+                    ],
+                    "en": "Frieren: Beyond Journey's End - Golden Land Arc",
+                    "ja": "葬送のフリーレン 黄金郷編"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027-10",
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 5
+            }
+        },
+        {
+            "node": {
+                "id": 59873,
+                "title": "Tokidoki Bosotto Russia-go de Dereru Tonari no Alya-san Season 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1711/156333.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1711/156333l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Alya Sometimes Hides Her Feelings in Russian Season 2"
+                    ],
+                    "en": "Alya Sometimes Hides Her Feelings in Russian Season 2",
+                    "ja": "時々ボソッとロシア語でデレる隣のアーリャさん Season 2"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027",
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 6
+            }
+        },
+        {
+            "node": {
+                "id": 62546,
+                "title": "Kimetsu no Yaiba Movie 2: Mugenjou-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1000/152184.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1000/152184l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Demon Slayer: Kimetsu no Yaiba - The Movie: Infinity Castle - Part 2"
+                    ],
+                    "en": "Demon Slayer: Kimetsu no Yaiba Infinity Castle II",
+                    "ja": "劇場版 鬼滅の刃 無限城編"
+                },
+                "media_type": "movie",
+                "status": "not_yet_aired",
+                "num_episodes": 1,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 7
+            }
+        },
+        {
+            "node": {
+                "id": 56732,
+                "title": "Sekai Saikou no Ansatsusha, Isekai Kizoku ni Tensei suru Season 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1582/159858.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1582/159858l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The world's best assassin, To reincarnate in a different world aristocrat",
+                        "Ansatsu Kizoku Season 2"
+                    ],
+                    "en": "The World's Finest Assassin Gets Reincarnated in Another World as an Aristocrat Season 2",
+                    "ja": "世界最高の暗殺者、異世界貴族に転生する Season2"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027-01",
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 72,
+                        "name": "Reincarnation"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 8
+            }
+        },
+        {
+            "node": {
+                "id": 63143,
+                "title": "Chainsaw Man: Shikaku-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1432/154522.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1432/154522l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "CSM"
+                    ],
+                    "en": "Chainsaw Man: Assassins Arc",
+                    "ja": "チェンソーマン刺客篇"
+                },
+                "media_type": "unknown",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 58,
+                        "name": "Gore"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 82,
+                        "name": "Urban Fantasy"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 9
+            }
+        },
+        {
+            "node": {
+                "id": 58934,
+                "title": "Mashle: Sanma Taisou Shinkakusha Saishuu Shiken-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1346/160994.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1346/160994l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Mashle 3rd Season"
+                    ],
+                    "en": "Mashle: Magic and Muscles - The Tri-Magicathlon Divine Visionary Final Exam Arc",
+                    "ja": "マッシュル-MASHLE- 続編 三魔対争神覚者最終試験編"
+                },
+                "media_type": "tv",
+                "status": "not_yet_aired",
+                "num_episodes": 0,
+                "start_date": "2027-01-10",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:00"
+                },
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 57,
+                        "name": "Gag Humor"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "ranking": {
+                "rank": 10
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/anime/ranking?offset=10&ranking_type=upcoming&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    }
+}
