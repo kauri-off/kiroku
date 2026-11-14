@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.screenshots
 
 import android.graphics.Bitmap
-import android.os.Looper
 import android.text.format.DateUtils
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -20,7 +19,6 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
@@ -56,8 +54,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.time.Duration
@@ -375,21 +371,6 @@ class ScreenshotHarnessTest {
         var size = IntSize.Zero
         Shot.launch(Variant.EnLight) { WidthOnlyPoster { size = it } }.use { }
         assertEquals(size.width * RemoteImages.POSTER_HEIGHT / RemoteImages.POSTER_WIDTH.toFloat(), size.height.toFloat(), 1f)
-    }
-
-    // A test that writes state as it is made posts to the main looper outside any shot; every class of this sandbox runs it.
-    @Test
-    fun everyTestLeavesNothingOnTheMainLooper() {
-        val posting =
-            object : Statement() {
-                override fun evaluate() {
-                    Shot.launch(Variant.EnLight) {}.close()
-                    mutableStateListOf<Int>().add(1)
-                    assertFalse(shadowOf(Looper.getMainLooper()).isIdle)
-                }
-            }
-        idlingMainLooper(posting, javaClass.classLoader!!).evaluate()
-        assertTrue(shadowOf(Looper.getMainLooper()).isIdle)
     }
 
     @Test

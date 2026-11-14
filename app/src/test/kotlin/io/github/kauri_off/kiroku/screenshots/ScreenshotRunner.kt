@@ -57,8 +57,14 @@ internal fun idlingMainLooper(
 ): Statement =
     object : Statement() {
         override fun evaluate() {
-            test.evaluate()
-            Class.forName("org.robolectric.shadows.ShadowLooper", true, sandbox).getMethod("idleMainLooper").invoke(null)
+            val idle = { Class.forName("org.robolectric.shadows.ShadowLooper", true, sandbox).getMethod("idleMainLooper").invoke(null) }
+            try {
+                test.evaluate()
+            } catch (failure: Throwable) {
+                runCatching(idle).exceptionOrNull()?.let(failure::addSuppressed)
+                throw failure
+            }
+            idle()
         }
     }
 

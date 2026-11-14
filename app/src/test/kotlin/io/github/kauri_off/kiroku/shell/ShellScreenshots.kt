@@ -56,7 +56,14 @@ class ShellScreenshots : ScreenshotRegistry() {
                 }
             },
             navigatorOf().let { navigator ->
-                Transition("search", "list", MotionBounds.SCREEN, at = MOMENTS, change = { navigator.select(Destination.Search) }) {
+                Transition(
+                    "search",
+                    "list",
+                    MotionBounds.SCREEN,
+                    at = ACROSS,
+                    lead = BAR_LEAD,
+                    change = { navigator.select(Destination.Search) },
+                ) {
                     Screens(navigator)
                 }
             },
@@ -75,6 +82,10 @@ class ShellScreenshots : ScreenshotRegistry() {
 
         // The slow effects spring does most of its way early: the moments are taken while the screens move.
         val MOMENTS = listOf(32L, 80L, 160L, MotionBounds.SCREEN)
+
+        // The bar's indicator moves before the screens, whose fade is over within a few frames.
+        const val BAR_LEAD = 32L
+        val ACROSS = listOf(48L, 64L, 80L, MotionBounds.SCREEN)
 
         // The finger reaches half-way in eight frames, holds for eight and lets go; the rest settles.
         const val GESTURE = 700L

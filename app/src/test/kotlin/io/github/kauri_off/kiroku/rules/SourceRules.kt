@@ -79,7 +79,7 @@ private val interfaceCode = Regex("""@Composable\b|^import androidx\.compose\.(?
 // Animation calls that fall back to Compose's own spec when their arguments name nothing from the motion scheme.
 private val specCalls =
     Regex(
-        """\b(animate(?!Scroll)\w*|Crossfade|AnimatedContent|AnimatedVisibility|fadeIn|fadeOut|slideIn\w*|slideOut\w*|""" +
+        """\b(animate(?!Scroll)\w*|Crossfade|AnimatedContent|AnimatedVisibility|fadeIn|fadeOut|slideIn\w*|slideOut\w*|unveilIn|veilOut|""" +
             """expandIn|expandVertically|expandHorizontally|shrinkOut|shrinkVertically|shrinkHorizontally|scaleIn|scaleOut)""" +
             """\s*(<[^>()]*>)?\s*[({]""",
     )
@@ -226,11 +226,11 @@ fun webViewProblems(
     }
 }
 
-// ARCHITECTURE 8.5: NavDisplay runs the back gesture and previews it with its own default; no app code reads it.
+// ARCHITECTURE 8.5: app code may give NavDisplay a preview to seek, and never reads the back gesture itself.
 private val backGesture =
     Regex(
-        """\b(PredictiveBackHandler|NavigationEventHandler|NavigationBackHandler|rememberNavigationEventState|""" +
-            """predictivePopTransitionSpec|PredictivePopTransitionKey|OnBackAnimationCallback|handleOnBackProgressed)\b""",
+        """(?i)\w*navigationEvent\w*|\b(PredictiveBackHandler|NavigationBackHandler|OnBackAnimationCallback|""" +
+            """handleOnBackProgressed|SeekableTransitionState|BackEventCompat|BackEvent)\b""",
     )
 
 fun backGestureProblems(

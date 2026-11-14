@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.shell
 
+import androidx.compose.material3.DrawerDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -42,7 +43,6 @@ private fun Placeholder(
 ) = PlaceholderScreen(PlaceholderState(destination, sessionExpired), { onSignIn() }, snackbars)
 
 // One NavDisplay over the List's stack and the current destination's, so Back from another root shows the List.
-// The back gesture's preview is NavDisplay's own.
 @Composable
 fun ShellRoute(
     navigator: ShellNavigator = rememberShellNavigator(),
@@ -69,6 +69,7 @@ fun ShellRoute(
     val motionScheme = MaterialTheme.motionScheme
     val step = with(LocalDensity.current) { Spacing.xxl.roundToPx() }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val scrim = DrawerDefaults.scrimColor
     ShellScreen(
         state = ShellState(navigator.current),
         onEvent = { event ->
@@ -81,6 +82,7 @@ fun ShellRoute(
             entries = navigator.visible.flatMap { decorated.getValue(it) },
             transitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
             popTransitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
+            predictivePopTransitionSpec = { backPreview(motionScheme, scrim) },
             onBack = { navigator.back() },
         )
     }

@@ -263,6 +263,7 @@ class SourceRulesTest {
             "slideInVertically { it }",
             "expandVertically()",
             "scaleIn()",
+            "unveilIn(initialColor = scrim)",
             "animateFloatAsState(target, Motion.fastEffects())",
             "animatable.animateTo(1f, motionScheme)",
             "animatable.animateTo(1f, motionScheme.defaultSpatialSpec())",
@@ -274,6 +275,7 @@ class SourceRulesTest {
             "animateFloatAsState(target, MaterialTheme.motionScheme.fastEffectsSpec())",
             "AnimatedVisibility(visible, enter = fadeIn(motionScheme.defaultEffectsSpec()), exit = fadeOut(motionScheme.fastEffectsSpec())) { }",
             "Modifier.animateContentSize(motionScheme.fastEffectsSpec())",
+            "unveilIn(motionScheme.fastEffectsSpec(), scrim, true)",
             "animatable.animateTo(1f, motionScheme.slowEffectsSpec())",
             "state.animateScrollToItem(0)",
         )) {
@@ -354,13 +356,16 @@ class SourceRulesTest {
         val planted =
             listOf(
                 "PredictiveBackHandler { progress -> progress.collect { } }",
-                "NavDisplay(entries, predictivePopTransitionSpec = { slide }, onBack = back)",
-                "val state = rememberNavigationEventState(sceneState)",
+                "rememberNavigationEventState(sceneState)",
                 "NavigationBackHandler(sceneState, state, onBackCompleted = back)",
-                "metadata = mapOf(NavDisplay.PredictivePopTransitionKey to spec)",
+                "LocalNavigationEventDispatcherOwner.current!!.navigationEventDispatcher.transitionState.collect { }",
+                "LocalNavAnimatedContentScope.current.transition.let { (it as SeekableTransitionState<*>).fraction }",
+                "DirectNavigationEventInput().backProgressed(event)",
+                "object : OnBackPressedCallback(true) { override fun handleOnBackProgressed(e: BackEventCompat) { } }",
             )
         for (source in planted) assertEquals(source, 1, backGestureProblems("A.kt", "val a = $source\n").size)
-        assertEquals(emptyList<String>(), backGestureProblems("A.kt", "// no PredictiveBackHandler\nBackHandler(enabled) { clear() }\n"))
+        val clean = "NavDisplay(entries, predictivePopTransitionSpec = { backPreview(motionScheme, scrim) }, onBack = back)\n"
+        assertEquals(emptyList<String>(), backGestureProblems("A.kt", clean + "BackHandler(enabled) { clear() }\n"))
     }
 
     @Test

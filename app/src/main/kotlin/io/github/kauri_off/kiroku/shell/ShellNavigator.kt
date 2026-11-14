@@ -48,11 +48,13 @@ class ShellNavigator(
 
     // Takes [key] off every stack that holds it; a root stays.
     fun remove(key: NavKey) {
+        if (backStack.last() == key) way = Way.Up
         stacks.values.forEach { stack -> (stack.lastIndex downTo 1).filter { stack[it] == key }.forEach { stack.removeAt(it) } }
     }
 
     // Shows [destination] with its stack popped to its root.
     fun home(destination: Destination) {
+        way = if (destination == current) Way.Up else Way.Across
         selected.value = destination
         stacks.getValue(destination).popTo(1)
     }

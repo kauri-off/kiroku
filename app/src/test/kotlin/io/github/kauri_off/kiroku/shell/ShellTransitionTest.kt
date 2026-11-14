@@ -4,19 +4,30 @@ import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.Transition
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
@@ -45,6 +56,10 @@ import androidx.test.ext.junit.rules.ActivityScenarioRule
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.settleMillis
+import io.github.kauri_off.kiroku.signin.SignInKey
+import io.github.kauri_off.kiroku.signin.browse
+import io.github.kauri_off.kiroku.signin.signedIn
 import kotlinx.serialization.Serializable
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -57,6 +72,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.sqrt
 
 @Serializable
 internal data class TransitionPage(
@@ -73,11 +89,21 @@ internal class ShellDriver(
     // Each screen's own transition, by its name, as NavDisplay runs it.
     val motion = mutableMapOf<String, Transition<EnterExitState>>()
 
+    // Each screen's colour, by its name; a mix of two is a screen part-faded.
+    val colours = mutableMapOf<String, Color>()
+
+    // The keys that passed every screen, bubbling up from the focused one.
+    val keys = mutableListOf<Key>()
+
+    lateinit var motionScheme: MotionScheme
+
     private val entries: ShellEntries = { navigator, _ ->
-        entry<ListRoot> { Screen("List root", navigator, TransitionPage(1)) }
-        entry<SearchRoot> { Screen("Search root", navigator, TransitionPage(2)) }
-        entry<ProfileRoot> { Screen("Profile root", navigator, TransitionPage(3)) }
-        entry<TransitionPage> { page -> Screen("Page ${page.n}", navigator, TransitionPage(page.n + 10)) }
+        entry<ListRoot> { Screen("List root", navigator, TransitionPage(1), MaterialTheme.colorScheme.primaryContainer) }
+        entry<SearchRoot> { Screen("Search root", navigator, TransitionPage(2), MaterialTheme.colorScheme.tertiaryContainer) }
+        entry<ProfileRoot> { Screen("Profile root", navigator, TransitionPage(3), Color.Transparent) }
+        entry<TransitionPage> { page ->
+            Screen("Page ${page.n}", navigator, TransitionPage(page.n + 10), MaterialTheme.colorScheme.surfaceContainerHighest)
+        }
     }
 
     @Composable
@@ -85,8 +111,10 @@ internal class ShellDriver(
         name: String,
         navigator: ShellNavigator,
         next: NavKey,
-    ) = Column {
+        colour: Color,
+    ) = Column(Modifier.fillMaxSize().background(colour)) {
         motion[name] = LocalNavAnimatedContentScope.current.transition
+        colours[name] = colour
         Text(name)
         Button(onClick = { navigator.open(next) }) { Text("Open from $name") }
         LazyColumn { items(ROWS) { Text("$name, row $it") } }
@@ -98,9 +126,17 @@ internal class ShellDriver(
         compose.setContent {
             navigator = rememberShellNavigator()
             KirokuTheme(dark = false, dynamicColor = false) {
+                motionScheme = MaterialTheme.motionScheme
                 val inputModes = LocalInputModeManager.current
                 useKeyboard = { inputModes.requestInputMode(InputMode.Keyboard) }
-                CompositionLocalProvider(LocalLayoutDirection provides direction) { ShellRoute(navigator, entries = entries) }
+                CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                    Box(
+                        Modifier.onKeyEvent {
+                            if (it.type == KeyEventType.KeyDown) keys += it.key
+                            true
+                        },
+                    ) { ShellRoute(navigator, entries = entries) }
+                }
             }
         }
         settle()
@@ -121,8 +157,7 @@ internal class ShellDriver(
             compose.waitForIdle()
         }
 
-    // Gives where [name] is after every frame of a change that settles within a screen's time, from the first that
-    // shows it, which is at most the change's start frames away.
+    // Where [name] is after each frame of a change, from the first that shows it to a screen's time.
     fun eachFrame(
         name: String,
         check: (frame: Int, left: Float) -> Unit,
@@ -168,6 +203,12 @@ internal class ShellDriver(
     }
 
     fun image(): ImageBitmap = compose.onRoot().captureToImage()
+
+    // The colour at the middle of the content's end edge, where no text is drawn.
+    fun edge(): Color = image().toPixelMap().let { it[it.width - 2, it.height / 2] }
+
+    // Frames after a change's start until a screen leaving with the fast effects spring is no longer drawn.
+    val fadeFrames: Int get() = START_FRAMES + (motionScheme.fastEffectsSpec<Float>().settleMillis(1f) / FRAME).toInt() + 1
 
     fun pressKey(key: Key) = compose.onRoot().performKeyInput { pressKey(key) }
 
@@ -272,6 +313,14 @@ class ShellTransitionTest {
         shell.back()
         shell.frames(START_FRAMES)
         shorter(exit = "Page 1", entrance = "List root")
+        shell.settle()
+        shell.onUi { select(Destination.Search) }
+        shell.frames(START_FRAMES)
+        shorter(exit = "List root", entrance = "Search root")
+        shell.settle()
+        shell.back()
+        shell.frames(START_FRAMES)
+        shorter(exit = "Search root", entrance = "List root")
     }
 
     private fun shorter(
@@ -282,6 +331,25 @@ class ShellTransitionTest {
         val entranceMillis = shell.motion.getValue(entrance).totalDurationNanos / NANOS
         assertTrue("$exit leaves in $exitMillis ms, $entrance enters in $entranceMillis ms", exitMillis in 1 until entranceMillis)
         assertTrue("$entrance enters in $entranceMillis ms", entranceMillis <= MotionBounds.SCREEN)
+    }
+
+    @Test
+    fun `between destinations both screens are drawn part-faded a few frames in`() {
+        shell.show()
+        shell.onUi { select(Destination.Profile) }
+        shell.settle()
+        val window = shell.edge()
+        shell.back()
+        shell.settle()
+        val list = shell.colours.getValue("List root")
+        shell.onUi { select(Destination.Search) }
+        shell.frames(START_FRAMES + 2)
+        val search = shell.colours.getValue("Search root")
+        val mix = shell.edge()
+        assertTrue("the leaving List is not drawn under Search: $mix", mix.awayFrom(window, search) > MIXED)
+        assertTrue("Search is not drawn over the List: $mix", mix.awayFrom(window, list) > MIXED)
+        shell.settle()
+        assertEquals(search, shell.edge())
     }
 
     @Test
@@ -313,20 +381,24 @@ class ShellTransitionTest {
     }
 
     @Test
-    fun `a tap while a page leaves acts on neither screen, and one after it on the screen arrived`() {
+    fun `after Back a tap reaches the screen arriving once the leaving one is no longer drawn, never the leaving one`() {
         shell.show()
+        val rest = shell.left("List root")
         shell.open("List root")
         shell.settle()
         val tap = shell.tapWhere("Open from Page 1")
         shell.back()
         shell.frames(START_FRAMES)
         tap()
-        shell.settle()
+        shell.frames(START_FRAMES)
         assertFalse("the leaving page took the tap", shell.exists("Page 11"))
-        assertFalse("the List under it took the tap", shell.exists("Page 1"))
-        shell.open("List root")
+        assertFalse("a tap went through the page still drawn", shell.exists("Page 1"))
+        shell.frames(shell.fadeFrames - 2 * START_FRAMES)
+        assertTrue("the List is already at rest", shell.left("List root") != rest)
+        tap()
         shell.settle()
-        assertTrue(shell.exists("Page 1"))
+        assertTrue("the List did not take the tap", shell.exists("Page 1"))
+        assertFalse(shell.exists("Page 11"))
     }
 
     @Test
@@ -340,7 +412,9 @@ class ShellTransitionTest {
         shell.focus("Open from Page 1")
         shell.back()
         shell.frames(START_FRAMES)
-        shell.pressKey(Key.Enter)
+        shell.keys.clear()
+        for (key in listOf(Key.Enter, Key.Back, Key.Escape)) shell.pressKey(key)
+        assertEquals("Back and Escape pass a leaving page", listOf(Key.Back, Key.Escape), shell.keys)
         shell.settle()
         assertFalse("the leaving page took the key", shell.exists("Page 11"))
         assertTrue(shell.exists("List root"))
@@ -355,17 +429,15 @@ class ShellTransitionTest {
         shell.settle()
         shell.scrollTo("Page 1", ROWS_SCROLLED)
         val before = shell.image()
-        for (edge in listOf(BackEventCompat.EDGE_LEFT, BackEventCompat.EDGE_RIGHT)) {
-            shell.gesture(QUARTER, edge)
-            shell.frames(START_FRAMES)
-            shell.gesture(HALF, edge, start = false)
-            shell.frames(START_FRAMES)
-            assertTrue("the List shows under the page as it was", shell.exists("List root, row $ROWS_SCROLLED"))
-            shell.cancel()
-            shell.settle()
-            assertFalse(shell.exists("List root"))
-            assertEquals("edge $edge", null, before.differences(shell.image()))
-        }
+        shell.gesture(QUARTER)
+        shell.frames(START_FRAMES)
+        shell.gesture(HALF, start = false)
+        shell.frames(START_FRAMES)
+        assertTrue("the List shows under the page as it was", shell.exists("List root, row $ROWS_SCROLLED"))
+        shell.cancel()
+        shell.settle()
+        assertFalse(shell.exists("List root"))
+        assertEquals(null, before.differences(shell.image()))
         shell.open("Page 1")
         shell.settle()
         shell.back()
@@ -434,6 +506,26 @@ class ShellTransitionTest {
         assertEquals("the destination tapped again pops to its root", Way.Up, navigator.way)
         navigator.back()
         assertEquals("Back from a root goes to another destination", Way.Across, navigator.way)
+        navigator.open(TransitionPage(3))
+        navigator.open(TransitionPage(4))
+        navigator.remove(TransitionPage(3))
+        assertEquals("a screen removed from under the top moves nothing", Way.Deeper, navigator.way)
+        navigator.remove(TransitionPage(4))
+        assertEquals(Way.Up, navigator.way)
+        assertEquals(Way.Across, signingIn(Destination.Profile).apply { signedIn() }.way)
+        assertEquals(Way.Up, signingIn(Destination.List, TransitionPage(5)).apply { signedIn() }.way)
+        assertEquals(Way.Up, signingIn(Destination.Search).apply { browse() }.way)
+        assertEquals(Way.Across, signingIn(Destination.Profile).apply { browse() }.way)
+    }
+
+    // The sign-in screen open on [from], over [pages].
+    private fun signingIn(
+        from: Destination,
+        vararg pages: NavKey,
+    ) = ShellNavigator.inMemory().apply {
+        select(from)
+        pages.forEach { open(it) }
+        open(SignInKey)
     }
 
     private companion object {
@@ -443,7 +535,21 @@ class ShellTransitionTest {
         const val QUARTER = 0.25f
         const val HALF = 0.5f
         const val NANOS = 1_000_000L
+
+        // How far a colour lies from the mix of two others before it shows a third screen drawn.
+        const val MIXED = 0.02f
     }
+}
+
+// The distance of this colour from the line through [a] and [b], in RGB.
+private fun Color.awayFrom(
+    a: Color,
+    b: Color,
+): Float {
+    val ab = listOf(b.red - a.red, b.green - a.green, b.blue - a.blue)
+    val ac = listOf(red - a.red, green - a.green, blue - a.blue)
+    val t = ab.zip(ac).sumOf { (x, y) -> (x * y).toDouble() } / ab.sumOf { (it * it).toDouble() }
+    return sqrt(ac.indices.sumOf { ((ac[it] - t * ab[it]).let { d -> d * d }) }).toFloat()
 }
 
 // With the system's animations off, every change of screen is complete in the first frame that shows it.

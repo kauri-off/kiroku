@@ -2,15 +2,25 @@ package io.github.kauri_off.kiroku.shell
 
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.unveilIn
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -22,8 +32,7 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 // How a change of screen went: a page opened, back along a stack, or to another destination.
 enum class Way { Deeper, Up, Across }
 
-// ARCHITECTURE 8.5: along a stack the Material forward and backward transition, between destinations a fade through.
-// A page opened comes from the end of a line by [step] pixels.
+// ARCHITECTURE 8.5: forward and backward along a stack by [step] pixels, a fade through between destinations.
 internal fun screenChange(
     way: Way,
     motionScheme: MotionScheme,
@@ -46,12 +55,39 @@ private fun slide(
     (slideInHorizontally(motionScheme.slowEffectsSpec()) { from } + fadeIn(motionScheme.slowEffectsSpec())) togetherWith
         (slideOutHorizontally(motionScheme.fastEffectsSpec()) { -from } + fadeOut(motionScheme.fastEffectsSpec()))
 
-// A screen that is leaving takes no touch, key or accessibility input until its transition settles.
+// Back's preview as NavDisplay seeks it: the page shrinks in place and fades over a veiled screen that grows to its size.
+@OptIn(ExperimentalAnimationApi::class)
+internal fun backPreview(
+    motionScheme: MotionScheme,
+    scrim: Color,
+): ContentTransform =
+    (
+        scaleIn(
+            motionScheme.fastEffectsSpec(),
+            initialScale = UNDER_SCALE,
+        ) + unveilIn(motionScheme.fastEffectsSpec(), scrim, true)
+    ) togetherWith
+        (scaleOut(motionScheme.fastEffectsSpec(), targetScale = PAGE_SCALE) + fadeOut(motionScheme.fastEffectsSpec()))
+
+internal const val PAGE_SCALE = 0.9f
+internal const val UNDER_SCALE = 0.95f
+
+// A leaving screen takes no touch, key or accessibility input, and touch passes under it once its fade has ended.
 @Composable
 internal fun NoInputWhileLeaving(content: @Composable () -> Unit) {
-    val leaving = LocalNavAnimatedContentScope.current.transition.targetState == EnterExitState.PostExit
-    Box(if (leaving) NoInput else Modifier) { content() }
+    val transition = LocalNavAnimatedContentScope.current.transition
+    val drawn by transition.animateFloat({ MaterialTheme.motionScheme.fastEffectsSpec() }) { if (it == EnterExitState.PostExit) 0f else 1f }
+    val leaving = transition.targetState == EnterExitState.PostExit
+    val passes =
+        Modifier.graphicsLayer {
+            clip = drawn == 0f
+            shape = Nowhere
+        }
+    Box(if (leaving) passes.then(NoInput) else Modifier) { content() }
 }
+
+// A clip that holds nothing, so no touch reaches the screen it clips.
+private val Nowhere = GenericShape { _, _ -> }
 
 // Back and Escape still reach the activity.
 private val NoInput =
