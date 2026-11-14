@@ -41,8 +41,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-// On real threads, over a database file. A row that cannot be mapped fails where it is mapped, and the failure's
-// trace says where that was; a read of the list can be held back before it starts or once its rows are read.
+// On real threads, over a database file: a failure's trace says where a row was mapped, and a read can be held back.
 @RunWith(RobolectricTestRunner::class)
 class StoreThreadsTest {
     private object StoreThread : CoroutineDispatcher() {

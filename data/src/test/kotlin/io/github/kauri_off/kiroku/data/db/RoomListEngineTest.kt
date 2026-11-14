@@ -9,8 +9,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.coroutines.EmptyCoroutineContext
 
-// Over the pool the app uses. Its transactions need a thread of their own, so the tests that dispatch nothing are
-// skipped here and run in [RoomListEngineInlineTest].
+// Over the pool the app uses; the two tests that dispatch nothing are skipped here and run in [RoomListEngineInlineTest].
 @RunWith(RobolectricTestRunner::class)
 class RoomListEngineTest : ListEngineContract() {
     @get:Rule
