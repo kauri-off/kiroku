@@ -20,6 +20,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.File
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
 
 internal const val REDIRECT = "io.github.kauri-off.kiroku.debug://oauth"
 internal const val AUTHORIZE = "https://mal.test/v1/oauth2/authorize"
@@ -48,6 +52,45 @@ internal fun redirectOf(
 
 // The step once the redirect in hand was dealt with.
 internal suspend fun MalSignIn.ended(): SignInStep = withTimeout(10_000) { step.first { it != SignInStep.Completing } }
+
+// Threads of the sign-in's own for its work; one of them that hands work to another runs [onHandOver] before it goes on.
+internal class HandOverThreads : CoroutineDispatcher() {
+    private val threads = Executors.newCachedThreadPool()
+    private val own = ThreadLocal<Boolean>()
+    private val running = AtomicInteger()
+
+    @Volatile
+    var onHandOver: (() -> Unit)? = null
+
+    override fun dispatch(
+        context: CoroutineContext,
+        block: Runnable,
+    ) {
+        running.incrementAndGet()
+        threads.execute {
+            own.set(true)
+            try {
+                block.run()
+            } finally {
+                running.decrementAndGet()
+            }
+        }
+        if (own.get() == true) onHandOver?.invoke()
+    }
+
+    // Everything handed to these threads so far has run as far as it can.
+    fun settle() {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (running.get() > 0) {
+            check(System.nanoTime() < deadline) { "The sign-in's work did not come to rest" }
+            Thread.sleep(1)
+        }
+    }
+
+    fun close() {
+        threads.shutdownNow()
+    }
+}
 
 // The sign-in and its session over one directory, one pair at a time, as successive processes would hold them.
 internal class SignInFixture(
@@ -91,6 +134,13 @@ internal class SignInFixture(
             exchangeWithin = exchangeWithin,
         )
     }
+
+    // The starts and redirects that are not dealt with yet.
+    fun work(): Set<Job> =
+        checkNotNull(scope)
+            .coroutineContext.job.children
+            .filter { it !== files }
+            .toSet()
 
     // Every start and redirect made before this call, and whatever they started, has been dealt with once it returns.
     suspend fun idle() {
