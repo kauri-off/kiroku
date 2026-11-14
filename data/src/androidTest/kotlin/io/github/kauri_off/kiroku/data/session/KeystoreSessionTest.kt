@@ -23,6 +23,7 @@ import org.junit.Test
 import java.io.File
 import java.security.KeyStore
 import java.time.Clock
+import java.util.concurrent.CopyOnWriteArrayList
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
@@ -32,11 +33,12 @@ class KeystoreSessionTest {
     private val file = File(InstrumentationRegistry.getInstrumentation().targetContext.noBackupFilesDir, "keystore-test/session")
     private val keystore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private var scope: CoroutineScope? = null
+    private val reported = CopyOnWriteArrayList<Throwable>()
 
     private suspend fun open(): MalSession {
         scope?.coroutineContext?.job?.cancelAndJoin()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scope = it }
-        return malSession(file, { error("No token request was expected") }, Clock.systemUTC(), scope) { throw it }
+        return malSession(file, { error("No token request was expected") }, Clock.systemUTC(), scope) { reported += it }
     }
 
     @Before
@@ -78,6 +80,7 @@ class KeystoreSessionTest {
             val next = open()
             assertEquals(signedIn, next.observeSession().first())
             assertEquals(listOf("device-access-token"), next.sent())
+            assertEquals(emptyList<Throwable>(), reported)
         }
 
     @Test
@@ -89,6 +92,7 @@ class KeystoreSessionTest {
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("second-access", "second-refresh")))
             assertFalse(first == file.readBytes().toList())
             assertEquals(listOf("second-access"), open().sent())
+            assertEquals(emptyList<Throwable>(), reported)
         }
 
     @Test
@@ -102,6 +106,8 @@ class KeystoreSessionTest {
             val session = open()
             assertEquals(Session.Expired(id), session.observeSession().first())
             assertEquals(emptyList<String>(), session.sent())
+            // The tokens that did not open are reported once, by the type of what the cipher threw.
+            assertEquals(listOf("java.security.GeneralSecurityException"), reported.map { it.message })
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("new-access", "new-refresh")))
             assertEquals(listOf("new-access"), open().sent())
         }
@@ -118,5 +124,6 @@ class KeystoreSessionTest {
             KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply { init(unfit) }.generateKey()
             assertEquals(Outcome.Success(Unit), open().signIn(TokenGrant("device-access-token", "device-refresh-token")))
             assertEquals(listOf("device-access-token"), open().sent())
+            assertEquals(emptyList<Throwable>(), reported)
         }
 }

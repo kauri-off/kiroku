@@ -68,8 +68,8 @@ class SignInAgainstServerTest {
 
     private val session by lazy {
         val file = File(directory, "session")
-        val store = TokenStore(file, TokenFormat(AesGcmCipher(TestKeys()), file.name), scope + Dispatchers.IO)
-        MalSession(store, endpoint, network.clock, scope) { network.unexpected += it }
+        val store = TokenStore(file, TokenFormat(AesGcmCipher(TestKeys()), file.name) { network.unexpected += it }, scope + Dispatchers.IO)
+        MalSession(store, endpoint, network.clock, scope, { network.unexpected += it })
     }
 
     private val signIn by lazy {

@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.signin
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -30,7 +31,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.Clock
 
-private fun graph(): AppGraph = createGraph("0123abcd", Clock.systemUTC(), CoroutineScope(Dispatchers.Unconfined))
+private fun graph(context: Context): AppGraph = createGraph(context, "0123abcd", Clock.systemUTC(), CoroutineScope(Dispatchers.Unconfined))
 
 class RecordingSignIn : SignIn {
     val redirects = mutableListOf<String>()
@@ -55,13 +56,13 @@ class SignInGraph(
 class SignInGraphApplication :
     Application(),
     AppGraphOwner {
-    override val graph = SignInGraph(graph(), RecordingSignIn())
+    override val graph by lazy { SignInGraph(graph(this), RecordingSignIn()) }
 }
 
 class NoSignInApplication :
     Application(),
     AppGraphOwner {
-    override val graph = graph()
+    override val graph by lazy { graph(this) }
 }
 
 @RunWith(RobolectricTestRunner::class)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="debug_menu_build">Сборка</string>
+    <string name="debug_menu_build_type">Тип сборки</string>
+    <string name="debug_menu_version">Версия</string>
+    <string name="debug_menu_commit">Коммит</string>
+    <string name="debug_menu_commit_dirty">%1$s, с незакоммиченными изменениями</string>
+    <string name="debug_menu_built">Собрана</string>
+    <string name="debug_menu_not_known">Неизвестно</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_title">Источник данных</string>
+    <string name="source_detail">С чем запускается приложение. У каждого источника свой вход и свой сохранённый список</string>
+    <string name="source_account">MyAnimeList</string>
+    <string name="source_demo">Демо</string>
+    <string name="source_running_account">До перезапуска приложение работает с MyAnimeList</string>
+    <string name="source_running_demo">До перезапуска приложение работает на демо-данных</string>
+    <string name="source_restart">Перезапустить</string>
+    <string name="source_not_kept">Не удалось сохранить выбор</string>
+</resources>

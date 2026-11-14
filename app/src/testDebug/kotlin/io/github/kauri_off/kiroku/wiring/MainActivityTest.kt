@@ -8,10 +8,10 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
-import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
-import org.junit.Assume.assumeTrue
+import io.github.kauri_off.kiroku.source.DataSource
+import io.github.kauri_off.kiroku.source.StartsOn
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,12 +23,14 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class MainActivityTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val source = StartsOn(DataSource.Demo)
+
+    @get:Rule(order = 1)
     val compose = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun `the app opens on the demo list and keeps an open edit sheet across recreation`() {
-        assumeTrue(BuildConfig.MAL_CLIENT_ID.isBlank())
         val title = FixtureAnime.exactToWatch.titles.romaji
         compose.waitForIdle()
         compose.onNodeWithText("My list").assertExists()

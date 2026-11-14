@@ -15,17 +15,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.core.view.children
-import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.source.DataSource
+import io.github.kauri_off.kiroku.source.StartsOn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,13 +39,13 @@ import kotlin.time.toJavaDuration
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ScenarioOverlayTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val source = StartsOn(DataSource.Demo)
+
+    @get:Rule(order = 1)
     val compose = createAndroidComposeRule<MainActivity>()
 
     private val scenarios get() = checkNotNull(RuntimeEnvironment.getApplication().scenarios)
-
-    @Before
-    fun demoMode() = assumeTrue(BuildConfig.MAL_CLIENT_ID.isBlank())
 
     private fun settle() {
         shadowOf(Looper.getMainLooper()).idle()

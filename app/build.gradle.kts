@@ -94,7 +94,7 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
-        // The release build's code on the demo, profileable: the owner's channel, and the build frames are measured on.
+        // The release build's code with the debug menu, profileable: the owner's channel, and the build frames are measured on.
         create("preview") {
             initWith(getByName("release"))
             applicationIdSuffix = ".preview"
@@ -335,7 +335,7 @@ abstract class VerifyReleasePackage : DefaultTask() {
             }
         }
 
-    // Every android:name in a manifest, a class in full; an anchor is a component named only to add to it.
+    // Every android:name a manifest adds, a class in full; an anchor is a component named only to add to it.
     private fun manifestNames(
         manifest: File,
         withAnchors: Boolean = true,
@@ -348,9 +348,10 @@ abstract class VerifyReleasePackage : DefaultTask() {
         return (0 until elements.length).mapNotNullTo(mutableSetOf()) { index ->
             val element = elements.item(index) as org.w3c.dom.Element
             val anchor = element.tagName in COMPONENTS && element.attributes.length == 1
+            val removed = element.getAttributeNS(TOOLS, "node") == "remove"
             element
                 .getAttributeNS(ANDROID, "name")
-                .takeIf { it.isNotEmpty() && (withAnchors || !anchor) }
+                .takeIf { it.isNotEmpty() && !removed && (withAnchors || !anchor) }
                 ?.let { if (it.startsWith('.')) namespace.get() + it else it }
         }
     }
@@ -428,6 +429,7 @@ abstract class VerifyReleasePackage : DefaultTask() {
 
     private companion object {
         const val ANDROID = "http://schemas.android.com/apk/res/android"
+        const val TOOLS = "http://schemas.android.com/tools"
         const val RES_TABLE_PACKAGE = 0x0200
         const val PACKAGE_KEY_STRINGS = 276
         val COMPONENTS = setOf("activity", "activity-alias", "service", "receiver", "provider")
@@ -468,6 +470,7 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/core/fixtures/",
                 "io/github/kauri_off/kiroku/standin/",
                 "io/github/kauri_off/kiroku/scenario/",
+                "io/github/kauri_off/kiroku/source/",
                 "io/github/kauri_off/kiroku/debugmenu/",
                 "io/github/kauri_off/kiroku/design/gallery/",
             ),

@@ -19,7 +19,7 @@ class KirokuApplication :
     AppGraphOwner,
     SingletonImageLoader.Factory {
     override val graph: AppGraph by lazy {
-        createGraph(BuildConfig.MAL_CLIENT_ID, DeviceClock, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        createGraph(this, BuildConfig.MAL_CLIENT_ID, DeviceClock, CoroutineScope(SupervisorJob() + Dispatchers.Default))
     }
 
     override fun onCreate() {

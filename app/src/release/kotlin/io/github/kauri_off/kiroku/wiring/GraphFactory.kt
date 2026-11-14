@@ -1,11 +1,12 @@
 package io.github.kauri_off.kiroku.wiring
 
-import android.util.Log
 import coil3.intercept.Interceptor
 
-// A release build logs an exception the list did not expect, and the list goes on.
-internal val reportUnexpected: (Throwable) -> Unit = { Log.e(LOG_TAG, UNEXPECTED, it) }
+// A release build logs the types of an exception nobody expected, never its message, and goes on.
+internal val reportUnexpected: (Throwable) -> Unit = ::logTypes
 
-internal val demoGraphFactory: DemoGraphFactory? = null
+internal val requestLog: ((String) -> Unit)? = null
+
+internal val otherSource: OtherSource? = null
 
 internal val standInPosters: Interceptor? = null

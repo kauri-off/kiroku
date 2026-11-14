@@ -98,5 +98,5 @@ class Scenarios(
     }
 }
 
-// The demo's scenarios, or null when the app runs on a real account.
+// The demo's scenarios, or null when the app runs on another source.
 val Context.scenarios: Scenarios? get() = (appGraph as? DemoGraph)?.scenarios

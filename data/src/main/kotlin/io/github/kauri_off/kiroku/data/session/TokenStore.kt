@@ -4,28 +4,33 @@ import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Serializer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.GeneralSecurityException
 import java.util.UUID
 
 // One per file and process: a second one on the same file fails at its first use.
 internal class TokenStore(
     private val file: File,
-    format: Serializer<Stored>,
+    private val format: Serializer<Stored>,
     scope: CoroutineScope,
 ) {
     private val store = DataStoreFactory.create(serializer = format, scope = scope) { file }
 
-    // A file that names no sign-in is signed out, and is left as it is until the next write.
+    // A file that names no sign-in is signed out and is left until the next write; one that cannot be read at all throws.
     suspend fun read(): Stored =
         try {
             store.data.first()
-        } catch (_: IOException) {
+        } catch (_: CorruptionException) {
             Stored.SignedOut
         }
 
@@ -42,14 +47,42 @@ internal class TokenStore(
         } catch (e: IOException) {
             if (wasRead) return e
         }
-        // What the file held could not be read, so nothing is lost by replacing it.
-        file.delete()
         return try {
-            store.updateData(update)
+            replace(value)
             null
         } catch (e: IOException) {
             e
         }
+    }
+
+    // What the file holds could not be read, so it stays until the new value is on the disk to take its place.
+    private suspend fun replace(value: Stored) =
+        withContext(Dispatchers.IO) {
+            val next = File(file.path + NEXT)
+            try {
+                FileOutputStream(next).use { output ->
+                    format.writeTo(value, output)
+                    output.fd.sync()
+                }
+                // A directory in the file's place holds no session.
+                if (file.isDirectory) file.delete()
+                Files.move(next.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } finally {
+                next.delete()
+            }
+        }
+
+    private companion object {
+        const val NEXT = ".next"
+    }
+}
+
+// Stored tokens that could not be read or did not open, as a report without the exception's message: its type and stack.
+class TokensNotRead internal constructor(
+    cause: Exception,
+) : Exception(cause.javaClass.name) {
+    init {
+        stackTrace = cause.stackTrace
     }
 }
 
@@ -57,6 +90,8 @@ internal class TokenStore(
 internal class TokenFormat(
     private val cipher: TokenCipher,
     private val name: String,
+    // Hears of tokens that did not open, without the exception's message.
+    private val unexpected: (Throwable) -> Unit,
 ) : Serializer<Stored> {
     override val defaultValue: Stored = Stored.SignedOut
 
@@ -86,11 +121,16 @@ internal class TokenFormat(
     private fun unsealed(bytes: ByteArray): Tokens? =
         try {
             json.decodeFromString<Tokens>(cipher.open(bytes.copyOfRange(HEAD, bytes.size), bound(bytes)).decodeToString())
-        } catch (_: GeneralSecurityException) {
-            null
-        } catch (_: RuntimeException) {
-            null
+        } catch (e: GeneralSecurityException) {
+            unopened(e)
+        } catch (e: RuntimeException) {
+            unopened(e)
         }
+
+    private fun unopened(e: Exception): Tokens? {
+        unexpected(TokensNotRead(e))
+        return null
+    }
 
     // The marker, the id and the file's name: tokens moved under another of them do not open.
     private fun bound(head: ByteArray): ByteArray = head.copyOf(HEAD) + name.encodeToByteArray()
