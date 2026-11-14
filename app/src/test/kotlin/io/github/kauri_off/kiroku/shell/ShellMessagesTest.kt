@@ -202,9 +202,9 @@ class ShellMessagesTest {
         val other = FixtureAnime.oneShortOfTotal
         val otherMoved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(other)))
         compose.runOnUiThread { listOf(moved, failed(1), otherMoved, moved).forEach(messages::post) }
-        compose.waitForIdle()
+        runMainLooper()
         runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
-        compose.waitForIdle()
+        runMainLooper()
         assertEquals(listOf(moved, otherMoved), shownInTurn())
     }
 
@@ -218,10 +218,10 @@ class ShellMessagesTest {
             }.toList()
         }
 
-    private fun idleFor(duration: Duration) {
-        shadowOf(Looper.getMainLooper()).idleFor(duration.toJavaDuration())
-        compose.waitForIdle()
-    }
+    // Runs the main looper alone: with nothing composed, compose.waitForIdle waits two real seconds for a root.
+    private fun runMainLooper() = shadowOf(Looper.getMainLooper()).idle()
+
+    private fun idleFor(duration: Duration) = shadowOf(Looper.getMainLooper()).idleFor(duration.toJavaDuration())
 
     // Makes the store unreadable and runs the clock until a watch's read has failed, whatever the list's own attempts take.
     private fun storeFailsUntilAReadEnds() {
@@ -235,7 +235,7 @@ class ShellMessagesTest {
     @Test
     fun `a waiting Undo is watched again when the list is read again after a failure`() {
         compose.runOnUiThread { listOf(failed(1), moved).forEach(messages::post) }
-        compose.waitForIdle()
+        runMainLooper()
         storeFailsUntilAReadEnds()
         graph.demo.store.unreadable.value = false
         runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
@@ -265,7 +265,7 @@ class ShellMessagesTest {
     @Test
     fun `a waiting Undo compares with the values its change left, not with the first read after the store returns`() {
         val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
-        compose.waitForIdle()
+        runMainLooper()
         waitingThroughFailure(undoOf(change)) { runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) } }
         assertEquals(listOf(otherFailed), shownInTurn())
     }
@@ -273,7 +273,7 @@ class ShellMessagesTest {
     @Test
     fun `a waiting Undo whose title was not written stays through a store that failed and came back`() {
         val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
-        compose.waitForIdle()
+        runMainLooper()
         waitingThroughFailure(undoOf(change))
         assertEquals(listOf(otherFailed, undoOf(change)), shownInTurn())
     }
@@ -289,7 +289,7 @@ class ShellMessagesTest {
     @Test
     fun `a store that stays broken is read again no sooner than REREAD, then less and less often, and at least every few minutes`() {
         compose.runOnUiThread { listOf(otherFailed, moved).forEach(messages::post) }
-        compose.waitForIdle()
+        runMainLooper()
         storeFailsUntilAReadEnds()
         val failed = reads
         idleFor(ShellMessages.REREAD - 1.seconds)
@@ -304,9 +304,9 @@ class ShellMessagesTest {
     @Test
     fun `tapping a Retry drops a waiting one of the same title before it could be shown`() {
         compose.runOnUiThread { listOf(failed(1), failed(2)).forEach(messages::post) }
-        compose.waitForIdle()
+        runMainLooper()
         compose.runOnUiThread { messages.ended(messages.current.value!!, actionPerformed = true) }
-        compose.waitForIdle()
+        runMainLooper()
         assertNull(messages.current.value)
         assertEquals(1, watched())
     }
@@ -330,11 +330,11 @@ class ShellMessagesTest {
     @Test
     fun `a waiting Undo stays when only its title's time stamp changes`() {
         compose.runOnUiThread { listOf(failed(1), moved).forEach(messages::post) }
-        compose.waitForIdle()
+        runMainLooper()
         val before = graph.demo.server.entry(anime.id)!!
         graph.demo.server.editOnWebsite(before.anime, before.values)
         scope.launch { graph.list.sync() }
-        compose.waitForIdle()
+        runMainLooper()
         val after = runBlocking { graph.list.observeEntry(anime.id).first() }!!
         assertNotEquals(before.updatedAt, after.updatedAt)
         assertEquals(before.values, after.values)
