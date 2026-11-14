@@ -101,8 +101,9 @@ From MAL's authorization reference:
 - The only grant is the authorization code grant with PKCE, and **only the `plain` PKCE method**: the code
   challenge equals the code verifier, 43 to 128 characters. Kiroku's client has no secret. This is the strongest
   flow MAL offers: an app that intercepts the redirect cannot redeem the code without the verifier.
-- The reference contradicts itself on the access token's lifetime, so Kiroku trusts only the `expires_in` it
-  receives. The refresh token lives one month. A refresh returns a new pair and revokes the old one.
+- The reference contradicts itself on the access token's lifetime, so Kiroku assumes no lifetime: it refreshes
+  when MAL rejects the access token. The refresh token lives one month. A refresh returns a new pair and revokes
+  the old one.
 
 | Value | Release build | Debug build |
 |---|---|---|
@@ -133,8 +134,9 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
 - **S7.** A user who only receives notifications and never opens the app keeps their session: the tokens are
   renewed in the background well inside the refresh token's month.
 - **S8.** Tokens are stored encrypted with a key from the Android Keystore, written so that an interrupted write
-  cannot lose the session, and excluded, like the settings, from cloud backup and device transfer. A token store
-  that cannot be read means signed out, never a crash.
+  cannot lose the session, and excluded, like the settings, from cloud backup and device transfer. Tokens that
+  cannot be read never crash the app and never clear what is stored: the session is expired for that run. A store
+  whose sign-in cannot be read either means signed out.
 - **S9.** Signing out removes the tokens and everything stored about the user.
 
 ### 3.3 The client id
