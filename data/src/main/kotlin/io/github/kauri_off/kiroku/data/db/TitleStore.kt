@@ -17,10 +17,11 @@ data class StoredDetails(
     val fetchedAt: Instant,
 )
 
-// The titles in the database: every screen's cache of MAL's titles, written beside the list and never by an edit.
+// The titles in the database, the cache of their pages; [unexpected] hears of a named title left out as unreadable.
 class TitleStore(
     private val database: KirokuDatabase,
     private val dispatcher: CoroutineDispatcher,
+    private val unexpected: (Throwable) -> Unit,
 ) {
     private val dao = database.titles()
 
@@ -35,10 +36,10 @@ class TitleStore(
         dao
             .observeDetails(id.value)
             .distinctUntilChanged()
-            .map { stored -> stored?.let { StoredDetails(it.toDetails(), instantOf(it.details.fetchedAt)) } }
+            .map { stored -> stored?.let { StoredDetails(it.toDetails(unexpected), instantOf(it.details.fetchedAt)) } }
             .flowOn(dispatcher)
 
-    // Titles known only in part, as a related row or a search result has them: stored only where none is stored.
+    // Titles known only in part, as a title's page names them: stored only where none is stored.
     suspend fun addUnknown(titles: List<Anime>) = withContext(dispatcher) { dao.insertIfAbsent(titles.map { it.toRow() }) }
 
     // MAL's whole answer about one title, all or none; the titles it names are known only in part.

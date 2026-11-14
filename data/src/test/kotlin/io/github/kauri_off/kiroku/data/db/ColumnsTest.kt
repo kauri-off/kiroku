@@ -16,7 +16,6 @@ import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.Source
 import io.github.kauri_off.kiroku.core.model.Titles
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,7 +34,7 @@ class ColumnsTest {
             id = AnimeId(1),
             titles = Titles("Romaji", "English", "日本語", listOf("One", "Two, \"quoted\"")),
             posterUrl = "https://example.invalid/poster.jpg",
-            mediaType = MediaType.Unrecognized("tv"),
+            mediaType = MediaType.Unrecognized("web_film"),
             airingStatus = AiringStatus.Airing,
             malEpisodes = 24,
             startDate = PartialDate.Month(YearMonth.of(2025, 10)),
@@ -131,21 +130,39 @@ class ColumnsTest {
     }
 
     @Test
-    fun `a code the app does not recognise is kept as MAL's, also when it reads like one the app has`() {
-        for (code in listOf("tv", "light_novel", "?", "", "pg_13 new")) {
-            assertEquals(MediaType.Unrecognized(code), mediaTypes.of(mediaTypes.toColumn(MediaType.Unrecognized(code))))
+    fun `a code the app does not recognise is stored and read as MAL gave it`() {
+        for (code in listOf("web_film", "?", "", "pg_13 new")) {
+            assertEquals(code, mediaTypes.toColumn(MediaType.Unrecognized(code)))
+            assertEquals(MediaType.Unrecognized(code), mediaTypes.of(code))
             assertEquals(Source.Unrecognized(code), sources.of(sources.toColumn(Source.Unrecognized(code))))
             assertEquals(AgeRating.Unrecognized(code), ageRatings.of(ageRatings.toColumn(AgeRating.Unrecognized(code))))
             assertEquals(RelationType.Unrecognized(code), relationTypes.of(relationTypes.toColumn(RelationType.Unrecognized(code))))
         }
-        assertNotEquals(mediaTypes.toColumn(MediaType.Tv), mediaTypes.toColumn(MediaType.Unrecognized("tv")))
+    }
+
+    // What a version that did not know a code stored is what the version that knows it stores.
+    @Test
+    fun `a code stored before the app knew it is read as the value the app knows now`() {
+        for (type in objectsOf(MediaType::class.java)) {
+            assertEquals(type, mediaTypes.of(mediaTypes.toColumn(MediaType.Unrecognized(mediaTypes.toColumn(type)))))
+        }
+        for (source in objectsOf(Source::class.java)) {
+            assertEquals(source, sources.of(sources.toColumn(Source.Unrecognized(sources.toColumn(source)))))
+        }
+        for (rating in objectsOf(AgeRating::class.java)) {
+            assertEquals(rating, ageRatings.of(ageRatings.toColumn(AgeRating.Unrecognized(ageRatings.toColumn(rating)))))
+        }
+        for (relation in objectsOf(RelationType::class.java)) {
+            val before = RelationType.Unrecognized(relationTypes.toColumn(relation))
+            assertEquals(relation, relationTypes.of(relationTypes.toColumn(before)))
+        }
     }
 
     @Test
-    fun `a code no value is stored under is an error, not a guess`() {
-        assertThrows(IllegalStateException::class.java) { mediaTypes.of("television") }
-        assertThrows(IllegalStateException::class.java) { listStatuses.of("?watching") }
+    fun `a code of a type that has no unrecognised value is an error when no value is stored under it`() {
+        assertThrows(IllegalStateException::class.java) { listStatuses.of("watched") }
         assertThrows(IllegalStateException::class.java) { airingStatuses.of("") }
+        assertThrows(IllegalStateException::class.java) { seasons.of("autumn") }
     }
 
     @Test

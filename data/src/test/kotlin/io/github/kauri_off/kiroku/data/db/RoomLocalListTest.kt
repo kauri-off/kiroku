@@ -50,11 +50,13 @@ class RoomLocalListTest {
     private class Subject(
         val database: KirokuDatabase,
         val store: RoomLocalList,
+        val unexpected: List<Throwable>,
     )
 
     private fun TestScope.subject(): Subject {
         val database = databases.open(this)
-        return Subject(database, RoomLocalList(database, backgroundScope, dispatcher))
+        val unexpected = mutableListOf<Throwable>()
+        return Subject(database, RoomLocalList(database, backgroundScope, dispatcher) { unexpected += it }, unexpected)
     }
 
     private suspend fun TestScope.seeded(entries: List<ListEntry> = fixtures.entries): Subject =
@@ -239,35 +241,61 @@ class RoomLocalListTest {
         }
 
     @Test
-    fun `a row that cannot be read ends every collector with its failure, and a new collection reads again`() =
+    fun `a row that cannot be read is left out of the list and reported once by its type, and fails only what asks for it`() =
         runTest {
             val s = seeded()
             val anime = FixtureAnime.exactToWatch
+            val other = fixtures.entries.last()
+            val seen = lists(s)
             val ended = mutableListOf<Throwable>()
-            backgroundScope.launch { runCatching { s.store.observeEntries().collect {} }.onFailure { ended += it } }
-            backgroundScope.launch { runCatching { s.store.observeEntries().collect {} }.onFailure { ended += it } }
             backgroundScope.launch { runCatching { s.store.observeEntry(anime.id).collect {} }.onFailure { ended += it } }
             runCurrent()
-            assertEquals(emptyList<Throwable>(), ended)
 
             s.database.execute("UPDATE title SET airing_status = 'broken' WHERE id = ${anime.id.value}")
             runCurrent()
+            s.store.write(mapOf(other.anime.id to other.watched(99)))
+            runCurrent()
 
-            assertEquals(3, ended.size)
-            assertTrue(ended.all { it is IllegalStateException })
-            assertTrue(runCatching { s.store.observeEntries().first() }.isFailure)
+            val ids = fixtures.entries.map { it.anime.id }.sortedBy { it.value }
+            assertEquals(ids - anime.id, seen.last().map { it.anime.id })
+            assertEquals(seen.last(), s.store.observeEntries().first())
+            assertEquals(listOf("java.lang.IllegalStateException"), s.unexpected.map { it.message })
+            assertTrue(s.unexpected.all { it is UnreadableRow && it.cause == null && it.stackTrace.isNotEmpty() })
+            assertEquals(1, ended.size)
             assertTrue(runCatching { s.store.observeEntry(anime.id).first() }.isFailure)
             assertTrue(runCatching { s.store.read(anime.id) }.isFailure)
+            assertEquals(fixtures.entries.size, s.store.readAll().size)
 
             s.database.execute("UPDATE title SET airing_status = 'airing' WHERE id = ${anime.id.value}")
             assertEquals(
-                fixtures.entries.size,
+                ids,
                 s.store
                     .observeEntries()
                     .first()
-                    .size,
+                    .map { it.anime.id },
             )
             assertNotNull(s.store.observeEntry(anime.id).first())
+            assertEquals(1, s.unexpected.size)
+        }
+
+    @Test
+    fun `an entry that cannot be read is left out of what a sync reads and reported, and the next download writes it anew`() =
+        runTest {
+            val s = seeded()
+            val broken = fixtures.entries.first()
+
+            s.database.execute("UPDATE list_entry SET confirmed_status = 'broken' WHERE title_id = ${broken.anime.id.value}")
+
+            assertEquals(
+                fixtures.entries.map { it.anime.id }.sortedBy { it.value } - broken.anime.id,
+                s.store
+                    .readAll()
+                    .keys
+                    .toList(),
+            )
+            assertEquals(listOf("java.lang.IllegalStateException"), s.unexpected.map { it.message })
+            s.store.download(fixtures.entries.map { it.anime }, mapOf(broken.anime.id to StoredEntry.settled(broken.record)), syncedAt)
+            assertEquals(fixtures.entries.settled(), s.store.readAll())
         }
 
     @Test
@@ -452,7 +480,34 @@ class RoomLocalListTest {
         }
 
     @Test
-    fun `clear forgets every entry, the time and the owner, and keeps what is known of the titles`() =
+    fun `what is kept of the entries made is what the list holds, and nothing after a clear`() =
+        runTest {
+            val s = seeded()
+            val gone = fixtures.entries[4]
+            val first = s.store.observeEntries().first()
+
+            s.store.write(mapOf(gone.anime.id to null))
+            assertEquals(
+                first.size - 1,
+                s.store
+                    .observeEntries()
+                    .first()
+                    .size,
+            )
+            s.store.write(mapOf(gone.anime.id to StoredEntry.settled(gone.record)))
+            val second = s.store.observeEntries().first()
+            assertEquals(first, second)
+            for ((old, new) in first.zip(second)) assertEquals(old.anime.id != gone.anime.id, old === new)
+
+            s.store.clear(owner)
+            s.store.download(fixtures.entries.map { it.anime }, fixtures.entries.settled(), syncedAt)
+            val third = s.store.observeEntries().first()
+            assertEquals(first, third)
+            for ((old, new) in second.zip(third)) assertTrue(old !== new)
+        }
+
+    @Test
+    fun `clear forgets every entry, the time, the owner and every title`() =
         runTest {
             val s = seeded()
             val seen = lists(s)
@@ -463,7 +518,8 @@ class RoomLocalListTest {
             assertEquals(StoredList(SignInId("b"), syncedAt = null), s.store.state())
             assertEquals(emptyMap<AnimeId, StoredEntry>(), s.store.readAll())
             assertEquals(emptyList<ListEntry>(), seen.last())
-            for (entry in fixtures.entries) assertEquals(StoredTitle(entry.anime, entry = null), s.store.read(entry.anime.id))
+            for (entry in fixtures.entries) assertNull(s.store.read(entry.anime.id))
+            assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1L), TABLES.map { s.database.rows(it) })
             s.store.clear(null)
             assertEquals(StoredList(owner = null, syncedAt = null), s.store.state())
         }

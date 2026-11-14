@@ -157,13 +157,13 @@ internal fun AnimeDetails.toRow(fetchedAt: Instant): TitleDetailsRow =
         fetchedAt = fetchedAt.toColumn(),
     )
 
-// One related title of a title, in the place MAL gave it.
+// One related title of a title, in the place MAL gave it. A title that is named here cannot be deleted by itself.
 @Entity(
     tableName = "title_relation",
     primaryKeys = ["title_id", "position"],
     foreignKeys = [
         ForeignKey(TitleRow::class, parentColumns = ["id"], childColumns = ["title_id"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(TitleRow::class, parentColumns = ["id"], childColumns = ["related_id"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(TitleRow::class, parentColumns = ["id"], childColumns = ["related_id"]),
     ],
     indices = [Index("related_id")],
 )
@@ -174,13 +174,13 @@ internal data class TitleRelationRow(
     val relation: String,
 )
 
-// One title recommended from a title, in the place MAL gave it.
+// One title recommended from a title, in the place MAL gave it; it cannot be deleted by itself either.
 @Entity(
     tableName = "title_recommendation",
     primaryKeys = ["title_id", "position"],
     foreignKeys = [
         ForeignKey(TitleRow::class, parentColumns = ["id"], childColumns = ["title_id"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(TitleRow::class, parentColumns = ["id"], childColumns = ["recommended_id"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(TitleRow::class, parentColumns = ["id"], childColumns = ["recommended_id"]),
     ],
     indices = [Index("recommended_id")],
 )
@@ -208,7 +208,8 @@ internal data class DetailsWithTitles(
     @Relation(entity = TitleRecommendationRow::class, parentColumn = "title_id", entityColumn = "title_id")
     val recommendations: List<RecommendedTitle>,
 ) {
-    fun toDetails(): AnimeDetails =
+    // A named title whose row cannot be read is left out, and [unexpected] hears of it.
+    fun toDetails(unexpected: (Throwable) -> Unit): AnimeDetails =
         AnimeDetails(
             id = AnimeId(details.titleId),
             synopsis = details.synopsis,
@@ -221,7 +222,10 @@ internal data class DetailsWithTitles(
                 details.statistics?.let {
                     TitleStatistics(StatusCounts(it.watching, it.completed, it.onHold, it.dropped, it.planned), it.members)
                 },
-            related = related.sortedBy { it.link.position }.map { RelatedAnime(it.title.toAnime(), relationTypes.of(it.link.relation)) },
-            recommendations = recommendations.sortedBy { it.link.position }.map { it.title.toAnime() },
+            related =
+                related.sortedBy { it.link.position }.mapNotNull {
+                    readable(unexpected) { RelatedAnime(it.title.toAnime(), relationTypes.of(it.link.relation)) }
+                },
+            recommendations = recommendations.sortedBy { it.link.position }.mapNotNull { readable(unexpected) { it.title.toAnime() } },
         )
 }

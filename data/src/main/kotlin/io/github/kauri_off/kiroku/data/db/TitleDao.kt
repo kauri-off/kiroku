@@ -43,6 +43,10 @@ internal abstract class TitleDao {
         update(stored.values.mapNotNull { old -> old.mergedWith(newer.getValue(old.id)).takeIf { it != old } })
     }
 
+    // Every title with what its page holds; no entry may be left.
+    @Query("DELETE FROM title")
+    abstract suspend fun deleteAll()
+
     @Query("SELECT * FROM title_details WHERE title_id = :id")
     protected abstract suspend fun details(id: Long): TitleDetailsRow?
 

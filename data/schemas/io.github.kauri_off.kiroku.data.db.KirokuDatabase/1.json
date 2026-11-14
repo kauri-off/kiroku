@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "fff4548a0e2e4bccadc27dc1210c0d62",
+    "identityHash": "773d868ce6aab7a58bcd465a18af7e36",
     "entities": [
       {
         "tableName": "title",
@@ -205,7 +205,7 @@
       },
       {
         "tableName": "title_relation",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `related_id` INTEGER NOT NULL, `relation` TEXT NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`related_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `related_id` INTEGER NOT NULL, `relation` TEXT NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`related_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
         "fields": [
           {
             "fieldPath": "titleId",
@@ -264,7 +264,7 @@
           },
           {
             "table": "title",
-            "onDelete": "CASCADE",
+            "onDelete": "NO ACTION",
             "onUpdate": "NO ACTION",
             "columns": [
               "related_id"
@@ -277,7 +277,7 @@
       },
       {
         "tableName": "title_recommendation",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `recommended_id` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`recommended_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `recommended_id` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`recommended_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
         "fields": [
           {
             "fieldPath": "titleId",
@@ -330,7 +330,7 @@
           },
           {
             "table": "title",
-            "onDelete": "CASCADE",
+            "onDelete": "NO ACTION",
             "onUpdate": "NO ACTION",
             "columns": [
               "recommended_id"
@@ -469,7 +469,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fff4548a0e2e4bccadc27dc1210c0d62')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '773d868ce6aab7a58bcd465a18af7e36')"
     ]
   }
 }

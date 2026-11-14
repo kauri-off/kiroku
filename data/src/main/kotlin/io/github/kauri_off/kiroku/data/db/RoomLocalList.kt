@@ -28,15 +28,16 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
-// The user's list in the database: rows become entries on [dispatcher], and collectors share reads while [scope] lives.
+// The user's list in the database, read on [dispatcher] and shared while [scope] lives; [unexpected] hears of a row left out as unreadable.
 class RoomLocalList(
     private val database: KirokuDatabase,
     scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher,
+    private val unexpected: (Throwable) -> Unit,
 ) : LocalList {
     private class Listed(
         val row: ListedRow,
-        val entry: ListEntry,
+        val entry: ListEntry?,
     )
 
     private class Read(
@@ -99,7 +100,7 @@ class RoomLocalList(
     override suspend fun read(id: AnimeId): StoredTitle? = withContext(dispatcher) { listDao.title(id.value)?.toStored() }
 
     override suspend fun readAll(): Map<AnimeId, StoredEntry> =
-        withContext(dispatcher) { listDao.entries().associate { AnimeId(it.titleId) to it.toStored() } }
+        withContext(dispatcher) { listDao.entries().mapNotNull { readable(unexpected) { AnimeId(it.titleId) to it.toStored() } }.toMap() }
 
     override suspend fun write(entries: Map<AnimeId, StoredEntry?>) = transaction { put(entries) }
 
@@ -127,12 +128,16 @@ class RoomLocalList(
             listDao.setState { it.copy(syncedAt = null) }
         }
 
-    // The titles stay: they are every screen's cache.
-    override suspend fun clear(owner: SignInId?) =
+    // With every title, unless the list was nobody's, empty, and stays nobody's: then no title is of a sign-in.
+    override suspend fun clear(owner: SignInId?) {
         transaction {
+            val nobodys = owner == null && listDao.state().owner == null && !listDao.hasEntries()
             listDao.deleteAll()
+            if (!nobodys) titleDao.deleteAll()
             listDao.setState { it.copy(owner = owner?.value, syncedAt = null) }
         }
+        reading.withLock { entries(emptyList()) }
+    }
 
     private suspend fun put(entries: Map<AnimeId, StoredEntry?>) =
         listDao.put(entries.entries.associate { (id, entry) -> id.value to entry?.toRow(id.value) })
@@ -141,12 +146,12 @@ class RoomLocalList(
 
     private suspend fun read(): Read = reading.withLock { Read(++reads, entries(listDao.listed())) }
 
-    // The list itself is the last one when no entry changed.
+    // The list itself is the last one when no entry changed; a row is read, and reported unreadable, once.
     private fun entries(rows: List<ListedRow>): List<ListEntry> {
         val now = HashMap<Long, Listed>(rows.size * 2)
         val entries =
-            rows.map { row ->
-                val kept = listed[row.title.id]?.takeIf { it.row == row } ?: Listed(row, row.toEntry())
+            rows.mapNotNull { row ->
+                val kept = listed[row.title.id]?.takeIf { it.row == row } ?: Listed(row, readable(unexpected) { row.toEntry() })
                 now[row.title.id] = kept
                 kept.entry
             }

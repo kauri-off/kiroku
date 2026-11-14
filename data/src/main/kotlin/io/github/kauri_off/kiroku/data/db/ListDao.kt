@@ -41,6 +41,9 @@ internal abstract class ListDao {
     @Query("DELETE FROM list_entry")
     abstract suspend fun deleteAll()
 
+    @Query("SELECT EXISTS(SELECT 1 FROM list_entry)")
+    abstract suspend fun hasEntries(): Boolean
+
     // Each entry in place, the absent ones deleted; one that is stored as given, or whose title is unknown, is not written.
     @Transaction
     open suspend fun put(entries: Map<Long, ListEntryRow?>) {
@@ -48,7 +51,7 @@ internal abstract class ListDao {
             val stored = entries(ids).associateBy { it.titleId }
             val titles = knownTitles(ids).toSet()
             val given = ids.mapNotNull { entries[it] }.filter { it.titleId in titles }
-            delete(ids.filter { it in stored && entries[it] == null })
+            ids.filter { it in stored && entries[it] == null }.let { if (it.isNotEmpty()) delete(it) }
             insert(given.filter { it.titleId !in stored })
             update(given.filter { stored[it.titleId].let { old -> old != null && old != it } })
         }

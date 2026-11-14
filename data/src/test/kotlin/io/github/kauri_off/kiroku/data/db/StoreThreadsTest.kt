@@ -9,16 +9,13 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.SignInId
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -74,7 +71,7 @@ class StoreThreadsTest {
 
     private val driver =
         object : SQLiteDriver {
-            override val hasConnectionPool: Boolean get() = true
+            override val hasConnectionPool: Boolean get() = AndroidSQLiteDriver().hasConnectionPool
 
             override fun open(fileName: String): SQLiteConnection {
                 val connection = AndroidSQLiteDriver().open(fileName)
@@ -104,8 +101,9 @@ class StoreThreadsTest {
     private val context = RuntimeEnvironment.getApplication()
     private val database = KirokuDatabase.builder(context, NAME).setDriver(driver).build()
     private val sharing = CoroutineScope(Dispatchers.Unconfined)
-    private val list = RoomLocalList(database, sharing, StoreThread)
-    private val titles = TitleStore(database, StoreThread)
+    private val unexpected = CopyOnWriteArrayList<Throwable>()
+    private val list = RoomLocalList(database, sharing, StoreThread) { unexpected += it }
+    private val titles = TitleStore(database, StoreThread) { unexpected += it }
     private val fixtures = Fixtures.reference
     private val anime = FixtureAnime.exactToWatch
     private val entry = checkNotNull(fixtures.entryFor(anime.id))
@@ -147,20 +145,22 @@ class StoreThreadsTest {
     private suspend fun corrupt() {
         database.execute("UPDATE list_entry SET shown_status = 'broken', confirmed_status = 'broken'")
         database.execute("UPDATE title SET airing_status = 'broken'")
-        database.execute("UPDATE title_details SET source = 'broken'")
+        database.execute("UPDATE title_details SET season = 'broken'")
     }
 
     @Test
     fun `the read all collectors share maps its rows on the store's dispatcher`() =
         runBlocking {
             stored()
-            val first = CompletableDeferred<Unit>()
-            val shared = async { failure { list.observeEntries().onEach { first.complete(Unit) }.collect() } }
-            withTimeout(TIMEOUT) { first.await() }
+            val seen = CopyOnWriteArrayList<Int>()
+            val standing = launch(Dispatchers.Default) { list.observeEntries().collect { seen += it.size } }
+            until { seen.isNotEmpty() }
 
             corrupt()
 
-            assertTrue(shared.await().mappedOnStoreThread())
+            until { unexpected.isNotEmpty() }
+            assertTrue(unexpected.all { it.mappedOnStoreThread() })
+            standing.cancel()
         }
 
     @Test
@@ -168,7 +168,9 @@ class StoreThreadsTest {
         runBlocking {
             stored()
             corrupt()
-            assertTrue(failure { list.observeEntries().first() }.mappedOnStoreThread())
+            assertEquals(emptyList<Any>(), list.observeEntries().first())
+            assertEquals(1, unexpected.size)
+            assertTrue(unexpected.all { it.mappedOnStoreThread() })
         }
 
     @Test
@@ -185,7 +187,9 @@ class StoreThreadsTest {
             stored()
             corrupt()
             assertTrue(failure { list.read(anime.id) }.mappedOnStoreThread())
-            assertTrue(failure { list.readAll() }.mappedOnStoreThread())
+            assertEquals(emptyMap<Any, Any>(), list.readAll())
+            assertEquals(1, unexpected.size)
+            assertTrue(unexpected.all { it.mappedOnStoreThread() })
         }
 
     @Test
@@ -232,7 +236,7 @@ class StoreThreadsTest {
     fun `a read that began later is never of an older list than one that began before it`() =
         runBlocking {
             stored()
-            val list = RoomLocalList(database, sharing, Dispatchers.Default)
+            val list = RoomLocalList(database, sharing, Dispatchers.Default) { unexpected += it }
             val beside = CopyOnWriteArrayList<Int>()
             val standing = collector(beside, list)
             until { beside.isNotEmpty() && reads.get() >= 2 }

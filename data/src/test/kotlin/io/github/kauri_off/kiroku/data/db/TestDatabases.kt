@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.db
 
 import androidx.room.RoomDatabase
 import androidx.room.execSQL
+import androidx.room.useReaderConnection
 import androidx.room.useWriterConnection
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteDriver
@@ -24,25 +25,21 @@ class TestDatabases : ExternalResource() {
     // Every statement Room ran, once for each time it ran, of any database opened here.
     val statements = mutableListOf<String>()
 
-    // Over the pool the app uses, where a transaction has a thread of its own, or over Room's own when [inline].
-    fun open(
-        scope: TestScope,
-        inline: Boolean = false,
-    ): KirokuDatabase =
+    fun open(scope: TestScope): KirokuDatabase =
         KirokuDatabase
             .builder(RuntimeEnvironment.getApplication(), name = null)
-            .setDriver(Recording(AndroidSQLiteDriver(), pooled = !inline))
+            .setDriver(Recording(AndroidSQLiteDriver()))
             .setQueryCoroutineContext(scope.dispatcher)
             .build()
             .also { opened += it }
 
     override fun after() = opened.forEach { it.close() }
 
+    // It says what the driver it records says of itself, so Room pools its connections as it does in the app.
     private inner class Recording(
         private val driver: SQLiteDriver,
-        private val pooled: Boolean,
     ) : SQLiteDriver {
-        override val hasConnectionPool: Boolean get() = pooled
+        override val hasConnectionPool: Boolean get() = driver.hasConnectionPool
 
         override fun open(fileName: String): SQLiteConnection {
             val connection = driver.open(fileName)
@@ -78,15 +75,24 @@ internal const val LISTED_QUERY = "FROM list_entry e JOIN title t"
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun TestScope.written(database: RoomDatabase): List<Set<String>> {
     val seen = mutableListOf<Set<String>>()
-    val tables = arrayOf("title", "title_details", "title_relation", "title_recommendation", "list_entry", "list_state")
     backgroundScope.launch(StandardTestDispatcher(testScheduler)) {
-        database.invalidationTracker.createFlow(*tables, emitInitialState = false).collect { seen += it }
+        database.invalidationTracker.createFlow(*TABLES.toTypedArray(), emitInitialState = false).collect { seen += it }
     }
     runCurrent()
     return seen
 }
 
 internal suspend fun RoomDatabase.execute(sql: String) = useWriterConnection { it.execSQL(sql) }
+
+internal suspend fun RoomDatabase.rows(table: String): Long =
+    useReaderConnection { connection ->
+        connection.usePrepared("SELECT COUNT(*) FROM $table") {
+            it.step()
+            it.getLong(0)
+        }
+    }
+
+internal val TABLES = listOf("title", "title_details", "title_relation", "title_recommendation", "list_entry", "list_state")
 
 // Makes such writes to the table fail, as a full disk would, until [repair].
 internal suspend fun RoomDatabase.breakWrites(

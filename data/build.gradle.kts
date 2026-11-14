@@ -53,6 +53,32 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
+// An entity that changed without its schema file fails the build once: the file is then updated, to be committed.
+tasks.named("copyRoomSchemas") {
+    val schemas = layout.projectDirectory.dir("schemas").asFile
+    val before =
+        layout.buildDirectory
+            .file("room/schemas-before")
+            .get()
+            .asFile
+    val state = { directory: File ->
+        directory
+            .walkTopDown()
+            .filter { it.isFile }
+            .sortedBy { it.path }
+            .joinToString("\n") { "${it.relativeTo(directory)}\n${it.readText()}" }
+    }
+    doFirst {
+        before.parentFile.mkdirs()
+        before.writeText(state(schemas))
+    }
+    doLast {
+        if (before.readText() != state(schemas)) {
+            throw GradleException("The database's entities no longer match data/schemas. The files are updated now: commit them.")
+        }
+    }
+}
+
 // A schema exported in the same run reaches the unit tests' assets.
 tasks.named { it.endsWith("UnitTestAssets") }.configureEach { mustRunAfter("copyRoomSchemas") }
 

@@ -64,11 +64,14 @@ class TitleStoreTest {
         val database: KirokuDatabase,
         val titles: TitleStore,
         val list: RoomLocalList,
+        val unexpected: List<Throwable>,
     )
 
     private fun TestScope.subject(): Subject {
         val database = databases.open(this)
-        return Subject(database, TitleStore(database, dispatcher), RoomLocalList(database, backgroundScope, dispatcher))
+        val unexpected = mutableListOf<Throwable>()
+        val titles = TitleStore(database, dispatcher) { unexpected += it }
+        return Subject(database, titles, RoomLocalList(database, backgroundScope, dispatcher) { unexpected += it }, unexpected)
     }
 
     private suspend fun TestScope.listed(): Subject =
@@ -327,6 +330,70 @@ class TitleStoreTest {
             runCurrent()
             assertEquals(listOf<Anime?>(anime, refreshed), summaries)
             assertEquals(1, pages.size)
+        }
+
+    @Test
+    fun `a clear that ends or begins a sign-in's list removes every title and what its page holds`() =
+        runTest {
+            val s = listed()
+            for (title in fixtures.anime) s.titles.refresh(title, fixtures.details.getValue(title.id), fetchedAt)
+            assertTrue(TABLES.all { s.database.rows(it) > 0 })
+
+            s.list.clear(null)
+            assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1L), TABLES.map { s.database.rows(it) })
+            assertNull(s.titles.observeAnime(anime.id).first())
+            assertNull(s.titles.observeDetails(anime.id).first())
+
+            s.titles.refresh(anime, details, fetchedAt)
+            s.list.clear(SignInId("b"))
+            assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1L), TABLES.map { s.database.rows(it) })
+
+            s.titles.refresh(anime, details, fetchedAt)
+            s.list.clear(null)
+            assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1L), TABLES.map { s.database.rows(it) })
+        }
+
+    @Test
+    fun `a clear of nobody's empty list, as every start signed out makes, keeps the titles opened since the sign-out`() =
+        runTest {
+            val s = subject()
+            s.list.clear(null)
+            s.titles.refresh(anime, details, fetchedAt)
+
+            s.list.clear(null)
+            assertEquals(StoredDetails(details, fetchedAt), s.titles.observeDetails(anime.id).first())
+
+            s.list.add(anime, StoredEntry.settled(entry.record))
+            s.list.clear(null)
+            assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1L), TABLES.map { s.database.rows(it) })
+        }
+
+    @Test
+    fun `a title a page names whose row cannot be read is left out of the page and reported by its type`() =
+        runTest {
+            val s = subject()
+            s.titles.refresh(anime, details, fetchedAt)
+            val related = details.related[1]
+            val recommended = details.recommendations[0]
+            val ids = "${related.anime.id.value}, ${recommended.id.value}"
+
+            s.database.execute("UPDATE title SET airing_status = 'broken' WHERE id IN ($ids)")
+
+            val shown = s.titles.observeDetails(anime.id).first()
+            assertEquals(
+                StoredDetails(
+                    details.copy(
+                        related = details.related - related,
+                        recommendations =
+                            details.recommendations - recommended,
+                    ),
+                    fetchedAt,
+                ),
+                shown,
+            )
+            assertEquals(listOf("java.lang.IllegalStateException", "java.lang.IllegalStateException"), s.unexpected.map { it.message })
+            assertTrue(s.unexpected.all { it is UnreadableRow })
+            assertTrue(runCatching { s.titles.observeAnime(related.anime.id).first() }.isFailure)
         }
 
     @Test

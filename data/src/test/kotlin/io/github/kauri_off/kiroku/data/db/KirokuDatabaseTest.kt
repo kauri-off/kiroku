@@ -44,7 +44,7 @@ class KirokuDatabaseTest {
 
     private fun <T> KirokuDatabase.use(block: suspend (TitleStore) -> T): T =
         try {
-            runBlocking { block(TitleStore(this@use, Dispatchers.IO)) }
+            runBlocking { block(TitleStore(this@use, Dispatchers.IO) { throw it }) }
         } finally {
             close()
         }
@@ -87,16 +87,24 @@ class KirokuDatabaseTest {
     }
 
     @Test
-    fun `a title that has an entry cannot be deleted, and a deleted title takes its details along`() {
+    fun `a title that has an entry or that a page names cannot be deleted, and a deleted title takes its details along`() {
         val database = KirokuDatabase.open(context, name)
-        val list = RoomLocalList(database, CoroutineScope(Dispatchers.IO), Dispatchers.IO)
+        val list = RoomLocalList(database, CoroutineScope(Dispatchers.IO), Dispatchers.IO) { throw it }
         val entry = checkNotNull(Fixtures.reference.entryFor(anime.id))
         val delete = "DELETE FROM title WHERE id = ${anime.id.value}"
         database.use { titles ->
             titles.refresh(anime, details, Fixtures.reference.now)
             list.add(anime, StoredEntry.settled(entry.record))
 
+            val named =
+                details.related
+                    .first()
+                    .anime.id.value
             assertTrue(runCatching { database.execute(delete) }.isFailure)
+            assertTrue(runCatching { database.execute("DELETE FROM title WHERE id = $named") }.isFailure)
+            assertTrue(
+                runCatching { database.execute("DELETE FROM title WHERE id = ${details.recommendations.last().id.value}") }.isFailure,
+            )
             assertTrue(runCatching { database.execute("INSERT INTO list_entry (title_id, unconfirmed) VALUES (1, 1)") }.isFailure)
             assertEquals(StoredTitle(anime, StoredEntry.settled(entry.record)), list.read(anime.id))
 

@@ -21,6 +21,27 @@ import java.time.YearMonth
 
 // How a value is written in a column. Every form is part of the schema: changing one is a migration.
 
+// A stored row that cannot be read, without its message, which could quote the list: the failure's type and stack.
+internal class UnreadableRow(
+    cause: Exception,
+) : Exception(cause.javaClass.name) {
+    init {
+        stackTrace = cause.stackTrace
+    }
+}
+
+// What [read] makes of a row, or nothing for a row that cannot be read, which [unexpected] hears of.
+internal inline fun <T : Any> readable(
+    unexpected: (Throwable) -> Unit,
+    read: () -> T,
+): T? =
+    try {
+        read()
+    } catch (e: Exception) {
+        unexpected(UnreadableRow(e))
+        null
+    }
+
 private const val NANOS_PER_SECOND = 1_000_000_000L
 
 // An instant is its nanoseconds since the epoch, so it comes back exactly and sorts in a query.
@@ -48,7 +69,7 @@ internal fun partialDateOf(column: String): PartialDate =
         else -> PartialDate.Day(LocalDate.parse(column))
     }
 
-// The codes of one type's values. A value the app does not recognise is MAL's own code behind a mark no code has.
+// The codes of one type's values. One the app does not recognise is stored as MAL gave it, so a version that knows it reads it.
 internal class Codes<T : Any>(
     known: List<T>,
     private val unrecognized: ((String) -> T)? = null,
@@ -57,19 +78,12 @@ internal class Codes<T : Any>(
     private val values = known.associateBy(code)
 
     init {
-        check(values.size == known.size && values.keys.none { it.startsWith(UNRECOGNIZED) })
+        check(values.size == known.size)
     }
 
     fun toColumn(value: T): String = code(value)
 
-    fun of(column: String): T =
-        values[column]
-            ?: unrecognized?.takeIf { column.startsWith(UNRECOGNIZED) }?.invoke(column.removePrefix(UNRECOGNIZED))
-            ?: error("No value has the stored code $column")
-
-    companion object {
-        const val UNRECOGNIZED = "?"
-    }
+    fun of(column: String): T = values[column] ?: unrecognized?.invoke(column) ?: error("No value has the stored code")
 }
 
 internal val listStatuses =
@@ -127,7 +141,7 @@ internal val mediaTypes =
             MediaType.Music -> "music"
             MediaType.Commercial -> "commercial"
             MediaType.PromotionalVideo -> "promotional_video"
-            is MediaType.Unrecognized -> Codes.UNRECOGNIZED + it.malCode
+            is MediaType.Unrecognized -> it.malCode
         }
     }
 
@@ -172,7 +186,7 @@ internal val sources =
             Source.Music -> "music"
             Source.MixedMedia -> "mixed_media"
             Source.Other -> "other"
-            is Source.Unrecognized -> Codes.UNRECOGNIZED + it.malCode
+            is Source.Unrecognized -> it.malCode
         }
     }
 
@@ -195,7 +209,7 @@ internal val ageRatings =
             AgeRating.Violence17 -> "violence_17"
             AgeRating.MildNudity -> "mild_nudity"
             AgeRating.Hentai -> "hentai"
-            is AgeRating.Unrecognized -> Codes.UNRECOGNIZED + it.malCode
+            is AgeRating.Unrecognized -> it.malCode
         }
     }
 
@@ -213,7 +227,7 @@ internal val relationTypes =
             RelationType.Summary -> "summary"
             RelationType.Other -> "other"
             RelationType.Character -> "character"
-            is RelationType.Unrecognized -> Codes.UNRECOGNIZED + it.malCode
+            is RelationType.Unrecognized -> it.malCode
         }
     }
 
