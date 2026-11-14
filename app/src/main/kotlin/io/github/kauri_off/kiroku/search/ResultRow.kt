@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.showsCount
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.RowLongPress
 import io.github.kauri_off.kiroku.design.component.RowTrailing
 import io.github.kauri_off.kiroku.text.statusLine
 import io.github.kauri_off.kiroku.title.HeaderFacts
@@ -53,12 +54,13 @@ fun resultRow(
 }
 
 // The title, with its place in front in a ranked list; the facts line; the list status line when the title is on the
-// list; the MAL score.
+// list; the MAL score. A long press opens the title's edit sheet, where there is a list to edit.
 @Composable
 fun ResultAnimeRow(
     row: ResultRow,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onEdit: (() -> Unit)? = null,
 ) {
     val title = row.rank?.let { stringResource(R.string.search_ranked_title, it, row.title) } ?: row.title
     val lines =
@@ -73,5 +75,6 @@ fun ResultAnimeRow(
         modifier = modifier,
         lines = lines.map { RowLine(it) },
         trailing = row.score?.let { RowTrailing.MalScore(scoreText(it)) },
+        longPress = onEdit?.let { RowLongPress(stringResource(R.string.search_edit), it) },
     )
 }

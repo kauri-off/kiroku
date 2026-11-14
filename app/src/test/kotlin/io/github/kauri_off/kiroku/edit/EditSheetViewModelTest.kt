@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -92,6 +93,22 @@ class EditSheetViewModelTest {
                 ),
                 s.sheet,
             )
+        }
+
+    @Test
+    fun `a title neither on the list nor in the store opens from what the caller knows of it, as a new entry`() =
+        test(open = null) { s ->
+            val unknown = FixtureAnime.notOnListAiring.copy(id = AnimeId(UNKNOWN_ID))
+            s.editor.open(unknown.id)
+            advanceUntilIdle()
+            assertNull(s.editor.sheet)
+            s.editor.open(unknown.id, unknown)
+            advanceUntilIdle()
+            assertTrue(s.sheet.isNew)
+            assertEquals(EditSheetState.newEntry, s.sheet.draft)
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(EditSheetState.newEntry, s.values(unknown))
         }
 
     @Test
@@ -218,5 +235,9 @@ class EditSheetViewModelTest {
         val saved = SavedStateHandle()
         test(saved = saved) { s -> s.editor.onEvent(EditSheetEvent.Dismissed) }
         test(saved = saved, open = null) { s -> assertNull(s.editor.sheet) }
+    }
+
+    private companion object {
+        const val UNKNOWN_ID = 999_999_999L
     }
 }

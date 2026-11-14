@@ -161,6 +161,8 @@ class AppRouteTest {
         compose.waitForIdle()
     }
 
+    private fun top(title: String) = displayed(title).single().getUnclippedBoundsInRoot().top
+
     private fun plusOnFirstRow() = compose.onAllNodesWithContentDescription("Plus one episode")[0].performClick()
 
     @Test
@@ -254,6 +256,28 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Watched 12\u00A0of\u00A024")
         assertEquals(12, values(kagerou)?.watchedEpisodes)
+    }
+
+    @Test
+    fun `a sort or a direction chosen in the sort sheet reorders the list behind it, and the sheet stays until dismissed`() {
+        app()
+        val titles =
+            Fixtures.reference.entries
+                .filter { it.status == ListStatus.Watching }
+                .map { it.anime.titles.romaji }
+                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+        compose.onNodeWithContentDescription("Sort").performClick()
+        compose.waitForIdle()
+        click("Title")
+        compose.waitForIdle()
+        shows("Sort by")
+        assertTrue(top(titles[0]) < top(titles[1]))
+        click("Z to A")
+        compose.waitForIdle()
+        shows("Sort by")
+        assertTrue(top(titles.last()) < top(titles[titles.lastIndex - 1]))
+        dismissSheet()
+        compose.onNodeWithText("Sort by").assertDoesNotExist()
     }
 
     @Test

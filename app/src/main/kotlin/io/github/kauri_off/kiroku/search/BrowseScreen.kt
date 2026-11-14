@@ -16,12 +16,18 @@ data class BrowseState(
     // Each with its place in front for a ranked list.
     val rows: Paged<ResultRow>,
     val sessionExpired: Boolean = false,
+    // Whether a row's long press opens its edit sheet: only while there is a list to edit.
+    val editable: Boolean = false,
 )
 
 sealed interface BrowseEvent {
     data object Back : BrowseEvent
 
     data class Open(
+        val id: AnimeId,
+    ) : BrowseEvent
+
+    data class Edit(
         val id: AnimeId,
     ) : BrowseEvent
 
@@ -58,6 +64,7 @@ fun BrowseScreen(
                             rows.more,
                             R.string.search_browse_failed,
                             onOpen = { onEvent(BrowseEvent.Open(it)) },
+                            onEdit = if (state.editable) ({ onEvent(BrowseEvent.Edit(it)) }) else null,
                             onLoadMore = { onEvent(BrowseEvent.LoadMore) },
                             onRetry = { onEvent(BrowseEvent.Retry) },
                         )
