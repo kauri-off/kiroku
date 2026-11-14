@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sign_out_title">Вход</string>
+    <string name="sign_out_demo">У\u00A0демо-данных нет аккаунта MyAnimeList, из которого можно выйти</string>
+    <string name="sign_out_not_read">Сохранённый вход ещё не прочитан</string>
+    <string name="sign_out_signed_out">Вход не выполнен</string>
+    <string name="sign_out_signed_in">Вход в MyAnimeList выполнен</string>
+    <string name="sign_out_expired">Вход выполнен, сессия истекла</string>
+    <string name="sign_out_sign_out">Выйти</string>
+</resources>

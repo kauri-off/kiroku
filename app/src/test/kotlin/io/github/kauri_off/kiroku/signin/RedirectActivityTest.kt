@@ -7,12 +7,15 @@ import android.net.Uri
 import android.os.Bundle
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.MainActivity
+import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
 import io.github.kauri_off.kiroku.core.repository.SignInFailure
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
+import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import io.github.kauri_off.kiroku.wiring.createGraph
 import kotlinx.coroutines.CoroutineScope
@@ -59,10 +62,11 @@ class SignInGraphApplication :
     override val graph by lazy { SignInGraph(graph(this), RecordingSignIn()) }
 }
 
+// The demo's graph: no MAL account, so no sign-in of its own.
 class NoSignInApplication :
     Application(),
     AppGraphOwner {
-    override val graph by lazy { graph(this) }
+    override val graph by lazy { TestGraph(Demo(Fixtures.reference, CoroutineScope(Dispatchers.Unconfined))) }
 }
 
 @RunWith(RobolectricTestRunner::class)

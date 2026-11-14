@@ -378,7 +378,7 @@ class AppRouteTest {
 
     // S6 on the real screens: the List, Search, Profile, the title page and its sub-screens.
     @Test
-    fun `every screen shows the session banner while the session is expired, and Sign in says it is not built`() {
+    fun `every screen shows the session banner while the session is expired, and Sign in says demo data cannot sign in`() {
         graph.demo.server.sessionExpired.value = true
         app()
         shows("Session expired")
@@ -395,7 +395,7 @@ class AppRouteTest {
         shows("Session expired")
         click("Sign in")
         compose.waitForIdle()
-        shows("Not available in this build yet")
+        shows("Demo data has no MyAnimeList account to sign in to")
         back()
         back()
         back()

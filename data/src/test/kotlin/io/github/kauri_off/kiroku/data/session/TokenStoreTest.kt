@@ -184,6 +184,18 @@ class TokenStoreTest {
         }
 
     @Test
+    fun theSuccessorOfAWriteThatDiedIsGoneOnceTheStoreIsRead() =
+        runBlocking {
+            val fixture = fixture()
+            fixture.store().write(old)
+            fixture.close()
+            val successor = File(fixture.file.path + ".next")
+            successor.writeBytes(fixture.file.readBytes().let { it.copyOf(it.size / 2) })
+            assertEquals(old.text(), fixture.store().read().text())
+            assertFalse(successor.exists())
+        }
+
+    @Test
     fun tokensThatDoNotOpenLeaveTheirSignInExpiredAndTheFileAsItIs() =
         runBlocking {
             val source = fixture()

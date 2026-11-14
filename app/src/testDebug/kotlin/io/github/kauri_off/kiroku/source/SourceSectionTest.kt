@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.source
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
@@ -8,8 +9,19 @@ import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
+import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.wiring.AppGraphOwner
+import io.github.kauri_off.kiroku.wiring.LiveGraph
+import io.github.kauri_off.kiroku.wiring.LiveParts
+import io.github.kauri_off.kiroku.wiring.LiveSource
+import io.github.kauri_off.kiroku.wiring.appGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -19,7 +31,29 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.io.File
+import java.time.Clock
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
+
+// The real account's live graph, whose reports a test reads instead of crashing on them.
+class QuietAccountApplication :
+    Application(),
+    AppGraphOwner {
+    val reports = CopyOnWriteArrayList<Throwable>()
+    override val graph: AppGraph by lazy {
+        LiveGraph(
+            LiveParts(
+                this,
+                LiveSource.Account,
+                "0123abcd",
+                Clock.systemUTC(),
+                CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                reports::add,
+            ),
+        )
+    }
+}
 
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -51,6 +85,23 @@ class SourceSectionTest {
         val started = { shadowOf(context).peekNextStartedActivity()?.component?.className }
         restartApp(context, beforeExit = { events += "write, started ${started()}" }, exit = { events += "exit, started ${started()}" })
         assertEquals(listOf("write, started null", "exit, started ${MainActivity::class.java.name}"), events)
+    }
+
+    // A sign-out the token file did not take, made without the Keystore: the file is a directory that cannot be removed.
+    @Test
+    @Config(application = QuietAccountApplication::class)
+    fun `Restart writes what the session's file did not take before the process ends`() {
+        val tokens = File(context.noBackupFilesDir, "account.tokens")
+        val inside = File(tokens, "held").apply { parentFile!!.mkdirs() }
+        inside.writeText("held")
+        runBlocking { context.appGraph.session.signOut() }
+        assertTrue(tokens.isDirectory)
+        inside.delete()
+
+        restartApp(context, exit = {})
+
+        assertTrue(tokens.isFile)
+        assertEquals(0L, tokens.length())
     }
 
     @Test

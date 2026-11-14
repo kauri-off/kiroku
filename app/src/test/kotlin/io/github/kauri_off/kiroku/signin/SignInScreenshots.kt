@@ -15,7 +15,11 @@ class SignInScreenshots : ScreenshotRegistry() {
     override val empty = notShown("The sign-in screen shows no data, so it has nothing to be empty of.")
     override val error = shown { Screen(SignInState.Failed) }
 
-    override val cases = listOf(case("no-client-id") { Screen(SignInState.NoClientId) })
+    override val cases =
+        listOf(
+            case("no-client-id") { Screen(SignInState.NoClientId) },
+            case("no-account") { Screen(SignInState.NoAccount) },
+        )
 }
 
 @Composable

@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.scenario.EdgeMarker
@@ -17,6 +19,8 @@ import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
+import io.github.kauri_off.kiroku.signout.SignOutSection
+import io.github.kauri_off.kiroku.signout.SignOutState
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceSection
 import io.github.kauri_off.kiroku.source.SourceState
@@ -36,6 +40,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case("waiting-for-save") { Menu(ScenarioState.Ready(several, ResetState.WaitingForSave)) },
             case("save-dropped") { Menu(ScenarioState.Ready(Scenario(), ResetState.SaveDropped)) },
             case("real-account") { Menu(ScenarioState.Unavailable) },
+            case("signed-out") { Menu(ScenarioState.Unavailable, signOut = SignOutState.Account(Session.SignedOut)) },
             case("source-chosen") { Menu(ScenarioState.Unavailable, source = SourceState(DataSource.Account, chosen = DataSource.Demo)) },
             case(
                 "source-not-kept",
@@ -49,6 +54,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
 
     private companion object {
         const val HASH = "72e26f6"
+        const val SIGN_IN = "sign-in"
         val BUILD = BuildInfo("preview", "0.1.0", Commit(HASH, dirty = false), Instant.parse("2026-11-12T09:41:00Z"))
     }
 
@@ -67,10 +73,13 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     DataSource.Demo
                 }
             ).let { SourceState(it, it) },
+        signOut: SignOutState =
+            if (scenarios == ScenarioState.Unavailable) SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))) else SignOutState.Demo,
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
             { SourceSection(source, onEvent = {}) },
+            { SignOutSection(signOut, onEvent = {}) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
         ),

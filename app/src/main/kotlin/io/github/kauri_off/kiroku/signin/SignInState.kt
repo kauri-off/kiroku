@@ -7,6 +7,9 @@ sealed interface SignInState {
     // A build without a MAL client id cannot sign in (ARCHITECTURE 3.3).
     data object NoClientId : SignInState
 
+    // Demo data has no MAL account behind it, whatever the build's client id.
+    data object NoAccount : SignInState
+
     // The browser has handed the sign-in back and its tokens are being fetched.
     data object Completing : SignInState
 

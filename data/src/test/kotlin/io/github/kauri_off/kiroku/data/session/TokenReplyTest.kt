@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.data.session
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -45,6 +46,12 @@ class TokenReplyTest {
             val expected = if (status == 400 || status == 401) TokenResult.Rejected else TokenResult.Failed(DataError.ServerError)
             assertEquals("$status", expected, TokenReply.Answer(status, "").read())
         }
+    }
+
+    @Test
+    fun malsRecordedAnswerToARefreshTokenItCannotReadRejects() {
+        val recorded = RecordedAnswers.named("refresh_invalid")
+        assertEquals(TokenResult.Rejected, TokenReply.Answer(recorded.status, recorded.body).read())
     }
 
     @Test

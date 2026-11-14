@@ -23,6 +23,11 @@ import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
 import io.github.kauri_off.kiroku.search.searchStandIn
+import io.github.kauri_off.kiroku.signin.SignInKey
+import io.github.kauri_off.kiroku.signin.SignInRoute
+import io.github.kauri_off.kiroku.signin.SignInTurns
+import io.github.kauri_off.kiroku.signin.browse
+import io.github.kauri_off.kiroku.signin.signedIn
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -48,6 +53,7 @@ fun AppRoute(
     LaunchedEffect(edit) {
         edit?.let { navigator.showEditorOf(it) }
     }
+    SignInTurns(graph, navigator)
     CompositionLocalProvider(LocalMessageCovers provides covers) {
         ShellRoute(navigator, snackbars, remember(graph, messages) { appEntries(graph, messages) })
     }
@@ -70,7 +76,7 @@ fun appEntries(
 ): ShellEntries {
     val standIn = searchStandIn(graph)
     return { navigator, snackbars ->
-        val signIn = { navigator.open(NotBuiltKey(NotBuilt.SignIn)) }
+        val signIn = { navigator.open(SignInKey) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
         val back = { navigator.back() }
         entry<ListRoot> {
@@ -129,6 +135,9 @@ fun appEntries(
         entry<RelatedKey> { key -> RelatedRoute(key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
+        entry<SignInKey> {
+            SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })
+        }
     }
 }
 
