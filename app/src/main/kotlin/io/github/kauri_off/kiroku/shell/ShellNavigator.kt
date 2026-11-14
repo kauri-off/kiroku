@@ -46,6 +46,17 @@ class ShellNavigator(
         way = Way.Deeper
     }
 
+    // Takes [key] off every stack that holds it; a root stays.
+    fun remove(key: NavKey) {
+        stacks.values.forEach { stack -> (stack.lastIndex downTo 1).filter { stack[it] == key }.forEach { stack.removeAt(it) } }
+    }
+
+    // Shows [destination] with its stack popped to its root.
+    fun home(destination: Destination) {
+        selected.value = destination
+        stacks.getValue(destination).popTo(1)
+    }
+
     // Back pops the current stack; from the root of Search or Profile it goes to List. False: leave the app.
     fun back(): Boolean {
         val stack = stacks.getValue(current)

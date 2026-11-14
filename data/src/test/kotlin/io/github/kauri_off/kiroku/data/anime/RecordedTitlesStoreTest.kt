@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.data.db.dispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -45,8 +46,14 @@ class RecordedTitlesStoreTest {
     @Test
     fun `every recorded title comes back from the store as it was mapped, an unknown code as the same code`() =
         runTest {
-            val titles = recordedNodes.map { it.second.toNode().toAnime() }.distinctBy { it.id }
-            assertTrue(titles.any { it.mediaType == MediaType.Unrecognized("unknown") })
+            val unknown =
+                recordedNodes
+                    .first { (_, node) ->
+                        "media_type" in node
+                    }.second
+                    .edited(listOf("media_type"), JsonPrimitive("web_film"))
+            val titles = (listOf(unknown) + recordedNodes.map { it.second }).map { it.toNode().toAnime() }.distinctBy { it.id }
+            assertTrue(titles.any { it.mediaType == MediaType.Unrecognized("web_film") })
             val (store) = store()
             store.addUnknown(titles)
             for (anime in titles) assertEquals(anime, store.observeAnime(anime.id).first())

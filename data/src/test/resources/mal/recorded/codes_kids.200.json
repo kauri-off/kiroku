@@ -1,0 +1,4941 @@
+{
+    "id": 527,
+    "title": "Pokemon",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/1787/140239.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/1787/140239l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Pocket Monsters",
+            "Indigo League",
+            "Adventures on the Orange Islands",
+            "The Johto Journeys",
+            "Johto League Champions",
+            "Master Quest"
+        ],
+        "en": "Pokémon",
+        "ja": "ポケットモンスター"
+    },
+    "media_type": "tv",
+    "status": "finished_airing",
+    "num_episodes": 276,
+    "start_date": "1997-04-01",
+    "broadcast": {
+        "day_of_the_week": "thursday",
+        "start_time": "19:00"
+    },
+    "mean": 7.43,
+    "rank": 2559,
+    "genres": [
+        {
+            "id": 1,
+            "name": "Action"
+        },
+        {
+            "id": 2,
+            "name": "Adventure"
+        },
+        {
+            "id": 4,
+            "name": "Comedy"
+        },
+        {
+            "id": 10,
+            "name": "Fantasy"
+        },
+        {
+            "id": 15,
+            "name": "Kids"
+        }
+    ],
+    "average_episode_duration": 1440,
+    "end_date": "2002-11-14",
+    "synopsis": "Pokémon are peculiar creatures with a vast array of…\n\nSetting off on a journey to become the very best, Satoshi…\n\n[Written by MAL Rewrite]",
+    "start_season": {
+        "year": 1997,
+        "season": "spring"
+    },
+    "source": "game",
+    "studios": [
+        {
+            "id": 28,
+            "name": "OLM"
+        }
+    ],
+    "rating": "pg",
+    "statistics": {
+        "status": {
+            "watching": "54598",
+            "completed": "498388",
+            "on_hold": "43372",
+            "dropped": "64106",
+            "plan_to_watch": "32900"
+        },
+        "num_list_users": 693364
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 528,
+                "title": "Pokemon Movie 01: Mewtwo no Gyakushuu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1513/140273.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1513/140273l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gekijouban Pocket Monsters: Mewtwo Strikes Back",
+                        "Pokémon Movie 1",
+                        "Pokémon: The Origin of Mewtwo",
+                        "Pokémon: The First Movie Kanzenban",
+                        "Pokémon: The First Movie Complete Version"
+                    ],
+                    "en": "Pokémon: The First Movie - Mewtwo Strikes Back",
+                    "ja": "ポケットモンスター ミュウツーの逆襲"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1998-07-18",
+                "mean": 7.68,
+                "rank": 1545,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 5100
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1117,
+                "title": "Pokemon Movie 02: Maboroshi no Pokemon Lugia Bakutan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/41801.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/41801l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Power of One",
+                        "Gekijouban Pocket Monsters: Revelation Lugia",
+                        "Pokémon Movie 2"
+                    ],
+                    "en": "Pokémon: The Movie 2000",
+                    "ja": "ポケットモンスター 幻のポケモンルギア爆誕"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1999-07-17",
+                "mean": 7.36,
+                "rank": 2881,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 4840
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1118,
+                "title": "Pokemon Movie 03: Kesshoutou no Teiou Entei",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/80288.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/80288l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokémon: Spell Of The Unown",
+                        "Gekijouban Pocket Monsters: Lord of the UNKNOWN Tower ENTEI",
+                        "Pokémon Movie 3"
+                    ],
+                    "en": "Pokémon 3: The Movie",
+                    "ja": "ポケットモンスター 結晶塔の帝王 ENTEI"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000-07-08",
+                "mean": 7.1,
+                "rank": 4427,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 4380
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1119,
+                "title": "Pokemon Movie 04: Celebi Toki wo Koeta Deai",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1906/94415.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1906/94415l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gekijouban Pocket Monsters: Serebii Toki wo Koeta Deai",
+                        "Celebi: A Timeless Encounter",
+                        "Pokémon Movie 4",
+                        "Celebi: Voice of the Forest"
+                    ],
+                    "en": "Pokémon 4Ever",
+                    "ja": "ポケットモンスター セレビィ 時を越えた遭遇（であい）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-07-07",
+                "mean": 6.93,
+                "rank": 5295,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 4741
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1120,
+                "title": "Pokemon Movie 05: Mizu no Miyako no Mamorigami Latias to Latios",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/21317.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/21317l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gekijouban Pocket Monsters: Mizu no Miyako Mamorigami Latias to Latios",
+                        "Pokemon Movie 5"
+                    ],
+                    "en": "Pokémon Heroes",
+                    "ja": "ポケットモンスター 水の都の護神 ラティアスとラティオス"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2002-07-13",
+                "mean": 7.18,
+                "rank": 3944,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 4440
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1525,
+                "title": "Pokemon Crystal: Raikou Ikazuchi no Densetsu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/21488.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/21488l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters Crystal: Raikou - Legend of Thunder"
+                    ],
+                    "en": "Pokémon: The Legend of Thunder!",
+                    "ja": "ポケットモンスター クリスタル ～ライコウ 雷の伝説～"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-12-30",
+                "mean": 6.86,
+                "rank": 5732,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 4140
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1564,
+                "title": "Pokemon Advanced Generation",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1036/142698.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1036/142698l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Advanced Generation",
+                        "Advanced Challenge",
+                        "Advanced Battle",
+                        "Battle Frontier",
+                        "Pokémon the Series: Ruby and Sapphire"
+                    ],
+                    "en": "Pokémon: Advanced",
+                    "ja": "ポケットモンスター　アドバンスジェネレーション"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 192,
+                "start_date": "2002-11-21",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "19:00"
+                },
+                "mean": 7.16,
+                "rank": 4068,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "relation_type": "sequel",
+            "relation_type_formatted": "Sequel"
+        },
+        {
+            "node": {
+                "id": 1709,
+                "title": "Pokemon: Mewtwo! Ware wa Koko ni Ari",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/87922.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/87922l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Myuutsu! I Exist Here"
+                    ],
+                    "en": "Pokémon: Mewtwo Returns",
+                    "ja": "ポケットモンスター ミュウツー! 我ハココニ在リ"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000-12-30",
+                "mean": 7.1,
+                "rank": 4428,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 3908
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2363,
+                "title": "Pokemon Side Stories",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1231/141945.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1231/141945l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Housoukyoku",
+                        "Shuukan Pokemon Housoukyoku",
+                        "Pokemon Hoso",
+                        "Pocket Monsters Housoukyoku"
+                    ],
+                    "en": "Pokémon Chronicles",
+                    "ja": "ポケットモンスター サイドストーリー"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 16,
+                "start_date": "2002-12-03",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "19:00"
+                },
+                "mean": 6.91,
+                "rank": 5412,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1200
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 4792,
+                "title": "Pokemon: Pikachu Tankentai",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1488/97386.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1488/97386l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikachu Tankentai"
+                    ],
+                    "en": "Pokémon: Pikachu's Rescue Adventure",
+                    "ja": "ピカチュウたんけんたい"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1999-07-17",
+                "mean": 6.58,
+                "rank": 7612,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1400
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 4793,
+                "title": "Pokemon: Pichu to Pikachu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1075/97384.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1075/97384l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon: Pikachu and Pichu",
+                    "ja": "ピチューとピカチュウ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000-07-08",
+                "mean": 6.73,
+                "rank": 6572,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1350
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 4794,
+                "title": "Pokemon: Pikachu no Dokidoki Kakurenbo",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1225/97385.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1225/97385l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikachu no Dokidoki Kakurenbo"
+                    ],
+                    "en": "Pokémon: Pikachu's Pikaboo",
+                    "ja": "ピカチュウのドキドキかくれんぼ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-07-07",
+                "mean": 6.5,
+                "rank": 8126,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 4795,
+                "title": "Pokemon: Pikapika Hoshizora Camp",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1258/97387.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1258/97387l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikapika Hoshizora Camp"
+                    ],
+                    "en": "Pokémon: Camp Pikachu",
+                    "ja": "ピカピカ星空キャンプ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2002-07-13",
+                "mean": 6.51,
+                "rank": 8047,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1320
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 4874,
+                "title": "Pokemon: Pikachu no Fuyuyasumi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1052/97380.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1052/97380l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikachu no Fuyuyasumi",
+                        "Let's Play on Christmas!",
+                        "Christmas Night",
+                        "Let's Play in the Snow!",
+                        "Kanga Games"
+                    ],
+                    "en": "Pokémon: Pikachu's Winter Vacation",
+                    "ja": "ポケットモンスター ピカチュウのふゆやすみ"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "1998-12-22",
+                "mean": 6.52,
+                "rank": 7991,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 540
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 5526,
+                "title": "Pokemon: Pikachu no Natsuyasumi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1927/97383.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1927/97383l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikachu no Natsuyasumi",
+                        "Pikachu Short 1"
+                    ],
+                    "en": "Pokémon: Pikachu's Summer Vacation",
+                    "ja": "ピカチュウのなつやすみ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1998-07-18",
+                "mean": 6.83,
+                "rank": 5909,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1260
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 6877,
+                "title": "Pokemon: Bokutachi Pichu Brothers - Party wa Oosawagi! no Maki",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1135/152985.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1135/152985l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon: Pichu Bros. Wild Adventure",
+                        "Pocket Monsters: Boku-tachi Pichu Brothers - Party wa Oosawagi! no Maki"
+                    ],
+                    "en": "Pokémon: Pichu Bros. in Party Panic",
+                    "ja": "ぼくたちピチューブラザーズ　～パーティはおおさわぎ！のまき～"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-07-18",
+                "mean": 6.49,
+                "rank": 8187,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1240
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 10916,
+                "title": "Pokemon: Pikachu no Fuyuyasumi (2000)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1910/108234.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1910/108234l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikachu no Fuyuyasumi (2000)",
+                        "Let's Play on the Ice!",
+                        "Winter Games",
+                        "Stantler's Little Helpers"
+                    ],
+                    "en": "Pokémon: Pikachu's Winter Vacation (2000)",
+                    "ja": "ピカチュウのふゆやすみ2000"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "1999-12-22",
+                "mean": 6.43,
+                "rank": 8583,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 660
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 10917,
+                "title": "Pokemon: Pikachu no Fuyuyasumi (2001)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1248/108235.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1248/108235l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: Pikachu no Fuyuyasumi (2001)",
+                        "Delibird's Present",
+                        "Delibird's Dilemma",
+                        "White Story",
+                        "Snorlax Snowman",
+                        "We are the Pichu Brothers - Balloon Disturbance",
+                        "Trouble in Big Town"
+                    ],
+                    "en": "Pokémon: Pikachu's Winter Vacation (2001)",
+                    "ja": "ピカチュウのふゆやすみ2001"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2000-12-22",
+                "mean": 6.41,
+                "rank": 8715,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1340
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 11073,
+                "title": "Pokemon Introductory Recap",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1488/152986.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1488/152986l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "World of Pokemon"
+                    ],
+                    "en": "Ash's Journey",
+                    "ja": "Pokemon: Ash's Journey"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1998-07-18",
+                "mean": 6.44,
+                "rank": 8517,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 122
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 20159,
+                "title": "Pokemon: The Origin",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/53701.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/53701l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters: The Origin",
+                        "Pokémon: The Origin"
+                    ],
+                    "en": "Pokémon: Origins",
+                    "ja": "ポケットモンスター THE ORIGIN"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 4,
+                "start_date": "2013-10-02",
+                "mean": 7.74,
+                "rank": 1371,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1299
+            },
+            "relation_type": "alternative_setting",
+            "relation_type_formatted": "Alternative setting"
+        },
+        {
+            "node": {
+                "id": 31750,
+                "title": "TV-ban Pokemon Special Masara Town-hen Recaps",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/76468.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/76468l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters Indigo League Recap",
+                        "Pocket Monsters OVA Summary"
+                    ],
+                    "en": "",
+                    "ja": "TV版 ポケットモンスター スペシャル マサラタウン編 総集編"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2000-09-29",
+                "mean": 6.22,
+                "rank": 9893,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 2865
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 33898,
+                "title": "Torikaekko Please",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1551/140937.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1551/140937l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Let's Trade, Please",
+                        "Pokemon Song",
+                        "Pokémon Song"
+                    ],
+                    "en": "",
+                    "ja": "とりかえっこプリーズ"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1998-02-10",
+                "mean": 4.49,
+                "genres": [
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 245
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 34514,
+                "title": "Pokemon Generations",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/83210.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/83210l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters Generations"
+                    ],
+                    "en": "Pokémon Generations",
+                    "ja": "ポケモンジェネレーションズ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 18,
+                "start_date": "2016-12-09",
+                "mean": 7.5,
+                "rank": 2232,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 270
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 34540,
+                "title": "Pokemon Movie 20: Kimi ni Kimeta!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1402/122043.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1402/122043l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Movie 20"
+                    ],
+                    "en": "Pokémon the Movie: I Choose You!",
+                    "ja": "劇場版ポケットモンスター キミにきめた！"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2017-07-15",
+                "mean": 7.2,
+                "rank": 3836,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 5880
+            },
+            "relation_type": "alternative_setting",
+            "relation_type_formatted": "Alternative setting"
+        },
+        {
+            "node": {
+                "id": 36825,
+                "title": "Pokemon Diamond & Pearl: Clip Show",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1695/142701.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1695/142701l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Recap"
+                    ],
+                    "en": "",
+                    "ja": "ポケットモンスター ダイヤモンド&パール"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2006-09-28",
+                "mean": 6.41,
+                "rank": 8713,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1443
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 37865,
+                "title": "Pokemon: Aki no Special",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1287/123875.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1287/123875l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Recap",
+                        "Pocket Monsters, Fall Special!"
+                    ],
+                    "en": "",
+                    "ja": "ポケットモンスター・秋のスペシャル"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1997-10-07",
+                "mean": 5.93,
+                "rank": 11491,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 2880
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 40143,
+                "title": "Pokemon Masters: Trainers Daishuuketsu Special Animation",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1238/133015.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1238/133015l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Masters Animated Trailer",
+                        "Pokemon Masters: Trainers Great Gathering Special Animation"
+                    ],
+                    "en": "",
+                    "ja": "『ポケモンマスターズ』トレーナー大集結スペシャルアニメーション"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2019-06-27",
+                "mean": 6.3,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 260
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 41612,
+                "title": "Oshougatsuda yo! Pokemon Special!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1045/106871.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1045/106871l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "It's the New Year! Pocket Monsters Special!"
+                    ],
+                    "en": "",
+                    "ja": "お正月だよ！ポケットモンスタースペシャル！"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1999-01-01",
+                "mean": 5.92,
+                "rank": 11548,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 5400
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 42984,
+                "title": "Gotcha!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1637/109512.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1637/109512l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokémon Special Music Video",
+                        "Acacia"
+                    ],
+                    "en": "",
+                    "ja": "GOTCHA!"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2020-09-29",
+                "mean": 8.32,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 194
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 49730,
+                "title": "Pokemon Evolutions",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1405/117456.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1405/117456l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Evolutions",
+                    "ja": "Pokémon Evolutions"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 8,
+                "start_date": "2021-09-09",
+                "mean": 7.46,
+                "rank": 2402,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 480
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 50840,
+                "title": "Metamon to!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1094/151538.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1094/151538l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Ditto And",
+                        "Metamon to! Oyasumi Mokurou",
+                        "Metamon to! Wooper to Katazuke",
+                        "Metamon to! Purin no Stage",
+                        "Good Night Rowlet",
+                        "Wooper, Let's Tidy Up!",
+                        "Jigglypuff's Mini Concert",
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "",
+                    "ja": "メタモンと！"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2022-01-14",
+                "mean": 5.71,
+                "rank": 12645,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 150
+            },
+            "relation_type": "character",
+            "relation_type_formatted": "Character"
+        },
+        {
+            "node": {
+                "id": 50878,
+                "title": "Pokemon Anime Chou Hyakka: Pokemon Kingin Zukan Super Select",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1883/120618.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1883/120618l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pocket Monsters Anime Super Ultimate Pokémon Gold and Silver Guidebook Super Select"
+                    ],
+                    "en": "",
+                    "ja": "ポケットモンスター アニメ超百科 ポケモン金銀図鑑 スーパセレクト"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000",
+                "mean": 5.89,
+                "rank": 11709,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1200
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 51013,
+                "title": "A Ripple in Time",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1360/120922.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1360/120922l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Daniel Arsham × Pokémon",
+                        "Toki no Hamon"
+                    ],
+                    "en": "",
+                    "ja": "A Ripple in Time / 時の波紋"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-02-12",
+                "mean": 6.1,
+                "rank": 10529,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 381
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51145,
+                "title": "Pokemon Legends Arceus: Yuki Hodo Kishi Futaai",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1364/123283.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1364/123283l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Yuki Hodokishi Futaai"
+                    ],
+                    "en": "Pokémon: Hisuian Snow",
+                    "ja": "Pokémon LEGENDS アルセウス 雪ほどきし二藍"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2022-05-18",
+                "mean": 7.4,
+                "rank": 2700,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 611
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51865,
+                "title": "Pokemon Dai Koushin!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1724/123922.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1724/123922l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Great March of Pokémon",
+                    "ja": "ポケモンだいこうしん!"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2019-01-31",
+                "mean": 5.2,
+                "rank": 14349,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 326
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51866,
+                "title": "CoroCoro Monster Ball",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1043/123923.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1043/123923l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Rolling Poké Balls",
+                    "ja": "コロコロモンスターボール"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2019-02-22",
+                "mean": 5.44,
+                "rank": 13708,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 328
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51867,
+                "title": "Pokemon Inai Inai Baa!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1500/123924.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1500/123924l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pokémon Peek-a-boo!",
+                    "ja": "ポケモン いないいないばあ!"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2019-03-15",
+                "mean": 5.35,
+                "rank": 14015,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 327
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51868,
+                "title": "Dokidoki Ghost Mansion",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1214/123925.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1214/123925l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Mysterious Ghost Manor",
+                    "ja": "ドキドキ ゴーストマンション"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2019-09-20",
+                "mean": 5.33,
+                "rank": 14057,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 330
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51870,
+                "title": "Pokemon de Manabi Asobu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1790/123933.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1790/123933l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Learn and Play With Pokémon",
+                    "ja": "ポケモンで学び遊ぶ"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2019-06-12",
+                "mean": 5.41,
+                "rank": 13813,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 56,
+                        "name": "Educational"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 215
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51871,
+                "title": "Hisui Kobanashi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1127/123934.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1127/123934l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Stop Motion Animation",
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "",
+                    "ja": "ヒスイ小噺"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2021-12-10",
+                "mean": 5.64,
+                "rank": 12971,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 100
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51883,
+                "title": "Pikachu no Asa no Nikka",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1535/123951.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1535/123951l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pikachu's Morning Routine",
+                    "ja": "ピカチュウのあさ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2020-07-10",
+                "mean": 5.62,
+                "rank": 13072,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 167
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51884,
+                "title": "Pokemon Daiundoukai",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1682/123952.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1682/123952l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pokémon Sports Day",
+                    "ja": "ポケモン大運動会"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2020-10-30",
+                "mean": 5.84,
+                "rank": 11988,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 193
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51885,
+                "title": "Pikachu, Pochama to Fushigi na Nendo!?",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1853/123953.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1853/123953l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pikachu, Piplup and the Playful Clay!",
+                    "ja": "ピカチュウ・ポッチャマとふしぎなねんど！？"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-01-07",
+                "mean": 5.36,
+                "rank": 13985,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 528
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51888,
+                "title": "Kansatsu! Pokemon Zukan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1575/123956.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1575/123956l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kansatsu! Pokemon Book: Oddish",
+                        "Kansatsu! Pokemon Book: One Pachi",
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pokémon Kids TV: Pokédex Info",
+                    "ja": "かんさつ！ポケモンずかん"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2020-10-23",
+                "mean": 5.43,
+                "rank": 13746,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 322
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51889,
+                "title": "Pokemon Kids TV Douyou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1945/123965.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1945/123965l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Kids TV Children Songs"
+                    ],
+                    "en": "Pokémon Kids TV: Nursery Rhymes",
+                    "ja": "ポケモン Kids TV 童謡 (どうよう)"
+                },
+                "media_type": "music",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2019-02-01",
+                "mean": 5.87,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 120
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 51955,
+                "title": "Pokemon Moncolle Story",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1030/124123.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1030/124123l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Stop Motion Animation"
+                    ],
+                    "en": "",
+                    "ja": "ポケモン モンコレストーリ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 8,
+                "start_date": "2018-03-30",
+                "mean": 5.37,
+                "rank": 13955,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 99
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 52497,
+                "title": "Pokemon Center Okinawa PV",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1283/125874.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1283/125874l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Travelling Gardie",
+                        "Travelling Growlithe"
+                    ],
+                    "en": "",
+                    "ja": "ポケモンセンターオキナワ オープン記念動画"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-08-11",
+                "mean": 5.78,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 264
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 52553,
+                "title": "Pokepeace",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1139/126168.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1139/126168l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Peaceful Place",
+                    "ja": "ポケピース"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2022-07-29",
+                "rank": 20011,
+                "genres": [
+                    {
+                        "id": 63,
+                        "name": "Iyashikei"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 84
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 52576,
+                "title": "Pokemon x ASMR",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1160/131947.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1160/131947l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモン × ASMR"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 7,
+                "start_date": "2020-01-16",
+                "mean": 5.63,
+                "rank": 13032,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 1394
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 52897,
+                "title": "Kemeng",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1950/134594.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1950/134594l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon 25th Anniversary",
+                        "Kamu"
+                    ],
+                    "en": "",
+                    "ja": "可梦"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-08-25",
+                "mean": 5.92,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 310
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 52942,
+                "title": "Pokemon Scarlet Violet",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1776/127565.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1776/127565l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケットモンスター スカーレット・バイオレット"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2022-09-01",
+                "mean": 6.07,
+                "rank": 10752,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 118
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 53327,
+                "title": "Nanjyamo no Aibou wa Nanimono nanja!? (Donna Monja TV)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1197/129096.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1197/129096l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Who is Nanjyamo's Partner!? (Donna Monja TV)"
+                    ],
+                    "en": "Guess Iono's Partner Pokémon!",
+                    "ja": "ナンジャモの相棒は何者なんじゃ!?【ドンナモンジャTV】"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2022-10-12",
+                "mean": 5.82,
+                "rank": 12089,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 210
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 53876,
+                "title": "Pokemon (2023)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1703/137216.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1703/137216l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokémon: Liko to Roy no Tabidachi",
+                        "Pocket Monsters: Liko to Roy no Tabidachi",
+                        "Pokémon: Terapagos no Kagayaki",
+                        "Pocket Monsters: Terapagos no Kagayaki",
+                        "Pokemon Horizons: Liko and Roy's Departure",
+                        "Pokemon Horizons: Terapagos' Gleam",
+                        "Pokemon Mega Voltage"
+                    ],
+                    "en": "Pokémon Horizons: The Series",
+                    "ja": "ポケットモンスター(2023)"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2023-04-14",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "18:55"
+                },
+                "mean": 7.38,
+                "rank": 2791,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 54276,
+                "title": "W Professors",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1941/132829.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1941/132829l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "The Two Professors",
+                    "ja": "W Professors"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2018-09-25",
+                "mean": 5.5,
+                "rank": 13534,
+                "genres": [
+                    {
+                        "id": 79,
+                        "name": "Video Game"
+                    }
+                ],
+                "average_episode_duration": 180
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 54434,
+                "title": "Chan Chiho Challenge Channel",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1620/134548.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1620/134548l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Chanchiho Challenge Channel"
+                    ],
+                    "en": "",
+                    "ja": "チャンチホチャレンジチャンネル"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 5,
+                "start_date": "2023-02-10",
+                "rank": 16127,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 349
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 54633,
+                "title": "Pokemon Concierge",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1064/139658.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1064/139658l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Concierge",
+                    "ja": "ポケモンコンシェルジュ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 4,
+                "start_date": "2023-12-28",
+                "mean": 7.7,
+                "rank": 1485,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 48,
+                        "name": "Workplace"
+                    }
+                ],
+                "average_episode_duration": 897
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 54646,
+                "title": "Tong Meng Zhi Lu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1814/133929.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1814/133929l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokémon: Journey of Shared Dreams"
+                    ],
+                    "en": "Pokémon: Journey of One Dream",
+                    "ja": "同梦之旅"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-02-28",
+                "mean": 6.15,
+                "rank": 10290,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 714
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 54648,
+                "title": "Fangkemeng: Bu Yuan Zhi Dao de Fangxing Baokemeng?!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1947/133931.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1947/133931l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokexel: Square-shaped Pokemon From a Non-round Island?!",
+                        "Marujanai Shima no Shikaku na Pokémon!?",
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Cube-Shaped Pokémon on Cubie Island?!",
+                    "ja": "方可梦：不圆之岛的方形宝可梦?!"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 5,
+                "start_date": "2023-02-28",
+                "mean": 5.9,
+                "rank": 11627,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 103
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 54655,
+                "title": "Hisui Chihou no Kiroku Eizou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1674/133944.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1674/133944l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Rare Footage of the Hisui Region Discovered!"
+                    ],
+                    "en": "",
+                    "ja": "ヒスイ地方の記録映像"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2021-10-19",
+                "mean": 5.91,
+                "rank": 11585,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 124
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 55074,
+                "title": "Pikatto PikaPika Pikachu Campaign PV",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1727/135462.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1727/135462l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ピカッと ピカピカ ピカチュウキャンペーン PV"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-04-22",
+                "mean": 5.57,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 36
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 56064,
+                "title": "Kimi ni Aeta!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1706/137331.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1706/137331l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon WCS2023"
+                    ],
+                    "en": "Challenge the World!",
+                    "ja": "キミに会えた！"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-07-23",
+                "mean": 6.66,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 60
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 56861,
+                "title": "Pokemon Yuenchi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1022/141144.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1022/141144l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pokémon Playground",
+                    "ja": "ポケモンゆうえんち"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-09-15",
+                "mean": 5.4,
+                "rank": 13846,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 240
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 56900,
+                "title": "Project Voltage",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1081/139076.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1081/139076l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon feat. Hatsune Miku",
+                        "Project VOLTAGE - Pokemon feat. Hatsune Miku",
+                        "PokeMiku"
+                    ],
+                    "en": "",
+                    "ja": "Project VOLTAGE"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 14,
+                "start_date": "2023-09-29",
+                "mean": 6.74,
+                "genres": [
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 184
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 57595,
+                "title": "Pokemon Sleep CMs",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1657/140542.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1657/140542l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Sleep CMs",
+                    "ja": "ポケモンスリープ CMs"
+                },
+                "media_type": "cm",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2023-12-21",
+                "mean": 5.85,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 30
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 57596,
+                "title": "My Pikachu Humming",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1378/140543.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1378/140543l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "My PIKACHU Humming"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-12-16",
+                "mean": 5.56,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 230
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 57858,
+                "title": "Shirarezaru \"Momowarou Monogatari\"",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1312/140939.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1312/140939l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Unknown \"Tale of Momowarou\""
+                    ],
+                    "en": "The Untold Story of Pecharunt",
+                    "ja": "知られざる「モモワロウ物語」"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2024-01-11",
+                "mean": 6.15,
+                "rank": 10278,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 156
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58012,
+                "title": "Liang Chen You Meng",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1873/141269.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1873/141269l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokémon: A Good Day for a Dream"
+                    ],
+                    "en": "A Good Day for a Dream",
+                    "ja": "良辰有梦"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-02-02",
+                "mean": 6.61,
+                "rank": 7389,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 156
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58087,
+                "title": "Kabigon Meets Snorlax",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1621/141345.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1621/141345l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Project Kabigon",
+                        "Project Snorlax"
+                    ],
+                    "en": "",
+                    "ja": "KABIGON meets SNORLAX"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-02-09",
+                "mean": 5.25,
+                "genres": [
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 80,
+                        "name": "Visual Arts"
+                    }
+                ],
+                "average_episode_duration": 66
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58140,
+                "title": "Kabigon Sleeping!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1611/141453.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1611/141453l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Project Kabigon",
+                        "Project Snorlax"
+                    ],
+                    "en": "Snorlax Sleeping!",
+                    "ja": "カビゴン寝てるんかーい！"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-02-16",
+                "mean": 6.07,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 162
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58244,
+                "title": "Pokedance",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1258/141641.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1258/141641l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "POKÉDANCE"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-02-27",
+                "mean": 6.56,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 79
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58247,
+                "title": "PokeMaze CM",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1196/141662.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1196/141662l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Cafe ReMix: Gimmighoul Coins!"
+                    ],
+                    "en": "Pokémon Café ReMix CM",
+                    "ja": "ポケまぜ CM"
+                },
+                "media_type": "cm",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-02-27",
+                "mean": 5.51,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 47,
+                        "name": "Gourmet"
+                    }
+                ],
+                "average_episode_duration": 30
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58248,
+                "title": "Pokemon Masters EX",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1885/151870.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1885/151870l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Masters EX",
+                    "ja": "ポケモンマスターズ EX"
+                },
+                "media_type": "pv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2019-12-05",
+                "mean": 6.03,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    }
+                ],
+                "average_episode_duration": 94
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58288,
+                "title": "\"Pokemon Shirt Sizing\" Concept Movie",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1206/141774.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1206/141774l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "「ポケモンシャツ サイジング」コンセプトムービー"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-11-04",
+                "mean": 5.65,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 91
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58439,
+                "title": "Pokemon Go CMs",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1466/145588.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1466/145588l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Go CMs",
+                    "ja": "Pokemon GO"
+                },
+                "media_type": "cm",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2018-02-02",
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 30
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58507,
+                "title": "Pokemon Card wo Yattemita",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1117/142216.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1117/142216l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモンカードをやってみたい"
+                },
+                "media_type": "cm",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-03-21",
+                "mean": 5.61,
+                "genres": [
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 30
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58508,
+                "title": "Mitsuketa! Kuwassu Daisousaku Campaign",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1507/142217.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1507/142217l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "みーつけた！クワッス大そうさくキャンペーン"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-03-21",
+                "mean": 5.69,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 60
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58835,
+                "title": "Pokemon Home Shoukai Douga",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1476/142938.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1476/142938l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Let's Introduce You to Pokémon Home!",
+                    "ja": "『Pokémon HOME』 紹介動画"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 8,
+                "start_date": "2024-05-10",
+                "mean": 5.47,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 45
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58912,
+                "title": "Lucky",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1617/143267.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1617/143267l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Lucky",
+                    "ja": "Lucky"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-05-24",
+                "mean": 6.47,
+                "genres": [
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 216
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 58953,
+                "title": "Pokemon Concierge Part 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1873/148170.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1873/148170l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Concierge Part 2",
+                    "ja": "ポケモンコンシェルジュ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 4,
+                "start_date": "2025-09-04",
+                "mean": 7.51,
+                "rank": 2194,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 48,
+                        "name": "Workplace"
+                    }
+                ],
+                "average_episode_duration": 992
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59013,
+                "title": "Bubble Beam Berry Blast",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1858/143465.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1858/143465l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "Bubble Beam Berry Blast"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-06-07",
+                "mean": 5.83,
+                "rank": 12017,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 68
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59357,
+                "title": "Turning the Tera Tide",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1337/144361.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1337/144361l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "Turning the Tera Tide"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-07-15",
+                "mean": 5.71,
+                "rank": 12666,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 80
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59372,
+                "title": "Pokemon Unite 3-shuunen PV",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1317/144393.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1317/144393l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon Unite 3rd Anniversary PV",
+                    "ja": "ポケモンユナイト 3周年PV"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-07-17",
+                "mean": 5.56,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 30
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59615,
+                "title": "Pokemon Card Game PV: Trainer's Pokemon",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1920/144941.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1920/144941l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモンカードゲームPV 「Trainer's Pokémon」"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-08-19",
+                "mean": 6.22,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 148
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59616,
+                "title": "PokeMinutes",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1209/144942.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1209/144942l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "PokéMinutes",
+                    "ja": "ポケミニッツ"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2024-07-19",
+                "rank": 20010,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 15
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59620,
+                "title": "Bao Ke Meng Donghua Tujian: Xiaoqi Dao Zhong",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1053/144969.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1053/144969l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Animated Pokedex: Resting on the Island"
+                    ],
+                    "en": "",
+                    "ja": "宝可梦动画图鉴 小憩岛中"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 10,
+                "start_date": "2024-08-05",
+                "mean": 6.13,
+                "rank": 10358,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 90
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59621,
+                "title": "Bao Ke Meng Donghua Tujian: Yi Bu Pian",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1926/144970.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1926/144970l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Animated Pokedex: Eevee"
+                    ],
+                    "en": "",
+                    "ja": "宝可梦动画图鉴 伊布篇"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-04-28",
+                "mean": 5.98,
+                "rank": 11194,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 75
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59622,
+                "title": "Kabigon to Nani Shite Kutsurogu?",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1111/144971.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1111/144971l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Project Kabigon",
+                        "Project Snorlax"
+                    ],
+                    "en": "",
+                    "ja": "カビゴンと何してくつろぐ？"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 6,
+                "start_date": "2023-09-28",
+                "mean": 6.11,
+                "rank": 10485,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 63,
+                        "name": "Iyashikei"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 34
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 59875,
+                "title": "Dan Yuan Meng Changjiu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1685/145577.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1685/145577l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon-tachi to Aki no Tsuki",
+                        "ポケモンたちと秋の月",
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Chasing the Moon",
+                    "ja": "但愿梦长久"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-09-14",
+                "mean": 6.32,
+                "rank": 9229,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 196
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 60321,
+                "title": "Kuroi Rayquaza Kourin",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1525/146552.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1525/146552l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Shiny Rayquaza Takes Flight Across Paldea!",
+                    "ja": "黒いレックウザ光臨"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-11-18",
+                "mean": 5.86,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    }
+                ],
+                "average_episode_duration": 84
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 60616,
+                "title": "Matcha Pokemon \"Chades\" no Kimyou na Monogatari",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1966/147151.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1966/147151l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "The Haunting Tale of Poltchageist",
+                    "ja": "まっちゃポケモン「チャデス」の奇妙な物語"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-08-22",
+                "mean": 6.06,
+                "rank": 10800,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 268
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 60674,
+                "title": "Pokemon Card Game PV: 9-tsu no Bouken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1319/147295.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1319/147295l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモンカードゲームPV 「9つの冒険」"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-11-21",
+                "mean": 6.08,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 175
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 60848,
+                "title": "Buzhuo Ni de She Nian Hao Yun",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1801/147757.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1801/147757l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Irochigai no Arbo",
+                        "違いのアーボ"
+                    ],
+                    "en": "",
+                    "ja": "捕捉你的蛇年好运"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-01-22",
+                "mean": 5.72,
+                "rank": 12564,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 83
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 60946,
+                "title": "Kairyuu to Yuubinyasan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1884/148063.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1884/148063l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Dragonite and the Postman"
+                    ],
+                    "en": "Dragonite and the Special Delivery",
+                    "ja": "カイリューとゆうびんやさん"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-02-27",
+                "mean": 7.57,
+                "rank": 1927,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 845
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 61180,
+                "title": "Pokemon to Ohayou Pokemon to Oyasumi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1601/148420.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1601/148420l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモンとおはよう ポケモンとおやすみ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 5,
+                "start_date": "2025-03-06",
+                "mean": 5.9,
+                "rank": 11655,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 63,
+                        "name": "Iyashikei"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 34
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 61963,
+                "title": "Bao Ke Meng Shengtai Yi Riji",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1375/150894.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1375/150894l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokécology Diary"
+                    ],
+                    "en": "Pokémon Ecology Diary",
+                    "ja": "宝可梦生态一日记"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-04-22",
+                "mean": 6.42,
+                "rank": 8604,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 540
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62004,
+                "title": "Baokemeng Qiyu Shatanjie",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1347/150920.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1347/150920l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Morpeko to Hajimete no Odekake",
+                        "モルペコとはじめてのおでかけ"
+                    ],
+                    "en": "",
+                    "ja": "宝可梦奇遇沙滩节"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-06-01",
+                "rank": 15789,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 695
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62013,
+                "title": "Poke Taiki",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1327/150947.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1327/150947l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Presents"
+                    ],
+                    "en": "",
+                    "ja": "ポケ待機"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 5,
+                "start_date": "2025-02-21",
+                "mean": 5.66,
+                "rank": 12895,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 30
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62141,
+                "title": "Sora to Umi no Michibiki Countdown CMs",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1164/151222.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1164/151222l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Wisdom of Sea and Sky Countdown CMs",
+                    "ja": "空と海の導き カウントダウン CMs"
+                },
+                "media_type": "cm",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2025-07-27",
+                "mean": 5.69,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    },
+                    {
+                        "id": 79,
+                        "name": "Video Game"
+                    }
+                ],
+                "average_episode_duration": 15
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62150,
+                "title": "Pokemon Scarlet Violet: Get Mew & Mewtwo!!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1590/151263.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1590/151263l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokemon Scarlet and Pokemon Violet: Get Mew and Mewtwo!",
+                    "ja": "『ポケットモンスター スカーレット・バイオレット』「Get Mew & Mewtwo !!」"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-08-08",
+                "mean": 5.98,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    }
+                ],
+                "average_episode_duration": 90
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62200,
+                "title": "Toaru Hi no Kabigon",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1708/151365.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1708/151365l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Project Kabigon",
+                        "Project Snorlax"
+                    ],
+                    "en": "",
+                    "ja": "とある日のカビゴン"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 8,
+                "start_date": "2023-11-03",
+                "mean": 5.79,
+                "rank": 12271,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 32
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62209,
+                "title": "Poke Oki",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1628/151378.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1628/151378l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケ起き"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 6,
+                "start_date": "2025-07-21",
+                "mean": 6.31,
+                "rank": 9337,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 25
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62266,
+                "title": "Pokemon Pose Awase Quiz",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1198/151509.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1198/151509l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Pokémon Pose!",
+                    "ja": "ポケモンポーズ合わせクイズ"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2024-02-23",
+                "mean": 5.56,
+                "rank": 13317,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 248
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62345,
+                "title": "Pokemon ga Ippiki",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1053/151706.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1053/151706l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Counting Pokémon",
+                    "ja": "ポケモンがいっぴき"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 4,
+                "start_date": "2025-04-09",
+                "mean": 5.64,
+                "rank": 12994,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 50
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62373,
+                "title": "Project Kabigon",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1431/151762.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1431/151762l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kabigon Stop Motion Animation",
+                        "Snorlax Stop Motion Animation"
+                    ],
+                    "en": "Project Snorlax",
+                    "ja": "プロジェクトカビゴン"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2023-10-05",
+                "rank": 20090,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 16
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62381,
+                "title": "Metamon Henshin Shiritori Battle",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1117/151776.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1117/151776l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Ditto Transformation Battle",
+                    "ja": "メタモンへんしん しりとりバトル"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-08-10",
+                "mean": 5.58,
+                "rank": 13233,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 418
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62388,
+                "title": "Pokemon Ieru ka na? Pokemon Kakeru ka na?",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1848/151795.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1848/151795l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモン言えるかな？ポケモンかけるかな？"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1998-03-13",
+                "mean": 5.25,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 80,
+                        "name": "Visual Arts"
+                    }
+                ],
+                "average_episode_duration": 1582
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62920,
+                "title": "PokePark Kanto PV",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1482/153515.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1482/153515l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "PokePark Kanto PV",
+                    "ja": "ポケパーク カントー PV"
+                },
+                "media_type": "pv",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-11-11",
+                "mean": 6.01,
+                "genres": [
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 92
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 63090,
+                "title": "Mega Shinka no Uta",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1766/154222.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1766/154222l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "メガシンカのうた"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-12-12",
+                "mean": 5.58,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    }
+                ],
+                "average_episode_duration": 118
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 63199,
+                "title": "Pokemon Card Game Mega Start Deck 100 Battle Collection CMs",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1120/154734.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1120/154734l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ポケモンカードゲーム MEGA「スタートデッキ100 バトルコレクション」 CMs"
+                },
+                "media_type": "cm",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2025-12-16",
+                "mean": 5.77,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 20
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 64641,
+                "title": "Box Party",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1876/159057.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1876/159057l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokemon Fun Video"
+                    ],
+                    "en": "Purrfect Box",
+                    "ja": "ボックスパーティー"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2026-06-05",
+                "rank": 15968,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 90
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 64650,
+                "title": "Poke Taiki (2026)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1722/160036.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1722/160036l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Pokémon Presents 2026"
+                    ],
+                    "en": "",
+                    "ja": "ポケ待機"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 8,
+                "start_date": "2026-02-20",
+                "rank": 20009,
+                "genres": [
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 25
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 64895,
+                "title": "Pokemon: Wild Card",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1216/159805.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1216/159805l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Pokémon: Wild Card",
+                    "ja": "ポケモン：ワイルドカード"
+                },
+                "media_type": "movie",
+                "status": "not_yet_aired",
+                "num_episodes": 1,
+                "start_date": "2027",
+                "genres": [
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        }
+    ],
+    "recommendations": [
+        {
+            "node": {
+                "id": 552,
+                "title": "Digimon Adventure",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1471/99249.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1471/99249l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Digimon Adventure 01"
+                    ],
+                    "en": "Digimon: Digital Monsters",
+                    "ja": "デジモンアドベンチャー"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 54,
+                "start_date": "1999-03-07",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "09:00"
+                },
+                "mean": 7.79,
+                "rank": 1207,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 21
+        },
+        {
+            "node": {
+                "id": 2156,
+                "title": "Bakugan Battle Brawlers",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/21568.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/21568l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Bakugan Battle Brawlers",
+                    "ja": "爆丸バトルブローラーズ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 52,
+                "start_date": "2007-04-05",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "17:30"
+                },
+                "mean": 6.52,
+                "rank": 7951,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 7
+        },
+        {
+            "node": {
+                "id": 1138,
+                "title": "Medarot",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1778/133514.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1778/133514l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Medabots",
+                    "ja": "メダロット"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 52,
+                "start_date": "1999-07-02",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "18:00"
+                },
+                "mean": 7.12,
+                "rank": 4295,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1475
+            },
+            "num_recommendations": 5
+        },
+        {
+            "node": {
+                "id": 21,
+                "title": "One Piece",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1244/138851.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "OP"
+                    ],
+                    "en": "One Piece",
+                    "ja": "ONE PIECE"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "1999-10-20",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "23:15"
+                },
+                "mean": 8.72,
+                "rank": 62,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 4
+        },
+        {
+            "node": {
+                "id": 1469,
+                "title": "Monster Farm: Enbanseki no Himitsu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1044/113641.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1044/113641l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Monster Rancher",
+                    "ja": "モンスターファーム"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 48,
+                "start_date": "1999-04-17",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "07:30"
+                },
+                "mean": 6.82,
+                "rank": 5982,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 4
+        },
+        {
+            "node": {
+                "id": 481,
+                "title": "Yu☆Gi☆Oh! Duel Monsters",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/77055.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/77055l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Yugioh",
+                        "Yu-Gi-Oh!",
+                        "Yu-Gi-Oh!: Duel Monsters",
+                        "Yugioh: Duel Monsters",
+                        "Yu-Gi-Oh! Duel Monsters"
+                    ],
+                    "en": "Yu-Gi-Oh!",
+                    "ja": "遊☆戯☆王　デュエルモンスターズ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 224,
+                "start_date": "2000-04-18",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "19:28"
+                },
+                "mean": 7.52,
+                "rank": 2165,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 1412
+            },
+            "num_recommendations": 4
+        },
+        {
+            "node": {
+                "id": 20,
+                "title": "Naruto",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1141/142503.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1141/142503l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "NARUTO"
+                    ],
+                    "en": "Naruto",
+                    "ja": "ナルト"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 220,
+                "start_date": "2002-10-03",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "19:30"
+                },
+                "mean": 8.03,
+                "rank": 726,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1404
+            },
+            "num_recommendations": 3
+        },
+        {
+            "node": {
+                "id": 1816,
+                "title": "Sonic X",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1801/121070.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1801/121070l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Sonic X",
+                    "ja": "ソニック X"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 78,
+                "start_date": "2003-04-06",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "08:30"
+                },
+                "mean": 6.66,
+                "rank": 7072,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 51,
+                        "name": "Anthropomorphic"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "num_recommendations": 3
+        },
+        {
+            "node": {
+                "id": 288,
+                "title": "Bakuten Shoot Beyblade",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1429/127983.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1429/127983l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Beyblade",
+                    "ja": "爆転シュート　ベイブレード"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 51,
+                "start_date": "2001-01-08",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "18:00"
+                },
+                "mean": 6.82,
+                "rank": 5941,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 3
+        },
+        {
+            "node": {
+                "id": 3576,
+                "title": "Kodai Ouja Kyouryuu King",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/75397.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/75397l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kodai Oja Kyoryu King D-Kids Adventure",
+                        "Ancient Ruler Dinosaur King"
+                    ],
+                    "en": "Dinosaur King",
+                    "ja": "古代王者 恐竜キング Ｄキッズアドベンチャー"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 49,
+                "start_date": "2007-02-04",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "07:00"
+                },
+                "mean": 6.54,
+                "rank": 7846,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "num_recommendations": 3
+        }
+    ]
+}

@@ -890,6 +890,21 @@ class MalSessionTest {
         }
 
     @Test
+    fun aNewSignInDropsThePairItsSignInBeforeItCouldNotWrite() =
+        test {
+            val cipher = FailingCipher(fixture.cipher)
+            val session = fixture.open(cipher, retryAfter = { Duration.ofDays(1) })
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            cipher.seals = false
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+            cipher.seals = true
+            assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access-3", "refresh-3")))
+            session.writeOwed()
+            assertTrue(stored().contains(" access-3 refresh-3 "))
+        }
+
+    @Test
     fun aSignOutThatCouldNotBeWrittenIsWrittenOnceTheFileTakesIt() =
         test {
             val format = BreakingFormat(fixture.format())
