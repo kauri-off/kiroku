@@ -125,15 +125,20 @@ class MalSession internal constructor(
         }
 
     // Null when the file is there and could not be read; only the first such failure is reported.
-    private suspend fun readFile(first: Boolean): Stored? =
-        guarded<Stored?>(Stored.SignedOut) {
-            try {
-                store.read()
-            } catch (e: IOException) {
-                if (first) unexpected(SessionFailure(e))
-                null
+    private suspend fun readFile(first: Boolean): Stored? {
+        var unread: IOException? = null
+        val stored =
+            guarded<Stored?>(Stored.SignedOut) {
+                try {
+                    store.read()
+                } catch (e: IOException) {
+                    unread = e
+                    null
+                }
             }
-        }?.also { state.value = it }
+        if (first) unread?.let { unexpected(SessionFailure(it)) }
+        return stored?.also { state.value = it }
+    }
 
     // Until the file was read, or a sign-in or a sign-out took its place.
     private suspend fun readAgain() {
