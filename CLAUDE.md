@@ -51,7 +51,7 @@ arguments, without `--kind …`. `tools/gw tasks` lists the tasks.
 | Screenshots of the changed screens | `tools/gw :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'`, one `--tests` per screen |
 | All screenshots | `tools/gw --kind check :app:recordRoborazziDebug` |
 | Format check / fix | `tools/gw ktlintCheck` / `tools/gw ktlintFormat` |
-| Everything before hand-off | `tools/gw --kind check ktlintCheck lint test assembleDebug` |
+| Everything before hand-off | `tools/gw --kind check ktlintCheck lint test assembleDebug assembleRelease assemblePreview` |
 
 Screenshots are written to `app/build/outputs/roborazzi/<screen>/`. They are not committed. A render deletes the
 images of every screen it does not render, so render all changed screens in one command. The SDK platform the
@@ -64,8 +64,8 @@ Many agents build here at once. Every Gradle run, emulator run and `adb` call go
 Never call `./gradlew`, `gradle`, `emulator` or `adb` directly: `adb` is used only inside `tools/emu run`, where it
 reaches that job's emulator and nothing else. Never touch a virtual device outside `~/.android/kiroku`.
 
-- `tools/gw [--kind test|check] <gradle arguments>` runs Gradle as a job. The default kind is `test` (one module,
-  filtered tests, a few screens); use `check` for whole-project runs: the kind sets the memory the queue reserves.
+- `tools/gw [--kind test|check] <gradle arguments>` runs Gradle as a job. The kind sets the memory the queue
+  reserves: `check` only for the full check, all screenshots or unfiltered `:app` tests; anything else is `test`.
   Gradle sees no device: a task that needs one (`connected…`, `install…`) runs only as
   `tools/emu run tools/gw <task>`, one module's task named in full, as in
   `tools/emu run tools/gw :data:connectedDebugAndroidTest`. Gradle managed devices are not used: they start emulators
