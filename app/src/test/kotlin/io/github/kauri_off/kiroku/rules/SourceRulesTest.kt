@@ -179,7 +179,7 @@ class SourceRulesTest {
     @Test
     fun everyTextFieldTakesTheAutofillModifier() {
         val sources = appSources()
-        assertEquals(4, sources.sumOf { textFields(it.readText()) })
+        assertEquals(5, sources.sumOf { textFields(it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { autofillProblems(relative(it), it.readText()) })
     }
 
