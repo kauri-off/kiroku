@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.data.session.TokenReply
 import io.github.kauri_off.kiroku.data.session.granted
 import io.github.kauri_off.kiroku.data.session.resource
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -109,6 +110,27 @@ class MalSignInTest {
             assertEquals(emptyList<String>(), fixture.sessions.reported)
         }
 
+    // Runs [block] while nothing of the sign-in, whose work has this one thread, can be dealt with.
+    private suspend fun CoroutineScope.held(
+        one: CoroutineDispatcher,
+        block: () -> Unit,
+    ) {
+        val busy = CountDownLatch(1)
+        val held = CompletableDeferred<Unit>()
+        val holder =
+            launch(one) {
+                held.complete(Unit)
+                busy.await()
+            }
+        held.await()
+        try {
+            block()
+        } finally {
+            busy.countDown()
+        }
+        holder.join()
+    }
+
     @Test
     fun aRedirectIsBeingCompletedFromTheMomentItArrives() =
         test {
@@ -116,23 +138,32 @@ class MalSignInTest {
             val one = Dispatchers.IO.limitedParallelism(1)
             val signIn = fixture.open(dispatcher = one)
             val address = fixture.started(signIn)
-            val busy = CountDownLatch(1)
-            val held = CompletableDeferred<Unit>()
-            val holder =
-                launch(one) {
-                    held.complete(Unit)
-                    busy.await()
-                }
-            held.await()
 
-            try {
+            held(one) {
                 signIn.redirected(redirectOf(address))
                 assertEquals(SignInStep.Completing, signIn.step.value)
-            } finally {
-                busy.countDown()
             }
-            holder.join()
+
             assertEquals(SignInStep.SignedIn, signIn.ended())
+        }
+
+    @Test
+    fun aRedirectThatArrivesAfterASuccessNobodyAcknowledgedNeverShowsSigningIn() =
+        test {
+            mal()
+            val one = Dispatchers.IO.limitedParallelism(1)
+            val signIn = fixture.open(dispatcher = one)
+            signIn.redirected(redirectOf(fixture.started(signIn)))
+            assertEquals(SignInStep.SignedIn, signIn.ended())
+            fixture.idle()
+
+            held(one) {
+                signIn.redirected("$REDIRECT?code=$CODE&state=any")
+                assertEquals(SignInStep.SignedIn, signIn.step.value)
+            }
+
+            fixture.idle()
+            assertEquals(SignInStep.SignedIn, signIn.step.value)
         }
 
     @Test
