@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -42,9 +43,11 @@ class Demo(
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
 
-    private val details = DemoAnimeRepository(fixtures, server)
+    private val details = DemoAnimeRepository(fixtures, server, clock)
 
     val anime: AnimeRepository = details
+
+    val connection: Connection = DemoConnection(server)
 
     val airing: AiringRepository = DemoAiringRepository(fixtures, server)
 

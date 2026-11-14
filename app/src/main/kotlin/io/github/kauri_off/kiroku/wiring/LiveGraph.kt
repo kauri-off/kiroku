@@ -55,6 +55,7 @@ internal class LiveGraph(
     override val airing by lazy { liveAiring(parts) }
     override val search by lazy { liveSearch(parts) }
     override val user by lazy { liveUser(parts, account) }
+    override val connection by lazy { liveConnection(parts) }
 
     // For whatever is about to end the process: a session nobody asked for has nothing to write.
     suspend fun writeOwed() {
