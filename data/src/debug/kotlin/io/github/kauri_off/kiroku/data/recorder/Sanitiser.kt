@@ -12,6 +12,7 @@ import kotlinx.serialization.json.longOrNull
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 internal const val KEPT_ENTRIES = 10
 
@@ -20,25 +21,39 @@ internal const val FREE_TEXT_LIMIT = 60
 
 internal val FreeTexts = setOf("synopsis", "background")
 
-// The line that says whose a free text is; as a text's last paragraph it is kept whole.
-internal val FreeTextSource = Regex("""\[Written by .*]|\(Source: .*\)""")
+// The longest line that says whose a free text is.
+internal const val SOURCE_LIMIT = 100
+
+private val FreeTextSource = Regex("""\[Written by .*]|\(Source: .*\)""")
+
+// The line that says whose a free text is; as the text's last paragraph it is kept whole.
+internal fun isClosingSource(paragraph: String): Boolean =
+    FreeTextSource.matches(paragraph) && paragraph.codePointCount(0, paragraph.length) <= SOURCE_LIMIT
 
 // Section 11.1: what is stored of an answer holds none of [secrets], no prose and nothing of a user's list but its shape.
 internal class Sanitiser(
     secrets: Map<String, String>,
+    // The title a recorder put on the list itself: its values there are the recorder's, and stay as MAL wrote them.
+    private val ownTitle: Long? = null,
 ) {
-    private val standIns = secrets.filterKeys { it.isNotBlank() }.mapKeys { it.key.lowercase() }
+    private val standIns = secrets.filterKeys { it.isNotBlank() }.toList()
 
-    // One pass with the longest first, so a secret that holds another is replaced whole.
-    private val secret =
-        standIns.keys
-            .sortedByDescending { it.length }
-            .joinToString("|") { Regex.escape(it) }
-            .takeIf { it.isNotEmpty() }
-            ?.let { Regex(it, RegexOption.IGNORE_CASE) }
+    private class Found(
+        val start: Int,
+        val end: Int,
+        val standIn: String,
+    )
 
     // The answer as it is stored, or null when it is not JSON: such a body is not stored.
-    fun json(body: String): String? {
+    fun json(body: String): String? = stored(body) { values(page(it)) }
+
+    // A user's profile as it is stored: its shape, with every value made up.
+    fun profile(body: String): String? = stored(body, MadeUp()::of)
+
+    private fun stored(
+        body: String,
+        cleaned: (JsonElement) -> JsonElement,
+    ): String? {
         val json =
             try {
                 Json.parseToJsonElement(body)
@@ -46,10 +61,33 @@ internal class Sanitiser(
                 null
             }
         val answer = json.takeIf { it is JsonObject || it is JsonArray } ?: return null
-        return plain(Pretty.encodeToString(JsonElement.serializer(), values(page(answer)))) + "\n"
+        return plain(Pretty.encodeToString(JsonElement.serializer(), cleaned(answer))) + "\n"
     }
 
-    fun plain(text: String): String = secret?.replace(text) { standIns[it.value.lowercase()] ?: "removed" } ?: text
+    // Secrets that overlap or touch are replaced as one, by the stand-in of the one that starts them.
+    fun plain(text: String): String {
+        val found =
+            standIns
+                .flatMap { (secret, standIn) -> starts(text, secret).map { Found(it, it + secret.length, standIn) } }
+                .sortedWith(compareBy<Found> { it.start }.thenByDescending { it.end })
+        val cleaned = StringBuilder()
+        var end = 0
+        for ((index, range) in found.withIndex()) {
+            if (index > 0 && range.start <= end) {
+                end = maxOf(end, range.end)
+            } else {
+                cleaned.append(text, end, range.start).append(range.standIn)
+                end = range.end
+            }
+        }
+        return cleaned.append(text, end, text.length).toString()
+    }
+
+    private fun starts(
+        text: String,
+        secret: String,
+    ): Sequence<Int> =
+        generateSequence(text.indexOf(secret, ignoreCase = true)) { text.indexOf(secret, it + 1, ignoreCase = true) }.takeWhile { it >= 0 }
 
     // A page of a list keeps its first entries, and its links are those of a page of so many.
     private fun page(json: JsonElement): JsonElement {
@@ -81,13 +119,15 @@ internal class Sanitiser(
         when (json) {
             is JsonArray -> JsonArray(json.map(::values))
             is JsonObject -> {
-                val title = ((json["node"] as? JsonObject ?: json)["id"] as? JsonPrimitive)?.longOrNull ?: 0
+                val node = json["node"] as? JsonObject ?: json
+                val title = (node["id"] as? JsonPrimitive)?.longOrNull ?: 0
+                val aired = node["start_date"]?.takeIf { it.isText }?.let { firstDay(it.text) }
                 JsonObject(
                     json.mapValues { (key, value) ->
                         when {
                             key in FreeTexts && value.isText -> JsonPrimitive(shortened(plain(value.text)))
-                            key in LIST_VALUES && value is JsonObject ->
-                                JsonObject(value.mapValues { (name, its) -> madeUp(name, its, title) })
+                            key in LIST_VALUES && value is JsonObject && title != ownTitle ->
+                                JsonObject(value.mapValues { (name, its) -> madeUp(name, its, title, aired) })
                             else -> values(value)
                         }
                     },
@@ -99,7 +139,7 @@ internal class Sanitiser(
     // Every paragraph is cut at a word, and every line break stays; no secret is in [text], so none is cut in two.
     private fun shortened(text: String): String {
         val last = Paragraph.findAll(text).lastOrNull()?.range
-        return Paragraph.replace(text) { if (it.range == last && FreeTextSource.matches(it.value)) it.value else cut(it.value) }
+        return Paragraph.replace(text) { if (it.range == last && isClosingSource(it.value)) it.value else cut(it.value) }
     }
 
     private fun cut(paragraph: String): String {
@@ -108,13 +148,14 @@ internal class Sanitiser(
         return start.substringBeforeLast(' ').trimEnd() + "…"
     }
 
-    // Of a user's values on a title the status and the count stay; the others are made up from the title's id, in MAL's shape.
+    // The status and the count stay; the rest is made up from the title's id, a start never before the title's own.
     private fun madeUp(
         name: String,
         value: JsonElement,
         title: Long,
+        aired: LocalDate?,
     ): JsonElement {
-        val started = LocalDate.of(2020, 1, 1).plusDays(title % 1000)
+        val started = (aired ?: LocalDate.of(2020, 1, 1)).plusDays(title % 1000)
         return when {
             name in KEPT_LIST_VALUES || value is JsonNull -> value
             name == "score" -> if ((value as? JsonPrimitive)?.longOrNull == 0L) value else JsonPrimitive(1 + title % 10)
@@ -134,6 +175,14 @@ internal class Sanitiser(
             0 -> real
             in PARTIAL_DATES -> "$made".take(real.length)
             else -> "$made"
+        }
+
+    // The first day a date of MAL's can mean, or null when it is no date.
+    private fun firstDay(date: String): LocalDate? =
+        try {
+            LocalDate.parse(date + "-01-01".drop(maxOf(0, date.length - 4)))
+        } catch (_: DateTimeParseException) {
+            null
         }
 
     private fun moment(
@@ -156,6 +205,40 @@ internal class Sanitiser(
                 }
         }
 
+    // Nothing of a profile is harmless: a value stays only when it is empty, and otherwise keeps its kind and its form.
+    private inner class MadeUp {
+        private var made = 0
+
+        fun of(json: JsonElement): JsonElement =
+            when (json) {
+                is JsonObject -> JsonObject(json.mapValues { (_, value) -> of(value) })
+                is JsonArray -> JsonArray(json.map(::of))
+                is JsonNull -> json
+                is JsonPrimitive -> if (json.isString) text(json.content) else number(json)
+            }
+
+        private fun text(real: String): JsonPrimitive {
+            val known = standIns.firstOrNull { (secret, _) -> secret.equals(real, ignoreCase = true) }?.second
+            return JsonPrimitive(
+                when {
+                    real.isEmpty() -> real
+                    known != null -> known
+                    MomentStart.containsMatchIn(real) -> MADE_UP_MOMENT
+                    Date.matches(real) -> MADE_UP_MOMENT.take(real.length)
+                    Address.containsMatchIn(real) -> "https://example.org/made-up-${++made}"
+                    else -> "made-up-${++made}"
+                },
+            )
+        }
+
+        private fun number(real: JsonPrimitive): JsonPrimitive =
+            when {
+                real.booleanOrNull != null -> JsonPrimitive(false)
+                real.longOrNull != null -> JsonPrimitive(++made)
+                else -> JsonPrimitive(++made + HALF)
+            }
+    }
+
     private val JsonElement.isText get() = this is JsonPrimitive && isString
 
     private val JsonElement.text get() = (this as JsonPrimitive).content
@@ -172,6 +255,10 @@ internal class Sanitiser(
         val Paragraph = Regex("""[^\r\n]+""")
         val Moment: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
         val MomentStart = Regex("""^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d""")
+        val Date = Regex("""\d{4}(-\d\d){0,2}""")
+        val Address = Regex("""^https?://""")
+        const val MADE_UP_MOMENT = "2020-01-01T00:00:00+00:00"
+        const val HALF = 0.5
         val Pretty = Json { prettyPrint = true }
     }
 }

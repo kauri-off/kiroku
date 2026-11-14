@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recorder_title">Recorder</string>
+    <string name="recorder_detail">Records what MyAnimeList answers to a signed-in user. It adds one title to your list, changes it and removes it again</string>
+    <string name="recorder_unavailable">The recorder works only on MyAnimeList. Choose MyAnimeList under Data source</string>
+    <string name="recorder_title_id">Title id on MyAnimeList</string>
+    <string name="recorder_title_id_detail">The number in the title’s address. The title must not be on your list, must have finished airing and have 3\u00A0episodes or more</string>
+    <string name="recorder_check">Check title</string>
+    <string name="recorder_checking">Asking MyAnimeList about the title</string>
+    <string name="recorder_confirm_title">Record on this title?</string>
+    <plurals name="recorder_confirm_named">
+        <item quantity="one">“%1$s”, %2$d\u00A0episode</item>
+        <item quantity="other">“%1$s”, %2$d\u00A0episodes</item>
+    </plurals>
+    <string name="recorder_confirm_writes">Kiroku will add this title to your list on MyAnimeList, change its status, watched episodes, score and dates, and remove it again. Nothing else on your list is changed. It takes about two minutes</string>
+    <string name="recorder_record">Record</string>
+    <string name="recorder_cancel">Cancel</string>
+    <string name="recorder_running">Answers recorded: %1$d\u00A0of\u00A0%2$d</string>
+    <string name="recorder_removing">Removing “%1$s” from your list</string>
+    <string name="recorder_recorded">Recording finished. Answers stored: %1$d</string>
+    <string name="recorder_stopped">The recording stopped at the request %1$s</string>
+    <string name="recorder_stopped_answers">Answers so far: %1$d. They replaced no earlier recording</string>
+    <string name="recorder_folder">Folder: %1$s</string>
+    <string name="recorder_list_untouched">Nothing on your list was changed</string>
+    <string name="recorder_list_same">“%1$s” was added to your list and removed again. The list holds the same titles as before</string>
+    <string name="recorder_list_removed">“%1$s” is removed from your list</string>
+    <string name="recorder_list_differs">“%1$s” is removed from your list, but the list does not hold the same titles as before the recording. Compare it with myanimelist.net</string>
+    <string name="recorder_list_left">“%1$s” may still be on your list. It is removed when the app next starts, or now with the button below. On the website: myanimelist.net/anime/%2$d</string>
+    <string name="recorder_leftover_removed">“%1$s”, which an earlier recording left on your list, is removed</string>
+    <string name="recorder_check_website">To check: myanimelist.net/anime/%1$d should offer “Add to My List”</string>
+    <string name="recorder_remove_now">Remove now</string>
+    <string name="recorder_done">Done</string>
+    <string name="recorder_halt_on_the_list">This title is on your list. Choose one that is not</string>
+    <string name="recorder_halt_not_finished">This title has not finished airing</string>
+    <string name="recorder_halt_too_few_episodes">This title has fewer than 3\u00A0episodes, or MyAnimeList does not know how many</string>
+    <string name="recorder_halt_no_such_title">MyAnimeList has no title with this id</string>
+    <string name="recorder_halt_not_signed_in">Nobody is signed in. Sign in and try again</string>
+    <string name="recorder_halt_no_answer">MyAnimeList did not answer</string>
+    <string name="recorder_halt_storage">The device could not store a file</string>
+    <string name="recorder_halt_another_account">Another account is signed in than the one the recording was made with. Sign in with that account</string>
+    <string name="recorder_halt_refused">MyAnimeList is refusing requests (answer %1$d). Try again later</string>
+    <string name="recorder_halt_unexpected">MyAnimeList answered %1$d, which the recorder did not expect</string>
+</resources>

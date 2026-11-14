@@ -5,6 +5,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 // MAL's token endpoint: a grant's form goes out, with the client's own credentials added by the sender.
 internal fun interface TokenEndpoint {
@@ -33,6 +36,8 @@ internal fun refreshGrant(refreshToken: String): Map<String, String> =
 internal class TokenGrant(
     val access: String,
     val refresh: String,
+    // The seconds MAL gave the access token, when it said so.
+    val lifetime: Long? = null,
 )
 
 internal sealed interface TokenResult {
@@ -68,6 +73,8 @@ internal fun rejectsGrant(status: Int): Boolean = status == 400 || status == 401
 private class TokenAnswer(
     @SerialName("access_token") val access: String? = null,
     @SerialName("refresh_token") val refresh: String? = null,
+    // Read as whatever MAL wrote: tokens are granted whatever stands here.
+    @SerialName("expires_in") val lifetime: JsonElement? = null,
 )
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -81,5 +88,5 @@ private fun grantIn(body: String): TokenGrant? {
         }
     val access = answer.access?.takeIf { it.isNotBlank() } ?: return null
     val refresh = answer.refresh?.takeIf { it.isNotBlank() } ?: return null
-    return TokenGrant(access, refresh)
+    return TokenGrant(access, refresh, (answer.lifetime as? JsonPrimitive)?.longOrNull)
 }

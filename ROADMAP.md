@@ -87,19 +87,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-11 Sign-in in the app.**
 
-- [ ] **M2-12 [A] Recorder for answers that need the sign-in.** A tool of debug and preview builds, opened from
-  the debug menu, that sends a fixed list of requests through the app's own owner of the tokens and stores the
-  answers in the app's storage: the profile with statistics; the own list in pages; and, on one title that is not
-  on the list, an add, a count, a count above the total, a completion, each date set and cleared, a score set and
-  cleared, a value MAL should refuse, the entry read back after each, the removal and a second removal. The list
-  covers what M2 to M6 need from a signed-in user, so one session is enough. The owner's list is as it was
-  afterwards, also after an interrupted run. Every value of the profile is replaced unless it is on a list of
-  harmless ones; list pages keep ten entries; no header and no token is stored, only the lifetime MAL gave the
-  access token.
-  **Needs:** M2-09, M2-10.
-  **Check:** tests against a local server with planted personal values: none is in the files; a run interrupted
-  after the add removes the title at the next start; a title already on the list is refused before any write.
-  The release guards show no release build holds the tool, and no other app can start it.
+- [x] **M2-12 [A] Recorder for answers that need the sign-in.**
 
 - [ ] **M2-13 [O] The owner signs in and records.** With the debug build: he signs in; signs in once more with
   the app killed while the browser is open; runs the recorder on a title that is not on his list. On the website

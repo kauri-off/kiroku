@@ -230,7 +230,7 @@
                 "num_episodes_watched": 5,
                 "is_rewatching": false,
                 "updated_at": "2022-10-09T17:29:03+00:00",
-                "start_date": "2022-06-16"
+                "start_date": "2023-06-26"
             }
         },
         {
@@ -277,8 +277,8 @@
                 "num_episodes_watched": 1,
                 "is_rewatching": false,
                 "updated_at": "2022-06-14T13:17:20+00:00",
-                "start_date": "2022-01-30",
-                "finish_date": "2022-03-31"
+                "start_date": "2013-06-05",
+                "finish_date": "2013-08-04"
             }
         },
         {
@@ -363,7 +363,7 @@
                 "num_episodes_watched": 4,
                 "is_rewatching": false,
                 "updated_at": "2022-11-23T03:01:07+00:00",
-                "start_date": "2020-10-20"
+                "start_date": "2027-07-29"
             }
         },
         {
@@ -417,8 +417,8 @@
                 "num_episodes_watched": 1,
                 "is_rewatching": false,
                 "updated_at": "2022-08-12T22:42:32+00:00",
-                "start_date": "2021-02-12",
-                "finish_date": "2021-02-20"
+                "start_date": "2012-10-29",
+                "finish_date": "2012-11-06"
             }
         },
         {
@@ -466,8 +466,8 @@
                 "num_episodes_watched": 13,
                 "is_rewatching": false,
                 "updated_at": "2022-02-18T03:15:40+00:00",
-                "start_date": "2020-09-17",
-                "finish_date": "2020-11-16"
+                "start_date": "2026-03-23",
+                "finish_date": "2026-05-22"
             }
         }
     ],

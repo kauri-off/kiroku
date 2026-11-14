@@ -91,6 +91,18 @@ class SanitiserTest {
     }
 
     @Test
+    fun `secrets that overlap or touch are replaced as one, and nothing of either is left`() {
+        val names = Sanitiser(mapOf("abcd" to "public-user", "cdef" to "private-user"))
+        val nameAndId = Sanitiser(mapOf("kauri_ab" to "public-user", "abcdef0123456789abcdef0123456789" to "client-id"))
+
+        assertEquals("users/public-user/x", names.plain("users/abcdef/x"))
+        assertEquals("a public-user, b", names.plain("a ABCDcdef, b"))
+        assertEquals("private-user-public-user", names.plain("cdef-abcd"))
+        assertEquals("id public-user.", nameAndId.plain("id kauri_abcdef0123456789abcdef0123456789."))
+        assertEquals("""{"next":"users/public-user/x"}""", "${Json.parseToJsonElement(names.json("""{"next":"users/abcdef/x"}""")!!)}")
+    }
+
+    @Test
     fun `a name MAL writes with escapes is replaced`() {
         val cleaned = sanitiser.json("""{"name":"\u0053ome_Name-7","link":"users\/Some_Name\u002d7\/animelist"}""")!!
 
@@ -138,6 +150,22 @@ class SanitiserTest {
         assertEquals(JsonNull, answer["other"]!!.jsonObject["synopsis"])
         assertTrue(cut.length <= FREE_TEXT_LIMIT)
         assertEquals(sanitiser.json("$planted"), sanitiser.json(sanitiser.json("$planted")!!))
+    }
+
+    @Test
+    fun `the line that names a text's source is kept whole only while it is short`() {
+        val tooLong = "(Source: ${"a company ".repeat(12).trim()})"
+
+        val answer = cleaned("${buildJsonObject { put("synopsis", "Short.\n\n$tooLong") }}")
+
+        assertEquals(
+            "Short.\n\n(Source: a company a company a company a company a company…",
+            answer["synopsis"]!!.jsonPrimitive.content,
+        )
+        assertTrue(tooLong.length > SOURCE_LIMIT)
+        assertFalse(isClosingSource(tooLong))
+        assertTrue(isClosingSource("(Source: Crunchyroll)") && isClosingSource("[Written by MAL Rewrite]"))
+        assertFalse(isClosingSource("Prose that ends with its source (Source: Crunchyroll)"))
     }
 
     @Test
@@ -199,6 +227,71 @@ class SanitiserTest {
     }
 
     @Test
+    fun `a made-up start date is never before the day the title itself started`() {
+        val planted =
+            """
+            {"data":[
+            {"node":{"id":7,"start_date":"2024-10-05"},"list_status":{"status":"completed","start_date":"2024-10-06","finish_date":"2024-12-28"}},
+            {"node":{"id":8,"start_date":"2019-04"},"list_status":{"status":"watching","start_date":"2019"}},
+            {"node":{"id":9,"start_date":"2031"},"list_status":{"status":"watching","start_date":"2031-02-03"}},
+            {"node":{"id":10,"start_date":"soon"},"list_status":{"status":"watching","start_date":"2031-02-03"}}
+            ]}
+            """.trimIndent()
+
+        val values = cleaned(planted)["data"]!!.jsonArray.map { "${it.jsonObject["list_status"]}" }
+
+        assertEquals(
+            listOf(
+                """{"status":"completed","start_date":"2024-10-12","finish_date":"2024-10-19"}""",
+                """{"status":"watching","start_date":"2019"}""",
+                """{"status":"watching","start_date":"2031-01-10"}""",
+                """{"status":"watching","start_date":"2020-01-11"}""",
+            ),
+            values,
+        )
+    }
+
+    @Test
+    fun `the values of a recorder's own title stay as MAL wrote them, and no other title's do`() {
+        val own = Sanitiser(mapOf("Some_Name-7" to "owner-user"), ownTitle = 7)
+        val values = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"by Some_Name-7"}"""
+        val madeUp = """{"status":"watching","score":3,"start_date":"2020-01-13","comments":""}"""
+        val kept = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"by owner-user"}"""
+
+        val page =
+            Json.parseToJsonElement(
+                own.json("""{"data":[{"node":{"id":7},"list_status":$values},{"node":{"id":12},"list_status":$values}]}""")!!,
+            )
+        val title = Json.parseToJsonElement(own.json("""{"id":7,"my_list_status":$values}""")!!)
+        val other = Json.parseToJsonElement(own.json("""{"id":12,"my_list_status":$values}""")!!)
+
+        assertEquals(listOf(kept, madeUp), page.jsonObject["data"]!!.jsonArray.map { "${it.jsonObject["list_status"]}" })
+        assertEquals(kept, "${title.jsonObject["my_list_status"]}")
+        assertEquals(madeUp, "${other.jsonObject["my_list_status"]}")
+    }
+
+    @Test
+    fun `of a profile nothing stays but its shape`() {
+        val planted =
+            """
+            {"id":4815162,"name":"Some_Name-7","picture":"https://cdn.example/userimages/4815162.jpg","location":"Somewhere",
+            "birthday":"1991-07","joined_at":"2011-03-05T10:20:30+09:00","is_supporter":true,"about":"","nothing":null,
+            "anime_statistics":{"num_items":321,"num_days":12.75,"mean_score":0},"something_new":{"deep":["mine",5]}}
+            """.trimIndent()
+
+        val profile = Json.parseToJsonElement(sanitiser.profile(planted)!!)
+
+        assertEquals(
+            """{"id":1,"name":"public-user","picture":"https://example.org/made-up-2","location":"made-up-3",""" +
+                """"birthday":"2020-01","joined_at":"2020-01-01T00:00:00+00:00","is_supporter":false,"about":"","nothing":null,""" +
+                """"anime_statistics":{"num_items":4,"num_days":5.5,"mean_score":6},"something_new":{"deep":["made-up-7",8]}}""",
+            "$profile",
+        )
+        assertNull(sanitiser.profile("<html>Some_Name-7</html>"))
+        assertEquals(sanitiser.profile(planted), sanitiser.profile(planted))
+    }
+
+    @Test
     fun `the links of a page are those of a page of ten entries`() {
         val list = "https://api.myanimelist.net/v2/users/public-user/animelist"
         val ranking = "https://api.myanimelist.net/v2/anime/ranking?offset=10&ranking_type=airing&limit=10&fields=id%2Ctitle"
@@ -221,8 +314,15 @@ class SanitiserTest {
         File(folder.root, "page.404.txt").writeText("<html>Not found</html>")
         val following = File(folder.root, "other.200.json").apply { writeText(sanitiser.json("""{"id":5}""")!!) }
         val written = following.lastModified()
+        // A recorder's own title keeps its values under the name of its read-back, and under no other.
+        val own = Sanitiser(emptyMap(), ownTitle = 5).json("""{"id":5,"my_list_status":{"status":"completed","score":7}}""")!!
+        val readBack = File(folder.root, "score_set_read.200.json").apply { writeText(own) }
+        val another = File(folder.root, "title_other.200.json").apply { writeText(own) }
 
-        assertEquals(listOf("title.200.json"), sanitiseStored(folder.root))
+        assertEquals(listOf("title.200.json", "title_other.200.json"), sanitiseStored(folder.root))
+
+        assertEquals(own, readBack.readText())
+        assertFalse(another.readText(), "\"score\": 7" in another.readText())
 
         assertFalse(long in File(folder.root, "title.200.json").readText())
         assertEquals(written, following.lastModified())

@@ -17,7 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
-import java.nio.file.Files
 import java.time.Clock
 
 // One request of a recorder's list; [path] names a user only by a [RecordedUser]'s stand-in.
@@ -90,14 +89,13 @@ internal class Recorder(
     fun record(asks: List<Ask>) {
         if (http.clientId.isBlank()) throw RecorderStop(NO_CLIENT_ID)
         require(staging.canonicalFile != into.canonicalFile)
-        staging.mkdirs()
-        staging.listFiles()?.forEach { it.delete() }
+        emptied(staging)
         try {
             asks.forEach(::ask)
         } catch (stop: RecorderStop) {
             throw RecorderStop("${stop.message}\nNo stored answer was replaced; what this run was answered is in $staging")
         }
-        keep()
+        keep(staging, into)
     }
 
     private fun ask(ask: Ask) {
@@ -107,16 +105,6 @@ internal class Recorder(
             ask.pages > 1 -> pages(ask)
             else -> store(ask, ask.name, request(ask, address(ask)))
         }
-    }
-
-    // The run's answers take the place of the earlier ones of their names.
-    private fun keep() {
-        into.mkdirs()
-        for (answer in staging.listFiles().orEmpty().sortedBy { it.name }) {
-            into.listFiles { earlier -> earlier.name.substringBefore('.') == answer.name.substringBefore('.') }?.forEach { it.delete() }
-            Files.move(answer.toPath(), File(into, answer.name).toPath())
-        }
-        staging.delete()
     }
 
     private fun address(ask: Ask): HttpUrl {
@@ -181,7 +169,6 @@ internal class Recorder(
             null
         }
 
-    // A body that is not JSON could hold a name in a form the sanitiser does not know: only what kind it was is stored.
     private fun store(
         ask: Ask,
         file: String,
@@ -189,9 +176,8 @@ internal class Recorder(
     ) {
         val answer = send(file, request)
         val kind = answer.type ?: "no content type"
-        val json = sanitiser.json(answer.body)
-        File(staging, "$file.${answer.status}.${if (json != null) "json" else "txt"}")
-            .writeText(json ?: sanitiser.plain("${answer.status}, $kind\n"))
+        val kept = sanitiser.kept(file, answer.status, answer.type, sanitiser.json(answer.body))
+        File(staging, kept.file).writeText(kept.text)
         say("$file: ${answer.status}, $kind, ${answer.body.length} characters")
         refused(ask, file, answer.status)
     }

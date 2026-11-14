@@ -10,16 +10,14 @@ fun main(arguments: Array<String>) {
 }
 
 // The names of the files that were not as the sanitiser leaves them.
-internal fun sanitiseStored(directory: File): List<String> {
-    val sanitiser = Sanitiser(emptyMap())
-    return directory
+internal fun sanitiseStored(directory: File): List<String> =
+    directory
         .listFiles { file -> file.isFile }
         .orEmpty()
         .sortedBy { it.name }
         .filter { file ->
             val stored = file.readText()
-            val cleaned = sanitiser.json(stored) ?: stored
+            val cleaned = sanitiserOfStored(file.name, stored).json(stored) ?: stored
             if (cleaned != stored) file.writeText(cleaned)
             cleaned != stored
         }.map { it.name }
-}
