@@ -12,7 +12,9 @@ value class AnimeId(
 data class Anime(
     val id: AnimeId,
     val titles: Titles,
+    // MAL's two sizes of one picture: the medium one, and the large one where MAL has it.
     val posterUrl: String?,
+    val largePosterUrl: String?,
     val mediaType: MediaType?,
     val airingStatus: AiringStatus,
     val malEpisodes: Int?,

@@ -119,15 +119,7 @@ on the Russian strings so far are fixed.
   **Check:** the recorded answers of M2-12 are committed; `git grep` for the owner's and the two users' names
   finds nothing; his list on myanimelist.net is as it was; a difference from W7 is filed as a task.
 
-- [ ] **M2-14 Title client and mappers.** `anime/{id}` to the domain model, and the mapper of a title's summary
-  that the list uses too. MAL's zero and empty values become absent (an episode count or length of 0, an empty
-  English or Japanese title or synonym, an empty synopsis), with a recorded answer holding each; genres are null
-  when an answer has none; a code the app does not know is kept as its code. A related title carries its media
-  type and start date; its list status is read from the stored list. Both picture sizes MAL gives are kept.
-  **Needs:** M2-10.
-  **Check:** `tools/gw :data:testDebugUnitTest`: mapper tests on recorded answers only, one per rule above; every
-  related title of the recorded airing title has a media type and a start year. Items 2 and 3 of section 13 are
-  corrected from the answers, the adult-content one included.
+- [x] **M2-14 Title client and mappers.**
 
 - [ ] **M2-15 List client: reading.** The list download of `RemoteList`: it asks with `nsfw=true`, reads the
   pages in an order edits do not change, and fails when any page fails. A list score of 0 is no score; dates may
@@ -376,7 +368,7 @@ P1 to P5; each starts with a budget change (ARCHITECTURE section 9.1). The sourc
 | P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics, behind an Anime / Manga switch; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
 | P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the franchise in watch order; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
 | P3 | Schedule and discovery | A weekly schedule of the user's airing titles as the fourth destination; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
-| P4 | Community, read-only | Forum boards, topics and posts as the fifth destination; a title's discussions; reviews | MAL, Jikan |
+| P4 | Community, read-only | Forum boards, topics and posts as the fifth destination; a title's discussions; users' reviews of a title | MAL, Jikan |
 | P5 | Reach | F-Droid; community translations, each reviewed by a speaker; Russian titles as a fourth title language; a pure-black theme; a choice of start tab; reference screenshots compared in CI; an "Up next" widget | Shikimori for Russian titles |
 
 ### Not built

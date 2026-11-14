@@ -69,7 +69,8 @@ MAL (from its API reference):
 - Dates may be partial ("2017-10-23", "2017-10", "2017").
 - Entries flagged as not safe for work are returned only on request. **The user's own list always requests them,
   so an entry never vanishes from the list** (dailyAL issues #11, #60). Search and browse leave them out unless the
-  setting "Show adult content in search" is on.
+  setting "Show adult content in search" is on. Inside a title's page the setting changes only its recommendations:
+  the title and its related titles are served either way.
 
 AniList (from live queries):
 
@@ -372,6 +373,7 @@ was chosen against, and why:
   periodic background work.
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
+- A value is stored under MAL's own code, so a code the app learns later needs no migration.
 - Every schema change is a real migration with a migration test. **There is no destructive fallback**: it would
   erase the record of announced episodes and announce them again (N10).
 
@@ -882,12 +884,11 @@ Each of these could change a decision above.
 
 1. **The sign-in has not been run end to end.** The client is registered with the redirect URIs of section 3.1,
    but no token exchange without a secret has been made.
-2. **The shapes of MAL's responses** for title statistics, related titles and the user's statistics are known from
-   dailyAL's working code, not from MAL's reference, which shows no samples. The recorded responses decide.
-3. **MAL's behaviour at its edges:** how it answers for a private list and whether that can be told apart from
-   rate limiting (section 2.3 assumes the same refusal, told apart by the endpoint); its rate limits; whether the
-   adult-content switch applies to related titles and recommendations inside a title; the shortest search query it
-   accepts (believed to be three characters).
+2. **The shape of MAL's user statistics** is known from dailyAL's working code, not from MAL's reference, which
+   shows no samples. The recorded responses decide.
+3. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
+   list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
+   (believed to be three characters).
 4. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
    it). How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not measured.
 5. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
