@@ -1,0 +1,546 @@
+#!/usr/bin/env -S python3 -I
+"""usage: tools/q view [--port N]   the queue as a page for the browser; prints its address and serves until stopped
+The page is at http://127.0.0.1:N/ (default 7475; 0 takes any free port) and reaches nothing but this machine.
+It shows what runs, what waits and for what, the emulator slots, the machine's memory against the budget and the
+margin, what ended and how, with a way to each log's tail, and the last hours per kind.
+It only reads, with the functions of tools/q beside it and without the state's lock: no request starts, stops or
+changes a job. It is not a queue job, reserves nothing and works only while a request is answered.
+Client ids are masked in every command and log line it shows. /state.json has the page's data."""
+import html, importlib.machinery, importlib.util, json, os, re, secrets, shlex, sys, threading, time, traceback
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
+
+TOOLS = os.path.dirname(os.path.realpath(__file__))
+PORT = 7475
+WINDOWS = {1: 60, 3: 180, 6: 300, 12: 600, 24: 1200}
+ENDED_FIRST, ENDED_ROWS, TAIL_LINES, TAIL_BYTES = 12, 100, 200, 1 << 18
+JOB_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{4}")
+MASK, NO_CLIENT_ID = "•••", "-Pkiroku.malClientId="
+ASSIGNED = re.compile(r"(?i)(client[-_.]?id=[\"']?|x-mal-client-id[\"']?\s*:\s*[\"']?)[^\s\"'&;,)]+")
+ARGUMENT = re.compile(r"(?is)(\S*client[-_.]?id=).+")
+BARE = re.compile(r"\b[0-9a-fA-F]{32}\b")
+CONTROL = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[[0-9;?]*[A-Za-z]"
+                     r"|[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+PLAIN = re.compile(r"[\w@%+=:,./•-]+")
+OUTCOMES = {"done": ("passed", "good"), "failed": ("failed", "plain"), "cancelled": ("cancelled", "stop"),
+            "lost": ("lost", "bad")}
+
+
+def load_q():
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("kiroku_q", f"{TOOLS}/q")
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader("kiroku_q", loader))
+    loader.exec_module(module)
+    return module
+
+
+q = load_q()
+
+
+# ---- what is shown of a job ------------------------------------------------------------------------------------
+
+def mask(text):
+    """Text without terminal and direction controls, and with every client id replaced."""
+    return BARE.sub(MASK, ASSIGNED.sub(lambda m: m.group(1) + MASK, CONTROL.sub("", text)))
+
+
+def command(cmd, cwd):
+    """A job's command for display, masked and without the wrappers' own part: in short, and whole."""
+    a = []
+    for x in cmd or []:
+        x = CONTROL.sub("", str(x))
+        m = ARGUMENT.fullmatch(x)
+        a.append(m.group(1) + MASK if m else mask(x))
+    if a[:2] == ["sh", "-c"] and a[3:4] == ["gradlew"]: a = a[3:]
+    elif a[1:2] == ["_job"] and os.path.basename(a[0]) == "emu": a = ["emu"] + a[2:]
+    if cwd: a = [x.replace(cwd + "/", "") for x in a]
+    join = lambda v: " ".join(x if PLAIN.fullmatch(x) else shlex.quote(x) for x in v)
+    return join([x for x in a if x != NO_CLIENT_ID] or a), join(a)
+
+
+def tail(i, lines, size):
+    """The last lines of a job's output, masked, or None when it has none."""
+    try:
+        with open(f"{q.jdir(i)}/out.log", "rb") as f:
+            end = f.seek(0, 2)
+            f.seek(max(0, end - size))
+            text = f.read().decode(errors="replace").splitlines()
+    except OSError: return None
+    return [mask(l) for l in (text[1:] if end > size else text)[-lines:]]
+
+
+def outcome(r):
+    name, tone = OUTCOMES.get(r.get("status"), (str(r.get("status")), "stop"))
+    if r.get("status") == "failed": name += f", exit {r.get('rc')}"
+    elif r.get("reason") in ("killed", "killed with its unit"): name = "killed"
+    elif r.get("reason"): name += f": {r['reason']}"
+    return name, tone
+
+
+class Log:
+    """The last day of the queue's log, read again only when the file has changed."""
+    lock, key, recs = threading.Lock(), None, []
+
+    @classmethod
+    def read(cls):
+        try:
+            st = os.stat(f"{q.STATE}/log.jsonl")
+            key = (st.st_size, st.st_mtime_ns)
+        except OSError: key = None
+        with cls.lock:
+            if key != cls.key:
+                t0 = q.now() - max(WINDOWS) * 3600
+                cls.key, cls.recs = key, [x for x in q.read_log() if (x.get("end") or 0) >= t0] if key else []
+            return str(key and key[0]), cls.recs
+
+
+def base(i, e, job):
+    short, full = command(job.get("cmd"), e.get("cwd"))
+    return {"id": i, "kind": e.get("kind"), "label": mask(e.get("label") or ""), "worktree": q.where(e.get("cwd") or ""),
+            "cwd": e.get("cwd"), "cmd": short, "cmd_full": full}
+
+
+def proc_line(path, pick):
+    try:
+        with open(path) as f: return pick(f.readline().split())
+    except (OSError, IndexError): return None
+
+
+def live():
+    """The queue now: the running and the queued jobs, the limits and the machine."""
+    t, err = q.now(), None
+    try: conf = q.load_conf()
+    except q.ConfError as x: conf, err = None, str(x)
+    mem, s = q.meminfo(), q.peek()
+    if s.get("format", 0) > q.FORMAT:
+        s, err = {"jobs": {}}, f"{q.STATE} was written by a newer tools/q than the one beside this view"
+    jobs = s.get("jobs") or {}
+    key, recs = Log.read()
+    typical = {k: q.pct([x.get("run") for x in recs if x.get("kind") == k and x.get("rc") == 0][-20:], 50)
+               for k in {e.get("kind") for e in jobs.values()}}
+    running, queued = [], []
+    for i, e in sorted(((i, e) for i, e in jobs.items() if e.get("state") == "running"), key=lambda x: x[1].get("start", 0)):
+        st, start = q.rjson(f"{q.jdir(i)}/status.json", {}), e.get("start", t)
+        last = [l.strip()[:300] for l in tail(i, 12, 1 << 13) or [] if l.strip()][-2:]
+        running.append({**base(i, e, q.rjson(f"{q.jdir(i)}/job.json", {})), "waited": start - e["submit"], "ran": t - start,
+                        "typical": typical.get(e.get("kind")), "used": q.claimed(e), "mem": e.get("mem"),
+                        "workers": e.get("workers"), "slot": e.get("slot"), "forced": bool(st.get("forced")),
+                        "stall": st.get("stall"), "gone": q.lost(e),
+                        "stopping": e.get("cancel"), "tail": last})
+    for n, (i, e) in enumerate(q.order(s), 1):
+        st, waited = q.rjson(f"{q.jdir(i)}/status.json", {}), t - e["submit"]
+        queued.append({**base(i, e, q.rjson(f"{q.jdir(i)}/job.json", {})), "position": n, "waited": waited,
+                       "why": st.get("why"), "waits_for": q.REASONS.get(st.get("why")), "stopping": e.get("cancel"),
+                       "gone": q.lost(e),
+                       "keeps_place": bool(conf) and waited >= conf["patience"]})
+    avail, aside = mem.get("MemAvailable", 0), sum(max(0, (r["mem"] or 0) - r["used"]) for r in running)
+    slots = [None] * max([conf["slots"] if conf else 0] + [r["slot"] + 1 for r in running if r["slot"] is not None])
+    for r in running:
+        if r["slot"] is not None: slots[r["slot"]] = {"id": r["id"], "label": r["label"], "ran": r["ran"]}
+    kinds = list(conf["kinds"]) if conf else []
+    fits = []
+    for k in kinds:
+        new = {"state": "queued", "kind": k, "seq": s.get("seq", 0) + 1, "submit": t}
+        ok, why = q.decide({"jobs": {**jobs, "new": new}}, "new", conf, mem)
+        fits.append({"kind": k, "mem": conf["kinds"][k]["mem"], "starts": ok, "why": None if ok else q.REASONS.get(why, why)})
+    machine = {"total": mem.get("MemTotal"), "avail": avail, "aside": aside, "margin": conf and conf["margin"],
+               "room": avail - aside - conf["margin"] if conf else None, "budget": conf and conf["budget"],
+               "declared": sum(r["mem"] or 0 for r in running), "used": sum(r["used"] for r in running),
+               "workers": sum(r["workers"] or 0 for r in running), "cpu": conf and conf["cpu"], "slots": slots,
+               "swap_free": mem.get("SwapFree"), "swap_total": mem.get("SwapTotal"), "threads": os.cpu_count(),
+               "load": proc_line("/proc/loadavg", lambda p: " ".join(p[:3])),
+               "pressure": proc_line("/proc/pressure/memory", lambda p: p[1].partition("=")[2])}
+    return {"at": t, "error": err, "log": key, "kinds": kinds, "running": running, "queued": queued, "machine": machine,
+            "fits": fits}
+
+
+def occupancy(spans, t0, step, n):
+    """Per kind, the average number of jobs inside each of n steps from t0."""
+    out = {}
+    for k, a, b in spans:
+        a, b = max(a, t0), min(b, t0 + n * step)
+        if b <= a: continue
+        row = out.setdefault(k, [0.0] * n)
+        for j in range(int((a - t0) // step), min(n - 1, int((b - t0) // step)) + 1):
+            row[j] += max(0.0, min(b, t0 + (j + 1) * step) - max(a, t0 + j * step)) / step
+    return out
+
+
+def history(hours, now_jobs=None):
+    """The jobs that ended in the last hours: each one, per kind, per worktree, and running against waiting over time."""
+    hours = hours if hours in WINDOWS else 3
+    t, (key, recs) = q.now(), Log.read()
+    t0 = t - hours * 3600
+    hist = [x for x in recs if (x.get("end") or 0) >= t0]
+    try: kinds = q.load_conf()["kinds"]
+    except q.ConfError: kinds = {}
+    ended = []
+    for x in reversed(hist[-ENDED_ROWS:]):
+        name, tone = outcome(x)
+        ended.append({**base(x.get("id"), x, x), "end": x.get("end"), "outcome": name, "rc": x.get("rc"),
+                      "tone": "bad" if x.get("oom_kills") else tone,
+                      "wait": x.get("wait"), "run": x.get("run"), "mem": x.get("mem"),
+                      **{k: x.get(k) for k in ("peak_mib", "anon_peak_mib", "swap_peak_mib", "oom_kills", "stalled")},
+                      "forced": bool(x.get("forced")), "over": bool(x.get("peak_mib") and x.get("mem") and x["peak_mib"] > x["mem"])})
+    per_kind = []
+    for k in list(kinds) + sorted({x.get("kind") for x in hist} - set(kinds), key=str):
+        h = [x for x in hist if x.get("kind") == k]
+        if not h: continue
+        w, r, p = ([x.get(c) for x in h] for c in ("wait", "run", "peak_mib"))
+        per_kind.append({"kind": k, "jobs": len(h), "passed": sum(x.get("rc") == 0 for x in h),
+                         "wait_sum": sum(v or 0 for v in w), "run_sum": sum(v or 0 for v in r),
+                         **{f"{name}_p{c}": q.pct(v, c) for name, v in (("wait", w), ("run", r), ("peak", p)) for c in (50, 90, 100)},
+                         "declared": kinds[k]["mem"] if k in kinds else None,
+                         "over": sum(1 for x in h if x.get("peak_mib") and x.get("mem") and x["peak_mib"] > x["mem"])})
+    reasons = []
+    for why, text in q.REASONS.items():
+        spans = [(max(a, t0), b) for x in hist for a, b, w in x.get("waits") or [] if w == why and b > t0]
+        if spans: reasons.append({"why": why, "text": text, "some": q.union(spans), "all": sum(b - a for a, b in spans)})
+    trees = {}
+    for x in hist:
+        w = trees.setdefault(x.get("cwd"), {"worktree": q.where(x.get("cwd") or ""), "jobs": 0, "passed": 0, "failed": 0,
+                                            "wait_sum": 0.0, "run_sum": 0.0})
+        w.update(label=x.get("label") or "", last=x.get("end"), last_outcome=outcome(x)[0], last_tone=outcome(x)[1])
+        w["jobs"] += 1
+        w["passed"] += x.get("rc") == 0
+        w["failed"] += x.get("status") == "failed"
+        w["wait_sum"] += x.get("wait") or 0
+        w["run_sum"] += x.get("run") or 0
+    wait, run = [], []
+    for x in hist:
+        start = x.get("start")
+        wait.append((x.get("kind"), x.get("submit") or t, start or x.get("end") or t))
+        if start: run.append((x.get("kind"), start, x.get("end") or t))
+    for r in now_jobs or []:
+        wait.append((r["kind"], t - r["waited"] - r.get("ran", 0), t - r.get("ran", 0)))
+        if "ran" in r: run.append((r["kind"], t - r["ran"], t))
+    step = WINDOWS[hours]
+    n, h0 = hours * 3600 // step, int(t0 // 3600) * 3600
+    rows = (int(t - h0) // 3600) + 1
+    by_hour = (occupancy(run, h0, 3600, rows), occupancy(wait, h0, 3600, rows))
+    hourly = [{"start": h0 + j * 3600, "jobs": sum(1 for x in hist if h0 + j * 3600 <= x["end"] < h0 + (j + 1) * 3600),
+               "run": {k: 60 * v[j] for k, v in by_hour[0].items() if v[j]},
+               "wait": {k: 60 * v[j] for k, v in by_hour[1].items() if v[j]}} for j in range(rows)]
+    return {"hours": hours, "since": t0, "at": t, "log": key, "jobs": len(hist), "kinds": list(kinds), "ended": ended,
+            "per_kind": per_kind, "reasons": reasons, "worktrees": sorted(trees.values(), key=lambda w: -w["last"]),
+            "wait_sum": sum(k["wait_sum"] for k in per_kind), "run_sum": sum(k["run_sum"] for k in per_kind),
+            "forced": sum(1 for x in hist if x.get("forced")), "oom": sum(1 for x in hist if x.get("oom_kills")),
+            "stalled": sum(1 for x in hist if x.get("stalled")),
+            "chart": {"start": t0, "step": step, "running": occupancy(run, t0, step, n), "waiting": occupancy(wait, t0, step, n)},
+            "hourly": [h for h in hourly if h["jobs"] or h["run"] or h["wait"]]}
+
+
+def job_log(i):
+    """One job, running, queued or ended, with the end of its output."""
+    job, st = q.rjson(f"{q.jdir(i)}/job.json"), q.rjson(f"{q.jdir(i)}/status.json", {})
+    if not job: return None
+    name, tone = outcome({**st, "status": st.get("state")})
+    live = st.get("state") in ("queued", "running")
+    lines = tail(i, TAIL_LINES, TAIL_BYTES)
+    return {**base(i, job, job), "state": st.get("state"), "live": live, "stall": st.get("stall"),
+            "outcome": "stalled" if st.get("stall") else st.get("state") if live else name, "tone": "bad" if st.get("stall") else tone,
+            "summary": q.job_line(job, st).removeprefix("q: "), "path": f"{q.jdir(i)}/out.log", "lines": lines}
+
+
+# ---- the page ---------------------------------------------------------------------------------------------------
+
+E = lambda v: html.escape(str(v), quote=True)
+num = lambda v: "–" if v is None else f"{v:,.0f}"
+clock = lambda t, f="%H:%M:%S": time.strftime(f, time.localtime(t))
+
+
+def dur(s):
+    if s is None: return "–"
+    s = int(round(s))
+    return f"{s} s" if s < 60 else f"{s // 60}m {s % 60:02d}s" if s < 3600 else f"{s // 3600}h {s % 3600 // 60:02d}m"
+
+
+def kind(k, kinds):
+    return f'<span class="kind k{kinds.index(k) + 1 if k in kinds and kinds.index(k) < 8 else 0}"><i></i>{E(k)}</span>'
+
+
+def badge(name, tone):
+    icon = {"good": "✓", "plain": "✕", "stop": "■", "bad": "!", "run": "▶", "wait": "…"}[tone]
+    return f'<span class="badge {tone}"><i>{icon}</i>{E(name)}</span>'
+
+
+def meter(used, total, near=101):
+    share = min(100.0, 100 * used / total) if total else 0
+    return f'<span class="meter{" over" if total and used > total else " warn" if share >= near else ""}"><i style="width:{share:.1f}%"></i></span>'
+
+
+def who(r):
+    tree = f'<small title="{E(r.get("cwd") or "")}">{E(r["worktree"])}</small>' if r["worktree"] != r["label"] else ""
+    return f'<td class="who"><b title="{E(r["label"])}">{E(r["label"] or "–")}</b>{tree}</td>'
+
+
+def what(r, extra=""):
+    return f'<td class="cmd"><code title="{E(r["cmd"])}">{E(r["cmd"])}</code>{extra}</td>'
+
+
+def log_button(r):
+    return f'<td class="act"><button type="button" data-job="{E(r["id"])}" title="the end of the output of job {E(r["id"])}">log</button></td>'
+
+
+def find(r, *more):
+    return E(" ".join(str(v) for v in (r["id"], r["kind"], r["label"], r["worktree"], r["cmd"]) + more).lower())
+
+
+def table(head, rows, empty, first=None):
+    """A table; with `first`, the rows after that many are folded away."""
+    if not rows: return f'<p class="none">{empty}</p>'
+    head = f'<thead><tr>{"".join(f"<th{c}>{h}</th>" for h, c in head)}</tr></thead>'
+    rest = rows[first:] if first else []
+    more = f'<details data-key="earlier"><summary>{len(rest)} earlier</summary><div class="scroll"><table>{head}<tbody>{"".join(rest)}</tbody></table></div></details>' if rest else ""
+    return f'<div class="scroll"><table>{head}<tbody>{"".join(rows[:first])}</tbody></table></div>{more}'
+
+
+def tile(title, figure, unit, bar, notes):
+    return f'<div class="tile"><h3>{title}</h3><p class="figure">{figure} <small>{unit}</small></p>{bar}<p class="notes">{notes}</p></div>'
+
+
+def render_live(d):
+    m, kinds, out = d["machine"], d["kinds"], []
+    if d["error"]: out.append(f'<p class="alert">{E(d["error"])}</p>')
+    segs = "".join(f'<i class="k{kinds.index(r["kind"]) + 1 if r["kind"] in kinds else 0}" style="width:{100 * (r["mem"] or 0) / m["budget"]:.1f}%"'
+                   f' title="{E(r["label"])}: {num(r["mem"])} MiB"></i>' for r in d["running"]) if m["budget"] else ""
+    tiles = [tile("Memory budget", num(m["declared"]), f'of {num(m["budget"])} MiB declared', f'<span class="segs">{segs}</span>',
+                  f'{num(m["used"])} MiB of it in use · {num(m["budget"] - m["declared"]) if m["budget"] else "–"} MiB of the budget free')]
+    total = m["total"] or m["avail"] or 1
+    parts = [("in use", total - m["avail"], "used"), ("set aside for running jobs", min(m["aside"], m["avail"]), "aside"),
+             ("margin", max(0, min(m["margin"] or 0, m["avail"] - m["aside"])), "margin")]
+    bar = "".join(f'<i class="{c}" style="width:{100 * v / total:.1f}%" title="{t}: {num(v)} MiB"></i>' for t, v, c in parts)
+    room = m["room"]
+    tiles.append(tile("Available memory", num(m["avail"]), f'of {num(m["total"])} MiB' if m["total"] else "MiB", f'<span class="segs mem">{bar}</span>',
+                      f'<span class="key used"></span>in use {num(total - m["avail"])} · <span class="key aside"></span>set aside {num(m["aside"])}'
+                      f' · <span class="key margin"></span>margin {num(m["margin"])} · '
+                      + ("–" if room is None else f'<b>room for a job {num(room)}</b>' if room >= 0 else f'<b class="short">short by {num(-room)}</b>')))
+    tiles.append(tile("Workers", num(m["workers"]), f'of {num(m["cpu"])}', meter(m["workers"], m["cpu"]),
+                      f'load {E(m["load"] or "–")} of {m["threads"]} threads'))
+    slots = "".join(f'<span class="slot{" busy" if s else ""}"><b>{n}</b>{E(s["label"]) + " · " + dur(s["ran"]) if s else "free"}</span>'
+                    for n, s in enumerate(m["slots"]))
+    tiles.append(tile("Emulator slots", sum(1 for s in m["slots"] if s), f'of {len(m["slots"])} in use', f'<span class="slots">{slots}</span>',
+                      f'swap free {num(m["swap_free"])} of {num(m["swap_total"])} MiB · memory pressure {E(m["pressure"] or "–")}'))
+    out.append(f'<section class="tiles">{"".join(tiles)}</section>')
+    if d["fits"]:
+        fit = " · ".join(f'{kind(f["kind"], kinds)} <small>{num(f["mem"])} MiB</small> '
+                         + ("<b>starts</b>" if f["starts"] else f'waits for {E(f["why"])}') for f in d["fits"])
+        out.append(f'<p class="fits">A job submitted now: {fit}</p>')
+    rows = []
+    for r in d["running"]:
+        state = (badge("unit gone", "bad") if r["gone"] else badge("stalled", "bad") if r["stall"]
+                 else badge("stopping", "stop") if r["stopping"] else badge("running", "run"))
+        last = "".join(f"<small>{E(l)}</small>" for l in r["tail"])
+        if r["stall"]: last = f'<small class="stall">{E(r["stall"].get("reason"))}; its threads: {E(r["stall"].get("threads"))}</small>' + last
+        notes = (f' · emulator slot {r["slot"]}' if r["slot"] is not None else "") + (" · started on swap" if r["forced"] else "")
+        rows.append(f'<tr data-find="{find(r, "running")}"><td>{state}</td><td>{kind(r["kind"], kinds)}</td>{who(r)}{what(r, last)}'
+                    f'<td class="num">{dur(r["waited"])}</td><td class="num">{dur(r["ran"])}'
+                    + (f'<small>of about {dur(r["typical"])}</small>' if r["typical"] else "")
+                    + f'</td><td class="mem">{meter(r["used"], r["mem"], 90)}<small>{num(r["used"])} of {num(r["mem"])} MiB{notes}</small></td>{log_button(r)}</tr>')
+    head = [("state", ""), ("kind", ""), ("branch, worktree", ""), ("command, last output", ""), ("waited", ' class="num"'),
+            ("running", ' class="num"'), ("memory in use, declared", ""), ("", "")]
+    out.append(f'<section data-key="running"><h2>Running <span class="count">{len(rows)}</span></h2>{table(head, rows, "Nothing runs.")}</section>')
+    rows = []
+    for r in d["queued"]:
+        why = E(r["waits_for"] or "its turn to be looked at") + ("<small>keeps its place: later jobs start only beside it</small>" if r["keeps_place"] else "")
+        state = badge("unit gone", "bad") if r["gone"] else badge("stopping", "stop") if r["stopping"] else badge("waiting", "wait")
+        rows.append(f'<tr data-find="{find(r, "queued waiting")}"><td>{state}</td>'
+                    f'<td>{kind(r["kind"], kinds)}</td>{who(r)}{what(r)}<td class="num">{dur(r["waited"])}</td>'
+                    f'<td class="num">{r["position"]}</td><td>{why}</td><td class="act"></td></tr>')
+    head = [("state", ""), ("kind", ""), ("branch, worktree", ""), ("command", ""), ("waited", ' class="num"'), ("place", ' class="num"'),
+            ("waits for", ""), ("", "")]
+    out.append(f'<section data-key="waiting"><h2>Waiting <span class="count">{len(rows)}</span></h2>{table(head, rows, "Nothing waits.")}</section>')
+    return (f'<div id="live" data-log="{E(d["log"])}" data-at="{clock(d["at"])}"'
+            f' data-title="{len(d["running"])} running, {len(d["queued"])} waiting">{"".join(out)}</div>')
+
+
+def chart(d):
+    """Running jobs above the line and waiting jobs below it, per kind, as SVG."""
+    c, kinds = d["chart"], d["kinds"]
+    names = kinds + sorted({k for side in (c["running"], c["waiting"]) for k in side} - set(kinds), key=str)
+    n = d["hours"] * 3600 // c["step"]
+    stack = lambda side, j: [(k, side[k][j]) for k in names if k in side and side[k][j] > 0.005]
+    up = max([sum(v for _, v in stack(c["running"], j)) for j in range(n)] + [1])
+    down = max([sum(v for _, v in stack(c["waiting"], j)) for j in range(n)] + [1])
+    W, H, L, R, T, B = 720, 230, 30, 6, 8, 20
+    scale = (H - T - B) / (up + down)
+    zero, bw = T + up * scale, (W - L - R) / n
+    tick = next(s for s in (1, 2, 5, 10, 20, 50, 100, 1000) if (up + down) / s <= 7)
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Jobs running, above the line, and waiting, below it, over the last {d["hours"]} hours">']
+    for v in range(-int(down // tick) * tick, int(up // tick) * tick + 1, tick):
+        y = zero - v * scale
+        out.append(f'<line class="{"axis" if v == 0 else "grid"}" x1="{L}" x2="{W - R}" y1="{y:.1f}" y2="{y:.1f}"/>'
+                   f'<text class="tick" x="{L - 5}" y="{y + 3.5:.1f}" text-anchor="end">{abs(v)}</text>')
+    out.append(f'<text class="side" x="{L + 4}" y="{T + 9}">running</text><text class="side" x="{L + 4}" y="{H - B - 4}">waiting</text>')
+    every = next(s for s in (600, 900, 1800, 3600, 7200, 14400) if d["hours"] * 3600 / s <= 8)
+    first = int(c["start"] // every + 1) * every
+    for x in range(first, int(c["start"]) + n * c["step"] + 1, every):
+        out.append(f'<text class="tick" x="{L + (x - c["start"]) / c["step"] * bw:.1f}" y="{H - 6}" text-anchor="middle">{clock(x, "%H:%M")}</text>')
+    w = min(24.0, bw - 2)
+    for j in range(n):
+        x, tip = L + j * bw + (bw - w) / 2, [f'{clock(c["start"] + j * c["step"], "%H:%M")} to {clock(c["start"] + (j + 1) * c["step"], "%H:%M")}']
+        for side, sign, word in ((c["running"], -1, "running"), (c["waiting"], 1, "waiting")):
+            y, parts = zero, stack(side, j)
+            for at, (k, v) in enumerate(parts):
+                h = v * scale
+                gap = 1 if at and h > 3 else 0
+                top, bottom = (y - h, y - gap) if sign < 0 else (y + gap, y + h)
+                r = min(3.0, w / 2, bottom - top) if at == len(parts) - 1 else 0
+                edge = (f'M{x:.1f} {bottom:.1f}V{top + r:.1f}q0 {-r:.1f} {r:.1f} {-r:.1f}h{w - 2 * r:.1f}q{r:.1f} 0 {r:.1f} {r:.1f}V{bottom:.1f}z' if sign < 0 else
+                        f'M{x:.1f} {top:.1f}V{bottom - r:.1f}q0 {r:.1f} {r:.1f} {r:.1f}h{w - 2 * r:.1f}q{r:.1f} 0 {r:.1f} {-r:.1f}V{top:.1f}z')
+                out.append(f'<path class="k{kinds.index(k) + 1 if k in kinds and kinds.index(k) < 8 else 0}" d="{edge}"/>')
+                y += sign * h
+            tip.append(f"{word}: " + (", ".join(f"{k} {v:.1f}" for k, v in parts) or "none"))
+        out.append(f'<rect class="hit" x="{L + j * bw:.1f}" y="{T}" width="{bw:.1f}" height="{H - T - B}" data-tip="{E(chr(10).join(tip))}"/>')
+    return "".join(out) + "</svg>"
+
+
+def render_history(d):
+    kinds, span = d["kinds"], f'the last {d["hours"]} h'
+    rows = []
+    for r in d["ended"]:
+        tags = "".join(f"<small>{t}</small>" for t in (
+            badge(f'stalled {r["stalled"]} time{"s" if r["stalled"] != 1 else ""}', "bad") if r["stalled"] else "",
+            "started on swap" if r["forced"] else "",
+            f'the kernel killed {r["oom_kills"]} of its processes for lack of memory' if r["oom_kills"] else "") if t)
+        peak = "–" if r["peak_mib"] is None or not r["mem"] else (
+            f'{meter(r["peak_mib"], r["mem"])}<small title="the cgroup\'s peak, file cache included'
+            + (f'; {num(r["anon_peak_mib"])} MiB without it' if r["anon_peak_mib"] is not None else "")
+            + f'">{num(r["peak_mib"])} of {num(r["mem"])} MiB' + (f' · swap {num(r["swap_peak_mib"])}' if r["swap_peak_mib"] else "") + "</small>")
+        rows.append(f'<tr data-find="{find(r, r["outcome"], "ended")}"><td class="num">{clock(r["end"])}</td><td>{badge(r["outcome"], r["tone"])}{tags}</td>'
+                    f'<td>{kind(r["kind"], kinds)}</td>{who(r)}{what(r)}<td class="num">{dur(r["wait"])}</td><td class="num">{dur(r["run"])}</td>'
+                    f'<td class="mem">{peak}</td>{log_button(r)}</tr>')
+    head = [("ended", ' class="num"'), ("how", ""), ("kind", ""), ("branch, worktree", ""), ("command", ""), ("waited", ' class="num"'),
+            ("ran", ' class="num"'), ("memory peak, declared", ""), ("", "")]
+    more = f"; the newest {len(rows)} are listed" if d["jobs"] > len(rows) else ""
+    out = [f'<section data-key="ended"><h2>Ended <span class="count">{d["jobs"]}</span> <small>in {span}{more}</small></h2>{table(head, rows, f"No job ended in {span}.", ENDED_FIRST)}</section>']
+    if not d["jobs"] and not d["chart"]["running"] and not d["chart"]["waiting"]:
+        return f'<div id="history" data-log="{E(d["log"])}">{out[0]}</div>'
+    share = 100 * d["wait_sum"] / (d["wait_sum"] + d["run_sum"]) if d["wait_sum"] + d["run_sum"] else 0
+    legend = "".join(kind(k, kinds) for k in kinds)
+    out.append(f'<section data-key="shape"><h2>Running against waiting <small>in {span}</small></h2>'
+               f'<p class="lead">Jobs waited <b>{dur(d["wait_sum"])}</b> and ran <b>{dur(d["run_sum"])}</b>: {share:.0f} % of their time was waiting.'
+               f' Started on swap: {d["forced"]}; with processes killed for lack of memory: {d["oom"]}; stalled: {d["stalled"]}.</p>'
+               f'<p class="legend">{legend}<span>jobs at once, averaged over {dur(d["chart"]["step"])}</span></p>'
+               f'<div class="chart">{chart(d)}</div>')
+    cell = lambda h, side: " · ".join(f"{E(k)} {v:.0f}" for k, v in h[side].items()) or "–"
+    rows = [f'<tr><td class="num">{clock(h["start"], "%H:00")}</td><td class="num">{h["jobs"]}</td><td>{cell(h, "run")}</td><td>{cell(h, "wait")}</td></tr>'
+            for h in d["hourly"]]
+    head = [("hour", ' class="num"'), ("jobs ended", ' class="num"'), ("running, job minutes per kind", ""), ("waiting, job minutes per kind", "")]
+    out.append(f'<details data-key="hourly"><summary>The same by hour, as a table</summary>{table(head, rows, "")}</details></section>')
+    f = lambda v: "–" if v is None else f"{v:,.0f}"
+    rows = [f'<tr><td>{kind(k["kind"], kinds)}</td><td class="num">{k["jobs"]}</td><td class="num">{k["passed"]}</td>'
+            f'<td class="num">{dur(k["wait_sum"])}</td><td class="num">{dur(k["run_sum"])}</td>'
+            f'<td class="num">{f(k["wait_p50"])} / {f(k["wait_p90"])} / {f(k["wait_p100"])}</td>'
+            f'<td class="num">{f(k["run_p50"])} / {f(k["run_p90"])} / {f(k["run_p100"])}</td>'
+            f'<td class="num">{f(k["peak_p50"])} / {f(k["peak_p90"])} / {f(k["peak_p100"])}</td>'
+            f'<td class="num">{f(k["declared"])}</td><td class="num">{k["over"]}</td></tr>' for k in d["per_kind"]]
+    head = [("kind", "")] + [(h, ' class="num"') for h in ("jobs", "passed", "waited in all", "ran in all", "wait p50 / p90 / max, s",
+                                                           "run p50 / p90 / max, s", "peak p50 / p90 / max, MiB", "declared", "over it")]
+    out.append(f'<section data-key="kinds"><h2>Per kind <small>in {span}</small></h2>{table(head, rows, "")}</section>')
+    most = max([r["all"] for r in d["reasons"]] + [1])
+    rows = "".join(f'<li><span>{E(r["text"])}</span><span class="meter plain"><i style="width:{100 * r["all"] / most:.1f}%"></i></span>'
+                   f'<span class="num"><b>{dur(r["all"])}</b> of waiting, over {dur(r["some"])}</span></li>' for r in d["reasons"])
+    out.append(f'<section data-key="reasons"><h2>What jobs waited for <small>in {span}</small></h2>'
+               + (f'<ul class="reasons">{rows}</ul>' if rows else '<p class="none">No job waited.</p>') + "</section>")
+    rows = [f'<tr data-find="{E((w["label"] + " " + w["worktree"]).lower())}">{who(w)}'
+            f'<td class="num">{w["jobs"]}</td><td class="num">{w["passed"]}</td><td class="num">{w["failed"]}</td>'
+            f'<td class="num">{dur(w["wait_sum"])}</td><td class="num">{dur(w["run_sum"])}</td>'
+            f'<td class="num">{clock(w["last"])}</td><td>{badge(w["last_outcome"], w["last_tone"])}</td></tr>' for w in d["worktrees"]]
+    head = [("branch, worktree", "")] + [(h, ' class="num"') for h in ("jobs", "passed", "failed", "waited", "ran", "last ended")] + [("how", "")]
+    out.append(f'<section data-key="worktrees"><h2>Worktrees <span class="count">{len(rows)}</span> <small>in {span}</small></h2>{table(head, rows, "")}</section>')
+    return f'<div id="history" data-log="{E(d["log"])}">{"".join(out)}</div>'
+
+
+def render_log(d):
+    lines = d["lines"]
+    body = ('<p class="none">It has no output: it has not started, or its directory was cleared.</p>' if lines is None
+            else f'<pre>{E(chr(10).join(lines))}</pre>')
+    stall = f'<p class="stall">{E(d["stall"].get("reason"))}; its threads: {E(d["stall"].get("threads"))}</p>' if d["stall"] else ""
+    return (f'<div id="joblog" data-live="{int(d["live"])}"><p>{badge(d["outcome"], {"queued": "wait", "running": "run"}.get(d["outcome"], d["tone"]))}'
+            f' <b>{E(d["label"])}</b> <small>{E(d["worktree"])} · {E(d["kind"])} · {E(d["id"])}</small></p>'
+            f'<p><code>{E(d["cmd_full"])}</code></p><p class="notes">{E(d["summary"])}</p>{stall}{body}'
+            f'<p class="notes">The last {TAIL_LINES} lines at most; the full output is <code>{E(d["path"])}</code></p></div>')
+
+
+def page(hours, nonce):
+    with open(f"{TOOLS}/qview.html") as f: text = f.read()
+    now = live()
+    windows = "".join(f'<a href="?h={h}"{" aria-current=true" if h == hours else ""}>{h} h</a>' for h in WINDOWS)
+    parts = {"nonce": nonce, "hours": str(hours), "windows": windows, "live": render_live(now),
+             "history": render_history(history(hours, now["running"] + now["queued"]))}
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: parts[m.group(1)], text)
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version, timeout = "HTTP/1.1", 30
+
+    def log_message(self, *a): pass
+
+    def answer(self, code, body, kind="text/html; charset=utf-8", nonce=""):
+        data = body.encode()
+        self.send_response(code)
+        for k, v in (("Content-Type", kind), ("Content-Length", len(data)), ("Cache-Control", "no-store"),
+                     ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer"), ("Allow", "GET, HEAD"),
+                     ("Content-Security-Policy", f"default-src 'none'; connect-src 'self'; style-src 'unsafe-inline';"
+                      f" script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")):
+            self.send_header(k, str(v))
+        self.end_headers()
+        if self.command != "HEAD": self.wfile.write(data)
+
+    def do_GET(self):
+        if self.headers.get("Host") not in self.server.hosts: return self.answer(403, "this view answers only at its own address")
+        url = urlsplit(self.path)
+        ask = {k: v[-1] for k, v in parse_qs(url.query).items()}
+        hours = int(ask["h"]) if ask.get("h") in {str(h) for h in WINDOWS} else 3
+        try:
+            if url.path == "/":
+                nonce = secrets.token_urlsafe(16)
+                return self.answer(200, page(hours, nonce), nonce=nonce)
+            if url.path == "/live": return self.answer(200, render_live(live()))
+            if url.path in ("/history", "/state.json"):
+                now = live()
+                past = history(hours, now["running"] + now["queued"])
+                if url.path == "/history": return self.answer(200, render_history(past))
+                return self.answer(200, json.dumps({"live": now, "history": past}), "application/json")
+            if url.path == "/log" and JOB_ID.fullmatch(ask.get("id", "")):
+                d = job_log(ask["id"])
+                if d: return self.answer(200, render_log(d))
+            self.answer(404, "nothing here")
+        except Exception:
+            traceback.print_exc()
+            self.answer(500, "the view failed to read the queue; its terminal has the error")
+
+    do_HEAD = do_GET
+
+    def refuse(self):
+        self.close_connection = True
+        self.answer(405, "this view only reads")
+
+    do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = refuse
+
+
+def main():
+    a = sys.argv[1:]
+    if not os.environ.get("KIROKU_Q_HERE"):
+        main_q = q.main_copy()
+        if main_q and main_q != q.HERE:
+            view = f"{os.path.dirname(main_q)}/qview"
+            if not os.path.isfile(view): q.die(f"qview: the main checkout has no tools/qview yet; KIROKU_Q_HERE=1 runs this copy")
+            os.execv(view, [view] + a)
+    port = PORT
+    if len(a) == 2 and a[0] == "--port" and a[1].isdigit(): port = int(a[1])
+    elif a: q.die(__doc__)
+    ThreadingHTTPServer.daemon_threads = True
+    try: server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError as x: q.die(f"qview: cannot listen on 127.0.0.1:{port} ({x.strerror}): the view may be running already; --port N takes another")
+    port = server.server_address[1]
+    server.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    print(f"http://127.0.0.1:{port}/  the queue's view; it only reads, and Ctrl-C stops it", flush=True)
+    try:
+        while True: server.handle_request()
+    except KeyboardInterrupt: pass
+
+
+if __name__ == "__main__":
+    main()

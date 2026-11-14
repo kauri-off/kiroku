@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-USAGE="usage: tools/gw [--kind test|check] GRADLE_ARGS...   run Gradle as a queue job (default kind: test)
-       tools/gw --wait ID                           wait again for a job that is not finished
+USAGE="usage: tools/gw [--kind test|check] [--client-id] GRADLE_ARGS...   run Gradle as a queue job (default kind: test)
+       tools/gw --wait ID                                       wait again for a job that is not finished
+Gradle builds without the MAL client id (-Pkiroku.malClientId=), as CI does; --client-id builds with the machine's
+own, as :data:recordMalAnswers needs. A -Pkiroku.malClientId among the arguments is used as given.
 Run it inside its worktree. Gradle sees no device; device tasks run as: tools/emu run tools/gw TASK.
 There a connected task fails (exit 1) when it ran no test or its result holds a failure. Device tasks are named in
 full: an abbreviation that could be one is refused.
@@ -13,11 +15,15 @@ case ${1:-} in
   '' | -h | --help) usage ;;
   --wait) [[ $# == 2 ]] || usage; qwait gw "$2" ;;
 esac
-kind=test
-case $1 in
-  --kind) [[ $# -ge 2 ]] || usage; kind=$2; shift 2 ;;
-  --kind=*) kind=${1#--kind=}; shift ;;
-esac
+kind=test client=0
+while (($#)); do
+  case $1 in
+    --kind) [[ $# -ge 2 ]] || usage; kind=$2; shift 2 ;;
+    --kind=*) kind=${1#--kind=}; shift ;;
+    --client-id) client=1; shift ;;
+    *) break ;;
+  esac
+done
 case $kind in
   test | check) ;;
   *) die "--kind must be test or check, not '$kind'" ;;
@@ -25,10 +31,30 @@ esac
 [[ $# -gt 0 ]] || usage
 for a; do
   case $a in
-    --kind | --kind=* | --wait) die "$a must come first" ;;
+    --kind | --kind=* | --client-id | --wait) die "$a must come first" ;;
     -p | --project-dir | --project-dir=*) die "$a is not allowed: tools/gw builds only its own worktree, $SELF" ;;
+    --) die "-- is not allowed: Gradle takes no arguments after it" ;;
   esac
 done
+
+# Without --client-id the build has no client id, unless the arguments set the property themselves.
+if ((!client)); then
+  unset MAL_CLIENT_ID
+  own=0 prop=0
+  for a; do
+    if ((prop)); then
+      prop=0
+      [[ $a != kiroku.malClientId && $a != kiroku.malClientId=* ]] || own=1
+      continue
+    fi
+    case $a in
+      -P | --project-prop) prop=1 ;;
+      -Pkiroku.malClientId | -Pkiroku.malClientId=* | --project-prop=kiroku.malClientId | \
+        --project-prop=kiroku.malClientId=*) own=1 ;;
+    esac
+  done
+  ((own)) || set -- -Pkiroku.malClientId= "$@"
+fi
 
 # The device tasks among the arguments, by full name in any case; an abbreviation that could expand to one is refused.
 device=() connected=0 skip=0 dry=0

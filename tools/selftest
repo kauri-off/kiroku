@@ -257,6 +257,8 @@ run tools/gw :core:test --kind check
 ok "gw refuses --kind after the Gradle arguments" '[[ $rc == 2 && $out == *"must come first"* && ! -e $F/q.calls ]]'
 run tools/gw -p /elsewhere build
 ok "gw refuses another project directory" '[[ $rc == 2 && $out == *"only its own worktree"* && ! -e $F/q.calls ]]'
+run tools/gw help -- -Pkiroku.malClientId=x
+ok "gw refuses --, after which Gradle reads no property" '[[ $rc == 2 && $out == *"-- is not allowed"* && ! -e $F/q.calls ]]'
 run tools/gw :app:installDebug
 ok "gw refuses a device task outside an emu job and names the right call" \
   '[[ $rc == 2 && $out == *"tools/emu run tools/gw :app:installDebug"* && ! -e $F/q.calls ]]'
@@ -308,6 +310,26 @@ ok "gw --wait the queue cannot answer exits 75 and says the job may still run" \
 ok "gw refuses to run from another checkout" '[[ $? == 0 ]]'
 run env KIROKU_EMU_JOB=$$ tools/gw :core:test
 ok "gw ignores a KIROKU_EMU_JOB that is not an emu job" 'grep -qx submit "$F/q.calls"'
+run env MAL_CLIENT_ID=env-id tools/gw :core:test
+ok "gw builds without the client id: it passes the property empty, once" \
+  '[[ $rc == 0 && $(grep -c kiroku.malClientId "$F/gradle.args") == 1 ]] && has gradle.args -Pkiroku.malClientId='
+ok "  and passes no client id from the environment" '! grep -q "^MAL_CLIENT_ID=" "$F/submit.env" "$F/gradle.env"'
+for p in -Pkiroku.malClientId=own -Pkiroku.malClientId "-P kiroku.malClientId=own" "--project-prop kiroku.malClientId" \
+  --project-prop=kiroku.malClientId=own; do
+  read -ra pa <<< "$p"
+  run tools/gw "${pa[@]}" :core:test
+  ok "gw keeps an explicit $p and adds no other" \
+    '[[ $rc == 0 && $(grep -c kiroku.malClientId "$F/gradle.args") == 1 ]] && has gradle.args "${pa[-1]}"'
+done
+run env MAL_CLIENT_ID=env-id tools/gw --client-id :data:recordMalAnswers
+ok "gw --client-id leaves the machine's client id to Gradle and adds no property, so recordMalAnswers is the one task" \
+  '[[ $rc == 0 && $(grep -v "^-" "$F/gradle.args") == :data:recordMalAnswers ]] && ! grep -q kiroku.malClientId "$F/gradle.args"'
+for o in "--client-id --kind check" "--kind check --client-id"; do
+  run tools/gw $o lint
+  ok "gw takes $o in either order" '[[ $rc == 0 ]] && grep -qx check "$F/q.calls" && ! grep -q kiroku.malClientId "$F/gradle.args"'
+done
+run tools/gw :core:test --client-id
+ok "gw refuses --client-id after the Gradle arguments" '[[ $rc == 2 && $out == *"must come first"* && ! -e $F/q.calls ]]'
 
 # tools/emu through the queue
 export ANDROID_HOME=$T/sdk
@@ -503,6 +525,7 @@ job run tools/gw -m :data:connectedDebugAndroidTest
 nok "  nor a dry run" '[[ $rc == 0 && $out != *"DEVICE TESTS"* ]]'
 job run tools/gw :data:assembleDebug
 nok "a task that is not connected is not checked for device tests" '[[ $rc == 0 && $out != *"DEVICE TESTS"* ]]'
+nok "gw in an emu job builds without the client id too" 'has gradle.args -Pkiroku.malClientId='
 rm -rf "$W/data"
 (
   env FAKE="$F2" ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=0 "$W/tools/emu" _job run sh -c 'env -i FAKE="$FAKE" \
@@ -566,6 +589,15 @@ for c in crash anr dead behind nostart noactivity; do
   nok "smoke fails on $c" '[[ $rc == 1 && $out == *"SMOKE FAILED"* ]]'
 done
 
+# the build: a hung unit-test task fails by itself
+ok "every module's unit-test tasks have a time limit of 10 minutes" \
+  'python3 -I - "$SRC/../build.gradle.kts" "$SRC"/../*/build.gradle.kts << "PY"
+import re, sys
+root, *modules = (open(p).read() for p in sys.argv[1:])
+block = re.search(r"subprojects \{.*?tasks\.withType<Test>\(\)\.configureEach \{(.*?)\n    \}", root, re.S)
+sys.exit(not block or "timeout = Duration.ofMinutes(10)" not in block.group(1) or any("timeout" in m for m in modules))
+PY'
+
 # tools/q itself: every job below is a real unit of the systemd user manager that runs a fake command
 if ! systemctl --user show-environment > /dev/null 2>&1; then
   if [[ -n ${KIROKU_SELFTEST_REQUIRE_Q:-} ]]; then
@@ -627,8 +659,11 @@ drain() {
   local d
   for d in "$QS"/jobs/*/; do q kill "$(basename "$d")" > /dev/null 2>&1; done
 }
-printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" "swaps=$T/swaps" cpus=16 lock_wait=1 boot_timeout=20 smoke_delay=0 \
-  > "$W/tools/test-hooks"
+qhooks() {
+  printf '%s\n' "avd_root=$AVDR" "port_base=$port" "meminfo=$T/meminfo" "swaps=$T/swaps" cpus=16 lock_wait=1 boot_timeout=20 \
+    smoke_delay=0 "$@" > "$W/tools/test-hooks"
+}
+qhooks
 
 conf
 avail 100000
@@ -662,6 +697,10 @@ b=$(sub alloc true)
 ok "q sets aside what a running job declared and has not used yet" 'is "$b" why memory'
 finished "$a" "$b"
 ok "  and no longer once the job has used it" '[[ $(st "$b" state) == done ]] && le "$b" end "$a" end'
+ok "q records a job's anonymous memory peak beside its cgroup peak" \
+  '[[ $(st "$a" anon_peak_mib) -ge 100 && $(st "$a" peak_mib) -ge $(st "$a" anon_peak_mib) ]] &&
+  grep -q "\"id\": \"$a\".*\"peak_mib\": [0-9]*, \"anon_peak_mib\": [0-9]" "$QS/log.jsonl"'
+ok "  and q wait shows that figure" '[[ $(q wait "$a") == *" with file cache and $(st "$a" anon_peak_mib) MiB without, of 100 declared"* ]]'
 DISK=$(cd "$SRC/.." && pwd)/build/selftest-$$
 mkdir -p "$DISK"
 if [[ $(stat -f -c %T "$DISK") == tmpfs ]]; then
@@ -675,6 +714,8 @@ else
   ok "a job that has filled file cache over its figure and allocated nothing" '[[ ${cached:-0} -ge 100 ]]'
   ok "  still has its whole figure set aside" '[[ $(st "$a" state) == running && $(st "$b" state) == queued && $(st "$b" why) == memory ]]'
   finished "$a" "$b"
+  ok "  and its file cache counts in its cgroup peak, not in its anonymous peak" \
+    '[[ $(st "$a" peak_mib) -ge 100 && $(st "$a" anon_peak_mib) -lt 50 ]]'
 fi
 rm -rf "$DISK"
 
@@ -804,16 +845,29 @@ ok "a busy job and a printing job are not stalled" \
   '[[ $(st "$b" state) == done && $(st "$c" state) == done && -z $(st "$b" stalled)$(st "$c" stalled) ]]'
 q kill "$a" > /dev/null
 
+conf
+mkdir "$T/nocg"
+qhooks "cgroup=$T/nocg"
+a=$(sub small python3 -c 'import time; b = b"x" * (50 << 20); time.sleep(1.5)')
+finished "$a"
+qhooks
+ok "a job whose memory statistics cannot be read logs no anonymous peak, not 0" \
+  '[[ $(st "$a" state) == done && -z $(st "$a" anon_peak_mib) ]] && grep -q "\"id\": \"$a\".*\"anon_peak_mib\": null" "$QS/log.jsonl"'
+
 # the wrappers through tools/q
 conf
 run env FAKE_GRADLE_RC=0 tools/gw :core:test --tests '*A B*'
 ok "gw runs Gradle as a job of tools/q, with the kind's workers, and reports its memory peak" \
-  '[[ $rc == 0 && $out == *"gradle line 80"*"exit 0; full output: $QS/jobs/"*"test job waited"*"memory peak "*" MiB of 600 declared"* ]] &&
+  '[[ $rc == 0 && $out == *"gradle line 80"*"exit 0; full output: $QS/jobs/"*"test job waited"*"memory peak "*" MiB with file cache and "*" MiB without, of 600 declared"* ]] &&
   has gradle.args --max-workers=3 && has gradle.args "*A B*"'
 ok "  and gives Gradle's JVMs the job's temporary directory" \
   'grep -qx "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=$QS/jobs/[0-9a-f-]*/tmp" "$F/gradle.env"'
 run tools/gw --kind check lint
 ok "gw --kind check runs with that kind's workers" '[[ $rc == 0 ]] && has gradle.args --max-workers=5'
+run env MAL_CLIENT_ID=env-id tools/gw --client-id :core:test
+b=$(sed -n '1s/^job \([^ ]*\) .*/\1/p' <<< "$out")
+ok "the queue does not save a client id from the environment with a job" \
+  '[[ $rc == 0 && -s $QS/jobs/$b/env.json ]] && ! grep -q CLIENT_ID "$QS/jobs/$b/env.json" "$F/gradle.env"'
 FAKE_GRADLE_RC=1 run tools/gw :core:test
 ok "gw exits with the code of Gradle in the job" '[[ $rc == 1 && $out == *"failed, exit 1; full output:"* ]]'
 run tools/emu run adb devices
@@ -861,12 +915,156 @@ ok "wrappers older than the queue are told to merge main" '[[ $? == 2 && $out ==
 out=$(q submit --api 99 --kind test -C "$W" -- true 2>&1)
 ok "wrappers newer than the queue are told to try again" '[[ $? == 2 && $out == *"main checkout, try again in a minute"* ]]'
 
+# tools/q view: the queue as a page, on fake jobs
+cp "$SRC/qview" "$SRC/qview.html" "$W/tools/"
+conf
+id=0123456789abcdef0123456789abcdef
+p=$(sub small sh -c 'echo fine' gradlew -Pkiroku.malClientId= -P "kiroku.malClientId=$id" :core:test)
+f=$(sub small sh -c 'exit 3' sh "-Pkiroku.malClientId=$id" '<script>alert(1)</script>')
+k=$(sub small env "MAL_CLIENT_ID=$id" sleep 60)
+finished "$p" "$f"
+is "$k" state running
+q kill "$k" > /dev/null
+printf '<i>out</i> {{live}} \033]8;;http://e.example\007link\033]8;;\007 \342\200\256 X-MAL-CLIENT-ID: %s and %s\n' "$id" "$id" > "$T/hostile"
+a=$(q submit --kind big --label '<b>branch</b>{{history}}' -C "$W" -- sh -c 'cat "$1"; sleep 60' sh "$T/hostile" "$id")
+is "$a" state running
+b=$(sub big sleep 60)
+is "$b" why budget
+q stats --since 1h > "$T/view.stats"
+"$W/tools/q" view --port 0 > "$T/view.out" 2>&1 &
+echo $! > "$T/bg.view"
+for _ in {1..50}; do grep -qs '^http://127\.0\.0\.1:[0-9]*/ ' "$T/view.out" && break; sleep 0.1; done
+view=$(cut -d/ -f1-3 "$T/view.out")
+python3 -I - "$view" "$QS" "$id" "$a" "$b" "$p" "$f" "$k" "$T/view.stats" > "$T/view.checks" << 'PY'
+import hashlib, json, os, sys, urllib.error, urllib.request
+url, state, secret, a, b, p, f, k, stats = sys.argv[1:]
+
+
+def get(path, method="GET", host=None):
+    r = urllib.request.Request(url + path, method=method, headers={"Host": host} if host else {})
+    try:
+        with urllib.request.urlopen(r, timeout=20) as x: return x.status, x.read().decode()
+    except urllib.error.HTTPError as x: return x.code, x.read().decode()
+
+
+def files():
+    out = {}
+    for d, _, names in os.walk(state):
+        for n in names:
+            s = os.stat(os.path.join(d, n))
+            with open(os.path.join(d, n), "rb") as x: out[os.path.join(d, n)] = (s.st_size, s.st_mtime_ns, hashlib.sha256(x.read()).hexdigest())
+    return out
+
+
+before = files()
+pages = {u: get(u) for u in ("/", "/live", "/history?h=1", "/state.json?h=1", f"/log?id={a}", f"/log?id={f}", f"/log?id={b}",
+                             "/?h=%C2%B2", "/history?h=99")}
+refused = [get("/live", m)[0] for m in ("POST", "PUT", "DELETE", "PATCH")] + [get(f"/log?id={a}", "POST")[0]]
+missing = [get(u)[0] for u in ("/log?id=..", "/log?id=20200101-000000-0000", f"/log?id={a}/../{b}", "/kill?id=" + a, "/jobs")]
+after = files()
+text = lambda u: pages[u][1]
+try: d = json.loads(text("/state.json?h=1"))
+except ValueError: d = {}
+live, past = d.get("live", {}), d.get("history", {})
+ended = {r["id"]: r for r in past.get("ended", [])}
+everything = "".join(t for _, t in pages.values())
+m, shown = live.get("machine", {}), lambda v: "-" if v is None else f"{v:.0f}"
+with open(stats) as x: by_stats = {l.split()[0]: l.split()[1:12] for l in x if l.split() and l.split()[0] in live.get("kinds", [])}
+by_view = {x["kind"]: [str(x["jobs"]), str(x["passed"])] + [shown(x[f"{n}_p{c}"]) for n in ("wait", "run", "peak") for c in (50, 90, 100)]
+           for x in past.get("per_kind", [])}
+checks = [
+    ("the view answers at the address it prints, on this machine only",
+     lambda: url.startswith("http://127.0.0.1:") and all(c == 200 for c, _ in pages.values())),
+    ("  its page has the running job: kind, label, worktree, command, times and memory against the declared",
+     lambda: [(r["id"], r["kind"], r["label"], r["worktree"], r["mem"]) for r in live["running"]] == [(a, "big", "<b>branch</b>{{history}}", "wt", 800)]
+     and live["running"][0]["ran"] > 0 and live["running"][0]["used"] >= 0 and live["running"][0]["cmd"].startswith("sh -c ")
+     and not live["running"][0]["gone"] and "unit gone" not in text("/live")),
+    ("  and the waiting job, its place and what it waits for",
+     lambda: [(r["id"], r["position"], r["why"], r["waits_for"], r["keeps_place"], r["gone"]) for r in live["queued"]]
+     == [(b, 1, "budget", "the memory budget", False, False)]),
+    ("  and the room for a job: available memory less what the running job declared and has not used, less the margin",
+     lambda: m["aside"] == 800 - live["running"][0]["used"] > 700 and m["room"] == 100000 - m["aside"] - 100),
+    ("  and the limits: the budget, the declared memory, the slots, and which kind would start now",
+     lambda: (live["machine"]["budget"], live["machine"]["declared"], live["machine"]["slots"], live["machine"]["avail"]) == (1000, 800, [None, None], 100000)
+     and {x["kind"]: x["starts"] for x in live["fits"]}["alloc"] and {x["kind"]: x["why"] for x in live["fits"]}["small"] == "the memory budget"),
+    ("  and the ended jobs: passed, failed with its code, killed",
+     lambda: (ended[p]["outcome"], ended[f]["outcome"], ended[k]["outcome"]) == ("passed", "failed, exit 3", "killed")
+     and ended[f]["run"] is not None and ended[p]["mem"] == 300),
+    ("  a failure by the job's own exit code in plain ink, not as an alarm",
+     lambda: (ended[p]["tone"], ended[f]["tone"], ended[k]["tone"]) == ("good", "plain", "stop")
+     and 'class="badge plain"><i>✕</i>failed, exit 3' in text("/history?h=1")),
+    ("  and per kind the figures of tools/q stats: jobs, passed, and the waits, runs and peaks at p50, p90 and the maximum",
+     lambda: len(by_view) >= 5 and by_view == by_stats and any(v[5] != v[6] for v in by_view.values())),
+    ("  and the last hour: waits and runs per kind, and running against waiting over time",
+     lambda: {x["kind"] for x in past["per_kind"]} >= {"small"} and sum(past["chart"]["running"]["small"]) > 0
+     and sum(past["chart"]["waiting"]["big"]) > 0 and "<svg" in text("/history?h=1")),
+    ("the view shows a label, a command and an output line escaped",
+     lambda: all("&lt;b&gt;branch&lt;/b&gt;" in text(u) and "<b>branch" not in text(u) for u in ("/", "/live", f"/log?id={a}"))
+     and all("&lt;script&gt;alert(1)&lt;/script&gt;" in text(u) and "<script>alert" not in text(u) for u in ("/", "/history?h=1", f"/log?id={f}"))
+     and all("&lt;i&gt;out&lt;/i&gt;" in text(u) and "<i>out" not in text(u) for u in ("/live", f"/log?id={a}"))),
+    ("  and a label or an output line that names a part of the page stays text",
+     lambda: text("/").count('id="history"') == 1 and text("/").count('id="live"') == 1
+     and "&lt;/b&gt;{{history}}" in text("/") and "{{live}} link" in text("/")),
+    ("  and without a terminal's sequences or a change of the writing direction",
+     lambda: not any(c in everything for c in ("\x1b", "\x07", "\u202e", "e.example")) and "{{live}} link  X-MAL" in text(f"/log?id={a}")),
+    ("the view never shows a client id: not as a property, an environment variable, a header or alone",
+     lambda: secret not in everything and len(everything) > 5000),
+    ("  and shows that one was given, and an empty one as it is",
+     lambda: ended[p]["cmd_full"] == "gradlew -Pkiroku.malClientId= -P kiroku.malClientId=••• :core:test"
+     and ended[p]["cmd"] == "gradlew -P kiroku.malClientId=••• :core:test" and "-Pkiroku.malClientId=•••" in ended[f]["cmd"]
+     and "MAL_CLIENT_ID=•••" in ended[k]["cmd"] and "X-MAL-CLIENT-ID: ••• and •••" in text(f"/log?id={a}")),
+    ("the view only reads: no request changes a file of the queue's state",
+     lambda: before == after and len(before) > 10),
+    ("  and it refuses every request that is not a read, an unknown job and another host",
+     lambda: refused == [405] * 5 and missing == [404] * 5 and get("/", host="example.com")[0] == 403),
+    ("  and takes a number of hours it does not offer for the usual three",
+     lambda: all(pages[u][0] == 200 and "in the last 3 h" in text(u) for u in ("/?h=%C2%B2", "/history?h=99"))),
+    ("the page asks nothing of another machine",
+     lambda: "http" not in text("/") and "default-src 'none'" in
+     urllib.request.urlopen(url + "/").headers["Content-Security-Policy"]),
+]
+for name, check in checks:
+    try: passed = bool(check())
+    except Exception as x: passed = False
+    print(int(passed), name)
+PY
+while IFS= read -r line; do ok "${line#* }" '((${line%% *}))'; done < "$T/view.checks"
+ok "every check of the view ran" '[[ $(wc -l < "$T/view.checks") == 18 ]]'
+q kill "$a" > /dev/null
+q kill "$b" > /dev/null
+vget() { python3 -I -c 'import sys, urllib.request
+sys.stdout.write(urllib.request.urlopen(sys.argv[1], timeout=20).read().decode())' "$view$1"; }
+a=$(sub small sleep 60)
+is "$a" state running
+systemctl --user kill -s KILL "kiroku-q-$a"
+for _ in {1..50}; do systemctl --user is-active -q "kiroku-q-$a" || break; sleep 0.1; done
+out=$(vget /live)
+ok "the view marks a job whose unit died, by the queue's own test, and drops nothing itself" \
+  '[[ $out == *"<i>!</i>unit gone</span>"* && $(st "$a" state) == running ]]'
+q ps > /dev/null
+out=$(vget "/history?h=1")
+ok "  and shows it as lost, as an alarm, once the queue has dropped it" \
+  '[[ $out == *"class=\"badge bad\"><i>!</i>lost: its unit died"* && $(vget /live) != *"unit gone"* ]]'
+kill "$(< "$T/bg.view")"
+
 out=$(q stats)
 ok "q stats reports waits, runs and memory peaks per kind, and what jobs waited for" \
   '[[ $? == 0 && $out == *"peak p50"*$'"'"'\nemu '"'"'*$'"'"'\nsmall '"'"'*"the memory budget"*"available memory"*"worker threads"*"an emulator slot"*"a job that has waited longer"*"started on swap, without the available memory they ask for: 2;"*"stalled: 1"* ]]'
 ok "q top shows the queue and the machine" '[[ $(q top --once) == *"0 running"*"0 queued"*"swap free"*"memory pressure"* ]]'
 ok "every job left a record" '[[ $(wc -l < "$QS/log.jsonl") == $(ls "$QS/jobs" | wc -l) && ! -s $QS/state.json.tmp ]] &&
   python3 -c "import json, sys; sys.exit(bool(json.load(open(sys.argv[1]))[\"jobs\"]))" "$QS/state.json"'
+ok "q stats shows the anonymous peaks of the jobs that recorded one" \
+  '[[ $(q stats | awk "\$1 == \"alloc\" { print (\$15 >= 100) }") == 1 ]]'
+t=$(date +%s)
+echo "{\"id\": \"old\", \"kind\": \"old\", \"status\": \"done\", \"rc\": 0, \"submit\": $t, \"start\": $t, \"end\": $t, \"wait\": 0, \"run\": 5, \"mem\": 300, \"peak_mib\": 500}" >> "$QS/log.jsonl"
+out=$(q stats)
+ok "q stats still reads a log line written before the anonymous peak was recorded" \
+  '[[ $? == 0 && $(awk "\$1 == \"old\" { print \$10, \$13 }" <<< "$out") == "500 -" ]]'
+for i in {1..20}; do
+  echo "{\"id\": \"known-$i\", \"kind\": \"known\", \"status\": \"done\", \"rc\": 0, \"submit\": $t, \"start\": $t, \"end\": $t, \"wait\": 0, \"run\": 5, \"peak_mib\": $((5000 + i * 10)), \"anon_peak_mib\": $((i * 10))}"
+done >> "$QS/log.jsonl"
+ok "q stats gives the p50, p90 and max of both peaks" \
+  '[[ $(q stats | awk "\$1 == \"known\" { print \$10, \$11, \$12, \$13, \$14, \$15 }") == "5110 5190 5200 110 190 200" ]]'
 
 summary
 ((fails == 0))

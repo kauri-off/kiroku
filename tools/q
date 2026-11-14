@@ -2,6 +2,7 @@
 """usage: tools/q [ps]                  jobs running and queued, and what each queued job waits for
        tools/q top [--once]          the same with output tails and the machine's memory, refreshed
        tools/q stats [--since 24h]   waits, runs and memory peaks per kind, and what jobs waited for
+       tools/q view [--port N]       all of the above as a page for the browser, read-only (tools/qview)
        tools/q kill ID               stop a queued or running job and wait until nothing of it is left
        tools/q submit --kind KIND [--label TEXT] [-C DIR] -- CMD...   prints the job's id (tools/gw, tools/emu)
        tools/q wait ID [--max SECONDS] [--tail N]     exit: the job's code, 75 not finished, 76 stalled, 125 stopped
@@ -36,7 +37,7 @@ UNIT = "kiroku-q-"
 EXIT_PENDING, EXIT_STALLED, EXIT_STOPPED = 75, 76, 125
 STALL_CPU = 0.02
 KEEP_DAYS, KEEP_JOBS = 14, 300
-SECRET = re.compile(r"TOKEN|SECRET|PASS|AUTH|COOKIE|CREDENTIAL|PRIVATE|API_?KEY|SESSION")
+SECRET = re.compile(r"TOKEN|SECRET|PASS|AUTH|COOKIE|CREDENTIAL|PRIVATE|API_?KEY|SESSION|CLIENT_?ID")
 REASONS = {"budget": "the memory budget", "memory": "available memory",
            "short": "available memory, too little to start on swap", "cpu": "worker threads",
            "slot": "an emulator slot", "order": "a job that has waited longer", "config": "a readable tools/q.conf"}
@@ -138,10 +139,16 @@ def cg_stat(cg, name, key):
     except (OSError, ValueError, StopIteration): return None
 
 
+def anon_mib(cg):
+    """MiB of anonymous memory, shared memory and swap in a cgroup: its use without the file cache; None if unreadable."""
+    anon = cg_stat(cg, "memory.stat", "anon")
+    if anon is None: return None
+    return (anon + (cg_stat(cg, "memory.stat", "shmem") or 0) + (cg_int(cg, "memory.swap.current") or 0)) >> 20
+
+
 def claimed(e):
     """MiB of its declared memory a running job has taken so far; file cache is left out, as it is still available."""
-    cg = e.get("cg")
-    return (sum(cg_stat(cg, "memory.stat", k) or 0 for k in ("anon", "shmem")) + (cg_int(cg, "memory.swap.current") or 0)) >> 20
+    return anon_mib(e.get("cg")) or 0
 
 
 def disk_swap_free():
@@ -158,6 +165,11 @@ def disk_swap_free():
 
 # ---- state ----------------------------------------------------------------------------------------------------
 
+def peek():
+    """The queue's state as last written, read without the lock: for a view, which changes nothing."""
+    return rjson(f"{STATE}/state.json") or {"format": FORMAT, "seq": 0, "jobs": {}}
+
+
 class Locked:
     """The queue's state file under an exclusive lock."""
     def __enter__(self):
@@ -165,7 +177,7 @@ class Locked:
         os.makedirs(f"{STATE}/jobs", mode=0o700, exist_ok=True)
         self.f = open(f"{STATE}/state.lock", "a")
         fcntl.flock(self.f, fcntl.LOCK_EX)
-        self.s = rjson(f"{STATE}/state.json") or {"format": FORMAT, "seq": 0, "jobs": {}}
+        self.s = peek()
         if self.s.get("format", 0) > FORMAT:
             die(f"q: {STATE} was written by a newer tools/q: the maintainer is updating the main checkout, try again in a minute")
         self.was = json.dumps(self.s, sort_keys=True)
@@ -182,10 +194,15 @@ def alive(pid):
     except PermissionError: return True
 
 
+def lost(e):
+    """Whether the unit of a job in the state died or never started."""
+    return bool(e.get("pid") and not alive(e["pid"])) or (not e.get("pid") and now() - e["submit"] > 60)
+
+
 def prune(s):
     """Drops jobs whose unit died or never started, and marks them lost."""
     for i, e in list(s["jobs"].items()):
-        if (e.get("pid") and not alive(e["pid"])) or (not e.get("pid") and now() - e["submit"] > 60):
+        if lost(e):
             del s["jobs"][i]
             st, job = rjson(f"{jdir(i)}/status.json", {}), rjson(f"{jdir(i)}/job.json")
             if job and st.get("state") in ("queued", "running"):
@@ -259,7 +276,7 @@ def record(i, job, st, state, rc, cg=None):
            "rc": rc, "submit": job["submit"], "start": start, "end": st["end"],
            "wait": round((start or st["end"]) - job["submit"], 1), "run": round(st["end"] - start, 1) if start else None,
            **{k: st.get(k) for k in ("mem", "workers", "slot", "forced", "avail", "waits", "stalled", "peak_mib",
-                                     "swap_peak_mib", "oom_kills", "cpu_s", "tmp_mib", "reason")}}
+                                     "anon_peak_mib", "swap_peak_mib", "oom_kills", "cpu_s", "tmp_mib", "reason")}}
     with open(f"{STATE}/log.jsonl", "a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps(rec) + "\n")
@@ -307,6 +324,7 @@ def try_conf():
 # ---- a job's processes ----------------------------------------------------------------------------------------
 
 def own_cgroup():
+    if "cgroup" in HOOK: return HOOK["cgroup"]
     try:
         with open("/proc/self/cgroup") as f:
             d = next("/sys/fs/cgroup" + l[3:].strip() for l in f if l.startswith("0::"))
@@ -489,8 +507,10 @@ def cmd_run(a):
             out.write(f"q: cannot start {job['cmd']}: {x}\n".encode())
             return finish(i, job, st, "failed", 127, cg)
         wd = Watchdog(cg, f"{d}/out.log", conf["stall"])
-        killed = False
+        killed, anon = False, None
         while True:
+            a = anon_mib(cg)
+            if a is not None: anon = max(anon or 0, a)
             try:
                 child.wait(conf["poll"])
                 break
@@ -507,6 +527,7 @@ def cmd_run(a):
                 st["stall"] = stall
                 wjson(f"{d}/status.json", st)
         if term: kill_tree(cg, child.pid, signal.SIGKILL)
+    if anon is not None: st["anon_peak_mib"] = anon
     rc = child.returncode
     if term:
         with Locked() as s: why = (s["jobs"].get(i) or {}).get("cancel")
@@ -536,8 +557,10 @@ def job_line(job, st):
     out = f"q: {job['kind']} job waited {(start or end) - job['submit']:.0f} s"
     if start: out += f", ran {end - start:.0f} s with {st.get('workers')} workers"
     if st.get("peak_mib") is not None:
-        out += f", memory peak {st['peak_mib']} MiB" + (f" of {st['mem']} declared" if st.get("mem") else "")
-        if st.get("swap_peak_mib"): out += f" and {st['swap_peak_mib']} MiB of swap"
+        out += f", memory peak {st['peak_mib']} MiB"
+        if st.get("anon_peak_mib") is not None: out += f" with file cache and {st['anon_peak_mib']} MiB without"
+        if st.get("mem"): out += f", of {st['mem']} declared"
+        if st.get("swap_peak_mib"): out += f", and {st['swap_peak_mib']} MiB of swap"
     if st.get("forced"): out += "; started on swap, without the available memory it asks for"
     if st.get("oom_kills"): out += f"; the kernel killed {st['oom_kills']} of its processes for lack of memory"
     return out
@@ -676,6 +699,10 @@ def cmd_top(a):
         except KeyboardInterrupt: return
 
 
+def cmd_view(a):
+    os.execv(f"{TOOLS}/qview", [f"{TOOLS}/qview"] + a)
+
+
 def parse_dur(v):
     m = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd]?)", v)
     if not m: die(f"q: bad duration {v}")
@@ -701,18 +728,22 @@ def cmd_stats(a):
     f = lambda v: "-" if v is None else f"{v:.0f}"
     print(f"q stats since {time.strftime('%Y-%m-%d %H:%M', time.localtime(t0))}: {len(hist)} jobs; times in s, memory in MiB")
     print(f"{'kind':6} {'jobs':>5} {'ok':>5} {'wait p50':>8} {'p90':>5} {'max':>5} {'run p50':>8} {'p90':>5} {'max':>5}"
-          f" {'peak p50':>9} {'p90':>6} {'max':>6} {'declared':>8} {'over':>5} {'swap max':>8} {'cores':>5}")
+          f" {'peak p50':>9} {'p90':>6} {'max':>6} {'anon p50':>9} {'p90':>6} {'max':>6} {'declared':>8} {'over':>5}"
+          f" {'swap max':>8} {'cores':>5}")
     for k in sorted({x["kind"] for x in hist}):
         h = [x for x in hist if x["kind"] == k]
-        w, r, p = ([x.get(c) for x in h] for c in ("wait", "run", "peak_mib"))
+        w, r, p, n = ([x.get(c) for x in h] for c in ("wait", "run", "peak_mib", "anon_peak_mib"))
         ran = [x for x in h if x.get("run") and x.get("cpu_s") is not None]
         cores = sum(x["cpu_s"] for x in ran) / sum(x["run"] for x in ran) if ran else None
         over = sum(1 for x in h if x.get("peak_mib") and x.get("mem") and x["peak_mib"] > x["mem"])
         decl = conf["kinds"][k]["mem"] if conf and k in conf["kinds"] else None
         print(f"{k:6} {len(h):5} {sum(x.get('rc') == 0 for x in h):5} {f(pct(w, 50)):>8} {f(pct(w, 90)):>5} {f(pct(w, 100)):>5}"
               f" {f(pct(r, 50)):>8} {f(pct(r, 90)):>5} {f(pct(r, 100)):>5} {f(pct(p, 50)):>9} {f(pct(p, 90)):>6}"
-              f" {f(pct(p, 100)):>6} {f(decl):>8} {over:5} {f(pct([x.get('swap_peak_mib') for x in h], 100)):>8}"
+              f" {f(pct(p, 100)):>6} {f(pct(n, 50)):>9} {f(pct(n, 90)):>6} {f(pct(n, 100)):>6} {f(decl):>8} {over:5}"
+              f" {f(pct([x.get('swap_peak_mib') for x in h], 100)):>8}"
               f" {'-' if cores is None else f'{cores:.1f}':>5}")
+    print("peak: the cgroup's peak, file cache included; anon: the highest anonymous and shared memory and swap seen at"
+          " a poll,\n  which is what the queue counts as use (- where the log has no figure)")
     print("over: jobs whose peak passed the memory declared for them; cores: CPU time by run time")
     print("what queued jobs waited for (time during which at least one job waited for it; all jobs' waits added up):")
     for why, text in REASONS.items():
@@ -729,7 +760,7 @@ def main():
         q = main_copy()
         if q and q != HERE: os.execv(q, [q] + a)
     cmds = {"submit": cmd_submit, "_run": cmd_run, "wait": cmd_wait, "ps": cmd_ps, "top": cmd_top, "stats": cmd_stats,
-            "kill": cmd_kill}
+            "kill": cmd_kill, "view": cmd_view}
     if a and a[0] not in cmds: die(__doc__)
     cmds[a[0] if a else "ps"](a[1:])
 
