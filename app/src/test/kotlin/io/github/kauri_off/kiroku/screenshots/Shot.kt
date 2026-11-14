@@ -40,6 +40,7 @@ import com.google.android.apps.common.testing.accessibility.framework.checks.Spe
 import com.google.android.apps.common.testing.accessibility.framework.integrations.espresso.AccessibilityViewCheckException
 import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.scenario.MARKER_TAG
@@ -252,12 +253,16 @@ class Shot private constructor(
         windows()
             .flatMap { it.composeRoots() }
             .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
-            .filter { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate }
+            .filter {
+                it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate ||
+                    it.config.getOrNull(SemanticsProperties.TestTag) == COUNTED_WAVY_INDICATOR
+            }
 
     private val SemanticsNode.loops: Int
         get() =
             when (config.getOrNull(SemanticsProperties.TestTag)) {
                 WAVY_INDICATOR -> WAVY_LOOPS
+                COUNTED_WAVY_INDICATOR -> 1
                 ONE_LOOP_INDICATOR -> 1
                 else -> 0
             }

@@ -75,13 +75,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
-- [ ] **M2-02 [O] Names for recording.** The owner writes two user names into the same file, outside the
-  repository: `kiroku.recordPublicUser`, a user with a public list of more than 1000 entries, and
-  `kiroku.recordPrivateUser`, a user whose list is private. He registers the preview build's redirect URI with MAL
-  if he decides so (section 3.1).
-  **Needs:** nothing.
-  **Check:** `grep -c '^kiroku\.record' ~/.gradle/gradle.properties` prints 2.
-
+- [x] **M2-02 [O] Names for recording.**
 - [x] **M2-03 [O] Frame for the first wave.**
 
 - [x] **M2-04 [A] Network foundation.**
@@ -170,18 +164,7 @@ on the Russian strings so far are fixed.
   **Check:** tests on the recorded pages behind a local server: three pages give every entry once; a failed
   middle page fails the download; the request carries `nsfw=true` and the order.
 
-- [ ] **M2-16 [A] Database: the titles and the list's store.** The database of section 7.1 for titles (summary,
-  details, related titles) and the list (shown values, confirmed values, the unconfirmed mark, the sync time, the
-  sign-in the list belongs to),
-  with the port M2-06 settled. A title's refresh and a list write do not overwrite each other, and a stored
-  value is never replaced by a missing one. The list is one shared flow, rows are mapped off the main thread, an
-  entry that did not change stays the same object, and one entry can be observed by itself. Version 1 of the
-  schema is what M2-33 installs; from then on every change is a migration.
-  **Needs:** M2-06.
-  **Check:** `tools/gw :data:testDebugUnitTest`: `ListEngineContract` passes over the store; a migration test
-  harness exists and a test fails when a destructive fallback is configured; with 3000 entries, a write of one
-  emits a list whose other entries are the same objects; a title refreshed and then edited on the list keeps the
-  refreshed data, and the reverse; a summary without genres leaves stored genres in place.
+- [x] **M2-16 [A] Database: the titles and the list's store.**
 
 - [ ] **M2-17 Anime repository.** The titles of section 7.1 over M2-14 and M2-16: a page shows what is stored,
   refreshes what is stale, and keeps what is stored when a refresh fails. A title reached from a related row has
@@ -387,8 +370,7 @@ Not to forget:
   told apart from rate limiting (item 3 of section 13). Without a private user name from the owner, that stays
   open and the task says so.
 
-- [ ] **M6-01 [L] Profile screen.** The stateless screens of section 9.7 on fixture states: own profile and another
-  user's; no view model, no network, no sub-screens.
+- [x] **M6-01 [L] Profile screen.**
 
 ## M7. Settings, polish and release 1.0
 

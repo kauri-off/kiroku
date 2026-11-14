@@ -312,6 +312,13 @@ internal fun ScreenStateSection() {
     Column {
         ScreenState(ScreenState.Loading)
         ScreenState(ScreenState.Empty(stringResource(R.string.gallery_empty), StateAction(stringResource(R.string.gallery_sign_in)) {}))
+        ScreenState(
+            ScreenState.Empty(
+                stringResource(R.string.gallery_signed_out),
+                StateAction(stringResource(R.string.gallery_sign_in)) {},
+                StateAction(stringResource(R.string.gallery_open_another)) {},
+            ),
+        )
         ScreenState(ScreenState.Error(stringResource(R.string.gallery_no_connection)) {})
     }
 }

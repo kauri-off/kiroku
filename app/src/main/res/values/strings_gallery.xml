@@ -49,6 +49,8 @@
     <string name="gallery_broadcast_value">Saturdays at\u00A017:30</string>
     <string name="gallery_empty">No titles in Planned</string>
     <string name="gallery_sign_in">Sign in</string>
+    <string name="gallery_signed_out">Sign in with MyAnimeList to see your profile here</string>
+    <string name="gallery_open_another">Open another profile</string>
     <string name="gallery_no_connection">No connection</string>
     <string name="gallery_no_value" translatable="false">—</string>
     <string name="gallery_no_score">No score</string>

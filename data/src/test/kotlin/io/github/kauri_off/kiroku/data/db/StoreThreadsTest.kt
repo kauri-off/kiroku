@@ -1,0 +1,272 @@
+package io.github.kauri_off.kiroku.data.db
+
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.SQLiteDriver
+import androidx.sqlite.SQLiteStatement
+import androidx.sqlite.driver.AndroidSQLiteDriver
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.StoredEntry
+import io.github.kauri_off.kiroku.core.list.record
+import io.github.kauri_off.kiroku.core.model.SignInId
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import java.util.Optional
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+
+// On real threads, over a database file: a failure's trace says where a row was mapped, and a read can be held back.
+@RunWith(RobolectricTestRunner::class)
+class StoreThreadsTest {
+    private object StoreThread : CoroutineDispatcher() {
+        private val executor = Executors.newSingleThreadExecutor()
+
+        override fun dispatch(
+            context: CoroutineContext,
+            block: Runnable,
+        ) = executor.execute { onStoreThread(block) }
+
+        private fun onStoreThread(block: Runnable) = block.run()
+    }
+
+    // A read of the list that waits until it is released: [before] it reads a row, or else with its rows read.
+    private class Hold(
+        val before: Boolean = false,
+    ) {
+        val reached = CountDownLatch(1)
+        val released = CountDownLatch(1)
+
+        fun park() {
+            reached.countDown()
+            check(released.await(TIMEOUT.inWholeSeconds, TimeUnit.SECONDS))
+        }
+    }
+
+    // What the coming reads of the list do, in their order: wait at a hold, or pass at null.
+    private val holds = ConcurrentLinkedQueue<Optional<Hold>>()
+    private val reads = AtomicInteger()
+
+    private val driver =
+        object : SQLiteDriver {
+            override val hasConnectionPool: Boolean get() = AndroidSQLiteDriver().hasConnectionPool
+
+            override fun open(fileName: String): SQLiteConnection {
+                val connection = AndroidSQLiteDriver().open(fileName)
+                return object : SQLiteConnection by connection {
+                    override fun prepare(sql: String): SQLiteStatement {
+                        val statement = connection.prepare(sql)
+                        if (!sql.endsWith("ORDER BY e.title_id")) return statement
+                        return object : SQLiteStatement by statement {
+                            private var started = false
+                            private var hold: Hold? = null
+
+                            override fun step(): Boolean {
+                                if (!started) hold = holds.poll()?.orElse(null)
+                                if (!started) hold?.takeIf { it.before }?.park()
+                                started = true
+                                val more = statement.step()
+                                if (!more) reads.incrementAndGet()
+                                if (!more) hold?.takeUnless { it.before }?.park()
+                                return more
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    private val context = RuntimeEnvironment.getApplication()
+    private val database = KirokuDatabase.builder(context, NAME).setDriver(driver).build()
+    private val sharing = CoroutineScope(Dispatchers.Unconfined)
+    private val unexpected = CopyOnWriteArrayList<Throwable>()
+    private val list = RoomLocalList(database, sharing, StoreThread) { unexpected += it }
+    private val titles = TitleStore(database, StoreThread) { unexpected += it }
+    private val fixtures = Fixtures.reference
+    private val anime = FixtureAnime.exactToWatch
+    private val entry = checkNotNull(fixtures.entryFor(anime.id))
+
+    @After
+    fun close() {
+        holds.clear()
+        sharing.cancel()
+        database.close()
+        context.deleteDatabase(NAME)
+    }
+
+    private suspend fun until(condition: () -> Boolean) = withTimeout(TIMEOUT) { while (!condition()) delay(POLL) }
+
+    private fun watched(count: Int) = StoredEntry.settled(entry.record.copy(values = entry.values.copy(watchedEpisodes = count)))
+
+    private fun CoroutineScope.collector(
+        seen: MutableList<Int>,
+        list: RoomLocalList = this@StoreThreadsTest.list,
+    ) = launch(Dispatchers.Default) { list.observeEntries().collect { seen += it.single().values.watchedEpisodes } }
+
+    private fun Throwable.mappedOnStoreThread() =
+        generateSequence(this) { it.cause }.any { cause -> cause.stackTrace.any { it.methodName == "onStoreThread" } }
+
+    private suspend fun failure(call: suspend () -> Any?): Throwable =
+        checkNotNull(
+            runCatching {
+                withTimeout(TIMEOUT) { call() }
+            }.exceptionOrNull(),
+        )
+
+    private suspend fun stored() {
+        list.clear(SignInId("a"))
+        list.download(listOf(anime), mapOf(anime.id to StoredEntry.settled(entry.record)), fixtures.now)
+        titles.refresh(anime, fixtures.details.getValue(anime.id), fixtures.now)
+        assertFalse(IllegalStateException().mappedOnStoreThread())
+    }
+
+    private suspend fun corrupt() {
+        database.execute("UPDATE list_entry SET shown_status = 'broken', confirmed_status = 'broken'")
+        database.execute("UPDATE title SET airing_status = 'broken'")
+        database.execute("UPDATE title_details SET season = 'broken'")
+    }
+
+    @Test
+    fun `the read all collectors share maps its rows on the store's dispatcher`() =
+        runBlocking {
+            stored()
+            val seen = CopyOnWriteArrayList<Int>()
+            val standing = launch(Dispatchers.Default) { list.observeEntries().collect { seen += it.size } }
+            until { seen.isNotEmpty() }
+
+            corrupt()
+
+            until { unexpected.isNotEmpty() }
+            assertTrue(unexpected.all { it.mappedOnStoreThread() })
+            standing.cancel()
+        }
+
+    @Test
+    fun `a collector's own read of the list maps its rows on the store's dispatcher`() =
+        runBlocking {
+            stored()
+            corrupt()
+            assertEquals(emptyList<Any>(), list.observeEntries().first())
+            assertEquals(1, unexpected.size)
+            assertTrue(unexpected.all { it.mappedOnStoreThread() })
+        }
+
+    @Test
+    fun `one entry's rows are mapped on the store's dispatcher`() =
+        runBlocking {
+            stored()
+            corrupt()
+            assertTrue(failure { list.observeEntry(anime.id).first() }.mappedOnStoreThread())
+        }
+
+    @Test
+    fun `a call maps its rows on the store's dispatcher`() =
+        runBlocking {
+            stored()
+            corrupt()
+            assertTrue(failure { list.read(anime.id) }.mappedOnStoreThread())
+            assertEquals(emptyMap<Any, Any>(), list.readAll())
+            assertEquals(1, unexpected.size)
+            assertTrue(unexpected.all { it.mappedOnStoreThread() })
+        }
+
+    @Test
+    fun `a title's rows are mapped on the store's dispatcher`() =
+        runBlocking {
+            stored()
+            corrupt()
+            assertTrue(failure { titles.observeAnime(anime.id).first() }.mappedOnStoreThread())
+            assertTrue(failure { titles.observeDetails(anime.id).first() }.mappedOnStoreThread())
+        }
+
+    @Test
+    fun `a collector that joins beside others gets no list older than the one stored when it joined`() =
+        runBlocking {
+            stored()
+            val beside = CopyOnWriteArrayList<Int>()
+            val standing = collector(beside)
+            until { beside.isNotEmpty() && reads.get() >= 2 }
+            val shared = Hold()
+            val next = Hold()
+
+            holds += Optional.of(shared)
+            list.write(mapOf(anime.id to watched(20)))
+            until { shared.reached.count == 0L }
+            list.write(mapOf(anime.id to watched(21)))
+            holds += listOf(Optional.empty(), Optional.of(next))
+            val seen = CopyOnWriteArrayList<Int>()
+            val joined = collector(seen)
+            delay(SETTLE)
+            shared.released.countDown()
+            until { next.reached.count == 0L }
+            delay(SETTLE)
+
+            assertEquals(listOf(21), seen.toList())
+            next.released.countDown()
+            until { beside.last() == 21 }
+            assertEquals(listOf(12, 20, 21), beside.toList())
+            joined.cancel()
+            standing.cancel()
+        }
+
+    // The store maps on several threads here, so only its own order keeps two reads apart.
+    @Test
+    fun `a read that began later is never of an older list than one that began before it`() =
+        runBlocking {
+            stored()
+            val list = RoomLocalList(database, sharing, Dispatchers.Default) { unexpected += it }
+            val beside = CopyOnWriteArrayList<Int>()
+            val standing = collector(beside, list)
+            until { beside.isNotEmpty() && reads.get() >= 2 }
+            val own = Hold(before = true)
+            val next = Hold()
+
+            holds += Optional.of(own)
+            val seen = CopyOnWriteArrayList<Int>()
+            val joined = collector(seen, list)
+            until { own.reached.count == 0L }
+            holds += listOf(Optional.empty(), Optional.of(next))
+            list.write(mapOf(anime.id to watched(20)))
+            delay(SETTLE)
+            list.write(mapOf(anime.id to watched(21)))
+            delay(SETTLE)
+            own.released.countDown()
+            delay(SETTLE)
+            val shown = seen.toList()
+            next.released.countDown()
+            until { beside.last() == 21 }
+
+            assertEquals(listOf(21), shown)
+            joined.cancel()
+            standing.cancel()
+        }
+
+    private companion object {
+        const val NAME = "threads.db"
+        val TIMEOUT = 20.seconds
+        val SETTLE = 200.milliseconds
+        val POLL = 5.milliseconds
+    }
+}

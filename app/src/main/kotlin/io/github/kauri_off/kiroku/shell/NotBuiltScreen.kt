@@ -30,8 +30,18 @@ fun NotBuiltScreen(
             NotBuilt.SignIn -> R.string.design_sign_in
             NotBuilt.Recommendations -> R.string.title_recommendations
         }
+    NotBuiltScreen(stringResource(title), onBack, snackbars)
+}
+
+// A not-built screen named by the caller.
+@Composable
+fun NotBuiltScreen(
+    title: String,
+    onBack: () -> Unit,
+    snackbars: SnackbarHostState,
+) {
     SubScreen(
-        title = stringResource(title),
+        title = title,
         sessionExpired = false,
         onBack = onBack,
         onSignIn = {},

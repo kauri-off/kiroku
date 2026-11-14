@@ -65,8 +65,6 @@ Wording decided before its feature exists. A row leaves this table when its reso
 | Notification summary | 3 new episodes | %d новая серия, новые серии, новых серий | |
 | Status panel | Upcoming / Recently sent | Ближайшие / Недавно отправленные | |
 | Sign out | Sign out | Выйти | |
-| Profile summary | Days watched / Mean score | Дней просмотра / Средняя оценка | |
-| Settings | Settings | Настройки | |
 
 ## Rules
 

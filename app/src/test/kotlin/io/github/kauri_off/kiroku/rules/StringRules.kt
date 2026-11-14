@@ -13,7 +13,8 @@ private val labelledBefore = setOf("list_episode_watched")
 
 // Strings that open with a verb before the count ("Watched 12 of 24"): the verb is not the number's word, so the
 // space before the number may break.
-private val verbBefore = setOf("list_progress", "list_progress_unknown_total", "gallery_progress")
+private val verbBefore =
+    setOf("list_progress", "list_progress_unknown_total", "gallery_progress", "profile_loading_list", "profile_loading_list_unknown_total")
 
 // An ordinary space between a number and the word, slash or colon next to it, where a line could break.
 fun numberSpaceProblems(

@@ -383,7 +383,9 @@ was chosen against, and why:
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
   replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
-  while the user can see and tap it. Ordinary messages are not queued.
+  while the user can see and tap it; a finger holding any message stops its time, which starts again in full when
+  let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
+  runs no action. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
 
@@ -470,7 +472,7 @@ colour outside the theme.
   shown, unless the segment alone is wider than the line.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked one
   per line (section 9.7), and a row's MAL score moves from the trailing slot to the end of its first supporting
-  line. Apart from that and the two poster rules above, nothing depends on the font scale.
+  line. Apart from these two and the two poster rules above, nothing depends on the font scale.
 
 ### 8.4 Components
 
@@ -486,7 +488,7 @@ The complete list. Adding one needs a reason in the pull request, an entry here 
 | `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
 | `FactRow` | `ListItem` | A label and a value |
 | `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9) |
-| `ScreenState` | `LoadingIndicator`, text, `Button` | The loading, empty and error states, identical everywhere |
+| `ScreenState` | `LoadingIndicator`, text, `Button`, `TextButton` | The loading, empty and error states, identical everywhere |
 | `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
 | `ConnectedChoice` | `ToggleButton` | One of a few options, all visible, as a connected button group in as few rows as fit |
 | `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, which follows the pager between two tabs, as the stock row cannot |
@@ -536,10 +538,10 @@ change legible, or preventing a jump. Decoration is not a purpose.
   for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
   slide with ViewPager2's snap timing, so that the gesture feels as in Droid-ify.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
-  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
-  stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a
-  List tab between orderings (section 9.3), even when a data refresh brings the change. Content that finishes
-  loading fades in.
+  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came, or the way they
+  were swiped. Lists have stable keys and use the list's item animation for add, remove and move, including a title
+  that joins or leaves a List tab between orderings (section 9.3), even when a data refresh brings the change.
+  Content that finishes loading fades in.
   One thing moves per change; a container that enters brings its content with it.
 - **Time.** An exit is shorter than the matching entrance, and an animation settles within the bound the motion
   tests set for its spring.
@@ -714,14 +716,17 @@ else. Nothing is written before "Save", and "Save" writes exactly what the sheet
 **Own profile.** Top app bar: "Profile", a settings icon. Must show: the header (avatar, user name, "Joined 2019");
 three `StatNumber`s ("Completed", "Days watched", "Mean score"); the status breakdown as five `StatBar`s; rows that
 open sub-screens: "Score distribution", "Genres", "Formats and years"; a row "Open another profile", which asks for a
-user name and lists the last five opened. Limit: nothing else.
+user name or a profile link and lists the last five profiles found. Limit: nothing else.
+
+Signed out, it offers "Sign in" and "Open another profile".
 
 The three numbers sit in one row; with large text (section 8.3) they are stacked one per line.
 
 **Another user.** There is no header, because MAL's API gives neither avatar nor join date for other users; their
 name is the top app bar title, with Back. Must show: the three numbers, the status breakdown, the three sub-screen
 rows, and "View list" (the read-only variant of section 9.3). A long list loads with a progress line ("Loading
-3 000 of 12 400").
+3 000 of 12 400"). A private list and an unknown name offer "Open another profile", not Retry; for an unknown name it
+opens with that name.
 
 Charts are horizontal bars only.
 
