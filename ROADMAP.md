@@ -73,13 +73,7 @@ sign-out happened that the owner did not cause; three title pages match myanimel
 statistics; a `myanimelist.net/anime/{id}` link opens the title page with the List beneath it; the owner's findings
 on the Russian strings so far are fixed.
 
-- [ ] **M2-01 [O] Client id on the machine.** The orchestrator moves the MAL client id from the untracked
-  `clientid.txt` into `~/.gradle/gradle.properties` as `kiroku.malClientId`. No agent reads that file or the value.
-  From then on every local build carries the id, so an agent's emulator run passes `-Pkiroku.malClientId=` unless
-  its task says otherwise: only the owner and the orchestrator drive the real MAL through the app.
-  **Needs:** nothing.
-  **Check:** `grep -c '^kiroku\.malClientId=.' ~/.gradle/gradle.properties` prints 1 (a count, so no value is
-  shown); `git check-ignore clientid.txt` prints the file name; `git status` is clean.
+- [x] **M2-01 [O] Client id on the machine.**
 
 - [ ] **M2-02 [O] Names for recording.** The owner writes two user names into the same file, outside the
   repository: `kiroku.recordPublicUser`, a user with a public list of more than 1000 entries, and
