@@ -19,7 +19,14 @@ class SourceRulesTest {
     fun viewModelsTakeNeitherTheListsWriterNorTheGraph() {
         val sources = appSources()
         assertEquals(
-            setOf("EditSheetViewModel.kt", "ListViewModel.kt", "ShellViewModel.kt", "SubScreenViewModels.kt", "TitleViewModel.kt"),
+            setOf(
+                "EditSheetViewModel.kt",
+                "ListViewModel.kt",
+                "ShellViewModel.kt",
+                "SignInViewModel.kt",
+                "SubScreenViewModels.kt",
+                "TitleViewModel.kt",
+            ),
             sources.filter { declaresViewModel(it.readText()) }.map { it.name }.toSet(),
         )
         assertTrue(sources.any { relative(it) == SHELL_VIEW_MODEL_SOURCE })

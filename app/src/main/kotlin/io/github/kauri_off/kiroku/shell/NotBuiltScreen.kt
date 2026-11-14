@@ -11,7 +11,7 @@ import io.github.kauri_off.kiroku.titlesub.SubScreenBody
 import kotlinx.serialization.Serializable
 
 // A screen a control leads to that a later milestone builds.
-enum class NotBuilt { SignIn, Recommendations }
+enum class NotBuilt { Recommendations, }
 
 @Serializable
 data class NotBuiltKey(
@@ -27,7 +27,6 @@ fun NotBuiltScreen(
 ) {
     val title =
         when (screen) {
-            NotBuilt.SignIn -> R.string.design_sign_in
             NotBuilt.Recommendations -> R.string.title_recommendations
         }
     NotBuiltScreen(stringResource(title), onBack, snackbars)

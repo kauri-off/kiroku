@@ -81,8 +81,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Debug build, release build with R8 and its guards, and the preview build
-        run: ./gradlew assembleDebug assembleRelease assemblePreview
+      - name: Debug build
+        env:
+          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+        run: ./gradlew assembleDebug
+
+      - name: Release build with R8 and its guards, and the preview build
+        run: ./gradlew assembleRelease assemblePreview
 
       - name: Save the Gradle home
         if: github.event_name == 'push'

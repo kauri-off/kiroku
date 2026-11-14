@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sign_out_title">Sign-in</string>
+    <string name="sign_out_demo">Demo data has no MyAnimeList account to sign out of</string>
+    <string name="sign_out_not_read">The stored sign-in has not been read yet</string>
+    <string name="sign_out_signed_out">Not signed in</string>
+    <string name="sign_out_signed_in">Signed in to MyAnimeList</string>
+    <string name="sign_out_expired">Signed in, and the session has expired</string>
+    <string name="sign_out_sign_out">Sign out</string>
+</resources>

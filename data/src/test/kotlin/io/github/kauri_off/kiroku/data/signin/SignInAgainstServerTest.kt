@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.dropped
 import io.github.kauri_off.kiroku.data.network.Thing
 import io.github.kauri_off.kiroku.data.network.received
+import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import io.github.kauri_off.kiroku.data.session.AesGcmCipher
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.MalTokenEndpoint
@@ -64,6 +65,10 @@ class SignInAgainstServerTest {
     private val browser = FakeBrowser()
     private val printed = resource("mal/authorization/token.json")
     private val expired = resource("mal/authorization/expired_access_token.json")
+
+    // MAL's own answers to an access token and to a refresh token it does not take.
+    private val invalidToken = RecordedAnswers.named("token_invalid")
+    private val invalidRefresh = RecordedAnswers.named("refresh_invalid")
     private val endpoint by lazy { MalTokenEndpoint(network.http) }
 
     private val session by lazy {
@@ -154,10 +159,12 @@ class SignInAgainstServerTest {
         }
 
     @Test
-    fun aRejectedAccessTokenLeadsToOneRefreshAtTheTokenEndpointAndOneRetryWithTheNewToken() =
+    fun malsRecordedInvalidTokenLeadsToOneRefreshAtTheTokenEndpointAndOneRetryWithTheNewToken() =
         test {
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("old-access", "refresh-1")))
-            network.answers { if (it.headers["Authorization"] == "Bearer ACCESS_TOKEN") answer() else answer(401, expired) }
+            network.answers {
+                if (it.headers["Authorization"] == "Bearer ACCESS_TOKEN") answer() else answer(invalidToken.status, invalidToken.body)
+            }
             network.signIn.enqueue(answer(body = printed))
 
             assertEquals(Outcome.Success(Thing(7)), readAsTheUser())
@@ -185,11 +192,11 @@ class SignInAgainstServerTest {
         }
 
     @Test
-    fun aRefreshThatTheTokenEndpointRejectsEndsTheSession() =
+    fun malsRecordedRejectionOfARefreshEndsTheSession() =
         test {
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("old-access", "refresh-1")))
-            network.always(answer(401, expired))
-            network.signIn.enqueue(answer(400, "no"))
+            network.always(answer(invalidToken.status, invalidToken.body))
+            network.signIn.enqueue(answer(invalidRefresh.status, invalidRefresh.body))
 
             assertEquals(Outcome.Failure(DataError.SessionExpired), readAsTheUser())
 
