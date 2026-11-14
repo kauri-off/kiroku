@@ -36,6 +36,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
@@ -601,9 +602,9 @@ class ListTabMotionTest {
     @Test
     fun `a drag back during a tap ends on the tab it settles on`() = dragAfterTap(0.6f, ListStatus.Watching)
 
-    // Every frame of a drag, its settle and a tap: the row has the pager's scroll, never one of its own or a late one.
+    // Every frame of a drag and its settle the row has the pager's scroll; on a tap it goes straight to the tab's place.
     @Test
-    fun `the row's scroll is taken from the pager in every frame`() {
+    fun `the row has the pager's scroll through a drag and goes straight to a tapped tab by the glide`() {
         show(ListFixtureStates.planned)
         val rest = left(firstRows[1])
         assertRowAt(1f)
@@ -701,13 +702,26 @@ class ListTabMotionTest {
         assertTrue("the selected tab's title is off the row", label("Watching").right.value <= 0f)
     }
 
+    // The scroll the row rests at on a tab, in whole pixels as the app works it out.
+    private fun place(index: Int): Float {
+        val density = compose.density.density
+
+        fun px(dp: Dp) = (dp.value * density).roundToInt()
+        val scroll = (rowScroll() * density).roundToInt()
+        val tabs = labels.map { bounds(tab(it)) }
+        val viewport = (pageWidth * density).roundToInt()
+        val max = (px(tabs.last().right) + scroll - viewport).coerceAtLeast(0)
+        val width = px(tabs[index].right) - px(tabs[index].left)
+        return (px(tabs[index].left) + scroll - (viewport / 2 - width / 2)).coerceIn(0, max) / density
+    }
+
     // Frame by frame, the row goes from [from] towards [to] and never back, ending there with the page on [target].
     private fun assertRowMovesOnce(
         from: Float,
         target: Int,
         rest: Float,
     ): Int {
-        val to = expectedScroll(target.toFloat())
+        val to = place(target)
         var last = from
         var moving = 0
         repeat(MAX_FRAMES) { frame ->
@@ -747,6 +761,46 @@ class ListTabMotionTest {
     fun `a tap on a far tab after the row was scrolled by hand moves the row once, towards the tab`() {
         val moving = tapFromScrolledRow("Completed")
         assertTrue("the row moved in $moving frames", moving >= GLIDE_FRAMES)
+    }
+
+    // At the owner's width, with the wider tabs of a large font, where the selected title is off the row too.
+    @Test
+    @Config(qualifiers = "en-w411dp-h2000dp", fontScale = LARGE_TEXT)
+    fun `at the phone's width with large text a tap on a far tab after a scroll by hand moves the row once`() {
+        val moving = tapFromScrolledRow("Completed")
+        assertTrue("the row moved in $moving frames", moving >= GLIDE_FRAMES)
+    }
+
+    // A scroll by hand during a tap's movement moves the row on top of it, for the rest of the tap and after it.
+    @Test
+    @Config(qualifiers = NARROW)
+    fun `a scroll by hand during a tap is kept on top of the tap's movement`() {
+        show(ListFixtureStates.watching)
+        val rest = left(firstRows[0])
+        val start = rowScroll()
+        tab("Completed").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        val to = place(2)
+
+        fun tapped() = start + (to - start) * headerPosition() / 2f
+        // Moves with no delay, which would advance the clock past the tap; the finger is lifted once the tap is over.
+        tab("On hold").performTouchInput {
+            down(center)
+            repeat(SLOW_STEPS) { moveBy(Offset(-HAND.dp.toPx() / SLOW_STEPS, 0f), delayMillis = 0) }
+        }
+        val hand = rowScroll() - tapped()
+        assertTrue("the row moved with the finger: $hand", hand > TOLERANCE)
+        assertTrue("still mid-tap: ${headerPosition()}", headerPosition() < 1f)
+        repeat(MAX_FRAMES) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("frame $frame: the tap's movement and the hand", tapped() + hand, rowScroll(), TOLERANCE)
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        tab("On hold").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(2f, pagerPosition(rest), SETTLE_EPSILON)
+        assertEquals("the hand is kept after the tap", to + hand, rowScroll(), TOLERANCE)
+        assertIdle()
     }
 
     @Test
@@ -884,6 +938,7 @@ class ListTabMotionTest {
         const val FLICK_SETTLE_MS = 220L
         const val END_DRAG = 4f
         const val NARROW = "en-w360dp-h2000dp"
+        const val LARGE_TEXT = 2f
         const val ARRIVING = 0.1f
     }
 }
