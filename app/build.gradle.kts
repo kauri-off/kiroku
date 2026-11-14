@@ -30,6 +30,13 @@ check(malClientId.matches(Regex("[A-Za-z0-9._-]*"))) {
     "The MAL client id may contain only letters, digits, '.', '_' and '-'"
 }
 
+// A build type's OAuth redirect as registered with MAL: a constant of its own, never made from the application id.
+fun com.android.build.api.dsl.ApplicationBuildType.oauthRedirect(uri: String) {
+    manifestPlaceholders["oauthScheme"] = uri.substringBefore("://")
+    manifestPlaceholders["oauthHost"] = uri.substringAfter("://")
+    buildConfigField("String", "OAUTH_REDIRECT", "\"$uri\"")
+}
+
 android {
     namespace = "io.github.kauri_off.kiroku"
     compileSdk {
@@ -79,8 +86,10 @@ android {
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "@string/app_name_debug"
             manifestPlaceholders["debugMenuShortcuts"] = "@xml/debug_menu_shortcuts_debug"
+            oauthRedirect("io.github.kauri-off.kiroku.debug://oauth")
         }
         release {
+            oauthRedirect("io.github.kauri-off.kiroku://oauth")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
@@ -91,6 +100,7 @@ android {
             applicationIdSuffix = ".preview"
             manifestPlaceholders["appLabel"] = "@string/app_name_preview"
             manifestPlaceholders["debugMenuShortcuts"] = "@xml/debug_menu_shortcuts_preview"
+            oauthRedirect("io.github.kauri-off.kiroku.preview://oauth")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
             isProfileable = true
@@ -591,7 +601,103 @@ abstract class VerifyShortcuts : DefaultTask() {
     }
 }
 
+// One activity takes the redirect registered with MAL for the build type, and no component is newly open to other apps.
+abstract class VerifyRedirect : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:Input
+    abstract val redirect: Property<String>
+
+    @get:Input
+    abstract val alsoExported: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val document =
+            javax.xml.parsers.DocumentBuilderFactory
+                .newInstance()
+                .apply { isNamespaceAware = true }
+                .newDocumentBuilder()
+                .parse(manifest.get().asFile)
+        val components = COMPONENTS.flatMap { document.getElementsByTagName(it).elements() }
+        val scheme = redirect.get().substringBefore("://")
+        val takers = components.filter { component -> component.filters().any { filter -> filter.any { it.endsWith(" scheme=$scheme") } } }
+        val filter =
+            listOf(
+                "action $VIEW",
+                "category $DEFAULT",
+                "category $BROWSABLE",
+                "data host=${redirect.get().substringAfter("://")} scheme=$scheme",
+            )
+        check(takers.map { it.name() } == listOf(ACTIVITY) && takers.single().filters() == listOf(filter)) {
+            "${redirect.get()} is taken by ${takers.map { it.name() to it.filters() }}, not by $ACTIVITY from a browser alone"
+        }
+        val exported = components.filter { it.getAttributeNS(ANDROID, "exported") == "true" }.mapTo(mutableSetOf()) { it.name() }
+        check(exported == alsoExported.get() + ACTIVITY) {
+            "Other apps can start $exported, not ${alsoExported.get() + ACTIVITY}"
+        }
+        report.get().asFile.writeText("$ACTIVITY takes ${redirect.get()}; exported: $exported\n")
+    }
+
+    private fun org.w3c.dom.NodeList.elements() = (0 until length).map { item(it) as org.w3c.dom.Element }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(ANDROID, "name")
+
+    // Each intent filter as its actions, categories and data, in the manifest's order.
+    private fun org.w3c.dom.Element.filters(): List<List<String>> =
+        getElementsByTagName("intent-filter").elements().map { filter ->
+            filter.getElementsByTagName("*").elements().map { part ->
+                val attributes = (0 until part.attributes.length).map { part.attributes.item(it) }
+                val values = attributes.map { if (part.tagName == "data") "${it.localName}=${it.nodeValue}" else it.nodeValue }
+                "${part.tagName} ${values.sorted().joinToString(" ")}"
+            }
+        }
+
+    private companion object {
+        const val ANDROID = "http://schemas.android.com/apk/res/android"
+        const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
+        const val VIEW = "android.intent.action.VIEW"
+        const val DEFAULT = "android.intent.category.DEFAULT"
+        const val BROWSABLE = "android.intent.category.BROWSABLE"
+        val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
+    }
+}
+
+// Section 3.1's redirects as MAL has them, and what else each build type lets another app start.
+val registeredRedirects =
+    mapOf(
+        "release" to "io.github.kauri-off.kiroku://oauth",
+        "debug" to "io.github.kauri-off.kiroku.debug://oauth",
+        "preview" to "io.github.kauri-off.kiroku.preview://oauth",
+    )
+val launcher = "io.github.kauri_off.kiroku.MainActivity"
+val scenarioTile = "io.github.kauri_off.kiroku.scenario.ScenarioTile"
+val profileInstaller = "androidx.profileinstaller.ProfileInstallReceiver"
+val composePreview = "androidx.compose.ui.tooling.PreviewActivity"
+val exportedBesidesTheRedirect =
+    mapOf(
+        "release" to setOf(launcher, profileInstaller),
+        "debug" to setOf(launcher, profileInstaller, scenarioTile, composePreview),
+        "preview" to setOf(launcher, profileInstaller, scenarioTile),
+    )
+
 androidComponents {
+    onVariants { variant ->
+        val name = variant.name.replaceFirstChar { it.uppercase() }
+        val redirect =
+            tasks.register<VerifyRedirect>("verify${name}Redirect") {
+                manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                redirect.set(registeredRedirects.getValue(variant.buildType!!))
+                alsoExported.set(exportedBesidesTheRedirect.getValue(variant.buildType!!))
+                report.set(layout.buildDirectory.file("reports/redirect-${variant.name}.txt"))
+            }
+        tasks.named { it == "assemble$name" }.configureEach { dependsOn(redirect) }
+    }
     onVariants { variant ->
         if (variant.buildType !in setOf("debug", "preview")) return@onVariants
         val name = variant.name.replaceFirstChar { it.uppercase() }

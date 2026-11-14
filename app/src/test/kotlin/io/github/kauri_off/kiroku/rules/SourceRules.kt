@@ -206,6 +206,19 @@ fun invisibleCharacterProblems(
             .map { "$name:${index + 1}: invisible character U+%04X; write it as an escape".format(it.code) }
     }
 
+// S1: sign-in is the browser's, so nothing that ships shows a web page itself.
+private val webView = Regex("""\bandroid\.webkit\b|\bWebView\w*""")
+
+fun webViewProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val code = if (name.endsWith(".kt") || name.endsWith(".kts")) KotlinSource(source).code else source
+    return code.lines().mapIndexedNotNull { index, line ->
+        if (webView.containsMatchIn(line)) "$name:${index + 1}: a WebView: ${line.trim()}" else null
+    }
+}
+
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =
     projectDir

@@ -306,6 +306,27 @@ class SourceRulesTest {
     }
 
     @Test
+    fun nothingThatShipsHoldsAWebView() {
+        val shipped = projectSources().filterNot { source -> listOf("test", "testDebug", "androidTest").any { "/src/$it/" in source.path } }
+        assertTrue(shipped.any { it.path.endsWith("signin/CustomTabBrowser.kt") })
+        assertTrue(shipped.any { it.path.endsWith("app/src/main/AndroidManifest.xml") })
+        assertEquals(emptyList<String>(), shipped.flatMap { webViewProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedWebViewFails() {
+        val planted =
+            listOf(
+                "A.kt" to "import android.webkit.CookieManager\n",
+                "A.kt" to "@Composable fun A() = AndroidView({ WebView(it) })\n",
+                "A.kt" to "class A : WebViewClient()\n",
+                "a.xml" to "<WebView android:id=\"@+id/a\" />\n",
+            )
+        for ((name, source) in planted) assertEquals(source, 1, webViewProblems(name, source).size)
+        assertEquals(emptyList<String>(), webViewProblems("A.kt", "// never a WebView\nval a = notShown(\"WebView\")\n"))
+    }
+
+    @Test
     fun everySourceSetThatShipsIsScanned() {
         val scanned = appSources().map { relative(it) }
         assertTrue(scanned.any { it.startsWith("app/src/main/") })
