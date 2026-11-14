@@ -119,15 +119,7 @@ on the Russian strings so far are fixed.
   **Check:** the recorded answers of M2-12 are committed; `git grep` for the owner's and the two users' names
   finds nothing; his list on myanimelist.net is as it was; a difference from W7 is filed as a task.
 
-- [ ] **M2-14 Title client and mappers.** `anime/{id}` to the domain model, and the mapper of a title's summary
-  that the list uses too. MAL's zero and empty values become absent (an episode count or length of 0, an empty
-  English or Japanese title or synonym, an empty synopsis), with a recorded answer holding each; genres are null
-  when an answer has none; a code the app does not know is kept as its code. A related title carries its media
-  type and start date; its list status is read from the stored list. Both picture sizes MAL gives are kept.
-  **Needs:** M2-10.
-  **Check:** `tools/gw :data:testDebugUnitTest`: mapper tests on recorded answers only, one per rule above; every
-  related title of the recorded airing title has a media type and a start year. Items 2 and 3 of section 13 are
-  corrected from the answers, the adult-content one included.
+- [x] **M2-14 Title client and mappers.**
 
 - [ ] **M2-15 List client: reading.** The list download of `RemoteList`: it asks with `nsfw=true`, reads the
   pages in an order edits do not change, and fails when any page fails. A list score of 0 is no score; dates may

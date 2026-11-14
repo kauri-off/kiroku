@@ -8,7 +8,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -21,20 +21,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
 
+      # A pull request's checkout is the merge commit, whose first parent is its base.
+      - name: Whether the queue tools changed
+        id: tools
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] || ! git diff --quiet HEAD^1 HEAD -- tools .github/workflows/ci.yml; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          fi
+
       # tools/emu runs its command in an unprivileged user and mount namespace, which Ubuntu's AppArmor restricts.
       - name: Allow unprivileged user namespaces
+        if: steps.tools.outputs.run == 'true'
         run: |
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
 
       - name: Queue self-test
+        if: steps.tools.outputs.run == 'true'
         run: tools/selftest
         env:
           KIROKU_SELFTEST_REQUIRE_Q: "1"
@@ -44,7 +55,19 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
-          cache-provider: basic
+          cache-disabled: true
+
+      # The newest state main saved; only main saves.
+      - name: Restore the Gradle home
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+          restore-keys: |
+            gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-
+            gradle-${{ runner.os }}-
 
       - name: Format, Lint, tests and screenshots
         run: ./gradlew --continue ktlintCheck lint test recordRoborazziDebug
@@ -60,6 +83,15 @@ jobs:
 
       - name: Debug build, release build with R8 and its guards, and the preview build
         run: ./gradlew assembleDebug assembleRelease assemblePreview
+
+      - name: Save the Gradle home
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
 
       - name: Keep the debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
