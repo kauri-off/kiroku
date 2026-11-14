@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.core.model.StatusCounts
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.data.network.MalFields
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -28,6 +29,7 @@ import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.Year
 import java.time.YearMonth
 
 // The mappers on MAL's recorded answers only.
@@ -250,5 +252,48 @@ class MalAnimeTest {
             anime.averageEpisodeDuration,
         )
         assertNull(anime.broadcast)
+    }
+
+    @Test
+    fun `a start date of a year or a month alone keeps its precision`() {
+        val years = mapped.filter { (_, node) -> node.text("start_date")?.length == 4 }
+        assertEquals(5, years.size)
+        for ((_, node, title) in years) assertEquals(PartialDate.OnlyYear(Year.parse(node.text("start_date"))), title.startDate)
+        val months = mapped.filter { (_, node) -> node.text("start_date")?.length == 7 }
+        assertTrue(months.isNotEmpty())
+        for ((_, node, title) in months) assertEquals(PartialDate.Month(YearMonth.parse(node.text("start_date"))), title.startDate)
+    }
+
+    @Test
+    fun `a missing mean or rank is absent, and one that is there is kept`() {
+        val noMean = mapped.filter { (_, node) -> "mean" !in node }
+        val noRank = mapped.filter { (_, node) -> "rank" !in node }
+        assertTrue(noMean.size > 10 && noRank.size > 10)
+        for ((_, node, title) in mapped) {
+            assertEquals(node.text("mean")?.toDouble(), title.meanScore)
+            assertEquals(node.text("rank")?.toInt(), title.rank)
+        }
+    }
+
+    // No recording holds these shapes: each is a recorded page with one value removed or altered here.
+    @Test
+    fun `a picture without its medium size is no picture, and the rest of the title is read`() {
+        val whole = recordedTitle("title_airing")
+        val edited = recordedJson("title_airing").edited(listOf("main_picture", "medium")).toTitle()
+        assertEquals(whole.copy(anime = whole.anime.copy(posterUrl = null, largePosterUrl = null)), edited)
+    }
+
+    @Test
+    fun `statistics missing a count are no statistics, and the rest of the title is read`() {
+        val whole = recordedTitle("title_airing")
+        val edited = recordedJson("title_airing").edited(listOf("statistics", "status", "dropped")).toTitle()
+        assertEquals(whole.copy(details = whole.details.copy(statistics = null)), edited)
+    }
+
+    @Test
+    fun `a broadcast time that does not parse is no time, and the rest of the title is read`() {
+        val whole = recordedTitle("title_airing")
+        val edited = recordedJson("title_airing").edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")).toTitle()
+        assertEquals(whole.copy(anime = whole.anime.copy(broadcast = Broadcast(DayOfWeek.FRIDAY, null))), edited)
     }
 }

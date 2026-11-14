@@ -87,6 +87,7 @@ internal class Codes<T : Any>(
     fun of(column: String): T = values[column] ?: unrecognized?.invoke(column) ?: error("No value has the stored code")
 }
 
+// Codes no recording holds: g, pg, r+, winter, dropped, spin_off, parent_story, full_story, alternative_setting, every source but four.
 internal val listStatuses =
     Codes(ListStatus.entries) {
         when (it) {

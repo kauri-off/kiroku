@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
+import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import kotlinx.coroutines.runBlocking
@@ -60,5 +61,14 @@ class MalTitlesTest {
         serve("title_unknown")
         assertEquals(Outcome.Failure(DataError.NotFound), runBlocking { titles.title(AnimeId(2), adult = false) })
         assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `an answer the mapper cannot read is a server error, and reported`() {
+        val page = recordedJson("title_airing").edited(listOf("status"))
+        network.api.enqueue(answer(200, page.toString(), "application/json; charset=UTF-8"))
+
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { titles.title(AnimeId(61987), adult = false) })
+        assertTrue(network.unexpected.single() is UnusableAnswer)
     }
 }

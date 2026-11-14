@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
+import java.time.format.DateTimeParseException
 
 // A title's page as MAL gives it: its summary and what only the page shows.
 data class MalTitle(
@@ -52,7 +53,7 @@ internal class AnimeNode(
 
 @Serializable
 internal class Picture(
-    val medium: String,
+    val medium: String? = null,
     val large: String? = null,
 )
 
@@ -98,8 +99,8 @@ private class StartSeason(
 // MAL gives the five counts as strings and the member count as a number.
 @Serializable
 private class Statistics(
-    val status: Map<String, JsonPrimitive>,
-    @SerialName("num_list_users") val members: Int,
+    val status: Map<String, JsonPrimitive> = emptyMap(),
+    @SerialName("num_list_users") val members: JsonPrimitive? = null,
 )
 
 @Serializable
@@ -129,8 +130,8 @@ internal fun AnimeNode.toAnime(): Anime =
                 japanese = alternativeTitles?.ja?.present(),
                 synonyms = alternativeTitles?.synonyms.orEmpty().mapNotNull { it.present() },
             ),
-        posterUrl = mainPicture?.medium,
-        largePosterUrl = mainPicture?.large,
+        posterUrl = mainPicture?.medium?.present(),
+        largePosterUrl = mainPicture?.large?.present()?.takeIf { mainPicture.medium?.present() != null },
         mediaType = mediaType?.present()?.let(mediaTypes::of),
         airingStatus = airingStatuses.of(status),
         malEpisodes = episodes.takeIf { it > 0 },
@@ -159,20 +160,29 @@ private fun PageNode.toDetails(id: AnimeId): AnimeDetails =
 // A day MAL names that is not a weekday leaves the title without a broadcast.
 private fun MalBroadcast.toBroadcast(): Broadcast? {
     val weekday = DayOfWeek.entries.find { it.name.equals(day, ignoreCase = true) } ?: return null
-    return Broadcast(weekday, startTime?.present()?.let(LocalTime::parse))
+    return Broadcast(weekday, startTime?.present()?.let(::timeOf))
 }
 
-private fun Statistics.toStatistics(): TitleStatistics {
-    fun count(key: String): Int = status.getValue(key).content.toInt()
+// A time that does not parse is no time.
+private fun timeOf(text: String): LocalTime? =
+    try {
+        LocalTime.parse(text)
+    } catch (_: DateTimeParseException) {
+        null
+    }
+
+// Statistics with a count missing or unreadable are no statistics.
+private fun Statistics.toStatistics(): TitleStatistics? {
+    fun count(key: String): Int? = status[key]?.content?.toIntOrNull()?.takeIf { it >= 0 }
     return TitleStatistics(
         StatusCounts(
-            watching = count("watching"),
-            completed = count("completed"),
-            onHold = count("on_hold"),
-            dropped = count("dropped"),
-            planned = count("plan_to_watch"),
+            watching = count("watching") ?: return null,
+            completed = count("completed") ?: return null,
+            onHold = count("on_hold") ?: return null,
+            dropped = count("dropped") ?: return null,
+            planned = count("plan_to_watch") ?: return null,
         ),
-        members,
+        members?.content?.toIntOrNull()?.takeIf { it >= 0 } ?: return null,
     )
 }
 

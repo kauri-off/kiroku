@@ -69,7 +69,8 @@ MAL (from its API reference):
 - Dates may be partial ("2017-10-23", "2017-10", "2017").
 - Entries flagged as not safe for work are returned only on request. **The user's own list always requests them,
   so an entry never vanishes from the list** (dailyAL issues #11, #60). Search and browse leave them out unless the
-  setting "Show adult content in search" is on.
+  setting "Show adult content in search" is on. Inside a title's page the setting changes only its recommendations:
+  the title and its related titles are served either way.
 
 AniList (from live queries):
 
@@ -372,6 +373,7 @@ was chosen against, and why:
   periodic background work.
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
+- A value is stored under MAL's own code, so a code the app learns later needs no migration.
 - Every schema change is a real migration with a migration test. **There is no destructive fallback**: it would
   erase the record of announced episodes and announce them again (N10).
 

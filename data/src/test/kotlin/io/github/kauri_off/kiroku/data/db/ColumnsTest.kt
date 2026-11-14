@@ -138,10 +138,13 @@ class ColumnsTest {
     fun `a code the app does not recognise is stored and read as MAL gave it`() {
         for (code in listOf("web_film", "?", "", "pg_13 new")) {
             assertEquals(code, mediaTypes.toColumn(MediaType.Unrecognized(code)))
+            assertEquals(code, sources.toColumn(Source.Unrecognized(code)))
+            assertEquals(code, ageRatings.toColumn(AgeRating.Unrecognized(code)))
+            assertEquals(code, relationTypes.toColumn(RelationType.Unrecognized(code)))
             assertEquals(MediaType.Unrecognized(code), mediaTypes.of(code))
-            assertEquals(Source.Unrecognized(code), sources.of(sources.toColumn(Source.Unrecognized(code))))
-            assertEquals(AgeRating.Unrecognized(code), ageRatings.of(ageRatings.toColumn(AgeRating.Unrecognized(code))))
-            assertEquals(RelationType.Unrecognized(code), relationTypes.of(relationTypes.toColumn(RelationType.Unrecognized(code))))
+            assertEquals(Source.Unrecognized(code), sources.of(code))
+            assertEquals(AgeRating.Unrecognized(code), ageRatings.of(code))
+            assertEquals(RelationType.Unrecognized(code), relationTypes.of(code))
         }
     }
 
