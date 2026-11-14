@@ -92,18 +92,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-04 [A] Network foundation.**
 
-- [ ] **M2-05 [A] Tokens and session.** S4 to S8. The tokens have one owner per process, through which every
-  authorised request goes; the session is signed out, signed in or expired, and has no value before the token
-  store was read. An authorised request that ends rejected is the outcome "session expired", never an exception.
-  The token answer is read as MAL's authorization reference prints it; which answers reject a refresh is settled
-  on recorded ones in M2-11. The app takes no part in cloud backup or device transfer. S7's rule (renew tokens
-  older than a set age) is here and runs when the app starts work; its periodic trigger comes with M4's
-  background work.
-  **Needs:** M2-03.
-  **Check:** tests: ten requests rejected at once cause one refresh and one retry each (S5); a rejected refresh
-  ends in expired with the tokens gone, and a temporary failure or a success without both tokens keeps them (S4,
-  S6); a write of the tokens cut at any point leaves the old or the new pair readable, and a store that cannot be
-  read is signed out (S8); a manifest test for the backup rule.
+- [x] **M2-05 [A] Tokens and session.**
 
 - [x] **M2-06 [A] List engine for a database.**
 
