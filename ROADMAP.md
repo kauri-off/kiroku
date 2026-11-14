@@ -85,16 +85,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-10 [A] Recorder for answers that need only the client id.**
 
-- [ ] **M2-11 Sign-in in the app.** The sign-in route and its view model join M2-07 to M2-08: the List's
-  signed-out state, the session banner and a title page lead to it, "Browse without an account" goes to Search, a
-  finished sign-in ends on the List. What the view model hands its route (signed in, a redirect received) is
-  state the route acts on and acknowledges, as `ShellMessages.editRequest` is. Debug and preview builds sign out
-  from the debug menu until Settings exist. The session's answers agree with the recorded invalid token and
-  rejected refresh. CI's debug build step gets the secret `MAL_CLIENT_ID` back.
-  **Needs:** M2-07, M2-08, M2-09, M2-10.
-  **Check:** tests: signed out, "Sign in" opens the screen and a finished sign-in leaves the stack at the List; a
-  result is acted on once across a recreated activity; a build without a client id shows the screen's
-  no-client-id form; the recorded rejection ends the session and the recorded invalid token leads to one refresh.
+- [x] **M2-11 Sign-in in the app.**
 
 - [ ] **M2-12 [A] Recorder for answers that need the sign-in.** A tool of debug and preview builds, opened from
   the debug menu, that sends a fixed list of requests through the app's own owner of the tokens and stores the
@@ -137,15 +128,7 @@ on the Russian strings so far are fixed.
   **Check:** tests: stored details are shown without a request while fresh; a failed refresh changes nothing
   stored and is reported; a refresh of the details does not lose a value the summary had.
 
-- [ ] **M2-18 Translated MAL values and the genre table.** Both languages for every media type, source, age
-  rating, relation, season, airing status and genre MAL uses, the genres collected by the recorder from enough
-  titles to hold them all, adult ones included. Before the Russian relation names are written they are compared
-  with the names Shikimori shows, read from the site at that time; the differences go to the owner, and a term
-  changes, in the glossary and the resources together, only on his answer.
-  **Needs:** M2-10.
-  **Check:** a test that every code and genre in the recorded answers has both translations, and that an unknown
-  one falls back as section 10 says; the pull request holds the comparison (relation, glossary, Shikimori) or
-  says the site could not be read.
+- [x] **M2-18 Translated MAL values and the genre table.**
 
 - [ ] **M2-19 List client: writing.** The rest of `RemoteList`: one entry read, set and removed, the answer
   being the entry as MAL has it afterwards; removing a title that is not on the list is a removal. The client is
