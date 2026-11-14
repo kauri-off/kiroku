@@ -19,10 +19,11 @@ MASK, NO_CLIENT_ID = "•••", "-Pkiroku.malClientId="
 ASSIGNED = re.compile(r"(?i)(client[-_.]?id=[\"']?|x-mal-client-id[\"']?\s*:\s*[\"']?)[^\s\"'&;,)]+")
 ARGUMENT = re.compile(r"(?is)(\S*client[-_.]?id=).+")
 BARE = re.compile(r"\b[0-9a-fA-F]{32}\b")
-CONTROL = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|[\x00-\x08\x0b-\x1f\x7f]")
+CONTROL = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[[0-9;?]*[A-Za-z]"
+                     r"|[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 PLAIN = re.compile(r"[\w@%+=:,./•-]+")
-OUTCOMES = {"done": ("passed", "good"), "failed": ("failed", "bad"), "cancelled": ("cancelled", "stop"),
-            "lost": ("lost", "stop")}
+OUTCOMES = {"done": ("passed", "good"), "failed": ("failed", "plain"), "cancelled": ("cancelled", "stop"),
+            "lost": ("lost", "bad")}
 
 
 def load_q():
@@ -39,16 +40,17 @@ q = load_q()
 # ---- what is shown of a job ------------------------------------------------------------------------------------
 
 def mask(text):
-    """Text with every client id replaced: one assigned by name, a MAL header's, and any bare 32 hex digits."""
-    return BARE.sub(MASK, ASSIGNED.sub(lambda m: m.group(1) + MASK, text))
+    """Text without terminal and direction controls, and with every client id replaced."""
+    return BARE.sub(MASK, ASSIGNED.sub(lambda m: m.group(1) + MASK, CONTROL.sub("", text)))
 
 
 def command(cmd, cwd):
     """A job's command for display, masked and without the wrappers' own part: in short, and whole."""
     a = []
     for x in cmd or []:
-        m = ARGUMENT.fullmatch(str(x))
-        a.append(m.group(1) + MASK if m else mask(str(x)))
+        x = CONTROL.sub("", str(x))
+        m = ARGUMENT.fullmatch(x)
+        a.append(m.group(1) + MASK if m else mask(x))
     if a[:2] == ["sh", "-c"] and a[3:4] == ["gradlew"]: a = a[3:]
     elif a[1:2] == ["_job"] and os.path.basename(a[0]) == "emu": a = ["emu"] + a[2:]
     if cwd: a = [x.replace(cwd + "/", "") for x in a]
@@ -64,7 +66,7 @@ def tail(i, lines, size):
             f.seek(max(0, end - size))
             text = f.read().decode(errors="replace").splitlines()
     except OSError: return None
-    return [mask(CONTROL.sub("", l)) for l in (text[1:] if end > size else text)[-lines:]]
+    return [mask(l) for l in (text[1:] if end > size else text)[-lines:]]
 
 
 def outcome(r):
@@ -94,7 +96,7 @@ class Log:
 
 def base(i, e, job):
     short, full = command(job.get("cmd"), e.get("cwd"))
-    return {"id": i, "kind": e.get("kind"), "label": e.get("label") or "", "worktree": q.where(e.get("cwd") or ""),
+    return {"id": i, "kind": e.get("kind"), "label": mask(e.get("label") or ""), "worktree": q.where(e.get("cwd") or ""),
             "cwd": e.get("cwd"), "cmd": short, "cmd_full": full}
 
 
@@ -123,12 +125,13 @@ def live():
         running.append({**base(i, e, q.rjson(f"{q.jdir(i)}/job.json", {})), "waited": start - e["submit"], "ran": t - start,
                         "typical": typical.get(e.get("kind")), "used": q.claimed(e), "mem": e.get("mem"),
                         "workers": e.get("workers"), "slot": e.get("slot"), "forced": bool(st.get("forced")),
-                        "stall": st.get("stall"), "gone": bool(e.get("pid")) and not q.alive(e["pid"]),
+                        "stall": st.get("stall"), "gone": q.lost(e),
                         "stopping": e.get("cancel"), "tail": last})
     for n, (i, e) in enumerate(q.order(s), 1):
         st, waited = q.rjson(f"{q.jdir(i)}/status.json", {}), t - e["submit"]
         queued.append({**base(i, e, q.rjson(f"{q.jdir(i)}/job.json", {})), "position": n, "waited": waited,
                        "why": st.get("why"), "waits_for": q.REASONS.get(st.get("why")), "stopping": e.get("cancel"),
+                       "gone": q.lost(e),
                        "keeps_place": bool(conf) and waited >= conf["patience"]})
     avail, aside = mem.get("MemAvailable", 0), sum(max(0, (r["mem"] or 0) - r["used"]) for r in running)
     slots = [None] * max([conf["slots"] if conf else 0] + [r["slot"] + 1 for r in running if r["slot"] is not None])
@@ -174,7 +177,8 @@ def history(hours, now_jobs=None):
     ended = []
     for x in reversed(hist[-ENDED_ROWS:]):
         name, tone = outcome(x)
-        ended.append({**base(x.get("id"), x, x), "end": x.get("end"), "outcome": name, "tone": tone, "rc": x.get("rc"),
+        ended.append({**base(x.get("id"), x, x), "end": x.get("end"), "outcome": name, "rc": x.get("rc"),
+                      "tone": "bad" if x.get("oom_kills") else tone,
                       "wait": x.get("wait"), "run": x.get("run"), "mem": x.get("mem"),
                       **{k: x.get(k) for k in ("peak_mib", "anon_peak_mib", "swap_peak_mib", "oom_kills", "stalled")},
                       "forced": bool(x.get("forced")), "over": bool(x.get("peak_mib") and x.get("mem") and x["peak_mib"] > x["mem"])})
@@ -234,7 +238,7 @@ def job_log(i):
     live = st.get("state") in ("queued", "running")
     lines = tail(i, TAIL_LINES, TAIL_BYTES)
     return {**base(i, job, job), "state": st.get("state"), "live": live, "stall": st.get("stall"),
-            "outcome": "stalled" if st.get("stall") else st.get("state") if live else name, "tone": "warn" if st.get("stall") else tone,
+            "outcome": "stalled" if st.get("stall") else st.get("state") if live else name, "tone": "bad" if st.get("stall") else tone,
             "summary": q.job_line(job, st).removeprefix("q: "), "path": f"{q.jdir(i)}/out.log", "lines": lines}
 
 
@@ -256,7 +260,7 @@ def kind(k, kinds):
 
 
 def badge(name, tone):
-    icon = {"good": "✓", "bad": "✕", "stop": "■", "warn": "!", "run": "▶", "wait": "…"}[tone]
+    icon = {"good": "✓", "plain": "✕", "stop": "■", "bad": "!", "run": "▶", "wait": "…"}[tone]
     return f'<span class="badge {tone}"><i>{icon}</i>{E(name)}</span>'
 
 
@@ -287,7 +291,7 @@ def table(head, rows, empty, first=None):
     if not rows: return f'<p class="none">{empty}</p>'
     head = f'<thead><tr>{"".join(f"<th{c}>{h}</th>" for h, c in head)}</tr></thead>'
     rest = rows[first:] if first else []
-    more = f'<details><summary>{len(rest)} earlier</summary><div class="scroll"><table>{head}<tbody>{"".join(rest)}</tbody></table></div></details>' if rest else ""
+    more = f'<details data-key="earlier"><summary>{len(rest)} earlier</summary><div class="scroll"><table>{head}<tbody>{"".join(rest)}</tbody></table></div></details>' if rest else ""
     return f'<div class="scroll"><table>{head}<tbody>{"".join(rows[:first])}</tbody></table></div>{more}'
 
 
@@ -324,7 +328,7 @@ def render_live(d):
         out.append(f'<p class="fits">A job submitted now: {fit}</p>')
     rows = []
     for r in d["running"]:
-        state = (badge("stalled", "warn") if r["stall"] else badge("unit gone", "bad") if r["gone"]
+        state = (badge("unit gone", "bad") if r["gone"] else badge("stalled", "bad") if r["stall"]
                  else badge("stopping", "stop") if r["stopping"] else badge("running", "run"))
         last = "".join(f"<small>{E(l)}</small>" for l in r["tail"])
         if r["stall"]: last = f'<small class="stall">{E(r["stall"].get("reason"))}; its threads: {E(r["stall"].get("threads"))}</small>' + last
@@ -335,16 +339,17 @@ def render_live(d):
                     + f'</td><td class="mem">{meter(r["used"], r["mem"], 90)}<small>{num(r["used"])} of {num(r["mem"])} MiB{notes}</small></td>{log_button(r)}</tr>')
     head = [("state", ""), ("kind", ""), ("branch, worktree", ""), ("command, last output", ""), ("waited", ' class="num"'),
             ("running", ' class="num"'), ("memory in use, declared", ""), ("", "")]
-    out.append(f'<section><h2>Running <span class="count">{len(rows)}</span></h2>{table(head, rows, "Nothing runs.")}</section>')
+    out.append(f'<section data-key="running"><h2>Running <span class="count">{len(rows)}</span></h2>{table(head, rows, "Nothing runs.")}</section>')
     rows = []
     for r in d["queued"]:
         why = E(r["waits_for"] or "its turn to be looked at") + ("<small>keeps its place: later jobs start only beside it</small>" if r["keeps_place"] else "")
-        rows.append(f'<tr data-find="{find(r, "queued waiting")}"><td>{badge("stopping" if r["stopping"] else "waiting", "stop" if r["stopping"] else "wait")}</td>'
+        state = badge("unit gone", "bad") if r["gone"] else badge("stopping", "stop") if r["stopping"] else badge("waiting", "wait")
+        rows.append(f'<tr data-find="{find(r, "queued waiting")}"><td>{state}</td>'
                     f'<td>{kind(r["kind"], kinds)}</td>{who(r)}{what(r)}<td class="num">{dur(r["waited"])}</td>'
                     f'<td class="num">{r["position"]}</td><td>{why}</td><td class="act"></td></tr>')
     head = [("state", ""), ("kind", ""), ("branch, worktree", ""), ("command", ""), ("waited", ' class="num"'), ("place", ' class="num"'),
             ("waits for", ""), ("", "")]
-    out.append(f'<section><h2>Waiting <span class="count">{len(rows)}</span></h2>{table(head, rows, "Nothing waits.")}</section>')
+    out.append(f'<section data-key="waiting"><h2>Waiting <span class="count">{len(rows)}</span></h2>{table(head, rows, "Nothing waits.")}</section>')
     return (f'<div id="live" data-log="{E(d["log"])}" data-at="{clock(d["at"])}"'
             f' data-title="{len(d["running"])} running, {len(d["queued"])} waiting">{"".join(out)}</div>')
 
@@ -395,9 +400,9 @@ def render_history(d):
     rows = []
     for r in d["ended"]:
         tags = "".join(f"<small>{t}</small>" for t in (
-            f'stalled {r["stalled"]} time{"s" if r["stalled"] != 1 else ""}' if r["stalled"] else "",
+            badge(f'stalled {r["stalled"]} time{"s" if r["stalled"] != 1 else ""}', "bad") if r["stalled"] else "",
             "started on swap" if r["forced"] else "",
-            f'the kernel killed {r["oom_kills"]} of its processes' if r["oom_kills"] else "") if t)
+            f'the kernel killed {r["oom_kills"]} of its processes for lack of memory' if r["oom_kills"] else "") if t)
         peak = "–" if r["peak_mib"] is None or not r["mem"] else (
             f'{meter(r["peak_mib"], r["mem"])}<small title="the cgroup\'s peak, file cache included'
             + (f'; {num(r["anon_peak_mib"])} MiB without it' if r["anon_peak_mib"] is not None else "")
@@ -408,12 +413,12 @@ def render_history(d):
     head = [("ended", ' class="num"'), ("how", ""), ("kind", ""), ("branch, worktree", ""), ("command", ""), ("waited", ' class="num"'),
             ("ran", ' class="num"'), ("memory peak, declared", ""), ("", "")]
     more = f"; the newest {len(rows)} are listed" if d["jobs"] > len(rows) else ""
-    out = [f'<section><h2>Ended <span class="count">{d["jobs"]}</span> <small>in {span}{more}</small></h2>{table(head, rows, f"No job ended in {span}.", ENDED_FIRST)}</section>']
+    out = [f'<section data-key="ended"><h2>Ended <span class="count">{d["jobs"]}</span> <small>in {span}{more}</small></h2>{table(head, rows, f"No job ended in {span}.", ENDED_FIRST)}</section>']
     if not d["jobs"] and not d["chart"]["running"] and not d["chart"]["waiting"]:
         return f'<div id="history" data-log="{E(d["log"])}">{out[0]}</div>'
     share = 100 * d["wait_sum"] / (d["wait_sum"] + d["run_sum"]) if d["wait_sum"] + d["run_sum"] else 0
     legend = "".join(kind(k, kinds) for k in kinds)
-    out.append(f'<section><h2>Running against waiting <small>in {span}</small></h2>'
+    out.append(f'<section data-key="shape"><h2>Running against waiting <small>in {span}</small></h2>'
                f'<p class="lead">Jobs waited <b>{dur(d["wait_sum"])}</b> and ran <b>{dur(d["run_sum"])}</b>: {share:.0f} % of their time was waiting.'
                f' Started on swap: {d["forced"]}; with processes killed for lack of memory: {d["oom"]}; stalled: {d["stalled"]}.</p>'
                f'<p class="legend">{legend}<span>jobs at once, averaged over {dur(d["chart"]["step"])}</span></p>'
@@ -422,7 +427,7 @@ def render_history(d):
     rows = [f'<tr><td class="num">{clock(h["start"], "%H:00")}</td><td class="num">{h["jobs"]}</td><td>{cell(h, "run")}</td><td>{cell(h, "wait")}</td></tr>'
             for h in d["hourly"]]
     head = [("hour", ' class="num"'), ("jobs ended", ' class="num"'), ("running, job minutes per kind", ""), ("waiting, job minutes per kind", "")]
-    out.append(f'<details><summary>The same by hour, as a table</summary>{table(head, rows, "")}</details></section>')
+    out.append(f'<details data-key="hourly"><summary>The same by hour, as a table</summary>{table(head, rows, "")}</details></section>')
     f = lambda v: "–" if v is None else f"{v:,.0f}"
     rows = [f'<tr><td>{kind(k["kind"], kinds)}</td><td class="num">{k["jobs"]}</td><td class="num">{k["passed"]}</td>'
             f'<td class="num">{dur(k["wait_sum"])}</td><td class="num">{dur(k["run_sum"])}</td>'
@@ -432,18 +437,18 @@ def render_history(d):
             f'<td class="num">{f(k["declared"])}</td><td class="num">{k["over"]}</td></tr>' for k in d["per_kind"]]
     head = [("kind", "")] + [(h, ' class="num"') for h in ("jobs", "passed", "waited in all", "ran in all", "wait p50 / p90 / max, s",
                                                            "run p50 / p90 / max, s", "peak p50 / p90 / max, MiB", "declared", "over it")]
-    out.append(f'<section><h2>Per kind <small>in {span}</small></h2>{table(head, rows, "")}</section>')
+    out.append(f'<section data-key="kinds"><h2>Per kind <small>in {span}</small></h2>{table(head, rows, "")}</section>')
     most = max([r["all"] for r in d["reasons"]] + [1])
     rows = "".join(f'<li><span>{E(r["text"])}</span><span class="meter plain"><i style="width:{100 * r["all"] / most:.1f}%"></i></span>'
                    f'<span class="num"><b>{dur(r["all"])}</b> of waiting, over {dur(r["some"])}</span></li>' for r in d["reasons"])
-    out.append(f'<section><h2>What jobs waited for <small>in {span}</small></h2>'
+    out.append(f'<section data-key="reasons"><h2>What jobs waited for <small>in {span}</small></h2>'
                + (f'<ul class="reasons">{rows}</ul>' if rows else '<p class="none">No job waited.</p>') + "</section>")
     rows = [f'<tr data-find="{E((w["label"] + " " + w["worktree"]).lower())}">{who(w)}'
             f'<td class="num">{w["jobs"]}</td><td class="num">{w["passed"]}</td><td class="num">{w["failed"]}</td>'
             f'<td class="num">{dur(w["wait_sum"])}</td><td class="num">{dur(w["run_sum"])}</td>'
             f'<td class="num">{clock(w["last"])}</td><td>{badge(w["last_outcome"], w["last_tone"])}</td></tr>' for w in d["worktrees"]]
     head = [("branch, worktree", "")] + [(h, ' class="num"') for h in ("jobs", "passed", "failed", "waited", "ran", "last ended")] + [("how", "")]
-    out.append(f'<section><h2>Worktrees <span class="count">{len(rows)}</span> <small>in {span}</small></h2>{table(head, rows, "")}</section>')
+    out.append(f'<section data-key="worktrees"><h2>Worktrees <span class="count">{len(rows)}</span> <small>in {span}</small></h2>{table(head, rows, "")}</section>')
     return f'<div id="history" data-log="{E(d["log"])}">{"".join(out)}</div>'
 
 
@@ -462,10 +467,9 @@ def page(hours, nonce):
     with open(f"{TOOLS}/qview.html") as f: text = f.read()
     now = live()
     windows = "".join(f'<a href="?h={h}"{" aria-current=true" if h == hours else ""}>{h} h</a>' for h in WINDOWS)
-    for k, v in (("nonce", nonce), ("hours", str(hours)), ("windows", windows), ("live", render_live(now)),
-                 ("history", render_history(history(hours, now["running"] + now["queued"])))):
-        text = text.replace("{{" + k + "}}", v)
-    return text
+    parts = {"nonce": nonce, "hours": str(hours), "windows": windows, "live": render_live(now),
+             "history": render_history(history(hours, now["running"] + now["queued"]))}
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: parts[m.group(1)], text)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -488,7 +492,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("Host") not in self.server.hosts: return self.answer(403, "this view answers only at its own address")
         url = urlsplit(self.path)
         ask = {k: v[-1] for k, v in parse_qs(url.query).items()}
-        hours = int(ask["h"]) if ask.get("h", "").isdigit() and int(ask["h"]) in WINDOWS else 3
+        hours = int(ask["h"]) if ask.get("h") in {str(h) for h in WINDOWS} else 3
         try:
             if url.path == "/":
                 nonce = secrets.token_urlsafe(16)

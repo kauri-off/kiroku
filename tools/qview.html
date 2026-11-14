@@ -11,7 +11,7 @@
   --axis: #c3c2b7; --border: rgba(11, 11, 11, .1);
   --k0: #898781; --k1: #2a78d6; --k2: #eb6834; --k3: #1baf7a; --k4: #eda100; --k5: #e87ba4; --k6: #008300;
   --k7: #6250d6; --k8: #e34948;
-  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --bad: #d03b3b;
+  --good: #0ca30c; --warn: #fab219; --bad: #d03b3b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -87,8 +87,8 @@ code { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .badge { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .badge i { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-style: normal;
   line-height: 1; color: #fff; background: var(--muted); }
-.badge.good i { background: var(--good); } .badge.bad i { background: var(--bad); } .badge.stop i { background: var(--serious); }
-.badge.warn i { background: var(--warn); color: #0b0b0b; } .badge.run i { background: var(--ink2); color: var(--surface); }
+.badge.good i { background: var(--good); } .badge.bad i { background: var(--bad); }
+.badge.run i, .badge.plain i { background: var(--ink2); color: var(--surface); }
 .meter { display: block; width: 100%; max-width: 150px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .meter i { display: block; height: 100%; border-radius: 3px; background: var(--ink2); }
 .meter.warn i { background: var(--warn); } .meter.over i { background: var(--bad); } .meter.plain i { background: var(--muted); }
@@ -146,6 +146,7 @@ pre { max-height: 56vh; margin: 10px 0 0; padding: 8px 10px; overflow: auto; fon
     const s = getSelection();
     return !!s && !s.isCollapsed && el.contains(s.anchorNode);
   };
+  const place = el => (el.closest("section") || el).dataset.key + "/" + ((el.closest("details") || el).dataset.key || "");
   const fragment = async url => {
     const r = await fetch(url, { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
@@ -157,9 +158,12 @@ pre { max-height: 56vh; margin: 10px 0 0; padding: 8px 10px; overflow: auto; fon
     holder.innerHTML = text;
     const fresh = holder.content.firstElementChild;
     if (!fresh || fresh.id !== id || selecting(old)) return false;
-    const open = [...old.querySelectorAll("details")].map(d => d.open);
+    const open = new Set([...old.querySelectorAll("details[open]")].map(d => d.dataset.key));
+    const left = new Map([...old.querySelectorAll(".scroll")].map(s => [place(s), s.scrollLeft]));
     old.replaceWith(fresh);
-    fresh.querySelectorAll("details").forEach((d, n) => { d.open = !!open[n]; });
+    fresh.querySelectorAll("details").forEach(d => { d.open = open.has(d.dataset.key); });
+    fresh.querySelectorAll(".scroll").forEach(s => { s.scrollLeft = left.get(place(s)) || 0; });
+    if (id === "history") tip.style.display = "none";
     return true;
   };
   const applyFilter = () => {
@@ -227,6 +231,7 @@ pre { max-height: 56vh; margin: 10px 0 0; padding: 8px 10px; overflow: auto; fon
     tip.style.left = Math.max(4, Math.min(e.clientX + 14, innerWidth - w - 4)) + "px";
     tip.style.top = Math.max(4, Math.min(e.clientY + 14, innerHeight - h - 4)) + "px";
   });
+  document.documentElement.addEventListener("pointerleave", () => { tip.style.display = "none"; });
   document.addEventListener("visibilitychange", tick);
   setInterval(tick, 2000);
   applyFilter();

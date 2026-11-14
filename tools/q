@@ -188,10 +188,15 @@ def alive(pid):
     except PermissionError: return True
 
 
+def lost(e):
+    """Whether the unit of a job in the state died or never started."""
+    return bool(e.get("pid") and not alive(e["pid"])) or (not e.get("pid") and now() - e["submit"] > 60)
+
+
 def prune(s):
     """Drops jobs whose unit died or never started, and marks them lost."""
     for i, e in list(s["jobs"].items()):
-        if (e.get("pid") and not alive(e["pid"])) or (not e.get("pid") and now() - e["submit"] > 60):
+        if lost(e):
             del s["jobs"][i]
             st, job = rjson(f"{jdir(i)}/status.json", {}), rjson(f"{jdir(i)}/job.json")
             if job and st.get("state") in ("queued", "running"):
