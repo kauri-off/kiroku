@@ -111,7 +111,7 @@ class ShellRouteTest {
         }
         compose.waitForIdle()
         shows("Page 1, 0 taps")
-        shows("Search root")
+        hides("Search root")
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
         compose.waitForIdle()
         hides("Page 1, 0 taps")

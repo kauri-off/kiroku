@@ -1,8 +1,6 @@
 package io.github.kauri_off.kiroku.shell
 
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -14,6 +12,10 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.NavigationBackHandler
+import androidx.navigation3.scene.SinglePaneSceneStrategy
+import androidx.navigation3.scene.rememberNavigationEventState
+import androidx.navigation3.scene.rememberSceneState
 import androidx.navigation3.ui.NavDisplay
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.notShown
@@ -51,6 +53,7 @@ fun ShellRoute(
             rememberSaveableStateHolderNavEntryDecorator<NavKey>(),
             rememberViewModelStoreNavEntryDecorator<NavKey>(),
         )
+    val motion = remember(navigator) { ScreenMotion(navigator) }
     val provider = entryProvider { entries(navigator, snackbars) }
     val decorated =
         Destination.entries.associateWith { destination ->
@@ -59,10 +62,21 @@ fun ShellRoute(
                     depth,
                     key,
                     ->
-                    provider(key).scopedTo(key, destination, depth, navigator)
+                    provider(key).scopedTo(key, destination, depth, navigator, motion)
                 }
             rememberDecoratedNavEntries(stack, decorators)
         }
+    // NavDisplay's own parts, so the transitions can read the back gesture's edge.
+    val sceneState =
+        rememberSceneState(
+            navigator.visible.flatMap { decorated.getValue(it) },
+            listOf(SinglePaneSceneStrategy()),
+            onBack = { navigator.back() },
+        )
+    val gesture = rememberNavigationEventState(sceneState)
+    motion.gesture = gesture
+    NavigationBackHandler(sceneState, gesture, onBackCompleted = { navigator.back() })
+    val motionScheme = MaterialTheme.motionScheme
     ShellScreen(
         state = ShellState(navigator.current),
         onEvent = { event ->
@@ -72,11 +86,11 @@ fun ShellRoute(
         },
     ) {
         NavDisplay(
-            entries = navigator.visible.flatMap { decorated.getValue(it) },
-            transitionSpec = { instant },
-            popTransitionSpec = { instant },
-            predictivePopTransitionSpec = { instant },
-            onBack = { navigator.back() },
+            sceneState,
+            gesture,
+            transitionSpec = { change(motionScheme, sceneState.currentScene, navigator.way) },
+            popTransitionSpec = { change(motionScheme, sceneState.currentScene, navigator.way) },
+            predictivePopTransitionSpec = { uncovers },
         )
     }
 }
@@ -88,13 +102,11 @@ private fun NavEntry<NavKey>.scopedTo(
     destination: Destination,
     depth: Int,
     navigator: ShellNavigator,
+    motion: ScreenMotion,
 ): NavEntry<NavKey> {
     val entry = this
     return NavEntry(key, notShown("${destination.name}/$depth/$contentKey"), metadata) {
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
-        CompositionLocalProvider(LocalOnTop provides onTop) { entry.Content() }
+        CompositionLocalProvider(LocalOnTop provides onTop) { MovingScreen(motion) { entry.Content() } }
     }
 }
-
-// Screens change without animation until the transitions of ARCHITECTURE section 8.5 are built.
-private val instant = ContentTransform(EnterTransition.None, ExitTransition.None)

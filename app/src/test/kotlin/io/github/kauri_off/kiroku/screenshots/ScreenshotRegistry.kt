@@ -1,12 +1,15 @@
 package io.github.kauri_off.kiroku.screenshots
 
 import android.graphics.Bitmap
+import android.os.Looper
 import androidx.compose.runtime.Composable
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.util.Locale
@@ -78,6 +81,10 @@ sealed class RegistryBase {
                 transitions.flatMap { renderTransition(it, shape.cases, File(outputRoot, screen)) }
         if (problems.isNotEmpty()) fail(problems.joinToString("\n"))
     }
+
+    // Robolectric drops what a test leaves on the main looper, and Compose's dispatcher then stalls in every later class.
+    @After
+    fun runMainLooper() = Shadows.shadowOf(Looper.getMainLooper()).idle()
 
     companion object {
         val isRecording: Boolean get() = System.getProperty("roborazzi.test.record") == "true"
