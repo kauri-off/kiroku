@@ -86,7 +86,12 @@ class SignInAgainstServerTest {
     // The fields of a form that is well formed: its content type, and each name once with a value.
     private fun RecordedRequest.form(): Map<String, String> {
         assertEquals("application/x-www-form-urlencoded", headers["Content-Type"])
-        val fields = body?.utf8().orEmpty().split('&').map { it.split('=') }
+        val fields =
+            body
+                ?.utf8()
+                .orEmpty()
+                .split('&')
+                .map { it.split('=') }
         for (field in fields) assertTrue("$field", field.size == 2 && field.all(String::isNotEmpty))
         val names = fields.map { URLDecoder.decode(it[0], "UTF-8") }
         assertEquals(names.distinct(), names)
@@ -209,7 +214,13 @@ class SignInAgainstServerTest {
     @Test
     fun aGrantReachesTheTokenEndpointAsAWellFormedFormWhateverItsValuesHold() =
         test {
-            val grant = mapOf("grant_type" to "authorization_code", "code" to "a+b/c=d&e f%\u00e9?#", "code_verifier" to "v-._~", "redirect_uri" to REDIRECT)
+            val grant =
+                mapOf(
+                    "grant_type" to "authorization_code",
+                    "code" to "a+b/c=d&e f%\u00e9?#",
+                    "code_verifier" to "v-._~",
+                    "redirect_uri" to REDIRECT,
+                )
             network.signIn.enqueue(answer(body = printed))
 
             endpoint.post(grant)
