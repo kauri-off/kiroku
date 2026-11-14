@@ -69,7 +69,7 @@ internal fun partialDateOf(column: String): PartialDate =
         else -> PartialDate.Day(LocalDate.parse(column))
     }
 
-// The codes of one type's values. One the app does not recognise is stored as MAL gave it, so a version that knows it reads it.
+// The codes of one type's values, MAL's own. One the app does not recognise is stored as MAL gave it, so a version that knows it reads it.
 internal class Codes<T : Any>(
     known: List<T>,
     private val unrecognized: ((String) -> T)? = null,
@@ -81,16 +81,18 @@ internal class Codes<T : Any>(
         check(values.size == known.size)
     }
 
-    fun toColumn(value: T): String = code(value)
+    // An unrecognised value under a known code is refused: it would read back as another value.
+    fun toColumn(value: T): String = code(value).also { require((values[it] ?: value) == value) }
 
     fun of(column: String): T = values[column] ?: unrecognized?.invoke(column) ?: error("No value has the stored code")
 }
 
+// Codes no recording holds: g, pg, r+, winter, dropped, spin_off, parent_story, full_story, alternative_setting, every source but four.
 internal val listStatuses =
     Codes(ListStatus.entries) {
         when (it) {
             ListStatus.Watching -> "watching"
-            ListStatus.Planned -> "planned"
+            ListStatus.Planned -> "plan_to_watch"
             ListStatus.Completed -> "completed"
             ListStatus.OnHold -> "on_hold"
             ListStatus.Dropped -> "dropped"
@@ -101,8 +103,8 @@ internal val airingStatuses =
     Codes(AiringStatus.entries) {
         when (it) {
             AiringStatus.NotYetAired -> "not_yet_aired"
-            AiringStatus.Airing -> "airing"
-            AiringStatus.Finished -> "finished"
+            AiringStatus.Airing -> "currently_airing"
+            AiringStatus.Finished -> "finished_airing"
         }
     }
 
@@ -139,8 +141,8 @@ internal val mediaTypes =
             MediaType.Ona -> "ona"
             MediaType.Special -> "special"
             MediaType.Music -> "music"
-            MediaType.Commercial -> "commercial"
-            MediaType.PromotionalVideo -> "promotional_video"
+            MediaType.Commercial -> "cm"
+            MediaType.PromotionalVideo -> "pv"
             is MediaType.Unrecognized -> it.malCode
         }
     }
@@ -171,7 +173,7 @@ internal val sources =
         when (it) {
             Source.Original -> "original"
             Source.Manga -> "manga"
-            Source.FourKomaManga -> "four_koma_manga"
+            Source.FourKomaManga -> "4_koma_manga"
             Source.WebManga -> "web_manga"
             Source.DigitalManga -> "digital_manga"
             Source.Novel -> "novel"
@@ -203,12 +205,12 @@ internal val ageRatings =
         AgeRating::Unrecognized,
     ) {
         when (it) {
-            AgeRating.AllAges -> "all_ages"
-            AgeRating.Children -> "children"
-            AgeRating.Teens13 -> "teens_13"
-            AgeRating.Violence17 -> "violence_17"
-            AgeRating.MildNudity -> "mild_nudity"
-            AgeRating.Hentai -> "hentai"
+            AgeRating.AllAges -> "g"
+            AgeRating.Children -> "pg"
+            AgeRating.Teens13 -> "pg_13"
+            AgeRating.Violence17 -> "r"
+            AgeRating.MildNudity -> "r+"
+            AgeRating.Hentai -> "rx"
             is AgeRating.Unrecognized -> it.malCode
         }
     }

@@ -34,6 +34,7 @@ class ColumnsTest {
             id = AnimeId(1),
             titles = Titles("Romaji", "English", "日本語", listOf("One", "Two, \"quoted\"")),
             posterUrl = "https://example.invalid/poster.jpg",
+            largePosterUrl = "https://example.invalid/posterl.jpg",
             mediaType = MediaType.Unrecognized("web_film"),
             airingStatus = AiringStatus.Airing,
             malEpisodes = 24,
@@ -49,6 +50,7 @@ class ColumnsTest {
             id = AnimeId(1),
             titles = Titles("Other romaji"),
             posterUrl = null,
+            largePosterUrl = null,
             mediaType = null,
             airingStatus = AiringStatus.Finished,
             malEpisodes = null,
@@ -89,26 +91,29 @@ class ColumnsTest {
         for (date in dates) assertEquals(date, partialDateOf(date.toColumn()))
     }
 
-    // The codes are the schema's: a change here is a migration.
+    // The codes are the schema's and MAL's: a change here is a migration.
     @Test
     fun `every value has the code it is stored under`() {
         assertEquals(
-            listOf("watching", "planned", "completed", "on_hold", "dropped"),
+            listOf("watching", "plan_to_watch", "completed", "on_hold", "dropped"),
             ListStatus.entries.map(listStatuses::toColumn),
         )
-        assertEquals(listOf("not_yet_aired", "airing", "finished"), AiringStatus.entries.map(airingStatuses::toColumn))
+        assertEquals(
+            listOf("not_yet_aired", "currently_airing", "finished_airing"),
+            AiringStatus.entries.map(airingStatuses::toColumn),
+        )
         assertEquals(listOf("winter", "spring", "summer", "fall"), Season.entries.map(seasons::toColumn))
         assertEquals(
-            "commercial movie music ona ova promotional_video special tv tv_special",
+            "cm movie music ona ova pv special tv tv_special",
             objectsOf(MediaType::class.java).map(mediaTypes::toColumn).sorted().joinToString(" "),
         )
         assertEquals(
-            "book card_game digital_manga four_koma_manga game light_novel manga mixed_media music novel original other " +
+            "4_koma_manga book card_game digital_manga game light_novel manga mixed_media music novel original other " +
                 "picture_book radio visual_novel web_manga web_novel",
             objectsOf(Source::class.java).map(sources::toColumn).sorted().joinToString(" "),
         )
         assertEquals(
-            "all_ages children hentai mild_nudity teens_13 violence_17",
+            "g pg pg_13 r r+ rx",
             objectsOf(AgeRating::class.java).map(ageRatings::toColumn).sorted().joinToString(" "),
         )
         assertEquals(
@@ -133,28 +138,31 @@ class ColumnsTest {
     fun `a code the app does not recognise is stored and read as MAL gave it`() {
         for (code in listOf("web_film", "?", "", "pg_13 new")) {
             assertEquals(code, mediaTypes.toColumn(MediaType.Unrecognized(code)))
+            assertEquals(code, sources.toColumn(Source.Unrecognized(code)))
+            assertEquals(code, ageRatings.toColumn(AgeRating.Unrecognized(code)))
+            assertEquals(code, relationTypes.toColumn(RelationType.Unrecognized(code)))
             assertEquals(MediaType.Unrecognized(code), mediaTypes.of(code))
-            assertEquals(Source.Unrecognized(code), sources.of(sources.toColumn(Source.Unrecognized(code))))
-            assertEquals(AgeRating.Unrecognized(code), ageRatings.of(ageRatings.toColumn(AgeRating.Unrecognized(code))))
-            assertEquals(RelationType.Unrecognized(code), relationTypes.of(relationTypes.toColumn(RelationType.Unrecognized(code))))
+            assertEquals(Source.Unrecognized(code), sources.of(code))
+            assertEquals(AgeRating.Unrecognized(code), ageRatings.of(code))
+            assertEquals(RelationType.Unrecognized(code), relationTypes.of(code))
         }
     }
 
-    // What a version that did not know a code stored is what the version that knows it stores.
     @Test
-    fun `a code stored before the app knew it is read as the value the app knows now`() {
+    fun `an unrecognised value under a known code is refused, as it would read back as another value`() {
         for (type in objectsOf(MediaType::class.java)) {
-            assertEquals(type, mediaTypes.of(mediaTypes.toColumn(MediaType.Unrecognized(mediaTypes.toColumn(type)))))
+            assertThrows(IllegalArgumentException::class.java) { mediaTypes.toColumn(MediaType.Unrecognized(mediaTypes.toColumn(type))) }
         }
         for (source in objectsOf(Source::class.java)) {
-            assertEquals(source, sources.of(sources.toColumn(Source.Unrecognized(sources.toColumn(source)))))
+            assertThrows(IllegalArgumentException::class.java) { sources.toColumn(Source.Unrecognized(sources.toColumn(source))) }
         }
         for (rating in objectsOf(AgeRating::class.java)) {
-            assertEquals(rating, ageRatings.of(ageRatings.toColumn(AgeRating.Unrecognized(ageRatings.toColumn(rating)))))
+            assertThrows(IllegalArgumentException::class.java) { ageRatings.toColumn(AgeRating.Unrecognized(ageRatings.toColumn(rating))) }
         }
         for (relation in objectsOf(RelationType::class.java)) {
-            val before = RelationType.Unrecognized(relationTypes.toColumn(relation))
-            assertEquals(relation, relationTypes.of(relationTypes.toColumn(before)))
+            assertThrows(IllegalArgumentException::class.java) {
+                relationTypes.toColumn(RelationType.Unrecognized(relationTypes.toColumn(relation)))
+            }
         }
     }
 
@@ -195,7 +203,7 @@ class ColumnsTest {
             listOf(
                 { it.copy(titles = it.titles.copy(english = null)) },
                 { it.copy(titles = it.titles.copy(japanese = null)) },
-                { it.copy(posterUrl = null) },
+                { it.copy(posterUrl = null, largePosterUrl = null) },
                 { it.copy(mediaType = null) },
                 { it.copy(malEpisodes = null) },
                 { it.copy(startDate = null) },
@@ -206,10 +214,16 @@ class ColumnsTest {
                 { it.copy(averageEpisodeDuration = null) },
             )
         assertEquals(
-            bare.toRow().copy(romaji = whole.titles.romaji, synonyms = whole.toRow().synonyms, airingStatus = "airing"),
+            bare.toRow().copy(romaji = whole.titles.romaji, synonyms = whole.toRow().synonyms, airingStatus = "currently_airing"),
             absences.fold(whole) { anime, without -> without(anime) }.toRow(),
         )
         for (without in absences) assertEquals(whole, whole.toRow().mergedWith(without(whole).toRow()).toAnime())
+    }
+
+    @Test
+    fun `a picture is one value, so a newer one without its large size does not keep the older large one`() {
+        val newer = whole.copy(posterUrl = "https://example.invalid/other.jpg", largePosterUrl = null)
+        assertEquals(newer, whole.toRow().mergedWith(newer.toRow()).toAnime())
     }
 
     @Test
