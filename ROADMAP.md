@@ -86,16 +86,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-07 [L] Sign-in screen.**
 
-- [ ] **M2-08 [A] Sign-in flow.** S1 to S4: the authorisation with PKCE in the user's browser, the redirect URI
-  as its own constant per build type (section 3.1), the redirect accepted once, only for a sign-in this app
-  started a short time ago and only with its `state`, and the exchange, which outlives the screen and the
-  process. The flow's progress and its result are state that is read and then acknowledged.
-  **Needs:** M2-04, M2-05.
-  **Check:** tests: a wrong, missing, old and repeated redirect each end in "Sign-in failed" (S3); an answer that
-  is not a success or lacks a token signs nobody in (S4); new instances over the same files, as after a process
-  death, complete a sign-in from its redirect (S2); a manifest test that each build type's filter carries its own
-  URI and that nothing else new is exported. `tools/emu run`: the redirect URI sent to the app while it is not
-  running starts it and ends in "Sign-in failed".
+- [x] **M2-08 [A] Sign-in flow.**
 
 - [ ] **M2-09 [A] Live graph and the choice of data source.** The live graph is built over `:data` with the real
   session, one file per area (session, list, titles), so a later task replaces one area without touching
