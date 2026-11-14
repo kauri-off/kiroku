@@ -67,7 +67,9 @@ reaches that job's emulator and nothing else. Never touch a virtual device outsi
 - `tools/gw [--kind test|check] <gradle arguments>` runs Gradle as a job. The default kind is `test` (one module,
   filtered tests, a few screens); use `check` for whole-project runs: the kind sets the memory the queue reserves.
   Gradle sees no device: a task that needs one (`connected…`, `install…`) runs only as
-  `tools/emu run tools/gw <task>`. Gradle managed devices are not used: they start emulators outside `tools/emu`.
+  `tools/emu run tools/gw <task>`, one module's task named in full, as in
+  `tools/emu run tools/gw :data:connectedDebugAndroidTest`. Gradle managed devices are not used: they start emulators
+  outside `tools/emu`.
 - `tools/emu run <command> [args…]` (several commands: `tools/emu run sh -c '…'`) boots Kiroku's own API 36
   emulator from a clean state in the slot the queue assigns, runs the command in the worktree with `adb` on the
   `PATH`, then stops the command and the emulator. A run takes a minute or more, so expect exit 75 at first. The
