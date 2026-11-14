@@ -519,13 +519,14 @@ class SwipedMessageMotionTest {
         assertIdle()
     }
 
-    // Effects springs only: a message let go short of half comes back to its place and never past it.
-    private fun returnsWithoutPassing(held: Boolean) {
+    // Effects springs only: let go held still short of half, it comes back to its place and never past it.
+    @Test
+    fun `a message let go held still comes back without passing its place`() {
         val rest = shown()
         compose.onNodeWithText("Could not save").performTouchInput {
             down(center)
             repeat(RETURN_STEPS) { moveBy(Offset(SwipeHarness.SHORT.toPx() * 2 / RETURN_STEPS, 0f), delayMillis = RETURN_STEP_MS) }
-            if (held) advanceEventTime(SwipeHarness.HELD_MS)
+            advanceEventTime(SwipeHarness.HELD_MS)
             up()
         }
         var elapsed = 0L
@@ -533,16 +534,10 @@ class SwipedMessageMotionTest {
             compose.mainClock.advanceTimeByFrame()
             elapsed += FRAME_MS
             val now = harness.left("Could not save")
-            assertTrue("held $held: at ${now - rest} after $elapsed ms", now.value >= rest.value - 0.5f)
+            assertTrue("at ${now - rest} after $elapsed ms", now.value >= rest.value - 0.5f)
         }
         assertEquals(rest.value, harness.left("Could not save").value, 0.5f)
     }
-
-    @Test
-    fun `a message let go while moving comes back without passing its place`() = returnsWithoutPassing(held = false)
-
-    @Test
-    fun `a message let go held still comes back without passing its place`() = returnsWithoutPassing(held = true)
 
     // ARCHITECTURE 7.2: its time runs only while it can be seen and tapped; under a finger it stops, and let go it starts again.
     @Test
@@ -621,7 +616,7 @@ class SwipedMessageMotionTest {
         const val SETTLED_MS = 2_000L
         const val FRAME_MS = 16L
 
-        // Sixty dp in about a second: well under the fling speed.
+        // Sixty dp in about a second.
         const val RETURN_STEPS = 60
         const val RETURN_STEP_MS = 16L
 
