@@ -1,3 +1,5 @@
+import java.time.Duration
+
 buildscript {
     repositories {
         google()
@@ -33,5 +35,6 @@ subprojects {
         usesService(testSlot)
         maxParallelForks = 1
         maxHeapSize = "1536m"
+        timeout = Duration.ofMinutes(10)
     }
 }
