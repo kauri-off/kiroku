@@ -80,6 +80,7 @@ inline fun AiringStatus.named(string: (Int) -> String): String =
         AiringStatus.NotYetAired -> string(R.string.common_not_yet_aired)
         AiringStatus.Airing -> string(R.string.mal_airing)
         AiringStatus.Finished -> string(R.string.mal_finished)
+        is AiringStatus.Unrecognized -> malCodeAsText(malCode)
     }
 
 // "Fall 2024": [string] reads a resource with the year.

@@ -94,6 +94,7 @@ class MalValueNamesTest {
             assertEquals("Mixed media", Source.Unrecognized("mixed_media").named(string))
             assertEquals("R18", AgeRating.Unrecognized("r18").named(string))
             assertEquals("Fan fiction", RelationType.Unrecognized("fan_fiction").named(string))
+            assertEquals("On hiatus", AiringStatus.Unrecognized("on_hiatus").named(string))
             assertEquals("Slow Life", Genre(UNKNOWN_GENRE, "Slow Life").named(string))
         }
     }

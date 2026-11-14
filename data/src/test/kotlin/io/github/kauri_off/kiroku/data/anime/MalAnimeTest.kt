@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.data.anime
 
 import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.AiringStatus
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.Broadcast
@@ -13,6 +15,8 @@ import io.github.kauri_off.kiroku.core.model.Source
 import io.github.kauri_off.kiroku.core.model.StatusCounts
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.data.network.MalFields
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
@@ -23,6 +27,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
@@ -301,5 +306,89 @@ class MalAnimeTest {
         val whole = recordedTitle("title_airing")
         val edited = recordedJson("title_airing").edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")).toTitle()
         assertEquals(whole.copy(anime = whole.anime.copy(broadcast = Broadcast(DayOfWeek.FRIDAY, null))), edited)
+    }
+
+    // Nothing fails because MAL sends a value or a shape the app does not expect: each makes its own value absent.
+    private val airing by lazy { recordedTitle("title_airing") }
+
+    private fun airingEdited(
+        vararg path: String,
+        value: JsonElement? = null,
+    ): MalTitle = recordedJson("title_airing").edited(path.toList(), value).toTitle()
+
+    private fun MalTitle.withAnime(change: Anime.() -> Anime) = copy(anime = anime.change())
+
+    private fun MalTitle.withDetails(change: AnimeDetails.() -> AnimeDetails) = copy(details = details.change())
+
+    @Test
+    fun `an airing status the app does not know is kept as MAL's code, in a title and in a related one`() {
+        assertEquals(
+            airing.withAnime { copy(airingStatus = AiringStatus.Unrecognized("on_hiatus")) },
+            airingEdited("status", value = JsonPrimitive("on_hiatus")),
+        )
+        val related = airing.details.related
+        val first = related[0].copy(anime = related[0].anime.copy(airingStatus = AiringStatus.Unrecognized("on_hiatus")))
+        assertEquals(
+            airing.withDetails { copy(related = listOf(first) + related.drop(1)) },
+            airingEdited("related_anime", "0", "node", "status", value = JsonPrimitive("on_hiatus")),
+        )
+    }
+
+    @Test
+    fun `a season the app does not know, or one without its year, is no season`() {
+        val none = airing.withDetails { copy(season = null) }
+        assertEquals(none, airingEdited("start_season", "season", value = JsonPrimitive("monsoon")))
+        assertEquals(none, airingEdited("start_season", "year"))
+    }
+
+    @Test
+    fun `a related title or a recommendation that cannot be mapped is left out, and the page shows`() {
+        val related = airing.details.related
+        assertEquals(airing.withDetails { copy(related = related.drop(1)) }, airingEdited("related_anime", "0", "node", "status"))
+        assertEquals(
+            airing.withDetails { copy(related = related.drop(1)) },
+            airingEdited("related_anime", "0", "node", "title", value = JsonPrimitive("")),
+        )
+        assertEquals(airing.withDetails { copy(related = related - related[1]) }, airingEdited("related_anime", "1", "relation_type"))
+        assertEquals(airing.withDetails { copy(recommendations = emptyList()) }, airingEdited("recommendations", "0", "node", "id"))
+    }
+
+    @Test
+    fun `a date that does not parse is no date`() {
+        assertEquals(airing.withAnime { copy(startDate = null) }, airingEdited("start_date", value = JsonPrimitive("2026-13-02")))
+        val finished = recordedTitle("title_finished")
+        assertEquals(
+            finished.withDetails { copy(endDate = null) },
+            recordedJson("title_finished").edited(listOf("end_date"), JsonPrimitive("spring")).toTitle(),
+        )
+    }
+
+    @Test
+    fun `a genre or a studio without its id or name is left out`() {
+        assertEquals(airing.withAnime { copy(genres = genres!!.drop(1)) }, airingEdited("genres", "0", "name"))
+        assertEquals(airing.withAnime { copy(genres = genres!!.drop(1)) }, airingEdited("genres", "0", "id"))
+        assertEquals(airing.withDetails { copy(studios = emptyList()) }, airingEdited("studios", "0", "name"))
+    }
+
+    @Test
+    fun `an episode count, a mean or a rank that is not a number, or out of range, is absent`() {
+        assertEquals(airing.withAnime { copy(malEpisodes = null) }, airingEdited("num_episodes", value = JsonPrimitive("12")))
+        assertEquals(airing.withAnime { copy(malEpisodes = null) }, airingEdited("num_episodes", value = JsonPrimitive(-1)))
+        assertEquals(airing.withAnime { copy(meanScore = null) }, airingEdited("mean", value = JsonPrimitive(10.5)))
+        assertEquals(airing.withAnime { copy(meanScore = null) }, airingEdited("mean", value = JsonPrimitive("8.6")))
+        assertEquals(airing.withAnime { copy(rank = null) }, airingEdited("rank", value = JsonPrimitive(0)))
+        assertEquals(airing.withAnime { copy(rank = null) }, airingEdited("rank", value = JsonNull))
+    }
+
+    // The list must keep every entry (section 2.2): its mapper fails the download on a node it cannot map.
+    @Test
+    fun `a list entry's title that cannot be mapped is an error, never left out, and one with an unknown status is kept`() {
+        val entry = recordedJson("list_public_1").getValue("data").jsonArray[0]
+        val node = entry.jsonObject.getValue("node").jsonObject
+        assertThrows(IllegalArgumentException::class.java) { node.edited(listOf("status")).toNode().toAnime() }
+        assertEquals(
+            node.toNode().toAnime().copy(airingStatus = AiringStatus.Unrecognized("on_hiatus")),
+            node.edited(listOf("status"), JsonPrimitive("on_hiatus")).toNode().toAnime(),
+        )
     }
 }

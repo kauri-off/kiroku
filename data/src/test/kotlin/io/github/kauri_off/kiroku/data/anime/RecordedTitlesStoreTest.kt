@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.anime
 
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.data.db.TestDatabases
 import io.github.kauri_off.kiroku.data.db.TitleStore
@@ -46,14 +47,15 @@ class RecordedTitlesStoreTest {
     @Test
     fun `every recorded title comes back from the store as it was mapped, an unknown code as the same code`() =
         runTest {
+            val (first, second) = recordedNodes.filter { (_, node) -> "media_type" in node }.map { it.second }.distinctBy { it["id"] }
             val unknown =
-                recordedNodes
-                    .first { (_, node) ->
-                        "media_type" in node
-                    }.second
-                    .edited(listOf("media_type"), JsonPrimitive("web_film"))
-            val titles = (listOf(unknown) + recordedNodes.map { it.second }).map { it.toNode().toAnime() }.distinctBy { it.id }
+                listOf(
+                    first.edited(listOf("media_type"), JsonPrimitive("web_film")),
+                    second.edited(listOf("status"), JsonPrimitive("on_hiatus")),
+                )
+            val titles = (unknown + recordedNodes.map { it.second }).map { it.toNode().toAnime() }.distinctBy { it.id }
             assertTrue(titles.any { it.mediaType == MediaType.Unrecognized("web_film") })
+            assertTrue(titles.any { it.airingStatus == AiringStatus.Unrecognized("on_hiatus") })
             val (store) = store()
             store.addUnknown(titles)
             for (anime in titles) assertEquals(anime, store.observeAnime(anime.id).first())
