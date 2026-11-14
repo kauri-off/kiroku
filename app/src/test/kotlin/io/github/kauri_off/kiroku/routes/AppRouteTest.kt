@@ -569,8 +569,10 @@ class AppRouteTest {
         }
         compose.waitForIdle()
         shows("My list")
-        compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().let { assertEquals(1, it.size) }
+        compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().let { assertEquals("the List under the page drew it", 0, it.size) }
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+        compose.waitForIdle()
+        compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().let { assertEquals(1, it.size) }
     }
 
     private fun plusOnTitlePage() = compose.onNode(hasContentDescription("Plus one episode") and hasClickAction()).performClick()

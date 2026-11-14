@@ -1,7 +1,9 @@
 package io.github.kauri_off.kiroku.screenshots
 
 import org.junit.runners.model.FrameworkMethod
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.internal.SandboxTestRunner
 import org.robolectric.internal.bytecode.InstrumentationConfiguration
 import org.robolectric.internal.bytecode.Interceptor
 import org.robolectric.internal.bytecode.MethodRef
@@ -31,6 +33,12 @@ class ScreenshotRunner(
     // Later interceptors take precedence, so this one replaces the stock handling of System.currentTimeMillis.
     override fun findInterceptors(): Collection<Interceptor> = super.findInterceptors() + WallClockInterceptor()
 
+    override fun getHelperTestRunner(bootstrappedTestClass: Class<*>): SandboxTestRunner.HelperTestRunner =
+        object : HelperTestRunner(bootstrappedTestClass) {
+            override fun methodBlock(method: FrameworkMethod): Statement =
+                idlingMainLooper(super.methodBlock(method), bootstrappedTestClass.classLoader)
+        }
+
     // Wall-clock calls are redirected only in instrumented code: the app, :core and the date picker's calendar.
     override fun createClassLoaderConfig(method: FrameworkMethod): InstrumentationConfiguration =
         InstrumentationConfiguration
@@ -41,6 +49,18 @@ class ScreenshotRunner(
             .doNotInstrumentPackage("io.github.kauri_off.kiroku.screenshots")
             .build()
 }
+
+// Robolectric drops what a test leaves on the main looper, and Compose's dispatcher then stalls in every later class.
+internal fun idlingMainLooper(
+    test: Statement,
+    sandbox: ClassLoader,
+): Statement =
+    object : Statement() {
+        override fun evaluate() {
+            test.evaluate()
+            Class.forName("org.robolectric.shadows.ShadowLooper", true, sandbox).getMethod("idleMainLooper").invoke(null)
+        }
+    }
 
 // Robolectric creates a second copy of the interceptor inside the sandbox, so this holds only JDK values.
 object FixedWallClock {

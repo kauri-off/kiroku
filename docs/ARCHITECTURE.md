@@ -550,9 +550,9 @@ change legible, or preventing a jump. Decoration is not a purpose.
 - **Time.** An exit is shorter than the matching entrance, and an animation settles within the bound the motion
   tests set for its spring.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
-  reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back shows where
-  Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned off,
-  every screen is complete and correct immediately. An idle screen has no animation running.
+  reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back is the
+  navigation library's preview; a cancelled gesture restores the state exactly. With the system's animations turned
+  off, every screen is complete and correct immediately. An idle screen has no animation running.
 
 A task that adds or changes an animation shows with tests that it settles within its time, that re-triggering it
 mid-flight ends in the right state, that the interaction is correct with animations off and that the idle screen has
@@ -839,7 +839,7 @@ their sizes.
 - `<case>__<variant>__strip-<n>.png`, for the content case: the `n`th horizontal strip from the top, stitched so that
   every card shows. Magenta marks a strip that changed height between pages.
 - `<case>__bounds.png`, for the content case in `en-light`: the bounds of the components, for checking alignment.
-- `<case>__<variant>__frames.png`: a transition as frames in one image (section 8.5).
+- `<transition>__<variant>__frames.png`: a transition as frames in one image (section 8.5).
 - `ACCESSIBILITY.txt`: the result of the automatic check for small touch targets and unlabeled controls, which
   fails the render.
 

@@ -226,6 +226,21 @@ fun webViewProblems(
     }
 }
 
+// ARCHITECTURE 8.5: NavDisplay runs the back gesture and previews it with its own default; no app code reads it.
+private val backGesture =
+    Regex(
+        """\b(PredictiveBackHandler|NavigationEventHandler|NavigationBackHandler|rememberNavigationEventState|""" +
+            """predictivePopTransitionSpec|PredictivePopTransitionKey|OnBackAnimationCallback|handleOnBackProgressed)\b""",
+    )
+
+fun backGestureProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (backGesture.containsMatchIn(line)) "$name:${index + 1}: the back gesture handled by the app: ${line.trim()}" else null
+    }
+
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =
     projectDir

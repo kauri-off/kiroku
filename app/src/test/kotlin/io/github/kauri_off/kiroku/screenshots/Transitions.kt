@@ -12,7 +12,8 @@ import java.io.File
 // from the first frame that moves, by default one third, two thirds and the end of [millis] (ARCHITECTURE 8.5). A
 // change that starts fast can show early moments instead. When one part reacts before the motion shown, [lead]
 // says by how long, and the moments are timed from the end of it. [content] shows the start state, then the end
-// state, in the end case's window.
+// state, in the end case's window. Its image is named after [name], the end case unless two changes end on one case.
+// [change] is made with the state, outside composition, as input makes it.
 class Transition(
     val case: String,
     val start: String,
@@ -20,6 +21,8 @@ class Transition(
     val variant: Variant = Variant.EnLight,
     val at: List<Long> = listOf(millis / 3, 2 * millis / 3, millis),
     val lead: Long = 0,
+    val name: String = case,
+    val change: () -> Unit = {},
     val content: @Composable (changed: Boolean) -> Unit,
 ) {
     init {
@@ -51,7 +54,10 @@ internal fun transitionFrames(
         // Unpaused, Robolectric runs every pending frame at once, so a whole animation would pass in one step.
         ShadowChoreographer.setPaused(true)
         try {
-            Snapshot.withMutableSnapshot { changed.value = true }
+            Snapshot.withMutableSnapshot {
+                changed.value = true
+                transition.change()
+            }
             Snapshot.sendApplyNotifications()
             // The frames are timed from the first one that differs, not from the frames it takes to start.
             var waited = 0L
@@ -83,7 +89,7 @@ internal fun renderTransition(
     dir: File,
     write: (Bitmap, File) -> Unit = Shot::write,
 ): List<String> {
-    val name = "${transition.case}__${transition.variant.id}__frames"
+    val name = "${transition.name}__${transition.variant.id}__frames"
     val end = cases.firstOrNull { it.name == transition.case } ?: return listOf("$name: there is no case '${transition.case}'")
     val window = end.window
     val result = transitionFrames(transition, window)

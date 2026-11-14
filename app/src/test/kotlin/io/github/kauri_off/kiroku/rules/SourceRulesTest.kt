@@ -336,6 +336,27 @@ class SourceRulesTest {
     }
 
     @Test
+    fun appCodeLeavesTheBackGestureToNavDisplay() {
+        val sources = appSources()
+        assertTrue(sources.any { it.path.endsWith("shell/ShellRoute.kt") })
+        assertEquals(emptyList<String>(), sources.flatMap { backGestureProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedBackGestureHandlerFails() {
+        val planted =
+            listOf(
+                "PredictiveBackHandler { progress -> progress.collect { } }",
+                "NavDisplay(entries, predictivePopTransitionSpec = { slide }, onBack = back)",
+                "val state = rememberNavigationEventState(sceneState)",
+                "NavigationBackHandler(sceneState, state, onBackCompleted = back)",
+                "metadata = mapOf(NavDisplay.PredictivePopTransitionKey to spec)",
+            )
+        for (source in planted) assertEquals(source, 1, backGestureProblems("A.kt", "val a = $source\n").size)
+        assertEquals(emptyList<String>(), backGestureProblems("A.kt", "// no PredictiveBackHandler\nBackHandler(enabled) { clear() }\n"))
+    }
+
+    @Test
     fun everySourceSetThatShipsIsScanned() {
         val scanned = appSources().map { relative(it) }
         assertTrue(scanned.any { it.startsWith("app/src/main/") })
