@@ -230,10 +230,7 @@ on the Russian strings so far are fixed.
   **Check:** the rubric on the cases; tests: a chain is walked once and read from the store afterwards; a
   failure in the chain leaves the page as it was.
 
-- [ ] **M2-28 Back gesture preview.** The back gesture shows the screen it leads to and a cancelled gesture
-  restores the screen exactly (section 8.5).
-  **Needs:** nothing.
-  **Check:** the tests and the frames image section 8.5 asks for; the owner judges the gesture on his phone.
+- [x] **M2-28 Back gesture preview.**
 
 - [x] **M2-29 Messages that are the only way back.**
 

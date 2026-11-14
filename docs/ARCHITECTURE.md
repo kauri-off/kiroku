@@ -539,18 +539,19 @@ change legible, or preventing a jump. Decoration is not a purpose.
   effects springs, because the spatial ones overshoot: fast for a change inside a component and for an exit, default
   for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
   slide with ViewPager2's snap timing, so that the gesture feels as in Droid-ify.
-- **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
-  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came, or the way they
-  were swiped. Lists have stable keys and use the list's item animation for add, remove and move, including a title
-  that joins or leaves a List tab between orderings (section 9.3), even when a data refresh brings the change.
-  Content that finishes loading fades in.
+- **Patterns.** List to title page: the Material forward transition; Back uncovers the screen under the page as it
+  slides away. Destinations of the navigation bar: fade through. Sheets, menus and snackbars enter from their edge and
+  leave the way they came, or the way they were swiped. Lists have stable keys and use the list's item animation for
+  add, remove and move, including a title that joins or leaves a List tab between orderings (section 9.3), even when a
+  data refresh brings the change. Content that finishes loading fades in.
   One thing moves per change; a container that enters brings its content with it.
 - **Time.** An exit is shorter than the matching entrance, and an animation settles within the bound the motion
   tests set for its spring.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
-  reversed mid-flight, ends in the state of the last input, and never blocks a tap. Predictive back shows where
-  Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned off,
-  every screen is complete and correct immediately. An idle screen has no animation running.
+  reversed mid-flight, ends in the state of the last input, and never blocks a tap, except that a screen that is
+  leaving takes no input until its transition settles, so no input acts on a screen being left. Predictive back shows
+  where Back leads, and a cancelled gesture restores the previous state exactly. With the system's animations turned
+  off, every screen is complete and correct immediately. An idle screen has no animation running.
 
 A task that adds or changes an animation shows with tests that it settles within its time, that re-triggering it
 mid-flight ends in the right state, that the interaction is correct with animations off and that the idle screen has
@@ -837,7 +838,7 @@ their sizes.
 - `<case>__<variant>__strip-<n>.png`, for the content case: the `n`th horizontal strip from the top, stitched so that
   every card shows. Magenta marks a strip that changed height between pages.
 - `<case>__bounds.png`, for the content case in `en-light`: the bounds of the components, for checking alignment.
-- `<case>__<variant>__frames.png`: a transition as frames in one image (section 8.5).
+- `<transition>__<variant>__frames.png`: a transition as frames in one image (section 8.5).
 - `ACCESSIBILITY.txt`: the result of the automatic check for small touch targets and unlabeled controls, which
   fails the render.
 

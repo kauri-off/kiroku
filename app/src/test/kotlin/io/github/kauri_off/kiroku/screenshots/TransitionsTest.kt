@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -86,6 +87,20 @@ class TransitionsTest {
         val led = Transition("end", "start", SETTLED, lead = FRAME) { Fading(it) }
         assertEquals(emptyList<String>(), render(led))
         assertFalse(transitionFrames(led).images[1].sameAs(transitionFrames(fading(SETTLED)).images[1]))
+    }
+
+    @Test
+    fun `a change made as input makes it shows as soon as the state it is timed from`() {
+        val shown = mutableStateOf(false)
+        val byInput = transitionFrames(Transition("end", "start", SETTLED, change = { shown.value = true }) { Fading(shown.value) })
+        assertEquals(transitionFrames(fading(SETTLED)).waited, byInput.waited)
+    }
+
+    @Test
+    fun `two changes that end on one case write two images by their names`() {
+        assertEquals(emptyList<String>(), render(fading(SETTLED)))
+        assertEquals(emptyList<String>(), render(Transition("end", "start", SETTLED, name = "end-again") { Fading(it) }))
+        assertEquals(setOf("end__en-light__frames.png", "end-again__en-light__frames.png"), written.keys)
     }
 
     private companion object {
