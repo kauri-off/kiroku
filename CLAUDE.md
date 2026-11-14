@@ -41,7 +41,7 @@ its code, assets or credentials. `clientid.txt` is the owner's: never read, prin
 ## Build and checks
 
 Run these through `tools/gw` on the maintainer's machine (next section). Elsewhere, run `./gradlew` with the same
-arguments, without `--kind …`. `tools/gw tasks` lists the tasks.
+arguments, without `tools/gw`'s options. `tools/gw tasks` lists the tasks.
 
 | Purpose | Command |
 |---|---|
@@ -55,7 +55,8 @@ arguments, without `--kind …`. `tools/gw tasks` lists the tasks.
 
 Screenshots are written to `app/build/outputs/roborazzi/<screen>/`. They are not committed. A render deletes the
 images of every screen it does not render, so render all changed screens in one command. The SDK platform the
-build needs is `platforms;android-37.2`; the client id is not needed for any check.
+build needs is `platforms;android-37.2`; the client id is not needed for any check. `tools/gw` builds without it
+unless given `--client-id`.
 
 ## The queue rule (the maintainer's machine)
 
