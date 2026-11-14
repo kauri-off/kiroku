@@ -18,6 +18,7 @@ import kotlinx.coroutines.plus
 import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 
 internal const val REDIRECT = "io.github.kauri-off.kiroku.debug://oauth"
@@ -60,14 +61,17 @@ internal class SignInFixture(
     lateinit var session: MalSession
         private set
     private var scope: CoroutineScope? = null
+    private var files: Job? = null
 
     // A plain job: an exception that leaves a coroutine of the sign-in ends it.
     fun open(
         cipher: TokenCipher = sessions.cipher,
         dispatcher: CoroutineDispatcher = Dispatchers.Default,
+        exchangeWithin: Duration = EXCHANGE_WITHIN,
     ): MalSignIn {
         session = sessions.open(cipher)
         val scope = CoroutineScope(Job() + dispatcher).also { this.scope = it }
+        val files = Job(scope.coroutineContext.job).also { this.files = it }
         val endpoint =
             TokenEndpoint { grant ->
                 sessions.grants += grant
@@ -77,14 +81,25 @@ internal class SignInFixture(
             authorize = AUTHORIZE,
             clientId = clientId,
             redirectUri = REDIRECT,
-            store = PendingStore(file, scope + Dispatchers.IO),
+            store = PendingStore(file, scope + Dispatchers.IO + files),
             endpoint = endpoint,
             signIn = session::signIn,
             clock = sessions.clock,
             scope = scope,
             unexpected = { sessions.unexpected += it },
             onFailure = { failures += it },
+            exchangeWithin = exchangeWithin,
         )
+    }
+
+    // Every start and redirect made before this call, and whatever they started, has been dealt with once it returns.
+    suspend fun idle() {
+        val work = checkNotNull(scope).coroutineContext.job
+        while (true) {
+            val running = work.children.filter { it !== files && it.isActive }.toList()
+            if (running.isEmpty()) return
+            running.forEach { it.join() }
+        }
     }
 
     suspend fun close() {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,6 +35,7 @@ private fun graph(): AppGraph = createGraph("0123abcd", Clock.systemUTC(), Corou
 class RecordingSignIn : SignIn {
     val redirects = mutableListOf<String>()
     override val step = MutableStateFlow<SignInStep>(SignInStep.None)
+    override val canStart = true
 
     override suspend fun start(browser: SignInBrowser) = Unit
 
@@ -117,6 +119,7 @@ class RedirectActivityTest {
     fun `a graph without a sign-in fails the redirect`() {
         val signIn = application.appGraph.signIn
         signIn.acknowledge(signIn.step.value)
+        assertFalse(signIn.canStart)
 
         assertTheAppCameBack(view(redirect))
 

@@ -11,6 +11,9 @@ import io.github.kauri_off.kiroku.data.session.resource
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -28,6 +31,7 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import kotlin.random.Random
 
 @RunWith(RobolectricTestRunner::class)
 class MalSignInTest {
@@ -50,11 +54,6 @@ class MalSignInTest {
     }
 
     private suspend fun session(): Session = fixture.session.observeSession().first()
-
-    // Every start and redirect before this call has been dealt with once it returns.
-    private suspend fun MalSignIn.settled() {
-        fixture.started(this)
-    }
 
     @Test
     fun aSignInOpensMalsPageWithTheBuildsRedirectAndAChallengeOfItsOwn() =
@@ -82,6 +81,7 @@ class MalSignInTest {
             assertNotEquals(first.asked("state"), second.asked("state"))
             assertNotEquals(first.asked("code_challenge"), second.asked("code_challenge"))
             assertEquals(SignInStep.None, signIn.step.value)
+            assertTrue(signIn.canStart)
             assertEquals(emptyList<Map<String, String>>(), grants.toList())
         }
 
@@ -214,7 +214,7 @@ class MalSignInTest {
             assertEquals(failed(SignInFailure.Unasked), signIn.ended())
 
             val early = fixture.started(signIn)
-            clock.advance(Duration.ofSeconds(-1))
+            clock.advance(STARTED_WITHIN.plusSeconds(1).negated())
             signIn.redirected(redirectOf(early))
             assertEquals(failed(SignInFailure.Old), signIn.ended())
             assertEquals(emptyList<Map<String, String>>(), grants.toList())
@@ -224,6 +224,58 @@ class MalSignInTest {
             clock.advance(STARTED_WITHIN)
             signIn.redirected(redirectOf(inTime))
             assertEquals(SignInStep.SignedIn, signIn.ended())
+        }
+
+    @Test
+    fun aClockSetBackALittleAfterTheStartDoesNotEndTheSignIn() =
+        test {
+            mal()
+            val signIn = fixture.open()
+            val address = fixture.started(signIn)
+            clock.advance(Duration.ofSeconds(-2))
+
+            signIn.redirected("$REDIRECT?code=$CODE&state=another")
+            assertEquals(failed(SignInFailure.WrongState), signIn.ended())
+            signIn.redirected(redirectOf(address))
+
+            assertEquals(SignInStep.SignedIn, signIn.ended())
+        }
+
+    @Test
+    fun aRedirectWithoutTheStateNeverEndsTheSignInThatWaits() =
+        test {
+            mal()
+            val signIn = fixture.open()
+            val address = fixture.started(signIn)
+            val late = STARTED_WITHIN.plusSeconds(1)
+            for (step in listOf(late, late.multipliedBy(-2))) {
+                clock.advance(step)
+                for (other in listOf("$REDIRECT?code=$CODE&state=another", "$REDIRECT?code=$CODE", "$REDIRECT?error=access_denied")) {
+                    signIn.redirected(other)
+                    assertEquals(other, failed(SignInFailure.WrongState), signIn.ended())
+                }
+            }
+            assertEquals(emptyList<Map<String, String>>(), grants.toList())
+
+            clock.advance(late)
+            signIn.redirected(redirectOf(address))
+            assertEquals(SignInStep.SignedIn, signIn.ended())
+        }
+
+    @Test
+    fun aNewSignInForgetsASuccessThatWasNotAcknowledged() =
+        test {
+            mal()
+            val signIn = fixture.open()
+            signIn.redirected(redirectOf(fixture.started(signIn)))
+            assertEquals(SignInStep.SignedIn, signIn.ended())
+
+            val address = fixture.started(signIn)
+            assertEquals(SignInStep.None, signIn.step.value)
+            signIn.redirected("$REDIRECT?error=access_denied&state=${address.asked("state")}")
+
+            assertEquals(failed(SignInFailure.Denied), signIn.ended())
+            assertEquals(1, grants.size)
         }
 
     @Test
@@ -258,10 +310,97 @@ class MalSignInTest {
 
             assertEquals(SignInStep.SignedIn, signIn.ended())
             signIn.acknowledge(SignInStep.SignedIn)
-            signIn.settled()
+            fixture.idle()
             assertEquals(SignInStep.None, signIn.step.value)
             assertEquals(emptyList<SignInFailure>(), fixture.failures.toList())
             assertEquals(1, grants.size)
+        }
+
+    @Test
+    fun aRedirectRepeatedWhileItsExchangeFailsLeavesThatFailureAndNoSigningIn() =
+        test {
+            lateinit var signIn: MalSignIn
+            lateinit var redirect: String
+            fixture.sessions.answer = {
+                signIn.redirected(redirect)
+                TokenReply.Answer(400, "no")
+            }
+            signIn = fixture.open()
+            redirect = redirectOf(fixture.started(signIn))
+
+            signIn.redirected(redirect)
+            fixture.idle()
+
+            assertEquals(failed(SignInFailure.Rejected), signIn.step.value)
+            assertEquals(listOf(SignInFailure.Rejected), fixture.failures.toList())
+            assertEquals(1, grants.size)
+        }
+
+    @Test
+    fun whateverRedirectsArriveWhenTheSignInLeavesBeingCompleted() =
+        test {
+            val random = Random(20261114)
+            val signIn = fixture.open()
+            repeat(100) { round ->
+                val granting = random.nextBoolean()
+                val after = random.nextLong(3)
+                fixture.sessions.answer = {
+                    delay(after)
+                    if (granting) granted("access-$round", "refresh-$round") else TokenReply.Answer(400, "no")
+                }
+                val redirect = redirectOf(fixture.started(signIn))
+                val arriving =
+                    listOf(
+                        redirect,
+                        redirect,
+                        "$REDIRECT?code=$CODE&state=another",
+                        "",
+                        redirect,
+                    ).map { it to random.nextLong(4) }
+                coroutineScope {
+                    for ((uri, wait) in arriving) {
+                        launch(Dispatchers.Default) {
+                            delay(wait)
+                            signIn.redirected(uri)
+                        }
+                    }
+                }
+                fixture.idle()
+
+                val end = signIn.step.value
+                if (granting) {
+                    assertEquals(
+                        "round $round",
+                        SignInStep.SignedIn,
+                        end,
+                    )
+                } else {
+                    assertTrue("round $round: $end", end is SignInStep.Failed)
+                }
+                assertEquals(granting, session() is Session.SignedIn)
+                assertEquals(round + 1, grants.size)
+                signIn.acknowledge(end)
+                assertEquals(SignInStep.None, signIn.step.value)
+                fixture.session.signOut()
+            }
+        }
+
+    @Test
+    fun aTokenRequestThatGetsNoAnswerIsGivenUpAndTheSignInFails() =
+        test {
+            fixture.sessions.answer = { awaitCancellation() }
+            val signIn = fixture.open(exchangeWithin = Duration.ofMillis(200))
+            val redirect = redirectOf(fixture.started(signIn))
+
+            signIn.redirected(redirect)
+            signIn.redirected(redirect)
+
+            assertEquals(failed(SignInFailure.NoTokens), signIn.ended())
+            assertEquals(Session.SignedOut, session())
+            assertEquals(emptyList<String>(), fixture.sessions.reported)
+            mal()
+            signIn.redirected(redirectOf(fixture.started(signIn)))
+            assertEquals(SignInStep.SignedIn, signIn.ended())
         }
 
     @Test
@@ -273,7 +412,7 @@ class MalSignInTest {
             assertEquals(SignInStep.SignedIn, signIn.ended())
 
             signIn.redirected("$REDIRECT?code=$CODE&state=any")
-            signIn.settled()
+            fixture.idle()
 
             assertEquals(listOf(SignInFailure.Unasked), fixture.failures.toList())
             assertEquals(SignInStep.SignedIn, signIn.step.value)
@@ -410,6 +549,7 @@ class MalSignInTest {
         test {
             fixture.clientId = " "
             val signIn = fixture.open()
+            assertFalse(signIn.canStart)
 
             signIn.start(fixture.browser)
 

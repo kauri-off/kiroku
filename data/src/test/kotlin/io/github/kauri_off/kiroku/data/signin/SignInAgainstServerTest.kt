@@ -73,7 +73,7 @@ class SignInAgainstServerTest {
     }
 
     private val signIn by lazy {
-        malSignIn(File(directory, "sign-in"), REDIRECT, network.http, session, network.clock, scope, { network.unexpected += it }) {
+        malSignIn(File(directory, "session"), REDIRECT, network.http, session, network.clock, scope, { network.unexpected += it }) {
             failures += it
         }
     }
@@ -118,8 +118,11 @@ class SignInAgainstServerTest {
             val address = browser.opened.single()
             assertEquals(network.signIn.url("/v1/oauth2/authorize").toString(), address.substringBefore('?'))
             assertEquals(CLIENT_ID, address.asked("client_id"))
+            assertTrue(File(directory, "session.sign-in").length() > 0)
             signIn.redirected(redirectOf(address))
             assertEquals(SignInStep.SignedIn, signIn.ended())
+            assertEquals(0, File(directory, "session.sign-in").length())
+            assertEquals(setOf("session", "session.sign-in"), directory.list().orEmpty().toSet())
 
             val token = network.signIn.received()
             assertEquals("POST /v1/oauth2/token", "${token.method} ${token.url.encodedPath}")

@@ -59,15 +59,7 @@ class CustomTabBrowserTest {
         assertEquals(address, started.dataString)
         assertNull(started.`package`)
         assertNull(started.component)
-    }
-
-    @Test
-    fun fromOutsideAnActivityThePageOpensInATaskOfItsOwn() {
-        assertTrue(CustomTabBrowser(application).open(address))
-
-        val started = shadowOf(application).nextStartedActivity
-        assertEquals(address, started.dataString)
-        assertTrue(started.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        assertEquals(0, started.flags and Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     @Test

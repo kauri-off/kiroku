@@ -59,6 +59,9 @@ sealed interface SignInStep {
 
 // The sign-in with MAL (S1 to S4), which outlives every screen.
 interface SignIn {
+    // Whether this data source can sign in at all; without it [start] only fails.
+    val canStart: Boolean
+
     val step: StateFlow<SignInStep>
 
     // Starts a sign-in and opens its page; an earlier failure is forgotten.
@@ -77,6 +80,7 @@ class NoSignIn(
 ) : SignIn {
     private val state = MutableStateFlow<SignInStep>(SignInStep.None)
     override val step = state.asStateFlow()
+    override val canStart = false
 
     override suspend fun start(browser: SignInBrowser) = failed()
 

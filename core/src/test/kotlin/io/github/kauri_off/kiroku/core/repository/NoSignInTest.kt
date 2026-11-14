@@ -19,6 +19,7 @@ class NoSignInTest {
                 true
             }
             assertFalse(opened)
+            assertFalse(signIn.canStart)
             assertEquals(unavailable, signIn.step.value)
             assertEquals(listOf(SignInFailure.Unavailable), reported)
         }

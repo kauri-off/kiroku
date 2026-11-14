@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.signin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.io.File
 
 class RedirectValuesTest {
     private fun values(uri: String) = redirectValues(uri, REDIRECT)
@@ -13,7 +14,14 @@ class RedirectValuesTest {
         assertEquals(mapOf("code" to "c", "state" to "s"), values("$REDIRECT/?code=c&state=s"))
         assertEquals(mapOf("code" to "c", "state" to "s"), values("$REDIRECT?code=c&state=s#_=_"))
         assertEquals(mapOf("error" to "access_denied", "state" to ""), values("$REDIRECT?error=access_denied&state"))
+        assertEquals(mapOf("code" to "a b", "state" to "s"), values("$REDIRECT?code=a+b&state=s"))
         assertEquals(emptyMap<String, String>(), values(REDIRECT))
+    }
+
+    @Test
+    fun theWaitingSignInIsKeptBesideItsSessionsFileUnderItsName() {
+        assertEquals(File("/data/no_backup/mal-session.sign-in"), pendingFile(File("/data/no_backup/mal-session")))
+        assertEquals(File("/data/no_backup/sandbox-session.sign-in"), pendingFile(File("/data/no_backup/sandbox-session")))
     }
 
     @Test

@@ -601,7 +601,77 @@ abstract class VerifyShortcuts : DefaultTask() {
     }
 }
 
-// One activity takes the redirect registered with MAL for the build type, and no component is newly open to other apps.
+// What a merged manifest gets wrong about its build type's redirect, registered with MAL; nothing when it is right.
+object RedirectRule {
+    const val ANDROID = "http://schemas.android.com/apk/res/android"
+    const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
+    const val VIEW = "android.intent.action.VIEW"
+    const val DEFAULT = "android.intent.category.DEFAULT"
+    const val BROWSABLE = "android.intent.category.BROWSABLE"
+    private val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
+
+    // An intent filter: its actions and categories, the attributes of each of its data elements, and whatever else it holds.
+    data class Filter(
+        val actions: List<String>,
+        val categories: Set<String>,
+        val data: List<Map<String, String>>,
+        val other: List<String> = emptyList(),
+    )
+
+    fun parse(manifest: File): org.w3c.dom.Document =
+        javax.xml.parsers.DocumentBuilderFactory
+            .newInstance()
+            .apply { isNamespaceAware = true }
+            .newDocumentBuilder()
+            .parse(manifest)
+
+    // Only a filter with data or the browser's category takes an address; one activity may have one, and it is this one.
+    fun problems(
+        manifest: org.w3c.dom.Document,
+        redirect: String,
+        alsoExported: Set<String>,
+    ): List<String> {
+        val components = COMPONENTS.flatMap { manifest.getElementsByTagName(it).elements() }
+        val takers =
+            components
+                .filter { component ->
+                    component.filters().any { BROWSABLE in it.categories || it.data.isNotEmpty() || it.other.isNotEmpty() }
+                }.map { it.name() }
+        val own = components.filter { it.name() == ACTIVITY }.flatMap { it.filters() }
+        val browser =
+            Filter(
+                listOf(VIEW),
+                setOf(DEFAULT, BROWSABLE),
+                listOf(mapOf("scheme" to redirect.substringBefore("://"), "host" to redirect.substringAfter("://"))),
+            )
+        val exported = components.filter { it.getAttributeNS(ANDROID, "exported") == "true" }.mapTo(mutableSetOf()) { it.name() }
+        return listOfNotNull(
+            "Addresses are taken by $takers, not by $ACTIVITY alone".takeIf { takers != listOf(ACTIVITY) },
+            "$ACTIVITY takes $own, not $redirect from a browser and nothing else".takeIf { own != listOf(browser) },
+            "Other apps can start $exported, not ${alsoExported + ACTIVITY}".takeIf { exported != alsoExported + ACTIVITY },
+        )
+    }
+
+    private fun org.w3c.dom.NodeList.elements() = (0 until length).map { item(it) as org.w3c.dom.Element }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(ANDROID, "name")
+
+    private fun org.w3c.dom.Element.filters(): List<Filter> =
+        getElementsByTagName("intent-filter").elements().map { filter ->
+            val parts = filter.getElementsByTagName("*").elements().groupBy { it.tagName }
+            Filter(
+                actions = parts["action"].orEmpty().map { it.name() },
+                categories = parts["category"].orEmpty().mapTo(mutableSetOf()) { it.name() },
+                data =
+                    parts["data"].orEmpty().map { data ->
+                        (0 until data.attributes.length).map { data.attributes.item(it) }.associate { it.localName to it.nodeValue }
+                    },
+                other = (parts.keys - setOf("action", "category", "data")).sorted(),
+            )
+        }
+}
+
+// The redirect activity alone takes an address, the build type's redirect from a browser, and nothing else is newly exported.
 abstract class VerifyRedirect : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -618,53 +688,155 @@ abstract class VerifyRedirect : DefaultTask() {
 
     @TaskAction
     fun verify() {
-        val document =
-            javax.xml.parsers.DocumentBuilderFactory
-                .newInstance()
-                .apply { isNamespaceAware = true }
-                .newDocumentBuilder()
-                .parse(manifest.get().asFile)
-        val components = COMPONENTS.flatMap { document.getElementsByTagName(it).elements() }
-        val scheme = redirect.get().substringBefore("://")
-        val takers = components.filter { component -> component.filters().any { filter -> filter.any { it.endsWith(" scheme=$scheme") } } }
-        val filter =
-            listOf(
-                "action $VIEW",
-                "category $DEFAULT",
-                "category $BROWSABLE",
-                "data host=${redirect.get().substringAfter("://")} scheme=$scheme",
-            )
-        check(takers.map { it.name() } == listOf(ACTIVITY) && takers.single().filters() == listOf(filter)) {
-            "${redirect.get()} is taken by ${takers.map { it.name() to it.filters() }}, not by $ACTIVITY from a browser alone"
-        }
-        val exported = components.filter { it.getAttributeNS(ANDROID, "exported") == "true" }.mapTo(mutableSetOf()) { it.name() }
-        check(exported == alsoExported.get() + ACTIVITY) {
-            "Other apps can start $exported, not ${alsoExported.get() + ACTIVITY}"
-        }
-        report.get().asFile.writeText("$ACTIVITY takes ${redirect.get()}; exported: $exported\n")
+        val problems = RedirectRule.problems(RedirectRule.parse(manifest.get().asFile), redirect.get(), alsoExported.get())
+        check(problems.isEmpty()) { problems.joinToString("\n") }
+        report.get().asFile.writeText(
+            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}; exported besides it: ${alsoExported.get()}\n",
+        )
     }
+}
 
-    private fun org.w3c.dom.NodeList.elements() = (0 until length).map { item(it) as org.w3c.dom.Element }
+// Holds the rule above to a manifest made wrong in one way at a time: each way has to be a problem.
+abstract class VerifyRedirectRule : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
 
-    private fun org.w3c.dom.Element.name() = getAttributeNS(ANDROID, "name")
+    @get:Input
+    abstract val redirect: Property<String>
 
-    // Each intent filter as its actions, categories and data, in the manifest's order.
-    private fun org.w3c.dom.Element.filters(): List<List<String>> =
-        getElementsByTagName("intent-filter").elements().map { filter ->
-            filter.getElementsByTagName("*").elements().map { part ->
-                val attributes = (0 until part.attributes.length).map { part.attributes.item(it) }
-                val values = attributes.map { if (part.tagName == "data") "${it.localName}=${it.nodeValue}" else it.nodeValue }
-                "${part.tagName} ${values.sorted().joinToString(" ")}"
+    @get:Input
+    abstract val alsoExported: SetProperty<String>
+
+    @get:Input
+    abstract val launcher: Property<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val scheme = redirect.get().substringBefore("://")
+        val host = redirect.get().substringAfter("://")
+        val takes = mapOf("scheme" to scheme)
+
+        // A second filter on the launcher, which is exported already, or the same filter on a component of its own.
+        val seconds: Map<String, List<Map<String, String>>> =
+            mapOf(
+                "the scheme alone" to listOf(takes),
+                "the scheme and the host" to listOf(takes + ("host" to host)),
+                "the scheme in other letters" to listOf(mapOf("scheme" to scheme.uppercase())),
+                "any host" to listOf(takes + ("host" to "*")),
+                "a host suffix" to listOf(takes + ("host" to "*.$host")),
+                "ssp" to listOf(takes + ("ssp" to "//$host")),
+                "sspPrefix" to listOf(takes + ("sspPrefix" to "//$host")),
+                "sspPattern" to listOf(takes + ("sspPattern" to "//.*")),
+                "sspAdvancedPattern" to listOf(takes + ("sspAdvancedPattern" to "//[a-z]+")),
+                "path" to listOf(takes + ("host" to host) + ("path" to "/")),
+                "pathPrefix" to listOf(takes + ("host" to host) + ("pathPrefix" to "/")),
+                "pathPattern" to listOf(takes + ("pathPattern" to ".*")),
+                "pathSuffix" to listOf(takes + ("pathSuffix" to "x")),
+                "a port" to listOf(takes + ("host" to host) + ("port" to "80")),
+                "mimeType" to listOf(takes + ("mimeType" to "*/*")),
+                "the scheme and the host in two elements" to listOf(takes, mapOf("host" to host)),
+                "the scheme beside another" to listOf(mapOf("scheme" to "https"), takes),
+            )
+        val wrong = mutableMapOf<String, (org.w3c.dom.Document) -> Unit>()
+        for ((name, data) in seconds) {
+            wrong["a second filter with $name"] = { it.component("activity", launcher.get()).filter(data) }
+            for (kind in listOf("activity", "activity-alias", "service", "receiver")) {
+                wrong["another $kind with $name"] = { it.added(kind).filter(data) }
             }
         }
+        val web = listOf(mapOf("scheme" to "https", "host" to "myanimelist.net"))
+        wrong["a second filter for a web address from a browser"] = { it.component("activity", launcher.get()).filter(web) }
+        wrong["a second filter for a web address"] = { it.component("activity", launcher.get()).filter(web, browsable = false) }
+        wrong["a second filter with a type alone"] =
+            { it.component("activity", launcher.get()).filter(listOf(mapOf("mimeType" to "*/*")), browsable = false) }
+        wrong["a second filter with the browser's category and no data"] = { it.component("activity", launcher.get()).filter(emptyList()) }
+        val own: (org.w3c.dom.Document) -> org.w3c.dom.Element = { it.component("activity", RedirectRule.ACTIVITY) }
+        val ownFilter: (
+            org.w3c.dom.Document,
+        ) -> org.w3c.dom.Element = { own(it).getElementsByTagName("intent-filter").item(0) as org.w3c.dom.Element }
+        val ownData: (
+            org.w3c.dom.Document,
+        ) -> org.w3c.dom.Element = { ownFilter(it).getElementsByTagName("data").item(0) as org.w3c.dom.Element }
+        wrong["the redirect activity with a second filter"] =
+            { own(it).filter(listOf(mapOf("scheme" to "https", "host" to "myanimelist.net"))) }
+        wrong["its filter with a second scheme"] = { ownFilter(it).addData(mapOf("scheme" to "https")) }
+        wrong["its filter with another action"] = { ownFilter(it).named("action", "android.intent.action.SEND") }
+        wrong["its filter with another category"] = { ownFilter(it).named("category", "android.intent.category.LAUNCHER") }
+        wrong["its filter with another element"] = { ownFilter(it).appendChild(it.createElement("uri-relative-filter-group")) }
+        wrong["its filter without the browser's category"] = { document ->
+            val categories = ownFilter(document).getElementsByTagName("category")
+            val browsable =
+                (0 until categories.length).map { categories.item(it) as org.w3c.dom.Element }.single {
+                    it.name() ==
+                        RedirectRule.BROWSABLE
+                }
+            browsable.parentNode.removeChild(browsable)
+        }
+        for (attribute in listOf("path", "pathPattern", "port", "mimeType", "sspPrefix")) {
+            wrong["its data with $attribute"] = { ownData(it).setAttributeNS(RedirectRule.ANDROID, "android:$attribute", "1") }
+        }
+        wrong["its data with another host"] = { ownData(it).setAttributeNS(RedirectRule.ANDROID, "android:host", "${host}2") }
+        wrong["its data with another scheme"] = { ownData(it).setAttributeNS(RedirectRule.ANDROID, "android:scheme", "$scheme.x") }
+        wrong["the redirect activity not exported"] = { own(it).setAttributeNS(RedirectRule.ANDROID, "android:exported", "false") }
+        wrong["no redirect activity"] = { own(it).let { activity -> activity.parentNode.removeChild(activity) } }
+        wrong["another exported activity"] = { it.added("activity").setAttributeNS(RedirectRule.ANDROID, "android:exported", "true") }
+        wrong["another exported provider"] = { it.added("provider").setAttributeNS(RedirectRule.ANDROID, "android:exported", "true") }
 
-    private companion object {
-        const val ANDROID = "http://schemas.android.com/apk/res/android"
-        const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
-        const val VIEW = "android.intent.action.VIEW"
-        const val DEFAULT = "android.intent.category.DEFAULT"
-        const val BROWSABLE = "android.intent.category.BROWSABLE"
-        val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
+        fun problems(change: (org.w3c.dom.Document) -> Unit): List<String> =
+            RedirectRule.problems(RedirectRule.parse(manifest.get().asFile).also(change), redirect.get(), alsoExported.get())
+        check(problems {}.isEmpty()) { "The manifest as it is: ${problems {}}" }
+        val passed = wrong.filterValues { problems(it).isEmpty() }.keys
+        check(passed.isEmpty()) { "The redirect check lets these wrong manifests pass: $passed" }
+        report.get().asFile.writeText(wrong.keys.joinToString("\n", postfix = "\n"))
+    }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(RedirectRule.ANDROID, "name")
+
+    private fun org.w3c.dom.Document.component(
+        kind: String,
+        name: String,
+    ): org.w3c.dom.Element {
+        val all = getElementsByTagName(kind)
+        return (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.single { it.name() == name }
+    }
+
+    // A component of the test's own, not exported.
+    private fun org.w3c.dom.Document.added(kind: String): org.w3c.dom.Element {
+        val component = createElement(kind)
+        component.setAttributeNS(RedirectRule.ANDROID, "android:name", "io.github.kauri_off.kiroku.Planted")
+        component.setAttributeNS(RedirectRule.ANDROID, "android:exported", "false")
+        getElementsByTagName("application").item(0).appendChild(component)
+        return component
+    }
+
+    private fun org.w3c.dom.Element.named(
+        tag: String,
+        name: String,
+    ) {
+        appendChild(ownerDocument.createElement(tag).also { it.setAttributeNS(RedirectRule.ANDROID, "android:name", name) })
+    }
+
+    private fun org.w3c.dom.Element.addData(attributes: Map<String, String>) {
+        val data = ownerDocument.createElement("data")
+        attributes.forEach { (name, value) -> data.setAttributeNS(RedirectRule.ANDROID, "android:$name", value) }
+        appendChild(data)
+    }
+
+    // A filter for a view from a browser with these data elements.
+    private fun org.w3c.dom.Element.filter(
+        data: List<Map<String, String>>,
+        browsable: Boolean = true,
+    ) {
+        val filter = ownerDocument.createElement("intent-filter")
+        appendChild(filter)
+        filter.named("action", RedirectRule.VIEW)
+        filter.named("category", RedirectRule.DEFAULT)
+        if (browsable) filter.named("category", RedirectRule.BROWSABLE)
+        data.forEach { filter.addData(it) }
     }
 }
 
@@ -675,28 +847,39 @@ val registeredRedirects =
         "debug" to "io.github.kauri-off.kiroku.debug://oauth",
         "preview" to "io.github.kauri-off.kiroku.preview://oauth",
     )
-val launcher = "io.github.kauri_off.kiroku.MainActivity"
+val launcherActivity = "io.github.kauri_off.kiroku.MainActivity"
 val scenarioTile = "io.github.kauri_off.kiroku.scenario.ScenarioTile"
 val profileInstaller = "androidx.profileinstaller.ProfileInstallReceiver"
 val composePreview = "androidx.compose.ui.tooling.PreviewActivity"
 val exportedBesidesTheRedirect =
     mapOf(
-        "release" to setOf(launcher, profileInstaller),
-        "debug" to setOf(launcher, profileInstaller, scenarioTile, composePreview),
-        "preview" to setOf(launcher, profileInstaller, scenarioTile),
+        "release" to setOf(launcherActivity, profileInstaller),
+        "debug" to setOf(launcherActivity, profileInstaller, scenarioTile, composePreview),
+        "preview" to setOf(launcherActivity, profileInstaller, scenarioTile),
     )
 
 androidComponents {
     onVariants { variant ->
         val name = variant.name.replaceFirstChar { it.uppercase() }
-        val redirect =
+        val verified =
             tasks.register<VerifyRedirect>("verify${name}Redirect") {
                 manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
                 redirect.set(registeredRedirects.getValue(variant.buildType!!))
                 alsoExported.set(exportedBesidesTheRedirect.getValue(variant.buildType!!))
                 report.set(layout.buildDirectory.file("reports/redirect-${variant.name}.txt"))
             }
-        tasks.named { it == "assemble$name" }.configureEach { dependsOn(redirect) }
+        tasks.named { it == "assemble$name" || it == "test" }.configureEach { dependsOn(verified) }
+        if (variant.buildType == "debug") {
+            val rule =
+                tasks.register<VerifyRedirectRule>("verifyRedirectRule") {
+                    manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                    redirect.set(registeredRedirects.getValue("debug"))
+                    alsoExported.set(exportedBesidesTheRedirect.getValue("debug"))
+                    launcher.set(launcherActivity)
+                    report.set(layout.buildDirectory.file("reports/redirect-rule.txt"))
+                }
+            tasks.named { it == "assembleDebug" || it == "test" }.configureEach { dependsOn(rule) }
+        }
     }
     onVariants { variant ->
         if (variant.buildType !in setOf("debug", "preview")) return@onVariants
