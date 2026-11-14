@@ -21,22 +21,30 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.AppBarWithSearch
-import androidx.compose.material3.ExpandedFullScreenSearchBar
+import androidx.compose.material3.ExpandedFullScreenContainedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBarColors
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSearchBarState
+import androidx.compose.material3.TextFieldColors
+import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -55,7 +63,6 @@ import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
-import kotlinx.coroutines.launch
 
 // Search of ARCHITECTURE section 9.6: the stock search bar, which opens the full-screen search view to type in. Both
 // show what the state holds for the field's text: the recent searches and the browse lists before a query, then the
@@ -67,22 +74,20 @@ fun SearchScreen(
     onEvent: (SearchEvent) -> Unit,
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
-    bar: SearchBarState = rememberSearchBarState(if (state.expanded) SearchBarValue.Expanded else SearchBarValue.Collapsed),
+    rememberBar: @Composable () -> SearchBarState = {
+        rememberContainedSearchBarState(if (state.expanded) SearchBarValue.Expanded else SearchBarValue.Collapsed)
+    },
 ) {
     BackHandler(enabled = state.query.text.isNotEmpty()) { onEvent(SearchEvent.Clear) }
-    // Leaving for another screen closes the search view at once, so Back returns to the results under the bar.
-    val scope = rememberCoroutineScope()
+    // Leaving for another screen closes the view at once: a new, closed bar replaces the open one.
+    var bars by rememberSaveable { mutableIntStateOf(0) }
+    val bar = key(bars) { rememberBar() }
     val events: (SearchEvent) -> Unit = { event ->
-        if (event is SearchEvent.Open || event is SearchEvent.Browse) {
-            scope.launch {
-                bar.snapTo(COLLAPSED)
-                onEvent(event)
-            }
-        } else {
-            onEvent(event)
-        }
+        if (event is SearchEvent.Open || event is SearchEvent.Browse) bars++
+        onEvent(event)
     }
-    val field = @Composable { SearchField(state.query, bar, events) }
+    val colors = SearchBarDefaults.containedColors(bar)
+    val field = @Composable { SearchField(state.query, bar, colors.inputFieldColors, events) }
     Scaffold(
         modifier = modifier,
         // The bar's own container is clear; this one hides the rows that scroll under it, up to the screen's top edge.
@@ -97,6 +102,7 @@ fun SearchScreen(
                         AppBarWithSearch(
                             state = bar,
                             inputField = field,
+                            colors = SearchBarDefaults.appBarWithSearchColors(searchBarColors = colors),
                             windowInsets = SearchBarDefaults.windowInsets.only(WindowInsetsSides.Top),
                             modifier = Modifier.widthIn(max = Sizes.contentMaxWidth),
                             contentPadding = PaddingValues(horizontal = Spacing.s),
@@ -108,25 +114,26 @@ fun SearchScreen(
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        Body(state.content, events, padding)
+        Body(state.content, events, padding, ListItemDefaults.colors())
     }
-    // The view's rows are list items on the surface, as under the bar, so the view is the surface too.
-    ExpandedFullScreenSearchBar(
-        state = bar,
-        inputField = field,
-        colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
+    // The field itself moves from the bar into the view, whose own container fades in behind it.
+    ExpandedFullScreenContainedSearchBar(state = bar, inputField = field, colors = colors) {
         WindowWithoutAutofill()
         // The view already keeps its content clear of the navigation bar and the keyboard.
-        Body(state.content, events, PaddingValues())
+        Body(state.content, events, PaddingValues(), viewRows(colors))
     }
 }
+
+// The view's rows lie on the view's container.
+@Composable
+private fun viewRows(colors: SearchBarColors): ListItemColors = ListItemDefaults.colors(containerColor = colors.containerColor)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SearchField(
     query: TextFieldState,
     bar: SearchBarState,
+    colors: TextFieldColors,
     onEvent: (SearchEvent) -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
@@ -134,6 +141,7 @@ private fun SearchField(
     SearchBarDefaults.InputField(
         textFieldState = query,
         searchBarState = bar,
+        colors = colors,
         onSearch = {
             keyboard?.hide()
             onEvent(SearchEvent.Submit)
@@ -170,21 +178,23 @@ private fun Body(
     content: SearchContent,
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
+    rows: ListItemColors,
 ) {
     when (content) {
-        is SearchContent.Start -> CentredList(padding) { start(content.recent, onEvent) }
-        is SearchContent.Results -> Results(content, onEvent, padding)
+        is SearchContent.Start -> CentredList(padding) { start(content.recent, onEvent, rows) }
+        is SearchContent.Results -> Results(content, onEvent, padding, rows)
     }
 }
 
 private fun LazyListScope.start(
     recent: List<String>,
     onEvent: (SearchEvent) -> Unit,
+    rows: ListItemColors,
 ) {
     if (recent.isNotEmpty()) {
         item(key = RECENT, contentType = HEADER) { SectionHeader(stringResource(R.string.search_recent)) }
         items(recent, key = { it }, contentType = { LINK }) { query ->
-            ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, content = { Text(query) })
+            ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
         }
     }
     item(key = BROWSE, contentType = HEADER) {
@@ -192,7 +202,7 @@ private fun LazyListScope.start(
         SectionHeader(stringResource(R.string.search_browse), gap)
     }
     items(browseLists, key = { it }, contentType = { LINK }) { list ->
-        LinkRow(browseName(list)) { onEvent(SearchEvent.Browse(list)) }
+        LinkRow(browseName(list), rows) { onEvent(SearchEvent.Browse(list)) }
     }
 }
 
@@ -203,12 +213,13 @@ private fun Results(
     content: SearchContent.Results,
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
+    rows: ListItemColors,
 ) {
     val openId = content.openId
     val results = content.results
     if (results is Paged.Shown && results.items.isNotEmpty()) {
         CentredList(padding) {
-            if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent) }
+            if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent, rows) }
             pagedRows(
                 content.query,
                 results.items,
@@ -217,6 +228,7 @@ private fun Results(
                 onOpen = { onEvent(SearchEvent.Open(it)) },
                 onLoadMore = { onEvent(SearchEvent.LoadMore) },
                 onRetry = { onEvent(SearchEvent.Retry) },
+                colors = rows,
             )
         }
         return
@@ -232,7 +244,7 @@ private fun Results(
         }
     Centred(padding) {
         Column(Modifier.fillMaxSize()) {
-            if (openId != null) OpenIdRow(openId, onEvent)
+            if (openId != null) OpenIdRow(openId, onEvent, rows)
             ScreenState(state, Modifier.weight(1f))
         }
     }
@@ -242,16 +254,19 @@ private fun Results(
 private fun OpenIdRow(
     id: AnimeId,
     onEvent: (SearchEvent) -> Unit,
-) = LinkRow(stringResource(R.string.search_open_id, id.value)) { onEvent(SearchEvent.Open(id)) }
+    rows: ListItemColors,
+) = LinkRow(stringResource(R.string.search_open_id, id.value), rows) { onEvent(SearchEvent.Open(id)) }
 
 // A row that opens another screen.
 @Composable
 private fun LinkRow(
     label: String,
+    colors: ListItemColors,
     onClick: () -> Unit,
 ) {
     ListItem(
         onClick = onClick,
+        colors = colors,
         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
         content = { Text(label) },
     )
@@ -297,7 +312,6 @@ private fun PaddingValues.start() = calculateStartPadding(LocalLayoutDirection.c
 @Composable
 private fun PaddingValues.end() = calculateEndPadding(LocalLayoutDirection.current)
 
-private const val COLLAPSED = 0f
 private const val RECENT = 0
 private const val BROWSE = 1
 private const val OPEN_ID = 2

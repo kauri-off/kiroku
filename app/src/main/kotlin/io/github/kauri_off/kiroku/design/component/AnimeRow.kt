@@ -13,6 +13,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,6 +81,7 @@ fun AnimeRow(
     lines: List<RowLine> = emptyList(),
     trailing: RowTrailing? = null,
     longPress: RowLongPress? = null,
+    colors: ListItemColors = ListItemDefaults.colors(),
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
     // With large text the score leaves the trailing slot for the end of the first line, so the title keeps its width.
@@ -102,6 +105,7 @@ fun AnimeRow(
         verticalAlignment = if (trailing is RowTrailing.PlusOne) Alignment.Top else Alignment.CenterVertically,
         onLongClick = longPress?.onLongPress,
         onLongClickLabel = longPress?.label,
+        colors = colors,
         content = { TitleText(title, maxLines = 2) },
     )
 }

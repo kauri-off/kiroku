@@ -1,11 +1,18 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.animation.core.snap
+import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -158,6 +165,39 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `a search view closed by leaving for a browse list fades its content in again when it next opens`() {
+        val composed = mutableStateOf(true)
+        lateinit var bar: SearchBarState
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                // As the navigation keeps a screen it covers: out of composition, its saved state kept.
+                val holder = rememberSaveableStateHolder()
+                if (composed.value) {
+                    holder.SaveableStateProvider(SEARCH) {
+                        SearchScreen(SearchFixtureStates.start, { events += it }, SnackbarHostState(), rememberBar = {
+                            rememberContainedSearchBarState().also { bar = it }
+                        })
+                    }
+                }
+            }
+        }
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(1f, 1f), saved(bar))
+        compose.onAllNodesWithText("Top rated").onLast().performClick()
+        compose.waitForIdle()
+        assertEquals(listOf<SearchEvent>(SearchEvent.Browse(BrowseList.TopRated)), events)
+        composed.value = false
+        compose.waitForIdle()
+        composed.value = true
+        compose.waitForIdle()
+        assertEquals(listOf(0f, 0f), saved(bar))
+    }
+
+    // The bar's progress and its content's, as the state saves them.
+    private fun saved(bar: SearchBarState): Any? = with(SearchBarState.Saver(snap(), snap())) { SaverScope { true }.save(bar) }
+
+    @Test
     fun `a failed further page keeps the rows and offers Retry`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
         show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Failed(DataError.Refused))))
@@ -209,6 +249,29 @@ class SearchFieldAutofillTest {
     }
 }
 
+// The search view's rows lie on the view's own container, so the view reads as one surface from the bar down.
+@RunWith(io.github.kauri_off.kiroku.screenshots.ScreenshotRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class SearchViewRowsTest {
+    @Test
+    fun theRowsOfTheSearchViewHaveTheViewsColour() {
+        for (variant in listOf(Variant.EnLight, Variant.EnDark)) {
+            Shot.launch(variant) { SearchScreen(SearchFixtureStates.searchView, {}, SnackbarHostState()) }.use { shot ->
+                val image = shot.image()
+                // A line down the view, right of the rows' text and left of their chevrons, from under the field.
+                val x = image.width * 3 / 4
+                val top = shot.dpToPx(BELOW_FIELD_DP).toInt()
+                val colours = (top until image.height * 3 / 4).map { image.getPixel(x, it) }.toSet()
+                assertEquals("${variant.id}: ${colours.map { Integer.toHexString(it) }}", 1, colours.size)
+            }
+        }
+    }
+
+    private companion object {
+        const val BELOW_FIELD_DP = 100
+    }
+}
+
 // With the keyboard up in the search view, the end of a long result list scrolls to just above the keyboard.
 @RunWith(io.github.kauri_off.kiroku.screenshots.ScreenshotRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -235,3 +298,5 @@ class SearchViewKeyboardTest {
         const val MAX_GAP_DP = 16
     }
 }
+
+private const val SEARCH = "search"
