@@ -22,12 +22,17 @@ import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
@@ -47,10 +52,12 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -228,6 +235,64 @@ class ListScreenTest {
         compose.onNodeWithText("Up next").assertDoesNotExist()
         compose.onNodeWithText("Start date").performClick()
         assertEquals(listOf(ListEvent.SelectSort(ListSort.StartDate)), events)
+    }
+
+    @Test
+    fun `the sort sheet offers the chosen sort's two directions, its own first, and sends either, the chosen one too`() {
+        show(ListFixtureStates.sortSheetScoreLowest)
+        compose.onNodeWithText("Highest first").assertIsDisplayed().assertIsOff()
+        compose.onNodeWithText("Lowest first").assertIsDisplayed().assertIsOn()
+        compose.onNodeWithText("Lowest first").performClick()
+        compose.onNodeWithText("Highest first").performClick()
+        assertEquals(
+            listOf(ListEvent.SelectDirection(SortDirection.Ascending), ListEvent.SelectDirection(SortDirection.Descending)),
+            events,
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "en-w891dp-h411dp-land")
+    fun `in phone landscape the sort sheet scrolls to both directions, each with its whole touch target on screen`() {
+        show(ListFixtureStates.sortSheetScoreLowest)
+        // The sheet is a window of its own, as large as the activity's.
+        val screen =
+            compose
+                .onAllNodes(isRoot())
+                .fetchSemanticsNodes()
+                .first()
+                .boundsInRoot
+        val target = with(compose.density) { Sizes.touchTarget.toPx() }
+        compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Lowest first"))).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        for (label in listOf("Highest first", "Lowest first")) {
+            val touch = compose.onNodeWithText(label).fetchSemanticsNode().touchBoundsInRoot
+            assertTrue("$label: $touch on $screen", touch.top >= screen.top && touch.bottom <= screen.bottom)
+            assertTrue("$label: $touch", touch.height >= target - 1f)
+        }
+    }
+
+    @Test
+    fun `a row is spoken with the value its tab is sorted by, the star as the word for the score`() {
+        show(ListFixtureStates.watchingByScore)
+        compose
+            .onNode(
+                hasText(
+                    "Kagerou Toshokan 2nd Season",
+                ) and hasText("Watched 120\u00A0of\u00A0366\u00A0· Score\u00A010") and hasClickAction(),
+            ).assertExists()
+        compose.onAllNodes(hasText("★", substring = true)).assertCountEquals(0)
+        compose.onAllNodes(hasText("★", substring = true), useUnmergedTree = true).assertCountEquals(0)
+        compose
+            .onNode(
+                hasText("Gekkou Kishidan") and hasText("Watched 6\u00A0of\u00A013") and hasClickAction(),
+            ).assertExists()
+    }
+
+    @Test
+    fun `with up next chosen the sort sheet offers no direction`() {
+        show(ListFixtureStates.sortSheet)
+        listOf("A to Z", "Z to A", "Newest first", "Oldest first", "Highest first", "Lowest first", "Earliest first", "Latest first")
+            .forEach { compose.onNodeWithText(it).assertDoesNotExist() }
     }
 
     @Test

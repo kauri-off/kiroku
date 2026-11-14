@@ -16,7 +16,9 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -177,6 +179,38 @@ class ListFrameWorkTest {
             assertNoPageWork("tap on $tab", (1..SETTLE_FRAMES).map { frame() })
             compose.onNode(hasText(tab) and isSelectable()).assertIsSelected()
         }
+    }
+
+    // The pages a user action composes until everything is idle again.
+    private fun pagesComposedBy(action: () -> Unit): Int {
+        counts.clear()
+        counting = true
+        action()
+        settle()
+        counting = false
+        return counts[PAGE] ?: 0
+    }
+
+    @Test
+    fun `a new sort or direction composes only its own page`() {
+        app()
+        compose.mainClock.autoAdvance = true
+        compose.onNode(hasText("Completed") and isSelectable()).performClick()
+        settle()
+        val sort =
+            pagesComposedBy {
+                compose.onNodeWithContentDescription("Sort").performClick()
+                settle()
+                compose.onNodeWithText("Score").performClick()
+            }
+        assertEquals("pages composed by a new sort", 1, sort)
+        val direction =
+            pagesComposedBy {
+                compose.onNodeWithContentDescription("Sort").performClick()
+                settle()
+                compose.onNodeWithText("Lowest first").performClick()
+            }
+        assertEquals("pages composed by a new direction", 1, direction)
     }
 
     @Test

@@ -12,10 +12,15 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.Titles
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
+import java.time.Year
+import java.time.YearMonth
+import java.util.Locale
 
 class ListOrderTest {
     private val set = Fixtures.reference
@@ -155,13 +160,121 @@ class ListOrderTest {
         }
     }
 
+    @Test
+    fun `each sort's default direction is its own order and up next has none`() {
+        assertEquals(
+            mapOf(
+                ListSort.UpNext to null,
+                ListSort.Title to SortDirection.Ascending,
+                ListSort.LastUpdated to SortDirection.Descending,
+                ListSort.Score to SortDirection.Descending,
+                ListSort.StartDate to SortDirection.Ascending,
+            ),
+            ListSort.entries.associateWith { it.defaultDirection },
+        )
+    }
+
+    @Test
+    fun `title goes A to Z or Z to A, and equal titles keep one order in both`() {
+        val b = entry("beta", Instant.EPOCH)
+        val a = entry("Alpha", Instant.EPOCH)
+        val g = entry("gamma", Instant.EPOCH)
+        val same1 = entry("Same", Instant.EPOCH)
+        val same2 = entry("same", Instant.EPOCH)
+        val entries = listOf(same2, g, same1, a, b)
+        assertEquals(listOf(a, b, g, same1, same2), sorted(entries, ListSort.Title, SortDirection.Ascending))
+        assertEquals(listOf(same1, same2, g, b, a), sorted(entries, ListSort.Title, SortDirection.Descending))
+    }
+
+    @Test
+    fun `titles follow the root collation without case, a macron or accent beside its base letter, in any language`() {
+        val names = listOf("Zetman", "Ōkami", "Naruto", "Pokémon", "pokemon", "akira")
+        val entries = names.map { entry(it, Instant.EPOCH) }
+        val ascending = listOf("akira", "Naruto", "Ōkami", "pokemon", "Pokémon", "Zetman")
+        val default = Locale.getDefault()
+        try {
+            listOf(Locale.ENGLISH, Locale.forLanguageTag("ru"), Locale.JAPANESE).forEach { locale ->
+                Locale.setDefault(locale)
+                assertEquals(ascending, sorted(entries, ListSort.Title, SortDirection.Ascending).map { it.anime.titles.romaji })
+                assertEquals(
+                    ascending.reversed(),
+                    sorted(entries, ListSort.Title, SortDirection.Descending).map { it.anime.titles.romaji },
+                )
+            }
+        } finally {
+            Locale.setDefault(default)
+        }
+    }
+
+    @Test
+    fun `last updated goes newest or oldest first, equal times by title`() {
+        val old = entry("Z old", Instant.parse("2025-01-01T00:00:00Z"))
+        val tieB = entry("B tie", Instant.parse("2025-06-01T00:00:00Z"))
+        val tieA = entry("A tie", Instant.parse("2025-06-01T00:00:00Z"))
+        val new = entry("M new", Instant.parse("2026-01-01T00:00:00Z"))
+        val entries = listOf(tieB, old, new, tieA)
+        assertEquals(listOf(new, tieA, tieB, old), sorted(entries, ListSort.LastUpdated, SortDirection.Descending))
+        assertEquals(listOf(old, tieA, tieB, new), sorted(entries, ListSort.LastUpdated, SortDirection.Ascending))
+    }
+
+    @Test
+    fun `score goes highest or lowest first, unscored last in both, equal scores by title`() {
+        val unscoredA = entry("A", Instant.EPOCH, score = null)
+        val unscoredB = entry("B", Instant.EPOCH, score = null)
+        val sevenD = entry("D", Instant.EPOCH, score = 7)
+        val sevenC = entry("C", Instant.EPOCH, score = 7)
+        val nine = entry("E", Instant.EPOCH, score = 9)
+        val four = entry("F", Instant.EPOCH, score = 4)
+        val entries = listOf(unscoredB, sevenD, unscoredA, four, nine, sevenC)
+        assertEquals(listOf(nine, sevenC, sevenD, four, unscoredA, unscoredB), sorted(entries, ListSort.Score, SortDirection.Descending))
+        assertEquals(listOf(four, sevenC, sevenD, nine, unscoredA, unscoredB), sorted(entries, ListSort.Score, SortDirection.Ascending))
+    }
+
+    @Test
+    fun `start date goes earliest or latest first, an unknown date last in both, equal dates by title`() {
+        val unknownA = entry("A", Instant.EPOCH, start = null)
+        val unknownB = entry("B", Instant.EPOCH, start = null)
+        val year = entry("C", Instant.EPOCH, start = PartialDate.OnlyYear(Year.of(2019)))
+        val dayE = entry("E", Instant.EPOCH, start = PartialDate.Day(LocalDate.of(2025, 10, 1)))
+        val monthD = entry("D", Instant.EPOCH, start = PartialDate.Month(YearMonth.of(2025, 10)))
+        val late = entry("F", Instant.EPOCH, start = PartialDate.Day(LocalDate.of(2026, 1, 9)))
+        val entries = listOf(unknownB, late, dayE, unknownA, year, monthD)
+        assertEquals(listOf(year, monthD, dayE, late, unknownA, unknownB), sorted(entries, ListSort.StartDate, SortDirection.Ascending))
+        assertEquals(listOf(late, monthD, dayE, year, unknownA, unknownB), sorted(entries, ListSort.StartDate, SortDirection.Descending))
+    }
+
+    @Test
+    fun `without a direction each sort keeps its own order, and up next ignores one`() {
+        val entries = set.entries
+        ListSort.entries.forEach { sort ->
+            assertEquals(
+                order(entries, sort, set.airing::get, today, sort.defaultDirection) { it.anime.titles.romaji },
+                order(entries, sort, set.airing::get, today) { it.anime.titles.romaji },
+            )
+        }
+        SortDirection.entries.forEach { direction ->
+            assertEquals(
+                order(entries, ListSort.UpNext, set.airing::get, today) { it.anime.titles.romaji },
+                order(entries, ListSort.UpNext, set.airing::get, today, direction) { it.anime.titles.romaji },
+            )
+        }
+    }
+
+    private fun sorted(
+        entries: List<ListEntry>,
+        sort: ListSort,
+        direction: SortDirection,
+    ): List<ListEntry> = order(entries, sort, { null }, today, direction) { it.anime.titles.romaji }
+
     private var nextId = 1L
 
     private fun entry(
         title: String,
         updated: Instant,
+        score: Int? = null,
+        start: PartialDate? = FixtureAnime.exactToWatch.startDate,
     ): ListEntry {
-        val anime = FixtureAnime.exactToWatch.copy(id = AnimeId(nextId++), titles = Titles(title))
-        return ListEntry(anime, ListValues(ListStatus.Watching, 0, null, null, null), updated)
+        val anime = FixtureAnime.exactToWatch.copy(id = AnimeId(nextId++), titles = Titles(title), startDate = start)
+        return ListEntry(anime, ListValues(ListStatus.Watching, 0, score, null, null), updated)
     }
 }

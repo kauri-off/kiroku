@@ -1,14 +1,19 @@
 package io.github.kauri_off.kiroku.list
 
+import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -28,12 +33,14 @@ object ListFixtureStates {
         ordered: List<ListEntry> = set.entries,
         shown: List<ListEntry> = ordered,
         readOnly: Boolean = false,
+        direction: SortDirection? = sort.defaultDirection,
+        schedule: Map<AnimeId, Airing> = set.airing,
     ): List<ListRow> {
         val now = shown.associateBy { it.anime.id }
-        val airing = if (readOnly) emptyMap() else set.airing
-        return order(ordered.filter { it.status == status }, sort, airing::get, today) { it.anime.titles.romaji }
+        val airing = if (readOnly) emptyMap() else schedule
+        return order(ordered.filter { it.status == status }, sort, airing::get, today, direction) { it.anime.titles.romaji }
             .mapNotNull { now[it.anime.id]?.takeIf { entry -> entry.status == status } }
-            .map { listRow(it, airing[it.anime.id], today, TitleLanguage.Romaji, readOnly) }
+            .map { listRow(it, airing[it.anime.id], today, TitleLanguage.Romaji, readOnly, sort) }
     }
 
     // Every tab's page by its default sort; [override] replaces some of them.
@@ -99,6 +106,71 @@ object ListFixtureStates {
     val dropped = state(ListStatus.Dropped)
 
     val sortSheet = watching.copy(sortSheetOpen = true)
+
+    // The widest line 2 a Watching row has: three-digit counts, a score of 10, episodes to watch and "+1".
+    private const val LONG_TOTAL = 366
+    private const val LONG_WATCHED = 120
+    private const val LONG_AIRED = 122
+    private const val TOP_SCORE = 10
+
+    private val longShow =
+        edited(FixtureAnime.exactToWatch) {
+            it.copy(
+                anime = it.anime.copy(malEpisodes = LONG_TOTAL),
+                values = it.values.copy(watchedEpisodes = LONG_WATCHED, score = TOP_SCORE),
+            )
+        }
+
+    private val longShowAiring =
+        set.airing + (
+            FixtureAnime.exactToWatch.id to
+                set.airing.getValue(FixtureAnime.exactToWatch.id).let {
+                    it.copy(
+                        aired = AiredCount.Exact(LONG_AIRED),
+                        total = LONG_TOTAL,
+                        nextEpisode = it.nextEpisode?.copy(number = LONG_AIRED + 1),
+                    )
+                }
+        )
+
+    // [status] ordered by [sort] in [direction], each row showing the value it is sorted by where it has one.
+    fun sorted(
+        status: ListStatus,
+        sort: ListSort,
+        direction: SortDirection? = sort.defaultDirection,
+        readOnly: Boolean = false,
+    ): ListState {
+        val entries = if (readOnly) set.otherUserEntries else longShow
+        val page =
+            ListPage(
+                sort,
+                sortsFor(status, withAiring = !readOnly),
+                rows(status, sort, entries, readOnly = readOnly, direction = direction, schedule = longShowAiring),
+                direction = direction,
+            )
+        val tabs = tabs(entries, readOnly, override = mapOf(status to page))
+        val owner = if (readOnly) ListOwner.Other(set.otherUserName) else ListOwner.Me
+        return ListState(owner = owner, content = tabs, tab = status, now = set.now)
+    }
+
+    val sortSheetTitle = sorted(ListStatus.Watching, ListSort.Title).copy(sortSheetOpen = true)
+
+    val sortSheetLastUpdated = sorted(ListStatus.Watching, ListSort.LastUpdated).copy(sortSheetOpen = true)
+
+    // The direction other than the sort's own, chosen.
+    val sortSheetScoreLowest = sorted(ListStatus.Watching, ListSort.Score, SortDirection.Ascending).copy(sortSheetOpen = true)
+
+    val sortSheetStartDate = sorted(ListStatus.Watching, ListSort.StartDate).copy(sortSheetOpen = true)
+
+    val watchingByScore = sorted(ListStatus.Watching, ListSort.Score)
+
+    val watchingByStartDate = sorted(ListStatus.Watching, ListSort.StartDate, SortDirection.Descending)
+
+    val plannedByStartDate = sorted(ListStatus.Planned, ListSort.StartDate)
+
+    val completedByScore = sorted(ListStatus.Completed, ListSort.Score)
+
+    val completedByStartDate = sorted(ListStatus.Completed, ListSort.StartDate)
 
     // "Kaze", in two Watching titles and in no other.
     private val query =
@@ -173,4 +245,6 @@ object ListFixtureStates {
             content = tabs(set.otherUserEntries, readOnly = true),
             now = set.now,
         )
+
+    val readOnlyByScore = sorted(ListStatus.Watching, ListSort.Score, readOnly = true)
 }

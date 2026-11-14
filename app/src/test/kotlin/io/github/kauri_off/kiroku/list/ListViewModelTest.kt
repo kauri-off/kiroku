@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -291,6 +292,63 @@ class ListViewModelTest {
             assertEquals(0, s.page(ListStatus.Planned).ordering)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertEquals(1, s.page().ordering)
+        }
+
+    @Test
+    fun `a direction orders only its tab again from the top, and a new sort starts in its own direction`() =
+        test { s ->
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Completed))
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
+            assertEquals(SortDirection.Descending, s.page().direction)
+            val highest = s.ids()
+            val planned = s.page(ListStatus.Planned)
+            s.list.onEvent(ListEvent.OpenSort)
+            s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
+            assertFalse(s.state.sortSheetOpen)
+            assertEquals(SortDirection.Ascending, s.page().direction)
+            assertEquals(
+                order(
+                    set.entries.filter { it.status == ListStatus.Completed },
+                    ListSort.Score,
+                    set.airing::get,
+                    today,
+                    SortDirection.Ascending,
+                ) {
+                    it.anime.titles.romaji
+                }.map { it.anime.id },
+                s.ids(),
+            )
+            assertTrue(s.ids() != highest)
+            assertSame(planned, s.page(ListStatus.Planned))
+            assertEquals(2, s.page().ordering)
+            assertEquals(0, s.page(ListStatus.Planned).ordering)
+            s.list.onEvent(ListEvent.OpenSort)
+            s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
+            assertFalse(s.state.sortSheetOpen)
+            assertEquals(2, s.page().ordering)
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            assertEquals(SortDirection.Ascending, s.page().direction)
+            s.list.onEvent(ListEvent.SelectSort(ListSort.LastUpdated))
+            assertEquals(SortDirection.Descending, s.page().direction)
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Watching))
+            s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
+            assertNull(s.page().direction)
+            assertEquals(upNext(), s.ids())
+            assertEquals(0, s.page().ordering)
+        }
+
+    @Test
+    fun `sorted by score or start date, a row shows that value, in the tab sorted so only`() =
+        test { s ->
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
+            val scores = set.entries.filter { it.status == ListStatus.Watching }.associate { it.anime.id to it.values.score }
+            assertEquals(s.page().rows.map { r -> scores.getValue(r.id)?.let(SortedBy::Score) }, s.page().rows.map { it.sortedBy })
+            assertTrue(s.page().rows.any { it.sortedBy != null })
+            assertTrue(s.page(ListStatus.Planned).rows.all { it.sortedBy == null })
+            s.list.onEvent(ListEvent.SelectSort(ListSort.StartDate))
+            assertTrue(s.page().rows.all { it.sortedBy is SortedBy.StartYear })
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            assertTrue(s.page().rows.all { it.sortedBy == null })
         }
 
     @Test
@@ -597,17 +655,20 @@ class ListViewModelTest {
         }
 
     @Test
-    fun `the tab, each tab's sort and the filter survive process death`() {
+    fun `the tab, each tab's sort and direction and the filter survive process death`() {
         val saved = SavedStateHandle()
         test(saved = saved) { s ->
             s.list.onEvent(ListEvent.SelectTab(ListStatus.Completed))
             s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
+            s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
             s.list.onEvent(ListEvent.StartFilter)
             s.list.onEvent(ListEvent.FilterChanged("a"))
         }
         test(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })) { s ->
             assertEquals(ListStatus.Completed, s.state.tab)
             assertEquals(ListSort.Score, s.page().sort)
+            assertEquals(SortDirection.Ascending, s.page().direction)
+            assertEquals(SortDirection.Descending, s.page(ListStatus.Planned).direction)
             assertEquals("a", s.list.filter)
             assertEquals("a", s.state.filter)
         }

@@ -11,6 +11,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.list.sortsFor
@@ -46,7 +48,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// The user's own list. Its orders are fixed at moments (the first load, Refresh, a new sort), so they are kept here.
+// The user's own list. Its orders are fixed at moments (first load, Refresh, a new sort or direction), so they live here.
 class ListViewModel(
     private val list: ListSource,
     private val airing: AiringRepository,
@@ -65,6 +67,7 @@ class ListViewModel(
         val failure: ListFailure? = null,
         val tab: ListStatus,
         val sorts: Map<ListStatus, ListSort>,
+        val directions: Map<ListStatus, SortDirection?>,
         val sortSheetOpen: Boolean = false,
         val refreshing: Boolean = false,
         val session: Session? = null,
@@ -74,13 +77,19 @@ class ListViewModel(
 
     private val model =
         MutableStateFlow(
-            Model(
-                tab = saved.get<String>(TAB)?.let(ListStatus::valueOf) ?: ListStatus.Watching,
-                sorts =
-                    ListStatus.entries.associateWith { status ->
-                        saved.get<String>(sortKey(status))?.let(ListSort::valueOf) ?: defaultSort(status, withAiring = true)
-                    },
-            ),
+            ListStatus.entries
+                .associateWith { status ->
+                    saved.get<String>(sortKey(status))?.let(ListSort::valueOf) ?: defaultSort(status, withAiring = true)
+                }.let { sorts ->
+                    Model(
+                        tab = saved.get<String>(TAB)?.let(ListStatus::valueOf) ?: ListStatus.Watching,
+                        sorts = sorts,
+                        directions =
+                            sorts.mapValues { (status, sort) ->
+                                sort.defaultDirection?.let { saved.get<String>(directionKey(status))?.let(SortDirection::valueOf) ?: it }
+                            },
+                    )
+                },
         )
     private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val retries = MutableStateFlow(0)
@@ -95,13 +104,14 @@ class ListViewModel(
         val orders: Map<ListStatus, List<AnimeId>>?,
         val orderings: Map<ListStatus, Int>,
         val sorts: Map<ListStatus, ListSort>,
+        val directions: Map<ListStatus, SortDirection?>,
         val failure: ListFailure?,
         val signedOut: Boolean,
         val filter: String?,
         val refreshes: Int,
     )
 
-    // Pages written against [now] in [zone]: kept while what they show, the zone and the clock within [now, until) hold.
+    // Pages written against [now] in [zone]; until a Refresh or [until], pages built again keep [now].
     private class Built(
         val shown: Shown,
         val content: ListContent,
@@ -138,6 +148,7 @@ class ListViewModel(
             ListEvent.OpenSort -> model.update { it.copy(sortSheetOpen = true) }
             ListEvent.DismissSort -> model.update { it.copy(sortSheetOpen = false) }
             is ListEvent.SelectSort -> selectSort(event.sort)
+            is ListEvent.SelectDirection -> selectDirection(event.direction)
             ListEvent.Refresh -> viewModelScope.launch { sync(fromUser = true) }
             ListEvent.Retry -> {
                 retries.update { it + 1 }
@@ -198,14 +209,18 @@ class ListViewModel(
                 model.orders,
                 model.orderings,
                 model.sorts,
+                model.directions,
                 model.failure,
                 session == Session.SignedOut,
                 filter,
                 model.refreshes,
             )
         val instant = clock.instant()
+        val current =
+            built?.takeIf { instant >= it.now && instant < it.until && it.zone == clock.zone && it.shown.refreshes == shown.refreshes }
         val pages =
-            built?.takeIf { it.shown == shown && instant >= it.now && instant < it.until && it.zone == clock.zone }
+            current?.takeIf { it.shown == shown }
+                ?: current?.let { built(model, filter, shown, it.now) }?.takeIf { instant < it.until }
                 ?: built(model, filter, shown, instant)
         return ListState(
             owner = ListOwner.Me,
@@ -232,7 +247,13 @@ class ListViewModel(
                 .mapNotNull { it.nextEpisode?.airsAt?.takeIf(now::isBefore) }
                 .minOrNull()
         val until = nextAirTime?.coerceAtMost(midnight) ?: midnight
-        return Built(shown, content(model, filter, today), now, until, clock.zone).also { built = it }
+        return Built(shown, content(model, filter, today).sharing(built?.content), now, until, clock.zone).also { built = it }
+    }
+
+    // A tab whose page did not change keeps the same object, so that its page is not composed again.
+    private fun ListContent.sharing(before: ListContent?): ListContent {
+        if (this !is ListContent.Tabs || before !is ListContent.Tabs) return this
+        return ListContent.Tabs(pages.mapValues { (status, page) -> before.pages[status]?.takeIf { it == page } ?: page })
     }
 
     private fun content(
@@ -255,12 +276,19 @@ class ListViewModel(
         ids: List<AnimeId>,
         today: LocalDate,
     ): ListPage {
+        val sort = model.sorts.getValue(status)
         val rows =
             ids
                 .mapNotNull { id -> model.entries[id]?.takeIf { it.status == status } }
-                .map { listRow(it, model.airing[it.anime.id], today, titleLanguage) }
+                .map { listRow(it, model.airing[it.anime.id], today, titleLanguage, sort = sort) }
                 .filter { text.isNullOrEmpty() || it.title.contains(text, ignoreCase = true) }
-        return ListPage(model.sorts.getValue(status), sortsFor(status, withAiring = true), rows, model.orderings.getValue(status))
+        return ListPage(
+            sort,
+            sortsFor(status, withAiring = true),
+            rows,
+            model.orderings.getValue(status),
+            model.directions.getValue(status),
+        )
     }
 
     private fun today(): LocalDate = LocalDate.now(clock)
@@ -268,14 +296,15 @@ class ListViewModel(
     private fun Model.ordered(
         status: ListStatus,
         sort: ListSort,
+        direction: SortDirection?,
     ): List<AnimeId> =
-        order(entries.values.filter { it.status == status }, sort, airing::get, today()) {
+        order(entries.values.filter { it.status == status }, sort, airing::get, today(), direction) {
             it.anime.titles.preferred(titleLanguage)
         }.map { it.anime.id }
 
     private fun Model.orderedAll(): Model =
         copy(
-            orders = ListStatus.entries.associateWith { ordered(it, sorts.getValue(it)) },
+            orders = ListStatus.entries.associateWith { ordered(it, sorts.getValue(it), directions.getValue(it)) },
             orderings = if (orders == null) orderings else orderings.mapValues { it.value + 1 },
         )
 
@@ -290,6 +319,7 @@ class ListViewModel(
         return if (next != current) copy(orders = next) else this
     }
 
+    // A new sort starts in its own direction.
     private fun selectSort(sort: ListSort) {
         val tab = model.value.tab
         if (model.value.sorts.getValue(tab) == sort) {
@@ -297,11 +327,31 @@ class ListViewModel(
             return
         }
         saved[sortKey(tab)] = sort.name
+        reorder(tab, sort, sort.defaultDirection)
+    }
+
+    private fun selectDirection(direction: SortDirection) {
+        val tab = model.value.tab
+        val sort = model.value.sorts.getValue(tab)
+        if (sort.defaultDirection == null || model.value.directions.getValue(tab) == direction) {
+            model.update { it.copy(sortSheetOpen = false) }
+            return
+        }
+        reorder(tab, sort, direction)
+    }
+
+    private fun reorder(
+        tab: ListStatus,
+        sort: ListSort,
+        direction: SortDirection?,
+    ) {
+        saved[directionKey(tab)] = direction?.name
         model.update { model ->
             model.copy(
                 sortSheetOpen = false,
                 sorts = model.sorts + (tab to sort),
-                orders = model.orders?.let { it + (tab to model.ordered(tab, sort)) },
+                directions = model.directions + (tab to direction),
+                orders = model.orders?.let { it + (tab to model.ordered(tab, sort, direction)) },
                 orderings = model.orderings + (tab to model.orderings.getValue(tab) + 1),
             )
         }
@@ -369,6 +419,8 @@ class ListViewModel(
         val FILTER = notShown("filter")
 
         fun sortKey(status: ListStatus) = notShown("sort.${status.name}")
+
+        fun directionKey(status: ListStatus) = notShown("direction.${status.name}")
     }
 }
 

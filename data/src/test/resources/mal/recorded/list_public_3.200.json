@@ -1,0 +1,602 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 10020,
+                "title": "Ore no Imouto ga Konnani Kawaii Wake ga Nai Specials",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/8/29734.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/8/29734l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "My Little Sister Can't Be This Cute Specials"
+                    ],
+                    "en": "OreImo Specials",
+                    "ja": "俺の妹がこんなに可愛いわけがない"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 4,
+                "start_date": "2011-02-22",
+                "mean": 7.31,
+                "rank": 3149,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 69,
+                        "name": "Otaku Culture"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1680
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 1,
+                "num_episodes_watched": 4,
+                "is_rewatching": false,
+                "updated_at": "2022-07-08T09:13:00+00:00",
+                "start_date": "2020-01-21",
+                "finish_date": "2020-02-10"
+            }
+        },
+        {
+            "node": {
+                "id": 13659,
+                "title": "Ore no Imouto ga Konnani Kawaii Wake ga Nai.",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1325/100406.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1325/100406l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "My Little Sister Can't Be This Cute 2",
+                        "Ore no Imouto ga Konna ni Kawaii Wake ga Nai 2"
+                    ],
+                    "en": "OreImo 2",
+                    "ja": "俺の妹がこんなに可愛いわけがない。"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2013-04-07",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:00"
+                },
+                "mean": 6.88,
+                "rank": 5602,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 69,
+                        "name": "Otaku Culture"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 10,
+                "num_episodes_watched": 13,
+                "is_rewatching": false,
+                "updated_at": "2022-06-06T22:00:21+00:00",
+                "start_date": "2021-10-21",
+                "finish_date": "2021-12-19"
+            }
+        },
+        {
+            "node": {
+                "id": 18857,
+                "title": "Ore no Imouto ga Konnani Kawaii Wake ga Nai. Specials",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1314/129575.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1314/129575l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "My Little Sister Can't Be This Cute 2 Specials",
+                        "Ore no Imouto ga Konna ni Kawaii Wake ga Nai 2 Specials"
+                    ],
+                    "en": "OreImo 2 Specials",
+                    "ja": "俺の妹がこんなに可愛いわけがない。"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2013-08-18",
+                "mean": 6.3,
+                "rank": 9398,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 69,
+                        "name": "Otaku Culture"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1497
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 8,
+                "num_episodes_watched": 3,
+                "is_rewatching": false,
+                "updated_at": "2022-09-26T08:09:43+00:00",
+                "start_date": "2022-05-07",
+                "finish_date": "2022-07-03"
+            }
+        },
+        {
+            "node": {
+                "id": 55129,
+                "title": "Oroka na Tenshi wa Akuma to Odoru",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1902/139271.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1902/139271l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Foolish Angel Dances with Demons",
+                        "Kanaten"
+                    ],
+                    "en": "The Foolish Angel Dances with the Devil",
+                    "ja": "愚かな天使は悪魔と踊る"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2024-01-09",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:30"
+                },
+                "mean": 6.9,
+                "rank": 5476,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 10,
+                "num_episodes_watched": 12,
+                "is_rewatching": false,
+                "updated_at": "2022-11-04T20:29:11+00:00",
+                "start_date": "2020-05-09",
+                "finish_date": "2020-06-07"
+            }
+        },
+        {
+            "node": {
+                "id": 35484,
+                "title": "Osake wa Fuufu ni Natte kara",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1684/108627.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1684/108627l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Love is Like a Cocktail",
+                    "ja": "お酒は夫婦になってから"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2017-10-04",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "01:00"
+                },
+                "mean": 6.95,
+                "rank": 5190,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 47,
+                        "name": "Gourmet"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 180
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 5,
+                "num_episodes_watched": 13,
+                "is_rewatching": false,
+                "updated_at": "2022-11-29T06:56:36+00:00",
+                "start_date": "2021-04-29",
+                "finish_date": "2021-07-22"
+            }
+        },
+        {
+            "node": {
+                "id": 38555,
+                "title": "Otome Game no Hametsu Flag shika Nai Akuyaku Reijou ni Tensei shiteshimatta...",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1483/107061.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1483/107061l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hamefura",
+                        "I Reincarnated into an Otome Game as a Villainess With Only Destruction Flags…",
+                        "Destruction Flag Otome"
+                    ],
+                    "en": "My Next Life as a Villainess: All Routes Lead to Doom!",
+                    "ja": "乙女ゲームの破滅フラグしかない悪役令嬢に転生してしまった…"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2020-04-05",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "01:30"
+                },
+                "mean": 7.44,
+                "rank": 2508,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    },
+                    {
+                        "id": 83,
+                        "name": "Villainess"
+                    }
+                ],
+                "average_episode_duration": 1490
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 6,
+                "num_episodes_watched": 12,
+                "is_rewatching": false,
+                "updated_at": "2022-09-06T18:17:25+00:00",
+                "start_date": "2021-07-09",
+                "finish_date": "2021-09-02"
+            }
+        },
+        {
+            "node": {
+                "id": 49842,
+                "title": "Otome Game no Hametsu Flag shika Nai Akuyaku Reijou ni Tensei shiteshimatta... Movie",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1360/138828.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1360/138828l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hamefura Movie",
+                        "I Reincarnated into an Otome Game as a Villainess With Only Destruction Flags…",
+                        "Destruction Flag Otome"
+                    ],
+                    "en": "My Next Life as a Villainess: All Routes Lead to Doom! Movie",
+                    "ja": "乙女ゲームの破滅フラグしかない悪役令嬢に転生してしまった…"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-12-08",
+                "mean": 7.2,
+                "rank": 3834,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    },
+                    {
+                        "id": 83,
+                        "name": "Villainess"
+                    }
+                ],
+                "average_episode_duration": 5400
+            },
+            "list_status": {
+                "status": "plan_to_watch",
+                "score": 0,
+                "num_episodes_watched": 0,
+                "is_rewatching": false,
+                "updated_at": "2022-07-08T06:33:18+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 42282,
+                "title": "Otome Game no Hametsu Flag shika Nai Akuyaku Reijou ni Tensei shiteshimatta... X",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1088/116439.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1088/116439l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hamefura X",
+                        "I Reincarnated into an Otome Game as a Villainess With Only Destruction Flags…",
+                        "Destruction Flag Otome"
+                    ],
+                    "en": "My Next Life as a Villainess: All Routes Lead to Doom! X",
+                    "ja": "乙女ゲームの破滅フラグしかない悪役令嬢に転生してしまった…X"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2021-07-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:25"
+                },
+                "mean": 7.25,
+                "rank": 3514,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 73,
+                        "name": "Reverse Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 25,
+                        "name": "Shoujo"
+                    },
+                    {
+                        "id": 83,
+                        "name": "Villainess"
+                    }
+                ],
+                "average_episode_duration": 1414
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 3,
+                "num_episodes_watched": 12,
+                "is_rewatching": false,
+                "updated_at": "2022-08-14T08:39:18+00:00",
+                "start_date": "2020-10-09",
+                "finish_date": "2020-12-30"
+            }
+        },
+        {
+            "node": {
+                "id": 63150,
+                "title": "Otome Kaijuu Caraméliser",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1981/156340.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1981/156340l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Monster Maiden Caramelize, Meiden Kaiju Carameliser"
+                    ],
+                    "en": "Kaiju Girl Caramelise",
+                    "ja": "乙女怪獣キャラメリゼ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2026-07-03",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "01:28"
+                },
+                "mean": 7.48,
+                "rank": 2325,
+                "genres": [
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1457
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 1,
+                "num_episodes_watched": 12,
+                "is_rewatching": false,
+                "updated_at": "2022-11-10T00:27:30+00:00",
+                "start_date": "2020-05-30",
+                "finish_date": "2020-07-19"
+            }
+        },
+        {
+            "node": {
+                "id": 8476,
+                "title": "Otome Youkai Zakuro",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/85430.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/85430l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Girl Demon Zakuro"
+                    ],
+                    "en": "Zakuro",
+                    "ja": "おとめ妖怪 ざくろ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2010-10-05",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:30"
+                },
+                "mean": 7.42,
+                "rank": 2600,
+                "genres": [
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 38,
+                        "name": "Military"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1464
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 7,
+                "num_episodes_watched": 13,
+                "is_rewatching": false,
+                "updated_at": "2022-02-16T20:50:44+00:00",
+                "start_date": "2021-04-21",
+                "finish_date": "2021-07-06"
+            }
+        }
+    ],
+    "paging": {
+        "previous": "https://api.myanimelist.net/v2/users/public-user/animelist?offset=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration%2Clist_status%7Bstatus%2Cscore%2Cnum_episodes_watched%2Cstart_date%2Cfinish_date%2Cupdated_at%7D&nsfw=true&sort=anime_title&limit=10"
+    }
+}

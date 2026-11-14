@@ -11,6 +11,14 @@
     <string name="list_sort_last_updated">Последнее изменение</string>
     <string name="list_sort_score">Оценка</string>
     <string name="list_sort_start_date">Дата начала</string>
+    <string name="list_direction_a_to_z">От A до Z</string>
+    <string name="list_direction_z_to_a">От Z до A</string>
+    <string name="list_direction_newest">Сначала новые</string>
+    <string name="list_direction_oldest">Сначала старые</string>
+    <string name="list_direction_highest">Сначала высокие</string>
+    <string name="list_direction_lowest">Сначала низкие</string>
+    <string name="list_direction_earliest">Сначала ранние</string>
+    <string name="list_direction_latest">Сначала поздние</string>
     <string name="list_progress">Просмотрено %1$d\u00A0из\u00A0%2$d</string>
     <string name="list_progress_unknown_total">Просмотрено %1$d</string>
     <string name="list_to_watch">К просмотру:\u00A0%1$d</string>

@@ -1,0 +1,528 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 63537,
+                "title": "\"Kimi wo Aisuru Ki wa Nai\" to Itta Jiki Koushaku-sama ga Nazeka Dekiai shitekimasu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1217/158710.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1217/158710l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "I Don't Know Why but the Next Duke Who Said \"I Have No Intention of Loving You\" Is Doting on Me",
+                        "Kimiai"
+                    ],
+                    "en": "The Duke's Son Claims He Won't Love Me Yet Showers Me with Adoration",
+                    "ja": "『きみを愛する気はない』と言った次期公爵様がなぜか溺愛してきます"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2026-07-05",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "01:30"
+                },
+                "mean": 6.78,
+                "rank": 6208,
+                "genres": [
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1368
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 8,
+                "num_episodes_watched": 12,
+                "is_rewatching": false,
+                "updated_at": "2022-12-15T11:45:03+00:00",
+                "start_date": "2021-06-21",
+                "finish_date": "2021-07-28"
+            }
+        },
+        {
+            "node": {
+                "id": 31646,
+                "title": "3-gatsu no Lion",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1590/154000.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1590/154000l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Sangatsu no Lion"
+                    ],
+                    "en": "March Comes In Like a Lion",
+                    "ja": "3月のライオン"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 22,
+                "start_date": "2016-10-08",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "23:00"
+                },
+                "mean": 8.37,
+                "rank": 259,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 7,
+                "num_episodes_watched": 22,
+                "is_rewatching": false,
+                "updated_at": "2022-12-12T12:24:34+00:00",
+                "start_date": "2021-10-08",
+                "finish_date": "2021-11-23"
+            }
+        },
+        {
+            "node": {
+                "id": 35180,
+                "title": "3-gatsu no Lion 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/88469.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/88469l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Sangatsu no Lion Second Season"
+                    ],
+                    "en": "March Comes In Like a Lion 2nd Season",
+                    "ja": "3月のライオン 第2シリーズ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 22,
+                "start_date": "2017-10-14",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "23:00"
+                },
+                "mean": 8.89,
+                "rank": 25,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 1,
+                "num_episodes_watched": 22,
+                "is_rewatching": false,
+                "updated_at": "2022-11-01T10:13:40+00:00",
+                "start_date": "2020-06-29",
+                "finish_date": "2020-09-17"
+            }
+        },
+        {
+            "node": {
+                "id": 51464,
+                "title": "4-nin wa Sorezore Uso wo Tsuku",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1934/128719.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1934/128719l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Four People and Their Respective Lies",
+                        "Yonin wa Sorezore Uso wo Tsuku"
+                    ],
+                    "en": "The Little Lies We All Tell",
+                    "ja": "４人はそれぞれウソをつく"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 11,
+                "start_date": "2022-10-16",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "02:00"
+                },
+                "mean": 7.15,
+                "rank": 4100,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 81,
+                        "name": "Crossdressing"
+                    },
+                    {
+                        "id": 57,
+                        "name": "Gag Humor"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 31,
+                        "name": "Super Power"
+                    }
+                ],
+                "average_episode_duration": 1403
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 5,
+                "num_episodes_watched": 11,
+                "is_rewatching": false,
+                "updated_at": "2022-12-03T22:30:16+00:00",
+                "start_date": "2021-04-09",
+                "finish_date": "2021-06-12"
+            }
+        },
+        {
+            "node": {
+                "id": 41457,
+                "title": "86",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1987/117507.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1987/117507l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Eighty Six"
+                    ],
+                    "en": "86 Eighty-Six",
+                    "ja": "86―エイティシックス―"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 11,
+                "start_date": "2021-04-11",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:00"
+                },
+                "mean": 8.36,
+                "rank": 270,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 18,
+                        "name": "Mecha"
+                    },
+                    {
+                        "id": 38,
+                        "name": "Military"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "list_status": {
+                "status": "on_hold",
+                "score": 0,
+                "num_episodes_watched": 10,
+                "is_rewatching": false,
+                "updated_at": "2022-05-30T17:53:03+00:00",
+                "start_date": "2021-04-02"
+            }
+        },
+        {
+            "node": {
+                "id": 32998,
+                "title": "91 Days",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/80515.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/80515l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "91 Days",
+                    "ja": "91Days"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2016-07-09",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:55"
+                },
+                "mean": 7.82,
+                "rank": 1123,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 68,
+                        "name": "Organized Crime"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "list_status": {
+                "status": "plan_to_watch",
+                "score": 0,
+                "num_episodes_watched": 0,
+                "is_rewatching": false,
+                "updated_at": "2022-04-15T10:26:02+00:00"
+            }
+        },
+        {
+            "node": {
+                "id": 9776,
+                "title": "A-Channel",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1333/110595.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1333/110595l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "A-Channel: The Animation"
+                    ],
+                    "en": "A-Channel",
+                    "ja": "Aチャンネル"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2011-04-08",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "01:40"
+                },
+                "mean": 6.94,
+                "rank": 5208,
+                "genres": [
+                    {
+                        "id": 52,
+                        "name": "CGDCT"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1469
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 7,
+                "num_episodes_watched": 12,
+                "is_rewatching": false,
+                "updated_at": "2022-06-16T00:29:04+00:00",
+                "start_date": "2022-02-15",
+                "finish_date": "2022-05-02"
+            }
+        },
+        {
+            "node": {
+                "id": 11339,
+                "title": "A-Channel+smile",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/35321.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/35321l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "A-Channel OVA"
+                    ],
+                    "en": "",
+                    "ja": "Aチャンネル+smile（プラス スマイル）"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2012-03-21",
+                "mean": 7.08,
+                "rank": 4504,
+                "genres": [
+                    {
+                        "id": 52,
+                        "name": "CGDCT"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 10,
+                "num_episodes_watched": 2,
+                "is_rewatching": false,
+                "updated_at": "2022-11-06T06:39:01+00:00",
+                "start_date": "2020-12-05",
+                "finish_date": "2021-01-13"
+            }
+        },
+        {
+            "node": {
+                "id": 10737,
+                "title": "A-Channel: +A-Channel",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/9/29573.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/9/29573l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "A-Channel Specials"
+                    ],
+                    "en": "A-Channel: +A-Channel",
+                    "ja": "Aチャンネル"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 11,
+                "start_date": "2011-05-25",
+                "mean": 6.94,
+                "rank": 5209,
+                "genres": [
+                    {
+                        "id": 52,
+                        "name": "CGDCT"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 171
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 8,
+                "num_episodes_watched": 11,
+                "is_rewatching": false,
+                "updated_at": "2022-09-12T02:25:03+00:00",
+                "start_date": "2022-01-07",
+                "finish_date": "2022-02-13"
+            }
+        },
+        {
+            "node": {
+                "id": 49,
+                "title": "Aa! Megami-sama!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1566/152081.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1566/152081l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Ah! My Goddess (OVA)"
+                    ],
+                    "en": "Oh! My Goddess",
+                    "ja": "ああっ女神さまっ"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 5,
+                "start_date": "1993-02-21",
+                "mean": 7.29,
+                "rank": 3232,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1800
+            },
+            "list_status": {
+                "status": "completed",
+                "score": 10,
+                "num_episodes_watched": 5,
+                "is_rewatching": false,
+                "updated_at": "2022-01-05T11:47:11+00:00"
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/users/public-user/animelist?offset=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration%2Clist_status%7Bstatus%2Cscore%2Cnum_episodes_watched%2Cstart_date%2Cfinish_date%2Cupdated_at%7D&nsfw=true&sort=anime_title&limit=10"
+    }
+}

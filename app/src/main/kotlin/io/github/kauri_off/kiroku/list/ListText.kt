@@ -6,6 +6,11 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.SortDirection.Ascending
+import io.github.kauri_off.kiroku.core.list.SortDirection.Descending
+import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.RowScore
 import io.github.kauri_off.kiroku.text.AirTimeText
 import io.github.kauri_off.kiroku.text.premiereText
 import java.time.Instant
@@ -19,6 +24,18 @@ class ListText(
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
     private val times = AirTimeText(context, now, zone)
+
+    // Line 2, followed by the value the tab is sorted by when the row has one: "Watched 12 of 24 · ★ 10", "… · 2025".
+    fun line2(
+        line: Line2,
+        sortedBy: SortedBy?,
+    ): RowLine =
+        when (sortedBy) {
+            null -> RowLine(line2(line))
+            is SortedBy.Score ->
+                RowLine(line2(line), score = RowScore(sortedBy.score.toString(), context.getString(R.string.list_score, sortedBy.score)))
+            is SortedBy.StartYear -> RowLine(line2(line) + context.getString(R.string.common_separator) + sortedBy.year)
+        }
 
     fun line2(line: Line2): String =
         when (line) {
@@ -45,6 +62,16 @@ class ListText(
 
     fun premiere(premiere: Premiere): String = premiereText(context, times, premiere, withYear = false)
 }
+
+// The two directions of a sort, worded for that sort, its own one first; "Up next" has none.
+fun ListSort.directions(): List<Pair<SortDirection, Int>> =
+    when (this) {
+        ListSort.UpNext -> emptyList()
+        ListSort.Title -> listOf(Ascending to R.string.list_direction_a_to_z, Descending to R.string.list_direction_z_to_a)
+        ListSort.LastUpdated -> listOf(Descending to R.string.list_direction_newest, Ascending to R.string.list_direction_oldest)
+        ListSort.Score -> listOf(Descending to R.string.list_direction_highest, Ascending to R.string.list_direction_lowest)
+        ListSort.StartDate -> listOf(Ascending to R.string.list_direction_earliest, Descending to R.string.list_direction_latest)
+    }
 
 @StringRes
 fun ListSort.labelRes(): Int =
