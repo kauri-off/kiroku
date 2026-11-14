@@ -82,6 +82,8 @@ class Shot private constructor(
     // The window as drawn now, with nothing let to settle: a frame of a running animation.
     fun frame(): Bitmap {
         Shadows.shadowOf(Looper.getMainLooper()).idle()
+        // A window the change opened, such as a full-screen dialog, is set up as on a phone like those open from the start.
+        windows().forEach { decor -> decor.window()?.asOnPhone() }
         val screen = RoboComponent.Screen(fetchRobolectricWindowRoots(), options).image ?: error("Nothing was drawn")
         val bitmap = screen.copy(Bitmap.Config.ARGB_8888, true)
         SystemBars.draw(Canvas(bitmap), activity.window, density, keyboard)

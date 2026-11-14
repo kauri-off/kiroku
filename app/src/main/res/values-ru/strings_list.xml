@@ -25,8 +25,6 @@
     <string name="list_to_watch_estimated">К просмотру:\u00A0~%1$d</string>
     <string name="list_score">Оценка:\u00A0%1$d</string>
     <string name="list_not_scored">Без оценки</string>
-    <string name="list_line2_sorted_by">%1$s\u00A0· %2$s</string>
-    <string name="list_sorted_by_score">★\u00A0%1$d</string>
     <string name="list_empty">В «%1$s» нет тайтлов</string>
     <string name="list_empty_action">Поиск</string>
     <string name="list_no_matches">Нет тайтлов с таким названием</string>

@@ -9,6 +9,8 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.SortDirection.Ascending
 import io.github.kauri_off.kiroku.core.list.SortDirection.Descending
+import io.github.kauri_off.kiroku.design.component.RowLine
+import io.github.kauri_off.kiroku.design.component.RowScore
 import io.github.kauri_off.kiroku.text.AirTimeText
 import io.github.kauri_off.kiroku.text.premiereText
 import java.time.Instant
@@ -27,21 +29,12 @@ class ListText(
     fun line2(
         line: Line2,
         sortedBy: SortedBy?,
-    ): String = sortedBy?.let { context.getString(R.string.list_line2_sorted_by, line2(line), sortedBy(it)) } ?: line2(line)
-
-    // Line 2 as a screen reader hears it, where it differs: the score's star said as the glossary's word.
-    fun spokenLine2(
-        line: Line2,
-        sortedBy: SortedBy?,
-    ): String? =
-        (sortedBy as? SortedBy.Score)?.let {
-            context.getString(R.string.list_line2_sorted_by, line2(line), context.getString(R.string.list_score, it.score))
-        }
-
-    private fun sortedBy(value: SortedBy): String =
-        when (value) {
-            is SortedBy.Score -> context.getString(R.string.list_sorted_by_score, value.score)
-            is SortedBy.StartYear -> value.year.toString()
+    ): RowLine =
+        when (sortedBy) {
+            null -> RowLine(line2(line))
+            is SortedBy.Score ->
+                RowLine(line2(line), score = RowScore(sortedBy.score.toString(), context.getString(R.string.list_score, sortedBy.score)))
+            is SortedBy.StartYear -> RowLine(line2(line) + context.getString(R.string.common_separator) + sortedBy.year)
         }
 
     fun line2(line: Line2): String =

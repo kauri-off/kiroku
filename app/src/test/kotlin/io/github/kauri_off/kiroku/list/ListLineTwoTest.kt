@@ -1,15 +1,19 @@
 package io.github.kauri_off.kiroku.list
 
-import androidx.compose.material3.Typography
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.design.component.DrawnTitleKey
+import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -22,7 +26,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.roundToInt
 
 // ARCHITECTURE 9.3: line 2 with the value a tab is sorted by is one line on a 411 dp phone, "+1" and line 3 present.
 @RunWith(RobolectricTestRunner::class)
@@ -50,18 +53,15 @@ class ListLineTwoTest {
         )
     }
 
-    // Lines on screen, from the line's height: a line spoken otherwise exposes no text layout.
-    private fun lineCount(
-        found: String,
-        scale: Float,
-    ): Int {
-        val height =
-            compose
-                .onAllNodesWithText(found, useUnmergedTree = true)[0]
-                .fetchSemanticsNode()
-                .size.height
-        val line = with(Density(compose.density.density, scale)) { Typography().bodyMedium.lineHeight.toPx() }
-        return (height / line).roundToInt()
+    // Lines of [line] as drawn; a scored line, spoken otherwise, is found by what it says.
+    private fun lineCount(line: RowLine): Int {
+        val separator = compose.activity.getString(R.string.common_separator)
+        val said = line.score?.let { line.text + separator + it.spoken } ?: line.text
+        val node = compose.onAllNodesWithText(said, useUnmergedTree = true)[0].fetchSemanticsNode()
+        if (DrawnTitleKey in node.config) return checkNotNull(node.config[DrawnTitleKey].layout).lineCount
+        val results = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(results)
+        return results.single().lineCount
     }
 
     private fun check(scales: List<Float>) {
@@ -82,8 +82,8 @@ class ListLineTwoTest {
                 val text = ListText(compose.activity, state.now)
                 for (row in rows) {
                     val line = text.line2(row.line2, row.sortedBy)
-                    val lines = lineCount(text.spokenLine2(row.line2, row.sortedBy) ?: line, scale)
-                    if (lines != 1) problems += "$sort at $scale: \"$line\" takes $lines lines"
+                    val lines = lineCount(line)
+                    if (lines != 1) problems += "$sort at $scale: $line takes $lines lines"
                 }
             }
         }
