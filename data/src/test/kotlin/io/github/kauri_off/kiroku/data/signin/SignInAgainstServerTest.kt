@@ -83,12 +83,15 @@ class SignInAgainstServerTest {
 
     private fun test(block: suspend CoroutineScope.() -> Unit) = runBlocking { withTimeout(30_000) { block() } }
 
-    private fun RecordedRequest.form(): Map<String, String> =
-        body
-            ?.utf8()
-            .orEmpty()
-            .split('&')
-            .associate { URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
+    // The fields of a form that is well formed: its content type, and each name once with a value.
+    private fun RecordedRequest.form(): Map<String, String> {
+        assertEquals("application/x-www-form-urlencoded", headers["Content-Type"])
+        val fields = body?.utf8().orEmpty().split('&').map { it.split('=') }
+        for (field in fields) assertTrue("$field", field.size == 2 && field.all(String::isNotEmpty))
+        val names = fields.map { URLDecoder.decode(it[0], "UTF-8") }
+        assertEquals(names.distinct(), names)
+        return names.zip(fields.map { URLDecoder.decode(it[1], "UTF-8") }).toMap()
+    }
 
     private suspend fun readAsTheUser(): Outcome<Thing> = session.authorised(network.http) { network.things.value.readAs(it) }
 
@@ -178,7 +181,7 @@ class SignInAgainstServerTest {
         test {
             assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("old-access", "refresh-1")))
             network.always(answer(401, expired))
-            network.signIn.enqueue(answer(400, """{"error":"invalid_grant"}"""))
+            network.signIn.enqueue(answer(400, "no"))
 
             assertEquals(Outcome.Failure(DataError.SessionExpired), readAsTheUser())
 
@@ -201,6 +204,20 @@ class SignInAgainstServerTest {
             network.online = false
             assertEquals(DataError.NoConnection.toString(), reply(dropped()))
             assertEquals(8, network.signIn.requestCount)
+        }
+
+    @Test
+    fun aGrantReachesTheTokenEndpointAsAWellFormedFormWhateverItsValuesHold() =
+        test {
+            val grant = mapOf("grant_type" to "authorization_code", "code" to "a+b/c=d&e f%\u00e9?#", "code_verifier" to "v-._~", "redirect_uri" to REDIRECT)
+            network.signIn.enqueue(answer(body = printed))
+
+            endpoint.post(grant)
+
+            val token = network.signIn.received()
+            assertEquals("POST /v1/oauth2/token", "${token.method} ${token.url.encodedPath}")
+            assertEquals(grant + ("client_id" to CLIENT_ID), token.form())
+            assertEquals(1, network.signIn.requestCount)
         }
 
     @Test
@@ -232,7 +249,7 @@ class SignInAgainstServerTest {
             assertEquals(SignInStep.Failed(SignInFailure.NoTokens), signIn.ended())
             assertEquals(MalBackOff.First, network.http.backOff.remaining())
 
-            network.signIn.enqueue(answer(400, """{"error":"invalid_grant"}"""))
+            network.signIn.enqueue(answer(401, "no"))
             signIn.start(browser)
             signIn.redirected(redirectOf(browser.opened.last()))
             assertEquals(SignInStep.Failed(SignInFailure.Rejected), signIn.ended())
