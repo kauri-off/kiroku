@@ -113,6 +113,11 @@ android {
         manifest.srcFile("src/debug/AndroidManifest.xml")
     }
 
+    // MAL's recorded answers, which the names of MAL's values are tested against.
+    sourceSets.named("test") {
+        resources.directories += "../data/src/test/resources/mal"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

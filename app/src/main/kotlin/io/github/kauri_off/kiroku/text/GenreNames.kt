@@ -1,6 +1,5 @@
 package io.github.kauri_off.kiroku.text
 
-import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
@@ -8,32 +7,46 @@ import io.github.kauri_off.kiroku.core.model.Genre
 
 // A genre's name in the app's language; a genre the app has no name for keeps MAL's (ARCHITECTURE section 10).
 @Composable
-fun genreName(genre: Genre): String = genreNameRes(genre.id)?.let { stringResource(it) } ?: genre.malName
+fun genreName(genre: Genre): String = genre.named { stringResource(it) }
 
-@StringRes
-fun genreNameRes(malId: Int): Int? = genreNames[malId]
+inline fun Genre.named(string: (Int) -> String): String = genreNames[id]?.let(string) ?: malName
 
-private val genreNames: Map<Int, Int> =
+// Every genre, theme and demographic MAL lists, by MAL's id.
+@PublishedApi
+internal val genreNames: Map<Int, Int> =
     mapOf(
         1 to R.string.genre_action,
         2 to R.string.genre_adventure,
+        3 to R.string.genre_racing,
         4 to R.string.genre_comedy,
         5 to R.string.genre_avant_garde,
         6 to R.string.genre_mythology,
         7 to R.string.genre_mystery,
         8 to R.string.genre_drama,
+        9 to R.string.genre_ecchi,
         10 to R.string.genre_fantasy,
+        11 to R.string.genre_strategy_game,
+        12 to R.string.genre_hentai,
         13 to R.string.genre_historical,
         14 to R.string.genre_horror,
+        15 to R.string.genre_kids,
+        17 to R.string.genre_martial_arts,
         18 to R.string.genre_mecha,
         19 to R.string.genre_music,
+        20 to R.string.genre_parody,
+        21 to R.string.genre_samurai,
         22 to R.string.genre_romance,
         23 to R.string.genre_school,
         24 to R.string.genre_sci_fi,
+        25 to R.string.genre_shoujo,
+        26 to R.string.genre_girls_love,
         27 to R.string.genre_shounen,
+        28 to R.string.genre_boys_love,
         29 to R.string.genre_space,
         30 to R.string.genre_sports,
         31 to R.string.genre_super_power,
+        32 to R.string.genre_vampire,
+        35 to R.string.genre_harem,
         36 to R.string.genre_slice_of_life,
         37 to R.string.genre_supernatural,
         38 to R.string.genre_military,
@@ -41,8 +54,43 @@ private val genreNames: Map<Int, Int> =
         40 to R.string.genre_psychological,
         41 to R.string.genre_suspense,
         42 to R.string.genre_seinen,
+        43 to R.string.genre_josei,
         46 to R.string.genre_award_winning,
         47 to R.string.genre_gourmet,
+        48 to R.string.genre_workplace,
+        49 to R.string.genre_erotica,
+        50 to R.string.genre_adult_cast,
+        51 to R.string.genre_anthropomorphic,
+        52 to R.string.genre_cgdct,
+        53 to R.string.genre_childcare,
+        54 to R.string.genre_combat_sports,
+        55 to R.string.genre_delinquents,
+        56 to R.string.genre_educational,
+        57 to R.string.genre_gag_humor,
+        58 to R.string.genre_gore,
+        59 to R.string.genre_high_stakes_game,
+        60 to R.string.genre_idols_female,
+        61 to R.string.genre_idols_male,
         62 to R.string.genre_isekai,
         63 to R.string.genre_iyashikei,
+        64 to R.string.genre_love_polygon,
+        65 to R.string.genre_magical_sex_shift,
+        66 to R.string.genre_mahou_shoujo,
+        67 to R.string.genre_medical,
+        68 to R.string.genre_organized_crime,
+        69 to R.string.genre_otaku_culture,
+        70 to R.string.genre_performing_arts,
+        71 to R.string.genre_pets,
+        72 to R.string.genre_reincarnation,
+        73 to R.string.genre_reverse_harem,
+        74 to R.string.genre_love_status_quo,
+        75 to R.string.genre_showbiz,
+        76 to R.string.genre_survival,
+        77 to R.string.genre_team_sports,
+        78 to R.string.genre_time_travel,
+        79 to R.string.genre_video_game,
+        80 to R.string.genre_visual_arts,
+        81 to R.string.genre_crossdressing,
+        82 to R.string.genre_urban_fantasy,
+        83 to R.string.genre_villainess,
     )

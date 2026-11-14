@@ -145,15 +145,7 @@ on the Russian strings so far are fixed.
   **Check:** tests: stored details are shown without a request while fresh; a failed refresh changes nothing
   stored and is reported; a refresh of the details does not lose a value the summary had.
 
-- [ ] **M2-18 Translated MAL values and the genre table.** Both languages for every media type, source, age
-  rating, relation, season, airing status and genre MAL uses, the genres collected by the recorder from enough
-  titles to hold them all, adult ones included. Before the Russian relation names are written they are compared
-  with the names Shikimori shows, read from the site at that time; the differences go to the owner, and a term
-  changes, in the glossary and the resources together, only on his answer.
-  **Needs:** M2-10.
-  **Check:** a test that every code and genre in the recorded answers has both translations, and that an unknown
-  one falls back as section 10 says; the pull request holds the comparison (relation, glossary, Shikimori) or
-  says the site could not be read.
+- [x] **M2-18 Translated MAL values and the genre table.**
 
 - [ ] **M2-19 List client: writing.** The rest of `RemoteList`: one entry read, set and removed, the answer
   being the entry as MAL has it afterwards; removing a title that is not on the list is a removal. The client is

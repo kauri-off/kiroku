@@ -1,0 +1,793 @@
+{
+    "id": 11617,
+    "title": "High School DxD",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/1331/111940.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/1331/111940l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Highschool DxD"
+        ],
+        "en": "High School DxD",
+        "ja": "ハイスクールD×D"
+    },
+    "media_type": "tv",
+    "status": "finished_airing",
+    "num_episodes": 12,
+    "start_date": "2012-01-06",
+    "broadcast": {
+        "day_of_the_week": "friday",
+        "start_time": "11:00"
+    },
+    "mean": 7.31,
+    "rank": 3130,
+    "genres": [
+        {
+            "id": 1,
+            "name": "Action"
+        },
+        {
+            "id": 4,
+            "name": "Comedy"
+        },
+        {
+            "id": 9,
+            "name": "Ecchi"
+        },
+        {
+            "id": 35,
+            "name": "Harem"
+        },
+        {
+            "id": 6,
+            "name": "Mythology"
+        },
+        {
+            "id": 22,
+            "name": "Romance"
+        },
+        {
+            "id": 23,
+            "name": "School"
+        },
+        {
+            "id": 37,
+            "name": "Supernatural"
+        }
+    ],
+    "average_episode_duration": 1440,
+    "end_date": "2012-03-23",
+    "synopsis": "High school student Issei Hyoudou is your run-of-the-mill…\n\nSlowly adjusting to his new life, Issei must train and…\n\n[Written by MAL Rewrite]",
+    "start_season": {
+        "year": 2012,
+        "season": "winter"
+    },
+    "source": "light_novel",
+    "studios": [
+        {
+            "id": 120,
+            "name": "TNK"
+        }
+    ],
+    "rating": "r+",
+    "statistics": {
+        "status": {
+            "watching": "61983",
+            "completed": "1259164",
+            "on_hold": "24246",
+            "dropped": "58765",
+            "plan_to_watch": "157116"
+        },
+        "num_list_users": 1561274
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 12729,
+                "title": "High School DxD OVA",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/63561.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/63561l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "High School DxD Episodes 13 and 14",
+                        "Highschool DxD OVA"
+                    ],
+                    "en": "",
+                    "ja": "ハイスクールD×D OVA"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2012-09-06",
+                "mean": 7.26,
+                "rank": 3434,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1422
+            },
+            "relation_type": "sequel",
+            "relation_type_formatted": "Sequel"
+        },
+        {
+            "node": {
+                "id": 13357,
+                "title": "High School DxD Specials",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/38449.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/38449l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Highschool DxD Specials"
+                    ],
+                    "en": "",
+                    "ja": "ハイスクールD×Dスペシャル"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 6,
+                "start_date": "2012-03-21",
+                "mean": 7.27,
+                "rank": 3370,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 223
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        }
+    ],
+    "recommendations": [
+        {
+            "node": {
+                "id": 23233,
+                "title": "Shinmai Maou no Testament",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1654/112033.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1654/112033l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Shinmai Maou no Keiyakusha"
+                    ],
+                    "en": "The Testament of Sister New Devil",
+                    "ja": "新妹魔王の契約者"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2015-01-08",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "02:00"
+                },
+                "mean": 6.68,
+                "rank": 6941,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "num_recommendations": 58
+        },
+        {
+            "node": {
+                "id": 8074,
+                "title": "Highschool of the Dead",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/78311.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/78311l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gakuen Mokushiroku: Highschool of the Dead",
+                        "HOTD",
+                        "HSOTD"
+                    ],
+                    "en": "High School of the Dead",
+                    "ja": "学園黙示録 HIGHSCHOOL OF THE DEAD"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2010-07-05",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "11:30"
+                },
+                "mean": 7.06,
+                "rank": 4625,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 58,
+                        "name": "Gore"
+                    },
+                    {
+                        "id": 14,
+                        "name": "Horror"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 76,
+                        "name": "Survival"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1425
+            },
+            "num_recommendations": 19
+        },
+        {
+            "node": {
+                "id": 25157,
+                "title": "Trinity Seven",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/67795.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/67795l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Trinity Seven",
+                    "ja": "トリニティセブン"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2014-10-08",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "01:40"
+                },
+                "mean": 7.02,
+                "rank": 4858,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 18
+        },
+        {
+            "node": {
+                "id": 3455,
+                "title": "To LOVE-Ru",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1292/147431.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1292/147431l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Toraburu",
+                        "Love Trouble"
+                    ],
+                    "en": "To Love Ru",
+                    "ja": "To LOVEる -とらぶる-"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "2008-04-04",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "01:55"
+                },
+                "mean": 6.96,
+                "rank": 5155,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "num_recommendations": 16
+        },
+        {
+            "node": {
+                "id": 8841,
+                "title": "Kore wa Zombie desu ka?",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/75521.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/75521l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Koreha Zombie Desuka?",
+                        "Kore ha Zombie Desu ka?",
+                        "Kore wa Zombie Desuka?"
+                    ],
+                    "en": "Is This a Zombie?",
+                    "ja": "これはゾンビですか?"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2011-01-11",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:30"
+                },
+                "mean": 7.32,
+                "rank": 3086,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    },
+                    {
+                        "id": 32,
+                        "name": "Vampire"
+                    }
+                ],
+                "average_episode_duration": 1480
+            },
+            "num_recommendations": 13
+        },
+        {
+            "node": {
+                "id": 12293,
+                "title": "Campione! Matsurowanu Kamigami to Kamigoroshi no Maou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/75662.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/75662l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Campione!: Matsurowanu Kamigami to Kamigoroshi no Maou"
+                    ],
+                    "en": "Campione!",
+                    "ja": "カンピオーネ！ ～まつろわぬ神々と神殺しの魔王～"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2012-07-06",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "23:30"
+                },
+                "mean": 6.9,
+                "rank": 5439,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 11
+        },
+        {
+            "node": {
+                "id": 7088,
+                "title": "Ichiban Ushiro no Daimaou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/75554.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/75554l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Ichiban Ushiro no Dai Mao"
+                    ],
+                    "en": "Demon King Daimao",
+                    "ja": "いちばんうしろの大魔王"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2010-04-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:30"
+                },
+                "mean": 6.69,
+                "rank": 6843,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1419
+            },
+            "num_recommendations": 10
+        },
+        {
+            "node": {
+                "id": 2993,
+                "title": "Rosario to Vampire",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/75242.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/75242l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Rosario and Vampire"
+                    ],
+                    "en": "Rosario + Vampire",
+                    "ja": "ロザリオとバンパイア"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2008-01-03",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "23:30"
+                },
+                "mean": 6.73,
+                "rank": 6576,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 32,
+                        "name": "Vampire"
+                    }
+                ],
+                "average_episode_duration": 1480
+            },
+            "num_recommendations": 9
+        },
+        {
+            "node": {
+                "id": 15583,
+                "title": "Date A Live",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/44844.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/44844l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Date A Live",
+                    "ja": "デート・ア・ライブ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2013-04-06",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:30"
+                },
+                "mean": 7.14,
+                "rank": 4163,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 82,
+                        "name": "Urban Fantasy"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "num_recommendations": 9
+        },
+        {
+            "node": {
+                "id": 6324,
+                "title": "Omamori Himari",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/22525.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/22525l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Protective Charm Himari",
+                        "OmaHima"
+                    ],
+                    "en": "Omamori Himari",
+                    "ja": "おまもりひまり"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2010-01-07",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "01:30"
+                },
+                "mean": 6.81,
+                "rank": 6061,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 35,
+                        "name": "Harem"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 8
+        }
+    ]
+}

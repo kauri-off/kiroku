@@ -8,7 +8,6 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RelationType
-import io.github.kauri_off.kiroku.core.model.malCodeAsText
 import io.github.kauri_off.kiroku.core.model.showsCount
 
 // Values from MAL and the user's list as interface text, one form for every screen.
@@ -38,19 +37,7 @@ fun ListStatus.label(): Int =
     }
 
 @Composable
-fun mediaTypeLabel(type: MediaType): String =
-    when (type) {
-        MediaType.Tv -> stringResource(R.string.common_type_tv)
-        MediaType.TvSpecial -> stringResource(R.string.common_type_tv_special)
-        MediaType.Movie -> stringResource(R.string.common_type_movie)
-        MediaType.Ova -> stringResource(R.string.common_type_ova)
-        MediaType.Ona -> stringResource(R.string.common_type_ona)
-        MediaType.Special -> stringResource(R.string.common_type_special)
-        MediaType.Music -> stringResource(R.string.common_type_music)
-        MediaType.Commercial -> stringResource(R.string.common_type_commercial)
-        MediaType.PromotionalVideo -> stringResource(R.string.common_type_promotional)
-        is MediaType.Unrecognized -> malCodeAsText(type.malCode)
-    }
+fun mediaTypeLabel(type: MediaType): String = type.named { stringResource(it) }
 
 // "TV · 2019"; either part is left out when unknown, so it can be empty.
 @Composable
@@ -61,18 +48,4 @@ fun typeAndYear(
 
 // The relation's full name.
 @Composable
-fun relationName(relation: RelationType): String =
-    when (relation) {
-        RelationType.Prequel -> stringResource(R.string.common_relation_prequel)
-        RelationType.Sequel -> stringResource(R.string.common_relation_sequel)
-        RelationType.ParentStory -> stringResource(R.string.common_relation_parent_story)
-        RelationType.FullStory -> stringResource(R.string.common_relation_full_story)
-        RelationType.SideStory -> stringResource(R.string.common_relation_side_story)
-        RelationType.SpinOff -> stringResource(R.string.common_relation_spin_off)
-        RelationType.AlternativeSetting -> stringResource(R.string.common_relation_alternative_setting)
-        RelationType.AlternativeVersion -> stringResource(R.string.common_relation_alternative_version)
-        RelationType.Summary -> stringResource(R.string.common_relation_summary)
-        RelationType.Other -> stringResource(R.string.common_relation_other)
-        RelationType.Character -> stringResource(R.string.common_relation_character)
-        is RelationType.Unrecognized -> malCodeAsText(relation.malCode)
-    }
+fun relationName(relation: RelationType): String = relation.named { stringResource(it) }
