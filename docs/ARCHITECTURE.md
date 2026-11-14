@@ -381,7 +381,9 @@ was chosen against, and why:
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
   replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
-  while the user can see and tap it. Ordinary messages are not queued.
+  while the user can see and tap it; a finger holding any message stops its time, which starts again in full when
+  let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
+  runs no action. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
 
@@ -533,10 +535,10 @@ change legible, or preventing a jump. Decoration is not a purpose.
   for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
   slide with ViewPager2's snap timing, so that the gesture feels as in Droid-ify.
 - **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
-  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came. Lists have
-  stable keys and use the list's item animation for add, remove and move, including a title that joins or leaves a
-  List tab between orderings (section 9.3), even when a data refresh brings the change. Content that finishes
-  loading fades in.
+  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came, or the way they
+  were swiped. Lists have stable keys and use the list's item animation for add, remove and move, including a title
+  that joins or leaves a List tab between orderings (section 9.3), even when a data refresh brings the change.
+  Content that finishes loading fades in.
   One thing moves per change; a container that enters brings its content with it.
 - **Time.** An exit is shorter than the matching entrance, and an animation settles within the bound the motion
   tests set for its spring.
