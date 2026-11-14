@@ -9,7 +9,13 @@ import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.rules.appSources
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -27,11 +33,22 @@ import java.util.concurrent.atomic.AtomicInteger
 class LiveGraphTest {
     private val context get() = RuntimeEnvironment.getApplication()
 
-    // The HTTP client asks whether it is on the main thread exactly when it is built.
+    // The HTTP client asks whether it is on the main thread exactly when it is built; a collection of the connection
+    // stands for one system callback.
     private class CountingDevice : Device {
         val clientBuilds = AtomicInteger()
+        val online = MutableStateFlow(true)
+        val registrations = AtomicInteger()
+        val registered = AtomicInteger()
 
-        override fun isOnline() = true
+        override fun isOnline() = online.value
+
+        override fun observeOnline(): Flow<Boolean> =
+            online
+                .onStart {
+                    registrations.incrementAndGet()
+                    registered.incrementAndGet()
+                }.onCompletion { registered.decrementAndGet() }
 
         override fun isMainThread(): Boolean {
             clientBuilds.incrementAndGet()
@@ -70,6 +87,34 @@ class LiveGraphTest {
             assertEquals(1, stores.get())
             assertEquals(0, device.clientBuilds.get())
             assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    @Test
+    fun `the connection is the requests' device, holding one callback while screens wait for it, none before or after`() =
+        runTest {
+            val graph = LiveGraph(parts(backgroundScope), listStore = { store() })
+            val connection = graph.connection
+            runCurrent()
+            assertEquals(0, device.registrations.get())
+
+            val first = mutableListOf<Boolean>()
+            val one = backgroundScope.launch { connection.observeOnline().collect { first += it } }
+            runCurrent()
+            device.online.value = false
+            runCurrent()
+            val second = mutableListOf<Boolean>()
+            val two = backgroundScope.launch { connection.observeOnline().collect { second += it } }
+            runCurrent()
+            assertEquals(listOf(true, false), first)
+            assertEquals("the current value at once", listOf(false), second)
+            assertEquals(1, device.registrations.get())
+
+            one.cancel()
+            runCurrent()
+            assertEquals(1, device.registered.get())
+            two.cancel()
+            runCurrent()
+            assertEquals(0, device.registered.get())
         }
 
     @Test

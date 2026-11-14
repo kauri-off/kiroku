@@ -11,6 +11,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
@@ -62,6 +63,7 @@ fun TitleRoute(
                 graph.list,
                 graph.airing,
                 graph.session,
+                graph.connection,
                 graph.clock,
                 graph.titleLanguage,
                 createSavedStateHandle(),
@@ -72,6 +74,7 @@ fun TitleRoute(
     val editor = editSheetViewModel(graph, messages)
     val context = LocalContext.current
     val state by title.state.collectAsScreenState()
+    CountAsShown(title.shown)
     TitleScreen(
         state = state,
         onEvent = { event ->

@@ -194,6 +194,9 @@ interface AnimeRepository {
 
     fun observeDetails(id: AnimeId): Flow<AnimeDetails?>
 
+    // When the details were last fetched; null when they never were.
+    fun observeRefreshedAt(id: AnimeId): Flow<Instant?>
+
     suspend fun refresh(id: AnimeId): Outcome<Unit>
 }
 

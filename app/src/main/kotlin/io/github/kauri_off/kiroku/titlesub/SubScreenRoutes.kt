@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.title.TitleSummary
@@ -49,9 +50,20 @@ fun RelatedRoute(
 ) {
     val related =
         viewModel {
-            RelatedViewModel(AnimeId(key.id), graph.anime, graph.list, graph.airing, graph.session, graph.titleLanguage, key.opened)
+            RelatedViewModel(
+                AnimeId(key.id),
+                graph.anime,
+                graph.list,
+                graph.airing,
+                graph.session,
+                graph.connection,
+                graph.clock,
+                graph.titleLanguage,
+                key.opened,
+            )
         }
     val state by related.state.collectAsScreenState()
+    CountAsShown(related.shown)
     RelatedScreen(
         state = state,
         onEvent = { event ->
@@ -76,9 +88,10 @@ fun DetailsRoute(
 ) {
     val details =
         viewModel {
-            DetailsViewModel(AnimeId(key.id), graph.anime, graph.session, graph.titleLanguage, graph.clock, key.opened)
+            DetailsViewModel(AnimeId(key.id), graph.anime, graph.session, graph.connection, graph.titleLanguage, graph.clock, key.opened)
         }
     val state by details.state.collectAsScreenState()
+    CountAsShown(details.shown)
     DetailsScreen(
         state = state,
         onEvent = { event ->
