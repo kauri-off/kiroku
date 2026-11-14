@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
@@ -146,6 +147,7 @@ class ScreenshotHarnessTest {
                 1 to { CircularProgressIndicator(Modifier.testTag(Shot.ONE_LOOP_INDICATOR)) },
                 1 to { LinearProgressIndicator(Modifier.testTag(Shot.ONE_LOOP_INDICATOR)) },
                 Shot.WAVY_LOOPS to { LinearWavyProgressIndicator(Modifier.testTag(WAVY_INDICATOR)) },
+                1 to { LinearWavyProgressIndicator(progress = { HALF }, modifier = Modifier.testTag(COUNTED_WAVY_INDICATOR)) },
                 0 to { ScreenState(ScreenState.Loading) },
                 0 to { RefreshBox(isRefreshing = true, onRefresh = {}) {} },
             )
@@ -398,3 +400,4 @@ private const val RING_INNER_DP = 16.0
 private const val SPINNER_SHARE = 0.6
 private const val PULSE_MS = 1000
 private const val PULSE_DP = 48
+private const val HALF = 0.5f

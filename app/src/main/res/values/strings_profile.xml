@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_title">Profile</string>
+    <string name="profile_settings">Settings</string>
+    <string name="profile_joined">Joined\u00A0%1$d</string>
+    <string name="profile_completed">Completed</string>
+    <string name="profile_days_watched">Days watched</string>
+    <string name="profile_mean_score">Mean score</string>
+    <string name="profile_no_mean_score_value" translatable="false">—</string>
+    <string name="profile_no_mean_score">No mean score</string>
+    <string name="profile_score_distribution">Score distribution</string>
+    <string name="profile_genres">Genres</string>
+    <string name="profile_formats_and_years">Formats and years</string>
+    <string name="profile_open_another">Open another profile</string>
+    <string name="profile_view_list">View list</string>
+    <string name="profile_signed_out">Sign in with MyAnimeList to see your profile here</string>
+    <string name="profile_sign_in">Sign in</string>
+    <string name="profile_could_not_load">Could not load the profile</string>
+    <string name="profile_private_list">This list is private</string>
+    <string name="profile_unknown_user">MyAnimeList has no user with this name</string>
+    <string name="profile_loading_list">Loading %1$s\u00A0of\u00A0%2$s</string>
+    <plurals name="profile_loading_list_unknown_total">
+        <item quantity="one">%1$s\u00A0title loaded</item>
+        <item quantity="other">%1$s\u00A0titles loaded</item>
+    </plurals>
+    <string name="profile_user_name">User name</string>
+    <string name="profile_not_a_profile_link">Not a MyAnimeList profile link</string>
+    <string name="profile_recent">Recent</string>
+    <string name="profile_open">Open</string>
+    <string name="profile_cancel">Cancel</string>
+</resources>
