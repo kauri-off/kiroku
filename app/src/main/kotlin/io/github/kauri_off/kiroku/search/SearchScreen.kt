@@ -51,6 +51,7 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
+import io.github.kauri_off.kiroku.design.component.WindowSnackbarHost
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -73,7 +74,7 @@ fun SearchScreen(
     // Leaving for another screen closes the search view at once, so Back returns to the results under the bar.
     val scope = rememberCoroutineScope()
     val events: (SearchEvent) -> Unit = { event ->
-        if (event is SearchEvent.Open || event is SearchEvent.Browse) {
+        if (event is SearchEvent.Open || event is SearchEvent.Browse || event is SearchEvent.SignIn) {
             scope.launch {
                 bar.snapTo(COLLAPSED)
                 onEvent(event)
@@ -106,7 +107,8 @@ fun SearchScreen(
                 }
             }
         },
-        snackbarHost = { ScreenSnackbarHost(snackbars) },
+        // While the view is open, its own host shows the messages.
+        snackbarHost = { if (bar.currentValue != SearchBarValue.Expanded) ScreenSnackbarHost(snackbars) },
     ) { padding ->
         Body(state.content, state.editable, events, padding)
     }
@@ -117,8 +119,13 @@ fun SearchScreen(
         colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         WindowWithoutAutofill()
+        // The view is a window over the screen's: it shows the session banner and the shell's messages itself.
+        if (state.sessionExpired) SessionBanner(onSignIn = { events(SearchEvent.SignIn) })
         // The view already keeps its content clear of the navigation bar and the keyboard.
-        Body(state.content, state.editable, events, PaddingValues())
+        Box(Modifier.fillMaxSize()) {
+            Body(state.content, state.editable, events, PaddingValues())
+            WindowSnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter))
+        }
     }
 }
 

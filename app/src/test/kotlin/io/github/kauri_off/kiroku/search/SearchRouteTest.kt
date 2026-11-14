@@ -29,6 +29,7 @@ import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.design.composeRule
@@ -45,6 +46,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -204,13 +206,75 @@ class SearchRouteTest {
     private val topAiring = SearchFixtureStates.browseRows(BrowseList.TopAiring).first().title
 
     @Test
-    fun `a long press on a browse list's row opens its edit sheet`() {
+    fun `a long press on a browse list's row opens the sheet of that row's title`() {
         search()
         compose.onNodeWithText("Top airing").performClick()
         settle()
-        compose.onNode(hasText(topAiring, substring = true) and hasClickAction()).performTouchInput { longClick() }
+        val pressed = SearchFixtureStates.browseRows(BrowseList.TopAiring)[2]
+        compose.onNode(hasText(pressed.title, substring = true) and hasClickAction()).performTouchInput { longClick() }
         settle()
         compose.onNodeWithText("Save").assertExists()
+        // The sheet names its title alone; the row puts its rank in front.
+        compose.onNode(hasText(pressed.title) and !hasClickAction()).assertExists()
+        assertEquals(ListStatus.OnHold, pressed.entry?.status)
+        compose.onNode(status("On hold")).assertIsOn()
+    }
+
+    @Test
+    fun `a result's title reaches the sheet, also when neither the list nor the store has it`() {
+        graph.titlesUnstored.value = true
+        search()
+        typeKag()
+        longPress(notListed.titles.romaji)
+        compose.onNodeWithText("Save").assertExists()
+        compose.onNode(status("Planned")).assertIsOn()
+    }
+
+    @Test
+    fun `with the session expired a result offers an edit, and the refused save and the banner are shown over the view`() {
+        graph.demo.server.sessionExpired.value = true
+        search()
+        typeKag()
+        compose.onNode(inView("Session expired")).assertExists()
+        longPress(FixtureAnime.exactToWatch.titles.romaji)
+        compose.onNode(status("On hold")).performClick()
+        compose.onNodeWithText("Save").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNode(inView("Could not save")).assertExists()
+        compose.onNode(hasText("Retry")).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a save that fails from the open view offers Retry over the view`() {
+        graph.demo.server.offline.value = true
+        search()
+        typeKag()
+        longPress(FixtureAnime.exactToWatch.titles.romaji)
+        compose.onNode(status("On hold")).performClick()
+        compose.onNodeWithText("Save").performClick()
+        settle()
+        compose.onNode(inView("Could not save")).assertExists()
+        compose.onNode(inView("Retry") and hasClickAction()).assertExists()
+    }
+
+    @Test
+    fun `while the session is unknown a result offers no edit`() {
+        graph.readsHeld = true
+        val standIn = SearchFixtureStates.standIn(Fixtures.reference)
+        val messages = ShellMessages(scope, graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SearchRoute(standIn, graph, messages, remember { SnackbarHostState() }, { _, _ -> }, onBrowse = {}, onSignIn = {})
+            }
+        }
+        settle()
+        typeKag()
+        val result = compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji) and hasClickAction())
+        result.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        graph.readsHeld = false
+        settle()
+        result.assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
     }
 
     @Test
@@ -236,6 +300,40 @@ class SearchRouteTest {
         result.performTouchInput { longClick() }
         settle()
         compose.onNodeWithText("Save").assertDoesNotExist()
+    }
+
+    // Under the bar, not in the search view.
+    private fun underBar(text: String) = hasText(text) and !hasAnyAncestor(isDialog())
+
+    @Test
+    fun `searching a recent search again moves it to the top without a second row`() {
+        search()
+        val again = SearchFixtureStates.recent[2]
+        compose.onNode(underBar(again)).performClick()
+        settle()
+        compose.onNode(hasContentDescription("Clear search") and !hasAnyAncestor(isDialog())).performClick()
+        settle()
+        val top = compose.onNode(underBar(again)).getUnclippedBoundsInRoot().top
+        val first = compose.onNode(underBar(SearchFixtureStates.recent[0])).getUnclippedBoundsInRoot().top
+        assertTrue(top < first)
+        compose.onNode(underBar(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertExists()
+    }
+
+    @Test
+    fun `a query of spaces is no query, and is not kept`() {
+        search()
+        compose.onNode(hasSetTextAction() and !hasAnyAncestor(isDialog())).performClick()
+        settle()
+        compose.onNode(typing).performKeyInput {
+            pressKey(Key.Spacebar)
+            pressKey(Key.Spacebar)
+        }
+        settle()
+        compose.onNode(inView("Recent searches")).assertExists()
+        compose.onNode(hasText("Nothing found", substring = true)).assertDoesNotExist()
+        compose.onNode(typing).performImeAction()
+        settle()
+        compose.onNode(inView(SearchFixtureStates.recent[MAX_RECENT_SEARCHES - 1])).assertExists()
     }
 
     private companion object {

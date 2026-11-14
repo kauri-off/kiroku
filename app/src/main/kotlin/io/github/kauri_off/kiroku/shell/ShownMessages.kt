@@ -40,7 +40,10 @@ fun ShownMessages(
         if (posted == null || text == null) return@LaunchedEffect
         val result =
             if (posted.message.mustStay) {
-                combine(lifecycle.currentStateFlow, snapshotFlow { window.isWindowFocused && !covers.covered }) { state, seen ->
+                combine(
+                    lifecycle.currentStateFlow,
+                    snapshotFlow { (window.isWindowFocused || covers.hostedAbove) && !covers.covered },
+                ) { state, seen ->
                     seen && state.isAtLeast(Lifecycle.State.STARTED)
                 }.distinctUntilChanged()
                     .mapLatest { seen -> if (seen) host.show(text, action) else null }
