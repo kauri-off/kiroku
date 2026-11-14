@@ -22,9 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-// The loads a screen asks for by itself (ARCHITECTURE 7.1). [whenShown] runs when it is shown, the first time and again
-// once it was hidden past its state's stop timeout; [again] runs while it is shown, once, when the connection returns
-// after a load failed for the lack of it.
+// Loads a screen asks for by itself (ARCHITECTURE 7.1): when shown, and once when the connection it failed for returns.
 class ShownLoads(
     scope: CoroutineScope,
     connection: Connection,

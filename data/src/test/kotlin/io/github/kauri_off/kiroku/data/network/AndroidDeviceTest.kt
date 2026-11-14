@@ -73,6 +73,34 @@ class AndroidDeviceTest {
             assertTrue(shadowOf(connectivity).networkCallbacks.isEmpty())
         }
 
+    // The system names no active network to a blocked app, as with a lockdown VPN reconnecting, and tells its callbacks.
+    @Test
+    fun `a blocked network is offline to the connection and to a request alike`() =
+        runTest {
+            val network = connectivity.activeNetwork!!
+            val online = capabilities(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            shadowOf(connectivity).setNetworkCapabilities(network, online)
+            val info = connectivity.activeNetworkInfo
+            val seen = mutableListOf<Boolean>()
+            backgroundScope.launch { device.observeOnline().collect { seen += it } }
+            runCurrent()
+            val callback = shadowOf(connectivity).networkCallbacks.single()
+            callback.onCapabilitiesChanged(network, online)
+            runCurrent()
+
+            shadowOf(connectivity).setActiveNetworkInfo(null)
+            callback.onBlockedStatusChanged(network, true)
+            runCurrent()
+            assertFalse(device.isOnline())
+            assertEquals(listOf(true, false), seen)
+
+            shadowOf(connectivity).setActiveNetworkInfo(info)
+            callback.onBlockedStatusChanged(network, false)
+            runCurrent()
+            assertTrue(device.isOnline())
+            assertEquals(listOf(true, false, true), seen)
+        }
+
     @Test
     fun `the connection starts offline without a network`() =
         runTest {

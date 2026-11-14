@@ -371,6 +371,8 @@ was chosen against, and why:
   holds everything shown from cache: titles, the user's list, related titles, airing data, the record of announced
   episodes, the user's profile. Cached data is refreshed when it is shown stale, on pull-to-refresh, and by
   periodic background work.
+- A screen counts as shown while it is on top and started, and as shown again only after its state's stop timeout;
+  a load that failed for want of a connection is repeated once when the connection returns while it is shown.
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
 - A value is stored under MAL's own code, so a code the app learns later needs no migration.

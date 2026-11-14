@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.network
 
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.Serializable
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -90,6 +91,8 @@ internal class NetworkFixture : ExternalResource() {
             device =
                 object : Device {
                     override fun isOnline() = online
+
+                    override fun observeOnline() = flowOf(online)
 
                     override fun isMainThread() = Thread.currentThread() === mainThread
                 },

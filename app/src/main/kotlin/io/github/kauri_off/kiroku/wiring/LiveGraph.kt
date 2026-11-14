@@ -32,7 +32,8 @@ internal class LiveParts(
     val scope: CoroutineScope,
     val unexpected: (Throwable) -> Unit,
     log: ((String) -> Unit)? = null,
-    device: Device = AndroidDevice(context),
+    // The requests' judgement of the connection and the screens' are this one device's.
+    val device: Device = AndroidDevice(context),
 ) {
     // The only HTTP client of the source.
     val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log)

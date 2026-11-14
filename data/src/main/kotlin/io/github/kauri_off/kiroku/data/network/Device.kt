@@ -12,37 +12,50 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-// What the network layer asks of the device it runs on.
-interface Device {
+// What the network layer asks of the device it runs on; its connection is the screens' too, so the two agree.
+interface Device : Connection {
     fun isOnline(): Boolean
 
     fun isMainThread(): Boolean
 }
 
-// The request's "No connection" and the screens' connection are one judgement: a default network that reaches the internet.
 class AndroidDevice(
     context: Context,
-) : Device,
-    Connection {
+) : Device {
     private val connectivity by lazy { context.getSystemService(ConnectivityManager::class.java) }
 
+    // The system names no active network for an app whose default network is blocked.
     override fun isOnline(): Boolean {
-        val network = connectivity.activeNetwork ?: return false
-        return connectivity.getNetworkCapabilities(network).reachesInternet()
+        val network = connectivity.activeNetwork
+        return online(network?.let(connectivity::getNetworkCapabilities), blocked = network == null)
     }
 
     override fun observeOnline(): Flow<Boolean> =
         callbackFlow {
             val callback =
                 object : ConnectivityManager.NetworkCallback() {
+                    private var capabilities: NetworkCapabilities? = null
+                    private var blocked = false
+
                     override fun onCapabilitiesChanged(
                         network: Network,
                         capabilities: NetworkCapabilities,
                     ) {
-                        trySend(capabilities.reachesInternet())
+                        this.capabilities = capabilities
+                        trySend(online(capabilities, blocked))
+                    }
+
+                    override fun onBlockedStatusChanged(
+                        network: Network,
+                        blocked: Boolean,
+                    ) {
+                        this.blocked = blocked
+                        trySend(online(capabilities, blocked))
                     }
 
                     override fun onLost(network: Network) {
+                        capabilities = null
+                        blocked = false
                         trySend(false)
                     }
                 }
@@ -52,6 +65,10 @@ class AndroidDevice(
         }.conflate().distinctUntilChanged()
 
     override fun isMainThread(): Boolean = Looper.getMainLooper().isCurrentThread
-
-    private fun NetworkCapabilities?.reachesInternet(): Boolean = this?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
 }
+
+// Online: a default network that reaches the internet and is not blocked for the app.
+private fun online(
+    capabilities: NetworkCapabilities?,
+    blocked: Boolean,
+): Boolean = !blocked && capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true

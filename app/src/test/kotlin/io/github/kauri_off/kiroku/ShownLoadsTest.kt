@@ -31,17 +31,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import java.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 // ARCHITECTURE 7.1 for every screen that loads by itself: what showing it, hiding it and the connection ask of MAL.
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -108,8 +109,8 @@ class ShownLoadsTest(
             val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
             val graph = TestGraph(Demo(Fixtures.reference, scope, LATENCY, clock))
             val subject = Subject(graph, clock, screen.open(graph, scope), this)
-            advanceUntilIdle()
             try {
+                settle()
                 body(subject)
             } finally {
                 subject.hide()
@@ -209,6 +210,24 @@ class ShownLoadsTest(
             s.graph.connectionSays.value = true
             settle()
             assertEquals(3, s.loads)
+        }
+
+    // The List's engine runs syncs one after another (W6), so there a newer sync always ends after an older one.
+    @Test
+    fun `an older load ending after a newer one does not stand for the screen`() =
+        test { s ->
+            assumeTrue(screen.toString() != "List")
+            s.graph.demo.server.latency = 3.seconds
+            s.show()
+            advanceTimeBy(500)
+            s.graph.demo.server.latency = LATENCY
+            s.opened.retry()
+            advanceTimeBy(500)
+            s.graph.demo.server.offline.value = true
+            settle()
+            s.graph.demo.server.offline.value = false
+            settle()
+            assertEquals("the older load's failure owed no repeat", 2, s.loads)
         }
 
     @Test

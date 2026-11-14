@@ -71,7 +71,9 @@ abstract class SubScreenViewModel(
         if (anime.stale(id, opened?.anime, clock.instant()) && load?.isActive != true) refresh()
     }
 
+    // A newer load replaces an older one, so the older one's end never stands for the screen.
     protected fun refresh() {
+        load?.cancel()
         failure.value = null
         loads.started()
         load =

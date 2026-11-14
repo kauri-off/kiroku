@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -13,6 +14,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
+import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
@@ -31,6 +33,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -273,6 +276,68 @@ class TitleViewModelTest {
             s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
             advanceUntilIdle()
             assertEquals(failed, s.shown.detailsWait)
+        }
+
+    // The connection's return repeats a failure shown in place as a Retry would: the wait at once, and no message.
+    @Test
+    fun `details that failed in place are repeated as a Retry when the connection returns`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            graph.demo.server.offline.value = true
+            val messages = ShellMessages(scope, graph.list)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
+            showing(title.state, title.shown)
+            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            advanceUntilIdle()
+            val failed = DetailsWait.Failed(DataError.NoConnection)
+            assertEquals(failed, wait())
+            messages.ended(messages.current.value!!, actionPerformed = false)
+            graph.connectionSays.value = true
+            runCurrent()
+            assertEquals(DetailsWait.Loading, wait())
+            advanceTimeBy(DETAILS_LATENCY + 1.seconds)
+            runCurrent()
+            assertEquals(failed, wait())
+            assertNull(messages.current.value)
+            title.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    // With the details shown, the repeat runs as one the page started: no wait shown at once, a failure said by a message.
+    @Test
+    fun `a failed refresh of details shown is repeated as the page's own when the connection returns`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
+            val graph = TestGraph(Demo(Fixtures.reference, scope, DETAILS_LATENCY, clock))
+            val messages = ShellMessages(scope, graph.list)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
+            var screen = showing(title.state, title.shown)
+            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            advanceUntilIdle()
+            screen.cancel()
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            clock.instant += Duration.ofDays(1)
+            graph.demo.server.offline.value = true
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceTimeBy(DETAILS_LATENCY + 1.seconds)
+            runCurrent()
+            val noConnection = ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection))
+            assertEquals(noConnection, messages.current.value?.message)
+            assertEquals(FixtureDetails.full, (title.state.value as TitleState.Shown).page.details)
+            messages.ended(messages.current.value!!, actionPerformed = false)
+            graph.connectionSays.value = true
+            runCurrent()
+            assertEquals(DetailsWait.Brief, wait())
+            assertEquals(3, graph.refreshes)
+            advanceTimeBy(DETAILS_LATENCY + 1.seconds)
+            runCurrent()
+            assertEquals(noConnection, messages.current.value?.message)
+            screen.cancel()
+            title.viewModelScope.cancel()
+            scope.cancel()
         }
 
     // A wait the person started needs no second's grace; a Retry that fails says so in place, with no message.
