@@ -259,6 +259,21 @@ class ProfileScreenTest {
     }
 
     @Test
+    fun aLinkThatIsNotAProfileStaysInTheFieldAndSaysSo() {
+        show(fixtures.me().copy(openProfile = OpenProfile("https://anilist.co/user/${fixtures.otherName}/", emptyList())))
+        compose.onNodeWithText("Not a MyAnimeList profile link", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Open").assertIsNotEnabled()
+    }
+
+    @Test
+    fun theDialogOpensTheNameInAPastedListLink() {
+        show(fixtures.me().copy(openProfile = OpenProfile("myanimelist.net/animelist/${fixtures.otherName}", emptyList())))
+        compose.onNodeWithText("Not a MyAnimeList profile link", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Open").performClick()
+        assertEquals(listOf(ProfileEvent.OpenProfile(fixtures.otherName)), events)
+    }
+
+    @Test
     fun theDialogOpensTheTypedName() {
         show(fixtures.me().copy(openProfile = OpenProfile(" ${fixtures.otherName} ", emptyList())))
         compose.onNodeWithText("Recent").assertDoesNotExist()

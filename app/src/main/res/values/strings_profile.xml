@@ -24,6 +24,7 @@
         <item quantity="other">%1$s\u00A0titles loaded</item>
     </plurals>
     <string name="profile_user_name">User name</string>
+    <string name="profile_not_a_profile_link">Not a MyAnimeList profile link</string>
     <string name="profile_recent">Recent</string>
     <string name="profile_open">Open</string>
     <string name="profile_cancel">Cancel</string>

@@ -25,6 +25,7 @@
         <item quantity="other">Загружено %1$s\u00A0тайтла</item>
     </plurals>
     <string name="profile_user_name">Имя пользователя</string>
+    <string name="profile_not_a_profile_link">Это не ссылка на профиль MyAnimeList</string>
     <string name="profile_recent">Недавние</string>
     <string name="profile_open">Открыть</string>
     <string name="profile_cancel">Отмена</string>

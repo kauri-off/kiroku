@@ -106,14 +106,34 @@ fun List<String>.withOpened(name: String): List<String> =
     (listOf(name) + filterNot { it.equals(name, ignoreCase = true) }).take(RECENT_PROFILES)
 
 // What the dialog opens: the name typed or taken from a pasted profile link; null when there is none.
-fun OpenProfile.nameToOpen(): String? = profileName(name)
+fun OpenProfile.nameToOpen(): String? = (profileInput(name) as? ProfileInput.Name)?.name
 
-// The user name in a myanimelist.net profile link, with or without its scheme, "www.", a trailing slash or a query;
-// any other text is taken as a name, without the blanks around it.
-fun profileName(text: String): String? {
+// The text is a link, but not to a MyAnimeList profile or list, so it is not taken as a name.
+val OpenProfile.notAProfileLink: Boolean get() = profileInput(name) == ProfileInput.OtherLink
+
+sealed interface ProfileInput {
+    data object Blank : ProfileInput
+
+    data class Name(
+        val name: String,
+    ) : ProfileInput
+
+    data object OtherLink : ProfileInput
+}
+
+// The user name in a myanimelist.net profile or list link, with or without its scheme, "www.", a further path, a
+// trailing slash or a query; any other text with a scheme, or a host and a path, is another link; the rest is a name.
+fun profileInput(text: String): ProfileInput {
     val trimmed = text.trim()
-    return (profileLink.matchEntire(trimmed)?.groupValues?.get(1) ?: trimmed).ifEmpty { null }
+    if (trimmed.isEmpty()) return ProfileInput.Blank
+    profileLink.matchEntire(trimmed)?.let { return ProfileInput.Name(it.groupValues[1]) }
+    return if (anyLink.containsMatchIn(trimmed)) ProfileInput.OtherLink else ProfileInput.Name(trimmed)
 }
 
 private val profileLink =
-    Regex(notShown("""(?:https?://)?(?:www\.)?myanimelist\.net/profile/([^/?#\s]+)/?(?:[?#]\S*)?"""), RegexOption.IGNORE_CASE)
+    Regex(
+        notShown("""(?:https?://)?(?:www\.)?myanimelist\.net/(?:profile|animelist)/([^/?#\s]+)(?:/[^?#\s]*)?(?:[?#]\S*)?"""),
+        RegexOption.IGNORE_CASE,
+    )
+
+private val anyLink = Regex(notShown("""://|^[^\s/]+\.[^\s/]+/"""))

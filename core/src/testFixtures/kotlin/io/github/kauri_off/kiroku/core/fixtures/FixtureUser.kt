@@ -174,9 +174,11 @@ object FixtureUser {
             other(FixtureAnime.plannedFinished, ListStatus.Planned, 0, null),
         )
 
-    // 24 characters, beyond any plausible user-name limit (MAL's is believed to be 16), so no real account has these.
-    val unknownName: String = "nobody_by_that_name_here"
-    val guestNames: List<String> = listOf("kiroku_fixture_guest_one", "kiroku_fixture_guest_two", "kiroku_fixture_guest_ten")
+    // 17 characters, one more than MAL allows a user name, so no account has it.
+    val unknownName: String = "nobody_has_a_name"
+
+    // 16 characters of wide letters: the longest name MAL allows, at its widest.
+    val guestNames: List<String> = listOf("MMMWWWguestKiroM", "WWWMMMguestKiroW", "MWMWMWguestKiroO")
 
     // Names opened earlier for the Profile's "Open another profile", newest first.
     val openedNames: List<String> = listOf("sample_viewer", "quiet_viewer") + guestNames

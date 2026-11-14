@@ -124,6 +124,13 @@ private fun Fields(
                 onEvent(ProfileEvent.TypeName(it.text))
             },
             label = { Text(stringResource(R.string.profile_user_name)) },
+            isError = dialog.notAProfileLink,
+            supportingText =
+                if (dialog.notAProfileLink) {
+                    { Text(stringResource(R.string.profile_not_a_profile_link)) }
+                } else {
+                    null
+                },
             singleLine = true,
             keyboardOptions =
                 KeyboardOptions(

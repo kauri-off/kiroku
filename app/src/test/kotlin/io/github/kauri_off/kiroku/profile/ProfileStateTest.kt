@@ -2,8 +2,10 @@ package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProfileStateTest {
@@ -68,7 +70,7 @@ class ProfileStateTest {
     }
 
     @Test
-    fun aPastedProfileLinkGivesItsName() {
+    fun aPastedProfileOrListLinkGivesItsName() {
         val forms =
             listOf(
                 "https://myanimelist.net/profile/sample_viewer",
@@ -77,18 +79,48 @@ class ProfileStateTest {
                 "myanimelist.net/profile/sample_viewer",
                 "www.myanimelist.net/profile/sample_viewer",
                 "  https://myanimelist.net/profile/sample_viewer?view=animelist&status=1 ",
+                "https://myanimelist.net/profile/sample_viewer/?view=1",
                 "https://MyAnimeList.net/profile/sample_viewer/#top",
+                "https://myanimelist.net/profile/sample_viewer\n",
+                "https://myanimelist.net/profile/sample_viewer/reviews",
+                "https://myanimelist.net/animelist/sample_viewer",
+                "myanimelist.net/animelist/sample_viewer?status=2",
             )
-        for (form in forms) assertEquals(form, "sample_viewer", profileName(form))
+        for (form in forms) assertEquals(form, ProfileInput.Name("sample_viewer"), profileInput(form))
+    }
+
+    @Test
+    fun aPathSegmentIsTakenAsItIs() {
+        for (name in listOf("a%20b", "имя", "Xi.nil")) {
+            assertEquals(ProfileInput.Name(name), profileInput("https://myanimelist.net/profile/$name"))
+        }
+    }
+
+    @Test
+    fun anyOtherLinkIsNotAName() {
+        val links =
+            listOf(
+                "m.myanimelist.net/profile/sample_viewer",
+                "https://anilist.co/user/sample_viewer/",
+                "anilist.co/user/sample_viewer",
+                "evil.com/myanimelist.net/profile/sample_viewer",
+                "myanimelist.net.evil.com/profile/sample_viewer",
+                "https://example.com/profile/x",
+                "myanimelist.net/anime/1",
+                "myanimelist.net/profile/",
+                "Check https://myanimelist.net/profile/sample_viewer",
+            )
+        for (link in links) assertEquals(link, ProfileInput.OtherLink, profileInput(link))
+        assertNull(OpenProfile(links[1], emptyList()).nameToOpen())
+        assertTrue(OpenProfile(links[1], emptyList()).notAProfileLink)
     }
 
     @Test
     fun anythingElseIsTakenAsAName() {
-        assertEquals("sample_viewer", profileName(" sample_viewer "))
-        assertEquals("https://example.com/profile/x", profileName("https://example.com/profile/x"))
-        assertEquals("myanimelist.net/anime/1", profileName("myanimelist.net/anime/1"))
-        assertEquals("myanimelist.net/profile/", profileName("myanimelist.net/profile/"))
-        assertNull(profileName("  "))
+        assertEquals(ProfileInput.Name("sample_viewer"), profileInput(" sample_viewer "))
+        assertEquals(ProfileInput.Name("some.name"), profileInput("some.name"))
+        assertEquals(ProfileInput.Blank, profileInput("  "))
+        assertFalse(OpenProfile("sample_viewer", emptyList()).notAProfileLink)
     }
 
     @Test

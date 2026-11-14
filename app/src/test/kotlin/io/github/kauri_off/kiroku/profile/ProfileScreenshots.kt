@@ -34,6 +34,9 @@ class ProfileScreenshots : ScreenshotRegistry() {
             case("unknown-name") { Screen(of(fixtures.unknownName, ProfileContent.Failed(DataError.UnknownUser))) },
             case("open-profile") { Screen(me().copy(openProfile = OpenProfile("", emptyList()))) },
             case("open-profile-recent") { Screen(me().copy(openProfile = OpenProfile("", fixtures.recent))) },
+            case("open-profile-other-link") {
+                Screen(me().copy(openProfile = OpenProfile(OTHER_LINK, fixtures.recent)))
+            },
             case("open-profile-landscape", window = WindowSize(widthDp = 891, heightDp = 411)) {
                 Screen(me().copy(openProfile = OpenProfile(fixtures.otherName, fixtures.recent)))
             },
@@ -51,3 +54,5 @@ class ProfileScreenshots : ScreenshotRegistry() {
 
 @Composable
 private fun Screen(state: ProfileState) = ProfileScreen(state, onEvent = {}, snackbars = remember { SnackbarHostState() })
+
+private const val OTHER_LINK = "https://anilist.co/user/sample_viewer/"

@@ -70,7 +70,7 @@ internal fun ProfileStandInRoute(
         ProfileState(
             owner = owner,
             content = content,
-            sessionExpired = session == Session.Expired,
+            sessionExpired = session is Session.Expired,
             openProfile = typed?.let { OpenProfile(it, standIn.recent) },
         )
     ProfileScreen(state, snackbars = snackbars, onEvent = { event ->
