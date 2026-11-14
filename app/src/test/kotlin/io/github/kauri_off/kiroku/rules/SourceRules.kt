@@ -101,7 +101,14 @@ const val PATIENCE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/desi
 // That wait, the only delay its file may write.
 const val PATIENCE_WAIT = "delay(PATIENCE)"
 
-private val allowances = mapOf(PAGE_MOTION_SOURCE to pageMotion, PATIENCE_SOURCE to listOf(PATIENCE_WAIT))
+// A message's time, which the host runs so that a finger holding the message stops it: a wait, not motion.
+const val MESSAGE_TIME_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/design/component/ScreenSnackbarHost.kt"
+
+// That wait, the only delay its file may write.
+const val MESSAGE_TIME_WAIT = "delay(millis)"
+
+private val allowances =
+    mapOf(PAGE_MOTION_SOURCE to pageMotion, PATIENCE_SOURCE to listOf(PATIENCE_WAIT), MESSAGE_TIME_SOURCE to listOf(MESSAGE_TIME_WAIT))
 
 fun motionLiteralProblems(
     name: String,

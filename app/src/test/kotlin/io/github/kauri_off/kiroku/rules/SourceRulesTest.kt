@@ -179,7 +179,7 @@ class SourceRulesTest {
     @Test
     fun everyTextFieldTakesTheAutofillModifier() {
         val sources = appSources()
-        assertEquals(3, sources.sumOf { textFields(it.readText()) })
+        assertEquals(4, sources.sumOf { textFields(it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { autofillProblems(relative(it), it.readText()) })
     }
 
@@ -213,6 +213,15 @@ class SourceRulesTest {
         assertEquals(1, motionLiteralProblems("A.kt", grace).size)
         assertEquals(1, motionLiteralProblems(PATIENCE_SOURCE, grace.replace(PATIENCE_WAIT, "delay(250)")).size)
         assertTrue(appSources().single { relative(it) == PATIENCE_SOURCE }.readText().contains(PATIENCE_WAIT))
+    }
+
+    @Test
+    fun aMessagesTimeIsTheOneDelayTheSnackbarHostsFileMayWrite() {
+        val time = "@Composable\nfun A() {\n    LaunchedEffect(x) { $MESSAGE_TIME_WAIT; data.dismiss() }\n}\n"
+        assertEquals(emptyList<String>(), motionLiteralProblems(MESSAGE_TIME_SOURCE, time))
+        assertEquals(1, motionLiteralProblems("A.kt", time).size)
+        assertEquals(1, motionLiteralProblems(MESSAGE_TIME_SOURCE, time.replace(MESSAGE_TIME_WAIT, "delay(250)")).size)
+        assertTrue(appSources().single { relative(it) == MESSAGE_TIME_SOURCE }.readText().contains(MESSAGE_TIME_WAIT))
     }
 
     @Test

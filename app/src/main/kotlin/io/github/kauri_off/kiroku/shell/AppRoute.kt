@@ -13,6 +13,10 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.search.BrowseKey
+import io.github.kauri_off.kiroku.search.BrowseRoute
+import io.github.kauri_off.kiroku.search.SearchRoute
+import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -57,8 +61,9 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
 fun appEntries(
     graph: AppGraph,
     messages: ShellMessages,
-): ShellEntries =
-    { navigator, snackbars ->
+): ShellEntries {
+    val standIn = searchStandIn(graph)
+    return { navigator, snackbars ->
         val signIn = { navigator.open(NotBuiltKey(NotBuilt.SignIn)) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
         val back = { navigator.back() }
@@ -72,7 +77,16 @@ fun appEntries(
                 onSignIn = signIn,
             )
         }
-        entry<SearchRoot> { NotBuiltDestination(graph, Destination.Search, signIn, snackbars) }
+        entry<SearchRoot> {
+            if (standIn == null) {
+                NotBuiltDestination(graph, Destination.Search, signIn, snackbars)
+            } else {
+                SearchRoute(standIn, graph, snackbars, openTitle, onBrowse = { navigator.open(BrowseKey(it)) }, onSignIn = signIn)
+            }
+        }
+        entry<BrowseKey> { key ->
+            standIn?.let { BrowseRoute(it, key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
+        }
         entry<ProfileRoot> { NotBuiltDestination(graph, Destination.Profile, signIn, snackbars) }
         entry<TitleKey> { key ->
             TitleRoute(
@@ -94,8 +108,9 @@ fun appEntries(
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
     }
+}
 
-// Search and Profile until their milestones: the placeholder, with the session banner of S6.
+// Search in a release and Profile until their milestones: the placeholder, with the session banner of S6.
 @Composable
 private fun NotBuiltDestination(
     graph: AppGraph,
