@@ -125,10 +125,12 @@ class MalSignInTest {
                 }
             held.await()
 
-            signIn.redirected(redirectOf(address))
-
-            assertEquals(SignInStep.Completing, signIn.step.value)
-            busy.countDown()
+            try {
+                signIn.redirected(redirectOf(address))
+                assertEquals(SignInStep.Completing, signIn.step.value)
+            } finally {
+                busy.countDown()
+            }
             holder.join()
             assertEquals(SignInStep.SignedIn, signIn.ended())
         }
