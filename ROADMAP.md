@@ -156,14 +156,7 @@ on the Russian strings so far are fixed.
   entry and no token, and the next sign-in shows nothing of the one before; with the airing source empty, no
   row and no title page shows an airing line. A release build holds no in-memory store.
 
-- [ ] **M2-22 Screens refresh by themselves.** A screen refreshes what is stale when it is shown, and a screen
-  left in the background past its state's stop timeout counts as shown again (section 7.1). A screen that shows
-  a failure tries once more when the connection returns. On demo data, where the scenario panel's "offline" is
-  the connection.
-  **Needs:** M2-06, M2-09.
-  **Check:** view-model tests for the List, the title page and its sub-screens: a fresh screen shown again asks
-  nothing, a stale one refreshes once; a failed load is repeated once when the connection returns and not again
-  while it stays.
+- [x] **M2-22 Screens refresh by themselves.**
 
 - [ ] **M2-23 List state for a real store.** The sort and direction of each tab are kept across restarts, in the
   preferences store, which `:data` gains here. The List's state is produced off the main thread, and a change to one

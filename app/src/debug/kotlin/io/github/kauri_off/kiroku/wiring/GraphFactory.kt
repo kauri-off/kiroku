@@ -47,4 +47,5 @@ class DemoGraph(
     override val airing = demo.airing
     override val search = demo.search
     override val user = demo.user
+    override val connection = demo.connection
 }

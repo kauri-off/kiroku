@@ -524,7 +524,7 @@ class AppRouteTest {
 
     // Section 7.2 offline: the failure is said by a message on the first screen and stays where the details would be.
     @Test
-    fun `a title page whose details could not load says why and Retry loads them once the connection is back`() {
+    fun `a title page whose details could not load says why and loads them once the connection is back`() {
         app()
         graph.demo.server.offline.value = true
         openKagerou()
@@ -533,7 +533,6 @@ class AppRouteTest {
         compose.mainClock.advanceTimeBy(AWAY_MILLIS)
         compose.onAllNodesWithText("No connection").assertCountEquals(1)
         graph.demo.server.offline.value = false
-        click("Retry")
         compose.waitForIdle()
         hides("No connection")
         scrollTo("Details")

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.PATIENCE
+import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -16,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -24,6 +26,7 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.stale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +36,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -47,6 +49,7 @@ class TitleViewModel(
     list: ListSource,
     airing: AiringRepository,
     session: SessionRepository,
+    connection: Connection,
     private val clock: Clock,
     private val titleLanguage: TitleLanguage,
     private val saved: SavedStateHandle,
@@ -75,7 +78,6 @@ class TitleViewModel(
     private val refreshing = MutableStateFlow(false)
     private val retries = MutableStateFlow(0)
     private var load: Job? = null
-    private var refreshed = false
 
     // A list that cannot be read fails the page, since its list values would be unknown.
     private val listRead =
@@ -97,12 +99,20 @@ class TitleViewModel(
 
     val state: StateFlow<TitleState> =
         combine(sources.filterNotNull(), moment, failure, waitShown, refreshing, ::build)
-            .onStart { if (!refreshed) refresh(Asked.Opening) }
             .stateIn(
                 viewModelScope,
                 WhileShown,
                 sources.value?.let { build(it, moment.value, null, false, false) } ?: TitleState.Loading(null),
             )
+
+    // A failure shown in place is tried again as a Retry would be; any other load runs as on opening.
+    private val loads =
+        ShownLoads(viewModelScope, connection, ::refreshIfStale) {
+            refresh(if (failure.value != null) Asked.Retry else Asked.Shown)
+        }
+
+    // Collected while the page is shown; showing it refreshes stale details.
+    val shown: StateFlow<Unit> get() = loads.shown
 
     // What the page shows of [id], itself or a related title, for the screen it opens.
     fun summaryOf(id: AnimeId): TitleSummary? {
@@ -179,17 +189,21 @@ class TitleViewModel(
 
     private fun shownPage(): TitlePage? = (state.value as? TitleState.Shown)?.page
 
-    // A wait the person asked for shows at once; the one on opening only after a second (section 9.4).
+    private suspend fun refreshIfStale() {
+        if (anime.stale(id, opened?.anime, clock.instant()) && load?.isActive != true) refresh(Asked.Shown)
+    }
+
+    // A wait the person asked for shows at once; one the page started only after a second (section 9.4).
     private fun refresh(asked: Asked) {
-        refreshed = true
         load?.cancel()
         failure.value = null
         waitShown.value = asked == Asked.Retry
         refreshing.value = asked == Asked.Pull
+        loads.started()
         load =
             viewModelScope.launch {
                 val wait =
-                    if (asked == Asked.Opening) {
+                    if (asked == Asked.Shown) {
                         launch {
                             delay(PATIENCE)
                             waitShown.value = true
@@ -201,6 +215,7 @@ class TitleViewModel(
                 wait?.cancel()
                 waitShown.value = false
                 refreshing.value = false
+                loads.ended((result as? Outcome.Failure)?.error)
                 if (result !is Outcome.Failure) return@launch
                 val shown = sources.filterNotNull().first().let { it.list.failure == null && animeOf(it) != null }
                 if (anime.observeDetails(id).first() == null) failure.value = result.error
@@ -228,7 +243,7 @@ class TitleViewModel(
         }
     }
 
-    private enum class Asked { Opening, Retry, Pull }
+    private enum class Asked { Shown, Retry, Pull }
 
     private companion object {
         val EXPANDED = notShown("synopsisExpanded")

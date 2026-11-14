@@ -430,4 +430,36 @@ class DemoTest {
             )
             assertEquals(clock.instant(), demo.server.entry(FixtureAnime.exactToWatch.id)?.updatedAt)
         }
+
+    @Test
+    fun `the scenario's offline is the demo's connection`() =
+        runTest {
+            val demo = demo()
+            val seen = mutableListOf<Boolean>()
+            backgroundScope.launch { demo.connection.observeOnline().collect { seen += it } }
+            runCurrent()
+            demo.server.offline.value = true
+            runCurrent()
+            demo.server.offline.value = false
+            runCurrent()
+            assertEquals(listOf(true, false, true), seen)
+        }
+
+    @Test
+    fun `a title's details carry the time they were fetched, and a failed refresh keeps it`() =
+        runTest {
+            val clock = DeviceClock(FixtureTime.reference, FixtureTime.zone)
+            val demo = Demo(Fixtures.reference, backgroundScope, clock = clock)
+            val id = FixtureAnime.exactToWatch.id
+            assertNull(demo.anime.observeRefreshedAt(id).first())
+            demo.anime.refresh(id)
+            assertEquals(FixtureTime.reference, demo.anime.observeRefreshedAt(id).first())
+            clock.instant = FixtureTime.reference.plus(Duration.ofHours(1))
+            demo.server.offline.value = true
+            demo.anime.refresh(id)
+            assertEquals(FixtureTime.reference, demo.anime.observeRefreshedAt(id).first())
+            demo.server.offline.value = false
+            demo.anime.refresh(id)
+            assertEquals(clock.instant, demo.anime.observeRefreshedAt(id).first())
+        }
 }
