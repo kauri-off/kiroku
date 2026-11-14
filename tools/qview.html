@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiroku queue</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781; --grid: #e1e0d9;
+  --axis: #c3c2b7; --border: rgba(11, 11, 11, .1);
+  --k0: #898781; --k1: #2a78d6; --k2: #eb6834; --k3: #1baf7a; --k4: #eda100; --k5: #e87ba4; --k6: #008300;
+  --k7: #6250d6; --k8: #e34948;
+  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --bad: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --grid: #2c2c2a; --axis: #383835;
+    --border: rgba(255, 255, 255, .1);
+    --k1: #3987e5; --k2: #d95926; --k3: #199e70; --k4: #c98500; --k5: #d55181; --k6: #0ca30c; --k7: #9085e9;
+    --k8: #e66767;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 8px 16px; background: var(--page); border-bottom: 1px solid var(--border); }
+header h1 { margin: 0; font-size: 15px; }
+#state { color: var(--ink2); font-variant-numeric: tabular-nums; }
+#state::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--good); }
+#state.held::before { background: var(--warn); }
+#state.lost::before { background: var(--bad); }
+#filter { flex: 1 1 160px; max-width: 320px; padding: 4px 8px; font: inherit; color: inherit; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; }
+nav { display: flex; gap: 2px; margin-left: auto; }
+nav a { padding: 3px 8px; border-radius: 6px; color: var(--ink2); text-decoration: none; }
+nav a[aria-current] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+main { max-width: 1500px; margin: 0 auto; padding: 12px 16px 40px; }
+.stale main { opacity: .55; }
+section { margin-top: 18px; }
+h2 { margin: 0 0 6px; font-size: 14px; }
+h2 small, .count { font-weight: 400; color: var(--ink2); }
+.count { padding: 0 6px; border-radius: 8px; background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+small { color: var(--ink2); font-size: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 0; }
+.tile { padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.tile h3 { margin: 0; font-size: 12px; font-weight: 400; color: var(--ink2); }
+.figure { margin: 2px 0 6px; font-size: 22px; font-weight: 600; }
+.figure small { font-size: 12px; font-weight: 400; }
+.notes { margin: 6px 0 0; color: var(--ink2); font-size: 12px; }
+.short { color: var(--bad); }
+.segs { display: flex; gap: 2px; height: 8px; overflow: hidden; border-radius: 4px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.segs i { min-width: 2px; }
+.mem .used, .key.used { background: color-mix(in srgb, var(--ink) 58%, transparent); }
+.mem .aside, .key.aside { background: color-mix(in srgb, var(--ink) 32%, transparent); }
+.mem .margin, .key.margin { background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.key { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 2px; }
+.slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.slot { padding: 1px 8px 1px 2px; border-radius: 10px; color: var(--ink2); box-shadow: 0 0 0 1px var(--border); white-space: nowrap; }
+.slot b { display: inline-block; min-width: 16px; margin-right: 6px; border-radius: 8px; text-align: center; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.slot.busy { color: var(--ink); background: color-mix(in srgb, var(--k3) 16%, transparent); }
+.fits { margin: 10px 0 0; color: var(--ink2); }
+.fits b { color: var(--ink); }
+.kind { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.kind i { width: 9px; height: 9px; border-radius: 2px; background: var(--k0); }
+.k0 { background: var(--k0); fill: var(--k0); } .k1 { background: var(--k1); fill: var(--k1); } .k2 { background: var(--k2); fill: var(--k2); }
+.k3 { background: var(--k3); fill: var(--k3); } .k4 { background: var(--k4); fill: var(--k4); } .k5 { background: var(--k5); fill: var(--k5); }
+.k6 { background: var(--k6); fill: var(--k6); } .k7 { background: var(--k7); fill: var(--k7); } .k8 { background: var(--k8); fill: var(--k8); }
+.kind.k0, .kind.k1, .kind.k2, .kind.k3, .kind.k4, .kind.k5, .kind.k6, .kind.k7, .kind.k8 { background: none; }
+.kind.k1 i { background: var(--k1); } .kind.k2 i { background: var(--k2); } .kind.k3 i { background: var(--k3); } .kind.k4 i { background: var(--k4); }
+.kind.k5 i { background: var(--k5); } .kind.k6 i { background: var(--k6); } .kind.k7 i { background: var(--k7); } .kind.k8 i { background: var(--k8); }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+table { width: 100%; min-width: 780px; border-collapse: collapse; }
+th, td { padding: 5px 6px; text-align: left; vertical-align: top; }
+th { font-size: 12px; font-weight: 400; color: var(--ink2); white-space: nowrap; border-bottom: 1px solid var(--border); }
+tbody tr + tr td { border-top: 1px solid var(--grid); }
+.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who { width: 20%; max-width: 0; }
+.who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.cmd { width: 36%; max-width: 0; }
+code { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.cmd code { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.mem { width: 14%; min-width: 118px; }
+.act { width: 1%; }
+.stall { color: var(--ink); }
+.badge { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.badge i { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-style: normal;
+  line-height: 1; color: #fff; background: var(--muted); }
+.badge.good i { background: var(--good); } .badge.bad i { background: var(--bad); } .badge.stop i { background: var(--serious); }
+.badge.warn i { background: var(--warn); color: #0b0b0b; } .badge.run i { background: var(--ink2); color: var(--surface); }
+.meter { display: block; width: 100%; max-width: 150px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.meter i { display: block; height: 100%; border-radius: 3px; background: var(--ink2); }
+.meter.warn i { background: var(--warn); } .meter.over i { background: var(--bad); } .meter.plain i { background: var(--muted); }
+button { padding: 1px 8px; font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+button:hover { background: color-mix(in srgb, var(--ink) 8%, var(--page)); }
+.none { margin: 0; padding: 8px 12px; color: var(--ink2); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.alert { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.lead { margin: 0 0 6px; color: var(--ink2); } .lead b { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 4px; color: var(--ink2); }
+.chart { padding: 8px 8px 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.grid { stroke: var(--grid); } .axis { stroke: var(--axis); }
+.tick, .side { fill: var(--muted); font-size: 10px; }
+.hit { fill: transparent; } .hit:hover { fill: color-mix(in srgb, var(--ink) 7%, transparent); }
+details { margin-top: 6px; } summary { color: var(--ink2); cursor: pointer; } details .scroll { margin-top: 6px; }
+.reasons { margin: 0; padding: 4px 12px; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.reasons li { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(60px, 1fr) minmax(190px, 1.4fr); gap: 10px; align-items: center; padding: 4px 0; }
+.reasons .meter { max-width: none; }
+#tip { position: fixed; z-index: 3; display: none; padding: 6px 9px; white-space: pre; pointer-events: none; font-size: 12px;
+  font-variant-numeric: tabular-nums; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+dialog { width: min(1100px, 94vw); max-height: 90vh; padding: 0; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog .bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+#joblog { padding: 4px 14px 12px; }
+#joblog p { margin: 8px 0 0; overflow-wrap: anywhere; }
+pre { max-height: 56vh; margin: 10px 0 0; padding: 8px 10px; overflow: auto; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--page); border: 1px solid var(--border); border-radius: 6px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body data-hours="{{hours}}">
+<header>
+  <h1>Kiroku queue</h1>
+  <span id="state" role="status">live</span>
+  <input id="filter" type="search" placeholder="Filter by branch, worktree, command, kind, outcome" aria-label="Filter the jobs">
+  <nav aria-label="How far back">{{windows}}</nav>
+</header>
+<main>
+{{live}}
+{{history}}
+</main>
+<div id="tip" role="tooltip"></div>
+<dialog id="logd" aria-label="A job's output">
+  <div class="bar"><b>The end of a job's output</b><button type="button" id="close">Close</button></div>
+  <div id="joblog"></div>
+</dialog>
+<script nonce="{{nonce}}">
+(() => {
+  const $ = id => document.getElementById(id);
+  const state = $("state"), filter = $("filter"), tip = $("tip"), dialog = $("logd");
+  const hours = document.body.dataset.hours;
+  let busy = false, job = null, pastAt = Date.now();
+
+  const selecting = el => {
+    const s = getSelection();
+    return !!s && !s.isCollapsed && el.contains(s.anchorNode);
+  };
+  const fragment = async url => {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    return r.text();
+  };
+  // A fragment is rendered by the view, which escapes every value in it; the page's policy runs no script from it.
+  const swap = (id, text) => {
+    const old = $(id), holder = document.createElement("template");
+    holder.innerHTML = text;
+    const fresh = holder.content.firstElementChild;
+    if (!fresh || fresh.id !== id || selecting(old)) return false;
+    const open = [...old.querySelectorAll("details")].map(d => d.open);
+    old.replaceWith(fresh);
+    fresh.querySelectorAll("details").forEach((d, n) => { d.open = !!open[n]; });
+    return true;
+  };
+  const applyFilter = () => {
+    const words = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
+    document.querySelectorAll("[data-find]").forEach(row => { row.hidden = !words.every(w => row.dataset.find.includes(w)); });
+  };
+  const showLog = async () => {
+    const box = $("joblog"), was = box.querySelector("pre");
+    const pinned = !was || was.scrollTop + was.clientHeight >= was.scrollHeight - 4;
+    if (!swap("joblog", await fragment("/log?id=" + encodeURIComponent(job)))) return;
+    const now = $("joblog").querySelector("pre");
+    if (now) now.scrollTop = pinned ? now.scrollHeight : was.scrollTop;
+  };
+  const tick = async () => {
+    if (busy || document.hidden) return;
+    busy = true;
+    try {
+      const shown = swap("live", await fragment("/live"));
+      if ($("live").dataset.log !== $("history").dataset.log || Date.now() - pastAt > 60000) {
+        if (swap("history", await fragment("/history?h=" + hours))) pastAt = Date.now();
+      }
+      if (dialog.open && job && $("joblog").dataset.live === "1") await showLog();
+      applyFilter();
+      const live = $("live");
+      document.title = live.dataset.title + " · Kiroku queue";
+      state.textContent = shown ? "live · " + live.dataset.at : "held while text is selected";
+      state.className = shown ? "" : "held";
+      document.body.classList.remove("stale");
+    } catch (e) {
+      state.textContent = "the view does not answer (" + new Date().toLocaleTimeString() + ")";
+      state.className = "lost";
+      document.body.classList.add("stale");
+    }
+    busy = false;
+  };
+
+  try { filter.value = sessionStorage.getItem("filter") || ""; } catch (e) {}
+  filter.addEventListener("input", () => {
+    try { sessionStorage.setItem("filter", filter.value); } catch (e) {}
+    applyFilter();
+  });
+  const openLog = id => {
+    job = id;
+    $("joblog").textContent = "";
+    if (!dialog.open) dialog.showModal();
+    history.replaceState(null, "", "#job=" + id);
+    showLog().catch(() => { $("joblog").textContent = "The view does not answer, or has no such job."; });
+  };
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button[data-job]");
+    if (b) openLog(b.dataset.job);
+  });
+  $("close").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => {
+    job = null;
+    history.replaceState(null, "", location.pathname + location.search);
+  });
+  if (/^#job=[0-9a-f-]+$/.test(location.hash)) openLog(location.hash.slice(5));
+  document.addEventListener("pointermove", e => {
+    const hit = e.target.closest ? e.target.closest(".hit") : null;
+    if (!hit) { tip.style.display = "none"; return; }
+    tip.textContent = hit.dataset.tip;
+    tip.style.display = "block";
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(4, Math.min(e.clientX + 14, innerWidth - w - 4)) + "px";
+    tip.style.top = Math.max(4, Math.min(e.clientY + 14, innerHeight - h - 4)) + "px";
+  });
+  document.addEventListener("visibilitychange", tick);
+  setInterval(tick, 2000);
+  applyFilter();
+  tick();
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 """usage: tools/q [ps]                  jobs running and queued, and what each queued job waits for
        tools/q top [--once]          the same with output tails and the machine's memory, refreshed
        tools/q stats [--since 24h]   waits, runs and memory peaks per kind, and what jobs waited for
+       tools/q view [--port N]       all of the above as a page for the browser, read-only (tools/qview)
        tools/q kill ID               stop a queued or running job and wait until nothing of it is left
        tools/q submit --kind KIND [--label TEXT] [-C DIR] -- CMD...   prints the job's id (tools/gw, tools/emu)
        tools/q wait ID [--max SECONDS] [--tail N]     exit: the job's code, 75 not finished, 76 stalled, 125 stopped
@@ -158,6 +159,11 @@ def disk_swap_free():
 
 # ---- state ----------------------------------------------------------------------------------------------------
 
+def peek():
+    """The queue's state as last written, read without the lock: for a view, which changes nothing."""
+    return rjson(f"{STATE}/state.json") or {"format": FORMAT, "seq": 0, "jobs": {}}
+
+
 class Locked:
     """The queue's state file under an exclusive lock."""
     def __enter__(self):
@@ -165,7 +171,7 @@ class Locked:
         os.makedirs(f"{STATE}/jobs", mode=0o700, exist_ok=True)
         self.f = open(f"{STATE}/state.lock", "a")
         fcntl.flock(self.f, fcntl.LOCK_EX)
-        self.s = rjson(f"{STATE}/state.json") or {"format": FORMAT, "seq": 0, "jobs": {}}
+        self.s = peek()
         if self.s.get("format", 0) > FORMAT:
             die(f"q: {STATE} was written by a newer tools/q: the maintainer is updating the main checkout, try again in a minute")
         self.was = json.dumps(self.s, sort_keys=True)
@@ -676,6 +682,10 @@ def cmd_top(a):
         except KeyboardInterrupt: return
 
 
+def cmd_view(a):
+    os.execv(f"{TOOLS}/qview", [f"{TOOLS}/qview"] + a)
+
+
 def parse_dur(v):
     m = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd]?)", v)
     if not m: die(f"q: bad duration {v}")
@@ -729,7 +739,7 @@ def main():
         q = main_copy()
         if q and q != HERE: os.execv(q, [q] + a)
     cmds = {"submit": cmd_submit, "_run": cmd_run, "wait": cmd_wait, "ps": cmd_ps, "top": cmd_top, "stats": cmd_stats,
-            "kill": cmd_kill}
+            "kill": cmd_kill, "view": cmd_view}
     if a and a[0] not in cmds: die(__doc__)
     cmds[a[0] if a else "ps"](a[1:])
 

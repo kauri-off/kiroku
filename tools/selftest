@@ -861,6 +861,101 @@ ok "wrappers older than the queue are told to merge main" '[[ $? == 2 && $out ==
 out=$(q submit --api 99 --kind test -C "$W" -- true 2>&1)
 ok "wrappers newer than the queue are told to try again" '[[ $? == 2 && $out == *"main checkout, try again in a minute"* ]]'
 
+# tools/q view: the queue as a page, on fake jobs
+cp "$SRC/qview" "$SRC/qview.html" "$W/tools/"
+conf
+id=0123456789abcdef0123456789abcdef
+p=$(sub small sh -c 'echo fine' gradlew -Pkiroku.malClientId= -P "kiroku.malClientId=$id" :core:test)
+f=$(sub small sh -c 'exit 3' sh "-Pkiroku.malClientId=$id" '<script>alert(1)</script>')
+k=$(sub small env "MAL_CLIENT_ID=$id" sleep 60)
+finished "$p" "$f"
+is "$k" state running
+q kill "$k" > /dev/null
+a=$(q submit --kind big --label '<b>branch</b>' -C "$W" -- sh -c 'echo "<i>out</i> X-MAL-CLIENT-ID: $1 and $1"; sleep 60' sh "$id")
+is "$a" state running
+b=$(sub big sleep 60)
+is "$b" why budget
+"$W/tools/q" view --port 0 > "$T/view.out" 2>&1 &
+echo $! > "$T/bg.view"
+for _ in {1..50}; do grep -qs '^http://127\.0\.0\.1:[0-9]*/ ' "$T/view.out" && break; sleep 0.1; done
+python3 -I - "$(cut -d/ -f1-3 "$T/view.out")" "$QS" "$id" "$a" "$b" "$p" "$f" "$k" > "$T/view.checks" << 'PY'
+import hashlib, json, os, sys, urllib.error, urllib.request
+url, state, secret, a, b, p, f, k = sys.argv[1:]
+
+
+def get(path, method="GET", host=None):
+    r = urllib.request.Request(url + path, method=method, headers={"Host": host} if host else {})
+    try:
+        with urllib.request.urlopen(r, timeout=20) as x: return x.status, x.read().decode()
+    except urllib.error.HTTPError as x: return x.code, x.read().decode()
+
+
+def files():
+    out = {}
+    for d, _, names in os.walk(state):
+        for n in names:
+            s = os.stat(os.path.join(d, n))
+            with open(os.path.join(d, n), "rb") as x: out[os.path.join(d, n)] = (s.st_size, s.st_mtime_ns, hashlib.sha256(x.read()).hexdigest())
+    return out
+
+
+before = files()
+pages = {u: get(u) for u in ("/", "/live", "/history?h=1", "/state.json?h=1", f"/log?id={a}", f"/log?id={f}", f"/log?id={b}")}
+refused = [get("/live", m)[0] for m in ("POST", "PUT", "DELETE", "PATCH")] + [get(f"/log?id={a}", "POST")[0]]
+missing = [get(u)[0] for u in ("/log?id=..", "/log?id=20200101-000000-0000", f"/log?id={a}/../{b}", "/kill?id=" + a, "/jobs")]
+after = files()
+text = lambda u: pages[u][1]
+try: d = json.loads(text("/state.json?h=1"))
+except ValueError: d = {}
+live, past = d.get("live", {}), d.get("history", {})
+ended = {r["id"]: r for r in past.get("ended", [])}
+everything = "".join(t for _, t in pages.values())
+checks = [
+    ("the view answers at the address it prints, on this machine only",
+     lambda: url.startswith("http://127.0.0.1:") and all(c == 200 for c, _ in pages.values())),
+    ("  its page has the running job: kind, label, worktree, command, times and memory against the declared",
+     lambda: [(r["id"], r["kind"], r["label"], r["worktree"], r["mem"]) for r in live["running"]] == [(a, "big", "<b>branch</b>", "wt", 800)]
+     and live["running"][0]["ran"] > 0 and live["running"][0]["used"] >= 0 and live["running"][0]["cmd"].startswith("sh -c ")),
+    ("  and the waiting job, its place and what it waits for",
+     lambda: [(r["id"], r["position"], r["why"], r["waits_for"]) for r in live["queued"]] == [(b, 1, "budget", "the memory budget")]),
+    ("  and the limits: the budget, the declared memory, the slots, and which kind would start now",
+     lambda: (live["machine"]["budget"], live["machine"]["declared"], live["machine"]["slots"], live["machine"]["avail"]) == (1000, 800, [None, None], 100000)
+     and {x["kind"]: x["starts"] for x in live["fits"]}["alloc"] and {x["kind"]: x["why"] for x in live["fits"]}["small"] == "the memory budget"),
+    ("  and the ended jobs: passed, failed with its code, killed",
+     lambda: (ended[p]["outcome"], ended[f]["outcome"], ended[k]["outcome"]) == ("passed", "failed, exit 3", "killed")
+     and ended[f]["run"] is not None and ended[p]["mem"] == 300),
+    ("  and the last hour: waits and runs per kind, and running against waiting over time",
+     lambda: {x["kind"] for x in past["per_kind"]} >= {"small"} and sum(past["chart"]["running"]["small"]) > 0
+     and sum(past["chart"]["waiting"]["big"]) > 0 and "<svg" in text("/history?h=1")),
+    ("the view shows a label, a command and an output line escaped",
+     lambda: all("&lt;b&gt;branch&lt;/b&gt;" in text(u) and "<b>branch" not in text(u) for u in ("/", "/live", f"/log?id={a}"))
+     and all("&lt;script&gt;alert(1)&lt;/script&gt;" in text(u) and "<script>alert" not in text(u) for u in ("/", "/history?h=1", f"/log?id={f}"))
+     and all("&lt;i&gt;out&lt;/i&gt;" in text(u) and "<i>out" not in text(u) for u in ("/live", f"/log?id={a}"))),
+    ("the view never shows a client id: not as a property, an environment variable, a header or alone",
+     lambda: secret not in everything and len(everything) > 5000),
+    ("  and shows that one was given, and an empty one as it is",
+     lambda: ended[p]["cmd_full"] == "gradlew -Pkiroku.malClientId= -P kiroku.malClientId=••• :core:test"
+     and ended[p]["cmd"] == "gradlew -P kiroku.malClientId=••• :core:test" and "-Pkiroku.malClientId=•••" in ended[f]["cmd"]
+     and "MAL_CLIENT_ID=•••" in ended[k]["cmd"] and "X-MAL-CLIENT-ID: ••• and •••" in text(f"/log?id={a}")),
+    ("the view only reads: no request changes a file of the queue's state",
+     lambda: before == after and len(before) > 10),
+    ("  and it refuses every request that is not a read, an unknown job and another host",
+     lambda: refused == [405] * 5 and missing == [404] * 5 and get("/", host="example.com")[0] == 403),
+    ("the page asks nothing of another machine",
+     lambda: "http" not in text("/") and "default-src 'none'" in
+     urllib.request.urlopen(url + "/").headers["Content-Security-Policy"]),
+]
+for name, check in checks:
+    try: passed = bool(check())
+    except Exception as x: passed = False
+    print(int(passed), name)
+PY
+while IFS= read -r line; do ok "${line#* }" '((${line%% *}))'; done < "$T/view.checks"
+ok "every check of the view ran" '[[ $(wc -l < "$T/view.checks") == 12 ]]'
+kill "$(< "$T/bg.view")"
+q kill "$a" > /dev/null
+q kill "$b" > /dev/null
+
 out=$(q stats)
 ok "q stats reports waits, runs and memory peaks per kind, and what jobs waited for" \
   '[[ $? == 0 && $out == *"peak p50"*$'"'"'\nemu '"'"'*$'"'"'\nsmall '"'"'*"the memory budget"*"available memory"*"worker threads"*"an emulator slot"*"a job that has waited longer"*"started on swap, without the available memory they ask for: 2;"*"stalled: 1"* ]]'
