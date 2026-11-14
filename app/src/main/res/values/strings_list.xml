@@ -11,6 +11,14 @@
     <string name="list_sort_last_updated">Last updated</string>
     <string name="list_sort_score">Score</string>
     <string name="list_sort_start_date">Start date</string>
+    <string name="list_direction_a_to_z">A to Z</string>
+    <string name="list_direction_z_to_a">Z to A</string>
+    <string name="list_direction_newest">Newest first</string>
+    <string name="list_direction_oldest">Oldest first</string>
+    <string name="list_direction_highest">Highest first</string>
+    <string name="list_direction_lowest">Lowest first</string>
+    <string name="list_direction_earliest">Earliest first</string>
+    <string name="list_direction_latest">Latest first</string>
     <string name="list_progress">Watched %1$d\u00A0of\u00A0%2$d</string>
     <string name="list_progress_unknown_total">Watched %1$d</string>
     <string name="list_to_watch">%1$d\u00A0to\u00A0watch</string>

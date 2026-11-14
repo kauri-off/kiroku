@@ -51,7 +51,7 @@ internal fun breakableTitle(title: String): String =
         }
     }
 
-// The drawn layout of a title, for tests; accessibility services do not read custom keys.
+// The drawn layout of a title or a scored line, for tests; accessibility services do not read custom keys.
 internal class DrawnTitle {
     var layout: TextLayoutResult? = null
 }

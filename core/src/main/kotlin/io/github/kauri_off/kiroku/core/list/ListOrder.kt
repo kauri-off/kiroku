@@ -8,10 +8,24 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import java.text.CollationKey
+import java.text.Collator
 import java.time.Instant
 import java.time.LocalDate
+import java.util.Locale
 
 enum class ListSort { UpNext, Title, LastUpdated, Score, StartDate }
+
+enum class SortDirection { Ascending, Descending }
+
+// Each sort's own order, which is the default; "Up next" is a grouping, not a scale, so it has no direction.
+val ListSort.defaultDirection: SortDirection?
+    get() =
+        when (this) {
+            ListSort.UpNext -> null
+            ListSort.Title, ListSort.StartDate -> SortDirection.Ascending
+            ListSort.LastUpdated, ListSort.Score -> SortDirection.Descending
+        }
 
 // The sorts a tab offers; "Up next" needs airing data, which another user's list does not have.
 fun sortsFor(
@@ -24,25 +38,42 @@ fun defaultSort(
     withAiring: Boolean,
 ): ListSort = if (ListSort.UpNext in sortsFor(status, withAiring)) ListSort.UpNext else ListSort.LastUpdated
 
-// Orders entries once, when the app starts, a tab's sort changes or the list is refreshed; equal keys go by title.
+// A missing key goes last in both directions; equal keys go by title A to Z, then by id.
 fun order(
     entries: List<ListEntry>,
     sort: ListSort,
     airing: (AnimeId) -> Airing?,
     today: LocalDate,
+    direction: SortDirection? = sort.defaultDirection,
     title: (ListEntry) -> String,
 ): List<ListEntry> {
-    val byTitle = compareBy<ListEntry, String>(String.CASE_INSENSITIVE_ORDER) { title(it) }
+    val titles = titleKeys(entries, title)
+    val byTitle = compareBy<ListEntry> { titles.getValue(it.anime.id) }
+    val ascending = direction != SortDirection.Descending
     val comparator: Comparator<ListEntry> =
         when (sort) {
             ListSort.UpNext -> upNext(airing, today)
-            ListSort.Title -> byTitle
-            ListSort.LastUpdated -> compareByDescending { it.updatedAt }
-            ListSort.Score -> compareBy(nullsLast(reverseOrder())) { it.values.score }
-            ListSort.StartDate -> compareBy(nullsLast()) { it.anime.startDate?.firstDay() }
+            ListSort.Title -> if (ascending) byTitle else byTitle.reversed()
+            ListSort.LastUpdated -> keyed(ascending) { it.updatedAt }
+            ListSort.Score -> keyed(ascending) { it.values.score }
+            ListSort.StartDate -> keyed(ascending) { it.anime.startDate?.firstDay() }
         }
-    return entries.sortedWith(comparator.then(byTitle))
+    return entries.sortedWith(comparator.then(byTitle).thenBy { it.anime.id.value })
 }
+
+// Root Unicode collation, case ignored: a letter with a macron or accent sorts with its base letter, in any language.
+private fun titleKeys(
+    entries: List<ListEntry>,
+    title: (ListEntry) -> String,
+): Map<AnimeId, CollationKey> {
+    val collator = Collator.getInstance(Locale.ROOT).apply { strength = Collator.SECONDARY }
+    return entries.associate { it.anime.id to collator.getCollationKey(title(it)) }
+}
+
+private fun <K : Comparable<K>> keyed(
+    ascending: Boolean,
+    key: (ListEntry) -> K?,
+): Comparator<ListEntry> = compareBy(nullsLast(if (ascending) naturalOrder() else reverseOrder())) { key(it) }
 
 // "Up next", grouped by what the row shows, from the same airing phase as the title page: episodes to watch, latest
 // aired first; then a known time for the next episode or the premiere, soonest first; then the rest, last updated first.
