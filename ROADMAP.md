@@ -379,8 +379,7 @@ Not to forget:
 - Typing does not send a request per keystroke.
 - Results that arrive page by page are held as a `StateFlow` of the pages loaded.
 
-- [ ] **M5-01 [L] Search screen.** The stateless screen of section 9.6 on fixture states: before a query, results,
-  the digits row, a browse list; no view model, no network.
+- [x] **M5-01 [L] Search screen.**
 
 ## M6. Profiles and statistics
 

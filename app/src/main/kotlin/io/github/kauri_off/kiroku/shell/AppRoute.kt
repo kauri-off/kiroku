@@ -19,6 +19,10 @@ import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
 import io.github.kauri_off.kiroku.profile.ProfileOwner
 import io.github.kauri_off.kiroku.profile.ProfileStandInRoute
 import io.github.kauri_off.kiroku.profile.profileStandIn
+import io.github.kauri_off.kiroku.search.BrowseKey
+import io.github.kauri_off.kiroku.search.BrowseRoute
+import io.github.kauri_off.kiroku.search.SearchRoute
+import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -63,8 +67,9 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
 fun appEntries(
     graph: AppGraph,
     messages: ShellMessages,
-): ShellEntries =
-    { navigator, snackbars ->
+): ShellEntries {
+    val standIn = searchStandIn(graph)
+    return { navigator, snackbars ->
         val signIn = { navigator.open(NotBuiltKey(NotBuilt.SignIn)) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
         val back = { navigator.back() }
@@ -78,21 +83,30 @@ fun appEntries(
                 onSignIn = signIn,
             )
         }
-        entry<SearchRoot> { NotBuiltDestination(graph, Destination.Search, signIn, snackbars) }
-        entry<ProfileRoot> {
-            val standIn = profileStandIn
+        entry<SearchRoot> {
             if (standIn == null) {
+                NotBuiltDestination(graph, Destination.Search, signIn, snackbars)
+            } else {
+                SearchRoute(standIn, graph, snackbars, openTitle, onBrowse = { navigator.open(BrowseKey(it)) }, onSignIn = signIn)
+            }
+        }
+        entry<BrowseKey> { key ->
+            standIn?.let { BrowseRoute(it, key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
+        }
+        entry<ProfileRoot> {
+            val profile = profileStandIn
+            if (profile == null) {
                 NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             } else {
-                ProfileStandInRoute(standIn, ProfileOwner.Me, graph, navigator, signIn, snackbars)
+                ProfileStandInRoute(profile, ProfileOwner.Me, graph, navigator, signIn, snackbars)
             }
         }
         entry<OtherProfileKey> { key ->
-            val standIn = profileStandIn
-            if (standIn == null) {
+            val profile = profileStandIn
+            if (profile == null) {
                 NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             } else {
-                ProfileStandInRoute(standIn, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars)
+                ProfileStandInRoute(profile, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars)
             }
         }
         entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
@@ -116,8 +130,9 @@ fun appEntries(
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
     }
+}
 
-// Search and Profile until their milestones: the placeholder, with the session banner of S6.
+// Search in a release and Profile until their milestones: the placeholder, with the session banner of S6.
 @Composable
 private fun NotBuiltDestination(
     graph: AppGraph,

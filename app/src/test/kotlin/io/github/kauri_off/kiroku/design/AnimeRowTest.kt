@@ -98,7 +98,7 @@ class AnimeRowTest {
                 Column {
                     AnimeRow("One", "poster", {}, Modifier.testTag("one"), listOf(RowLine("Score 7")))
                     AnimeRow("Two", "poster", {}, Modifier.testTag("two"), listOf(RowLine("TV · 2019"), RowLine("Watching")))
-                    AnimeRow("Three", "poster", {}, Modifier.testTag("three"), listOf(RowLine("Movie · 2020")), RowTrailing.Value("8.1"))
+                    AnimeRow("Three", "poster", {}, Modifier.testTag("three"), listOf(RowLine("Movie · 2020")), RowTrailing.MalScore("8.1"))
                 }
             }
         }

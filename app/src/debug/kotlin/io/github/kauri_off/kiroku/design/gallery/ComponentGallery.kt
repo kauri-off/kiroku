@@ -171,7 +171,7 @@ internal fun AnimeRowSection() {
                     RowLine(stringResource(R.string.gallery_facts)),
                     RowLine(stringResource(R.string.gallery_list_status)),
                 ),
-            trailing = RowTrailing.Value(decimal(8.73)),
+            trailing = RowTrailing.MalScore(decimal(8.73)),
         )
     }
 }

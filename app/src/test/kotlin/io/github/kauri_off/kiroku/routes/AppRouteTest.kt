@@ -349,10 +349,10 @@ class AppRouteTest {
     }
 
     @Test
-    fun `Search says it is not in this build`() {
+    fun `Search shows the fixture titles' search`() {
         app()
         click("Search")
-        shows("Not available in this build yet")
+        shows("Recent searches")
         back()
         shows("My list")
     }

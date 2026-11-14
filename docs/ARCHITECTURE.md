@@ -469,7 +469,8 @@ colour outside the theme.
 - **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
   shown, unless the segment alone is wider than the line.
 - **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked one
-  per line (section 9.7). Apart from that and the two poster rules above, nothing depends on the font scale.
+  per line (section 9.7), and a row's MAL score moves from the trailing slot to the end of its first supporting
+  line. Apart from these two and the two poster rules above, nothing depends on the font scale.
 
 ### 8.4 Components
 
@@ -697,12 +698,12 @@ else. Nothing is written before "Save", and "Save" writes exactly what the sheet
 
 - A Material search bar at the top.
 - Before a query, must show: up to five recent searches, then four rows that open browse lists: "This season", "Top
-  airing", "Top rated", "Most popular". Limit: nothing else; there is no home feed. Later browse entries are added
-  as rows here.
-- Results (`AnimeRow`), must show: the title (line cap two); the facts line of section 9.4, "TV · 2024 ·
-  24 episodes"; when the title is on the user's list, a second supporting line, the list status line:
-  "Watching · 12 / 24", without the count for Planned with none watched and for Completed at the total (dailyAL
-  issue #67); trailing, the MAL score.
+  airing", "Top rated", "Most popular", each group under its header. Limit: nothing else; there is no home feed.
+  Later browse entries are added as rows here.
+- Results (`AnimeRow`), must show: the title (line cap two); the facts line of section 9.4, without the episode
+  count when the list status line states the total ("TV · 2024" above "Watching · 12 / 24"); when the title is on
+  the user's list, a second supporting line, the list status line: "Watching · 12 / 24", without the count for
+  Planned with none watched and for Completed at the total (dailyAL issue #67); trailing, the MAL score.
 - A query that is only digits shows one extra row above the results, "Open title #<id>", which opens the title page
   of that MAL id. Limit: nothing else is added to the results.
 - A browse list uses the same row, with the rank in front of the title for ranked lists.

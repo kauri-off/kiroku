@@ -19,4 +19,5 @@
     <string name="design_episode_minus">Минус одна серия</string>
     <string name="design_episode_plus">Плюс одна серия</string>
     <string name="design_episode_total">" /\u00A0%d"</string>
+    <string name="design_mal_score">Оценка MAL %1$s</string>
 </resources>
