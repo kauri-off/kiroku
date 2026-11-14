@@ -61,7 +61,7 @@ fun SignInTurns(
     LaunchedEffect(turn) {
         turn?.let {
             navigator.follow(it)
-            handOver.taken(it)
+            handOver.taken(it, onScreen = navigator.backStack.last() == SignInKey)
         }
     }
 }
@@ -70,6 +70,7 @@ private fun ShellNavigator.follow(turn: SignInTurn) =
     when (turn) {
         SignInTurn.Redirected -> if (backStack.last() != SignInKey) open(SignInKey) else Unit
         SignInTurn.SignedIn -> signedIn()
+        is SignInTurn.Failed -> Unit
     }
 
 // A finished sign-in leaves the List alone on its stack, and no sign-in screen anywhere.

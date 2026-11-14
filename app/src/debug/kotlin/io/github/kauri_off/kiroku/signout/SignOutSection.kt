@@ -34,7 +34,7 @@ sealed interface SignOutEvent {
     data object SignOut : SignOutEvent
 }
 
-// Signs the account out until Settings exist; the sign-out runs in the session's own scope and outlives the menu.
+// Signs the account out until Settings exist.
 @Composable
 fun SignOutRoute() {
     val graph = LocalContext.current.appGraph
@@ -48,7 +48,7 @@ fun SignOutRoute() {
     }
 }
 
-// Where the account's sign-in stands, and Sign out while there is one to end.
+// Where the account's sign-in stands, and Sign out once a stored sign-in has been read.
 @Composable
 fun SignOutSection(
     state: SignOutState,
@@ -56,7 +56,7 @@ fun SignOutSection(
 ) {
     SectionHeader(stringResource(R.string.sign_out_title))
     SectionDetail(state.detail)
-    if (state is SignOutState.Account && state.session != Session.SignedOut) {
+    if (state is SignOutState.Account && (state.session is Session.SignedIn || state.session is Session.Expired)) {
         OutlinedButton(
             onClick = { onEvent(SignOutEvent.SignOut) },
             modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s),

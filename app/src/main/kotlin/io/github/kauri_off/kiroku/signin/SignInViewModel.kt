@@ -52,6 +52,11 @@ sealed interface SignInTurn {
 
     // The sign-in ended signed in: the app goes to the List.
     data object SignedIn : SignInTurn
+
+    // The sign-in being completed failed: shown if its screen is on top, else read, as the person left it.
+    data class Failed(
+        val step: SignInStep.Failed,
+    ) : SignInTurn
 }
 
 // The app's side of the sign-in, for as long as the app is shown: what it must act on, until it acknowledges it.
@@ -59,23 +64,33 @@ class SignInHandOver(
     private val signIn: SignIn,
 ) : ViewModel() {
     private val redirected = MutableStateFlow(false)
+    private val failed = MutableStateFlow<SignInStep.Failed?>(null)
 
     // The step the last turn was decided from; it outlives the screen's collection, so a step is acted on once.
     private var last: SignInStep = SignInStep.None
 
     val turn: StateFlow<SignInTurn?> =
-        combine(signIn.step.map(::arrived), redirected) { step, redirected ->
+        combine(signIn.step.map(::arrived), redirected, failed) { step, redirected, failed ->
             when {
                 step == SignInStep.SignedIn -> SignInTurn.SignedIn
                 redirected -> SignInTurn.Redirected
+                failed != null -> SignInTurn.Failed(failed)
                 else -> null
             }
         }.stateIn(viewModelScope, WhileShown, null)
 
-    fun taken(turn: SignInTurn) {
+    // [onScreen]: the sign-in screen is on top once the app has acted on [turn].
+    fun taken(
+        turn: SignInTurn,
+        onScreen: Boolean,
+    ) {
         when (turn) {
             SignInTurn.Redirected -> redirected.value = false
             SignInTurn.SignedIn -> signIn.acknowledge(SignInStep.SignedIn)
+            is SignInTurn.Failed -> {
+                failed.value = null
+                if (!onScreen) signIn.acknowledge(turn.step)
+            }
         }
     }
 
@@ -84,9 +99,13 @@ class SignInHandOver(
         val previous = last
         last = step
         when {
-            step == SignInStep.None -> redirected.value = false
+            step == SignInStep.None -> {
+                redirected.value = false
+                failed.value = null
+            }
             !signIn.canStart || step == previous -> Unit
             step == SignInStep.Completing || step is SignInStep.Failed && previous != SignInStep.Completing -> redirected.value = true
+            step is SignInStep.Failed && !redirected.value -> failed.value = step
         }
         return step
     }

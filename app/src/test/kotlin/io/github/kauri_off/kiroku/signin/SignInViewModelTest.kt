@@ -110,14 +110,32 @@ class SignInViewModelTest {
             assertNull(handOver.turn.value)
             signIn.redirected("x")
             assertEquals(SignInTurn.Redirected, handOver.turn.value)
-            handOver.taken(SignInTurn.Redirected)
+            handOver.taken(SignInTurn.Redirected, onScreen = true)
             assertNull(handOver.turn.value)
             signIn.step.value = failed
+            assertEquals(SignInTurn.Failed(failed), handOver.turn.value)
+            handOver.taken(SignInTurn.Failed(failed), onScreen = true)
             assertNull(handOver.turn.value)
+            assertEquals(emptyList<SignInStep>(), signIn.acknowledged.toList())
 
             shown.cancel()
             testScheduler.advanceTimeBy(60_000)
             showing(handOver.turn)
+            assertNull(handOver.turn.value)
+        }
+
+    @Test
+    fun `a failure that ends a sign-in whose screen was left is read, so the next visit is a new start`() =
+        test {
+            val signIn = FakeSignIn()
+            val handOver = SignInHandOver(signIn)
+            showing(handOver.turn)
+            signIn.redirected("x")
+            handOver.taken(SignInTurn.Redirected, onScreen = true)
+            signIn.step.value = failed
+            handOver.taken(SignInTurn.Failed(failed), onScreen = false)
+            assertEquals(listOf<SignInStep>(failed), signIn.acknowledged.toList())
+            assertEquals(SignInStep.None, signIn.step.value)
             assertNull(handOver.turn.value)
         }
 
@@ -152,7 +170,7 @@ class SignInViewModelTest {
             signIn.redirected("x")
             signIn.step.value = SignInStep.SignedIn
             assertEquals(SignInTurn.SignedIn, handOver.turn.value)
-            handOver.taken(SignInTurn.SignedIn)
+            handOver.taken(SignInTurn.SignedIn, onScreen = false)
             assertEquals(listOf<SignInStep>(SignInStep.SignedIn), signIn.acknowledged.toList())
             assertNull(handOver.turn.value)
         }

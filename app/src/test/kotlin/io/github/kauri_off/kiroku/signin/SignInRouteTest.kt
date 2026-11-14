@@ -145,6 +145,7 @@ class SignInRouteTest {
 
         step(SignInStep.Failed(SignInFailure.Rejected))
         shows(kagerou)
+        assertEquals(SignInStep.None, signIn.step.value)
         signIn.redirected("x")
         compose.waitForIdle()
         step(SignInStep.Failed(SignInFailure.Rejected))
@@ -153,8 +154,47 @@ class SignInRouteTest {
         shows("Sign-in failed, try again")
         back()
         shows(kagerou)
-        assertEquals(listOf<SignInStep>(SignInStep.Failed(SignInFailure.Rejected)), signIn.acknowledged.toList())
+        assertEquals(List(2) { SignInStep.Failed(SignInFailure.Rejected) }, signIn.acknowledged.toList())
         assertEquals(SignInStep.None, signIn.step.value)
+    }
+
+    @Test
+    fun `a sign-in that fails after its screen was left is not shown later, and the next visit is ready`() {
+        signedOut()
+        click("Sign in")
+        click(SIGN_IN)
+        step(SignInStep.Completing)
+        back()
+        shows("My list")
+        step(SignInStep.Failed(SignInFailure.Rejected))
+        click("Sign in")
+        shows(SENTENCE)
+        compose.onNodeWithText(SIGN_IN).assertIsEnabled()
+    }
+
+    @Test
+    fun `a redirect that arrives with the sign-in screen on top stays on that screen, and one Back leaves it`() {
+        signedOut()
+        click("Sign in")
+        signIn.redirected("x")
+        compose.waitForIdle()
+        shows("Signing in…")
+        back()
+        compose.onNodeWithText("Signing in…").assertDoesNotExist()
+        shows("Sign in with MyAnimeList to see your list here")
+    }
+
+    @Test
+    fun `the screen leaves for the List once the session is signed in, whoever signed it in`() {
+        app.test.demo.server.sessionExpired.value = true
+        compose.waitForIdle()
+        click(kagerou)
+        click("Sign in")
+        shows(SENTENCE)
+        app.test.demo.server.sessionExpired.value = false
+        compose.waitForIdle()
+        assertTheListIsAlone()
+        assertEquals(emptyList<SignInStep>(), signIn.acknowledged.toList())
     }
 
     @Test

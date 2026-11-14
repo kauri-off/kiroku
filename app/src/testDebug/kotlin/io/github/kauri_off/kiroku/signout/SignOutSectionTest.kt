@@ -1,9 +1,11 @@
 package io.github.kauri_off.kiroku.signout
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.signin.FakeSignInApplication
@@ -48,10 +50,21 @@ class SignOutSectionTest {
     }
 
     @Test
+    fun `Sign out is offered once the stored sign-in has been read and names one`() {
+        val state = mutableStateOf(SignOutState.Account(null))
+        compose.setContent { Column { SignOutSection(state.value, onEvent = {}) } }
+        compose.onNodeWithText("The stored sign-in has not been read yet").assertExists()
+        compose.onNodeWithText("Sign out").assertDoesNotExist()
+        state.value = SignOutState.Account(Session.Expired(SignInId("a")))
+        compose.onNodeWithText("Session expired").assertExists()
+        compose.onNodeWithText("Sign out").assertExists()
+    }
+
+    @Test
     @Config(application = NoSignInApplication::class)
     fun `demo data has no account to sign out of`() {
         menu()
-        compose.onNodeWithText("Demo data has no MyAnimeList account to sign out of").assertExists()
+        compose.onNodeWithText("Demo data has no MyAnimeList account").assertExists()
         compose.onNodeWithText("Sign out").assertDoesNotExist()
     }
 }

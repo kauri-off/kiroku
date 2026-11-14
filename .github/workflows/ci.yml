@@ -83,7 +83,7 @@ jobs:
 
       - name: Debug build
         env:
-          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+          MAL_CLIENT_ID: ${{ github.event_name == 'push' && secrets.MAL_CLIENT_ID || '' }}
         run: ./gradlew assembleDebug
 
       - name: Release build with R8 and its guards, and the preview build
