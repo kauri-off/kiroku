@@ -35,7 +35,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Duration
@@ -495,7 +494,7 @@ class MalSessionTest {
             val mal = FakeMal("access-2")
             assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
             assertEquals(listOf("java.io.IOException"), fixture.reported)
-            assertFalse(fixture.unexpected.single() is TokensNotOpened)
+            assertFalse(fixture.unexpected.single() is TokensNotRead)
             assertEquals(Outcome.Success("access-2"), session.authorised(mal.request))
             assertEquals(listOf("access-1", "access-2", "access-2"), mal.sent)
             assertEquals(1, fixture.grants.size)
@@ -770,7 +769,7 @@ class MalSessionTest {
             // Reported by its type: the message is the Keystore's own.
             assertEquals(listOf("java.security.ProviderException"), fixture.reported)
             assertFalse("no Keystore" in fixture.unexpected.single().stackTraceToString())
-            assertTrue(fixture.unexpected.single() is TokensNotOpened)
+            assertTrue(fixture.unexpected.single() is TokensNotRead)
 
             val next = fixture.reopen()
             assertEquals(Session.SignedIn(id), next.now())
@@ -798,15 +797,6 @@ class MalSessionTest {
             assertEquals(Session.SignedOut, fixture.reopen().now())
         }
 
-    // A disk that fails every read while [failing], as a file that is there and cannot be read.
-    private class FailingDisk(
-        private val real: Serializer<Stored>,
-        var failing: Boolean = true,
-    ) : Serializer<Stored> by real {
-        override suspend fun readFrom(input: InputStream): Stored =
-            if (failing) throw IOException("the disk, at a title") else real.readFrom(input)
-    }
-
     private val soon: (Int) -> Duration = { Duration.ofMillis(10) }
 
     private suspend fun MalSession.known(): Session? = withTimeoutOrNull(300) { now() }
@@ -822,13 +812,13 @@ class MalSessionTest {
             assertEquals(null, session.known())
             // Nothing is sent or changed meanwhile, and the many tries are one report, of the type alone.
             val mal = FakeMal("access-1")
-            assertEquals(expired, session.authorised(mal.request))
+            assertEquals(Outcome.Failure(DataError.StorageError), session.authorised(mal.request))
             session.renewIfDue()
             assertEquals(emptyList<String>(), mal.sent)
             assertEquals(file, fixture.file.readBytes().toList())
             assertEquals(listOf("java.io.IOException"), fixture.reported)
             assertFalse("title" in fixture.unexpected.single().stackTraceToString())
-            assertFalse(fixture.unexpected.single() is TokensNotOpened)
+            assertTrue(fixture.unexpected.single() is TokensNotRead)
 
             disk.failing = false
             assertEquals(id, session.now())
@@ -939,5 +929,65 @@ class MalSessionTest {
             assertTrue(runCatching { session.now() }.exceptionOrNull() is IllegalStateException)
             assertTrue(parent.isActive)
             parent.coroutineContext.job.cancelAndJoin()
+        }
+
+    @Test
+    fun aSignInThatCannotBeWrittenWhileTheFileCannotBeReadLosesNeitherTheFileNorItsSignIn() =
+        test {
+            val id = signedIn().now()
+            val file = fixture.file.readBytes().toList()
+            fixture.close()
+            val disk = FailingDisk(fixture.format(), fullToo = true)
+            val session = fixture.open(format = disk, retryAfter = soon)
+            assertEquals(null, session.known())
+
+            assertEquals(Outcome.Failure(DataError.StorageError), session.signIn(TokenGrant("access-2", "refresh-2")))
+            session.signOut()
+            delay(100)
+            assertEquals(file, fixture.file.readBytes().toList())
+            assertEquals(
+                listOf(fixture.file.name),
+                fixture.file.parentFile!!
+                    .list()
+                    .orEmpty()
+                    .toList(),
+            )
+
+            // The sign-out that the file did not take still holds; nothing of the failed sign-in does.
+            assertEquals(Session.SignedOut, session.now())
+            disk.failing = false
+            assertEquals(id, fixture.reopen().now())
+        }
+
+    @Test
+    fun theWaitsBetweenTriesOfTheFileAreASecondDoublingToAMinuteAndNoLonger() {
+        assertEquals(listOf(1L, 2, 4, 8, 16, 32, 60, 60, 60), (0..8).map { fileRetry(it).seconds })
+        for (attempt in listOf(9, 40, 62, 63, 64, 1000, Int.MAX_VALUE)) assertEquals("$attempt", 60, fileRetry(attempt).seconds)
+    }
+
+    @Test
+    fun aValueTheFileDidNotTakeIsWrittenWhenAskedAndAFileThatHoldsItsValueIsLeftAlone() =
+        test {
+            val cipher = FailingCipher(fixture.cipher)
+            val session = fixture.open(cipher, retryAfter = { Duration.ofDays(1) })
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            val first = fixture.file.readBytes().toList()
+            session.writeOwed()
+            assertEquals(first, fixture.file.readBytes().toList())
+
+            cipher.seals = false
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+            session.writeOwed()
+            assertEquals(first, fixture.file.readBytes().toList())
+
+            cipher.seals = true
+            session.writeOwed()
+            val second = fixture.file.readBytes().toList()
+            assertNotEquals(first, second)
+            session.writeOwed()
+            assertEquals(second, fixture.file.readBytes().toList())
+            assertEquals(listOf("java.io.IOException"), fixture.reported)
+            assertTrue(stored().contains(" access-2 refresh-2 "))
         }
 }

@@ -113,6 +113,9 @@ class MalSession internal constructor(
     // Held by every change of the tokens, a refresh's request to MAL included.
     private val gate = Mutex()
 
+    // The value the file did not take yet; changed only with the gate held.
+    private var owed: Stored? = null
+
     private val lock = Any()
     private var renewal: Renewal? = null
 
@@ -136,7 +139,7 @@ class MalSession internal constructor(
                     null
                 }
             }
-        if (first) unread?.let { unexpected(SessionFailure(it)) }
+        if (first) unread?.let { unexpected(TokensNotRead(it)) }
         return stored?.also { state.value = it }
     }
 
@@ -172,6 +175,7 @@ class MalSession internal constructor(
             change {
                 val signedIn = Stored.SignedIn(Tokens(UUID.randomUUID().toString(), grant.access, grant.refresh, now()))
                 if (written(signedIn)) {
+                    owed = null
                     state.value = signedIn
                     Outcome.Success(Unit)
                 } else {
@@ -183,7 +187,13 @@ class MalSession internal constructor(
     // S5: a rejected token leads to one refresh, shared with every request rejected beside this one, and one retry.
     internal suspend fun <T> authorised(request: AuthorisedRequest<T>): Outcome<T> =
         guarded(Outcome.Failure(DataError.ServerError)) {
-            val first = tokens() ?: return expired
+            val first =
+                when (val stored = stored()) {
+                    is Stored.SignedIn -> stored.tokens
+                    // The file could not be read: nobody is known to be signed out, and nothing is sent.
+                    null -> return unread
+                    else -> return expired
+                }
             when (val attempt = request.send(first.access)) {
                 is Attempt.Answered -> return attempt.outcome
                 Attempt.Rejected -> Unit
@@ -203,8 +213,15 @@ class MalSession internal constructor(
     // S7: for whatever starts work without a screen; the session itself does it when it is first read.
     suspend fun renewIfDue() {
         guarded(Unit) {
-            val tokens = tokens() ?: return
+            val tokens = (stored() as? Stored.SignedIn)?.tokens ?: return
             if (due(tokens)) renew(tokens)
+        }
+    }
+
+    // One more try at a value the file did not take, for whatever is about to end the process.
+    suspend fun writeOwed() {
+        guarded(Unit) {
+            change { owedWritten() }
         }
     }
 
@@ -236,34 +253,38 @@ class MalSession internal constructor(
 
     // The session is [value] from now on; a file that did not take it is written again until it does.
     private suspend fun kept(value: Stored) {
-        val written = written(value)
+        owed = value.takeUnless { written(it) }
         state.value = value
-        if (!written) scope.launch { writeAgain(value) }
+        if (owed != null) scope.launch { writeAgain(value) }
     }
 
-    // Until the file holds [value], or another value took its place; these tries report nothing.
+    // Until the file holds [value], or another value took its place.
     private suspend fun writeAgain(value: Stored) {
         var attempt = 0
         while (true) {
             delay(retryAfter(attempt++).toMillis())
-            val settled =
-                gate.withLock {
-                    state.value !== value ||
-                        try {
-                            store.write(value) == null
-                        } catch (e: Exception) {
-                            if (e is CancellationException) currentCoroutineContext().ensureActive()
-                            false
-                        }
-                }
-            if (settled) return
+            if (gate.withLock { owed !== value || owedWritten() }) return
         }
     }
 
-    // The tokens once no change of them is running.
-    private suspend fun tokens(): Tokens? {
+    // Reports nothing: the first failure of this value was reported.
+    private suspend fun owedWritten(): Boolean {
+        val value = owed ?: return true
+        val written =
+            try {
+                store.write(value) == null
+            } catch (e: Exception) {
+                if (e is CancellationException) currentCoroutineContext().ensureActive()
+                false
+            }
+        if (written) owed = null
+        return written
+    }
+
+    // What the file said once no change of it is running; null when it could not be read.
+    private suspend fun stored(): Stored? {
         read.await()
-        return (gate.withLock { state.value } as? Stored.SignedIn)?.tokens
+        return gate.withLock { state.value }
     }
 
     // Outlives its caller: a sign-in or sign-out that has begun is finished and stored.
@@ -307,6 +328,7 @@ class MalSession internal constructor(
 
     private companion object {
         val expired = Outcome.Failure(DataError.SessionExpired)
+        val unread = Outcome.Failure(DataError.StorageError)
 
         val Stored.session: Session
             get() =

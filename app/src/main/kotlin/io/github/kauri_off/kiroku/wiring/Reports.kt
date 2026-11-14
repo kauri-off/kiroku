@@ -9,8 +9,7 @@ private val CAUSED_BY = notShown("Caused by: ")
 private val FRAME = notShown("\tat ")
 private const val CAUSES = 8
 
-// What is said of an exception where its message, which could quote the list or an answer, must not go: one line each
-// for its type, for the type its message names when it names one, for its frames, and the same for its causes.
+// An exception without its message, which could quote the list: its type, the type its message names, its frames, its causes.
 internal fun typesOf(e: Throwable): List<String> =
     buildList {
         var current: Throwable? = e

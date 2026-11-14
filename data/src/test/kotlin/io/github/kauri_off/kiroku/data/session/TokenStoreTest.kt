@@ -160,6 +160,30 @@ class TokenStoreTest {
         }
 
     @Test
+    fun aWriteThatFailsOverAFileThatCannotBeReadLeavesThatFile() =
+        runBlocking {
+            val fixture = fixture()
+            fixture.store().write(old)
+            val file = fixture.file.readBytes().toList()
+            fixture.close()
+            val disk = FailingDisk(fixture.format(), fullToo = true)
+            val store = fixture.store(disk)
+            assertNotNull(store.write(new))
+            assertEquals(file, fixture.file.readBytes().toList())
+            assertEquals(
+                listOf(fixture.file.name),
+                fixture.file.parentFile!!
+                    .list()
+                    .orEmpty()
+                    .toList(),
+            )
+
+            disk.fullToo = false
+            assertNull(store.write(new))
+            assertEquals(new.text(), fixture.reread().text())
+        }
+
+    @Test
     fun tokensThatDoNotOpenLeaveTheirSignInExpiredAndTheFileAsItIs() =
         runBlocking {
             val source = fixture()

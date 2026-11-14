@@ -10,6 +10,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.job
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.security.ProviderException
 import java.time.Clock
 import java.time.Duration
@@ -75,6 +78,21 @@ internal class FailingCipher(
         sealed: ByteArray,
         bound: ByteArray,
     ): ByteArray = if (opens) real.open(sealed, bound) else throw ProviderException("no Keystore")
+}
+
+// A disk that fails every read of the file while [failing], and every write of it while [fullToo].
+internal class FailingDisk(
+    private val real: Serializer<Stored>,
+    var failing: Boolean = true,
+    var fullToo: Boolean = false,
+) : Serializer<Stored> by real {
+    override suspend fun readFrom(input: InputStream): Stored =
+        if (failing) throw IOException("the disk, at a title") else real.readFrom(input)
+
+    override suspend fun writeTo(
+        t: Stored,
+        output: OutputStream,
+    ) = if (fullToo) throw IOException("the disk is full") else real.writeTo(t, output)
 }
 
 internal class TestClock(

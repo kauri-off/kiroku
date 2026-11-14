@@ -3,6 +3,8 @@ package io.github.kauri_off.kiroku.wiring
 import android.util.Log
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
+import io.github.kauri_off.kiroku.rules.KotlinSource
+import io.github.kauri_off.kiroku.rules.appSources
 import io.github.kauri_off.kiroku.rules.projectDir
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,17 +33,33 @@ class ReportsTest {
         assertTrue(text, "Caused by: java.lang.IllegalArgumentException" in text)
     }
 
-    // A release build's sources are in no unit test, so its two lines are read here.
+    // A release build's sources are in no unit test, so its lines are read here, comments apart.
     @Test
     fun `a release build reports with that log, has no other source than the real account and logs no request`() {
-        val release = File(projectDir, "app/src/release/kotlin/io/github/kauri_off/kiroku/wiring/GraphFactory.kt").readText()
+        val release = File(projectDir, "app/src/release/kotlin/io/github/kauri_off/kiroku/wiring/GraphFactory.kt")
+        val lines = KotlinSource(release.readText()).code.lines()
         for (line in listOf(
             "internal val reportUnexpected: (Throwable) -> Unit = ::logTypes",
             "internal val requestLog: ((String) -> Unit)? = null",
             "internal val otherSource: OtherSource? = null",
         )) {
-            assertTrue(line, line in release.lines())
+            assertTrue(line, line in lines)
         }
+    }
+
+    // So no build hands a live graph another reporter or request log than its own factory's.
+    @Test
+    fun `the parts of a live graph are made in one place, with the build's reporter and request log`() {
+        val making = Regex("""\bLiveParts\s*\(""")
+        val made =
+            appSources()
+                .flatMap { KotlinSource(it.readText()).code.lines() }
+                .filter { making.containsMatchIn(it) && "class LiveParts" !in it }
+                .map { it.trim() }
+        val only =
+            "live: () -> AppGraph = " +
+                "{ LiveGraph(LiveParts(context, LiveSource.Account, clientId, clock, scope, reportUnexpected, requestLog)) },"
+        assertEquals(listOf(only), made)
     }
 
     @Test

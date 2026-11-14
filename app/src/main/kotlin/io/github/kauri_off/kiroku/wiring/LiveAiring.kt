@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
 // The airing data of a live source, of which there is none yet.
-internal fun liveAiring(): AiringRepository =
+@Suppress("UNUSED_PARAMETER")
+internal fun liveAiring(parts: LiveParts): AiringRepository =
     object : AiringRepository {
         private val unavailable = Outcome.Failure(DataError.ServerError)
 

@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
 // The titles of a live source, of which nothing is known and nothing can be fetched yet.
-internal fun liveTitles(): AnimeRepository =
+@Suppress("UNUSED_PARAMETER")
+internal fun liveTitles(parts: LiveParts): AnimeRepository =
     object : AnimeRepository {
         override fun observeAnime(id: AnimeId): Flow<Anime?> = flowOf(null)
 

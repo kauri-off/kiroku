@@ -9,7 +9,8 @@ import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 
 // Search and the browse lists of a live source, which answer nothing yet.
-internal fun liveSearch(): SearchRepository =
+@Suppress("UNUSED_PARAMETER")
+internal fun liveSearch(parts: LiveParts): SearchRepository =
     object : SearchRepository {
         private val unavailable = Outcome.Failure(DataError.ServerError)
 

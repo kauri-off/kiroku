@@ -24,6 +24,12 @@ import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.wiring.LiveGraph
+import io.github.kauri_off.kiroku.wiring.appGraph
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 data class SourceState(
     val running: DataSource,
@@ -41,7 +47,7 @@ sealed interface SourceEvent {
 }
 
 @Composable
-fun SourceRoute(restart: (Context) -> Unit = ::restartApp) {
+fun SourceRoute(restart: (Context) -> Unit = { restartApp(it) }) {
     val context = LocalContext.current
     val choice = remember { SourceChoice(context) }
     var state by remember { mutableStateOf(SourceState(context.runningSource, choice.startsOn(BuildConfig.MAL_CLIENT_ID))) }
@@ -108,8 +114,14 @@ fun relaunchIntent(context: Context): Intent =
     checkNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName))
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
-// Ends this process; the system starts a new one for the screen asked for just before.
-fun restartApp(context: Context) {
+// Ends this process after one more try at what the session's file did not take; the system starts a new one for the first screen.
+fun restartApp(
+    context: Context,
+    patience: Duration = 2.seconds,
+    beforeExit: suspend () -> Unit = { (context.appGraph as? LiveGraph)?.writeOwed() },
+    exit: () -> Unit = { Runtime.getRuntime().exit(0) },
+) {
+    runBlocking { withTimeoutOrNull(patience) { beforeExit() } }
     context.startActivity(relaunchIntent(context))
-    Runtime.getRuntime().exit(0)
+    exit()
 }

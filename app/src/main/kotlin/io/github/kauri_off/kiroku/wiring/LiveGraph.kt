@@ -47,11 +47,17 @@ internal class LiveGraph(
     listStore: (LiveParts) -> LocalList = ::liveListStore,
 ) : AppGraph {
     override val clock: Clock = parts.clock
-    private val account by lazy { liveSession(parts) }
+    private val built = lazy { liveSession(parts) }
+    private val account by built
     override val session: SessionRepository get() = account
     override val list by lazy { liveList(parts, account, listStore) }
-    override val anime by lazy { liveTitles() }
-    override val airing by lazy { liveAiring() }
-    override val search by lazy { liveSearch() }
-    override val user by lazy { liveUser() }
+    override val anime by lazy { liveTitles(parts) }
+    override val airing by lazy { liveAiring(parts) }
+    override val search by lazy { liveSearch(parts) }
+    override val user by lazy { liveUser(parts, account) }
+
+    // For whatever is about to end the process: a session nobody asked for has nothing to write.
+    suspend fun writeOwed() {
+        if (built.isInitialized()) account.writeOwed()
+    }
 }
