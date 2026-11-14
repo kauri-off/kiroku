@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mal_airing">Выходит</string>
+    <string name="mal_finished">Завершено</string>
+    <string name="mal_season_winter">Зима\u00A0%d</string>
+    <string name="mal_season_spring">Весна\u00A0%d</string>
+    <string name="mal_season_summer">Лето\u00A0%d</string>
+    <string name="mal_season_fall">Осень\u00A0%d</string>
+</resources>

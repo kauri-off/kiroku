@@ -1,0 +1,615 @@
+{
+    "id": 263,
+    "title": "Hajime no Ippo",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/4/86334.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/4/86334l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "The First Step",
+            "Hajime no Ippo: The Fighting"
+        ],
+        "en": "Fighting Spirit",
+        "ja": "はじめの一歩 THE FIGHTING!"
+    },
+    "media_type": "tv",
+    "status": "finished_airing",
+    "num_episodes": 75,
+    "start_date": "2000-10-04",
+    "broadcast": {
+        "day_of_the_week": "tuesday",
+        "start_time": "00:50"
+    },
+    "mean": 8.78,
+    "rank": 43,
+    "genres": [
+        {
+            "id": 54,
+            "name": "Combat Sports"
+        },
+        {
+            "id": 27,
+            "name": "Shounen"
+        },
+        {
+            "id": 30,
+            "name": "Sports"
+        }
+    ],
+    "average_episode_duration": 1435,
+    "end_date": "2002-03-27",
+    "synopsis": "In his father's absence, teenager Ippo Makunouchi works…\n\nFollowing brief training under Takamura, Ippo impresses…\n\n[Written by MAL Rewrite]\n",
+    "start_season": {
+        "year": 2000,
+        "season": "fall"
+    },
+    "source": "manga",
+    "studios": [
+        {
+            "id": 11,
+            "name": "Madhouse"
+        }
+    ],
+    "rating": "pg_13",
+    "statistics": {
+        "status": {
+            "watching": "75681",
+            "completed": "400390",
+            "on_hold": "36575",
+            "dropped": "17760",
+            "plan_to_watch": "184605"
+        },
+        "num_list_users": 715011
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 264,
+                "title": "Hajime no Ippo: Champion Road",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1521/137978.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1521/137978l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The First Step - Champion Road"
+                    ],
+                    "en": "Fighting Spirit: Champion Road",
+                    "ja": "はじめの一歩 -Champion Road-"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-04-18",
+                "mean": 8.25,
+                "rank": 394,
+                "genres": [
+                    {
+                        "id": 54,
+                        "name": "Combat Sports"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 5488
+            },
+            "relation_type": "sequel",
+            "relation_type_formatted": "Sequel"
+        },
+        {
+            "node": {
+                "id": 12069,
+                "title": "Hajime no Ippo: Boxer no Kobushi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/84664.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/84664l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hajime no Ippo Episode 76",
+                        "The First Step Special",
+                        "Hajime no Ippo: The Fighting Special",
+                        "Hajime no Ippo Special"
+                    ],
+                    "en": "Fighting Spirit Special",
+                    "ja": "はじめの一歩 THE FIGHTING! ボクサーの拳"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-03-21",
+                "mean": 8.09,
+                "rank": 621,
+                "genres": [
+                    {
+                        "id": 54,
+                        "name": "Combat Sports"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1415
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        }
+    ],
+    "recommendations": [
+        {
+            "node": {
+                "id": 1559,
+                "title": "Shijou Saikyou no Deshi Kenichi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/9/75515.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/9/75515l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "History's Strongest Disciple Kenichi"
+                    ],
+                    "en": "KenIchi: The Mightiest Disciple",
+                    "ja": "史上最強の弟子 ケンイチ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 50,
+                "start_date": "2006-10-08",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:55"
+                },
+                "mean": 8.03,
+                "rank": 733,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1475
+            },
+            "num_recommendations": 27
+        },
+        {
+            "node": {
+                "id": 36563,
+                "title": "Megalo Box",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1958/93533.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1958/93533l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Megalobox",
+                    "ja": "メガロボクス"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2018-04-06",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "01:28"
+                },
+                "mean": 7.87,
+                "rank": 1023,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 54,
+                        "name": "Combat Sports"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1465
+            },
+            "num_recommendations": 13
+        },
+        {
+            "node": {
+                "id": 2402,
+                "title": "Ashita no Joe",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/64671.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/64671l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Rocky Joe",
+                        "Champion Joe"
+                    ],
+                    "en": "Tomorrow's Joe",
+                    "ja": "あしたのジョー"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 79,
+                "start_date": "1970-04-01",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "19:00"
+                },
+                "mean": 8.39,
+                "rank": 241,
+                "genres": [
+                    {
+                        "id": 54,
+                        "name": "Combat Sports"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "num_recommendations": 11
+        },
+        {
+            "node": {
+                "id": 21185,
+                "title": "Baby Steps",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/63361.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/63361l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Baby Steps"
+                    ],
+                    "en": "",
+                    "ja": "ベイビーステップ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2014-04-06",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:30"
+                },
+                "mean": 7.79,
+                "rank": 1202,
+                "genres": [
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "num_recommendations": 10
+        },
+        {
+            "node": {
+                "id": 34636,
+                "title": "Ballroom e Youkoso",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/86739.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/86739l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Welcome to the Ballroom",
+                    "ja": "ボールルームへようこそ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2017-07-09",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "02:08"
+                },
+                "mean": 8.18,
+                "rank": 479,
+                "genres": [
+                    {
+                        "id": 70,
+                        "name": "Performing Arts"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1450
+            },
+            "num_recommendations": 10
+        },
+        {
+            "node": {
+                "id": 15,
+                "title": "Eyeshield 21",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1079/133529.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1079/133529l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Eyeshield21"
+                    ],
+                    "en": "",
+                    "ja": "アイシールド21"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 145,
+                "start_date": "2005-04-06",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "19:00"
+                },
+                "mean": 7.91,
+                "rank": 919,
+                "genres": [
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 10
+        },
+        {
+            "node": {
+                "id": 20583,
+                "title": "Haikyuu!!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/76014.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/76014l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "High Kyuu!!",
+                        "HQ!!"
+                    ],
+                    "en": "Haikyu!!",
+                    "ja": "ハイキュー!!"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2014-04-06",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:00"
+                },
+                "mean": 8.43,
+                "rank": 212,
+                "genres": [
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 8
+        },
+        {
+            "node": {
+                "id": 245,
+                "title": "Great Teacher Onizuka",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/11460.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/11460l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "GTO",
+                        "GTO - The Animation"
+                    ],
+                    "en": "Great Teacher Onizuka",
+                    "ja": "グレート・ティーチャー・オニヅカ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 43,
+                "start_date": "1999-06-30",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "19:30"
+                },
+                "mean": 8.68,
+                "rank": 74,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 55,
+                        "name": "Delinquents"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 48,
+                        "name": "Workplace"
+                    }
+                ],
+                "average_episode_duration": 1550
+            },
+            "num_recommendations": 8
+        },
+        {
+            "node": {
+                "id": 18179,
+                "title": "Yowamushi Pedal",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/53211.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/53211l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Yowapeda"
+                    ],
+                    "en": "Yowamushi Pedal",
+                    "ja": "弱虫ペダル"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 38,
+                "start_date": "2013-10-08",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:35"
+                },
+                "mean": 7.92,
+                "rank": 914,
+                "genres": [
+                    {
+                        "id": 3,
+                        "name": "Racing"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 7
+        },
+        {
+            "node": {
+                "id": 11771,
+                "title": "Kuroko no Basket",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/50453.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/50453l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kuroko no Basuke",
+                        "KuroBas",
+                        "The Basketball Which Kuroko Plays"
+                    ],
+                    "en": "Kuroko's Basketball",
+                    "ja": "黒子のバスケ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2012-04-08",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "01:58"
+                },
+                "mean": 8.04,
+                "rank": 706,
+                "genres": [
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1450
+            },
+            "num_recommendations": 6
+        }
+    ]
+}

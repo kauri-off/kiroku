@@ -1,0 +1,774 @@
+{
+    "id": 34933,
+    "title": "Kakegurui",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/3/86578.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/3/86578l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Kakegurui: Compulsive Gambler",
+            "Gambling School"
+        ],
+        "en": "Kakegurui",
+        "ja": "賭ケグルイ"
+    },
+    "media_type": "tv",
+    "status": "finished_airing",
+    "num_episodes": 12,
+    "start_date": "2017-07-01",
+    "broadcast": {
+        "day_of_the_week": "saturday",
+        "start_time": "22:00"
+    },
+    "mean": 7.21,
+    "rank": 3752,
+    "genres": [
+        {
+            "id": 8,
+            "name": "Drama"
+        },
+        {
+            "id": 59,
+            "name": "High Stakes Game"
+        },
+        {
+            "id": 7,
+            "name": "Mystery"
+        },
+        {
+            "id": 40,
+            "name": "Psychological"
+        },
+        {
+            "id": 23,
+            "name": "School"
+        },
+        {
+            "id": 27,
+            "name": "Shounen"
+        },
+        {
+            "id": 11,
+            "name": "Strategy Game"
+        },
+        {
+            "id": 41,
+            "name": "Suspense"
+        }
+    ],
+    "average_episode_duration": 1470,
+    "end_date": "2017-09-23",
+    "synopsis": "Unlike many schools, attending Hyakkaou Private Academy…\n\nYumeko Jabami, a seemingly naive and beautiful transfer…\n\n[Written by MAL Rewrite]",
+    "start_season": {
+        "year": 2017,
+        "season": "summer"
+    },
+    "source": "manga",
+    "studios": [
+        {
+            "id": 569,
+            "name": "MAPPA"
+        }
+    ],
+    "rating": "r",
+    "statistics": {
+        "status": {
+            "watching": "79997",
+            "completed": "1274296",
+            "on_hold": "33244",
+            "dropped": "69805",
+            "plan_to_watch": "196525"
+        },
+        "num_list_users": 1653867
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 37086,
+                "title": "Kakegurui××",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1496/96519.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1496/96519l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kakegurui 2nd Season",
+                        "Kakegurui: Compulsive Gambler 2nd Season",
+                        "Gambling School 2nd Season"
+                    ],
+                    "en": "",
+                    "ja": "賭ケグルイ××"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2019-01-09",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "02:30"
+                },
+                "mean": 7.18,
+                "rank": 3924,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1469
+            },
+            "relation_type": "sequel",
+            "relation_type_formatted": "Sequel"
+        },
+        {
+            "node": {
+                "id": 38939,
+                "title": "Kakegurui Picture Drama",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1914/98035.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1914/98035l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kakegurui: Compulsive Gambler Picture Drama"
+                    ],
+                    "en": "",
+                    "ja": "賭ケグルイ メイド喫茶百花王"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 3,
+                "start_date": "2017-10-13",
+                "mean": 6.66,
+                "rank": 7052,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 152
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 50339,
+                "title": "Kakegurui Twin",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1851/124275.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1851/124275l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Compulsive Gambler Twin"
+                    ],
+                    "en": "Kakegurui Twin",
+                    "ja": "賭ケグルイ双"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 6,
+                "start_date": "2022-08-04",
+                "mean": 7.17,
+                "rank": 3990,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1547
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        }
+    ],
+    "recommendations": [
+        {
+            "node": {
+                "id": 19815,
+                "title": "No Game No Life",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1074/111944.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1074/111944l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "NGNL"
+                    ],
+                    "en": "No Game, No Life",
+                    "ja": "ノーゲーム・ノーライフ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2014-04-09",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "21:30"
+                },
+                "mean": 8.03,
+                "rank": 727,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 33
+        },
+        {
+            "node": {
+                "id": 3002,
+                "title": "Gyakkyou Burai Kaiji: Ultimate Survivor",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/80032.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/80032l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Tobaku Mokushiroku Kaiji",
+                        "The Suffering Pariah Kaiji"
+                    ],
+                    "en": "Kaiji: Ultimate Survivor",
+                    "ja": "逆境無頼カイジ Ultimate Survivor"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "2007-10-03",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:59"
+                },
+                "mean": 8.25,
+                "rank": 393,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 27
+        },
+        {
+            "node": {
+                "id": 35507,
+                "title": "Youkoso Jitsuryoku Shijou Shugi no Kyoushitsu e",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/86830.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/86830l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Welcome to the Classroom of the Elite",
+                        "You-jitsu",
+                        "You-zitsu"
+                    ],
+                    "en": "Classroom of the Elite",
+                    "ja": "ようこそ実力至上主義の教室へ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2017-07-12",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "23:30"
+                },
+                "mean": 7.81,
+                "rank": 1176,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 15
+        },
+        {
+            "node": {
+                "id": 28223,
+                "title": "Death Parade",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/71553.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/71553l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Death Parade",
+                    "ja": "デス・パレード"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2015-01-10",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:58"
+                },
+                "mean": 8.13,
+                "rank": 554,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 15
+        },
+        {
+            "node": {
+                "id": 28171,
+                "title": "Shokugeki no Souma",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1444/148976.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1444/148976l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Shokugeki no Soma",
+                        "Food Wars: Shokugeki no Soma"
+                    ],
+                    "en": "Food Wars! Shokugeki no Soma",
+                    "ja": "食戟のソーマ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2015-04-04",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "02:25"
+                },
+                "mean": 8.11,
+                "rank": 598,
+                "genres": [
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 47,
+                        "name": "Gourmet"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "num_recommendations": 14
+        },
+        {
+            "node": {
+                "id": 50273,
+                "title": "Tomodachi Game",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1247/121345.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1247/121345l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Friends Game"
+                    ],
+                    "en": "Tomodachi Game",
+                    "ja": "トモダチゲーム"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2022-04-06",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "01:29"
+                },
+                "mean": 7.69,
+                "rank": 1526,
+                "genres": [
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1370
+            },
+            "num_recommendations": 7
+        },
+        {
+            "node": {
+                "id": 1535,
+                "title": "Death Note",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1079/138100.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1079/138100l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "DN"
+                    ],
+                    "en": "Death Note",
+                    "ja": "デスノート"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 37,
+                "start_date": "2006-10-04",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:56"
+                },
+                "mean": 8.62,
+                "rank": 103,
+                "genres": [
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 6
+        },
+        {
+            "node": {
+                "id": 5040,
+                "title": "One Outs",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/21065.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/21065l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "ONE OUTS Nobody wins, but I!"
+                    ],
+                    "en": "One Outs",
+                    "ja": "ワンナウツ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2008-10-08",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:59"
+                },
+                "mean": 8.32,
+                "rank": 315,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 6
+        },
+        {
+            "node": {
+                "id": 36525,
+                "title": "Dorei-ku The Animation",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1801/90264.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1801/90264l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Doreiku: Boku to Nijuusannin no Dorei",
+                        "Dorei-ku: Boku to 23-nin no Dorei",
+                        "23 Slaves and Me"
+                    ],
+                    "en": "",
+                    "ja": "奴隷区 The Animation"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2018-04-13",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "01:00"
+                },
+                "mean": 5.93,
+                "rank": 11458,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1482
+            },
+            "num_recommendations": 4
+        },
+        {
+            "node": {
+                "id": 10271,
+                "title": "Gyakkyou Burai Kaiji: Hakairoku-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/30599.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/30599l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gyakkyou Burai Kaiji S2",
+                        "The Suffering Pariah Kaiji: Backslide Arc"
+                    ],
+                    "en": "Kaiji: Against All Rules",
+                    "ja": "逆境無頼カイジ 破戒録篇"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "2011-04-06",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:59"
+                },
+                "mean": 8.24,
+                "rank": 406,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 59,
+                        "name": "High Stakes Game"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 11,
+                        "name": "Strategy Game"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "num_recommendations": 4
+        }
+    ]
+}
