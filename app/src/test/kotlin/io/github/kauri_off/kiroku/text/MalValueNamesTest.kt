@@ -6,11 +6,18 @@ import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.Genre
-import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.Source
+import io.github.kauri_off.kiroku.data.anime.NO_MEDIA_TYPE
+import io.github.kauri_off.kiroku.data.db.ageRatings
+import io.github.kauri_off.kiroku.data.db.airingStatuses
+import io.github.kauri_off.kiroku.data.db.listStatuses
+import io.github.kauri_off.kiroku.data.db.mediaTypes
+import io.github.kauri_off.kiroku.data.db.relationTypes
+import io.github.kauri_off.kiroku.data.db.seasons
+import io.github.kauri_off.kiroku.data.db.sources
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -32,17 +39,28 @@ class MalValueNamesTest {
     private val russian = resources("ru")
 
     @Test
-    fun `every code in the recorded answers has a name in both languages`() {
-        val codes = RecordedCodes.read()
+    fun `every code the mapper knows has a name in both languages, and every recorded code is one of them`() {
+        val recorded = RecordedCodes.read()
 
         for ((kind, table) in codeTables) {
-            val recorded = codes.of(kind)
-            assertTrue(kind, recorded.isNotEmpty())
-            for (code in recorded - NotAValue[kind].orEmpty()) {
-                assertTrue("$kind $code is not a code the app knows", code in table)
-                assertTranslated("$kind $code", table[code])
-            }
+            for ((code, name) in table) assertTranslated("$kind $code", name)
+            val codes = recorded.of(kind) - if (kind == "media_type") setOf(NO_MEDIA_TYPE) else emptySet()
+            assertTrue(kind, codes.isNotEmpty())
+            for (code in codes) assertTrue("$kind $code is not a code the app knows", code in table)
         }
+    }
+
+    @Test
+    fun `a value has its own name`() {
+        for ((kind, code, inEnglish, inRussian) in Pinned) {
+            val name = checkNotNull(codeTables.getValue(kind)[code])
+            assertEquals("$kind $code", inEnglish, english.getString(name))
+            assertEquals("$kind $code", inRussian, russian.getString(name))
+        }
+        assertEquals("Super power", Genre(31, "Super Power").named(english::getString))
+        assertEquals("Суперсила", Genre(31, "Super Power").named(russian::getString))
+        assertEquals("Тайна", Genre(7, "Mystery").named(russian::getString))
+        assertEquals("Детектив", Genre(39, "Detective").named(russian::getString))
     }
 
     @Test
@@ -58,20 +76,14 @@ class MalValueNamesTest {
     }
 
     @Test
-    fun `every value the app knows has a name in both languages`() {
-        val known: List<Pair<Any, Int?>> =
-            MediaTypes.map { it to it.name() } + RelationType.known.map { it to it.name() } + Sources.map { it to it.name() } +
-                AgeRatings.map { it to it.name() } + AiringStatus.entries.map { it to it.name() } +
-                ListStatus.entries.map { it to it.label() } + Season.entries.map { it to AnimeSeason(YEAR, it).name() }
-
-        for ((value, name) in known) assertTranslated("$value", name)
-    }
-
-    @Test
     fun `a season is written with its year`() {
-        val fall = AnimeSeason(YEAR, Season.Fall)
-        assertEquals("Fall\u00A02024", fall.named { id, year -> english.getString(id, year) })
-        assertEquals("Осень\u00A02024", fall.named { id, year -> russian.getString(id, year) })
+        val inEnglish = listOf("Winter", "Spring", "Summer", "Fall")
+        val inRussian = listOf("Зима", "Весна", "Лето", "Осень")
+        for ((index, season) in Season.entries.withIndex()) {
+            val named = AnimeSeason(YEAR, season)
+            assertEquals("${inEnglish[index]}\u00A0$YEAR", named.named { id, year -> english.getString(id, year) })
+            assertEquals("${inRussian[index]}\u00A0$YEAR", named.named { id, year -> russian.getString(id, year) })
+        }
     }
 
     @Test
@@ -104,121 +116,44 @@ class MalValueNamesTest {
         return app.createConfigurationContext(configuration).resources
     }
 
+    private data class Pin(
+        val kind: String,
+        val code: String,
+        val inEnglish: String,
+        val inRussian: String,
+    )
+
     private companion object {
         const val YEAR = 2024
         const val UNKNOWN_GENRE = 999
         val SameInBoth = setOf("OVA", "ONA", "CGDCT")
 
-        val MediaTypes =
-            listOf(
-                MediaType.Tv,
-                MediaType.TvSpecial,
-                MediaType.Movie,
-                MediaType.Ova,
-                MediaType.Ona,
-                MediaType.Special,
-                MediaType.Music,
-                MediaType.Commercial,
-                MediaType.PromotionalVideo,
-            )
-        val Sources =
-            listOf(
-                Source.Original,
-                Source.Manga,
-                Source.FourKomaManga,
-                Source.WebManga,
-                Source.DigitalManga,
-                Source.Novel,
-                Source.LightNovel,
-                Source.WebNovel,
-                Source.VisualNovel,
-                Source.Game,
-                Source.CardGame,
-                Source.Book,
-                Source.PictureBook,
-                Source.Radio,
-                Source.Music,
-                Source.MixedMedia,
-                Source.Other,
-            )
-        val AgeRatings =
-            listOf(
-                AgeRating.AllAges,
-                AgeRating.Children,
-                AgeRating.Teens13,
-                AgeRating.Violence17,
-                AgeRating.MildNudity,
-                AgeRating.Hentai,
-            )
-
-        // Codes that say MAL does not know the value, so the app shows none.
-        val NotAValue = mapOf("media_type" to setOf("unknown"))
-
-        // MAL's codes as the recorded answers spell them.
+        // MAL's codes of each kind as the mapper reads them, each with the resource its value is named with.
         val codeTables: Map<String, Map<String, Int?>> =
             mapOf(
-                "media_type" to
-                    listOf(
-                        "tv",
-                        "tv_special",
-                        "movie",
-                        "ova",
-                        "ona",
-                        "special",
-                        "music",
-                        "cm",
-                        "pv",
-                    ).zip(MediaTypes.map { it.name() }).toMap(),
-                "status" to
-                    mapOf(
-                        "not_yet_aired" to AiringStatus.NotYetAired.name(),
-                        "currently_airing" to AiringStatus.Airing.name(),
-                        "finished_airing" to AiringStatus.Finished.name(),
-                    ),
-                "list_status" to
-                    mapOf(
-                        "watching" to ListStatus.Watching.label(),
-                        "completed" to ListStatus.Completed.label(),
-                        "on_hold" to ListStatus.OnHold.label(),
-                        "dropped" to ListStatus.Dropped.label(),
-                        "plan_to_watch" to ListStatus.Planned.label(),
-                    ),
-                "rating" to listOf("g", "pg", "pg_13", "r", "r+", "rx").zip(AgeRatings.map { it.name() }).toMap(),
-                "source" to
-                    listOf(
-                        "original",
-                        "manga",
-                        "4_koma_manga",
-                        "web_manga",
-                        "digital_manga",
-                        "novel",
-                        "light_novel",
-                        "web_novel",
-                        "visual_novel",
-                        "game",
-                        "card_game",
-                        "book",
-                        "picture_book",
-                        "radio",
-                        "music",
-                        "mixed_media",
-                        "other",
-                    ).zip(Sources.map { it.name() }).toMap(),
-                "season" to listOf("winter", "spring", "summer", "fall").zip(Season.entries.map { AnimeSeason(YEAR, it).name() }).toMap(),
-                "relation_type" to
-                    listOf(
-                        "prequel",
-                        "sequel",
-                        "parent_story",
-                        "full_story",
-                        "side_story",
-                        "spin_off",
-                        "alternative_setting",
-                        "alternative_version",
-                        "summary",
-                        "other",
-                        "character",
-                    ).zip(RelationType.known.map { it.name() }).toMap(),
+                "media_type" to mediaTypes.values.mapValues { it.value.name() },
+                "status" to airingStatuses.values.mapValues { it.value.name() },
+                "list_status" to listStatuses.values.mapValues { it.value.label() },
+                "rating" to ageRatings.values.mapValues { it.value.name() },
+                "source" to sources.values.mapValues { it.value.name() },
+                "season" to seasons.values.mapValues { AnimeSeason(YEAR, it.value).name() },
+                "relation_type" to relationTypes.values.mapValues { it.value.name() },
+            )
+
+        val Pinned =
+            listOf(
+                Pin("media_type", "tv", "TV", "ТВ"),
+                Pin("media_type", "movie", "Movie", "Фильм"),
+                Pin("status", "currently_airing", "Airing", "Выходит"),
+                Pin("status", "finished_airing", "Finished", "Завершено"),
+                Pin("list_status", "plan_to_watch", "Planned", "Запланировано"),
+                Pin("list_status", "completed", "Completed", "Просмотрено"),
+                Pin("rating", "pg_13", "PG-13 (teens\u00A013\u00A0or older)", "PG-13 (от\u00A013\u00A0лет)"),
+                Pin("rating", "r+", "R+ (mild nudity)", "R+ (частичная обнажённость)"),
+                Pin("source", "manga", "Manga", "Манга"),
+                Pin("source", "light_novel", "Light novel", "Ранобэ"),
+                Pin("relation_type", "side_story", "Side story", "Побочная история"),
+                Pin("relation_type", "alternative_setting", "Alternative setting", "Альтернативная вселенная"),
             )
 
         // The resource a value is named with, or null when it is written without one.

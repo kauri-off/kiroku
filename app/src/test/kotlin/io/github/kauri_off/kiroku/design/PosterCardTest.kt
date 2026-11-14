@@ -40,7 +40,7 @@ class PosterCardTest {
 
     // The longest single words among the captions, in both languages, and two-word captions.
     private val captions1 =
-        listOf("Продолжение", "Предыстория", "Побочная история", "Основная история", "Краткое изложение", "Альт. сеттинг", "Parent story")
+        listOf("Продолжение", "Предыстория", "Побочная история", "Основная история", "Краткое изложение", "Альт. вселенная", "Parent story")
     private val captions2 = listOf("Запланировано", "Просмотрено", "Отложено", "Completed", "Фильм · 2024")
 
     @Test
