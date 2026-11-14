@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -14,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ import kotlinx.coroutines.plus
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.io.IOException
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
@@ -60,6 +63,17 @@ internal class SessionFailure(
     }
 }
 
+// The waits between tries of a token file that could not be read or written: a second, doubling to a minute.
+internal fun fileRetry(attempt: Int): Duration = Duration.ofSeconds(minOf(1L shl attempt.coerceIn(0, 6), 60))
+
+// The session's own scope: a child that fails is reported, and ends neither the others nor the scope it was made in.
+internal fun sessionScope(
+    parent: CoroutineScope,
+    unexpected: (Throwable) -> Unit,
+): CoroutineScope =
+    parent + SupervisorJob(parent.coroutineContext[Job]) +
+        CoroutineExceptionHandler { _, e -> if (e is Exception) unexpected(SessionFailure(e)) else throw e }
+
 // The session over [file], which no other object may read or write, sealed with a key from the Android Keystore.
 internal fun malSession(
     file: File,
@@ -68,12 +82,13 @@ internal fun malSession(
     scope: CoroutineScope,
     unexpected: (Throwable) -> Unit,
 ): MalSession {
-    val files = scope + Dispatchers.IO + SupervisorJob(scope.coroutineContext[Job])
+    val own = sessionScope(scope, unexpected)
+    val files = own + Dispatchers.IO + SupervisorJob(own.coroutineContext[Job])
     return MalSession(
-        TokenStore(file, TokenFormat(AesGcmCipher(KeystoreKeys(KEY_ALIAS)), file.name), files),
+        TokenStore(file, TokenFormat(AesGcmCipher(KeystoreKeys(KEY_ALIAS)), file.name, unexpected), files),
         endpoint,
         clock,
-        scope,
+        own,
         unexpected,
     )
 }
@@ -85,13 +100,14 @@ class MalSession internal constructor(
     private val clock: Clock,
     private val scope: CoroutineScope,
     private val unexpected: (Throwable) -> Unit,
+    private val retryAfter: (attempt: Int) -> Duration = ::fileRetry,
 ) : SessionRepository {
     private class Renewal(
         val tokens: Tokens,
         val result: Deferred<Outcome<Stored>>,
     )
 
-    // Null until the token store was read.
+    // Null until the token file was read: a file that cannot be read signs nobody out.
     private val state = MutableStateFlow<Stored?>(null)
 
     // Held by every change of the tokens, a refresh's request to MAL included.
@@ -102,9 +118,36 @@ class MalSession internal constructor(
 
     private val read =
         scope.async(start = CoroutineStart.LAZY) {
-            val stored = gate.withLock { guarded<Stored>(Stored.SignedOut) { store.read() }.also { state.value = it } }
-            if (stored is Stored.SignedIn && due(stored.tokens)) scope.launch { renew(stored.tokens) }
+            when (val stored = gate.withLock { readFile(first = true) }) {
+                null -> scope.launch { readAgain() }
+                else -> renewAtStart(stored)
+            }
         }
+
+    // Null when the file is there and could not be read; only the first such failure is reported.
+    private suspend fun readFile(first: Boolean): Stored? =
+        guarded<Stored?>(Stored.SignedOut) {
+            try {
+                store.read()
+            } catch (e: IOException) {
+                if (first) unexpected(SessionFailure(e))
+                null
+            }
+        }?.also { state.value = it }
+
+    // Until the file was read, or a sign-in or a sign-out took its place.
+    private suspend fun readAgain() {
+        var attempt = 0
+        while (true) {
+            delay(retryAfter(attempt++).toMillis())
+            val stored = gate.withLock { if (state.value == null) readFile(first = false) else return } ?: continue
+            return renewAtStart(stored)
+        }
+    }
+
+    private fun renewAtStart(stored: Stored) {
+        if (stored is Stored.SignedIn && due(stored.tokens)) scope.launch { renew(stored.tokens) }
+    }
 
     override fun observeSession(): Flow<Session> =
         flow {
@@ -114,10 +157,7 @@ class MalSession internal constructor(
 
     override suspend fun signOut() {
         guarded(Unit) {
-            change {
-                written(Stored.SignedOut)
-                state.value = Stored.SignedOut
-            }
+            change { kept(Stored.SignedOut) }
         }
     }
 
@@ -189,6 +229,32 @@ class MalSession internal constructor(
             failure == null
         }
 
+    // The session is [value] from now on; a file that did not take it is written again until it does.
+    private suspend fun kept(value: Stored) {
+        val written = written(value)
+        state.value = value
+        if (!written) scope.launch { writeAgain(value) }
+    }
+
+    // Until the file holds [value], or another value took its place; these tries report nothing.
+    private suspend fun writeAgain(value: Stored) {
+        var attempt = 0
+        while (true) {
+            delay(retryAfter(attempt++).toMillis())
+            val settled =
+                gate.withLock {
+                    state.value !== value ||
+                        try {
+                            store.write(value) == null
+                        } catch (e: Exception) {
+                            if (e is CancellationException) currentCoroutineContext().ensureActive()
+                            false
+                        }
+                }
+            if (settled) return
+        }
+    }
+
     // The tokens once no change of them is running.
     private suspend fun tokens(): Tokens? {
         read.await()
@@ -227,8 +293,7 @@ class MalSession internal constructor(
                 is TokenResult.Failed -> return Outcome.Failure(answer.error)
             }
         // New tokens that cannot be stored still serve this process.
-        written(next)
-        state.value = next
+        kept(next)
         return Outcome.Success(next)
     }
 

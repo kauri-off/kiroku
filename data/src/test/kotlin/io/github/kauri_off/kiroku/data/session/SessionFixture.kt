@@ -130,7 +130,7 @@ internal class SessionFixture(
     fun format(
         cipher: TokenCipher = this.cipher,
         name: String = file.name,
-    ) = TokenFormat(cipher, name)
+    ) = TokenFormat(cipher, name) { unexpected += it }
 
     fun store(format: Serializer<Stored> = format()) = TokenStore(file, format, scope(SupervisorJob() + Dispatchers.IO))
 
@@ -138,6 +138,7 @@ internal class SessionFixture(
         cipher: TokenCipher = this.cipher,
         format: Serializer<Stored> = format(cipher),
         dispatcher: CoroutineDispatcher = Dispatchers.Default,
+        retryAfter: (Int) -> Duration = ::fileRetry,
     ): MalSession {
         sessionScope = scope(Job() + dispatcher)
         val endpoint =
@@ -145,7 +146,7 @@ internal class SessionFixture(
                 grants += grant
                 answer(grant)
             }
-        return MalSession(store(format), endpoint, clock, sessionScope) { unexpected += it }
+        return MalSession(store(format), endpoint, clock, sessionScope, { unexpected += it }, retryAfter)
     }
 
     suspend fun close() {

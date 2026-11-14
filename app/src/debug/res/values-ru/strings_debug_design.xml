@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="debug_menu_design">Дизайн-система</string>
+    <string name="debug_menu_gallery_detail">Все компоненты во всех состояниях</string>
+</resources>

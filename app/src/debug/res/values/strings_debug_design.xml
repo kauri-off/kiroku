@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="debug_menu_design">Design system</string>
+    <string name="debug_menu_gallery_detail">Every component in every state it can be in</string>
+</resources>

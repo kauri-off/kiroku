@@ -28,6 +28,6 @@
     <string name="scenarios_reset_running">Bringing the list back</string>
     <string name="scenarios_reset_dropped">The list is back; a save that got no answer was dropped</string>
     <string name="scenarios_reset_failed">The list did not come back. Reset again</string>
-    <string name="scenarios_unavailable">Scenarios work only on demo data, and this build has a MyAnimeList client id</string>
+    <string name="scenarios_unavailable">Scenarios work only on demo data. Choose Demo under Data source</string>
     <string name="scenarios_marker_spoken">Simulated: %s</string>
 </resources>

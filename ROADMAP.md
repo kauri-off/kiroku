@@ -103,18 +103,7 @@ on the Russian strings so far are fixed.
   URI and that nothing else new is exported. `tools/emu run`: the redirect URI sent to the app while it is not
   running starts it and ends in "Sign-in failed".
 
-- [ ] **M2-09 [A] Live graph and the choice of data source.** The live graph is built over `:data` with the real
-  session, one file per area (session, list, titles), so a later task replaces one area without touching
-  another. Nothing of the network or the database is built before its first use. Debug and preview builds choose
-  their source: the real account (the default when the build has a client id), the demo, and later the sandbox;
-  the choice is kept and applied when the process starts. Each source has its own stores and the demo reaches no
-  MAL host. No test depends on whether the build has a client id. The release reporter logs an exception's type,
-  never its message, which could quote the list. The debug menu takes its sections from one file each.
-  **Needs:** M2-05, M2-06.
-  **Check:** tests: with a client id a debug build starts on the real account and, after the choice, on the demo;
-  reading the session builds neither the HTTP client nor a database; the demo source builds no HTTP client at
-  all; the reporter's output for an exception whose message holds a title does not hold it; the tests that
-  skipped themselves with a client id are gone or run. The release guards pass.
+- [x] **M2-09 [A] Live graph and the choice of data source.**
 
 - [ ] **M2-10 [A] Recorder for answers that need only the client id.** The build task of section 11.1, run by
   agents through `tools/gw`: a list of requests kept in the repository, the field sets written once for the

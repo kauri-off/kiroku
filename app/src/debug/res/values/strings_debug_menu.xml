@@ -1,13 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="debug_menu_title">Debug menu</string>
-    <string name="debug_menu_build">Build</string>
-    <string name="debug_menu_build_type">Build type</string>
-    <string name="debug_menu_version">Version</string>
-    <string name="debug_menu_commit">Commit</string>
-    <string name="debug_menu_commit_dirty">%1$s, with uncommitted changes</string>
-    <string name="debug_menu_built">Built</string>
-    <string name="debug_menu_not_known">Not known</string>
-    <string name="debug_menu_design">Design system</string>
-    <string name="debug_menu_gallery_detail">Every component in every state it can be in</string>
 </resources>

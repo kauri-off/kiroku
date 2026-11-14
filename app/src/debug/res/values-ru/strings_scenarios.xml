@@ -28,6 +28,6 @@
     <string name="scenarios_reset_running">Список восстанавливается</string>
     <string name="scenarios_reset_dropped">Список восстановлен, сохранение без ответа отброшено</string>
     <string name="scenarios_reset_failed">Список не восстановился. Сбросьте ещё раз</string>
-    <string name="scenarios_unavailable">Сценарии работают только на демо-данных, а в этой сборке есть идентификатор клиента MyAnimeList</string>
+    <string name="scenarios_unavailable">Сценарии работают только на демо-данных. Выберите «Демо» в разделе «Источник данных»</string>
     <string name="scenarios_marker_spoken">Симуляция: %s</string>
 </resources>

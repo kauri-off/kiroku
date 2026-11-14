@@ -25,13 +25,16 @@ import io.github.kauri_off.kiroku.scenario.ScenarioTile
 import io.github.kauri_off.kiroku.scenario.StoreFault
 import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.scenario.scenarios
+import io.github.kauri_off.kiroku.source.DataSource
+import io.github.kauri_off.kiroku.source.SourceChoice
+import io.github.kauri_off.kiroku.source.StartsOn
+import io.github.kauri_off.kiroku.source.runningSource
 import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,22 +44,22 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.xmlpull.v1.XmlPullParser
 
-// The menu switches the demo's scenarios by touch, keeps them across a rotation, resets the demo, names the build and opens the gallery.
+// The menu switches the demo's scenarios by touch, keeps them across a rotation, resets the demo, chooses the source, names the build and opens the gallery.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class DebugMenuTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val source = StartsOn(DataSource.Demo)
+
+    @get:Rule(order = 1)
     val compose = createAndroidComposeRule<DebugMenuActivity>()
 
     private val context get() = RuntimeEnvironment.getApplication()
     private val demo get() = (context.appGraph as DemoGraph).demo
     private val scenarios get() = checkNotNull(context.scenarios)
 
-    private fun demoMode() = assumeTrue(BuildConfig.MAL_CLIENT_ID.isBlank())
-
     @Test
     fun `a switch applies at once, survives a rotation, and reset turns it off`() {
-        demoMode()
         compose.onNodeWithText("Offline").performClick()
         assertTrue(demo.server.offline.value)
         compose.onNodeWithText("Refused").performClick()
@@ -76,7 +79,6 @@ class DebugMenuTest {
 
     @Test
     fun `while reset waits for a save on its way, the switches cannot be touched and the panel says why`() {
-        demoMode()
         compose.onNodeWithText("Slow").performClick()
         runBlocking { demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch)) }
 
@@ -89,6 +91,26 @@ class DebugMenuTest {
         compose.waitUntil(RESET_TIMEOUT) { scenarios.reset.value == ResetState.Idle }
         compose.onNodeWithText("Offline").assertIsEnabled()
         compose.onNodeWithText("Slow").assertIsOff()
+    }
+
+    @Test
+    fun `a source chosen by touch is kept for the next start, across a rotation, while the app stays on the one it started on`() {
+        compose.onNodeWithText("Restart").assertDoesNotExist()
+        compose.onNodeWithText("MyAnimeList").performScrollTo().performClick()
+        assertEquals(DataSource.Account, SourceChoice(context).chosen())
+        compose.onNodeWithText("MyAnimeList").assertIsOn()
+        compose.onNodeWithText("Still on demo data until the app starts again").assertExists()
+        compose.onNodeWithText("Restart").assertExists()
+        assertEquals(DataSource.Demo, context.runningSource)
+        compose.onNodeWithText("Offline").performScrollTo().assertIsEnabled()
+
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText("MyAnimeList").performScrollTo().assertIsOn()
+        compose.onNodeWithText("Restart").assertExists()
+
+        compose.onNodeWithText("Demo").performClick()
+        assertEquals(DataSource.Demo, SourceChoice(context).chosen())
+        compose.onNodeWithText("Restart").assertDoesNotExist()
     }
 
     @Test

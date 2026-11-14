@@ -148,11 +148,15 @@ class TokenStoreTest {
         }
 
     @Test
-    fun aDirectoryInTheFilesPlaceIsSignedOut() =
+    fun aFileThatCannotBeReadAtAllIsNotSignedOutAndAWriteReplacesIt() =
         runBlocking {
             val fixture = fixture()
             fixture.file.mkdirs()
-            assertEquals("signed out", fixture.store().read().text())
+            val store = fixture.store()
+            assertThrows(IOException::class.java) { runBlocking { store.read() } }
+            assertTrue(fixture.file.isDirectory)
+            assertNull(store.write(new))
+            assertEquals(new.text(), fixture.reread().text())
         }
 
     @Test

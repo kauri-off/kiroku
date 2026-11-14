@@ -458,6 +458,7 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/core/fixtures/",
                 "io/github/kauri_off/kiroku/standin/",
                 "io/github/kauri_off/kiroku/scenario/",
+                "io/github/kauri_off/kiroku/source/",
                 "io/github/kauri_off/kiroku/debugmenu/",
                 "io/github/kauri_off/kiroku/design/gallery/",
             ),

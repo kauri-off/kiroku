@@ -13,20 +13,24 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 sealed interface ScenarioState {
-    // The app runs on a real account, where nothing is simulated.
+    // The app runs on the real account, where nothing is simulated.
     data object Unavailable : ScenarioState
 
     data class Ready(
@@ -43,7 +47,26 @@ sealed interface ScenarioEvent {
     data object Reset : ScenarioEvent
 }
 
-// The debug menu's first section: switches for the demo's failures, which apply at once, and a reset of its data.
+@Composable
+fun ScenarioRoute() {
+    val scenarios = LocalContext.current.scenarios
+    val state =
+        if (scenarios == null) {
+            ScenarioState.Unavailable
+        } else {
+            val scenario by scenarios.scenario.collectAsScreenState()
+            val reset by scenarios.reset.collectAsScreenState()
+            ScenarioState.Ready(scenario, reset)
+        }
+    ScenarioSection(state) { event ->
+        when (event) {
+            is ScenarioEvent.Change -> scenarios?.set(event.scenario)
+            ScenarioEvent.Reset -> scenarios?.reset()
+        }
+    }
+}
+
+// Switches for the demo's failures, which apply at once, and a reset of its data.
 @Composable
 fun ScenarioSection(
     state: ScenarioState,
@@ -51,7 +74,7 @@ fun ScenarioSection(
 ) {
     SectionHeader(stringResource(R.string.scenarios_title))
     when (state) {
-        ScenarioState.Unavailable -> Detail(R.string.scenarios_unavailable)
+        ScenarioState.Unavailable -> SectionDetail(R.string.scenarios_unavailable)
         is ScenarioState.Ready -> Switches(state, onEvent)
     }
 }
@@ -86,7 +109,7 @@ private fun Switches(
         enabled,
     ) { change(scenario.copy(store = StoreFault.entries[it])) }
     SectionHeader(stringResource(R.string.scenarios_reset_title), Modifier.padding(top = Spacing.xl))
-    Detail(R.string.scenarios_reset_detail)
+    SectionDetail(R.string.scenarios_reset_detail)
     OutlinedButton(
         onClick = { onEvent(ScenarioEvent.Reset) },
         enabled = enabled,
@@ -141,7 +164,7 @@ private fun Choice(
     onChoose: (Int) -> Unit,
 ) {
     SectionHeader(stringResource(title), Modifier.padding(top = Spacing.xl))
-    Detail(detail)
+    SectionDetail(detail)
     ConnectedChoice(
         labels.map { stringResource(it) },
         chosen,
@@ -150,16 +173,6 @@ private fun Choice(
         enabled,
     )
 }
-
-@Composable
-private fun Detail(
-    @StringRes text: Int,
-) = Text(
-    stringResource(text),
-    style = MaterialTheme.typography.bodyMedium,
-    color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.padding(horizontal = Spacing.l),
-)
 
 private val ResetState.message: Int?
     get() =

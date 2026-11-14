@@ -7,12 +7,16 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
@@ -20,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,9 +35,11 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -49,7 +56,7 @@ class MalSessionTest {
     @After
     fun close() = runBlocking { fixture.close() }
 
-    private fun test(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) = runBlocking { withTimeout(30_000) { block() } }
+    private fun test(block: suspend CoroutineScope.() -> Unit) = runBlocking { withTimeout(30_000) { block() } }
 
     private suspend fun signedIn(
         access: String = "access-1",
@@ -759,6 +766,9 @@ class MalSessionTest {
             assertEquals(emptyList<String>(), mal.sent)
             assertEquals(emptyList<Map<String, String>>(), fixture.grants)
             assertEquals(file, fixture.file.readBytes().toList())
+            // Reported by its type: the message is the Keystore's own.
+            assertEquals(listOf("java.security.ProviderException"), fixture.reported)
+            assertFalse("no Keystore" in fixture.unexpected.single().stackTraceToString())
 
             val next = fixture.reopen()
             assertEquals(Session.SignedIn(id), next.now())
@@ -784,5 +794,147 @@ class MalSessionTest {
             assertEquals(Session.SignedOut, again.now())
             assertEquals(0L, fixture.file.length())
             assertEquals(Session.SignedOut, fixture.reopen().now())
+        }
+
+    // A disk that fails every read while [failing], as a file that is there and cannot be read.
+    private class FailingDisk(
+        private val real: Serializer<Stored>,
+        var failing: Boolean = true,
+    ) : Serializer<Stored> by real {
+        override suspend fun readFrom(input: InputStream): Stored =
+            if (failing) throw IOException("the disk, at a title") else real.readFrom(input)
+    }
+
+    private val soon: (Int) -> Duration = { Duration.ofMillis(10) }
+
+    private suspend fun MalSession.known(): Session? = withTimeoutOrNull(300) { now() }
+
+    @Test
+    fun aFileThatCannotBeReadAtTheStartSignsNobodyOutAndIsReadAgainUntilItCanBe() =
+        test {
+            val id = signedIn().now()
+            val file = fixture.file.readBytes().toList()
+            fixture.close()
+            val disk = FailingDisk(fixture.format())
+            val session = fixture.open(format = disk, retryAfter = soon)
+            assertEquals(null, session.known())
+            // Nothing is sent or changed meanwhile, and the many tries are one report, of the type alone.
+            val mal = FakeMal("access-1")
+            assertEquals(expired, session.authorised(mal.request))
+            session.renewIfDue()
+            assertEquals(emptyList<String>(), mal.sent)
+            assertEquals(file, fixture.file.readBytes().toList())
+            assertEquals(listOf("java.io.IOException"), fixture.reported)
+            assertFalse("title" in fixture.unexpected.single().stackTraceToString())
+
+            disk.failing = false
+            assertEquals(id, session.now())
+            assertEquals(Outcome.Success("access-1"), session.authorised(mal.request))
+            assertEquals(1, fixture.reported.size)
+        }
+
+    @Test
+    fun afterAStartThatCouldNotReadTheFileASignInOrASignOutStillWorks() =
+        test {
+            val id = signedIn().now()
+            fixture.close()
+            val session = fixture.open(format = FailingDisk(fixture.format()), retryAfter = soon)
+            assertEquals(null, session.known())
+            assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access-2", "refresh-2")))
+            val other = session.now()
+            assertTrue(other is Session.SignedIn)
+            assertNotEquals(id, other)
+            assertEquals(other, fixture.reopen().now())
+
+            fixture.close()
+            val again = fixture.open(format = FailingDisk(fixture.format()), retryAfter = soon)
+            assertEquals(null, again.known())
+            again.signOut()
+            assertEquals(Session.SignedOut, again.now())
+            assertEquals(Session.SignedOut, fixture.reopen().now())
+        }
+
+    private suspend fun untilTheFileChanged(from: List<Byte>) =
+        withTimeout(10_000) {
+            while (fixture.file.readBytes().toList() == from) delay(5)
+        }
+
+    @Test
+    fun aRefreshedPairThatCouldNotBeWrittenIsWrittenOnceTheFileTakesIt() =
+        test {
+            val cipher = FailingCipher(fixture.cipher)
+            val session = fixture.open(cipher, retryAfter = soon)
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            val file = fixture.file.readBytes().toList()
+            cipher.seals = false
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+            delay(100)
+            assertEquals(file, fixture.file.readBytes().toList())
+
+            cipher.seals = true
+            untilTheFileChanged(file)
+            // The tries that failed are one report, and the next process starts with the pair MAL knows.
+            assertEquals(listOf("java.io.IOException"), fixture.reported)
+            assertEquals(1, fixture.grants.size)
+            assertTrue(stored().contains(" access-2 refresh-2 "))
+        }
+
+    @Test
+    fun aPairThatCouldNotBeWrittenIsNotWrittenOverALaterSignOut() =
+        test {
+            val cipher = FailingCipher(fixture.cipher)
+            val session = fixture.open(cipher, retryAfter = soon)
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            cipher.seals = false
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+            session.signOut()
+            cipher.seals = true
+            delay(200)
+            assertEquals(0L, fixture.file.length())
+            assertEquals("signed out", stored())
+        }
+
+    @Test
+    fun aSignOutThatCouldNotBeWrittenIsWrittenOnceTheFileTakesIt() =
+        test {
+            val format = BreakingFormat(fixture.format())
+            val session = fixture.open(format = format, retryAfter = soon)
+            session.signIn(TokenGrant("access-1", "refresh-1"))
+            val file = fixture.file.readBytes().toList()
+            format.broken = true
+            session.signOut()
+            assertEquals(Session.SignedOut, session.now())
+            assertEquals(file, fixture.file.readBytes().toList())
+            format.broken = false
+            untilTheFileChanged(file)
+            assertEquals("signed out", stored())
+        }
+
+    @Test
+    fun aChildThatFailsIsReportedAndEndsNeitherTheSessionsScopeNorTheOneItWasMadeIn() =
+        test {
+            val parent = CoroutineScope(Job())
+            val reports = CopyOnWriteArrayList<Throwable>()
+            val scope = sessionScope(parent, reports::add)
+            scope.launch { throw IllegalStateException("with a title") }.join()
+            assertTrue(parent.isActive && scope.isActive)
+            assertEquals(7, scope.async { 7 }.await())
+            assertEquals(listOf("java.lang.IllegalStateException"), reports.map { it.message })
+            parent.cancel()
+            assertFalse(scope.isActive)
+        }
+
+    @Test
+    fun theSessionOfTheAppRunsInSuchAScope() =
+        test {
+            val parent = CoroutineScope(Job())
+            fixture.file.mkdirs()
+            val session =
+                malSession(fixture.file, TokenEndpoint { error("unused") }, fixture.clock, parent) { throw IllegalStateException() }
+            assertTrue(runCatching { session.now() }.exceptionOrNull() is IllegalStateException)
+            assertTrue(parent.isActive)
+            parent.coroutineContext.job.cancelAndJoin()
         }
 }

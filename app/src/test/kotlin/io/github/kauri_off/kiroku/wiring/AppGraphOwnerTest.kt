@@ -14,7 +14,9 @@ import java.time.Clock
 class TestGraphApplication :
     Application(),
     AppGraphOwner {
-    override val graph: AppGraph = createGraph("0123abcd", Clock.systemUTC(), CoroutineScope(Dispatchers.Unconfined))
+    override val graph: AppGraph by lazy {
+        createGraph(this, "0123abcd", Clock.systemUTC(), CoroutineScope(Dispatchers.Unconfined), other = null)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)

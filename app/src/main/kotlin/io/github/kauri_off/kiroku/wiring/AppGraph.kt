@@ -31,16 +31,19 @@ interface AppGraphOwner {
 
 val Context.appGraph: AppGraph get() = (applicationContext as AppGraphOwner).graph
 
-internal typealias DemoGraphFactory = (Clock, CoroutineScope) -> AppGraph
+// The graph of the source a debug or preview build was told to start on, or null for the real account.
+internal typealias OtherSource = (context: Context, clientId: String, clock: Clock, scope: CoroutineScope) -> AppGraph?
 
 internal fun malClientId(value: String): String? = value.trim().ifEmpty { null }
 
 internal val LOG_TAG = notShown("Kiroku")
-internal val UNEXPECTED = notShown("An exception the list did not expect")
 
+// The graph of this process, on the source chosen before it started; a release build has the real account alone.
 internal fun createGraph(
+    context: Context,
     clientId: String,
     clock: Clock,
     scope: CoroutineScope,
-    demo: DemoGraphFactory? = demoGraphFactory,
-): AppGraph = if (malClientId(clientId) == null && demo != null) demo(clock, scope) else LiveGraph(clock, scope, reportUnexpected)
+    other: OtherSource? = otherSource,
+    live: () -> AppGraph = { LiveGraph(LiveParts(context, LiveSource.Account, clientId, clock, scope, reportUnexpected, requestLog)) },
+): AppGraph = other?.invoke(context, clientId, clock, scope) ?: live()

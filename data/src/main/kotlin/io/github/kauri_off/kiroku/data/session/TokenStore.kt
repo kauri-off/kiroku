@@ -21,11 +21,11 @@ internal class TokenStore(
 ) {
     private val store = DataStoreFactory.create(serializer = format, scope = scope) { file }
 
-    // A file that names no sign-in is signed out, and is left as it is until the next write.
+    // A file that names no sign-in is signed out and is left until the next write; one that cannot be read at all throws.
     suspend fun read(): Stored =
         try {
             store.data.first()
-        } catch (_: IOException) {
+        } catch (_: CorruptionException) {
             Stored.SignedOut
         }
 
@@ -57,6 +57,8 @@ internal class TokenStore(
 internal class TokenFormat(
     private val cipher: TokenCipher,
     private val name: String,
+    // Hears of tokens that did not open, without the exception's message.
+    private val unexpected: (Throwable) -> Unit,
 ) : Serializer<Stored> {
     override val defaultValue: Stored = Stored.SignedOut
 
@@ -86,11 +88,16 @@ internal class TokenFormat(
     private fun unsealed(bytes: ByteArray): Tokens? =
         try {
             json.decodeFromString<Tokens>(cipher.open(bytes.copyOfRange(HEAD, bytes.size), bound(bytes)).decodeToString())
-        } catch (_: GeneralSecurityException) {
-            null
-        } catch (_: RuntimeException) {
-            null
+        } catch (e: GeneralSecurityException) {
+            unopened(e)
+        } catch (e: RuntimeException) {
+            unopened(e)
         }
+
+    private fun unopened(e: Exception): Tokens? {
+        unexpected(SessionFailure(e))
+        return null
+    }
 
     // The marker, the id and the file's name: tokens moved under another of them do not open.
     private fun bound(head: ByteArray): ByteArray = head.copyOf(HEAD) + name.encodeToByteArray()

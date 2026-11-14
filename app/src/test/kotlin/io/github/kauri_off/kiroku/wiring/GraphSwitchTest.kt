@@ -16,13 +16,19 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
+// What a release build runs on: it has no other source, so [createGraph] is given none.
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class GraphSwitchTest {
     private val clock = Clock.fixed(Instant.parse("2026-11-10T12:00:00Z"), ZoneOffset.UTC)
+    private val context get() = RuntimeEnvironment.getApplication()
 
     @Test
     fun `a blank client id counts as absent`() {
@@ -31,22 +37,28 @@ class GraphSwitchTest {
         assertEquals("0123abcd", malClientId(" 0123abcd "))
     }
 
-    @Test
-    fun `a release build without a client id is signed out and shows no invented data`() =
+    private fun onTheRealAccountSignedOut(id: String) =
         runTest {
-            for (id in listOf("", " ")) {
-                val graph = createGraph(id, clock, backgroundScope, demo = null)
-                assertTrue(graph is LiveGraph)
-                assertEquals(Session.SignedOut, graph.session.observeSession().first())
-                assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
-                assertEquals(clock, graph.clock)
-            }
+            val graph = createGraph(context, id, clock, backgroundScope, other = null)
+            assertTrue(graph is LiveGraph)
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
+            assertEquals(clock, graph.clock)
         }
+
+    @Test
+    fun `a release build without a client id is on the real account, signed out and with no invented data`() = onTheRealAccountSignedOut("")
+
+    @Test
+    fun `a release build with a blank client id is too`() = onTheRealAccountSignedOut(" ")
+
+    @Test
+    fun `a release build with a client id is too`() = onTheRealAccountSignedOut("0123abcd")
 
     @Test
     fun `signed out, the live graph's list refuses a write and a sync, and says that the write failed`() =
         runTest {
-            val graph = createGraph("0123abcd", clock, backgroundScope, demo = null)
+            val graph = createGraph(context, "0123abcd", clock, backgroundScope, other = null)
             val failures = mutableListOf<WriteFailure>()
             backgroundScope.launch { graph.list.observeWriteFailures().collect { failures += it } }
             runCurrent()
@@ -58,11 +70,5 @@ class GraphSwitchTest {
             assertEquals(listOf(WriteFailure(DataError.SessionExpired, write, list = null)), failures)
             assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.sync())
             assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.send(write))
-        }
-
-    @Test
-    fun `a release build with a client id is not in demo mode`() =
-        runTest {
-            assertTrue(createGraph("0123abcd", clock, backgroundScope, demo = null) is LiveGraph)
         }
 }
