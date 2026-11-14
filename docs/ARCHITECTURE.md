@@ -173,7 +173,8 @@ the background.
 - **A2. Correct between refreshes.** The aired count rises when a stored air time passes, with no network call, and
   a visible screen updates at that moment without polling.
 - **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's, otherwise unknown. A
-  title MAL marks as finished has aired completely. The aired count never exceeds a known total.
+  title MAL marks as finished has aired completely. The aired count never exceeds a known total. An airing status
+  the app does not know is read as airing by every rule, freshness included.
 - **A4. A schedule numbered differently is not used.** When AniList's episode numbers evidently continue an
   earlier season (they run past MAL's total, or reach a number that a show with MAL's start date cannot have
   reached), AniList's data is not used for that title.

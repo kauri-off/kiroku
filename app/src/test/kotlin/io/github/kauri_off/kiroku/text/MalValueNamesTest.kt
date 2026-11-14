@@ -24,6 +24,7 @@ import org.json.JSONTokener
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,6 +96,7 @@ class MalValueNamesTest {
             assertEquals("R18", AgeRating.Unrecognized("r18").named(string))
             assertEquals("Fan fiction", RelationType.Unrecognized("fan_fiction").named(string))
             assertEquals("On hiatus", AiringStatus.Unrecognized("on_hiatus").named(string))
+            assertNull(AiringStatus.Unrecognized("").named(string))
             assertEquals("Slow Life", Genre(UNKNOWN_GENRE, "Slow Life").named(string))
         }
     }
@@ -158,7 +160,7 @@ class MalValueNamesTest {
             )
 
         // The resource a value is named with, or null when it is written without one.
-        fun resourceOf(naming: ((Int) -> String) -> String): Int? {
+        fun resourceOf(naming: ((Int) -> String) -> String?): Int? {
             var read: Int? = null
             naming { id -> "".also { read = id } }
             return read

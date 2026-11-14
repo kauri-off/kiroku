@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.anime
 
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
@@ -41,19 +43,19 @@ data class MalTitle(
 // A title as every answer of MAL's names it: a list's, a search's, a ranking's, a related title, a recommendation.
 @Serializable
 internal class AnimeNode(
-    val id: Long,
-    val title: String,
+    val id: JsonElement? = null,
+    val title: String? = null,
     @SerialName("main_picture") val mainPicture: Picture? = null,
     @SerialName("alternative_titles") val alternativeTitles: AlternativeTitles? = null,
     @SerialName("media_type") val mediaType: String? = null,
-    val status: String,
+    val status: String? = null,
     @SerialName("num_episodes") val episodes: JsonElement? = null,
     @SerialName("start_date") val startDate: String? = null,
     val broadcast: MalBroadcast? = null,
     val mean: JsonElement? = null,
     val rank: JsonElement? = null,
     val genres: List<Named>? = null,
-    @SerialName("average_episode_duration") val episodeSeconds: Long = 0,
+    @SerialName("average_episode_duration") val episodeSeconds: JsonElement? = null,
 )
 
 @Serializable
@@ -71,7 +73,7 @@ internal class AlternativeTitles(
 
 @Serializable
 internal class MalBroadcast(
-    @SerialName("day_of_the_week") val day: String,
+    @SerialName("day_of_the_week") val day: String? = null,
     @SerialName("start_time") val startTime: String? = null,
 )
 
@@ -127,30 +129,37 @@ internal fun JsonObject.toTitle(): MalTitle {
 // MAL's media type for a title whose type it does not know yet.
 const val NO_MEDIA_TYPE = "unknown"
 
-// MAL's zero, empty and unreadable values are absent; a code the app does not know stays MAL's code. A node without
-// an id, a title or a status cannot be mapped.
+// MAL's status for a title it gives none.
+private val NO_STATUS = AiringStatus.Unrecognized("")
+
+// MAL's zero, empty and unreadable values are absent; a code the app does not know stays MAL's code. Only a node
+// without a usable id, or without any title, cannot be mapped; a missing status is the unknown one.
 internal fun AnimeNode.toAnime(): Anime =
     Anime(
-        id = AnimeId(id),
-        titles =
-            Titles(
-                romaji = title,
-                english = alternativeTitles?.en?.present(),
-                japanese = alternativeTitles?.ja?.present(),
-                synonyms = alternativeTitles?.synonyms.orEmpty().mapNotNull { it.present() },
-            ),
+        id = AnimeId(requireNotNull(id.positiveLong())),
+        titles = titles(),
         posterUrl = mainPicture?.medium?.present(),
         largePosterUrl = mainPicture?.large?.present()?.takeIf { mainPicture.medium?.present() != null },
         mediaType = mediaType?.present()?.takeIf { it != NO_MEDIA_TYPE }?.let(mediaTypes::of),
-        airingStatus = airingStatuses.of(status),
+        airingStatus = status?.present()?.let(airingStatuses::of) ?: NO_STATUS,
         malEpisodes = episodes.number()?.intOrNull?.takeIf { it > 0 },
         startDate = startDate?.let(::dateOf),
         broadcast = broadcast?.toBroadcast(),
         meanScore = mean.number()?.doubleOrNull?.takeIf { it in 0.0..10.0 },
         rank = rank.number()?.intOrNull?.takeIf { it > 0 },
-        genres = genres?.mapNotNull { genre -> genre.id?.let { id -> genre.name?.let { Genre(id, it) } } },
-        averageEpisodeDuration = episodeSeconds.takeIf { it > 0 }?.let(Duration::ofSeconds),
+        genres = genres?.mapNotNull { genre -> genre.id?.let { id -> genre.name?.present()?.let { Genre(id, it) } } },
+        averageEpisodeDuration = episodeSeconds.positiveLong()?.let(Duration::ofSeconds),
     )
+
+// Without MAL's main title the English one takes its place, then the Japanese one (section 10's order).
+private fun AnimeNode.titles(): Titles {
+    val english = alternativeTitles?.en?.present()
+    val japanese = alternativeTitles?.ja?.present()
+    val synonyms = alternativeTitles?.synonyms.orEmpty().mapNotNull { it.present() }
+    title?.present()?.let { return Titles(it, english, japanese, synonyms) }
+    english?.let { return Titles(it, null, japanese, synonyms) }
+    return Titles(requireNotNull(japanese), null, null, synonyms)
+}
 
 private fun PageNode.toDetails(id: AnimeId): AnimeDetails =
     AnimeDetails(
@@ -194,11 +203,15 @@ private fun dateOf(text: String): PartialDate? =
         null
     }
 
-private fun JsonElement?.number(): JsonPrimitive? = (this as? JsonPrimitive)?.takeUnless { it.isString }
+// A number MAL gives in quotes is read as the number, as every numeric field is.
+private fun JsonElement?.number(): JsonPrimitive? = this as? JsonPrimitive
 
-// A day MAL names that is not a weekday leaves the title without a broadcast.
+private fun JsonElement?.positiveLong(): Long? = number()?.longOrNull?.takeIf { it > 0 }
+
+// A broadcast without a weekday, or with a day that is not one, is no broadcast.
 private fun MalBroadcast.toBroadcast(): Broadcast? {
-    val weekday = DayOfWeek.entries.find { it.name.equals(day, ignoreCase = true) } ?: return null
+    val named = day ?: return null
+    val weekday = DayOfWeek.entries.find { it.name.equals(named, ignoreCase = true) } ?: return null
     return Broadcast(weekday, startTime?.present()?.let(::timeOf))
 }
 

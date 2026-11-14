@@ -75,12 +75,13 @@ inline fun AgeRating.named(string: (Int) -> String): String =
         is AgeRating.Unrecognized -> malCodeAsText(malCode)
     }
 
-inline fun AiringStatus.named(string: (Int) -> String): String =
+// No name for a status MAL left blank.
+inline fun AiringStatus.named(string: (Int) -> String): String? =
     when (this) {
         AiringStatus.NotYetAired -> string(R.string.common_not_yet_aired)
         AiringStatus.Airing -> string(R.string.mal_airing)
         AiringStatus.Finished -> string(R.string.mal_finished)
-        is AiringStatus.Unrecognized -> malCodeAsText(malCode)
+        is AiringStatus.Unrecognized -> malCode.takeIf { it.isNotBlank() }?.let(::malCodeAsText)
     }
 
 // "Fall 2024": [string] reads a resource with the year.
