@@ -29,6 +29,7 @@ internal data class TitleRow(
     val japanese: String?,
     val synonyms: String,
     @ColumnInfo(name = "poster_url") val posterUrl: String?,
+    @ColumnInfo(name = "large_poster_url") val largePosterUrl: String?,
     @ColumnInfo(name = "media_type") val mediaType: String?,
     @ColumnInfo(name = "airing_status") val airingStatus: String,
     val episodes: Int?,
@@ -40,12 +41,13 @@ internal data class TitleRow(
     val genres: String?,
     @ColumnInfo(name = "episode_duration") val episodeDuration: Long?,
 ) {
-    // A stored value is never replaced by a missing one; the day and the time of a broadcast are one value.
+    // A stored value is never replaced by a missing one; a picture's two sizes, and a broadcast's day and time, are one value.
     fun mergedWith(newer: TitleRow): TitleRow =
         newer.copy(
             english = newer.english ?: english,
             japanese = newer.japanese ?: japanese,
             posterUrl = newer.posterUrl ?: posterUrl,
+            largePosterUrl = if (newer.posterUrl == null) largePosterUrl else newer.largePosterUrl,
             mediaType = newer.mediaType ?: mediaType,
             episodes = newer.episodes ?: episodes,
             startDate = newer.startDate ?: startDate,
@@ -62,6 +64,7 @@ internal data class TitleRow(
             id = AnimeId(id),
             titles = Titles(romaji, english, japanese, textsOf(synonyms)),
             posterUrl = posterUrl,
+            largePosterUrl = largePosterUrl,
             mediaType = mediaType?.let(mediaTypes::of),
             airingStatus = airingStatuses.of(airingStatus),
             malEpisodes = episodes,
@@ -86,6 +89,7 @@ internal fun Anime.toRow(): TitleRow =
         japanese = titles.japanese,
         synonyms = textsToColumn(titles.synonyms),
         posterUrl = posterUrl,
+        largePosterUrl = largePosterUrl,
         mediaType = mediaType?.let(mediaTypes::toColumn),
         airingStatus = airingStatuses.toColumn(airingStatus),
         episodes = malEpisodes,

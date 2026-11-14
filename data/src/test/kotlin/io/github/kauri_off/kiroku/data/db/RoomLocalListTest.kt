@@ -266,7 +266,7 @@ class RoomLocalListTest {
             assertTrue(runCatching { s.store.read(anime.id) }.isFailure)
             assertEquals(fixtures.entries.size, s.store.readAll().size)
 
-            s.database.execute("UPDATE title SET airing_status = 'airing' WHERE id = ${anime.id.value}")
+            s.database.execute("UPDATE title SET airing_status = 'currently_airing' WHERE id = ${anime.id.value}")
             assertEquals(
                 ids,
                 s.store
