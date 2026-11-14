@@ -718,6 +718,7 @@ object FixtureAnime {
         id = AnimeId(id),
         titles = titles,
         posterUrl = if (poster) "$POSTER_URL$id.jpg" else null,
+        largePosterUrl = null,
         mediaType = type,
         airingStatus = status,
         malEpisodes = malEpisodes,

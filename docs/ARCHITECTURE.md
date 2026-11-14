@@ -882,12 +882,11 @@ Each of these could change a decision above.
 
 1. **The sign-in has not been run end to end.** The client is registered with the redirect URIs of section 3.1,
    but no token exchange without a secret has been made.
-2. **The shapes of MAL's responses** for title statistics, related titles and the user's statistics are known from
-   dailyAL's working code, not from MAL's reference, which shows no samples. The recorded responses decide.
-3. **MAL's behaviour at its edges:** how it answers for a private list and whether that can be told apart from
-   rate limiting (section 2.3 assumes the same refusal, told apart by the endpoint); its rate limits; whether the
-   adult-content switch applies to related titles and recommendations inside a title; the shortest search query it
-   accepts (believed to be three characters).
+2. **The shape of MAL's user statistics** is known from dailyAL's working code, not from MAL's reference, which
+   shows no samples. The recorded responses decide.
+3. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
+   list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
+   (believed to be three characters).
 4. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
    it). How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not measured.
 5. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm

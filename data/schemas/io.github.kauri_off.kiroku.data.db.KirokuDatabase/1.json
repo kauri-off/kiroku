@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "773d868ce6aab7a58bcd465a18af7e36",
+    "identityHash": "c908fc01889fca24c50eae1d46661170",
     "entities": [
       {
         "tableName": "title",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster_url` TEXT, `media_type` TEXT, `airing_status` TEXT NOT NULL, `episodes` INTEGER, `start_date` TEXT, `broadcast_day` INTEGER, `broadcast_time` TEXT, `mean_score` REAL, `rank` INTEGER, `genres` TEXT, `episode_duration` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster_url` TEXT, `large_poster_url` TEXT, `media_type` TEXT, `airing_status` TEXT NOT NULL, `episodes` INTEGER, `start_date` TEXT, `broadcast_day` INTEGER, `broadcast_time` TEXT, `mean_score` REAL, `rank` INTEGER, `genres` TEXT, `episode_duration` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -39,6 +39,11 @@
           {
             "fieldPath": "posterUrl",
             "columnName": "poster_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "largePosterUrl",
+            "columnName": "large_poster_url",
             "affinity": "TEXT"
           },
           {
@@ -469,7 +474,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '773d868ce6aab7a58bcd465a18af7e36')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c908fc01889fca24c50eae1d46661170')"
     ]
   }
 }
