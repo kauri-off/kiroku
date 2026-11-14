@@ -25,9 +25,10 @@ row. The owner is the final authority on the Russian column.
 | The default sort | Up next | На очереди | |
 | Synopsis, Related, Details | Synopsis, Related, Details | Описание, Связанное, Подробности | |
 | Airing status | Airing / Finished / Not yet aired | Выходит / Завершено / Ещё не вышло | |
-| Relations | Sequel, Prequel, Side story, Parent story, Full story | Продолжение, Предыстория, Побочная история, Основная история, Полная версия | "Sequel" is also the header of the title page's sequel row. The two alternative types are shortened only as a strip caption: Alt. setting / Alt. version, «Альт. сеттинг» / «Альт. версия» |
+| Relations | Sequel, Prequel, Side story, Parent story, Full story | Продолжение, Предыстория, Побочная история, Основная история, Полная версия | "Sequel" is also the header of the title page's sequel row. The two alternative types are shortened only as a strip caption: Alt. setting / Alt. version, «Альт. вселенная» / «Альт. версия» |
 | Media types | Movie, Special, Music | Фильм, Спешл, Клип | The rest are kept as MAL writes them (TV / ТВ, OVA, ONA) |
-| Genres | as MAL names them, in sentence case | the names Russian anime sites use, as Shikimori has them | One exception: MAL keeps Mystery and Detective apart, so Mystery is «Тайна» and Detective «Детектив» |
+| Genres | as MAL names them, in sentence case | the names Russian anime sites use, as Shikimori has them | An exception: MAL keeps Mystery and Detective apart, so Mystery is «Тайна» and Detective «Детектив» |
+| Super power genre | Super power | Суперсила | An exception: Shikimori writes «Супер сила», but «супер-» is a prefix and is written together |
 | MAL, AniList, MyAnimeList | | | Written in Latin letters in both languages |
 
 ## Forms
