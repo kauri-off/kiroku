@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import io.github.kauri_off.kiroku.MainActivity
+import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
@@ -20,6 +21,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import kotlin.time.Duration.Companion.seconds
 
 // The launcher activity opens the real app on demo data, and an open edit sheet with a typed count survives
 // recreation (a rotation).
@@ -36,7 +38,7 @@ class MainActivityTest {
     fun `the app opens on the demo list and keeps an open edit sheet across recreation`() {
         val title = FixtureAnime.exactToWatch.titles.romaji
         // The List's rows are built off the main thread.
-        compose.waitUntil(ROWS_MILLIS) {
+        compose.waitUntil(ROWS.inWholeMilliseconds) {
             shadowOf(Looper.getMainLooper()).idle()
             compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
         }
@@ -52,6 +54,7 @@ class MainActivityTest {
     }
 
     private companion object {
-        const val ROWS_MILLIS = 10_000L
+        // The splash's own limit, and a second for Robolectric on a busy machine: a slower start fails.
+        val ROWS = PATIENCE + 1.seconds
     }
 }

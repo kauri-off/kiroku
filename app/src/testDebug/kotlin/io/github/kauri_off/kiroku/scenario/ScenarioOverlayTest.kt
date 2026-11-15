@@ -33,6 +33,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
 // The debug menu's tab is over the app from after its first frame on, sheets included, and turns red while a scenario is on.
@@ -49,7 +50,7 @@ class ScenarioOverlayTest {
 
     // The List's rows are built off the main thread, and the first frame, which brings the tab, waits for them.
     private fun settle() {
-        compose.waitUntil(FIRST_FRAME_MILLIS) {
+        compose.waitUntil(FIRST_FRAME.inWholeMilliseconds) {
             shadowOf(Looper.getMainLooper()).idle()
             markers().isNotEmpty()
         }
@@ -211,6 +212,8 @@ class ScenarioOverlayTest {
     private companion object {
         const val DRAG_STEPS = 8
         const val FRAME = 16L
-        const val FIRST_FRAME_MILLIS = 10_000L
+
+        // The splash's own limit, and a second for Robolectric on a busy machine: a slower start fails.
+        val FIRST_FRAME = PATIENCE + 1.seconds
     }
 }

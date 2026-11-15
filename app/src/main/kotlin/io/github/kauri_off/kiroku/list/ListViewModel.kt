@@ -58,8 +58,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// The user's own list. Its orders are fixed at moments (first load, Refresh, a new sort or direction), so they live here.
-// Its state is built, and its orders computed, on [background], one at a time and in the order they were asked for.
+// The user's own list, its orders fixed at moments and its state built on [background], one step at a time, in order.
 class ListViewModel(
     private val list: ListSource,
     private val airing: AiringRepository,
@@ -443,12 +442,16 @@ class ListViewModel(
                         }
                     val schedule = airing.observeAiring().first()
                     awaitSorts()
-                    // Meanwhile the list may have arrived and been ordered at start.
-                    if (synced != null && (fromUser || model.value.orders == null)) {
+                    if (synced != null) {
                         entriesLoaded = true
+                        // Asked on the lane: the list may have arrived there first and been ordered at start.
                         withContext(lane) {
                             model.update {
-                                it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
+                                if (fromUser || it.orders == null) {
+                                    it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
+                                } else {
+                                    it
+                                }
                             }
                         }
                     }
@@ -459,7 +462,18 @@ class ListViewModel(
                         if (result.error != DataError.SessionExpired) {
                             messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
                         }
-                    entriesLoaded && model.value.entries.isNotEmpty() -> withContext(lane) { model.update { it.orderedAll() } }
+                    entriesLoaded && model.value.entries.isNotEmpty() ->
+                        withContext(lane) {
+                            model.update {
+                                if (it.orders ==
+                                    null
+                                ) {
+                                    it.orderedAll()
+                                } else {
+                                    it
+                                }
+                            }
+                        }
                     else -> model.update { it.copy(failure = result.error.toListFailure()) }
                 }
         }

@@ -25,6 +25,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.CopyOnWriteArrayList
@@ -39,11 +40,17 @@ class StoredPreferencesTest {
     private val threads = CopyOnWriteArraySet<Thread>()
     private val defaults = ListStatus.entries.associateWith(TabSort::defaultFor)
 
+    // While set, the disk fails a read or a write of the file.
+    @Volatile private var readsFail = false
+
+    @Volatile private var writesFail = false
+
     // The file's own format, noting the threads the file is read and written on.
     private val format =
         object : Serializer<Preferences> by PreferencesFileSerializer {
             override suspend fun readFrom(input: InputStream): Preferences {
                 threads += Thread.currentThread()
+                if (readsFail) throw IOException("read")
                 return PreferencesFileSerializer.readFrom(input)
             }
 
@@ -52,6 +59,7 @@ class StoredPreferencesTest {
                 output: OutputStream,
             ) {
                 threads += Thread.currentThread()
+                if (writesFail) throw IOException("write")
                 PreferencesFileSerializer.writeTo(t, output)
             }
         }
@@ -73,6 +81,17 @@ class StoredPreferencesTest {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             PreferenceDataStoreFactory.create(scope = scope) { file }.edit { it.putAll(*values) }
             scope.coroutineContext.job.cancelAndJoin()
+        }
+
+    // What the file holds, read as any other version of the app reads it.
+    private fun stored(): Preferences =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            PreferenceDataStoreFactory
+                .create(scope = scope) { file }
+                .data
+                .first()
+                .also { scope.coroutineContext.job.cancelAndJoin() }
         }
 
     private fun sort(status: String) = stringPreferencesKey("list_sort_$status")
@@ -139,6 +158,77 @@ class StoredPreferencesTest {
         process { it.setListSort(ListStatus.Dropped, TabSort(ListSort.Title)) }
         process { assertEquals(defaults + (ListStatus.Dropped to TabSort(ListSort.Title)), it.observeListSorts().first()) }
         assertEquals(1, reports.size)
+    }
+
+    @Test
+    fun `a write the disk fails is reported, the choices before it hold, and the next write is kept`() {
+        val score = TabSort(ListSort.Score, SortDirection.Ascending)
+        process {
+            it.setListSort(ListStatus.Completed, score)
+            writesFail = true
+            it.setListSort(ListStatus.Completed, TabSort(ListSort.Title))
+            assertEquals(1, reports.size)
+            assertTrue(reports.single() is PreferencesFailure)
+            assertEquals(score, it.observeListSorts().first().getValue(ListStatus.Completed))
+            writesFail = false
+            it.setListSort(ListStatus.Planned, TabSort(ListSort.Title))
+        }
+        process {
+            val sorts = it.observeListSorts().first()
+            assertEquals(score, sorts.getValue(ListStatus.Completed))
+            assertEquals(TabSort(ListSort.Title), sorts.getValue(ListStatus.Planned))
+        }
+        assertEquals(1, reports.size)
+    }
+
+    @Test
+    fun `a file the disk cannot read gives every tab its default and is reported`() {
+        process { it.setListSort(ListStatus.Completed, TabSort(ListSort.Score)) }
+        readsFail = true
+        process { assertEquals(defaults, it.observeListSorts().first()) }
+        assertEquals(1, reports.size)
+        assertTrue(reports.single() is PreferencesFailure)
+        readsFail = false
+        process { assertEquals(TabSort(ListSort.Score), it.observeListSorts().first().getValue(ListStatus.Completed)) }
+    }
+
+    // The codes are the file's format: a file written with them is read as these sorts, and a choice is written so.
+    @Test
+    fun `every status, sort and direction is stored under its own code`() {
+        val raw =
+            mapOf(
+                "watching" to ("up_next" to null),
+                "plan_to_watch" to ("title" to "descending"),
+                "completed" to ("last_updated" to "ascending"),
+                "on_hold" to ("score" to "descending"),
+                "dropped" to ("start_date" to "ascending"),
+            )
+        val sorts =
+            mapOf(
+                ListStatus.Watching to TabSort(ListSort.UpNext),
+                ListStatus.Planned to TabSort(ListSort.Title, SortDirection.Descending),
+                ListStatus.Completed to TabSort(ListSort.LastUpdated, SortDirection.Ascending),
+                ListStatus.OnHold to TabSort(ListSort.Score, SortDirection.Descending),
+                ListStatus.Dropped to TabSort(ListSort.StartDate, SortDirection.Ascending),
+            )
+        written(
+            *raw
+                .flatMap { (status, codes) ->
+                    listOfNotNull(sort(status) to codes.first, codes.second?.let { direction(status) to it })
+                }.toTypedArray(),
+        )
+        process { assertEquals(sorts, it.observeListSorts().first()) }
+
+        file.delete()
+        process { store -> sorts.forEach { (status, sort) -> store.setListSort(status, sort) } }
+        val stored = stored().asMap().mapKeys { it.key.name }
+        val expected =
+            raw
+                .flatMap { (status, codes) ->
+                    listOfNotNull("list_sort_$status" to codes.first, codes.second?.let { "list_direction_$status" to it })
+                }.toMap()
+        assertEquals(expected, stored)
+        assertEquals(emptyList<Throwable>(), reports)
     }
 
     @Test
