@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -578,7 +579,7 @@ private fun LazyListScope.watchOrder(
     chain.forEachIndexed { index, card ->
         item(key = card.anime.id.value, contentType = card.current) {
             val modifier = chainItem(animated).then(if (index == 0) Modifier.trimTop(ListItemTop) else Modifier)
-            ChainRow(card, onEvent, modifier)
+            ChainRow(card, place = index + 1, of = chain.size, onEvent, modifier)
         }
     }
     if (loading) item(key = Section.ChainLoading) { ChainLoading(chainItem(animated)) }
@@ -599,6 +600,8 @@ private fun LazyItemScope.chainItem(animated: Boolean): Modifier {
 @Composable
 private fun ChainRow(
     card: ChainCard,
+    place: Int,
+    of: Int,
     onEvent: (TitleEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -617,11 +620,13 @@ private fun ChainRow(
         )
         return
     }
+    // In a supporting colour, as it opens nothing; a screen reader hears its place in the order too.
+    val spoken = pluralStringResource(R.plurals.title_this_title_spoken, of, place, of)
     ListItem(
-        modifier = modifier.testTag(TitleTags.chainRow),
+        modifier = modifier.testTag(TitleTags.chainRow).clearAndSetSemantics { contentDescription = spoken },
         leadingContent = { Poster(anime.posterUrl, PosterSize.Row) },
         verticalAlignment = Alignment.CenterVertically,
-        content = { Text(stringResource(R.string.title_this_title), color = MaterialTheme.colorScheme.primary) },
+        content = { Text(stringResource(R.string.title_this_title), color = MaterialTheme.colorScheme.onSurfaceVariant) },
     )
 }
 

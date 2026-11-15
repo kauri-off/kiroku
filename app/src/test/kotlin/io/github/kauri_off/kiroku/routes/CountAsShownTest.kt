@@ -138,6 +138,6 @@ class CountAsShownTest {
             dispatcher.onBackPressed()
         }
         compose.waitForIdle()
-        assertEquals(listOf(onTop.id, beneath.id), graph.refreshed.take(2))
+        assertEquals(listOf(onTop.id, beneath.id, FixtureAnime.premiereYear.id, FixtureAnime.prequel.id), graph.refreshed)
     }
 }

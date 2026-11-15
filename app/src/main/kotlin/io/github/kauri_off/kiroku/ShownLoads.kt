@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.detailsStale
 import io.github.kauri_off.kiroku.core.repository.listStale
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingCommand
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,10 @@ class ShownLoads(
 
     // What the route collects while its screen is shown (CountAsShown).
     val shown: StateFlow<Unit> = watchers.asStateFlow()
+
+    // Whether the screen is shown now: it stops being shown at once, not after the stop timeout.
+    val showing: Flow<Boolean> = watchers.subscriptionCount.map { it > 0 }.distinctUntilChanged()
+    val isShowing: Boolean get() = watchers.subscriptionCount.value > 0
 
     init {
         scope.launch {

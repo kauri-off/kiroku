@@ -24,6 +24,10 @@
     <string name="title_your_score_label">Your score</string>
     <string name="title_watch_order">Watch order</string>
     <string name="title_this_title">This title</string>
+    <plurals name="title_this_title_spoken">
+        <item quantity="one">This title, %1$d of %2$d title</item>
+        <item quantity="other">This title, %1$d of %2$d titles</item>
+    </plurals>
     <string name="title_loading_watch_order">Loading the watch order</string>
     <string name="title_related">Related</string>
     <string name="title_statistics">Statistics</string>

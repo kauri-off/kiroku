@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -34,6 +35,7 @@ import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -197,9 +199,12 @@ class TitleScreenTest {
     @Test
     fun theWatchOrderMarksThePagesOwnTitleAndShowsTheWalkWhileItRuns() {
         show(TitleFixtures.chainLoading)
-        scrollTo("This title")
-        compose.onNode(hasText("This title") and hasClickAction()).assertDoesNotExist()
-        compose.onNodeWithText("This title").assertIsDisplayed()
+        val spoken = "This title, 2 of 3 titles"
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription(spoken))
+        compose.onNode(hasContentDescription(spoken) and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription(spoken).assertIsDisplayed()
         compose
             .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .performScrollToNode(hasContentDescription("Loading the watch order"))
@@ -208,6 +213,9 @@ class TitleScreenTest {
         compose.onNodeWithContentDescription("Loading the watch order").assertDoesNotExist()
         val film = TitleFixtures.filmBetweenSeasons
         show(TitleFixtures.chainOfFour)
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription("This title, 2 of 4 titles"))
         scrollTo(film.titles.romaji)
         sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(hasText(film.titles.romaji) and hasClickAction()).performClick() }
     }
@@ -281,5 +289,20 @@ class TitleScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText("Added to Planned").assertIsDisplayed()
         compose.onNodeWithText("Change").assertIsDisplayed()
+    }
+}
+
+// The place of the page's own title is spoken with the total's plural, as the Russian genitive after «из» needs.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "ru")
+class TitleSpokenPlaceTest {
+    @Test
+    fun theOwnTitlesPlaceTakesThePluralOfTheTotal() {
+        val resources = RuntimeEnvironment.getApplication().resources
+
+        fun spoken(of: Int) = resources.getQuantityString(R.plurals.title_this_title_spoken, of, 2, of)
+        assertEquals("Этот тайтл, 2 из 2 тайтлов", spoken(2))
+        assertEquals("Этот тайтл, 2 из 5 тайтлов", spoken(5))
+        assertEquals("Этот тайтл, 2 из 21 тайтла", spoken(21))
     }
 }

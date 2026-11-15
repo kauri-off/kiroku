@@ -31,6 +31,7 @@ import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ArrivingPoster
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
@@ -43,6 +44,7 @@ import java.time.LocalDate
 
 private const val FRAME = 16L
 private const val FILM_BETWEEN_SEASONS = 900_100L
+private val SECTION_WINDOW = WindowSize(widthDp = 411, heightDp = 1180)
 
 class TitleScreenshots : ScreenshotRegistry() {
     override val content = contentCase("airing-on-list") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch)) }
@@ -94,6 +96,9 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("chain-loading") { Screen(TitleFixtures.chainLoading) },
             case("chain-of-four") { Screen(TitleFixtures.chainOfFour) },
             case("chain-failed") { Screen(TitleFixtures.chainFailed) },
+            // The first two in a window that holds the whole section, for the frames of the film arriving.
+            case("chain-loading-tall", window = SECTION_WINDOW) { Screen(TitleFixtures.chainLoading) },
+            case("chain-of-four-tall", window = SECTION_WINDOW) { Screen(TitleFixtures.chainOfFour) },
         )
 
     // The header's large picture fades in over the row's on the fast effects spring, which does most of its way early.
@@ -101,8 +106,8 @@ class TitleScreenshots : ScreenshotRegistry() {
         listOf(
             // The film the walk found joins the watch order between the seasons, and the indicator leaves.
             Transition(
-                "chain-of-four",
-                start = "chain-loading",
+                "chain-of-four-tall",
+                start = "chain-loading-tall",
                 millis = MotionBounds.ENTER,
                 at = listOf(FRAME, 2 * FRAME, 4 * FRAME, MotionBounds.ENTER),
             ) { found ->

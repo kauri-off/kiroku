@@ -108,6 +108,10 @@ class TitleViewModel(
 
     // The chain was walked since the page opened, or since a pull asked for it again.
     private var walked = false
+    private var walking: Job? = null
+
+    // A walk was stopped, or not started, because the page was not shown; it goes on when the page is shown again.
+    private var cut = false
     private val retries = MutableStateFlow(0)
     private var load: Job? = null
 
@@ -155,6 +159,20 @@ class TitleViewModel(
 
     // Collected while the page is shown; showing it refreshes stale details.
     val shown: StateFlow<Unit> get() = loads.shown
+
+    // Only a shown page walks, so the page left for another one, another tab or a sign-out asks nothing more.
+    init {
+        viewModelScope.launch {
+            loads.showing.collect { showing ->
+                if (!showing && walking?.isActive == true) {
+                    walking?.cancel()
+                    cut = true
+                } else if (showing && cut && load?.isActive != true) {
+                    walkIfOwed()
+                }
+            }
+        }
+    }
 
     // What the page shows of [id], itself or a related title, for the screen it opens.
     fun summaryOf(id: AnimeId): TitleSummary? {
@@ -240,16 +258,13 @@ class TitleViewModel(
     private suspend fun refreshIfStale() {
         val stale = anime.stale(id, opened?.anime, clock.instant())
         if (load?.isActive == true) return
-        if (stale) {
-            refresh(Asked.Shown)
-        } else if (!walked) {
-            load = viewModelScope.launch { walkChain() }
-        }
+        if (stale) refresh(Asked.Shown) else walkIfOwed()
     }
 
     // A wait the person asked for shows at once; one the page started only after a second (section 9.4).
     private fun refresh(asked: Asked) {
         load?.cancel()
+        walking?.cancel()
         failure.value = null
         waitShown.value = asked == Asked.Retry
         refreshing.value = asked == Asked.Pull
@@ -272,7 +287,7 @@ class TitleViewModel(
                 loads.ended((result as? Outcome.Failure)?.error)
                 if (result !is Outcome.Failure) {
                     if (asked == Asked.Pull) walked = false
-                    walkChain()
+                    walkIfOwed()
                     return@launch
                 }
                 val shown =
@@ -285,10 +300,17 @@ class TitleViewModel(
             }
     }
 
+    // After the page's own load, never beside it; a page not shown owes the walk to its next show.
+    private fun walkIfOwed() {
+        if (walked || walking?.isActive == true) return
+        cut = !loads.isShowing
+        if (cut) return
+        walking = viewModelScope.launch { walkChain() }
+    }
+
     // Reads from MAL, one after another, each title of the chain whose stored page is missing or stale, and stops at
     // the first that fails, which leaves the page as it was; the chain is read from the store throughout.
     private suspend fun walkChain() {
-        if (walked) return
         coroutineScope {
             val wait =
                 launch {
@@ -313,6 +335,7 @@ class TitleViewModel(
                 } catch (_: DataException) {
                     return false
                 }
+            if (id !in pages) return false
             val next = chainWalk(id, pages.mapValues { it.value.related }).firstOrNull { it !in done } ?: return true
             done += next
             if (next in pages && !anime.stale(next, null, clock.instant())) continue

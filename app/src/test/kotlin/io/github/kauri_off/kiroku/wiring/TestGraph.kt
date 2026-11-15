@@ -118,8 +118,12 @@ class TestGraph(
 
     private val counted = CountedAnime(demo.anime, counter, refreshCount, titlesUnstored, titlesUnreadable, refreshFails)
 
-    // The titles refreshed so far, in order, and each read of the details of several titles together.
+    // The titles MAL answered so far, in order (a request cancelled before its answer reached nothing, as the demo's
+    // server answers at the end of its latency), and each read of the details of several titles together.
     val refreshed: List<AnimeId> get() = counted.refreshed.toList()
+
+    // The titles asked for so far, in order, answered or not.
+    val requested: List<AnimeId> get() = counted.requested.toList()
     val detailQueries: List<Set<AnimeId>> get() = counted.detailQueries.toList()
 
     override val anime: AnimeRepository = counted
@@ -193,6 +197,7 @@ private class CountedAnime(
     private val failing: StateFlow<Set<AnimeId>>,
 ) : AnimeRepository by inner {
     val refreshed = CopyOnWriteArrayList<AnimeId>()
+    val requested = CopyOnWriteArrayList<AnimeId>()
     val detailQueries = CopyOnWriteArrayList<Set<AnimeId>>()
 
     override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(stored(inner.observeAnime(id)))
@@ -214,9 +219,10 @@ private class CountedAnime(
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         refreshes.incrementAndGet()
+        requested += id
+        val result = if (id in failing.value) Outcome.Failure(DataError.NoConnection) else inner.refresh(id)
         refreshed += id
-        if (id in failing.value) return Outcome.Failure(DataError.NoConnection)
-        return inner.refresh(id)
+        return result
     }
 }
 

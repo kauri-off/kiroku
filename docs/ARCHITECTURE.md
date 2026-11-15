@@ -673,8 +673,8 @@ episode total, the year, the premiere and a related title each appear in one pla
 5. **Watch order** (must show when the title has a sequel or a prequel; absent otherwise): a `SectionHeader` over the
    chain of sequels and prequels in the order to watch it, which `:core` decides: for each other title an `AnimeRow`
    that opens it, with the user's list status for it when it is on their list, and in this title's place its poster
-   and a mark, which open nothing. Limit: six titles, those nearest to this one. A title in it is not repeated in the
-   Related strip.
+   and the words "This title", which open nothing. Limit: six titles, those nearest to this one. A title in it is not
+   repeated in the Related strip.
 6. **Synopsis:** a `SectionHeader` over the text, line cap four, which expands and collapses in place. Under it one
    line of plain text with the genres, line cap one.
 7. **Related** (must show when the title has related anime other than the watch order's): a `SectionHeader` over a

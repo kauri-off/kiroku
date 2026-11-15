@@ -45,6 +45,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -342,7 +343,7 @@ class TitleViewModelTest {
             graph.connectionSays.value = true
             runCurrent()
             assertEquals(DetailsWait.Brief, wait())
-            assertEquals(3, graph.refreshed.count { it == FixtureAnime.exactToWatch.id })
+            assertEquals(3, graph.requested.count { it == FixtureAnime.exactToWatch.id })
             advanceTimeBy(DETAILS_LATENCY + 1.seconds)
             runCurrent()
             assertEquals(noConnection, messages.current.value?.message)
@@ -762,6 +763,97 @@ class TitleViewModelTest {
             )
         }
 
+    private val ownAndChain = listOf(FixtureAnime.exactToWatch, FixtureAnime.premiereYear, FixtureAnime.prequel).map { it.id }
+
+    // The walk asks for the third season the moment the page's own details arrive; the page is left for that season.
+    @Test
+    fun `a page left for its sequel stops its walk, so no title is asked twice`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val messages = ShellMessages(scope, graph.list)
+            val first = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
+            val firstShown = showing(first.state, first.shown)
+            advanceTimeBy(DETAILS_LATENCY.inWholeMilliseconds + 1)
+            runCurrent()
+            assertEquals(FixtureDetails.full, (first.state.value as TitleState.Shown).page.details)
+            firstShown.cancel()
+            val next = title(graph, FixtureAnime.premiereYear.id, SavedStateHandle(), messages)
+            showing(next.state, next.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(listOf(FixtureAnime.exactToWatch, FixtureAnime.premiereYear, FixtureAnime.prequel).map { it.id }, graph.refreshed)
+            assertEquals(chain, next.state.value.chain())
+            scope.cancel()
+        }
+
+    @Test
+    fun `a page left mid-walk asks nothing more, and its next show goes on without asking again for what is stored`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            var screen = showing(title.state, title.shown)
+            advanceTimeBy(2 * DETAILS_LATENCY.inWholeMilliseconds + 1)
+            runCurrent()
+            assertEquals(ownAndChain.take(2), graph.refreshed)
+            screen.cancel()
+            advanceTimeBy(1.minutes.inWholeMilliseconds)
+            runCurrent()
+            assertEquals(ownAndChain.take(2), graph.refreshed)
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain, graph.refreshed)
+            assertEquals(chain, title.state.value.chain())
+            screen.cancel()
+            scope.cancel()
+        }
+
+    // A sign-out in another tab empties the stores while this page is in that tab's stack, no longer shown.
+    @Test
+    fun `a page that stops being shown mid-walk writes nothing more to the store, as across a sign-out`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            val screen = showing(title.state, title.shown)
+            advanceTimeBy(DETAILS_LATENCY.inWholeMilliseconds + 1)
+            runCurrent()
+            screen.cancel()
+            runCurrent()
+            graph.session.signOut()
+            advanceTimeBy(1.minutes.inWholeMilliseconds)
+            runCurrent()
+            assertEquals(ownAndChain.take(1), graph.refreshed)
+            assertNull(graph.anime.observeDetails(FixtureAnime.premiereYear.id).first())
+            assertNull(graph.anime.observeDetails(FixtureAnime.prequel.id).first())
+            scope.cancel()
+        }
+
+    // Freshness as for any page: past six hours only the airing title itself is stale, past a day the chain too.
+    @Test
+    fun `a stale stored page of the chain is asked for again and a fresh one is not`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
+            val graph = TestGraph(Demo(Fixtures.reference, scope, kotlin.time.Duration.ZERO, clock))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain, graph.refreshed)
+            clock.instant += Duration.ofHours(7)
+            title.onEvent(TitleEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(ownAndChain + FixtureAnime.exactToWatch.id, graph.refreshed)
+            clock.instant += Duration.ofHours(18)
+            title.onEvent(TitleEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(ownAndChain + FixtureAnime.exactToWatch.id + ownAndChain, graph.refreshed)
+            scope.cancel()
+        }
+
     @Test
     fun `a walk shows its indicator only once it has lasted a second, and never once it has ended`() =
         runTest(dispatcher) {
@@ -799,7 +891,8 @@ class TitleViewModelTest {
             showing(title.state, title.shown)
             runCurrent()
             assertTrue(graph.readers > 0)
-            assertEquals(FixtureAnime.exactToWatch.id, graph.refreshed.first())
+            advanceUntilIdle()
+            assertEquals(listOf(FixtureAnime.exactToWatch, FixtureAnime.premiereYear, FixtureAnime.prequel).map { it.id }, graph.refreshed)
             scope.cancel()
         }
 

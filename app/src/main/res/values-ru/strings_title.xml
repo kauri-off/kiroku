@@ -25,6 +25,12 @@
     <string name="title_your_score_label">Ваша оценка</string>
     <string name="title_watch_order">Порядок просмотра</string>
     <string name="title_this_title">Этот тайтл</string>
+    <plurals name="title_this_title_spoken">
+        <item quantity="one">Этот тайтл, %1$d из %2$d тайтла</item>
+        <item quantity="few">Этот тайтл, %1$d из %2$d тайтлов</item>
+        <item quantity="many">Этот тайтл, %1$d из %2$d тайтлов</item>
+        <item quantity="other">Этот тайтл, %1$d из %2$d тайтла</item>
+    </plurals>
     <string name="title_loading_watch_order">Загрузка порядка просмотра</string>
     <string name="title_related">Связанное</string>
     <string name="title_statistics">Статистика</string>
