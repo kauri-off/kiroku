@@ -190,7 +190,14 @@ private fun TitleContent(
     // Whether the watch order was on the page before this composition; read and set without a recomposition.
     val chainShown = remember { BooleanArray(1) }
     val chainWasShown = chainShown[0]
-    SideEffect { chainShown[0] = page.chain.isNotEmpty() }
+    // Whether the synopsis opened or closed in this composition, read and set as the above.
+    val expanded = state.moment.synopsisExpanded
+    val lastExpanded = remember { booleanArrayOf(expanded) }
+    val synopsisToggled = lastExpanded[0] != expanded
+    SideEffect {
+        chainShown[0] = page.chain.isNotEmpty()
+        lastExpanded[0] = expanded
+    }
     RefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = { onEvent(TitleEvent.Refresh) },
@@ -228,7 +235,7 @@ private fun TitleContent(
                         }
                 }
             } else {
-                details(details, state, chainWasShown, onEvent)
+                details(details, state, chainWasShown, sectionsMove = !synopsisToggled, onEvent)
             }
         }
     }
@@ -455,6 +462,7 @@ private fun LazyListScope.details(
     details: AnimeDetails,
     state: TitleState.Shown,
     chainWasShown: Boolean,
+    sectionsMove: Boolean,
     onEvent: (TitleEvent) -> Unit,
 ) {
     val page = state.page
@@ -466,13 +474,13 @@ private fun LazyListScope.details(
     val synopsis = details.synopsis != null || genres.isNotEmpty()
     if (synopsis) {
         item(key = Section.Synopsis) {
-            Gap(afterChain) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
+            Gap(afterChain, below(sectionsMove)) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
         }
     }
     // Drawn whenever there is something to open from it: the strip, or only "See all" when no related title fits it.
     val related = page.related.isNotEmpty() || page.moreRelated
     if (related) {
-        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterChain) { Related(page, onEvent) } }
+        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterChain, below(sectionsMove)) { Related(page, onEvent) } }
     }
     details.statistics?.let { statistics ->
         // The strip's cards end in their own blank room.
@@ -483,11 +491,21 @@ private fun LazyListScope.details(
                 synopsis -> Spacing.xl
                 else -> afterChain
             }
-        item(key = Section.Statistics) { Gap(space) { Statistics(statistics) } }
+        item(key = Section.Statistics) { Gap(space, below(sectionsMove)) { Statistics(statistics) } }
     }
     // A list row starts with its own padding.
-    item(key = Section.More) { Gap(Spacing.s) { More(details, onEvent) } }
+    item(key = Section.More) { Gap(Spacing.s, below(sectionsMove)) { More(details, onEvent) } }
 }
+
+// The sections under the watch order move with its rows, as items of the same list, and do not fade. In the frame the
+// synopsis opens or closes they are put in place at once, as on a page without the watch order.
+@Composable
+private fun LazyItemScope.below(moves: Boolean): Modifier =
+    Modifier.animateItem(
+        fadeInSpec = null,
+        placementSpec = if (moves) MaterialTheme.motionScheme.fastEffectsSpec() else null,
+        fadeOutSpec = null,
+    )
 
 @Composable
 private fun Synopsis(

@@ -158,20 +158,23 @@ class TitleViewModel(
             connection,
             ::refreshIfStale,
             again = { refresh(if (failure.value != null) Asked.Retry else Asked.Shown) },
-            showing = ::showingChanged,
+            hidden = ::hidden,
+            shownAgain = ::shownAgain,
         )
 
     // Collected while the page is shown; showing it refreshes stale details.
     val shown: StateFlow<Unit> get() = loads.shown
 
     // Only a shown page walks, so the page left for another one, another tab or a sign-out asks nothing more.
-    private fun showingChanged(showing: Boolean) {
-        if (!showing && walking?.isActive == true) {
-            walking?.cancel()
-            cut = true
-        } else if (showing && cut && load?.isActive != true) {
-            walkIfOwed()
-        }
+    private fun hidden() {
+        if (walking?.isActive != true) return
+        walking?.cancel()
+        cut = true
+    }
+
+    // Shown again past the stop timeout, the page goes on through refreshIfStale, after its own page if that is stale.
+    private fun shownAgain() {
+        if (cut && load?.isActive != true) walkIfOwed()
     }
 
     // What the page shows of [id], itself or a related title, for the screen it opens.

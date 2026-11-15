@@ -831,6 +831,112 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
+    // A rotation mid-walk: the page is shown again within its stop timeout, so nothing but the walk itself resumes it.
+    // The title asked for when the page was hidden is asked again, as the hide cancelled it.
+    @Test
+    fun `a page shown again within its stop timeout mid-walk finishes its chain`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            var screen = showing(title.state, title.shown)
+            advanceTimeBy(DETAILS_LATENCY.inWholeMilliseconds + 1)
+            runCurrent()
+            screen.cancel()
+            runCurrent()
+            advanceTimeBy(ROTATION_MILLIS)
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain, graph.refreshed)
+            assertEquals(
+                listOf(FixtureAnime.exactToWatch, FixtureAnime.premiereYear, FixtureAnime.premiereYear, FixtureAnime.prequel).map {
+                    it.id
+                },
+                graph.requested,
+            )
+            screen.cancel()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a page hidden before its own details arrive does not walk while hidden, and walks on its next show`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            var screen = showing(title.state, title.shown)
+            advanceTimeBy(1.seconds.inWholeMilliseconds)
+            runCurrent()
+            screen.cancel()
+            advanceTimeBy(1.minutes.inWholeMilliseconds)
+            runCurrent()
+            assertEquals(ownAndChain.take(1), graph.requested)
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain, graph.requested)
+            screen.cancel()
+            scope.cancel()
+        }
+
+    // A store emptied while the page was hidden (a sign-out) holds not even the page's own page: a walk resumed then
+    // reads no chain, and does not count as done, so the next show walks it.
+    @Test
+    fun `a walk that finds the page's own page gone is not done, and the next show walks the chain`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            var screen = showing(title.state, title.shown)
+            advanceTimeBy(DETAILS_LATENCY.inWholeMilliseconds + 1)
+            runCurrent()
+            screen.cancel()
+            runCurrent()
+            graph.titlesUnstored.value = true
+            advanceTimeBy(ROTATION_MILLIS)
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain.take(1), graph.refreshed)
+            screen.cancel()
+            graph.titlesUnstored.value = false
+            advanceTimeBy(1.minutes.inWholeMilliseconds)
+            runCurrent()
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain, graph.refreshed)
+            screen.cancel()
+            scope.cancel()
+        }
+
+    // Shown again after a long absence with a cut walk and a stale page of its own: the page's own refresh, then the
+    // walk, never side by side.
+    @Test
+    fun `a cut walk shown again past its stop timeout over a stale page asks for each title once, after the page's own`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
+            val graph = TestGraph(Demo(Fixtures.reference, scope, DETAILS_LATENCY, clock))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            var screen = showing(title.state, title.shown)
+            advanceTimeBy(DETAILS_LATENCY.inWholeMilliseconds + 1)
+            runCurrent()
+            screen.cancel()
+            advanceTimeBy(1.minutes.inWholeMilliseconds)
+            runCurrent()
+            clock.instant += Duration.ofHours(7)
+            val before = graph.requested.size
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(ownAndChain, graph.requested.drop(before))
+            assertEquals(ownAndChain.take(1) + ownAndChain, graph.refreshed)
+            screen.cancel()
+            scope.cancel()
+        }
+
     // Freshness as for any page: past six hours only the airing title itself is stale, past a day the chain too.
     @Test
     fun `a stale stored page of the chain is asked for again and a fresh one is not`() =
@@ -1027,6 +1133,7 @@ class TitleViewModelTest {
 
     private companion object {
         const val STOPPED_AFTER_MILLIS = 5_001L
+        const val ROTATION_MILLIS = 1_000L
         const val PATIENCE_MILLIS = 1_000L
         val DETAILS_LATENCY = 3.seconds
     }

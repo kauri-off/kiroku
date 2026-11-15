@@ -31,6 +31,8 @@ import org.robolectric.annotation.GraphicsMode
 private val third = FixtureAnime.premiereYear.titles.romaji
 private val film = TitleFixtures.filmBetweenSeasons.titles.romaji
 private const val LOADING = "Loading the watch order"
+private const val SYNOPSIS = "Synopsis"
+private const val RELATED = "Related"
 
 // A title the walk finds joins the watch order as the List's rows do: it fades in on the default effects spring and
 // the rows below make room on the fast one; the indicator leaves. The order arriving with the details does not move.
@@ -69,18 +71,26 @@ class TitleChainMotionTest {
     fun `a title the walk finds comes in between the seasons, the rows below make room, and it settles within 400 ms`() {
         showAndSettle(TitleFixtures.chainLoading)
         val before = top(third)
+        val synopsisBefore = top(SYNOPSIS)
         set(TitleFixtures.chainOfFour)
         repeat(4) { compose.mainClock.advanceTimeByFrame() }
         val moving = top(third)
+        val synopsisMoving = top(SYNOPSIS)
         compose.mainClock.advanceTimeBy(CHANGE_MS)
         val settled = top(third)
+        val synopsisSettled = top(SYNOPSIS)
         assertTrue("the third season is on its way down: $before < $moving < $settled", moving > before && moving < settled)
+        assertTrue(
+            "Synopsis moves with the rows: $synopsisBefore < $synopsisMoving < $synopsisSettled",
+            synopsisMoving > synopsisBefore && synopsisMoving < synopsisSettled,
+        )
         assertTrue("the film comes before the third season", top(film) < settled)
         compose.onNodeWithContentDescription(LOADING).assertDoesNotExist()
         compose.mainClock.advanceTimeBy(ENTER_MS - CHANGE_MS)
         val entered = compose.onNodeWithText(film).captureToImage().toPixelMap()
         compose.mainClock.advanceTimeBy(SETTLED)
         assertEquals(settled, top(third))
+        assertEquals(synopsisSettled, top(SYNOPSIS))
         assertTrue(
             "the film has faded in",
             entered.buffer.contentEquals(
@@ -98,12 +108,14 @@ class TitleChainMotionTest {
     fun `a walk that goes back in mid-flight ends with every row where the last state puts it`() {
         showAndSettle(TitleFixtures.chainFailed)
         val before = top(third)
+        val synopsisBefore = top(SYNOPSIS)
         set(TitleFixtures.chainOfFour)
         compose.mainClock.advanceTimeBy(ENTER_MS / 3)
         set(TitleFixtures.chainFailed)
         compose.mainClock.advanceTimeBy(SETTLED)
         compose.onNodeWithText(film).assertDoesNotExist()
         assertEquals(before, top(third))
+        assertEquals(synopsisBefore, top(SYNOPSIS))
         assertIdle()
     }
 
@@ -120,6 +132,23 @@ class TitleChainMotionTest {
         val settled = compose.onNodeWithText(third).captureToImage().toPixelMap()
         assertTrue("the row is drawn in full at once", row.buffer.contentEquals(settled.buffer))
         assertIdle()
+    }
+
+    // As on a page without a watch order: the sections below an opening or closing synopsis are in place at once.
+    @Test
+    fun `the synopsis opening and closing moves the sections below it at once`() {
+        showAndSettle(TitleFixtures.chainOfFour)
+        for (expanded in listOf(true, false)) {
+            val before = top(RELATED)
+            set(TitleFixtures.chainOfFour.copy(moment = TitleMoment(synopsisExpanded = expanded)))
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeByFrame()
+            val first = top(RELATED)
+            assertTrue("Related moved", first != before)
+            compose.mainClock.advanceTimeBy(SETTLED)
+            assertEquals(first, top(RELATED))
+            assertIdle()
+        }
     }
 
     private companion object {
