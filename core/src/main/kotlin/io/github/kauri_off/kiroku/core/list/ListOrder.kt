@@ -38,6 +38,21 @@ fun defaultSort(
     withAiring: Boolean,
 ): ListSort = if (ListSort.UpNext in sortsFor(status, withAiring)) ListSort.UpNext else ListSort.LastUpdated
 
+// A tab's sort and its direction, which "Up next" has none of.
+data class TabSort(
+    val sort: ListSort,
+    val direction: SortDirection? = sort.defaultDirection,
+) {
+    init {
+        require((direction == null) == (sort.defaultDirection == null))
+    }
+
+    companion object {
+        // A tab of the user's own list where nothing was chosen.
+        fun defaultFor(status: ListStatus): TabSort = TabSort(defaultSort(status, withAiring = true))
+    }
+}
+
 // A missing key goes last in both directions; equal keys go by title A to Z, then by id.
 fun order(
     entries: List<ListEntry>,

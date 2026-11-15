@@ -32,10 +32,12 @@ fun ListRoute(
                 graph.airing,
                 graph.session,
                 graph.connection,
+                graph.preferences,
                 graph.clock,
                 graph.titleLanguage,
                 createSavedStateHandle(),
                 messages,
+                graph.background,
             )
         }
     val editor = editSheetViewModel(graph, messages)

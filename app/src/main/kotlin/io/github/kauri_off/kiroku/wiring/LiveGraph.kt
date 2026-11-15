@@ -63,7 +63,9 @@ internal class LiveGraph(
     override val search by lazy { liveSearch(parts) }
     override val user by lazy { liveUser(parts, account) }
     override val connection by lazy { liveConnection(parts) }
+    override val preferences by lazy { livePreferences(parts) }
     override val signIn by lazy { liveSignIn(parts, account) }
+    override val images = parts.http.callFactory
 
     // What debug and preview builds record MAL's answers with; it looks at once for a title an earlier run left on the list.
     val recorder = liveRecorder(parts, built)

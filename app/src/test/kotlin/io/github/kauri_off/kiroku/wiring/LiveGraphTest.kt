@@ -6,11 +6,15 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
+import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -21,13 +25,17 @@ import io.github.kauri_off.kiroku.rules.appSources
 import io.github.kauri_off.kiroku.stale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -41,6 +49,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.io.File
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
@@ -162,6 +171,25 @@ class LiveGraphTest {
             val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
             parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
             assertEquals(Session.Expired(SignInId(signIn)), LiveGraph(parts).session.observeSession().first())
+        }
+
+    @Test
+    fun `the choices of a source are kept in that source's own file, which a new process reads`() =
+        runBlocking {
+            val first = CoroutineScope(SupervisorJob())
+            val graph = LiveGraph(parts(first), listStore = { store() })
+            assertSame(Dispatchers.Default, graph.background)
+            graph.preferences.setListSort(ListStatus.Completed, TabSort(ListSort.Score, SortDirection.Ascending))
+            first.coroutineContext.job.cancelAndJoin()
+            assertTrue(File(context.noBackupFilesDir, "account.preferences_pb").isFile)
+
+            val second = CoroutineScope(SupervisorJob())
+            val sorts = LiveGraph(parts(second), listStore = { store() }).preferences.observeListSorts().first()
+            assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), sorts.getValue(ListStatus.Completed))
+            assertEquals(TabSort.defaultFor(ListStatus.Watching), sorts.getValue(ListStatus.Watching))
+            second.coroutineContext.job.cancelAndJoin()
+            assertEquals(0, stores.get())
+            assertEquals(emptyList<Throwable>(), unexpected)
         }
 
     // Section 7.1: a title page shows what the source's own database holds and asks MAL nothing while it is fresh.

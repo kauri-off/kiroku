@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
@@ -54,6 +55,8 @@ class Demo(
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
     val user: UserRepository = DemoUserRepository(fixtures, server, signIn)
+
+    val preferences: PreferencesRepository = DemoPreferences()
 
     // Whether an edit is on its way to MAL.
     val saving: Boolean get() = server.writing.value > 0 || store.unconfirmed.value

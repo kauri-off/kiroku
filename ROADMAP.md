@@ -136,22 +136,11 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-22 Screens refresh by themselves.**
 
-- [ ] **M2-23 List state for a real store.** The sort and direction of each tab are kept across restarts, in the
-  preferences store, which `:data` gains here. The List's state is produced off the main thread, and a change to one
-  entry rebuilds its row and its tab alone.
-  **Needs:** M2-22.
-  **Check:** tests: a new process over the same store shows the chosen sorts; after a "+1" every other row is
-  the same object and one row recomposes; no state is built on the main thread.
+- [x] **M2-23 List state for a real store.**
 
 - [x] **M2-24 [L] Title page for a real store.**
 
-- [ ] **M2-25 Posters from the network.** Images load through the app's HTTP client: a row asks for the picture
-  of its size, the header for the large one with the row's picture in its place until it arrives. The loader has
-  a test of its own. Debug builds keep the stand-in art for the demo, and no render asks the network.
-  **Needs:** M2-09, M2-14.
-  **Check:** tests against a local server: a row's request is for the medium picture and carries the app's
-  `User-Agent`; the header shows the row's cached picture in its first frame; a failed image leaves the
-  placeholder. A render of the List is byte-identical to one without a network.
+- [x] **M2-25 Posters from the network.**
 
 - [ ] **M2-26 The real title page and its link.** The live graph's titles are M2-17. A
   `myanimelist.net/anime/{id}` link, with or without a slug or a trailing slash, opens the title page with the

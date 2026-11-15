@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.DeviceClock
 import io.github.kauri_off.kiroku.wiring.createGraph
 import io.github.kauri_off.kiroku.wiring.debugTools
+import io.github.kauri_off.kiroku.wiring.imageLoader
 import io.github.kauri_off.kiroku.wiring.standInPosters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,5 @@ class KirokuApplication :
     }
 
     // The debug build draws its fixture titles' posters; the release build has no stand-ins.
-    override fun newImageLoader(context: PlatformContext): ImageLoader =
-        ImageLoader.Builder(context).components { standInPosters?.let { add(it) } }.build()
+    override fun newImageLoader(context: PlatformContext): ImageLoader = imageLoader(context, graph.images, standInPosters)
 }
