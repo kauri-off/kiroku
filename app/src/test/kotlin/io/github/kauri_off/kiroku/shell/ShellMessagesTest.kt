@@ -465,4 +465,38 @@ class ShellMessagesTest {
         compose.onNodeWithText("Could not save").assertDoesNotExist()
         assertEquals(null, shell.messages.current.value)
     }
+
+    // A "+1" then a "−1" whose first request fails: the Retry holds the values the title rolls back to, and MAL may
+    // hold the one in between, so the message stays until a change says more.
+    @Test
+    fun `a failed save whose Retry would write the values the title rolled back to keeps its message`() {
+        val shell = ShellViewModel(graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        val before = watched()
+        graph.demo.server.failingWrites.value = true
+        runBlocking {
+            graph.list.write(ListWrite.MarkNextWatched(anime))
+            graph.list.write(ListWrite.StepWatched(anime, -1))
+        }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        val retry =
+            (
+                shell.messages.current.value!!
+                    .message.action as ShellMessage.Action.Retry
+            ).write as ListWrite.Retry
+        assertEquals(before, (retry.failure.write as ListWrite.Save).values.watchedEpisodes)
+        assertEquals(before, watched())
+
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+    }
 }

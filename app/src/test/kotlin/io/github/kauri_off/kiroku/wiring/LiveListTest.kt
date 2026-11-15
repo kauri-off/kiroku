@@ -217,18 +217,16 @@ class LiveListTest {
             assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.sync())
             assertEquals(asked, mal.asked.size)
 
-            // Another user, whose list is one page.
+            // Another user, whose list is one page; the List still open downloads it by itself.
             mal.pages = listOf(ServedMal.recorded("list_public_3.200.json"))
+            val ids = ServedMal.ids(mal.pages).toSet()
             graph.signInOnce()
-            assertEquals(emptySet<Long>(), graph.ids())
-            assertNull(graph.list.observeSyncedAt().first())
-            assertEquals(defaults, graph.preferences.observeListSorts().first())
-            assertEquals(Outcome.Success(Unit), graph.list.sync())
-            assertEquals(ServedMal.ids(mal.pages).toSet(), graph.ids())
-            assertEquals(emptyList<String>(), mal.writes)
-
+            assertTrue(ids.containsAll(graph.ids()))
+            val shown = screen.showingRows(ids.size)
             val second = graph.list.observeEntries().first()
-            val shown = screen.showingRows(second.size)
+            assertEquals(ids, second.map { it.anime.id.value }.toSet())
+            assertNotNull(graph.list.observeSyncedAt().first())
+            assertEquals(emptyList<String>(), mal.writes)
             assertEquals(ListStatus.Watching, screen.state.value.tab)
             val completed = shown.pages.getValue(ListStatus.Completed)
             assertEquals(ListSort.LastUpdated, completed.sort)

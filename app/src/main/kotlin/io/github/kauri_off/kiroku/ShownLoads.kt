@@ -101,6 +101,18 @@ class ShownLoads(
     fun ended(error: DataError?) {
         owed.value = error == DataError.NoConnection
     }
+
+    // A load another part of the app started is owed and may fail offline: it is repeated once the connection is seen
+    // to come back, not while it stays, when that part's own attempt runs.
+    fun owedOffline() {
+        spent = true
+        owed.value = true
+    }
+
+    // A load another part of the app made succeeded, so nothing is owed.
+    fun loadedElsewhere() {
+        owed.value = false
+    }
 }
 
 // What is stale, read from the stores; a store that cannot be read holds nothing fresh.

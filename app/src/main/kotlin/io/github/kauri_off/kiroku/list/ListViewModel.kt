@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -223,10 +224,12 @@ class ListViewModel(
             .flatMapLatest { owner ->
                 if (readFor !== NOBODY_YET && readFor != owner) forgetOwner()
                 readFor = owner
-                combine(list.observeEntries(), airing.observeAiring(), ::Pair).map { (entries, schedule) ->
-                    awaitSorts()
-                    received(entries, schedule)
-                }
+                val read =
+                    combine(list.observeEntries(), airing.observeAiring(), ::Pair).map { (entries, schedule) ->
+                        awaitSorts()
+                        received(entries, schedule)
+                    }
+                if (owner == null) read else merge(read, owedDownloads())
             }.onStart { emit(Unit) }
             .readAgainOnRetry(retries, ::unreadable)
 
@@ -238,13 +241,36 @@ class ListViewModel(
         model.update { if (it.sorts == null && it.owners == asked.owners) it.copy(sorts = sorts.toMap<EntryStatus, TabSort>()) else it }
     }
 
-    // Another owner's list starts as a list first shown: no entry, order, sort, tab or filter of the one before.
+    // A download the engine owes (a write MAL may have made) that failed offline is made when the connection returns.
+    private fun owedDownloads(): Flow<Unit> =
+        flow {
+            var known = false
+            var owed = false
+            list
+                .observeSyncedAt()
+                .catch { if (it !is DataException) throw it }
+                .collect { at ->
+                    if (at == null && known) {
+                        owed = true
+                        viewModelScope.launch { loads.owedOffline() }
+                    } else if (at != null && owed) {
+                        // Only what this marked: a load of the List's own that is owed stays owed.
+                        owed = false
+                        viewModelScope.launch { loads.loadedElsewhere() }
+                    }
+                    known = at != null
+                }
+        }
+
+    // Another owner's list starts as a list first shown: no entry, order, sort, tab or filter of the one before; a new
+    // signed-in owner's list is downloaded when it is stale, whatever the last owner's sync still does.
     private fun forgetOwner() {
         settled = false
         entriesLoaded = false
         viewModelScope.launch {
             filterBy(null)
             saveTab()
+            if (session.observeSession().first() is Session.SignedIn && list.stale(clock.instant())) startSync(fromUser = false)
         }
         model.update {
             it.copy(
@@ -256,6 +282,7 @@ class ListViewModel(
                 tab = ListStatus.Watching,
                 sorts = null,
                 sortSheetOpen = false,
+                refreshing = false,
                 owners = it.owners + 1,
             )
         }
@@ -510,7 +537,7 @@ class ListViewModel(
                         // Asked on the lane: the list may have arrived there first and been ordered at start.
                         withContext(lane) {
                             model.update {
-                                if (fromUser || it.orders == null) {
+                                if (it.owners == owners && (fromUser || it.orders == null)) {
                                     it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
                                 } else {
                                     it
@@ -527,17 +554,9 @@ class ListViewModel(
                         }
                     entriesLoaded && model.value.entries.isNotEmpty() ->
                         withContext(lane) {
-                            model.update {
-                                if (it.orders ==
-                                    null
-                                ) {
-                                    it.orderedAll()
-                                } else {
-                                    it
-                                }
-                            }
+                            model.update { if (it.owners == owners && it.orders == null) it.orderedAll() else it }
                         }
-                    else -> model.update { it.copy(failure = result.error.toListFailure()) }
+                    else -> model.update { if (it.owners == owners) it.copy(failure = result.error.toListFailure()) else it }
                 }
         }
         model.update { it.copy(refreshing = false, refreshes = if (fromUser) it.refreshes + 1 else it.refreshes) }
