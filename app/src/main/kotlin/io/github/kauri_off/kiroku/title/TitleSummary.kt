@@ -16,6 +16,8 @@ class TitleSummary(
     val session: Session?,
     // Only when the opener is the title's own page.
     val page: PageSummary? = null,
+    // The title's page was read before, so a value its title lacks is one MAL gives none of.
+    val pageRead: Boolean = page != null,
 )
 
 // What a title page shows below its header: the details, and the list entries and airing of the related titles.

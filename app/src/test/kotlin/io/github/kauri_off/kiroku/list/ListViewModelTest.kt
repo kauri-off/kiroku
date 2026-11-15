@@ -133,6 +133,7 @@ class ListViewModelTest {
         val list =
             ListViewModel(
                 graph.list,
+                graph.anime,
                 airing(graph.airing),
                 graph.session,
                 graph.connection,
@@ -755,6 +756,7 @@ class ListViewModelTest {
             val list =
                 ListViewModel(
                     graph.list,
+                    graph.anime,
                     graph.airing,
                     graph.session,
                     graph.connection,
@@ -846,6 +848,7 @@ class ListViewModelTest {
             val list =
                 ListViewModel(
                     graph.list,
+                    graph.anime,
                     graph.airing,
                     graph.session,
                     graph.connection,
@@ -880,6 +883,7 @@ class ListViewModelTest {
                 val list =
                     ListViewModel(
                         graph.list,
+                        graph.anime,
                         graph.airing,
                         graph.session,
                         graph.connection,

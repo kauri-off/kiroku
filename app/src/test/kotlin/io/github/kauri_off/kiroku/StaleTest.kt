@@ -37,6 +37,8 @@ class StaleTest {
 
         override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = read(refreshedAt)
 
+        override fun observePagesRead(): Flow<Set<AnimeId>> = read(emptySet())
+
         override suspend fun refresh(id: AnimeId): Outcome<Unit> = Outcome.Success(Unit)
     }
 

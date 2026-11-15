@@ -164,6 +164,22 @@ class TitleStateTest {
         assertEquals(2026, TitleFixtures.page(FixtureAnime.premiereTimeSoon).facts.year)
     }
 
+    // Only the title's own page says MAL has no score; before it is read, an absent score is not known yet.
+    @Test
+    fun aScoreIsNoneOnlyOnceTheTitlesPageIsReadAndUntilThenNotKnownYet() {
+        val scored = FixtureAnime.relatedFullStory
+        val unscored = scored.copy(meanScore = null)
+        assertEquals(MalScore.Given(8.10), TitleFixtures.page(scored, entry = null, details = null).score)
+        assertEquals(MalScore.Given(8.10), TitleFixtures.page(scored, entry = null).score)
+        assertEquals(MalScore.NotKnownYet, TitleFixtures.page(unscored, entry = null, details = null).score)
+        assertEquals(MalScore.None, TitleFixtures.page(unscored, entry = null).score)
+        assertEquals(MalScore.None, TitleFixtures.page(FixtureAnime.premiereTimeLater).score)
+        val related = TitleFixtures.openedFromRelated.page
+        assertEquals(MalScore.NotKnownYet, related.score)
+        assertEquals(HeaderFacts(MediaType.Tv, 2024, null), related.facts)
+        assertEquals(null, related.anime.rank)
+    }
+
     @Test
     fun anExpiredSessionShowsTheBannerInEveryState() {
         val page = TitleFixtures.page(FixtureAnime.exactToWatch)

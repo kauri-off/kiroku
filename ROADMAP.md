@@ -138,14 +138,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-23 List state for a real store.**
 
-- [ ] **M2-24 [L] Title page for a real store.** A title opened from a related row that is neither on the list
-  nor stored shows, for the score, the episode count and the rank it does not know yet, what the hand-off
-  proposes and the owner accepts, without a claim that MAL has none. The title and the synopsis can be selected
-  and copied. The page and its sub-screens read the entries of the titles they show, not the list. Case:
-  `opened-from-related`.
-  **Needs:** M2-22.
-  **Check:** the rubric on the case; tests: a page of twelve related titles is not rebuilt by a change to
-  another entry; the title and the synopsis offer the selection.
+- [x] **M2-24 [L] Title page for a real store.**
 
 - [x] **M2-25 Posters from the network.**
 

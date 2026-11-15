@@ -198,6 +198,9 @@ interface AnimeRepository {
     // When the details were last fetched; null when they never were.
     fun observeRefreshedAt(id: AnimeId): Flow<Instant?>
 
+    // The titles whose page is stored.
+    fun observePagesRead(): Flow<Set<AnimeId>>
+
     suspend fun refresh(id: AnimeId): Outcome<Unit>
 }
 

@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
@@ -62,14 +63,36 @@ class TitleViewModel(
         val list: ListRead,
         val airing: Map<AnimeId, Airing>,
         val session: Session?,
+        // The title's own store could not be read.
+        val storeFailure: DataError? = null,
+        // The opener knew the title's page was read; the store's details say so once they are read.
+        val pageRead: Boolean = false,
     ) {
         // The store's answers are not known yet; the summary stands in for them in build.
-        constructor(opened: TitleSummary) : this(null, null, ListRead(opened.knownEntries()), opened.knownAiring(), opened.session)
+        constructor(opened: TitleSummary) : this(
+            null,
+            null,
+            ListRead(opened.knownEntries()),
+            opened.knownAiring(),
+            opened.session,
+            pageRead = opened.pageRead,
+        )
     }
 
     private class ListRead(
         val entries: Map<AnimeId, ListEntry> = emptyMap(),
         val failure: DataError? = null,
+    )
+
+    private class Stored(
+        val anime: Anime? = null,
+        val details: AnimeDetails? = null,
+        val failure: DataError? = null,
+    )
+
+    private class Around(
+        val list: ListRead,
+        val airing: Map<AnimeId, Airing>,
     )
 
     private val moment = MutableStateFlow(TitleMoment(synopsisExpanded = saved[EXPANDED] ?: false))
@@ -79,23 +102,26 @@ class TitleViewModel(
     private val retries = MutableStateFlow(0)
     private var load: Job? = null
 
-    // A list that cannot be read fails the page, since its list values would be unknown.
-    private val listRead =
-        list
-            .observeEntries()
-            .map { list -> ListRead(list.associateBy { it.anime.id }) }
-            .readAgainOnRetry(retries) { ListRead(failure = it) }
+    // A store that cannot be read fails the page, as a list that cannot be read does, since its values would be unknown.
+    private val stored =
+        combine(anime.observeAnime(id), anime.observeDetails(id)) { anime, details -> Stored(anime, details) }
+            .readAgainOnRetry(retries) { Stored(failure = it) }
+
+    // Of the list and the airing, only the titles the page shows: a change to any other title rebuilds nothing.
+    private val around =
+        stored.withRead({ shownTitles(id, it.details) }) { ids ->
+            combine(
+                list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
+                airing.airingOf(ids),
+                ::Around,
+            )
+        }
 
     // Starts from what the opening screen showed, so the page needs no read for its first frame; build falls back to it.
     private val sources: StateFlow<Sources?> =
-        combine(
-            anime.observeAnime(id),
-            anime.observeDetails(id),
-            listRead,
-            airing.observeAiring(),
-            session.observeSession(),
-            ::Sources,
-        ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
+        combine(around, session.observeSession()) { (stored, around), session ->
+            Sources(stored.anime, stored.details, around.list, around.airing, session, stored.failure)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<TitleState> =
         combine(sources.filterNotNull(), moment, failure, waitShown, refreshing, ::build)
@@ -160,9 +186,9 @@ class TitleViewModel(
         val anime = animeOf(sources)
         val details = sources.details
         val session = sources.session
-        val listFailure = sources.list.failure
+        val readFailure = sources.list.failure ?: sources.storeFailure
         return when {
-            listFailure != null -> TitleState.Failed(listFailure, session)
+            readFailure != null -> TitleState.Failed(readFailure, session)
             anime == null -> failure?.let { TitleState.Failed(it, session) } ?: TitleState.Loading(session)
             else ->
                 TitleState.Shown(
@@ -174,6 +200,7 @@ class TitleViewModel(
                         sources.list.entries.mapValues { it.value.status },
                         titleLanguage,
                         clock,
+                        pageRead = details != null || sources.pageRead,
                     ),
                     session,
                     moment,
@@ -217,14 +244,22 @@ class TitleViewModel(
                 refreshing.value = false
                 loads.ended((result as? Outcome.Failure)?.error)
                 if (result !is Outcome.Failure) return@launch
-                val shown = sources.filterNotNull().first().let { it.list.failure == null && animeOf(it) != null }
-                if (anime.observeDetails(id).first() == null) failure.value = result.error
+                val shown =
+                    sources.filterNotNull().first().let { it.list.failure == null && it.storeFailure == null && animeOf(it) != null }
+                if (storedDetails() == null) failure.value = result.error
                 // Section 7.2: a Retry fails where it was tapped; any other failure is also said on the first screen.
                 if (shown && asked != Asked.Retry && result.error != DataError.SessionExpired) {
                     messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
                 }
             }
     }
+
+    private suspend fun storedDetails(): AnimeDetails? =
+        try {
+            anime.observeDetails(id).first()
+        } catch (_: DataException) {
+            null
+        }
 
     private fun addToList() {
         val page = shownPage() ?: return

@@ -68,6 +68,20 @@ class RelatedViewModelTest {
         }
 
     @Test
+    fun `Related reads the list entries of the titles it shows, not the list`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val related = related(graph)
+            showing(related.state, related.shown)
+            advanceUntilIdle()
+            val details = graph.anime.observeDetails(FixtureAnime.premiereYear.id).first()!!
+            assertEquals(details.related.map { it.anime.id }.toSet(), graph.entriesRead)
+            assertEquals(0, graph.wholeListReads)
+            scope.cancel()
+        }
+
+    @Test
     fun `both sub-screens read their sources only while shown, and show what changed meanwhile when shown again`() =
         runTest(dispatcher) {
             val scope = foregroundScope()
