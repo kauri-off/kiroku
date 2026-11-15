@@ -1,8 +1,6 @@
 package io.github.kauri_off.kiroku.link
 
 import android.app.Application
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -20,7 +18,6 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.SignInStep
-import io.github.kauri_off.kiroku.data.preferences.StoredNotice
 import io.github.kauri_off.kiroku.signin.FakeSignInGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -29,47 +26,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import java.io.File
 
-// Demo data, a sign-in the test moves, and the real notice over a file, whose need for the person's consent the test sets.
+// Demo data and a sign-in the test moves.
 open class LinkGraphApplication :
     Application(),
     AppGraphOwner,
     LinksOwner {
     val test by lazy { TestGraph(Demo(Fixtures.reference, CoroutineScope(SupervisorJob() + Dispatchers.Main))) }
     override val graph by lazy { FakeSignInGraph(test) }
-
-    @Volatile var consentNeeded = false
-
-    override val links by lazy {
-        val stored = StoredNotice(File(noBackupFilesDir, "links.preferences_pb"), CoroutineScope(SupervisorJob()), {})
-        AppLinks(DeviceLinkNotice(stored) { consentNeeded })
-    }
+    override val links = AppLinks()
 }
 
 // The system handed the app a link before its screen was made.
 class StartedByLinkApplication : LinkGraphApplication() {
     override fun onCreate() {
         super.onCreate()
-        consentNeeded = true
         links.opened(FixtureAnime.exactToWatch.id)
-    }
-}
-
-// The system does not open MAL's links in the app until the person allows it.
-class ConsentNeededApplication : LinkGraphApplication() {
-    override fun onCreate() {
-        super.onCreate()
-        consentNeeded = true
     }
 }
 
@@ -125,10 +104,6 @@ class LinkRouteTest {
         back()
         assertTrue(compose.activity.isFinishing)
     }
-
-    private fun noticeShown(): Boolean = compose.onAllNodesWithText(NOTICE).fetchSemanticsNodes().isNotEmpty()
-
-    private fun due(): Boolean = runBlocking { app.links.notice.due() }
 
     @Test
     fun `signed in, a link opens its title over the List`() {
@@ -224,56 +199,14 @@ class LinkRouteTest {
 
     @Test
     @Config(application = StartedByLinkApplication::class)
-    fun `a link that starts the app opens on its title with the List beneath, and no notice over it`() {
+    fun `a link that starts the app opens on its title with the List beneath`() {
         onPageOf(kagerou)
         // The List is made only when Back shows it: the start never shows it first.
         assertEquals(0, app.test.wholeListReads)
-        assertTrue(due())
-        assertFalse(noticeShown())
         assertTheListIsBeneath()
     }
 
-    @Test
-    @Config(application = ConsentNeededApplication::class)
-    fun `the notice shows once over the List at a start, and never again`() {
-        compose.waitUntil(WAIT) { noticeShown() }
-        shows(SENTENCE)
-        compose.waitUntil(WAIT) { !due() }
-        back()
-        shows("My list")
-        recreate()
-        compose.waitForIdle()
-        assertFalse(noticeShown())
-        back()
-        assertTrue(compose.activity.isFinishing)
-    }
-
-    @Test
-    fun `the notice is not shown while the links open in the app`() {
-        shows("My list")
-        assertFalse(due())
-        recreate()
-        assertFalse(noticeShown())
-    }
-
-    @Test
-    @Config(application = ConsentNeededApplication::class)
-    fun `Open settings leads to the system's setting of the app's links and leaves the List on screen`() {
-        compose.waitUntil(WAIT) { noticeShown() }
-        click("Open settings")
-        val started = shadowOf(app).nextStartedActivity
-        assertEquals(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, started.action)
-        assertEquals("package:${app.packageName}", started.dataString)
-        assertEquals(0, started.flags and Intent.FLAG_ACTIVITY_NEW_TASK)
-        assertFalse(noticeShown())
-        shows("My list")
-    }
-
     private companion object {
-        const val NOTICE = "Links to MyAnimeList"
-        const val SENTENCE =
-            "Links to titles on myanimelist.net open in the browser until you allow this app to open them in Android's settings"
         const val SIGN_IN = "Sign in with MyAnimeList"
-        const val WAIT = 5_000L
     }
 }

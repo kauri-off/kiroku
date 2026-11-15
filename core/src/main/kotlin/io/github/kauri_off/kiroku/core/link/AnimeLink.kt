@@ -23,6 +23,8 @@ fun animeLink(address: String): AnimeId? {
     if (!uri.scheme.equals("https", ignoreCase = true) || uri.rawUserInfo != null || uri.port != -1 || host !in animeLinkHosts) {
         return null
     }
-    val id = animePage.matchEntire(uri.path ?: return null)?.groupValues?.get(1) ?: return null
+    // As written and as decoded: an encoded slash is no part of the page's address.
+    val id = animePage.matchEntire(uri.rawPath ?: return null)?.groupValues?.get(1) ?: return null
+    if (!animePage.matches(uri.path)) return null
     return id.toLongOrNull()?.let(::AnimeId)
 }

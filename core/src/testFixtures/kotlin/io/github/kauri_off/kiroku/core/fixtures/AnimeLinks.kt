@@ -44,14 +44,22 @@ object AnimeLinks {
             "https://example.com/anime/1",
         )
 
-    // Given to the app, which refuses them: the manifest's filter cannot tell them from a title's page.
-    val refusedOnArrival: List<String> =
+    // Given to the app by the manifest's filter, which cannot tell them from a title's page; the app hands them on.
+    val handedOn: List<String> =
         listOf(
             "https://myanimelist.net/anime/99999999999999999999",
             "https://myanimelist.net:8443/anime/1",
             "https://someone@myanimelist.net/anime/1",
+            "https://myanimelist.net/anime%2F1",
+            "https://myanimelist.net/anime/1%2F2",
+            "https://myanimelist.net/anime/%31",
+            "https://myanimelist.net/anime/1?ref=a|b",
+            "https://myanimelist.net/anime/1/100%_x",
+            "https://myanimelist.net/anime/1/Cowboy Bebop",
+            "https://myanimelist.net/anime/1/{Bebop}",
+            "https://myanimelist.net/anime/1#a^b",
         )
 
     // Not addresses at all.
-    val unreadable: List<String> = listOf("", "myanimelist.net/anime/1", "https://myanimelist.net/anime/1 2", "anime/1")
+    val unreadable: List<String> = listOf("", "myanimelist.net/anime/1", "anime/1")
 }

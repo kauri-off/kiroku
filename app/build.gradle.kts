@@ -635,12 +635,13 @@ object RedirectRule {
         ) +
             listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") }
 
-    // An intent filter: its actions and categories, the attributes of each of its data elements, and whatever else it holds.
+    // An intent filter: actions, categories, each data element's attributes, other children, and its own attributes.
     data class Filter(
         val actions: List<String>,
         val categories: Set<String>,
         val data: List<Map<String, String>>,
         val other: List<String> = emptyList(),
+        val attributes: Map<String, String> = emptyMap(),
     )
 
     fun parse(manifest: File): org.w3c.dom.Document =
@@ -709,6 +710,10 @@ object RedirectRule {
                         (0 until data.attributes.length).map { data.attributes.item(it) }.associate { it.localName to it.nodeValue }
                     },
                 other = (parts.keys - setOf("action", "category", "data")).sorted(),
+                attributes =
+                    filter.attributes.let { all ->
+                        (0 until all.length).map(all::item).associate { it.localName to it.nodeValue }
+                    },
             )
         }
 }
@@ -829,6 +834,10 @@ abstract class VerifyRedirectRule : DefaultTask() {
                     browsable.parentNode.removeChild(browsable)
                 },
                 "the link has a second filter" to { link(it).filter(listOf(mapOf("scheme" to "https", "host" to "myanimelist.net"))) },
+                "the link asks for verification of a domain the app does not own" to
+                    { linkFilter(it).setAttributeNS(android, "android:autoVerify", "true") },
+                "the link's filter has a priority" to { linkFilter(it).setAttributeNS(android, "android:priority", "999") },
+                "the redirect's filter asks for verification" to { ownFilter(it).setAttributeNS(android, "android:autoVerify", "true") },
                 "the link is claimed before Android 12" to { link(it).setAttributeNS(android, "android:enabled", "true") },
                 "the link asks for a permission" to
                     { link(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },

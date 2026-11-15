@@ -14,9 +14,6 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
-import io.github.kauri_off.kiroku.link.LinkNoticeTurn
-import io.github.kauri_off.kiroku.link.LinksKey
-import io.github.kauri_off.kiroku.link.LinksRoute
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
@@ -77,7 +74,7 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
     }
 }
 
-// Each link handed over is acted on once; the notice about them is shown once, when due.
+// Each link handed over is acted on once.
 @Composable
 private fun LinkTurns(
     links: AppLinks,
@@ -90,7 +87,6 @@ private fun LinkTurns(
             links.taken(it)
         }
     }
-    LinkNoticeTurn(links.notice, navigator)
 }
 
 // A link opens its title over the List alone (section 6.3), whatever was shown.
@@ -169,7 +165,6 @@ fun appEntries(
         entry<RelatedKey> { key -> RelatedRoute(key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
-        entry<LinksKey> { LinksRoute(snackbars, onBack = { back() }) }
         entry<SignInKey> {
             SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })
         }

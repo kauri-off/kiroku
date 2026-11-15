@@ -13,8 +13,8 @@ class AnimeLinkTest {
     }
 
     @Test
-    fun `any other address, a sub-page of a title and an id that is not a positive number name nothing`() {
-        val refused = AnimeLinks.refused + AnimeLinks.refusedOnArrival + AnimeLinks.unreadable
+    fun `any other address, a sub-page, an encoded slash and an id that is not a positive number name nothing`() {
+        val refused = AnimeLinks.refused + AnimeLinks.handedOn + AnimeLinks.unreadable
         assertEquals(refused.associateWith { null }, refused.associateWith(::animeLink))
     }
 }

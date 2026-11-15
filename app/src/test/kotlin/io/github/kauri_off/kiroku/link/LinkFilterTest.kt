@@ -3,14 +3,12 @@ package io.github.kauri_off.kiroku.link
 import android.content.Intent
 import android.net.Uri
 import io.github.kauri_off.kiroku.core.fixtures.AnimeLinks
-import io.github.kauri_off.kiroku.rules.projectDir
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-import java.io.File
 
 // What the system gives the app of MAL's addresses, by the merged manifest; the build checks the filter's exact shape.
 @RunWith(RobolectricTestRunner::class)
@@ -32,20 +30,12 @@ class LinkFilterTest {
     fun `from Android 12 the app is given a title's page and nothing else of MAL's site`() {
         assertEquals(AnimeLinks.opened.keys.toList(), taken(AnimeLinks.opened.keys))
         assertEquals(emptyList<String>(), taken(AnimeLinks.refused))
-        assertEquals(AnimeLinks.refusedOnArrival, taken(AnimeLinks.refusedOnArrival))
+        assertEquals(AnimeLinks.handedOn, taken(AnimeLinks.handedOn))
     }
 
-    // The manifest enables the link's activity by this value alone, which the build checks.
     @Test
+    @Config(sdk = [30])
     fun `before Android 12 no address is claimed, since a filter cannot tell a title's page from its sub-pages`() {
-        val claimed =
-            File(projectDir, "app/src/main/res")
-                .walk()
-                .filter { it.name == "links.xml" }
-                .associate {
-                    it.parentFile.name to
-                        Regex("""<bool name="links_claimed">(\w+)</bool>""").find(it.readText())?.groupValues?.get(1)
-                }
-        assertEquals(mapOf("values" to "false", "values-v31" to "true"), claimed)
+        assertEquals(emptyList<String>(), taken(AnimeLinks.opened.keys + AnimeLinks.handedOn + AnimeLinks.refused))
     }
 }

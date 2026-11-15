@@ -18,16 +18,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
-class NoNotice : LinkNotice {
-    override suspend fun due() = false
-
-    override suspend fun shown() = Unit
-}
-
 class LinksApplication :
     Application(),
     LinksOwner {
-    override val links = AppLinks(NoNotice())
+    override val links = AppLinks()
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -38,25 +32,46 @@ class LinkActivityTest {
 
     private fun view(uri: String?) = Intent(Intent.ACTION_VIEW, uri?.let(Uri::parse), application, LinkActivity::class.java)
 
-    // The link activity is gone; with [comesBack], the app's own screen is brought up, in its own task, without the address.
+    private fun create(
+        intent: Intent,
+        saved: Bundle? = null,
+    ) = assertTrue(
+        Robolectric
+            .buildActivity(LinkActivity::class.java, intent)
+            .create(saved)
+            .get()
+            .isFinishing,
+    )
+
+    // The link activity is gone, and the app's own screen is brought up, in its own task, without the address.
     private fun arrive(
         intent: Intent,
-        comesBack: Boolean = true,
         saved: Bundle? = null,
     ) {
-        val activity = Robolectric.buildActivity(LinkActivity::class.java, intent).create(saved).get()
-        assertTrue(activity.isFinishing)
+        create(intent, saved)
         val started = shadowOf(application).nextStartedActivity
-        if (!comesBack) {
-            assertNull(started)
-            return
-        }
         assertEquals(MainActivity::class.java.name, started.component?.className)
         val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         assertEquals(flags, started.flags and flags)
         assertNull(started.data)
         assertNull(started.extras)
         assertNull(shadowOf(application).nextStartedActivity)
+    }
+
+    // The link activity is gone, and the address went whole to the browser, not to this app.
+    private fun handedOn(address: String) {
+        create(view(address))
+        val started = shadowOf(application).nextStartedActivity
+        assertEquals(address, Intent.ACTION_VIEW, started.action)
+        assertEquals(address, address, started.dataString)
+        assertTrue(address, started.hasCategory(Intent.CATEGORY_BROWSABLE))
+        assertNull(address, started.component)
+        val selector = checkNotNull(started.selector)
+        assertEquals(Intent.ACTION_MAIN, selector.action)
+        assertEquals(setOf(Intent.CATEGORY_APP_BROWSER), selector.categories)
+        assertEquals(Intent.FLAG_ACTIVITY_NEW_TASK, started.flags and Intent.FLAG_ACTIVITY_NEW_TASK)
+        assertNull(shadowOf(application).nextStartedActivity)
+        assertNull(address, links.link.value)
     }
 
     @Test
@@ -69,12 +84,10 @@ class LinkActivityTest {
     }
 
     @Test
-    fun `an address that is not a title's page opens nothing of the app's`() {
-        for (address in AnimeLinks.refused + AnimeLinks.refusedOnArrival + AnimeLinks.unreadable) {
-            arrive(view(address), comesBack = false)
-            assertNull(address, links.link.value)
-        }
-        arrive(view(null), comesBack = false)
+    fun `whatever else the system hands the app goes on to the browser, and an intent without an address to nothing`() {
+        for (address in AnimeLinks.handedOn + AnimeLinks.refused + AnimeLinks.unreadable) handedOn(address)
+        create(view(null))
+        assertNull(shadowOf(application).nextStartedActivity)
         assertNull(links.link.value)
     }
 

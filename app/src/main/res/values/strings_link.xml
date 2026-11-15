@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="links_title">Links to MyAnimeList</string>
-    <string name="links_sentence">Links to titles on myanimelist.net open in the browser until you allow this app to open them in Android\'s settings</string>
-    <string name="links_open_settings">Open settings</string>
-</resources>

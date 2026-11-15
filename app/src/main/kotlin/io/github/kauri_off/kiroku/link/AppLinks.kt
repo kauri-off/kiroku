@@ -13,10 +13,8 @@ data class OpenedLink(
     val serial: Long,
 )
 
-// The links to titles the system handed to the app, each taken once, and the notice that the system must allow them.
-class AppLinks(
-    val notice: LinkNotice,
-) {
+// The links to titles the system handed to the app, each taken once.
+class AppLinks {
     private val serials = AtomicLong()
     private val pending = MutableStateFlow<OpenedLink?>(null)
 
@@ -40,11 +38,3 @@ interface LinksOwner {
 }
 
 val Context.appLinks: AppLinks? get() = (applicationContext as? LinksOwner)?.links
-
-// Whether the screen that says the system must allow the links is due, and that it was shown.
-interface LinkNotice {
-    // The system asks the person, the links do not open in the app, and the screen was never shown.
-    suspend fun due(): Boolean
-
-    suspend fun shown()
-}

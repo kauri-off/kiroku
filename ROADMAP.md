@@ -63,8 +63,8 @@ Goal: the owner signs in and uses their real list and real title pages (ARCHITEC
 
 Acceptance: over three days of use, every list change made in the app is on the website and the reverse; no
 sign-out happened that the owner did not cause; three title pages match myanimelist.net for related titles and
-statistics; a `myanimelist.net/anime/{id}` link opens the title page with the List beneath it; the owner's findings
-on the Russian strings so far are fixed.
+statistics; a `myanimelist.net/anime/{id}` link, once allowed in Android's settings, opens the title page with the
+List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
