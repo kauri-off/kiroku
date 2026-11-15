@@ -53,7 +53,7 @@ class RecordedTitlesStoreTest {
                     first.edited(listOf("media_type"), JsonPrimitive("web_film")),
                     second.edited(listOf("status"), JsonPrimitive("on_hiatus")),
                 )
-            val titles = (unknown + recordedNodes.map { it.second }).map { it.toNode().toAnime() }.distinctBy { it.id }
+            val titles = (unknown + recordedNodes.map { it.second }).map { it.toNode().toAnime(Repairs()) }.distinctBy { it.id }
             assertTrue(titles.any { it.mediaType == MediaType.Unrecognized("web_film") })
             assertTrue(titles.any { it.airingStatus == AiringStatus.Unrecognized("on_hiatus") })
             val (store) = store()

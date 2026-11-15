@@ -23,7 +23,7 @@ internal val titlePages =
 
 internal fun recordedJson(name: String): JsonObject = MalJson.parseToJsonElement(RecordedAnswers.named(name).body).jsonObject
 
-internal fun recordedTitle(name: String): MalTitle = recordedJson(name).toTitle()
+internal fun recordedTitle(name: String): MalTitle = recordedJson(name).toTitle(Repairs())
 
 // Every title node of every recorded answer, the pages themselves included, each with the answer it came from.
 internal val recordedNodes: List<Pair<String, JsonObject>> by lazy {

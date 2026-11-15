@@ -41,23 +41,37 @@ internal data class TitleRow(
     val genres: String?,
     @ColumnInfo(name = "episode_duration") val episodeDuration: Long?,
 ) {
-    // A stored value is never replaced by a missing one; a picture's two sizes, and a broadcast's day and time, are one value.
-    fun mergedWith(newer: TitleRow): TitleRow =
+    // A stored value is never replaced by a missing one or one filled in; a picture's sizes, and a broadcast, are one value.
+    fun mergedWith(
+        newer: TitleRow,
+        unread: Set<Unread> = emptySet(),
+    ): TitleRow =
         newer.copy(
+            romaji = if (newer.fillsInRomaji(this)) romaji else newer.romaji,
             english = newer.english ?: english,
             japanese = newer.japanese ?: japanese,
             posterUrl = newer.posterUrl ?: posterUrl,
             largePosterUrl = if (newer.posterUrl == null) largePosterUrl else newer.largePosterUrl,
             mediaType = newer.mediaType ?: mediaType,
+            airingStatus = newer.airingStatus.ifEmpty { airingStatus },
             episodes = newer.episodes ?: episodes,
             startDate = newer.startDate ?: startDate,
             broadcastDay = newer.broadcastDay ?: broadcastDay,
-            broadcastTime = if (newer.broadcastDay == null) broadcastTime else newer.broadcastTime,
+            broadcastTime =
+                when {
+                    newer.broadcastDay == null -> broadcastTime
+                    Unread.BroadcastTime in unread && newer.broadcastDay == broadcastDay -> broadcastTime
+                    else -> newer.broadcastTime
+                },
             meanScore = newer.meanScore ?: meanScore,
             rank = newer.rank ?: rank,
-            genres = newer.genres ?: genres,
+            genres = if (Unread.Genres in unread) genres ?: newer.genres else newer.genres ?: genres,
             episodeDuration = newer.episodeDuration ?: episodeDuration,
         )
+
+    // The mapper's main title for a page without one: its English title, else its Japanese one, out of its own slot.
+    private fun fillsInRomaji(stored: TitleRow): Boolean =
+        english == null && (romaji == stored.english || (japanese == null && romaji == stored.japanese))
 
     fun toAnime(): Anime =
         Anime(
@@ -131,8 +145,12 @@ internal data class TitleDetailsRow(
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
 ) {
     // The same rule as a summary's; the season's year and name are one value.
-    fun mergedWith(newer: TitleDetailsRow): TitleDetailsRow =
+    fun mergedWith(
+        newer: TitleDetailsRow,
+        unread: Set<Unread> = emptySet(),
+    ): TitleDetailsRow =
         newer.copy(
+            studios = if (Unread.Studios in unread) studios else newer.studios,
             synopsis = newer.synopsis ?: synopsis,
             endDate = newer.endDate ?: endDate,
             seasonYear = newer.seasonYear ?: seasonYear,

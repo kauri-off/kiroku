@@ -100,21 +100,11 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-14 Title client and mappers.**
 
-- [ ] **M2-15 List client: reading.** The list download of `RemoteList`: it asks with `nsfw=true`, reads the
-  pages in an order edits do not change, and fails when any page fails. A list score of 0 is no score; dates may
-  be partial. It serves the signed-in user and, in M6, a named one.
-  **Needs:** M2-05, M2-14, and the list answers of M2-10.
-  **Check:** tests on the recorded pages behind a local server: three pages give every entry once; a failed
-  middle page fails the download; the request carries `nsfw=true` and the order.
+- [x] **M2-15 List client: reading.**
 
 - [x] **M2-16 [A] Database: the titles and the list's store.**
 
-- [ ] **M2-17 Anime repository.** The titles of section 7.1 over M2-14 and M2-16: a page shows what is stored,
-  refreshes what is stale, and keeps what is stored when a refresh fails. A title reached from a related row has
-  that row's data from the first frame.
-  **Needs:** M2-14, M2-16.
-  **Check:** tests: stored details are shown without a request while fresh; a failed refresh changes nothing
-  stored and is reported; a refresh of the details does not lose a value the summary had.
+- [x] **M2-17 Anime repository.**
 
 - [x] **M2-18 Translated MAL values and the genre table.**
 
