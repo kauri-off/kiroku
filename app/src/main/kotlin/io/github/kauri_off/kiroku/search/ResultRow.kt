@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -61,6 +63,7 @@ fun ResultAnimeRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onEdit: (() -> Unit)? = null,
+    colors: ListItemColors = ListItemDefaults.colors(),
 ) {
     val title = row.rank?.let { stringResource(R.string.search_ranked_title, it, row.title) } ?: row.title
     val lines =
@@ -76,5 +79,6 @@ fun ResultAnimeRow(
         lines = lines.map { RowLine(it) },
         trailing = row.score?.let { RowTrailing.MalScore(scoreText(it)) },
         longPress = onEdit?.let { RowLongPress(stringResource(R.string.search_edit), it) },
+        colors = colors,
     )
 }
