@@ -9,17 +9,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import kotlinx.serialization.Serializable
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -28,8 +34,10 @@ import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en")
 class ShellRouteTest {
     private val compose = composeRule()
@@ -49,12 +57,17 @@ class ShellRouteTest {
         entry<Page> { page -> Counter("Page ${page.n}") }
     }
 
+    // The screens drawn since this was last cleared, and which of them may draw the snackbar host.
+    private val drawn = mutableSetOf<String>()
+    private val onTop = mutableMapOf<String, Boolean>()
+
     @Composable
     private fun Root(
         name: String,
         navigator: ShellNavigator,
         next: NavKey,
-    ) = Column {
+    ) = Column(Modifier.drawBehind { drawn += name }) {
+        onTop[name] = LocalOnTop.current
         Text(name)
         Button(onClick = { navigator.open(next) }) { Text("Open") }
     }
@@ -62,7 +75,8 @@ class ShellRouteTest {
     @Composable
     private fun Counter(name: String) {
         var taps by rememberSaveable { mutableIntStateOf(0) }
-        Button(onClick = { taps++ }) { Text("$name, $taps taps") }
+        onTop[name] = LocalOnTop.current
+        Button(onClick = { taps++ }, Modifier.drawBehind { drawn += name }) { Text("$name, $taps taps") }
     }
 
     private fun shell(entries: ShellEntries = this.entries) =
@@ -110,8 +124,19 @@ class ShellRouteTest {
             dispatcher.dispatchOnBackProgressed(BackEventCompat(0f, 0f, 0.5f, BackEventCompat.EDGE_LEFT))
         }
         compose.waitForIdle()
+        drawn.clear()
+        compose.onRoot().captureToImage()
+        assertEquals("both screens are drawn under the gesture", setOf("Page 1", "Search root"), drawn)
+        assertEquals(
+            "only the screen on top may draw the snackbar",
+            mapOf("Page 1" to false, "Search root" to true),
+            onTop.filterKeys {
+                it in
+                    drawn
+            },
+        )
         shows("Page 1, 0 taps")
-        shows("Search root")
+        hides("Search root")
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
         compose.waitForIdle()
         hides("Page 1, 0 taps")

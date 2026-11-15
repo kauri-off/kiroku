@@ -263,6 +263,7 @@ class SourceRulesTest {
             "slideInVertically { it }",
             "expandVertically()",
             "scaleIn()",
+            "unveilIn(initialColor = scrim)",
             "animateFloatAsState(target, Motion.fastEffects())",
             "animatable.animateTo(1f, motionScheme)",
             "animatable.animateTo(1f, motionScheme.defaultSpatialSpec())",
@@ -274,6 +275,7 @@ class SourceRulesTest {
             "animateFloatAsState(target, MaterialTheme.motionScheme.fastEffectsSpec())",
             "AnimatedVisibility(visible, enter = fadeIn(motionScheme.defaultEffectsSpec()), exit = fadeOut(motionScheme.fastEffectsSpec())) { }",
             "Modifier.animateContentSize(motionScheme.fastEffectsSpec())",
+            "unveilIn(motionScheme.fastEffectsSpec())",
             "animatable.animateTo(1f, motionScheme.slowEffectsSpec())",
             "state.animateScrollToItem(0)",
         )) {
@@ -340,6 +342,30 @@ class SourceRulesTest {
             )
         for ((name, source) in planted) assertEquals(source, 1, webViewProblems(name, source).size)
         assertEquals(emptyList<String>(), webViewProblems("A.kt", "// never a WebView\nval a = notShown(\"WebView\")\n"))
+    }
+
+    @Test
+    fun appCodeLeavesTheBackGestureToNavDisplay() {
+        val sources = appSources()
+        assertTrue(sources.any { it.path.endsWith("shell/ShellRoute.kt") })
+        assertEquals(emptyList<String>(), sources.flatMap { backGestureProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedBackGestureHandlerFails() {
+        val planted =
+            listOf(
+                "PredictiveBackHandler { progress -> progress.collect { } }",
+                "rememberNavigationEventState(sceneState)",
+                "NavigationBackHandler(sceneState, state, onBackCompleted = back)",
+                "LocalNavigationEventDispatcherOwner.current!!.navigationEventDispatcher.transitionState.collect { }",
+                "LocalNavAnimatedContentScope.current.transition.let { (it as SeekableTransitionState<*>).fraction }",
+                "DirectNavigationEventInput().backProgressed(event)",
+                "object : OnBackPressedCallback(true) { override fun handleOnBackProgressed(e: BackEventCompat) { } }",
+            )
+        for (source in planted) assertEquals(source, 1, backGestureProblems("A.kt", "val a = $source\n").size)
+        val clean = "NavDisplay(entries, predictivePopTransitionSpec = { noPreview }, onBack = back)\n"
+        assertEquals(emptyList<String>(), backGestureProblems("A.kt", clean + "BackHandler(enabled) { clear() }\n"))
     }
 
     @Test

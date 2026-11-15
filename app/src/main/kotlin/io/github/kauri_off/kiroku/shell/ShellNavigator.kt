@@ -2,9 +2,11 @@ package io.github.kauri_off.kiroku.shell
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import io.github.kauri_off.kiroku.notShown
@@ -20,6 +22,10 @@ class ShellNavigator(
 
     val current: Destination get() = selected.value
 
+    // How the last change of screen went, for its transition.
+    var way by mutableStateOf(Way.Across)
+        private set
+
     val stack: List<NavKey> get() = stackOf(current)
 
     fun stackOf(destination: Destination): List<NavKey> = stacks.getValue(destination)
@@ -28,22 +34,27 @@ class ShellNavigator(
     fun select(destination: Destination) {
         if (destination == current) {
             stacks.getValue(destination).popTo(1)
+            way = Way.Up
         } else {
             selected.value = destination
+            way = Way.Across
         }
     }
 
     fun open(key: NavKey) {
         stacks.getValue(current).add(key)
+        way = Way.Deeper
     }
 
     // Takes [key] off every stack that holds it; a root stays.
     fun remove(key: NavKey) {
+        if (backStack.last() == key) way = Way.Up
         stacks.values.forEach { stack -> (stack.lastIndex downTo 1).filter { stack[it] == key }.forEach { stack.removeAt(it) } }
     }
 
     // Shows [destination] with its stack popped to its root.
     fun home(destination: Destination) {
+        way = if (destination == current) Way.Up else Way.Across
         selected.value = destination
         stacks.getValue(destination).popTo(1)
     }
@@ -54,10 +65,12 @@ class ShellNavigator(
         return when {
             stack.size > 1 -> {
                 stack.popTo(stack.size - 1)
+                way = Way.Up
                 true
             }
             current != Destination.List -> {
                 selected.value = Destination.List
+                way = Way.Across
                 true
             }
             else -> false
