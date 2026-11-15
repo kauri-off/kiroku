@@ -18,11 +18,7 @@ import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToIndex
-import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.annotation.DelicateCoilApi
-import coil3.imageDecoderEnabled
-import coil3.intercept.Interceptor
 import coil3.memory.MemoryCache
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
@@ -32,8 +28,6 @@ import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
-import io.github.kauri_off.kiroku.data.network.Device
-import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterSize
@@ -48,37 +42,27 @@ import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import io.github.kauri_off.kiroku.title.TitleFixtures
 import io.github.kauri_off.kiroku.title.TitleScreen
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.flowOf
-import mockwebserver3.Dispatcher
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
-import mockwebserver3.RecordedRequest
-import okio.Buffer
-import org.junit.After
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.BLUE
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.GREEN
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.HUGE_HEIGHT
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.HUGE_WIDTH
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.LARGE_HEIGHT
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.LARGE_WIDTH
+import io.github.kauri_off.kiroku.wiring.Pictures.Companion.RED
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.ByteArrayOutputStream
-import java.time.Clock
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.io.File
 
 // Images come through the live graph's HTTP client from a local server that answers with pictures drawn here.
-@OptIn(DelicateCoilApi::class)
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -88,111 +72,25 @@ class ImageLoaderTest {
     @get:Rule
     val rule: TestRule = registered(compose)
 
-    private val context get() = RuntimeEnvironment.getApplication()
-    private val server = MockWebServer()
-    private val received = CopyOnWriteArrayList<RecordedRequest>()
-    private val answers = mutableMapOf<String, () -> MockResponse>()
-    private val release = CountDownLatch(1)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val ended = CopyOnWriteArrayList<Pair<String, Any>>()
-    private val asked = CopyOnWriteArrayList<Size>()
-    private lateinit var loader: ImageLoader
-    private var calls: okhttp3.Call.Factory? = null
+    @get:Rule
+    val pictures = Pictures()
 
-    @Before
-    fun start() {
-        server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse {
-                    received += request
-                    return answers[request.url.encodedPath]?.invoke() ?: MockResponse.Builder().code(404).build()
-                }
-            }
-        server.start()
-        val device =
-            object : Device {
-                override fun isOnline() = true
-
-                override fun observeOnline() = flowOf(true)
-
-                override fun isMainThread() = false
-            }
-        // MAL's API is elsewhere, so the image host is not the API's and gets no client id.
-        val source = LiveSource("images", MalHosts(api = "http://localhost:9/v2/", signIn = "http://localhost:9/v1/oauth2/"))
-        val graph = LiveGraph(LiveParts(context, source, CLIENT_ID, Clock.systemUTC(), scope, { throw it }, device = device))
-        calls = graph.images
-        loader = installed(calls)
-    }
-
-    @After
-    fun stop() {
-        release.countDown()
-        SingletonImageLoader.reset()
-        scope.cancel()
-        server.close()
-    }
-
-    // The app's loader, telling the test the size each request asked for and how it ended. Robolectric has no
-    // ImageDecoder, so pictures are decoded by BitmapFactory, which Coil sizes by the same rule.
-    private fun installed(
-        calls: okhttp3.Call.Factory?,
-        standIn: Interceptor? = null,
-    ): ImageLoader {
-        val listener =
-            object : coil3.EventListener() {
-                override fun resolveSizeEnd(
-                    request: ImageRequest,
-                    size: Size,
-                ) {
-                    asked += size
-                }
-
-                override fun onSuccess(
-                    request: ImageRequest,
-                    result: SuccessResult,
-                ) {
-                    ended += request.data.toString() to result
-                }
-
-                override fun onError(
-                    request: ImageRequest,
-                    result: ErrorResult,
-                ) {
-                    ended += request.data.toString() to result
-                }
-            }
-        return imageLoader(context, calls, standIn)
-            .newBuilder()
-            .eventListener(listener)
-            .imageDecoderEnabled(false)
-            .build()
-            .also { SingletonImageLoader.setUnsafe(it) }
-    }
+    private val context get() = pictures.context
+    private val received get() = pictures.received
+    private val ended get() = pictures.ended
+    private val asked get() = pictures.asked
+    private val server get() = pictures.server
 
     private fun picture(
         path: String,
         colour: Int,
-        width: Int = MEDIUM_WIDTH,
-        height: Int = MEDIUM_HEIGHT,
+        width: Int = Pictures.MEDIUM_WIDTH,
+        height: Int = Pictures.MEDIUM_HEIGHT,
         held: Boolean = false,
-    ): String {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply { eraseColor(colour) }
-        val png = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-        answers[path] = {
-            if (held) release.await(10, TimeUnit.SECONDS)
-            MockResponse
-                .Builder()
-                .addHeader("Content-Type", "image/png")
-                .body(Buffer().write(png))
-                .build()
-        }
-        return server.url(path).toString()
-    }
+        band: Int? = null,
+    ) = pictures.picture(path, colour, width, height, held, band)
 
-    private fun failing(path: String): String {
-        answers[path] = { MockResponse.Builder().code(500).build() }
-        return server.url(path).toString()
-    }
+    private fun failing(path: String) = pictures.failing(path)
 
     // A change from the test, applied before the next frame.
     private fun applied(change: () -> Unit) {
@@ -200,12 +98,13 @@ class ImageLoaderTest {
         Snapshot.sendApplyNotifications()
     }
 
-    private fun waitEnded(url: String) = compose.waitUntil(5_000) { ended.any { it.first == url } }
+    private fun waitEnded(url: String) = compose.waitUntil(5_000) { pictures.hasEnded(url) }
 
-    private fun centre(): Int {
-        val image = compose.onNodeWithTag(POSTER).captureToImage().asAndroidBitmap()
-        return image.getPixel(image.width / 2, image.height / 2)
-    }
+    private fun poster(): Bitmap = compose.onNodeWithTag(POSTER).captureToImage().asAndroidBitmap()
+
+    private fun centre(): Int = poster().let { it.getPixel(it.width / 2, it.height / 2) }
+
+    private fun execute(data: Any): Any = runBlocking { pictures.loader.execute(ImageRequest.Builder(context).data(data).build()) }
 
     @Test
     fun `a list row asks for the medium picture with the app's user agent, and no token or client id`() {
@@ -239,7 +138,7 @@ class ImageLoaderTest {
 
     @Test
     fun `the title page's header shows the row's picture from its first frame until the large one arrives`() {
-        loader = installed(calls, StandInPosters)
+        pictures.installed(pictures.calls, StandInPosters)
         val medium = picture("/medium/1.png", RED)
         val large = picture("/large/1.png", BLUE, LARGE_WIDTH, LARGE_HEIGHT, held = true)
         val anime = FixtureAnime.exactToWatch.copy(posterUrl = medium, largePosterUrl = large)
@@ -263,7 +162,7 @@ class ImageLoaderTest {
         assertEquals(RED, header(anime))
 
         compose.mainClock.autoAdvance = true
-        release.countDown()
+        pictures.release()
         waitEnded(large)
         compose.waitForIdle()
         assertEquals(BLUE, header(anime))
@@ -341,11 +240,11 @@ class ImageLoaderTest {
         val width = with(compose.density) { Sizes.posterRow.roundToPx() }
         val height = with(compose.density) { Sizes.posterRowHeight.roundToPx() }
         assertTrue(asked.isNotEmpty())
-        asked.forEach { assertEquals(Size(width, height), it) }
+        asked.forEach { assertEquals(Size(width, height), it.second) }
         val decoded = ended.mapNotNull { (it.second as? SuccessResult)?.image }
         assertTrue(decoded.isNotEmpty())
         decoded.forEach { assertTrue("${it.width}×${it.height}", it.width <= width * 1.1f && it.height <= height * 1.1f) }
-        val cache = checkNotNull(loader.memoryCache)
+        val cache = checkNotNull(pictures.loader.memoryCache)
         cache.keys.forEach { key ->
             val image = checkNotNull(cache[key]).image
             assertTrue("${image.width}×${image.height}", image.width <= width * 1.1f && image.height <= height * 1.1f)
@@ -354,7 +253,7 @@ class ImageLoaderTest {
 
     @Test
     fun `without an HTTP client no image reaches a host`() {
-        loader = installed(calls = null)
+        pictures.installed(calls = null)
         val url = picture("/medium/1.png", RED)
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) { Poster(url, PosterSize.Row, Modifier.testTag(POSTER)) }
@@ -362,20 +261,106 @@ class ImageLoaderTest {
         waitEnded(url)
         assertTrue(ended.single().second is ErrorResult)
         assertEquals(0, server.requestCount)
-        assertNull(loader.memoryCache?.get(MemoryCache.Key(url)))
+        assertNull(pictures.loader.memoryCache?.get(MemoryCache.Key(url)))
+    }
+
+    @Test
+    fun `opened with nothing in memory, a failed large picture gives way to the medium one, and then to the placeholder`() {
+        val medium = picture("/medium/1.png", RED)
+        val large = failing("/large/1.png")
+        val lost = failing("/medium/2.png")
+        val lostLarge = failing("/large/2.png")
+        var which by mutableStateOf(1)
+        var placeholder = 0
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                placeholder = MaterialTheme.colorScheme.surfaceContainerHighest.toArgb()
+                if (which == 1) {
+                    Poster(medium, PosterSize.Header, Modifier.testTag(POSTER), large = large)
+                } else {
+                    Poster(lost, PosterSize.Header, Modifier.testTag(POSTER), large = lostLarge)
+                }
+            }
+        }
+        waitEnded(medium)
+        compose.waitForIdle()
+        assertTrue(pictures.result(large) is ErrorResult)
+        assertEquals(RED, centre())
+
+        compose.runOnUiThread { applied { which = 2 } }
+        waitEnded(lost)
+        compose.waitForIdle()
+        assertEquals(placeholder, centre())
+        assertEquals(listOf("/large/1.png", "/medium/1.png", "/large/2.png", "/medium/2.png"), received.map { it.url.encodedPath })
+    }
+
+    @Test
+    fun `the header's large picture is decoded at the header's size and cropped as the row's picture was`() {
+        val medium = picture("/medium/1.png", RED, band = GREEN)
+        val large = picture("/large/1.png", BLUE, HUGE_WIDTH, HUGE_HEIGHT, band = GREEN)
+        var header by mutableStateOf(false)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                if (header) {
+                    Poster(medium, PosterSize.Header, Modifier.testTag(POSTER), large = large)
+                } else {
+                    Poster(medium, PosterSize.Row, Modifier.testTag(POSTER))
+                }
+            }
+        }
+        waitEnded(medium)
+        compose.runOnUiThread { applied { header = true } }
+        waitEnded(large)
+        compose.waitForIdle()
+
+        val width = with(compose.density) { Sizes.posterHeader.roundToPx() }
+        val height = with(compose.density) { (Sizes.posterHeader * 3 / 2).roundToPx() }
+        assertEquals(listOf(Size(width, height)), asked.filter { it.first == large }.map { it.second })
+        val image = (pictures.result(large) as SuccessResult).image
+        assertTrue("${image.width}×${image.height}", image.width <= width * 1.1f && image.height <= height * 1.1f)
+        val shown = poster()
+        assertEquals(GREEN, shown.getPixel(shown.width / 2, 1))
+        assertEquals(BLUE, shown.getPixel(shown.width / 2, shown.height / 2))
+    }
+
+    @Test
+    fun `only https addresses are fetched, and a planted file, content, resource, data or http address leaves the placeholder`() {
+        pictures.installed(pictures.calls, StandInPosters, schemes = Https)
+        val file = File(context.cacheDir, "planted.png")
+        Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888).compress(Bitmap.CompressFormat.PNG, 100, file.outputStream())
+        val planted =
+            listOf(
+                "file://${file.absolutePath}",
+                file.absolutePath,
+                "content://media/external/images/media/1",
+                "android.resource://${context.packageName}/drawable/ic_launcher_foreground",
+                "file:///android_asset/planted.png",
+                "data:image/png;base64,iVBORw0KGgo=",
+                "ftp://example.invalid/planted.png",
+                picture("/medium/1.png", RED),
+            )
+        for (address in planted) {
+            val result = execute(address)
+            assertTrue(address, result is ErrorResult && result.throwable is IllegalArgumentException)
+        }
+        assertEquals(0, server.requestCount)
+        assertTrue(execute(checkNotNull(FixtureAnime.exactToWatch.posterUrl)) is SuccessResult)
+    }
+
+    // The loader the application itself builds: in a build without a client id it is the demo's, which reaches no host.
+    @Test
+    fun `the application's own loader refuses a host's picture and reaches no host`() {
+        SingletonImageLoader.reset()
+        val app = SingletonImageLoader.get(context)
+        val url = picture("/medium/1.png", RED)
+        assertTrue(runBlocking { app.execute(ImageRequest.Builder(context).data(url).build()) } is ErrorResult)
+        assertEquals(0, server.requestCount)
+        val standIn = runBlocking { app.execute(ImageRequest.Builder(context).data(FixtureAnime.exactToWatch.posterUrl).build()) }
+        assertTrue(standIn is SuccessResult)
     }
 
     private companion object {
-        const val CLIENT_ID = "the-client-id-5d2b"
         const val POSTER = "poster"
         const val LIST = "list"
-        const val RED = 0xFFFF0000.toInt()
-        const val BLUE = 0xFF0000FF.toInt()
-        const val MEDIUM_WIDTH = 225
-        const val MEDIUM_HEIGHT = 318
-        const val LARGE_WIDTH = 425
-        const val LARGE_HEIGHT = 600
-        const val HUGE_WIDTH = 2250
-        const val HUGE_HEIGHT = 3180
     }
 }
