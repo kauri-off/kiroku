@@ -262,7 +262,7 @@ private fun StartSeason.toSeason(): AnimeSeason? {
     return AnimeSeason(year ?: return null, season)
 }
 
-private fun dateOf(text: String): PartialDate? =
+internal fun dateOf(text: String): PartialDate? =
     try {
         text.present()?.let(::partialDateOf)
     } catch (_: DateTimeParseException) {
