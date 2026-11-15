@@ -24,40 +24,40 @@ sealed interface ListUser {
 }
 
 // A user's whole list from MAL, page after page, or the failure of the first page that failed.
-class MalLists(
+class MalLists internal constructor(
     private val http: MalHttp,
     private val session: MalSession,
+    private val maxEntries: Int,
 ) {
+    constructor(http: MalHttp, session: MalSession) : this(http, session, MAX_ENTRIES)
+
     private val api by http.api(ListApi::class)
 
     suspend fun list(user: ListUser): Outcome<List<ListEntry>> {
         val entries = mutableListOf<ListEntry>()
-        val asked = mutableListOf<Map<String, String>>()
-        var query = Asked + ("offset" to "0")
+        var offset = 0
         while (true) {
-            asked += query
             val page =
-                when (val outcome = page(user, query, asked)) {
+                when (val outcome = page(user, offset)) {
                     is Outcome.Failure -> return outcome
                     is Outcome.Success -> outcome.value
                 }
             entries += page.entries
-            query = page.next ?: return Outcome.Success(entries)
+            offset = page.next ?: return Outcome.Success(entries)
         }
     }
 
-    // The page at MAL's next link, asked the same way; a list that does not end fails at the page that shows it.
+    // The next page must start where this one ended, below the bound; anything else fails rather than end the list early.
     private suspend fun page(
         user: ListUser,
-        query: Map<String, String>,
-        asked: List<Map<String, String>>,
+        offset: Int,
     ): Outcome<ListPage> {
         suspend fun read(authorization: String?): ListPage {
-            val page = api.page(user.path, query, authorization).toListPage()
-            val next = page.next?.plus(Asked) ?: return page
-            check(next !in asked) { "A page already read" }
-            check(asked.size < MAX_PAGES) { "The list does not end" }
-            return ListPage(page.entries, next)
+            val page = api.page(user.path, Asked + ("offset" to "$offset"), authorization).toListPage()
+            val next = page.next ?: return page
+            check(page.entries.isNotEmpty() && next == offset + page.entries.size) { "The next page is not after this one" }
+            check(next < maxEntries) { "The list does not end" }
+            return page
         }
         return when (user) {
             ListUser.SignedIn -> session.authorised(http) { read(it) }
@@ -76,8 +76,8 @@ class MalLists(
         // In the titles' order, which no edit changes, with adult titles, so that none leaves the list.
         val Asked = mapOf("fields" to MalFields.LIST_ENTRY, "nsfw" to "true", "sort" to "anime_title", "limit" to "1000")
 
-        // More pages of MAL's largest size than MAL has titles.
-        const val MAX_PAGES = 100
+        // Several times the titles MAL has: a list cannot hold more, whatever size MAL makes its pages.
+        const val MAX_ENTRIES = 100_000
     }
 }
 

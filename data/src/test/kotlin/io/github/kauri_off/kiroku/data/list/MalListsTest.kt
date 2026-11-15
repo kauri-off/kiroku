@@ -14,8 +14,8 @@ import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 import mockwebserver3.MockResponse
 import mockwebserver3.RecordedRequest
 import org.junit.After
@@ -99,50 +99,84 @@ class MalListsTest {
         assertTrue(asked.none { it.url.queryParameter("offset") == "20" })
     }
 
-    @Test
-    fun `a next link back to a page already read ends the download as a failure`() {
-        val back =
-            recordedJson(
-                "list_public_2",
-            ).edited(listOf("paging", "next"), recordedJson("list_public_2").getValue("paging").jsonObject.getValue("previous"))
-        serve { offset -> if (offset == 10) answer(200, back.toString()) else null }
+    // A recorded page whose next link is [link].
+    private fun pageWithNext(
+        name: String,
+        link: String,
+    ) = recordedJson(name).edited(listOf("paging", "next"), JsonPrimitive(link)).toString()
 
-        assertEquals(Outcome.Failure(DataError.ServerError), download())
-        assertEquals(listOf("0", "10"), asked.map { it.url.queryParameter("offset") })
-        assertTrue(network.unexpected.single() is UnusableAnswer)
-    }
+    private val link = "https://api.myanimelist.net/v2/users/public-user/animelist"
 
     @Test
-    fun `a list that always has a next page ends the download as a failure after a bounded number of pages`() {
-        val first = recordedJson("list_public_1")
-        val next =
-            first
-                .getValue("paging")
-                .jsonObject
-                .getValue("next")
-                .let { (it as JsonPrimitive).content }
-        serve { offset ->
-            answer(
-                200,
-                first.edited(listOf("paging", "next"), JsonPrimitive(next.replace("offset=10", "offset=${offset + 10}"))).toString(),
+    fun `a next link that does not start where the page ended fails the download, and no page after it is asked`() {
+        val wrong =
+            listOf(
+                "$link?offset=0",
+                "$link?offset=10",
+                "$link?offset=19",
+                "$link?offset=25",
+                "$link?offset=1000000",
+                link,
+                "$link?offset=x",
             )
-        }
+        for (next in wrong) {
+            asked.clear()
+            network.unexpected.clear()
+            serve { offset -> if (offset == 10) answer(200, pageWithNext("list_public_2", next)) else null }
 
-        assertEquals(Outcome.Failure(DataError.ServerError), download())
-        assertEquals(100, asked.size)
-        assertTrue(network.unexpected.single() is UnusableAnswer)
+            assertEquals(next, Outcome.Failure(DataError.ServerError), download())
+            assertEquals(next, listOf("0", "10"), asked.map { it.url.queryParameter("offset") })
+            assertTrue(next, network.unexpected.single() is UnusableAnswer)
+        }
     }
 
     @Test
-    fun `the next page is asked of MAL's own host whatever host the link names`() {
-        val elsewhere =
-            recordedJson(
-                "list_public_1",
-            ).edited(listOf("paging", "next"), JsonPrimitive("https://elsewhere.example/v2/other?offset=10"))
-        serve { offset -> if (offset == 0) answer(200, elsewhere.toString()) else null }
+    fun `a list longer than the bound fails at the page that passes it, whatever size the pages are`() {
+        serve { offset -> answer(200, pageWithNext("list_public_1", "$link?offset=${offset + 10}")) }
+        val bounded = MalLists(network.http, sessions.open(), maxEntries = 25)
+
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { bounded.list(user) })
+        assertEquals(listOf("0", "10", "20"), asked.map { it.url.queryParameter("offset") })
+        assertTrue(network.unexpected.single() is UnusableAnswer)
+
+        serve()
+        val exactly = MalLists(network.http, sessions.open(), maxEntries = 30)
+        assertEquals(recordedEntries(), (runBlocking { exactly.list(user) } as Outcome.Success).value)
+    }
+
+    @Test
+    fun `only the offset of a next link reaches the next request, on MAL's own host`() {
+        val next = "https://elsewhere.example/v2/other?offset=10&status=watching&limit=10&nsfw=false&sort=list_score&fields=id"
+        serve { offset -> if (offset == 0) answer(200, pageWithNext("list_public_1", next)) else null }
 
         assertEquals(recordedEntries(), (download() as Outcome.Success).value)
-        assertTrue(asked.all { it.url.encodedPath == "/v2/users/public-user/animelist" && it.url.queryParameter("nsfw") == "true" })
+        val second = asked[1].url
+        assertEquals("/v2/users/public-user/animelist", second.encodedPath)
+        val expected =
+            mapOf(
+                "fields" to MalFields.LIST_ENTRY,
+                "nsfw" to "true",
+                "sort" to "anime_title",
+                "limit" to "1000",
+                "offset" to "10",
+            )
+        assertEquals(expected, second.queryParameterNames.associateWith { second.queryParameterValues(it).single() })
+    }
+
+    @Test
+    fun `a page without its entries fails the download, first or in the middle with a next link`() {
+        for ((at, name) in listOf(0 to "list_public_1", 10 to "list_public_2")) {
+            for (data in listOf(null, JsonNull)) {
+                asked.clear()
+                network.unexpected.clear()
+                val empty = recordedJson(name).edited(listOf("data"), data).toString()
+                serve { offset -> if (offset == at) answer(200, empty) else null }
+
+                assertEquals("$name $data", Outcome.Failure(DataError.ServerError), download())
+                assertEquals(listOf("0", "10").take(at / 10 + 1), asked.map { it.url.queryParameter("offset") })
+                assertTrue(network.unexpected.single() is UnusableAnswer)
+            }
+        }
     }
 
     @Test

@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.anime.toAnime
 import io.github.kauri_off.kiroku.data.anime.toNode
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -61,9 +62,9 @@ class MalListPageTest {
         assertEquals(ListStatus.Completed, first.status)
         assertEquals(8, first.values.score)
         assertEquals(12, first.values.watchedEpisodes)
-        assertEquals(PartialDate.Day(LocalDate.parse("2021-06-21")), first.values.startDate)
-        assertEquals(PartialDate.Day(LocalDate.parse("2021-07-28")), first.values.finishDate)
-        assertEquals(Instant.parse("2022-12-15T11:45:03Z"), first.updatedAt)
+        assertEquals(PartialDate.Day(LocalDate.parse("2026-08-31")), first.values.startDate)
+        assertEquals(PartialDate.Day(LocalDate.parse("2026-10-07")), first.values.finishDate)
+        assertEquals(Instant.parse("2026-10-07T11:45:03Z"), first.updatedAt)
     }
 
     @Test
@@ -78,7 +79,7 @@ class MalListPageTest {
         val entries = page.toListPage().entries.associateBy { it.anime.id.value }
         val unscored = entries.getValue(41457).values
         assertNull(unscored.score)
-        assertEquals(PartialDate.Day(LocalDate.parse("2021-04-02")), unscored.startDate)
+        assertEquals(PartialDate.Day(LocalDate.parse("2023-07-27")), unscored.startDate)
         assertNull(unscored.finishDate)
         assertNull(entries.getValue(32998).values.startDate)
     }
@@ -151,19 +152,59 @@ class MalListPageTest {
     }
 
     @Test
-    fun `only a page without a next link is the last, and a next link that cannot be read fails the page`() {
-        assertEquals(
-            mapOf("offset" to "10", "nsfw" to "true", "sort" to "anime_title", "limit" to "10"),
-            page.toListPage().next?.filterKeys { it != "fields" },
-        )
+    fun `only a page without a next link is the last, and of a next link only its offset is read`() {
+        assertEquals(10, page.toListPage().next)
         assertNull(recordedJson("list_public_3").toListPage().next)
         assertNull(page.edited(listOf("paging", "next")).toListPage().next)
         assertNull(page.edited(listOf("paging", "next"), JsonNull).toListPage().next)
         assertNull(page.edited(listOf("paging")).toListPage().next)
         assertNull(page.edited(listOf("paging"), JsonNull).toListPage().next)
-        for (next in listOf(JsonPrimitive(10), JsonPrimitive("not a link"), JsonPrimitive(""), JsonObject(emptyMap()))) {
+        val link = "https://api.myanimelist.net/v2/users/public-user/animelist"
+        val unreadable =
+            listOf(JsonPrimitive(10), JsonPrimitive("not a link"), JsonPrimitive(""), JsonObject(emptyMap())) +
+                listOf(
+                    link,
+                    "$link?offset=",
+                    "$link?offset=x",
+                    "$link?offset=-10",
+                    "$link?offset=1.5",
+                    "$link?start=10",
+                ).map(::JsonPrimitive)
+        for (next in unreadable) {
             assertThrows("$next", IllegalStateException::class.java) { page.edited(listOf("paging", "next"), next).toListPage() }
         }
         assertThrows(IllegalStateException::class.java) { page.edited(listOf("paging"), JsonPrimitive("next")).toListPage() }
+    }
+
+    @Test
+    fun `a page without its entries fails, and is never a page with none`() {
+        for (data in listOf(null, JsonNull, JsonObject(emptyMap()), JsonPrimitive("[]"))) {
+            assertThrows("$data", SerializationException::class.java) { page.edited(listOf("data"), data).toListPage() }
+            assertThrows(
+                "$data",
+                SerializationException::class.java,
+            ) { recordedJson("list_public_3").edited(listOf("data"), data).toListPage() }
+        }
+    }
+
+    @Test
+    fun `a watched count on a planned entry is kept as MAL sent it`() {
+        val planned =
+            page
+                .edited(listOf("data", "0", "list_status", "status"), JsonPrimitive("plan_to_watch"))
+                .edited(listOf("data", "0", "list_status", "num_episodes_watched"), JsonPrimitive(40))
+                .toListPage()
+                .entries
+                .first()
+                .values
+        assertEquals(ListStatus.Planned, planned.status)
+        assertEquals(40, planned.watchedEpisodes)
+    }
+
+    @Test
+    fun `a finish date before the start is kept as MAL sent it`() {
+        val backwards = firstWith("start_date", JsonPrimitive("2026-11-01")).values
+        assertEquals(PartialDate.Day(LocalDate.parse("2026-11-01")), backwards.startDate)
+        assertEquals(PartialDate.Day(LocalDate.parse("2026-10-07")), backwards.finishDate)
     }
 }

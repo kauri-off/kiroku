@@ -19,15 +19,15 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
 
-// One page of a user's list: its entries, and the query of the next page, which the last page has none of.
+// One page of a user's list: its entries, and the offset of the next page, which the last page has none of.
 internal class ListPage(
     val entries: List<ListEntry>,
-    val next: Map<String, String>?,
+    val next: Int?,
 )
 
 @Serializable
 private class PageNode(
-    val data: List<ItemNode> = emptyList(),
+    val data: List<ItemNode>,
     val paging: JsonElement? = null,
 )
 
@@ -40,7 +40,7 @@ private class ItemNode(
 // An entry whose last change MAL does not give sorts as the oldest.
 internal val NEVER_UPDATED: Instant = Instant.EPOCH
 
-// Every entry is mapped or the page fails: an entry left out would leave the stored list.
+// Every entry is mapped or the page fails, as does a page without its entries: none may leave the list.
 internal fun JsonObject.toListPage(): ListPage {
     val page = MalJson.decodeFromJsonElement(PageNode.serializer(), this)
     return ListPage(page.data.map { listEntryOf(it.node, it.values) }, nextOf(page.paging))
@@ -66,14 +66,14 @@ private fun listEntryOf(
     )
 }
 
-// No next link is the last page; a link that cannot be read fails, as more entries may follow.
-private fun nextOf(paging: JsonElement?): Map<String, String>? {
+// No next link is the last page; of a link only its offset is used, and one without an offset fails.
+private fun nextOf(paging: JsonElement?): Int? {
     if (paging == null || paging is JsonNull) return null
     check(paging is JsonObject) { "Paging is not an object" }
     val next = paging["next"]
     if (next == null || next is JsonNull) return null
-    val url = checkNotNull((next as? JsonPrimitive)?.takeIf { it.isString }?.content?.toHttpUrlOrNull()) { "No next link" }
-    return url.queryParameterNames.associateWith { url.queryParameter(it).orEmpty() }
+    val url = (next as? JsonPrimitive)?.takeIf { it.isString }?.content?.toHttpUrlOrNull()
+    return checkNotNull(url?.queryParameter("offset")?.toIntOrNull()?.takeIf { it >= 0 }) { "No next offset" }
 }
 
 private fun JsonObject.text(key: String): String? =
