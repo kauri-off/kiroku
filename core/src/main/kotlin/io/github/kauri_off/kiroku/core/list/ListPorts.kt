@@ -67,6 +67,9 @@ interface LocalList {
     // One title's shown entry, and nothing for a change to another title.
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
 
+    // The shown entries of [ids] that exist, read together.
+    fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>>
+
     suspend fun state(): StoredList
 
     // Null for a title the store does not know; a title it knows may have no entry.

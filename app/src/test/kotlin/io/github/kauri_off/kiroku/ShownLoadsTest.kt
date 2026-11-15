@@ -291,7 +291,8 @@ class ShownLoadsTest(
                         list.onEvent(ListEvent.Retry)
                     }) { ListStatus.entries.forEach { list.onEvent(ListEvent.SelectTab(it)) } }
                 },
-                Screen("Title page", TestGraph::refreshes) { graph, scope ->
+                // The page's own title: the walk along its chain asks for its other titles once, as its own tests show.
+                Screen("Title page", { graph -> graph.refreshed.count { it == title } }) { graph, scope ->
                     val page =
                         TitleViewModel(
                             title,

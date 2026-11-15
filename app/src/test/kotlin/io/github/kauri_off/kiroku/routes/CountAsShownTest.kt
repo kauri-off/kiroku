@@ -51,7 +51,9 @@ class CountAsShownTest {
     private lateinit var navigator: ShellNavigator
 
     private val beneath = FixtureAnime.exactToWatch
-    private val onTop = FixtureAnime.premiereYear
+
+    // Not of the chain of the page beneath, whose walk would read the page beneath.
+    private val onTop = FixtureAnime.exactCaughtUp
 
     @After
     fun stop() = scope.cancel()
@@ -114,7 +116,7 @@ class CountAsShownTest {
             navigator.open(TitleKey(onTop.id.value))
         }
         compose.waitForIdle()
-        assertEquals(1, graph.refreshes)
+        assertEquals(listOf(onTop.id), graph.refreshed)
 
         val dispatcher = compose.activity.onBackPressedDispatcher
         compose.runOnUiThread {
@@ -123,19 +125,19 @@ class CountAsShownTest {
         }
         compose.waitForIdle()
         assertTrue(
-            "the page under the gesture is drawn",
-            compose.onAllNodesWithText(beneath.titles.romaji).fetchSemanticsNodes().isNotEmpty(),
+            "the gesture shows no preview: the page on top stays",
+            compose.onAllNodesWithText(onTop.titles.romaji).fetchSemanticsNodes().isNotEmpty(),
         )
-        assertEquals(1, graph.refreshes)
+        assertEquals(listOf(onTop.id), graph.refreshed)
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
         compose.waitForIdle()
-        assertEquals(1, graph.refreshes)
+        assertEquals(listOf(onTop.id), graph.refreshed)
 
         compose.runOnUiThread {
             dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT))
             dispatcher.onBackPressed()
         }
         compose.waitForIdle()
-        assertEquals(2, graph.refreshes)
+        assertEquals(listOf(onTop.id, beneath.id), graph.refreshed.take(2))
     }
 }

@@ -22,6 +22,9 @@
     <string name="title_synopsis_more">More</string>
     <string name="title_synopsis_less">Less</string>
     <string name="title_your_score_label">Your score</string>
+    <string name="title_watch_order">Watch order</string>
+    <string name="title_this_title">This title</string>
+    <string name="title_loading_watch_order">Loading the watch order</string>
     <string name="title_related">Related</string>
     <string name="title_statistics">Statistics</string>
     <plurals name="title_members">

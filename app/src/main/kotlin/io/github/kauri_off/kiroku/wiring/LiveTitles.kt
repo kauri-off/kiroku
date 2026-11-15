@@ -40,6 +40,8 @@ private class TitlesOnFirstUse(
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = flow { emitAll(titles().observeDetails(id)) }
 
+    override fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>> = flow { emitAll(titles().observeDetailsOf(ids)) }
+
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = flow { emitAll(titles().observeRefreshedAt(id)) }
 
     override fun observePagesRead(): Flow<Set<AnimeId>> = flow { emitAll(titles().observePagesRead()) }

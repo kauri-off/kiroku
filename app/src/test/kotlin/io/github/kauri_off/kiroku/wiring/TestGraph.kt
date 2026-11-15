@@ -48,6 +48,7 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -81,9 +82,11 @@ class TestGraph(
 
     private val listReads = ListReads()
 
-    // Collections of the whole list so far, and the titles whose entries were read one by one.
+    // Collections of the whole list so far, the titles whose entries were read one by one, and each read of the
+    // entries of several titles together.
     val wholeListReads: Int get() = listReads.whole.get()
     val entriesRead: Set<AnimeId> get() = listReads.titles.toSet()
+    val entryQueries: List<Set<AnimeId>> get() = listReads.sets.toList()
 
     override val list: ListRepository =
         CountedList(
@@ -110,7 +113,16 @@ class TestGraph(
     // While true, the title store cannot be read: its flows end with a storage error.
     val titlesUnreadable = MutableStateFlow(false)
 
-    override val anime: AnimeRepository = CountedAnime(demo.anime, counter, refreshCount, titlesUnstored, titlesUnreadable)
+    // While it holds a title, a refresh of that title fails as without a connection.
+    val refreshFails = MutableStateFlow(emptySet<AnimeId>())
+
+    private val counted = CountedAnime(demo.anime, counter, refreshCount, titlesUnstored, titlesUnreadable, refreshFails)
+
+    // The titles refreshed so far, in order, and each read of the details of several titles together.
+    val refreshed: List<AnimeId> get() = counted.refreshed.toList()
+    val detailQueries: List<Set<AnimeId>> get() = counted.detailQueries.toList()
+
+    override val anime: AnimeRepository = counted
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
@@ -150,6 +162,7 @@ private class Readers {
 private class ListReads {
     val whole = AtomicInteger()
     val titles: MutableSet<AnimeId> = ConcurrentHashMap.newKeySet()
+    val sets = CopyOnWriteArrayList<Set<AnimeId>>()
 }
 
 private class CountedList(
@@ -166,6 +179,9 @@ private class CountedList(
     override fun observeEntries(): Flow<List<ListEntry>> = readers.of(inner.observeEntries()).onStart { reads.whole.incrementAndGet() }
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = readers.of(inner.observeEntry(id)).onStart { reads.titles += id }
+
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
+        readers.of(inner.observeEntriesOf(ids)).onStart { reads.sets += ids }
 }
 
 private class CountedAnime(
@@ -174,10 +190,17 @@ private class CountedAnime(
     private val refreshes: AtomicInteger,
     private val unstored: StateFlow<Boolean>,
     private val unreadable: StateFlow<Boolean>,
+    private val failing: StateFlow<Set<AnimeId>>,
 ) : AnimeRepository by inner {
+    val refreshed = CopyOnWriteArrayList<AnimeId>()
+    val detailQueries = CopyOnWriteArrayList<Set<AnimeId>>()
+
     override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(stored(inner.observeAnime(id)))
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = readers.of(stored(inner.observeDetails(id)))
+
+    override fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>> =
+        readers.of(stored(inner.observeDetailsOf(ids)).map { it.orEmpty() }).onStart { detailQueries += ids }
 
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = readers.of(stored(inner.observeRefreshedAt(id)))
 
@@ -191,6 +214,8 @@ private class CountedAnime(
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         refreshes.incrementAndGet()
+        refreshed += id
+        if (id in failing.value) return Outcome.Failure(DataError.NoConnection)
         return inner.refresh(id)
     }
 }
@@ -215,6 +240,8 @@ private class LateList(
     override fun observeEntries(): Flow<List<ListEntry>> = inner.observeEntries().late()
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = inner.observeEntry(id).late()
+
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> = inner.observeEntriesOf(ids).late()
 
     // The first value is a read of what is there now; every later one is a change, heard late.
     private fun <T> Flow<T>.late(): Flow<T> = withIndex().onEach { if (it.index > 0) delay(LATE) }.map { it.value }

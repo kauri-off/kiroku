@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.chainWalk
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -29,6 +30,7 @@ import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.stale
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,6 +69,7 @@ class TitleViewModel(
         val storeFailure: DataError? = null,
         // The opener knew the title's page was read; the store's details say so once they are read.
         val pageRead: Boolean = false,
+        val chain: Map<AnimeId, AnimeDetails> = emptyMap(),
     ) {
         // The store's answers are not known yet; the summary stands in for them in build.
         constructor(opened: TitleSummary) : this(
@@ -87,6 +90,8 @@ class TitleViewModel(
     private class Stored(
         val anime: Anime? = null,
         val details: AnimeDetails? = null,
+        // The stored pages of the chain of sequels.
+        val chain: Map<AnimeId, AnimeDetails> = emptyMap(),
         val failure: DataError? = null,
     )
 
@@ -99,17 +104,21 @@ class TitleViewModel(
     private val failure = MutableStateFlow<DataError?>(null)
     private val waitShown = MutableStateFlow(false)
     private val refreshing = MutableStateFlow(false)
+    private val chainWaitShown = MutableStateFlow(false)
+
+    // The chain was walked since the page opened, or since a pull asked for it again.
+    private var walked = false
     private val retries = MutableStateFlow(0)
     private var load: Job? = null
 
     // A store that cannot be read fails the page, as a list that cannot be read does, since its values would be unknown.
     private val stored =
-        combine(anime.observeAnime(id), anime.observeDetails(id)) { anime, details -> Stored(anime, details) }
+        combine(anime.observeAnime(id), anime.observeDetails(id), anime.chainPagesOf(id), ::Stored)
             .readAgainOnRetry(retries) { Stored(failure = it) }
 
     // Of the list and the airing, only the titles the page shows: a change to any other title rebuilds nothing.
     private val around =
-        stored.withRead({ shownTitles(id, it.details) }) { ids ->
+        stored.withRead({ shownTitles(id, it.details, it.chain) }) { ids ->
             combine(
                 list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
                 airing.airingOf(ids),
@@ -120,16 +129,23 @@ class TitleViewModel(
     // Starts from what the opening screen showed, so the page needs no read for its first frame; build falls back to it.
     private val sources: StateFlow<Sources?> =
         combine(around, session.observeSession()) { (stored, around), session ->
-            Sources(stored.anime, stored.details, around.list, around.airing, session, stored.failure)
+            Sources(stored.anime, stored.details, around.list, around.airing, session, stored.failure, chain = stored.chain)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<TitleState> =
-        combine(sources.filterNotNull(), moment, failure, waitShown, refreshing, ::build)
-            .stateIn(
-                viewModelScope,
-                WhileShown,
-                sources.value?.let { build(it, moment.value, null, false, false) } ?: TitleState.Loading(null),
-            )
+        combine(sources.filterNotNull(), moment, failure, combine(waitShown, chainWaitShown, ::Pair), refreshing) {
+            sources,
+            moment,
+            failure,
+            (waitShown, chainWaitShown),
+            refreshing,
+            ->
+            build(sources, moment, failure, waitShown, refreshing, chainWaitShown)
+        }.stateIn(
+            viewModelScope,
+            WhileShown,
+            sources.value?.let { build(it, moment.value, null, false, false, false) } ?: TitleState.Loading(null),
+        )
 
     // A failure shown in place is tried again as a Retry would be; any other load runs as on opening.
     private val loads =
@@ -151,7 +167,8 @@ class TitleViewModel(
             return TitleSummary(animeOf(sources) ?: return null, entry, sources.airing[id], sources.session, page)
         }
         // A related row knows less of a title than its list entry does.
-        val anime = entry?.anime ?: details?.related?.firstOrNull { it.anime.id == id }?.anime ?: return null
+        val named = (listOfNotNull(details) + sources.chain.values).flatMap { it.related }
+        val anime = entry?.anime ?: named.firstOrNull { it.anime.id == id }?.anime ?: return null
         return TitleSummary(anime, entry, sources.airing[id], sources.session)
     }
 
@@ -181,6 +198,7 @@ class TitleViewModel(
         failure: DataError?,
         waitShown: Boolean,
         refreshing: Boolean,
+        chainWaitShown: Boolean,
     ): TitleState {
         val entry = sources.list.entries[id]
         val anime = animeOf(sources)
@@ -201,6 +219,7 @@ class TitleViewModel(
                         titleLanguage,
                         clock,
                         pageRead = details != null || sources.pageRead,
+                        chainPages = sources.chain,
                     ),
                     session,
                     moment,
@@ -210,14 +229,22 @@ class TitleViewModel(
                         else -> DetailsWait.Brief
                     },
                     refreshing,
+                    chainLoading = chainWaitShown && details != null,
                 )
         }
     }
 
     private fun shownPage(): TitlePage? = (state.value as? TitleState.Shown)?.page
 
+    // A load that started while the store was read stands; a fresh page walks its chain if it has not.
     private suspend fun refreshIfStale() {
-        if (anime.stale(id, opened?.anime, clock.instant()) && load?.isActive != true) refresh(Asked.Shown)
+        val stale = anime.stale(id, opened?.anime, clock.instant())
+        if (load?.isActive == true) return
+        if (stale) {
+            refresh(Asked.Shown)
+        } else if (!walked) {
+            load = viewModelScope.launch { walkChain() }
+        }
     }
 
     // A wait the person asked for shows at once; one the page started only after a second (section 9.4).
@@ -243,7 +270,11 @@ class TitleViewModel(
                 waitShown.value = false
                 refreshing.value = false
                 loads.ended((result as? Outcome.Failure)?.error)
-                if (result !is Outcome.Failure) return@launch
+                if (result !is Outcome.Failure) {
+                    if (asked == Asked.Pull) walked = false
+                    walkChain()
+                    return@launch
+                }
                 val shown =
                     sources.filterNotNull().first().let { it.list.failure == null && it.storeFailure == null && animeOf(it) != null }
                 if (storedDetails() == null) failure.value = result.error
@@ -252,6 +283,41 @@ class TitleViewModel(
                     messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
                 }
             }
+    }
+
+    // Reads from MAL, one after another, each title of the chain whose stored page is missing or stale, and stops at
+    // the first that fails, which leaves the page as it was; the chain is read from the store throughout.
+    private suspend fun walkChain() {
+        if (walked) return
+        coroutineScope {
+            val wait =
+                launch {
+                    delay(PATIENCE)
+                    chainWaitShown.value = true
+                }
+            try {
+                walked = walkedWhole()
+            } finally {
+                wait.cancel()
+                chainWaitShown.value = false
+            }
+        }
+    }
+
+    private suspend fun walkedWhole(): Boolean {
+        val done = mutableSetOf(id)
+        while (true) {
+            val pages =
+                try {
+                    anime.chainPagesOf(id).first()
+                } catch (_: DataException) {
+                    return false
+                }
+            val next = chainWalk(id, pages.mapValues { it.value.related }).firstOrNull { it !in done } ?: return true
+            done += next
+            if (next in pages && !anime.stale(next, null, clock.instant())) continue
+            if (anime.refresh(next) is Outcome.Failure) return false
+        }
     }
 
     private suspend fun storedDetails(): AnimeDetails? =

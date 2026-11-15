@@ -222,6 +222,9 @@ abstract class ListEngineContract {
 
         override fun observeEntry(id: AnimeId): Flow<ListEntry?> = query("observeEntry") { inner.observeEntry(id) }
 
+        override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
+            query("observeEntriesOf") { inner.observeEntriesOf(ids) }
+
         override suspend fun state(): StoredList = reading("state") { inner.state() }
 
         override suspend fun read(id: AnimeId): StoredTitle? = reading("read") { inner.read(id) }
@@ -418,6 +421,23 @@ abstract class ListEngineContract {
                     ?.values
                     ?.watchedEpisodes,
             )
+        }
+
+    @Test
+    fun `the entries of several titles are read together, only those that exist, and follow a write`() =
+        runTest {
+            val s = subject()
+            val ids = setOf(FixtureAnime.exactToWatch.id, FixtureAnime.exactCaughtUp.id, FixtureAnime.notOnListAiring.id)
+            val seen = mutableListOf<Map<AnimeId, ListEntry>>()
+            backgroundScope.launch { s.list.observeEntriesOf(ids).collect { seen += it } }
+            runCurrent()
+            assertEquals(listOf("observeEntriesOf"), s.local.calls.filter { it.startsWith("observe") })
+            assertEquals(ids - FixtureAnime.notOnListAiring.id, seen.last().keys)
+            assertEquals(s.shown(FixtureAnime.exactToWatch.id), seen.last()[FixtureAnime.exactToWatch.id])
+
+            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            runCurrent()
+            assertEquals(13, seen.last()[FixtureAnime.exactToWatch.id]?.values?.watchedEpisodes)
         }
 
     @Test

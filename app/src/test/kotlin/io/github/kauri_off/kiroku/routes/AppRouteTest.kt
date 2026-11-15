@@ -16,6 +16,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -48,6 +49,7 @@ import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
+import io.github.kauri_off.kiroku.title.TitleTags
 import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
@@ -116,7 +118,8 @@ class AppRouteTest {
                 .map { nodes[it] }
         }
 
-    private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction()).performClick()
+    // A row of the title page's watch order can show a status too; these clicks are of the page's own controls.
+    private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction() and !hasTestTag(TitleTags.chainRow)).performClick()
 
     private fun back() {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }

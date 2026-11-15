@@ -178,9 +178,10 @@ class TitleScreenTest {
         scrollTo("Less")
         sends(TitleEvent.CollapseSynopsis) { compose.onNodeWithText("Less").performClick() }
         show(shown)
-        val sequel = checkNotNull(shown.page.sequel)
-        scrollTo(sequel.title)
-        sends(TitleEvent.OpenRelated(sequel.related.anime.id)) { compose.onNode(hasText(sequel.title) and hasClickAction()).performClick() }
+        for (card in shown.page.chain.filterNot { it.current }) {
+            scrollTo(card.title)
+            sends(TitleEvent.OpenRelated(card.anime.id)) { compose.onNode(hasText(card.title) and hasClickAction()).performClick() }
+        }
         val first = shown.page.related.first()
         scrollTo("Statistics")
         sends(TitleEvent.OpenRelated(first.related.anime.id)) { compose.onNode(hasText(first.title) and hasClickAction()).performClick() }
@@ -190,6 +191,25 @@ class TitleScreenTest {
         scrollTo("Recommendations")
         sends(TitleEvent.OpenDetails) { compose.onNodeWithText("Details").performClick() }
         sends(TitleEvent.OpenRecommendations) { compose.onNodeWithText("Recommendations").performClick() }
+    }
+
+    // The page's own title is marked in its place in the order and opens nothing; the others open their pages.
+    @Test
+    fun theWatchOrderMarksThePagesOwnTitleAndShowsTheWalkWhileItRuns() {
+        show(TitleFixtures.chainLoading)
+        scrollTo("This title")
+        compose.onNode(hasText("This title") and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithText("This title").assertIsDisplayed()
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription("Loading the watch order"))
+        compose.onNodeWithContentDescription("Loading the watch order").assertIsDisplayed()
+        show(TitleFixtures.chainFailed)
+        compose.onNodeWithContentDescription("Loading the watch order").assertDoesNotExist()
+        val film = TitleFixtures.filmBetweenSeasons
+        show(TitleFixtures.chainOfFour)
+        scrollTo(film.titles.romaji)
+        sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(hasText(film.titles.romaji) and hasClickAction()).performClick() }
     }
 
     // Review M1: with no related title for the strip, the section is "See all" alone.

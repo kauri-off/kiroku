@@ -342,7 +342,7 @@ class TitleViewModelTest {
             graph.connectionSays.value = true
             runCurrent()
             assertEquals(DetailsWait.Brief, wait())
-            assertEquals(3, graph.refreshes)
+            assertEquals(3, graph.refreshed.count { it == FixtureAnime.exactToWatch.id })
             advanceTimeBy(DETAILS_LATENCY + 1.seconds)
             runCurrent()
             assertEquals(noConnection, messages.current.value?.message)
@@ -518,15 +518,18 @@ class TitleViewModelTest {
             val withDetails = states.filterIsInstance<TitleState.Shown>().filter { it.page.details != null }
             assertTrue(withDetails.isNotEmpty())
             for (state in withDetails) {
-                for (card in state.page.related + listOfNotNull(state.page.sequel)) {
+                for (card in state.page.related) {
                     assertEquals(card.title, onList[card.related.anime.id], card.status)
+                }
+                for (card in state.page.chain) {
+                    assertEquals(card.title, onList[card.anime.id], card.status)
                 }
             }
             assertTrue(
                 withDetails
                     .last()
-                    .page.related
-                    .any { it.status != null },
+                    .page.chain
+                    .any { !it.current && it.status != null },
             )
             scope.cancel()
         }
@@ -568,12 +571,13 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
-    // The page reads one entry per title it shows: itself and its related titles, never the whole list.
+    // The page reads the entries of the titles it shows in one read: itself, its related titles and its watch order.
     @Test
-    fun `the page reads the list entries of the titles it shows, not the list`() =
+    fun `the page reads the list entries of the titles it shows in one read, not one per title and not the list`() =
         test { s ->
-            val shown = setOf(FixtureAnime.exactToWatch.id) + FixtureDetails.full.related.map { it.anime.id }
-            assertEquals(shown, s.graph.entriesRead)
+            val shown = setOf(FixtureAnime.exactToWatch.id) + FixtureDetails.full.related.map { it.anime.id } + chain
+            assertEquals(shown, s.graph.entryQueries.last())
+            assertEquals(emptySet<AnimeId>(), s.graph.entriesRead)
             assertEquals(0, s.graph.wholeListReads)
         }
 
@@ -669,7 +673,7 @@ class TitleViewModelTest {
     fun `the details are refreshed once, not again when the page is shown again while they are fresh`() =
         test { s ->
             assertEquals(FixtureDetails.full, s.shown.page.details)
-            assertEquals(1, s.graph.refreshes)
+            assertEquals(1, s.graph.refreshed.count { it == FixtureAnime.exactToWatch.id })
             s.screen.cancel()
             advanceTimeBy(STOPPED_AFTER_MILLIS)
             runCurrent()
@@ -677,8 +681,109 @@ class TitleViewModelTest {
             s.screen = showing(s.title.state, s.title.shown)
             runCurrent()
             advanceUntilIdle()
-            assertEquals(1, s.graph.refreshes)
+            assertEquals(1, s.graph.refreshed.count { it == FixtureAnime.exactToWatch.id })
             assertEquals(FixtureDetails.full, s.shown.page.details)
+        }
+
+    private val chain = listOf(FixtureAnime.prequel, FixtureAnime.exactToWatch, FixtureAnime.premiereYear).map { it.id }
+
+    private fun TitleState.chain() = (this as TitleState.Shown).page.chain.map { it.anime.id }
+
+    // One request per title of the chain, the nearest first and a sequel before a prequel, after the page's own.
+    @Test
+    fun `a chain is walked once, one request per title, and read from the store afterwards`() =
+        test { s ->
+            val walked = listOf(FixtureAnime.exactToWatch, FixtureAnime.premiereYear, FixtureAnime.prequel).map { it.id }
+            assertEquals(walked, s.graph.refreshed)
+            assertEquals(chain, s.state.chain())
+            assertEquals(chain.toSet(), s.graph.detailQueries.last())
+            s.screen.cancel()
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            runCurrent()
+            s.screen = showing(s.title.state, s.title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            val again = title(s.graph, FixtureAnime.premiereYear.id, SavedStateHandle(), s.messages)
+            showing(again.state, again.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(walked, s.graph.refreshed)
+            assertEquals(chain, s.state.chain())
+            assertEquals(chain, again.state.value.chain())
+        }
+
+    @Test
+    fun `nothing is fetched for a title that has no sequel or prequel`() =
+        test(id = FixtureAnime.exactCaughtUp.id) { s ->
+            assertEquals(listOf(FixtureAnime.exactCaughtUp.id), s.graph.refreshed)
+            assertEquals(emptyList<AnimeId>(), s.state.chain())
+        }
+
+    // The walk stops at the failed title and the page keeps what the store tells, with no message; the next refresh
+    // goes on from there, asking again only for what is not stored or is stale.
+    @Test
+    fun `a failure in the chain leaves the page as it was`() =
+        test(before = { refreshFails.value = setOf(FixtureAnime.premiereYear.id) }) { s ->
+            assertEquals(listOf(FixtureAnime.exactToWatch.id, FixtureAnime.premiereYear.id), s.graph.refreshed)
+            assertEquals(chain, s.state.chain())
+            assertEquals(FixtureDetails.full, s.shown.page.details)
+            assertEquals(false, s.shown.chainLoading)
+            assertEquals(false, s.shown.refreshing)
+            assertNull(s.message)
+            s.graph.refreshFails.value = emptySet()
+            s.title.onEvent(TitleEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(
+                listOf(
+                    FixtureAnime.exactToWatch,
+                    FixtureAnime.premiereYear,
+                    FixtureAnime.exactToWatch,
+                    FixtureAnime.premiereYear,
+                    FixtureAnime.prequel,
+                ).map { it.id },
+                s.graph.refreshed,
+            )
+            assertEquals(chain, s.state.chain())
+        }
+
+    @Test
+    fun `a failed walk is taken up again when the page is shown again, without the page's own fresh title`() =
+        test(before = { refreshFails.value = setOf(FixtureAnime.prequel.id) }) { s ->
+            s.graph.refreshFails.value = emptySet()
+            s.screen.cancel()
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            runCurrent()
+            s.screen = showing(s.title.state, s.title.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(
+                listOf(FixtureAnime.exactToWatch, FixtureAnime.premiereYear, FixtureAnime.prequel, FixtureAnime.prequel).map { it.id },
+                s.graph.refreshed,
+            )
+        }
+
+    @Test
+    fun `a walk shows its indicator only once it has lasted a second, and never once it has ended`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            showing(title.state, title.shown)
+            val shown = { title.state.value as TitleState.Shown }
+            advanceTimeBy(DETAILS_LATENCY.inWholeMilliseconds)
+            runCurrent()
+            assertEquals(FixtureDetails.full, shown().page.details)
+            assertEquals(false, shown().chainLoading)
+            advanceTimeBy(PATIENCE_MILLIS - 1)
+            runCurrent()
+            assertEquals(false, shown().chainLoading)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(true, shown().chainLoading)
+            advanceUntilIdle()
+            assertEquals(false, shown().chainLoading)
+            assertEquals(chain, title.state.value.chain())
+            scope.cancel()
         }
 
     @Test
@@ -694,7 +799,7 @@ class TitleViewModelTest {
             showing(title.state, title.shown)
             runCurrent()
             assertTrue(graph.readers > 0)
-            assertEquals(1, graph.refreshes)
+            assertEquals(FixtureAnime.exactToWatch.id, graph.refreshed.first())
             scope.cancel()
         }
 
