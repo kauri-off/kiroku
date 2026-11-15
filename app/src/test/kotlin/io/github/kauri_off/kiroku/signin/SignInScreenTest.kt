@@ -146,7 +146,7 @@ class SignInScreenTest {
     private companion object {
         const val APP = "Kiroku"
         const val BACK = "Back"
-        const val SENTENCE = "Keep track of your list and know when new episodes air"
+        const val SENTENCE = "Keep track of your list and know when the next episodes air"
         const val NO_CLIENT_ID = "This build has no MyAnimeList client id"
         const val NO_ACCOUNT = "Demo data has no MyAnimeList account to sign in to"
         const val SIGNING_IN = "Signing in…"

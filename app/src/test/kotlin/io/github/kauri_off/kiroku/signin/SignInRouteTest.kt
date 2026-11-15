@@ -221,7 +221,7 @@ class SignInRouteTest {
     }
 
     private companion object {
-        const val SENTENCE = "Keep track of your list and know when new episodes air"
+        const val SENTENCE = "Keep track of your list and know when the next episodes air"
         const val SIGN_IN = "Sign in with MyAnimeList"
     }
 }
