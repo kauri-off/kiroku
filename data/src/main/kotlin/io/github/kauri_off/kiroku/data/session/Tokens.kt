@@ -9,6 +9,8 @@ internal class Tokens(
     val access: String,
     val refresh: String,
     val obtainedAt: Long,
+    // The seconds MAL gave the access token, when it said so. Nothing acts on it: a token is refreshed when MAL rejects it.
+    val lifetime: Long? = null,
 )
 
 internal sealed interface Stored {

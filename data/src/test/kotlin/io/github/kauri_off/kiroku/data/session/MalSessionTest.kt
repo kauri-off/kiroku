@@ -29,6 +29,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -121,6 +122,25 @@ class MalSessionTest {
             other.signIn(TokenGrant("access-3", "refresh-3"))
             assertTrue(other.now() is Session.SignedIn)
             assertNotEquals(first, other.now())
+        }
+
+    @Test
+    fun theLifetimeMalGaveATokenIsKeptForTheNextProcessAndReplacedByARefresh() =
+        test {
+            val session = fixture.open()
+            assertNull(session.accessTokenLifetime())
+            session.signIn(TokenGrant("access-1", "refresh-1", 3600))
+            assertEquals(3600L, session.accessTokenLifetime())
+
+            val next = fixture.reopen()
+            assertEquals(3600L, next.accessTokenLifetime())
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), next.authorised(FakeMal("access-2").request))
+            assertEquals(2415600L, fixture.reopen().accessTokenLifetime())
+
+            val without = fixture.reopen()
+            without.signIn(TokenGrant("access-3", "refresh-3"))
+            assertNull(fixture.reopen().accessTokenLifetime())
         }
 
     @Test
