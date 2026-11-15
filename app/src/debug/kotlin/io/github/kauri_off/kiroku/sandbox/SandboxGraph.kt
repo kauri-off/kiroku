@@ -3,12 +3,8 @@ package io.github.kauri_off.kiroku.sandbox
 import android.content.Context
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
-import io.github.kauri_off.kiroku.core.list.LocalList
-import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
-import io.github.kauri_off.kiroku.data.db.RoomLocalList
-import io.github.kauri_off.kiroku.data.list.MalRemoteList
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.sandbox.Sandbox
@@ -25,7 +21,6 @@ import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.LiveGraph
 import io.github.kauri_off.kiroku.wiring.LiveParts
 import io.github.kauri_off.kiroku.wiring.LiveSource
-import io.github.kauri_off.kiroku.wiring.liveList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +29,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Clock
 
-// The live graph over MAL on the device; its list is the engine over MAL's client and the source's database.
+// The live graph whole over MAL on the device, which keeps a made-up list in the source's own files.
 class SandboxGraph internal constructor(
     private val parts: LiveParts,
     val sandbox: Sandbox,
@@ -43,15 +38,11 @@ class SandboxGraph internal constructor(
 ) : AppGraph by live,
     SignInOwner,
     ScenariosOwner {
-    override val list: ListRepository by lazy { liveList(parts, live.account, ::database, MalRemoteList(parts.http, live.account)) }
-
     override val signIn: SignIn by lazy { SandboxSignIn(live.signIn, sandbox.mal) }
 
     override val scenarios = Scenarios(SandboxScenarios(), parts.scope)
 
     suspend fun writeOwed() = live.writeOwed()
-
-    private fun database(parts: LiveParts): LocalList = RoomLocalList(parts.database, parts.scope, Dispatchers.IO, parts.unexpected)
 
     private inner class SandboxScenarios : ScenarioSubject {
         override val sandbox = true

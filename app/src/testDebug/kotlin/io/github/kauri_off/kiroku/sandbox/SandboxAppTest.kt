@@ -16,11 +16,14 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTitles
 import io.github.kauri_off.kiroku.scenario.Scenario
+import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.source.runningSource
+import io.github.kauri_off.kiroku.wiring.KeysInMemory
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
@@ -77,7 +80,12 @@ class SandboxAppTest {
     }
 
     @get:Rule(order = 0)
-    val keystore = TestKeystore()
+    val keystore =
+        object : ExternalResource() {
+            override fun before() = KeysInMemory.install()
+
+            override fun after() = KeysInMemory.uninstall()
+        }
 
     @get:Rule(order = 1)
     val connections = NoConnection()
@@ -242,6 +250,75 @@ class SandboxAppTest {
         assertEquals(emptyList<URI>(), connections.asked)
     }
 
+    private fun until(done: () -> Boolean) =
+        waited {
+            while (!done()) delay(POLL)
+        }
+
+    private fun asked(request: String) = request in graph.sandbox.mal.asked
+
+    // M2-21's signed-in List on the sandbox: an edit sheet's save and removal, a failed write and the download after it,
+    // a sign-out that clears the list, and a new sign-in that fills the List left open.
+    @Test
+    fun `the List on the sandbox saves, removes, downloads after a failed write, clears at a sign-out and fills at the next sign-in`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        val entries = waited { graph.list.observeEntries().first { it.isNotEmpty() } }
+        val (watching, other) = entries.filter { it.status == ListStatus.Watching }.take(2)
+        shows(watching.anime.titles.romaji)
+
+        val saved = watching.values.copy(score = 9, watchedEpisodes = watching.values.watchedEpisodes + 2)
+        waited { graph.list.write(ListWrite.Save(watching.anime, saved)) }
+        until { asked("PATCH sandbox.invalid/v2/anime/${watching.anime.id.value}/my_list_status") }
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        assertEquals(saved, waited { graph.list.observeEntry(watching.anime.id).first() }!!.values)
+
+        val completed = entries.first { it.status == ListStatus.Completed }
+        waited { graph.list.write(ListWrite.Remove(completed.anime)) }
+        until { asked("DELETE sandbox.invalid/v2/anime/${completed.anime.id.value}/my_list_status") }
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        assertEquals(null, waited { graph.list.observeEntry(completed.anime.id).first() })
+
+        // A write MAL may have made before it failed is settled by a download, and the row shows what MAL has.
+        graph.scenarios.set(Scenario(writes = WriteFault.ServerError))
+        val failed = graph.sandbox.mal.asked.size
+        waited { graph.list.write(ListWrite.MarkNextWatched(other.anime)) }
+        until {
+            val since =
+                graph.sandbox.mal.asked
+                    .drop(failed)
+            val wrote = since.indexOf("PATCH sandbox.invalid/v2/anime/${other.anime.id.value}/my_list_status")
+            wrote >= 0 && since.drop(wrote + 1).contains("GET sandbox.invalid/v2/users/@me/animelist")
+        }
+        graph.scenarios.set(Scenario())
+        assertEquals(other.values, waited { graph.list.observeEntry(other.anime.id).first { it?.values == other.values } }!!.values)
+
+        // S9: a sign-out leaves no token, entry or sort; the List left open says to sign in, and fills at the next sign-in.
+        waited { graph.preferences.setListSort(ListStatus.Completed, TabSort(ListSort.Score, SortDirection.Ascending)) }
+        waited { graph.session.signOut() }
+        assertEquals(Session.SignedOut, waited { graph.session.observeSession().first() })
+        assertEquals(emptyList<ListEntry>(), waited { graph.list.observeEntries().first() })
+        assertEquals(0L, File(context.noBackupFilesDir, "sandbox.tokens").length())
+        assertEquals(
+            TabSort.defaultFor(ListStatus.Completed),
+            waited {
+                graph.preferences.observeListSorts().first()
+            }.getValue(ListStatus.Completed),
+        )
+        shows("Sign in with MyAnimeList to see your list here")
+        val downloads =
+            graph.sandbox.mal.asked
+                .count { it == "GET sandbox.invalid/v2/users/@me/animelist" }
+        signIn()
+        shows(watching.anime.titles.romaji)
+        assertTrue(
+            graph.sandbox.mal.asked
+                .count { it == "GET sandbox.invalid/v2/users/@me/animelist" } > downloads,
+        )
+        assertEquals(saved, waited { graph.list.observeEntry(watching.anime.id).first { it != null } }!!.values)
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
     // No user's list values and no title not safe for work reach a debug or preview build.
     @Test
     fun `the build's assets are the public answers the sandbox reads, and nothing else`() {
@@ -252,5 +329,6 @@ class SandboxAppTest {
 
     private companion object {
         const val WAIT = 20_000L
+        const val POLL = 20L
     }
 }

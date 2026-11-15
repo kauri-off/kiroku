@@ -21,6 +21,7 @@ import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -36,10 +37,9 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,10 +47,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -66,7 +70,7 @@ class ListViewModel(
     private val list: ListSource,
     private val anime: AnimeRepository,
     private val airing: AiringRepository,
-    session: SessionRepository,
+    private val session: SessionRepository,
     connection: Connection,
     private val preferences: PreferencesRepository,
     private val clock: Clock,
@@ -91,6 +95,8 @@ class ListViewModel(
         val session: Session? = null,
         // Counts the user's refreshes, each of which builds the pages again.
         val refreshes: Int = 0,
+        // Counts the owners of the list this view model has shown; nothing read for an earlier one is kept.
+        val owners: Int = 0,
     )
 
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
@@ -99,8 +105,8 @@ class ListViewModel(
     private var syncing: Job? = null
     private val lane = background.limitedParallelism(1)
 
-    // The sorts chosen before, read once when the List is first shown; from then on this view model keeps them.
-    private val chosen = viewModelScope.async(lane, CoroutineStart.LAZY) { preferences.observeListSorts().first() }
+    // The owner whose list is read, until a first one is known.
+    @Volatile private var readFor: Any? = NOBODY_YET
 
     // The first sync ended, or the stored list was fresh: a list read from now on is ordered as it comes.
     @Volatile private var settled = false
@@ -208,17 +214,78 @@ class ListViewModel(
         if (syncing?.isActive != true) startSync(fromUser = false)
     }
 
+    // S9: each owner's list is read anew; its choices are read after the list's first answer, which follows its clear.
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun reading(): Flow<Unit> =
-        flow {
-            awaitSorts()
-            emitAll(combine(list.observeEntries(), airing.observeAiring(), ::received))
-        }.onStart { emit(Unit) }
+        session
+            .observeSession()
+            .map { it.owner }
+            .distinctUntilChanged()
+            .flatMapLatest { owner ->
+                if (readFor !== NOBODY_YET && readFor != owner) forgetOwner()
+                readFor = owner
+                val read =
+                    combine(list.observeEntries(), airing.observeAiring(), ::Pair).map { (entries, schedule) ->
+                        awaitSorts()
+                        received(entries, schedule)
+                    }
+                if (owner == null) read else merge(read, owedDownloads())
+            }.onStart { emit(Unit) }
             .readAgainOnRetry(retries, ::unreadable)
 
+    // The sorts chosen before, read once for each owner; from then on this view model keeps them.
     private suspend fun awaitSorts() {
-        if (model.value.sorts != null) return
-        val sorts = chosen.await()
-        model.update { if (it.sorts == null) it.copy(sorts = sorts.toMap<EntryStatus, TabSort>()) else it }
+        val asked = model.value
+        if (asked.sorts != null) return
+        val sorts = preferences.observeListSorts().first()
+        model.update { if (it.sorts == null && it.owners == asked.owners) it.copy(sorts = sorts.toMap<EntryStatus, TabSort>()) else it }
+    }
+
+    // A download the engine owes (a write MAL may have made) that failed offline is made when the connection returns.
+    private fun owedDownloads(): Flow<Unit> =
+        flow {
+            var known = false
+            var owed = false
+            list
+                .observeSyncedAt()
+                .catch { if (it !is DataException) throw it }
+                .collect { at ->
+                    if (at == null && known) {
+                        owed = true
+                        viewModelScope.launch { loads.owedOffline() }
+                    } else if (at != null && owed) {
+                        // Only what this marked: a load of the List's own that is owed stays owed.
+                        owed = false
+                        viewModelScope.launch { loads.loadedElsewhere() }
+                    }
+                    known = at != null
+                }
+        }
+
+    // Another owner's list starts as a list first shown: no entry, order, sort, tab or filter of the one before; a new
+    // signed-in owner's list is downloaded when it is stale, whatever the last owner's sync still does.
+    private fun forgetOwner() {
+        settled = false
+        entriesLoaded = false
+        viewModelScope.launch {
+            filterBy(null)
+            saveTab()
+            if (session.observeSession().first() is Session.SignedIn && list.stale(clock.instant())) startSync(fromUser = false)
+        }
+        model.update {
+            it.copy(
+                entries = emptyMap(),
+                airing = emptyMap(),
+                orders = null,
+                orderings = it.orderings.mapValues { (_, ordering) -> ordering + 1 },
+                failure = null,
+                tab = ListStatus.Watching,
+                sorts = null,
+                sortSheetOpen = false,
+                refreshing = false,
+                owners = it.owners + 1,
+            )
+        }
     }
 
     private fun received(
@@ -445,9 +512,14 @@ class ListViewModel(
     private suspend fun sync(fromUser: Boolean) {
         model.update { it.copy(failure = null, refreshing = it.refreshing || fromUser) }
         loads.started()
+        val owners = model.value.owners
         val result = list.sync()
-        settled = true
         loads.ended((result as? Outcome.Failure)?.error)
+        if (model.value.owners != owners) {
+            model.update { it.copy(refreshing = false) }
+            return
+        }
+        settled = true
         when (result) {
             is Outcome.Success ->
                 if (fromUser || model.value.orders == null) {
@@ -465,7 +537,7 @@ class ListViewModel(
                         // Asked on the lane: the list may have arrived there first and been ordered at start.
                         withContext(lane) {
                             model.update {
-                                if (fromUser || it.orders == null) {
+                                if (it.owners == owners && (fromUser || it.orders == null)) {
                                     it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
                                 } else {
                                     it
@@ -482,17 +554,9 @@ class ListViewModel(
                         }
                     entriesLoaded && model.value.entries.isNotEmpty() ->
                         withContext(lane) {
-                            model.update {
-                                if (it.orders ==
-                                    null
-                                ) {
-                                    it.orderedAll()
-                                } else {
-                                    it
-                                }
-                            }
+                            model.update { if (it.owners == owners && it.orders == null) it.orderedAll() else it }
                         }
-                    else -> model.update { it.copy(failure = result.error.toListFailure()) }
+                    else -> model.update { if (it.owners == owners) it.copy(failure = result.error.toListFailure()) else it }
                 }
         }
         model.update { it.copy(refreshing = false, refreshes = if (fromUser) it.refreshes + 1 else it.refreshes) }
@@ -508,6 +572,15 @@ class ListViewModel(
         val TAB = notShown("tab")
         val FILTER = notShown("filter")
         val UNRECOGNIZED = notShown("?")
+        val NOBODY_YET = Any()
+
+        val Session.owner: SignInId?
+            get() =
+                when (this) {
+                    Session.SignedOut -> null
+                    is Session.SignedIn -> signIn
+                    is Session.Expired -> signIn
+                }
 
         fun savedTab(status: EntryStatus): String =
             when (status) {
