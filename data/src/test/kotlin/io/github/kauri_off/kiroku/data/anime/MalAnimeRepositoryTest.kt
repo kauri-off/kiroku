@@ -1,14 +1,20 @@
 package io.github.kauri_off.kiroku.data.anime
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.detailsStale
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
+import io.github.kauri_off.kiroku.data.db.RoomLocalList
 import io.github.kauri_off.kiroku.data.db.TestDatabases
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.db.breakWrites
 import io.github.kauri_off.kiroku.data.db.dispatcher
+import io.github.kauri_off.kiroku.data.db.execute
+import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
@@ -130,18 +136,67 @@ class MalAnimeRepositoryTest {
             assertEquals(6, network.api.requestCount)
         }
 
+    // Section 7.1: a stored value is replaced by MAL's, never by one MAL left out or the mapper filled in.
     @Test
     fun `a refresh of the details does not lose a value the summary had`() =
         runTest {
             val s = subject()
             s.store.addUnknown(listOf(airing.anime))
-            val without = listOf("main_picture", "mean", "rank", "genres", "start_date", "broadcast", "num_episodes")
+            val without = listOf("main_picture", "mean", "rank", "genres", "start_date", "broadcast", "num_episodes", "status", "title")
             serve(without.fold(recordedJson("title_airing")) { page, key -> page.edited(listOf(key)) })
 
             assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
-
             assertEquals(airing.anime, s.titles.observeAnime(id).first())
             assertEquals(airing.details, s.titles.observeDetails(id).first())
+
+            // Values read only in part: the stored ones stand.
+            val partial =
+                listOf(
+                    listOf("genres", "0", "name") to null,
+                    listOf("broadcast", "start_time") to JsonPrimitive("24:00"),
+                    listOf("studios", "0", "name") to null,
+                    listOf("related_anime", "0", "node", "id") to null,
+                    listOf("recommendations", "0", "node", "id") to null,
+                )
+            serve(partial.fold(recordedJson("title_airing")) { page, (path, value) -> page.edited(path, value) })
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+            assertEquals(airing.anime, s.titles.observeAnime(id).first())
+            assertEquals(airing.details, s.titles.observeDetails(id).first())
+        }
+
+    @Test
+    fun `a summary that comes after the page, without the status or the main title, does not lose them`() =
+        runTest {
+            val s = subject()
+            val list = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
+            list.clear(SignInId("a"))
+            serve("title_airing")
+            s.titles.refresh(id)
+
+            val summary =
+                recordedJson("title_airing")
+                    .edited(listOf("status"))
+                    .edited(listOf("title"))
+                    .toNode()
+                    .toAnime(Repairs())
+            assertEquals(AiringStatus.Unrecognized(""), summary.airingStatus)
+            assertEquals(airing.anime.titles.english, summary.titles.romaji)
+            list.download(listOf(summary), emptyMap(), network.clock.now)
+
+            assertEquals(airing.anime, s.titles.observeAnime(id).first())
+        }
+
+    @Test
+    fun `a store that cannot be read is reported and ends each flow with a storage error`() =
+        runTest {
+            val s = subject()
+            s.database.execute("ALTER TABLE title RENAME TO title_gone")
+            s.database.execute("ALTER TABLE title_details RENAME TO title_details_gone")
+            for (flow in listOf(s.titles.observeAnime(id), s.titles.observeDetails(id), s.titles.observeRefreshedAt(id))) {
+                val ended = runCatching { flow.first() }.exceptionOrNull()
+                assertEquals(DataError.StorageError, (ended as DataException).error)
+            }
+            assertEquals(3, network.unexpected.size)
         }
 
     @Test
@@ -184,6 +239,10 @@ class MalAnimeRepositoryTest {
         runTest {
             val s = subject()
             serve("title_airing")
-            assertEquals(Outcome.Failure(DataError.ServerError), s.titles.refresh(AnimeId(id.value + 1)))
+            val asked = AnimeId(id.value + 1)
+            assertEquals(Outcome.Failure(DataError.ServerError), s.titles.refresh(asked))
+            assertTrue(network.unexpected.single() is AnotherTitleAnswer)
+            assertNull(s.titles.observeAnime(asked).first())
+            assertNull(s.titles.observeAnime(id).first())
         }
 }

@@ -219,10 +219,18 @@ internal class UnusableAnswer(
     }
 }
 
-// An answer the mapper read with values left out or filled in; it names MAL's fields, never a value.
+// An answer of MAL's the app used in part or not at all, for a value it did not expect; it never quotes a value.
+sealed class OddAnswer(
+    message: String,
+) : Exception(message)
+
+// An answer the mapper read with values left out or filled in, by MAL's field names.
 class RepairedAnswer(
     val fields: Set<String>,
-) : Exception(fields.joinToString())
+) : OddAnswer(fields.joinToString())
+
+// A title's page that answered for another title than the one asked.
+class AnotherTitleAnswer : OddAnswer("id")
 
 // A 2xx that is empty, or cannot be read and does not say it is JSON: a portal's or a proxy's page, not MAL's.
 internal class NotAnAnswer : IOException()

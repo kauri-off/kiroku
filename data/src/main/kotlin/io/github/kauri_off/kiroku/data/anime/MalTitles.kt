@@ -26,12 +26,12 @@ class MalTitles(
             http
                 .call {
                     val repairs = Repairs()
-                    api.title(id.value, MalFields.DETAILS, nsfw = if (adult) true else null).toTitle(repairs) to repairs.fields
+                    api.title(id.value, MalFields.DETAILS, nsfw = if (adult) true else null).toTitle(repairs) to repairs
                 }.clientIdOutcome()
         if (answer !is Outcome.Success) return answer as Outcome.Failure
-        val (title, repaired) = answer.value
-        if (repaired.isNotEmpty()) http.unexpected(RepairedAnswer(repaired))
-        return Outcome.Success(title)
+        val (title, repairs) = answer.value
+        if (repairs.fields.isNotEmpty()) http.unexpected(RepairedAnswer(repairs.fields))
+        return Outcome.Success(title.copy(unread = repairs.unread))
     }
 }
 

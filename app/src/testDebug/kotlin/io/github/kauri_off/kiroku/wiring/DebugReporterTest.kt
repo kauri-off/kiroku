@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.wiring
 import android.os.Looper
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
@@ -74,11 +75,13 @@ class DebugReporterTest {
 
     // Nothing fails on a value of MAL's the app cannot read, and the report of it is not silent either.
     @Test
-    fun `an answer of MAL's read in part is logged, and the build does not crash`() {
+    fun `an answer of MAL's read in part or for another title is logged, and the build does not crash`() {
         reportUnexpected(RepairedAnswer(setOf("start_date")))
+        reportUnexpected(AnotherTitleAnswer())
         mainThread.idle()
 
-        assertEquals("Unexpected: ${RepairedAnswer::class.java.name}", ShadowLog.getLogsForTag(LOG_TAG).first().msg)
+        val logged = ShadowLog.getLogsForTag(LOG_TAG).map { it.msg }.filter { it.startsWith("Unexpected: ") }
+        assertEquals(listOf(RepairedAnswer::class.java.name, AnotherTitleAnswer::class.java.name).map { "Unexpected: $it" }, logged)
     }
 
     @Test

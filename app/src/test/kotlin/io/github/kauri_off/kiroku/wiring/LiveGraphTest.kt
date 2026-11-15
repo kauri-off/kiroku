@@ -1,12 +1,19 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.os.Looper
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeDetails
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
@@ -17,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
@@ -25,6 +33,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -189,6 +198,42 @@ class LiveGraphTest {
             assertEquals(emptyList<String>(), requests)
             assertEquals(0, device.clientBuilds.get())
             assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    @Test
+    fun `the titles' repository is built once, at the first call, off the main thread`() =
+        runTest {
+            val built = mutableListOf<Thread>()
+            val nothing =
+                object : AnimeRepository {
+                    override fun observeAnime(id: AnimeId) = flowOf<Anime?>(null)
+
+                    override fun observeDetails(id: AnimeId) = flowOf<AnimeDetails?>(null)
+
+                    override fun observeRefreshedAt(id: AnimeId) = flowOf<Instant?>(null)
+
+                    override suspend fun refresh(id: AnimeId) = Outcome.Success(Unit)
+                }
+            val titles = liveTitles(parts(backgroundScope)) { nothing.also { built += Thread.currentThread() } }
+            assertEquals(emptyList<Thread>(), built)
+
+            titles.observeAnime(AnimeId(1)).first()
+            titles.refresh(AnimeId(1))
+            assertEquals(1, built.size)
+            assertNotSame(Looper.getMainLooper().thread, built.single())
+        }
+
+    // Until Settings exist, "Show adult content in search" is off, so a title's page asks without adult recommendations.
+    @Test
+    fun `a live title's page is asked without nsfw`() =
+        runTest {
+            val requests = mutableListOf<String>()
+            device.online.value = false
+            val source = LiveSource("closed", MalHosts("http://127.0.0.1:1/v2/", "http://127.0.0.1:1/v1/oauth2/"))
+            val parts = LiveParts(context, source, "0123abcd", Clock.systemUTC(), backgroundScope, unexpected::add, requests::add, device)
+
+            assertEquals(Outcome.Failure(DataError.NoConnection), liveTitles(parts).refresh(AnimeId(61987)))
+            assertTrue(requests.toString(), requests.single().startsWith("GET 127.0.0.1/v2/anime/61987?fields "))
         }
 
     // So a graph that is not a live graph, the demo's, holds no HTTP client.

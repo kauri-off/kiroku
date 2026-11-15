@@ -15,11 +15,15 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 
 // The titles of a live source: its database's, refreshed from MAL's pages.
-internal fun liveTitles(parts: LiveParts): AnimeRepository =
-    TitlesOnFirstUse {
-        val store = TitleStore(parts.database, Dispatchers.IO, parts.unexpected)
-        MalAnimeRepository(MalTitles(parts.http), store, parts.clock, { SHOW_ADULT }, parts.unexpected)
-    }
+internal fun liveTitles(
+    parts: LiveParts,
+    build: (LiveParts) -> AnimeRepository = ::titlesOf,
+): AnimeRepository = TitlesOnFirstUse { build(parts) }
+
+private fun titlesOf(parts: LiveParts): AnimeRepository {
+    val store = TitleStore(parts.database, Dispatchers.IO, parts.unexpected)
+    return MalAnimeRepository(MalTitles(parts.http), store, parts.clock, { SHOW_ADULT }, parts.unexpected)
+}
 
 // The setting "Show adult content in search", off until Settings exist.
 private const val SHOW_ADULT = false

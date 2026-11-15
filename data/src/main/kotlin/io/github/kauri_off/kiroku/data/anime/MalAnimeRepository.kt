@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.db.TitleStore
+import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -44,11 +45,14 @@ class MalAnimeRepository(
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         val answer = titles.title(id, adult())
         if (answer !is Outcome.Success) return answer as Outcome.Failure
-        val (anime, details) = answer.value
+        val (anime, details, unread) = answer.value
         // A page of another title is not the one asked for, which would otherwise never get its details.
-        if (anime.id != id) return Outcome.Failure(DataError.ServerError)
+        if (anime.id != id) {
+            unexpected(AnotherTitleAnswer())
+            return Outcome.Failure(DataError.ServerError)
+        }
         return try {
-            store.refresh(anime, details, clock.instant())
+            store.refresh(anime, details, clock.instant(), unread)
             Outcome.Success(Unit)
         } catch (e: CancellationException) {
             throw e
