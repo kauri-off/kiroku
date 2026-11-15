@@ -4,6 +4,8 @@ import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import io.github.kauri_off.kiroku.link.AppLinks
+import io.github.kauri_off.kiroku.link.LinksOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.DeviceClock
@@ -18,10 +20,13 @@ import kotlinx.coroutines.SupervisorJob
 class KirokuApplication :
     Application(),
     AppGraphOwner,
+    LinksOwner,
     SingletonImageLoader.Factory {
     override val graph: AppGraph by lazy {
         createGraph(this, BuildConfig.MAL_CLIENT_ID, DeviceClock, CoroutineScope(SupervisorJob() + Dispatchers.Default))
     }
+
+    override val links = AppLinks()
 
     override fun onCreate() {
         super.onCreate()

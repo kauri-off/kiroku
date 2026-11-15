@@ -226,19 +226,31 @@ fun webViewProblems(
     }
 }
 
-// ARCHITECTURE 8.5: app code may give NavDisplay a preview to seek, and never reads the back gesture itself.
+// ARCHITECTURE 8.5: app code never reads the back gesture; one file hands it to NavDisplay's back handler alone.
 private val backGesture =
     Regex(
         """(?i)\w*navigationEvent\w*|\b(PredictiveBackHandler|NavigationBackHandler|OnBackAnimationCallback|""" +
             """handleOnBackProgressed|SeekableTransitionState|BackEventCompat|BackEvent)\b""",
     )
 
+const val BACK_HANDLER_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/shell/NavDisplayWithoutPreview.kt"
+
+// What that file may name: the handler and the states it makes, never what the gesture's state holds.
+private val backHandler = Regex("""\b(NavigationBackHandler|rememberNavigationEventState)\b""")
+private val gestureState = Regex("""\b(transitionState|latestEvent|progress)\b""")
+
 fun backGestureProblems(
     name: String,
     source: String,
 ): List<String> =
     KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
-        if (backGesture.containsMatchIn(line)) "$name:${index + 1}: the back gesture handled by the app: ${line.trim()}" else null
+        val found =
+            if (name == BACK_HANDLER_SOURCE) {
+                gestureState.containsMatchIn(line) || backGesture.containsMatchIn(line.replace(backHandler, ""))
+            } else {
+                backGesture.containsMatchIn(line)
+            }
+        if (found) "$name:${index + 1}: the back gesture handled by the app: ${line.trim()}" else null
     }
 
 // Every Kotlin, Gradle script and XML source of the project's modules.

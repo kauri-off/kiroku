@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.list
 
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -56,8 +57,14 @@ private fun listEntryOf(
     node: AnimeNode,
     values: JsonElement?,
     repairs: Repairs,
+): ListEntry = listEntryOf(node.toAnime(repairs.within("node")), values, repairs)
+
+// An entry's values as MAL gives them, in a list, a title's own answer or a write's, with the title they belong to.
+internal fun listEntryOf(
+    anime: Anime,
+    values: JsonElement?,
+    repairs: Repairs,
 ): ListEntry {
-    val anime = node.toAnime(repairs.within("node"))
     val fields = values as? JsonObject ?: JsonObject(emptyMap())
     val noted = repairs.within("list_status")
 

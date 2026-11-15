@@ -336,8 +336,9 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - The app opens on List, tab Watching. Signed out, List shows its empty state with one "Sign in" button; "Browse
   without an account" on the sign-in screen goes to Search.
 - Predictive back is on.
-- Deep links: `https://myanimelist.net/anime/{id}` (with or without a slug or trailing slash),
-  `https://myanimelist.net/profile/{name}`, and the OAuth redirect.
+- Deep links: a title's page, `https://[www.]myanimelist.net/anime/{id}` with or without its name and a trailing
+  slash, from Android 12, once the user has allowed the app's links in the system's settings;
+  `https://myanimelist.net/profile/{name}`; and the OAuth redirect.
 
 ### 6.4 Stack, wiring and demo mode
 
@@ -561,7 +562,7 @@ change legible, or preventing a jump. Decoration is not a purpose.
   tests set for its spring.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
   reversed mid-flight, ends in the state of the last input, and never blocks a tap. The back gesture shows no preview:
-  the screen changes when it commits, and a cancel changes nothing. With the system's animations turned off, every
+  a commit plays Back's transition, and a cancel changes nothing. With the system's animations turned off, every
   screen is complete and correct immediately. An idle screen has no animation running.
 
 A task that adds or changes an animation shows with tests that it settles within its time, that re-triggering it
@@ -819,9 +820,9 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 - **Tests of MAL mappers run against responses recorded from the real API, never against shapes written from
   memory.** An agent can neither read the client id nor sign in, so responses that need only the client id are
   recorded by a build task that uses the id without printing it or any request header and is not part of any build
-  or check, and responses that need the user's sign-in are recorded by the owner with a debug-only tool in the app.
+  or check; those needing the user's sign-in, by the owner with a debug tool, as sent less token and client id.
 - **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
-  reads recorded files before they are committed.
+  reads recorded files before they are committed. The owner's stay outside all checkouts; tests skip without them.
 - Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
   itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another
@@ -880,9 +881,9 @@ only when rendered on the same machine.
   the underscore in the base package, and composable functions are exempt from the function-naming rule. Android
   Lint with the translation checks as errors; other warnings are not errors, because checks such as "newer version
   available" would fail the build whenever a library publishes a release.
-- **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and on pushes to `main`, and
-  checks that the pull request title is a conventional commit; its workflow files say what it runs and keeps. What
-  it builds for a pull request is built without any secret.
+- **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and push to `main` that changes
+  more than documents, and checks every pull request's title as a conventional commit; its workflow files say what
+  it runs and keeps. What it builds for a pull request is built without any secret.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
@@ -898,16 +899,14 @@ only when rendered on the same machine.
 
 Each of these could change a decision above.
 
-1. **The sign-in has not been run end to end.** The client is registered with the redirect URIs of section 3.1,
-   but no token exchange without a secret has been made.
-2. **The shape of MAL's user statistics** is known from dailyAL's working code, not from MAL's reference, which
-   shows no samples. The recorded responses decide.
-3. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
+1. **A sign-in with the app killed while the browser is open has not been run on a phone.** A sign-in has: MAL
+   granted a token with a lifetime.
+2. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
    list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
    (believed to be three characters).
-4. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
+3. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
    it). How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not measured.
-5. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
+4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-6. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
+5. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
    not be reached from the maintainer's machine.

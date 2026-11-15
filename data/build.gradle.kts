@@ -90,6 +90,19 @@ tasks.named("copyRoomSchemas") {
     }
 }
 
+// Section 11.1: the signed-in recorder's answers stay outside every checkout; the tests that need them read them there.
+val ownerRecordings: String =
+    providers
+        .gradleProperty("kiroku.ownerRecordings")
+        .orElse(providers.environmentVariable("KIROKU_OWNER_RECORDINGS"))
+        .orElse(providers.systemProperty("user.home").map { "$it/.local/share/kiroku/owner-recordings" })
+        .get()
+
+tasks.withType<Test>().configureEach {
+    systemProperty("kiroku.ownerRecordings", ownerRecordings)
+    inputs.files(fileTree(ownerRecordings)).withPropertyName("ownerRecordings")
+}
+
 // A schema exported in the same run reaches the unit tests' assets.
 tasks.named { it.endsWith("UnitTestAssets") }.configureEach { mustRunAfter("copyRoomSchemas") }
 

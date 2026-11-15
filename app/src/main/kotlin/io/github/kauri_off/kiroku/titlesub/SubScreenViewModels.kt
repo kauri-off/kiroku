@@ -53,16 +53,32 @@ abstract class SubScreenViewModel(
         val details: AnimeDetails?,
         val session: Session?,
         val failure: DataError?,
+        // The title's own store could not be read.
+        val storeFailure: DataError? = null,
     ) {
         constructor(opened: TitleSummary) : this(opened.anime, opened.page?.details, opened.session, null)
     }
 
+    private class Stored(
+        val anime: Anime? = null,
+        val details: AnimeDetails? = null,
+        val failure: DataError? = null,
+    )
+
     private val failure = MutableStateFlow<DataError?>(null)
     private var load: Job? = null
 
+    // Retry reads again what could not be read.
+    protected val retries = MutableStateFlow(0)
+
+    // A store that cannot be read fails the screen, as on the title page.
+    private val stored =
+        combine(anime.observeAnime(id), anime.observeDetails(id)) { anime, details -> Stored(anime, details) }
+            .readAgainOnRetry(retries) { Stored(failure = it) }
+
     protected val title: Flow<Title> =
-        combine(anime.observeAnime(id), anime.observeDetails(id), session.observeSession(), failure) { stored, details, session, failure ->
-            Title(stored ?: opened?.anime, details ?: opened?.page?.details, session, failure)
+        combine(stored, session.observeSession(), failure) { stored, session, failure ->
+            Title(stored.anime ?: opened?.anime, stored.details ?: opened?.page?.details, session, failure, stored.failure)
         }
 
     private val loads = ShownLoads(viewModelScope, connection, ::refreshIfStale, ::refresh)
@@ -74,8 +90,13 @@ abstract class SubScreenViewModel(
         if (anime.stale(id, opened?.anime, clock.instant()) && load?.isActive != true) refresh()
     }
 
+    protected fun retry() {
+        retries.update { it + 1 }
+        refresh()
+    }
+
     // A newer load replaces an older one, so the older one's end never stands for the screen.
-    protected fun refresh() {
+    private fun refresh() {
         load?.cancel()
         failure.value = null
         loads.started()
@@ -113,8 +134,6 @@ class RelatedViewModel(
         constructor(opened: TitleSummary) : this(Title(opened), ListRead(opened.knownEntries()), opened.knownAiring())
     }
 
-    private val retries = MutableStateFlow(0)
-
     // Of the list and the airing, only the related titles; a list that cannot be read fails the screen.
     private val sources: StateFlow<Sources?> =
         title
@@ -140,9 +159,7 @@ class RelatedViewModel(
             .stateIn(viewModelScope, WhileShown, sources.value?.let(::build) ?: RelatedState.Loading(null))
 
     fun onEvent(event: RelatedEvent) {
-        if (event != RelatedEvent.Retry) return
-        retries.update { it + 1 }
-        refresh()
+        if (event == RelatedEvent.Retry) retry()
     }
 
     // What the screen shows of a related title, for its page.
@@ -163,7 +180,7 @@ class RelatedViewModel(
         val title = sources.title
         val details = title.details
         val failure = title.failure
-        val listFailure = sources.list.failure
+        val listFailure = sources.list.failure ?: title.storeFailure
         return when {
             listFailure != null -> RelatedState.Failed(listFailure, title.session)
             details != null ->
@@ -195,14 +212,16 @@ class DetailsViewModel(
             .stateIn(viewModelScope, WhileShown, opened?.let { build(Title(it)) } ?: DetailsState.Loading(null))
 
     fun onEvent(event: DetailsEvent) {
-        if (event == DetailsEvent.Retry) refresh()
+        if (event == DetailsEvent.Retry) retry()
     }
 
     private fun build(title: Title): DetailsState {
         val anime = title.anime
         val details = title.details
         val failure = title.failure
+        val storeFailure = title.storeFailure
         return when {
+            storeFailure != null -> DetailsState.Failed(storeFailure, title.session)
             anime != null && details != null -> detailsState(anime, details, titleLanguage, title.session, clock)
             failure != null -> DetailsState.Failed(failure, title.session)
             else -> DetailsState.Loading(title.session)

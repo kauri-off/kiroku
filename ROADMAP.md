@@ -63,8 +63,8 @@ Goal: the owner signs in and uses their real list and real title pages (ARCHITEC
 
 Acceptance: over three days of use, every list change made in the app is on the website and the reverse; no
 sign-out happened that the owner did not cause; three title pages match myanimelist.net for related titles and
-statistics; a `myanimelist.net/anime/{id}` link opens the title page with the List beneath it; the owner's findings
-on the Russian strings so far are fixed.
+statistics; a `myanimelist.net/anime/{id}` link, once allowed in Android's settings, opens the title page with the
+List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
@@ -92,11 +92,13 @@ on the Russian strings so far are fixed.
 - [ ] **M2-13 [O] The owner signs in and records.** With the debug build: he signs in; signs in once more with
   the app killed while the browser is open; runs the recorder on a title that is not on his list. On the website
   he completes a title with an empty start date, steps a Completed title below its total and completes a title
-  that has a finish date, and says what MAL did (W7). The orchestrator pulls the files, reads them for anything
-  personal, checks them for the client id, commits them, and corrects section 3.1 and items 1 to 3 of section 13.
+  that has a finish date, and says what MAL did (W7). The orchestrator pulls the files into the owner's folder
+  outside every checkout (section 11.1), checks them for a token and the client id, and corrects section 3.1 and
+  items 1 and 2 of section 13.
   **Needs:** M2-11, M2-12.
-  **Check:** the recorded answers of M2-12 are committed; `git grep` for the owner's and the two users' names
-  finds nothing; his list on myanimelist.net is as it was; a difference from W7 is filed as a task.
+  **Check:** the recorded answers of M2-12 are in that folder and the tests that read them pass; `git grep` for the
+  owner's and the two users' names finds nothing; his list on myanimelist.net is as it was; a difference from W7 is
+  filed as a task.
 
 - [x] **M2-14 Title client and mappers.**
 
@@ -108,14 +110,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-18 Translated MAL values and the genre table.**
 
-- [ ] **M2-19 List client: writing.** The rest of `RemoteList`: one entry read, set and removed, the answer
-  being the entry as MAL has it afterwards; removing a title that is not on the list is a removal. The client is
-  held to `RemoteList` by tests on recorded answers. The recordings settle what a write answers with, whether it
-  can clear a date and how MAL takes a count above its total; whatever differs from W3, W7 or W9 goes to the
-  owner in the hand-off and is not worked around.
-  **Needs:** M2-13, M2-15.
-  **Check:** tests on the answers of M2-13, one per request the recorder made; the reading mappers of M2-15 pass
-  on the owner's own pages. Items 2 and 3 of section 13 are corrected.
+- [x] **M2-19 List client: writing.**
 
 - [ ] **M2-20 Sandbox.** A stand-in for MAL in debug and preview builds, behind the real network layer: it keeps
   a list as the website would and answers in the recorded shapes, sign-in and refresh included, so that
@@ -134,6 +129,14 @@ on the Russian strings so far are fixed.
   entry and no token, and the next sign-in shows nothing of the one before; with the airing source empty, no
   row and no title page shows an airing line. A release build holds no in-memory store.
 
+- [ ] **M2-34 A write carries only what the user changed.** The engine hands the client the values MAL last
+  confirmed, and a write sends only the values that differ from them, so neither a value MAL gave that the app could
+  not read nor one changed on the website since the last download is written over. The owner decides first: a
+  website edit of another value then stands, which changes how W1 and W4 read.
+  **Needs:** M2-21 and the owner's decision.
+  **Check:** a write after an unreadable score leaves the score out, replacing the test that it sends `score=0`; a
+  step and an edit-sheet save each send their changed values alone; `ListEngineContract` passes.
+
 - [x] **M2-22 Screens refresh by themselves.**
 
 - [x] **M2-23 List state for a real store.**
@@ -142,14 +145,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-25 Posters from the network.**
 
-- [ ] **M2-26 The real title page and its link.** The live graph's titles are M2-17. A
-  `myanimelist.net/anime/{id}` link, with or without a slug or a trailing slash, opens the title page with the
-  List beneath it (section 6.3); no other address is claimed. While the system does not let the app open these
-  links, the app says so once in a screen of its own that leads to the system's setting for it; the row in Settings
-  comes with M7.
-  **Needs:** M2-17, M2-24.
-  **Check:** a parser test with ten forms of the address; `tools/emu run` on the demo source: the link starts
-  the app on the title page, and Back shows the List.
+- [x] **M2-26 The real title page and its link.**
 
 - [ ] **M2-27 [L] Watch order on the title page.** The page follows the chain of sequels, one request per title,
   each stored, and shows the watch order, so a film between seasons does not hide the next season; the order is
@@ -198,7 +194,7 @@ Not to forget:
 - AniList needs no key: the agent records its responses itself, among them a title without a schedule, a title on a
   break and a MAL id AniList does not know.
 - During the seven days the app counts, over the owner's list, how many titles get an exact count, how many are
-  rejected for their numbering (A4) and how many are only estimated (A5, A6). The counts settle item 4 of
+  rejected for their numbering (A4) and how many are only estimated (A5, A6). The counts settle item 3 of
   section 13.
 - The rule that rows never move (section 9.3) is tested with airing data changing under a visible tab.
 - The calculator's result also carries "to watch" and the premiere, so no screen combines them on its own (A1).
@@ -221,7 +217,7 @@ Not to forget:
 - What is notifiable is written and tested in `:core` first, with every dailyAL failure case.
 - The emulator run of section 5.2 forces Doze and restarts the device. It cannot use demo mode, whose data does not
   survive a restart, and a refresh must not overwrite the episode it plants. It measures the delay of the
-  notification and whether the re-check reached the network, which settles item 5 of section 13.
+  notification and whether the re-check reached the network, which settles item 4 of section 13.
 - The "Mark watched" action is tested on an Android level before 12 as well as on a current one (N9).
 - An edit sheet opened before a "Mark watched" and saved after it sends the older count, since the last value shown
   wins (W1); decide whether the action's episode survives a save that did not change the count.
@@ -239,7 +235,7 @@ each browse list opens and loads further pages; a query of digits offers "Open t
 
 Not to forget:
 
-- Searches of one, two and three characters are recorded, to learn the shortest query MAL accepts (item 3 of
+- Searches of one, two and three characters are recorded, to learn the shortest query MAL accepts (item 2 of
   section 13).
 - Typing does not send a request per keystroke.
 - Results that arrive page by page are held as a `StateFlow` of the pages loaded.
@@ -260,7 +256,7 @@ Not to forget:
 
 - One statistics calculator in `:core` serves the owner and other users, tested against a list computed by hand.
 - The answers for a public list, a private list and an unknown name are recorded, and settle how a private list is
-  told apart from rate limiting (item 3 of section 13). Without a private user name from the owner, that stays
+  told apart from rate limiting (item 2 of section 13). Without a private user name from the owner, that stays
   open and the task says so.
 
 - [x] **M6-01 [L] Profile screen.**
@@ -297,7 +293,7 @@ Not to forget:
 This section accounts for every other dailyAL feature: it is planned, or it is not built, with the reason. A
 feature the owner wants back moves from "Not built" to a planned milestone. The milestones are built in the order
 P1 to P5; each starts with a budget change (ARCHITECTURE section 9.1). The sources other than MAL are unchecked
-(ARCHITECTURE section 13, item 6).
+(ARCHITECTURE section 13, item 5).
 
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|

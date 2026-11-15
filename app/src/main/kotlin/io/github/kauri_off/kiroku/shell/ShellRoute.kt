@@ -15,7 +15,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
-import androidx.navigation3.ui.NavDisplay
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
@@ -76,18 +75,16 @@ fun ShellRoute(
             }
         },
     ) {
-        NavDisplay(
+        NavDisplayWithoutPreview(
             entries = navigator.visible.flatMap { decorated.getValue(it) },
-            transitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
-            popTransitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
-            predictivePopTransitionSpec = { noPreview },
+            transition = { screenChange(navigator.way, motionScheme, step, rtl) },
             onBack = { navigator.back() },
         )
     }
 }
 
 // Each entry's saved state and view models belong to its place in one destination's stack, never to its key alone.
-// Only the entry on top draws the snackbar host, also while a back gesture shows the one under it.
+// Only the entry on top draws the snackbar host, also while Back's transition shows the one under it.
 private fun NavEntry<NavKey>.scopedTo(
     key: NavKey,
     destination: Destination,

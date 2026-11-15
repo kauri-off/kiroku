@@ -94,8 +94,8 @@ class ShellNavigator(
 
 // Survives recreation and process death: the stacks are saved with their keys, the selection by name.
 @Composable
-fun rememberShellNavigator(): ShellNavigator {
-    val list = rememberNavBackStack(Destination.List.root)
+fun rememberShellNavigator(vararg overList: NavKey): ShellNavigator {
+    val list = rememberNavBackStack(Destination.List.root, *overList)
     val search = rememberNavBackStack(Destination.Search.root)
     val profile = rememberNavBackStack(Destination.Profile.root)
     val selected = rememberSaveable { mutableStateOf(Destination.List) }

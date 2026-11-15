@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Before Android 12 a filter cannot tell a title's page from its sub-pages, so no link is claimed. -->
+    <bool name="links_claimed">false</bool>
+</resources>
