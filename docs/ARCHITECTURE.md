@@ -173,7 +173,8 @@ the background.
 - **A2. Correct between refreshes.** The aired count rises when a stored air time passes, with no network call, and
   a visible screen updates at that moment without polling.
 - **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's, otherwise unknown. A
-  title MAL marks as finished has aired completely. The aired count never exceeds a known total.
+  title MAL marks as finished has aired completely. The aired count never exceeds a known total. An airing status
+  the app does not know is read as airing by every rule, freshness included.
 - **A4. A schedule numbered differently is not used.** When AniList's episode numbers evidently continue an
   earlier season (they run past MAL's total, or reach a number that a show with MAL's start date cannot have
   reached), AniList's data is not used for that title.
@@ -538,7 +539,8 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page.
+  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page, and on a tap moves
+  once, from where it is shown to the tab's place.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme, and only from its
   effects springs, because the spatial ones overshoot: fast for a change inside a component and for an exit, default
   for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and

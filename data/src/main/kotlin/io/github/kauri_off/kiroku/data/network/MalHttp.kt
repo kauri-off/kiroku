@@ -203,7 +203,12 @@ class MalHttp(
     }
 }
 
-internal val MalJson = Json { ignoreUnknownKeys = true }
+// A null where a field has a default is that default, as MAL leaving the field out would be.
+internal val MalJson =
+    Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
 
 // An exception of the network layer without its message, which could quote an answer.
 internal class UnusableAnswer(

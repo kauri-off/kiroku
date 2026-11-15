@@ -101,11 +101,12 @@ val listStatuses =
     }
 
 val airingStatuses =
-    Codes(AiringStatus.entries) {
+    Codes(AiringStatus.known, AiringStatus::Unrecognized) {
         when (it) {
             AiringStatus.NotYetAired -> "not_yet_aired"
             AiringStatus.Airing -> "currently_airing"
             AiringStatus.Finished -> "finished_airing"
+            is AiringStatus.Unrecognized -> it.malCode
         }
     }
 

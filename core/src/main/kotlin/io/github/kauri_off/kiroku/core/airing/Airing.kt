@@ -69,6 +69,14 @@ data class Airing(
     }
 }
 
+// The status every rule of airing, notification and freshness reads: one the app does not know is read as airing.
+val AiringStatus.effective: AiringStatus
+    get() =
+        when (this) {
+            AiringStatus.NotYetAired, AiringStatus.Airing, AiringStatus.Finished -> this
+            is AiringStatus.Unrecognized -> AiringStatus.Airing
+        }
+
 fun episodeTotal(
     anime: Anime,
     airing: Airing?,
@@ -77,7 +85,7 @@ fun episodeTotal(
 fun toWatch(
     entry: ListEntry,
     airing: Airing?,
-): AiredCount.Known? = toWatch(entry.anime.airingStatus, entry.values, airing)
+): AiredCount.Known? = toWatch(entry.anime.airingStatus.effective, entry.values, airing)
 
 private fun toWatch(
     airingStatus: AiringStatus,
@@ -119,10 +127,11 @@ fun premiereOf(
     airing: Airing?,
     today: LocalDate,
 ): Premiere? {
-    if (anime.airingStatus == AiringStatus.Finished) return null
+    val status = anime.airingStatus.effective
+    if (status == AiringStatus.Finished) return null
     when (val aired = airing?.aired) {
         is AiredCount.Known -> if (aired.value > 0) return null
-        AiredCount.Unknown, null -> if (anime.airingStatus != AiringStatus.NotYetAired) return null
+        AiredCount.Unknown, null -> if (status != AiringStatus.NotYetAired) return null
     }
     airing?.nextEpisode?.takeIf { it.number == 1 }?.let { return Premiere.At(it.airsAt) }
     return when (val date = anime.startDate) {
@@ -160,9 +169,10 @@ fun airingPhase(
     today: LocalDate,
 ): AiringPhase? {
     premiereOf(anime, airing, today)?.let { return AiringPhase.NotYetAired(it) }
-    if (anime.airingStatus == AiringStatus.Finished) return null
+    val status = anime.airingStatus.effective
+    if (status == AiringStatus.Finished) return null
     val aired = airing?.aired as? AiredCount.Known ?: return AiringPhase.CountUnknown
-    val toWatch = values?.let { toWatch(anime.airingStatus, it, airing) }?.takeIf { it.value > 0 }
+    val toWatch = values?.let { toWatch(status, it, airing) }?.takeIf { it.value > 0 }
     // An episode the user has already recorded as watched is not announced as next (W9).
     val next = airing.nextEpisode?.takeIf { values == null || it.number > values.watchedEpisodes }
     return AiringPhase.Aired(aired, toWatch, next)

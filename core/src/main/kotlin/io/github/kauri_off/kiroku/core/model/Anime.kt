@@ -64,7 +64,21 @@ data class Titles(
 
 enum class TitleLanguage { Romaji, English, Japanese }
 
-enum class AiringStatus { NotYetAired, Airing, Finished }
+sealed interface AiringStatus {
+    data object NotYetAired : AiringStatus
+
+    data object Airing : AiringStatus
+
+    data object Finished : AiringStatus
+
+    data class Unrecognized(
+        val malCode: String,
+    ) : AiringStatus
+
+    companion object {
+        val known: List<AiringStatus> = listOf(NotYetAired, Airing, Finished)
+    }
+}
 
 data class Broadcast(
     val dayOfWeek: DayOfWeek,

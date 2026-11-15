@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
@@ -134,7 +135,7 @@ internal class DemoSearchRepository(
                 BrowseList.ThisSeason ->
                     fixtures.anime.filter { it.airingStatus != AiringStatus.Finished }.map { Ranked(null, it) }
                 BrowseList.TopAiring ->
-                    byRank(fixtures.anime.filter { it.airingStatus == AiringStatus.Airing })
+                    byRank(fixtures.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
                         .mapIndexed { index, it -> Ranked(index + 1, it) }
                 BrowseList.TopRated -> byRank(fixtures.anime).map { Ranked(it.rank, it) }
                 BrowseList.MostPopular ->

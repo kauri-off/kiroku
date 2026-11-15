@@ -1,6 +1,8 @@
 package io.github.kauri_off.kiroku.core.repository
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.model.AiringStatus
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,6 +43,16 @@ class FreshnessTest {
     fun `an airing title's details are fresh for six hours`() {
         assertFalse(detailsStale(FixtureAnime.exactToWatch, at, after(6.hours - 1.milliseconds)))
         assertTrue(detailsStale(FixtureAnime.exactToWatch, at, after(6.hours)))
+    }
+
+    // No rule in Airing.kt can tell an unknown status from airing; this one compares with Airing, so it can.
+    @Test
+    fun `a title whose airing status the app does not know is fresh as an airing one`() {
+        val unknown = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.Unrecognized("on_hiatus"))
+        assertTrue(detailsStale(unknown, at, after(7.hours)))
+        for (age in listOf(0.hours, 6.hours - 1.milliseconds, 6.hours, 7.hours, 24.hours)) {
+            assertEquals(age.toString(), detailsStale(FixtureAnime.exactToWatch, at, after(age)), detailsStale(unknown, at, after(age)))
+        }
     }
 
     @Test
