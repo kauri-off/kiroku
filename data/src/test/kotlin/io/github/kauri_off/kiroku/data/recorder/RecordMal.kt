@@ -6,8 +6,6 @@ import java.io.RandomAccessFile
 import java.nio.channels.OverlappingFileLockException
 import kotlin.system.exitProcess
 
-private const val PAUSE_MILLIS = 2000L
-
 // The build's recorder (section 11.1): its arguments are where the answers go and where a run's answers wait.
 fun main(arguments: Array<String>) {
     val cache = System.getenv("XDG_CACHE_HOME")?.takeIf { it.isNotBlank() } ?: "${System.getProperty("user.home")}/.cache"

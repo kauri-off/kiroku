@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,6 +16,17 @@ class TokenReplyTest {
         val result = TokenReply.Answer(200, printed).read() as TokenResult.Granted
         assertEquals("ACCESS_TOKEN", result.grant.access)
         assertEquals("REFRESH_TOKEN", result.grant.refresh)
+    }
+
+    @Test
+    fun theLifetimeIsReadWhenItIsANumberAndTokensAreGrantedWhateverStandsThere() {
+        assertEquals(2415600L, (TokenReply.Answer(200, printed).read() as TokenResult.Granted).grant.lifetime)
+        val others = listOf("\"soon\"", "null", "[1]", "1.5", "{}", "true").map { printed.replace("2415600", it) }
+        for (body in others + printed.replace("\"expires_in\": 2415600,", "")) {
+            val result = TokenReply.Answer(200, body).read() as TokenResult.Granted
+            assertNull(body, result.grant.lifetime)
+            assertEquals("ACCESS_TOKEN", result.grant.access)
+        }
     }
 
     @Test
