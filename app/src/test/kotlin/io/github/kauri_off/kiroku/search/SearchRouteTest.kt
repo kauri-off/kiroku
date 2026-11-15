@@ -256,6 +256,8 @@ class SearchRouteTest {
         settle()
         compose.onNode(inView("Could not save")).assertExists()
         compose.onNode(inView("Retry") and hasClickAction()).assertExists()
+        // The page's own host steps aside while the view shows the message.
+        compose.onNode(hasText("Could not save") and !hasAnyAncestor(isDialog())).assertDoesNotExist()
     }
 
     @Test

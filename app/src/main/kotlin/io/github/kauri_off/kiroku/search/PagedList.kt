@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,9 +35,15 @@ internal fun LazyListScope.pagedRows(
     onEdit: ((AnimeId) -> Unit)?,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
+    colors: ListItemColors? = null,
 ) {
     items(rows, key = { it.id.value }, contentType = { ROW }) { row ->
-        ResultAnimeRow(row, onClick = { onOpen(row.id) }, onEdit = onEdit?.let { { it(row.id) } })
+        ResultAnimeRow(
+            row,
+            onClick = { onOpen(row.id) },
+            onEdit = onEdit?.let { { it(row.id) } },
+            colors = colors ?: ListItemDefaults.colors(),
+        )
     }
     when (more) {
         More.None -> Unit
