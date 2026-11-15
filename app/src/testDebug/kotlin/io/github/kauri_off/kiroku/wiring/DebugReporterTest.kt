@@ -1,6 +1,8 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.os.Looper
+import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.source.DataSource
@@ -61,6 +63,21 @@ class DebugReporterTest {
             mainThread.idle()
             assertEquals("Unexpected: io.github.kauri_off.kiroku.data.session.TokensNotRead", logged.first())
             assertTrue(logged.toString(), logged[1].startsWith("Stands for: java.io."))
+        }
+
+    @Test
+    fun `a file of choices that cannot be read at a start is logged, and the build does not crash`() =
+        runTest {
+            File(context.noBackupFilesDir, "account.preferences_pb").writeText("not a preferences file")
+            assertTrue(SourceChoice(context).choose(DataSource.Account))
+            val graph = createGraph(context, "0123abcd", Clock.systemUTC(), backgroundScope)
+
+            val sorts = withContext(Dispatchers.Default) { withTimeout(10_000) { graph.preferences.observeListSorts().first() } }
+            assertEquals(ListStatus.entries.associateWith(TabSort::defaultFor), sorts)
+
+            mainThread.idle()
+            val logged = ShadowLog.getLogsForTag(LOG_TAG).map { it.msg }
+            assertEquals("Unexpected: io.github.kauri_off.kiroku.data.preferences.PreferencesFailure", logged.first())
         }
 
     private suspend fun logged(enough: (List<String>) -> Boolean): List<String> {

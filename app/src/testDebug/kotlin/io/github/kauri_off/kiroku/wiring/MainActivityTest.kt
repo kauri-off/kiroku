@@ -1,10 +1,12 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.os.Looper
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -16,6 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 // The launcher activity opens the real app on demo data, and an open edit sheet with a typed count survives
@@ -32,7 +35,11 @@ class MainActivityTest {
     @Test
     fun `the app opens on the demo list and keeps an open edit sheet across recreation`() {
         val title = FixtureAnime.exactToWatch.titles.romaji
-        compose.waitForIdle()
+        // The List's rows are built off the main thread.
+        compose.waitUntil(ROWS_MILLIS) {
+            shadowOf(Looper.getMainLooper()).idle()
+            compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("My list").assertExists()
         compose.onNodeWithText(title).performTouchInput { longClick() }
         compose.waitForIdle()
@@ -42,5 +49,9 @@ class MainActivityTest {
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
         compose.onNode(hasSetTextAction() and hasText("17")).assertExists()
+    }
+
+    private companion object {
+        const val ROWS_MILLIS = 10_000L
     }
 }

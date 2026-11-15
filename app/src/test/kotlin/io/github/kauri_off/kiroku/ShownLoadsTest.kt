@@ -279,10 +279,12 @@ class ShownLoadsTest(
                             graph.airing,
                             graph.session,
                             graph.connection,
+                            graph.preferences,
                             graph.clock,
                             graph.titleLanguage,
                             SavedStateHandle(),
                             ShellMessages(scope, graph.list),
+                            graph.background,
                         )
                     Opened(list, list.state, list.shown, {
                         list.onEvent(ListEvent.Retry)

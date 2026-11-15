@@ -47,8 +47,12 @@ class ScenarioOverlayTest {
 
     private val scenarios get() = checkNotNull(RuntimeEnvironment.getApplication().scenarios)
 
+    // The List's rows are built off the main thread, and the first frame, which brings the tab, waits for them.
     private fun settle() {
-        shadowOf(Looper.getMainLooper()).idle()
+        compose.waitUntil(FIRST_FRAME_MILLIS) {
+            shadowOf(Looper.getMainLooper()).idle()
+            markers().isNotEmpty()
+        }
         compose.waitForIdle()
     }
 
@@ -207,5 +211,6 @@ class ScenarioOverlayTest {
     private companion object {
         const val DRAG_STEPS = 8
         const val FRAME = 16L
+        const val FIRST_FRAME_MILLIS = 10_000L
     }
 }

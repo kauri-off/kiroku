@@ -3,19 +3,24 @@ package io.github.kauri_off.kiroku.list
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
@@ -24,8 +29,10 @@ import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -34,16 +41,25 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ListViewModelTest {
@@ -93,13 +109,26 @@ class ListViewModelTest {
         lateObservers: Boolean = false,
         slowWrites: Boolean = false,
         unreadable: Boolean = false,
+        preferences: PreferencesRepository? = null,
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
-        val graph = TestGraph(demo(scope), lateObservers, slowWrites).apply { listUnreadable = unreadable }
+        val shown = demo(scope)
+        val graph = TestGraph(shown, lateObservers, slowWrites, preferences ?: shown.preferences).apply { listUnreadable = unreadable }
         val messages = ShellMessages(scope, graph.list)
         val list =
-            ListViewModel(graph.list, graph.airing, graph.session, graph.connection, graph.clock, graph.titleLanguage, saved, messages)
+            ListViewModel(
+                graph.list,
+                graph.airing,
+                graph.session,
+                graph.connection,
+                graph.preferences,
+                graph.clock,
+                graph.titleLanguage,
+                saved,
+                messages,
+                graph.background,
+            )
         val subject = Subject(graph, saved, messages, list, this)
         advanceUntilIdle()
         body(subject)
@@ -577,6 +606,103 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `a row is built again when the day it shows passes`() {
+        val anime = FixtureAnime.premiereDate
+        val premiere = (anime.startDate as PartialDate.Day).date
+        val end = premiere.plusDays(1).atStartOfDay(FixtureTime.zone).toInstant()
+        val clock = MovingClock(end.minusSeconds(1), FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            fun line2() =
+                s
+                    .page(ListStatus.Planned)
+                    .rows
+                    .single { it.id == anime.id }
+                    .line2
+            assertEquals(Line2.Premieres(Premiere.OnDay(premiere)), line2())
+            clock.instant = end
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            assertEquals(Line2.Premieres(Premiere.Unannounced), line2())
+        }
+    }
+
+    @Test
+    fun `after a PlusOne every other row and every other tab's page is the same object`() =
+        test { s ->
+            val anime = FixtureAnime.exactToWatch
+            val before = (s.state.content as ListContent.Tabs).pages
+            s.list.onEvent(ListEvent.PlusOne(anime.id))
+            advanceUntilIdle()
+            val after = (s.state.content as ListContent.Tabs).pages
+            for (status in ListStatus.entries - ListStatus.Watching) assertSame(status.name, before[status], after[status])
+            val rows = before.getValue(ListStatus.Watching).rows.zip(after.getValue(ListStatus.Watching).rows)
+            assertEquals(set.entries.count { it.status == ListStatus.Watching }, rows.size)
+            for ((old, new) in rows) {
+                assertEquals(old.id, new.id)
+                if (new.id == anime.id) assertNotEquals(old, new) else assertSame(new.title, old, new)
+            }
+        }
+
+    // The clock is read for every page built and every order computed, so the threads it is read on are theirs.
+    @Test
+    fun `no state is built and no order computed on the main thread`() =
+        runTest(dispatcher) {
+            val main = Thread.currentThread()
+            val pool = Executors.newSingleThreadExecutor()
+            val background = pool.asCoroutineDispatcher()
+            val threads = CopyOnWriteArraySet<Thread>()
+            val clock =
+                object : Clock() {
+                    override fun instant(): Instant {
+                        val building =
+                            Throwable().stackTrace.any {
+                                it.className.startsWith(ListViewModel::class.java.name) &&
+                                    it.methodName in STATE_WORK
+                            }
+                        if (building) threads += Thread.currentThread()
+                        return set.now
+                    }
+
+                    override fun getZone(): ZoneId = FixtureTime.zone
+
+                    override fun withZone(zone: ZoneId): Clock = this
+                }
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope, clock = clock))
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    background,
+                )
+            val screen = showing(list.state, list.shown)
+
+            suspend fun until(condition: (ListState) -> Boolean) =
+                withContext(Dispatchers.Default) { withTimeout(TIMEOUT) { list.state.first(condition) } }
+
+            until { it.content is ListContent.Tabs }
+            list.onEvent(ListEvent.PlusOne(FixtureAnime.exactToWatch.id))
+            until { state -> state.page!!.rows.any { (it.line2 as? Line2.Progress)?.watched == 13 } }
+            list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            until { it.page?.sort == ListSort.Title }
+            list.onEvent(ListEvent.Refresh)
+            until { it.page?.ordering == 2 }
+
+            assertEquals(setOf(pool.submit<Thread> { Thread.currentThread() }.get()), threads.toSet())
+            assertFalse(main in threads)
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
+            pool.shutdown()
+        }
+
+    @Test
     fun `the pages are built again once an air time they show passes`() {
         val airsAt = nextAirTime
         val clock = MovingClock(airsAt.minusSeconds(1), FixtureTime.zone)
@@ -639,10 +765,12 @@ class ListViewModelTest {
                     graph.airing,
                     graph.session,
                     graph.connection,
+                    graph.preferences,
                     graph.clock,
                     graph.titleLanguage,
                     SavedStateHandle(),
                     ShellMessages(scope, graph.list),
+                    graph.background,
                 )
             val downloads = graph.demo.server.listDownloads
             advanceUntilIdle()
@@ -671,10 +799,12 @@ class ListViewModelTest {
                         graph.airing,
                         graph.session,
                         graph.connection,
+                        graph.preferences,
                         graph.clock,
                         graph.titleLanguage,
                         SavedStateHandle(),
                         ShellMessages(scope, graph.list),
+                        graph.background,
                     )
                 // Drawn first, as under a back gesture, then shown: the stored list is read before it is known fresh.
                 val drawn = showing(list.state)
@@ -694,28 +824,57 @@ class ListViewModelTest {
         }
 
     @Test
-    fun `the tab, each tab's sort and direction and the filter survive process death`() {
+    fun `a new process over the same store shows each tab's chosen sort, and the tab and the filter survive process death`() {
         val saved = SavedStateHandle()
-        test(saved = saved) { s ->
+        val store = DemoPreferences()
+        test(saved = saved, preferences = store) { s ->
             s.list.onEvent(ListEvent.SelectTab(ListStatus.Completed))
             s.list.onEvent(ListEvent.SelectSort(ListSort.Score))
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Completed))
             s.list.onEvent(ListEvent.StartFilter)
             s.list.onEvent(ListEvent.FilterChanged("a"))
+            advanceUntilIdle()
         }
-        test(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })) { s ->
+        test(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) }), preferences = store) { s ->
             assertEquals(ListStatus.Completed, s.state.tab)
-            assertEquals(ListSort.Score, s.page().sort)
-            assertEquals(SortDirection.Ascending, s.page().direction)
-            assertEquals(SortDirection.Descending, s.page(ListStatus.Planned).direction)
             assertEquals("a", s.list.filter)
             assertEquals("a", s.state.filter)
+        }
+        test(preferences = store) { s ->
+            assertEquals(ListStatus.Watching, s.state.tab)
+            assertNull(s.list.filter)
+            val sorts = ListStatus.entries.associateWith { s.page(it).sort to s.page(it).direction }
+            val expected =
+                ListStatus.entries.associateWith { TabSort.defaultFor(it).sort to TabSort.defaultFor(it).direction } +
+                    mapOf(
+                        ListStatus.Completed to (ListSort.Score to SortDirection.Ascending),
+                        ListStatus.Planned to (ListSort.Title to SortDirection.Ascending),
+                    )
+            assertEquals(expected, sorts)
+            assertEquals(
+                order(
+                    set.entries.filter { it.status == ListStatus.Completed },
+                    ListSort.Score,
+                    set.airing::get,
+                    today,
+                    SortDirection.Ascending,
+                ) {
+                    it.anime.titles.romaji
+                }.map { it.anime.id },
+                s.ids(ListStatus.Completed),
+            )
+            ListStatus.entries.forEach { assertEquals(it.name, 0, s.page(it).ordering) }
         }
     }
 
     private companion object {
         const val ROTATION = 4_000L
         const val STOPPED_AFTER = 1_001L
+        val TIMEOUT = 10.seconds
+        val STATE_WORK = setOf("build", "ordered")
     }
 }
 
