@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -34,6 +35,7 @@ import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -184,9 +186,10 @@ class TitleScreenTest {
         scrollTo("Less")
         sends(TitleEvent.CollapseSynopsis) { compose.onNodeWithText("Less").performClick() }
         show(shown)
-        val sequel = checkNotNull(shown.page.sequel)
-        scrollTo(sequel.title)
-        sends(TitleEvent.OpenRelated(sequel.related.anime.id)) { compose.onNode(hasText(sequel.title) and hasClickAction()).performClick() }
+        for (card in shown.page.chain.filterNot { it.current }) {
+            scrollTo(card.title)
+            sends(TitleEvent.OpenRelated(card.anime.id)) { compose.onNode(hasText(card.title) and hasClickAction()).performClick() }
+        }
         val first = shown.page.related.first()
         scrollTo("Statistics")
         sends(TitleEvent.OpenRelated(first.related.anime.id)) { compose.onNode(hasText(first.title) and hasClickAction()).performClick() }
@@ -196,6 +199,31 @@ class TitleScreenTest {
         scrollTo("Recommendations")
         sends(TitleEvent.OpenDetails) { compose.onNodeWithText("Details").performClick() }
         sends(TitleEvent.OpenRecommendations) { compose.onNodeWithText("Recommendations").performClick() }
+    }
+
+    // The page's own title is marked in its place in the order and opens nothing; the others open their pages.
+    @Test
+    fun theWatchOrderMarksThePagesOwnTitleAndShowsTheWalkWhileItRuns() {
+        show(TitleFixtures.chainLoading)
+        val spoken = "This title, 2\u00A0of\u00A03\u00A0titles"
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription(spoken))
+        compose.onNode(hasContentDescription(spoken) and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription(spoken).assertIsDisplayed()
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription("Loading the watch order"))
+        compose.onNodeWithContentDescription("Loading the watch order").assertIsDisplayed()
+        show(TitleFixtures.chainFailed)
+        compose.onNodeWithContentDescription("Loading the watch order").assertDoesNotExist()
+        val film = TitleFixtures.filmBetweenSeasons
+        show(TitleFixtures.chainOfFour)
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription("This title, 2\u00A0of\u00A04\u00A0titles"))
+        scrollTo(film.titles.romaji)
+        sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(hasText(film.titles.romaji) and hasClickAction()).performClick() }
     }
 
     // Review M1: with no related title for the strip, the section is "See all" alone.
@@ -267,5 +295,20 @@ class TitleScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText("Added to Planned").assertIsDisplayed()
         compose.onNodeWithText("Change").assertIsDisplayed()
+    }
+}
+
+// The place of the page's own title is spoken with the total's plural, as the Russian genitive after «из» needs.
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "ru")
+class TitleSpokenPlaceTest {
+    @Test
+    fun theOwnTitlesPlaceTakesThePluralOfTheTotal() {
+        val resources = RuntimeEnvironment.getApplication().resources
+
+        fun spoken(of: Int) = resources.getQuantityString(R.plurals.title_this_title_spoken, of, 2, of)
+        assertEquals("Этот тайтл, 2\u00A0из\u00A02\u00A0тайтлов", spoken(2))
+        assertEquals("Этот тайтл, 2\u00A0из\u00A05\u00A0тайтлов", spoken(5))
+        assertEquals("Этот тайтл, 2\u00A0из\u00A021\u00A0тайтла", spoken(21))
     }
 }

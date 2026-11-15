@@ -147,12 +147,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-26 The real title page and its link.**
 
-- [ ] **M2-27 [L] Watch order on the title page.** The page follows the chain of sequels, one request per title,
-  each stored, and shows the watch order, so a film between seasons does not hide the next season; the order is
-  decided in `:core`. Cases: `chain-loading`, `chain-of-four`, `chain-failed`.
-  **Needs:** M2-26, and section 9.4 changed by its own procedure (section 9.1).
-  **Check:** the rubric on the cases; tests: a chain is walked once and read from the store afterwards; a
-  failure in the chain leaves the page as it was.
+- [x] **M2-27 [L] Watch order on the title page.**
 
 - [x] **M2-28 Back gesture preview.**
 

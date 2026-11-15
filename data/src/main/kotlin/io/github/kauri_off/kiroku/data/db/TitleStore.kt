@@ -42,6 +42,13 @@ class TitleStore(
             .map { stored -> stored?.let { StoredDetails(it.toDetails(unexpected), instantOf(it.details.fetchedAt)) } }
             .flowOn(dispatcher)
 
+    fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>> =
+        dao
+            .observeDetails(ids.map { it.value })
+            .distinctUntilChanged()
+            .map { rows -> rows.associate { AnimeId(it.details.titleId) to it.toDetails(unexpected) } }
+            .flowOn(dispatcher)
+
     fun observeDetailed(): Flow<Set<AnimeId>> =
         dao
             .observeDetailed()

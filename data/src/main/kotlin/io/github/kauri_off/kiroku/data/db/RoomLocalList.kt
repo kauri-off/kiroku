@@ -95,6 +95,13 @@ class RoomLocalList(
             .map { it?.toEntry() }
             .flowOn(dispatcher)
 
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
+        listDao
+            .observeListed(ids.map { it.value })
+            .distinctUntilChanged()
+            .map { rows -> rows.map { it.toEntry() }.associateBy { it.anime.id } }
+            .flowOn(dispatcher)
+
     override suspend fun state(): StoredList = withContext(dispatcher) { listDao.state().toStored() }
 
     override suspend fun read(id: AnimeId): StoredTitle? = withContext(dispatcher) { listDao.title(id.value)?.toStored() }

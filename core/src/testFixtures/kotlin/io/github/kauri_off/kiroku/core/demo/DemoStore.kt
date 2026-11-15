@@ -44,6 +44,8 @@ class DemoStore(
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = inner.observeEntry(id).whileReadable()
 
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> = inner.observeEntriesOf(ids).whileReadable()
+
     override suspend fun state(): StoredList = reading { inner.state() }
 
     override suspend fun read(id: AnimeId): StoredTitle? = reading { inner.read(id) }

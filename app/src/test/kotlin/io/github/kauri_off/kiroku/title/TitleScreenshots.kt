@@ -21,15 +21,18 @@ import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ArrivingPoster
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
@@ -38,8 +41,11 @@ import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import java.time.Duration
+import java.time.LocalDate
 
 private const val FRAME = 16L
+private const val FILM_BETWEEN_SEASONS = 900_100L
+private val SECTION_WINDOW = WindowSize(widthDp = 411, heightDp = 1180)
 
 class TitleScreenshots : ScreenshotRegistry() {
     override val content = contentCase("airing-on-list") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch)) }
@@ -89,11 +95,26 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("opened-from-related") { Screen(TitleFixtures.openedFromRelated) },
             case("poster-arriving") { Arriving(inMemory = false, arrived = false) },
             case("poster-arrived") { Arriving(inMemory = true, arrived = false) },
+            case("chain-loading") { Screen(TitleFixtures.chainLoading) },
+            case("chain-of-four") { Screen(TitleFixtures.chainOfFour) },
+            case("chain-failed") { Screen(TitleFixtures.chainFailed) },
+            // The first two in a window that holds the whole section, for the frames of the film arriving.
+            case("chain-loading-tall", window = SECTION_WINDOW) { Screen(TitleFixtures.chainLoading) },
+            case("chain-of-four-tall", window = SECTION_WINDOW) { Screen(TitleFixtures.chainOfFour) },
         )
 
     // The header's large picture fades in over the row's on the fast effects spring, which does most of its way early.
     override val transitions =
         listOf(
+            // The film the walk found joins the watch order between the seasons, and the indicator leaves.
+            Transition(
+                "chain-of-four-tall",
+                start = "chain-loading-tall",
+                millis = MotionBounds.ENTER,
+                at = listOf(FRAME, 2 * FRAME, 4 * FRAME, MotionBounds.ENTER),
+            ) { found ->
+                Screen(if (found) TitleFixtures.chainOfFour else TitleFixtures.chainLoading)
+            },
             Transition(
                 "poster-arrived",
                 start = "poster-arriving",
@@ -143,11 +164,13 @@ object TitleFixtures {
     private val statuses: Map<AnimeId, EntryStatus> =
         set.entries.associate { it.anime.id to it.status }
 
+    // Every page of the set is stored, so a page shows its whole chain of sequels.
     fun page(
         anime: Anime,
         entry: ListEntry? = set.entryFor(anime.id),
         airing: Airing? = set.airing[anime.id],
         details: AnimeDetails? = set.details[anime.id],
+        chainPages: Map<AnimeId, AnimeDetails> = set.details,
     ): TitlePage =
         TitlePage.of(
             anime = anime,
@@ -157,6 +180,7 @@ object TitleFixtures {
             listStatuses = statuses,
             language = TitleLanguage.Romaji,
             clock = set.clock,
+            chainPages = chainPages,
         )
 
     fun of(
@@ -220,6 +244,60 @@ object TitleFixtures {
             val anime = FixtureAnime.relatedFullStory.copy(meanScore = null, rank = null, malEpisodes = null)
             return of(anime, entry = null, airing = null, details = null).copy(detailsWait = DetailsWait.Loading)
         }
+
+    // A film between the second and the third season: the second season's page names only the third, whose page names
+    // the film as its prequel.
+    val filmBetweenSeasons: Anime =
+        FixtureAnime.film.copy(
+            id = AnimeId(FILM_BETWEEN_SEASONS),
+            titles =
+                Titles(
+                    "Kagerou Toshokan Movie: Natsu no Owari",
+                    "The Heat Haze Library the Movie: The End of Summer",
+                    "劇場版 陽炎図書館 夏の終わり",
+                ),
+            posterUrl = "${FixtureAnime.POSTER_URL}$FILM_BETWEEN_SEASONS.jpg",
+            largePosterUrl = null,
+            startDate = PartialDate.Day(LocalDate.parse("2026-08-21")),
+        )
+
+    private val chainOfFourPages: Map<AnimeId, AnimeDetails>
+        get() {
+            val third = checkNotNull(set.details[FixtureAnime.premiereYear.id])
+            val film = checkNotNull(set.details[FixtureAnime.film.id])
+            return set.details +
+                mapOf(
+                    FixtureAnime.premiereYear.id to third.copy(related = listOf(RelatedAnime(filmBetweenSeasons, RelationType.Prequel))),
+                    filmBetweenSeasons.id to
+                        film.copy(
+                            id = filmBetweenSeasons.id,
+                            related =
+                                listOf(
+                                    RelatedAnime(FixtureAnime.exactToWatch, RelationType.Prequel),
+                                    RelatedAnime(FixtureAnime.premiereYear, RelationType.Sequel),
+                                ),
+                        ),
+                )
+        }
+
+    // The walk has read every page of the chain: the film comes between the seasons.
+    val chainOfFour: TitleState.Shown
+        get() = chainOfFourWith()
+
+    // The same with the title's own entry and page as given, as "Add to list" or a refresh changes them.
+    fun chainOfFourWith(
+        entry: ListEntry? = set.entryFor(FixtureAnime.exactToWatch.id),
+        details: AnimeDetails? = set.details[FixtureAnime.exactToWatch.id],
+    ): TitleState.Shown =
+        TitleState.Shown(page(FixtureAnime.exactToWatch, entry = entry, details = details, chainPages = chainOfFourPages), set.session)
+
+    // The walk has run for a second: the chain is what the title's own page tells, with the indicator under it.
+    val chainLoading: TitleState.Shown
+        get() = TitleState.Shown(page(FixtureAnime.exactToWatch, chainPages = emptyMap()), set.session, chainLoading = true)
+
+    // The walk's first request failed: the page stays as the title's own page tells it, and says nothing.
+    val chainFailed: TitleState.Shown
+        get() = TitleState.Shown(page(FixtureAnime.exactToWatch, chainPages = emptyMap()), set.session)
 
     // "Add to list" was tapped: the title is Planned and the snackbar offers "Change".
     val added: TitleState.Shown

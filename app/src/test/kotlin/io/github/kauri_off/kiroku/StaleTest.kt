@@ -35,6 +35,8 @@ class StaleTest {
 
         override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = read(null)
 
+        override fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>> = read(emptyMap())
+
         override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = read(refreshedAt)
 
         override fun observePagesRead(): Flow<Set<AnimeId>> = read(emptySet())
