@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
+import io.github.kauri_off.kiroku.data.recorder.RecordingRequests
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.source.DataSource
@@ -51,6 +52,9 @@ class RecorderSectionTest {
         compose.onNodeWithText("Record on this title?").assertExists()
         compose.onNodeWithText("“Cowboy Bebop”, 26\u00A0episodes").assertExists()
         compose.onNodeWithText("Kiroku will add this title to your list on MyAnimeList", substring = true).assertExists()
+        val requests = "It sends $RecordingRequests\u00A0requests, two seconds apart, which takes about two minutes"
+        compose.onNodeWithText(requests).assertExists()
+        assertEquals(47, RecordingRequests)
         assertEquals(emptyList<RecorderEvent>(), events)
 
         compose.onNodeWithText("Cancel").performClick()

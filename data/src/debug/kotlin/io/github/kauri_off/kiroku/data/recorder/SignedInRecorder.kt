@@ -277,15 +277,15 @@ class SignedInRecorder internal constructor(
 
     // The fixed list of changes, each read back; the title is on the list from the first to the removal.
     private suspend fun changes(title: RecordedTitle) {
+        ownTitle = title.id
         for ((index, write) in OwnTitleWrites.withIndex()) {
             val adds = index == 0
             ask(write.name, patch(title.id, write.form(title.episodes)), expected = if (adds) ::ok else ::answered)
-            if (adds) ownTitle = title.id
             ask("${write.name}_read", entry(title.id, READ_BACK))
         }
         ask("entry_full", entry(title.id, MalFields.OWN_ENTRY))
         ask(REMOVED, delete(title.id))
-        offTheList(ask("removed_read", entry(title.id, READ_BACK)), "removed_read")
+        offTheList(ask("removed_read", entry(title.id, READ_BACK), expected = ::knownOrNot), title.id, "removed_read")
         journal.delete()
         ask("removed_again", delete(title.id), expected = ::knownOrNot)
     }
@@ -303,19 +303,23 @@ class SignedInRecorder internal constructor(
             val user = ask(USER, get("users/@me?fields=id"), kept = false)
             if (userOf(user) != left.user) throw Halted(Halt.AnotherAccount, USER)
             ask(REMOVED, delete(left.title.id), kept = false, expected = ::knownOrNot)
-            offTheList(ask(READ, entry(left.title.id, READ_BACK), kept = false), READ)
+            offTheList(ask(READ, entry(left.title.id, READ_BACK), kept = false, expected = ::knownOrNot), left.title.id, READ)
             journal.delete()
             null
         } catch (halted: Halted) {
             halted.halt
         }
 
-    // The journal goes only once MAL itself shows the title without an entry.
+    // The journal goes only on MAL's own answer for this title without an entry, or on MAL's word that it knows no such title.
     private fun offTheList(
         read: Answer,
+        id: Long,
         at: String,
     ) {
-        if (read.json()?.get("my_list_status").holdsValues) throw Halted(Halt.StillOnTheList, at)
+        val title = read.json()
+        if (read.status == NOT_FOUND && title?.text("error") == UNKNOWN_TITLE) return
+        if (read.status != OK || title?.number("id") != id) throw Halted(Halt.Unexpected(read.status), at)
+        if (title["my_list_status"].holdsValues) throw Halted(Halt.StillOnTheList, at)
     }
 
     private suspend fun lifetime() {
@@ -545,6 +549,7 @@ class SignedInRecorder internal constructor(
         const val MOST_PAGES = 50
         const val FEWEST_EPISODES = 3
         const val FINISHED = "finished_airing"
+        const val UNKNOWN_TITLE = "not_found"
         const val OWN_LIST = "users/@me/animelist?fields=${MalFields.LIST_ENTRY}&nsfw=true"
         const val READ_BACK = "id,num_episodes,my_list_status{${MalFields.LIST_VALUES}}"
         const val PROFILE = "profile"

@@ -12,7 +12,11 @@
         <item quantity="one">“%1$s”, %2$d\u00A0episode</item>
         <item quantity="other">“%1$s”, %2$d\u00A0episodes</item>
     </plurals>
-    <string name="recorder_confirm_writes">Kiroku will add this title to your list on MyAnimeList, change its status, watched episodes, score and dates, and remove it again. Nothing else on your list is changed. It takes about two minutes</string>
+    <string name="recorder_confirm_writes">Kiroku will add this title to your list on MyAnimeList, change its status, watched episodes, score and dates, and remove it again. Nothing else on your list is changed</string>
+    <plurals name="recorder_confirm_requests">
+        <item quantity="one">It sends %d\u00A0request</item>
+        <item quantity="other">It sends %d\u00A0requests, two seconds apart, which takes about two minutes</item>
+    </plurals>
     <string name="recorder_record">Record</string>
     <string name="recorder_cancel">Cancel</string>
     <string name="recorder_running">Answers recorded: %1$d\u00A0of\u00A0%2$d</string>

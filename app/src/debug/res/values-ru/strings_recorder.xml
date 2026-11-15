@@ -14,7 +14,13 @@
         <item quantity="many">«%1$s», %2$d\u00A0серий</item>
         <item quantity="other">«%1$s», %2$d\u00A0серии</item>
     </plurals>
-    <string name="recorder_confirm_writes">Kiroku добавит этот тайтл в ваш список на MyAnimeList, изменит его статус, число просмотренных серий, оценку и даты и снова удалит его. Больше в списке ничего не изменится. Это займёт около двух минут</string>
+    <string name="recorder_confirm_writes">Kiroku добавит этот тайтл в ваш список на MyAnimeList, изменит его статус, число просмотренных серий, оценку и даты и снова удалит его. Больше в списке ничего не изменится</string>
+    <plurals name="recorder_confirm_requests">
+        <item quantity="one">Будет отправлен %d\u00A0запрос</item>
+        <item quantity="few">Будет отправлено %d\u00A0запроса, по одному в две секунды: это около двух минут</item>
+        <item quantity="many">Будет отправлено %d\u00A0запросов, по одному в две секунды: это около двух минут</item>
+        <item quantity="other">Будет отправлено %d\u00A0запроса, по одному в две секунды: это около двух минут</item>
+    </plurals>
     <string name="recorder_record">Записать</string>
     <string name="recorder_cancel">Отмена</string>
     <string name="recorder_running">Записано ответов: %1$d\u00A0из\u00A0%2$d</string>

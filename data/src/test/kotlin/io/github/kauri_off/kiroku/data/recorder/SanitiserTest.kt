@@ -63,16 +63,30 @@ class SanitiserTest {
     }
 
     @Test
-    fun `a user's id is replaced wherever it stands as a whole number, an error's message included`() {
-        val owner = Sanitiser(emptyMap(), userId = "4815162")
-        val planted = """{"id":4815162,"message":"no entry of user 4815162.","rank":14815162,"mean":4815162.5,"link":"u/4815162/x"}"""
+    fun `a user's id is replaced in a text and where a key names it, and no number is changed for being equal to it`() {
+        val owner = Sanitiser(emptyMap(), userId = "1440")
+        val planted =
+            """{"id":1440,"average_episode_duration":1440,"statistics":{"watching":"1440"},"user_id":1440,""" +
+                """"user":{"id":1440,"rank":1440},""" +
+                """"users":[{"user":{"id":"1440"}}],"message":"no entry of user 1440.","mean":1440.5,"link":"u/1440/x, 11440"}"""
 
         assertEquals(
-            """{"id":0,"message":"no entry of user 0.","rank":14815162,"mean":4815162.5,"link":"u/0/x"}""",
+            """{"id":1440,"average_episode_duration":1440,"statistics":{"watching":"1440"},"user_id":0,"user":{"id":0,"rank":1440},""" +
+                """"users":[{"user":{"id":0}}],"message":"no entry of user 0.","mean":1440.5,"link":"u/0/x, 11440"}""",
             "${Json.parseToJsonElement(owner.json(planted)!!)}",
         )
-        assertEquals("user 0", owner.plain("user 4815162"))
-        assertEquals("""{"id":4815162}""", "${Json.parseToJsonElement(Sanitiser(emptyMap(), userId = "x").json("""{"id":4815162}""")!!)}")
+        assertEquals("user 0", owner.plain("user 1440"))
+    }
+
+    @Test
+    fun `a moment is stored in UTC without a part of a second, wherever an answer holds one`() {
+        val moments = """{"updated_at":"2026-11-14T21:00:00.123+09:00","created_at":"2026-11-14T12:00:00Z","""
+        val planted = """$moments"day":"2026-11-14","at":"2026-11-14T12:00:00"}"""
+
+        assertEquals(
+            """{"updated_at":"2026-11-14T12:00:00+00:00","created_at":"2026-11-14T12:00:00+00:00","day":"2026-11-14","at":"2026-11-14T12:00:00"}""",
+            "${Json.parseToJsonElement(sanitiser.json(planted)!!)}",
+        )
     }
 
     @Test
@@ -315,7 +329,7 @@ class SanitiserTest {
         val ofMal = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"mine","updated_at":"""
         val values = """$ofMal"2026-11-14T15:00:00.123+03:00"}"""
         val madeUp = """{"status":"watching","score":3,"start_date":"2020-01-13","comments":"","updated_at":"2020-01-13T02:23:48+00:00"}"""
-        val kept = """$ofMal"2026-11-14T12:00:00+00:00"}"""
+        val kept = ofMal.replace("mine", "") + """"2026-11-14T12:00:00+00:00"}"""
 
         val page =
             Json.parseToJsonElement(

@@ -36,6 +36,7 @@ import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
+import io.github.kauri_off.kiroku.data.recorder.RecordingRequests
 import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -156,6 +157,7 @@ private fun Confirmation(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 Text(pluralStringResource(R.plurals.recorder_confirm_named, title.episodes, title.name, title.episodes))
                 Text(stringResource(R.string.recorder_confirm_writes))
+                Text(pluralStringResource(R.plurals.recorder_confirm_requests, RecordingRequests, RecordingRequests))
             }
         },
         confirmButton = {

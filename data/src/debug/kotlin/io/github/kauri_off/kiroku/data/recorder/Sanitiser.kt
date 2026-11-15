@@ -42,7 +42,7 @@ internal class Sanitiser(
     secrets: Map<String, String>,
     // User names and what stands for each: replaced where a value is the name, and after `users/` in an address.
     names: Map<String, String> = emptyMap(),
-    // A user's id, replaced wherever it stands as a whole number.
+    // A user's id: replaced in a text that holds it as a whole number, and as a value only where a key says it is a user's.
     userId: String? = null,
     // The title a recorder put on the list itself: its values there are the recorder's, and stay as MAL wrote them.
     private val ownTitle: Long? = null,
@@ -53,6 +53,7 @@ internal class Sanitiser(
         users.map { (name, standIn) ->
             Regex("(?<=users/)" + Regex.escape(name) + """(?=[/?#"\s]|$)""", RegexOption.IGNORE_CASE) to standIn
         }
+    private val user = userId?.takeIf { id -> id.isNotEmpty() && id.all(Char::isDigit) }
     private val asNumber =
         userId?.takeIf { id -> id.isNotEmpty() && id.all(Char::isDigit) }?.let { Regex("""(?<![0-9])(?<![0-9]\.)$it(?![0-9]|\.[0-9])""") }
 
@@ -85,14 +86,14 @@ internal class Sanitiser(
                 null
             }
         val answer = json.takeIf { it is JsonObject || it is JsonArray } ?: return null
-        return plain(Pretty.encodeToString(JsonElement.serializer(), cleaned(answer))) + "\n"
+        return unnamed(Pretty.encodeToString(JsonElement.serializer(), cleaned(answer))) + "\n"
     }
 
     // A text without the secrets, without a user's name where an address names the user, and without the user's id.
-    fun plain(text: String): String {
-        val named = inAddress.fold(withoutSecrets(text)) { cleaned, (name, standIn) -> name.replace(cleaned) { standIn } }
-        return asNumber?.replace(named, "0") ?: named
-    }
+    fun plain(text: String): String = unnamed(text).let { asNumber?.replace(it, "0") ?: it }
+
+    private fun unnamed(text: String): String =
+        inAddress.fold(withoutSecrets(text)) { cleaned, (name, standIn) -> name.replace(cleaned) { standIn } }
 
     // Secrets that overlap or touch are replaced as one, by the stand-in of the one that starts them.
     private fun withoutSecrets(text: String): String {
@@ -145,9 +146,13 @@ internal class Sanitiser(
             .replace(PageStart) { "offset=${(it.groupValues[1].toLongOrNull() ?: 0) / size * KEPT_ENTRIES}" }
     }
 
-    private fun values(json: JsonElement): JsonElement =
+    private fun values(
+        json: JsonElement,
+        // The key the value stands under, through lists.
+        under: String? = null,
+    ): JsonElement =
         when (json) {
-            is JsonArray -> JsonArray(json.map(::values))
+            is JsonArray -> JsonArray(json.map { values(it, under) })
             is JsonObject -> {
                 val node = json["node"] as? JsonObject ?: json
                 val title = (node["id"] as? JsonPrimitive)?.longOrNull ?: 0
@@ -157,24 +162,44 @@ internal class Sanitiser(
                         when {
                             key in FreeTexts && value.isText -> JsonPrimitive(shortened(plain(value.text)))
                             key in LIST_VALUES && value is JsonObject && title != ownTitle -> madeUp(value, title, aired)
-                            key == UPDATED && value.isText && ownTitle != null -> JsonPrimitive(inUtc(value.text))
-                            else -> values(value)
+                            // The recorder writes neither, so what stands there is the user's own.
+                            key in OWNERS_TEXTS && ownTitle != null -> blank(value)
+                            isUsersId(key, under, value) -> JsonPrimitive(0)
+                            else -> values(value, key)
                         }
                     },
                 )
             }
-            is JsonPrimitive -> if (json.isString) JsonPrimitive(named(json.content)) else json
+            is JsonPrimitive -> if (json.isString) JsonPrimitive(text(json.content)) else json
         }
+
+    // A number is the user's id where its key says so, never because it equals it: a title's own numbers stay.
+    private fun isUsersId(
+        key: String,
+        under: String?,
+        value: JsonElement,
+    ): Boolean = value is JsonPrimitive && value.content == user && (key == "user_id" || (key == "id" && under == "user"))
+
+    // A text of an answer: a user's name where it is the whole value, a moment in UTC, the user's id inside other words.
+    private fun text(real: String): String {
+        val named = named(real)
+        return when {
+            named != real -> named
+            MomentStart.containsMatchIn(real) -> utc(real) ?: real
+            real.all(Char::isDigit) -> real
+            else -> asNumber?.replace(real, "0") ?: real
+        }
+    }
 
     // A value that is a user's name, whatever its case, is the user's stand-in.
     private fun named(text: String): String = users.firstOrNull { (name, _) -> name.equals(text, ignoreCase = true) }?.second ?: text
 
-    // The moment MAL wrote, without the offset it wrote it in and without a part of a second.
-    private fun inUtc(moment: String): String =
+    // The moment MAL wrote, without the offset it wrote it in and without a part of a second; null when it is none.
+    private fun utc(moment: String): String? =
         try {
             OffsetDateTime.parse(moment).withOffsetSameInstant(ZoneOffset.UTC).format(Moment) + UTC
         } catch (_: DateTimeException) {
-            MADE_UP_MOMENT
+            null
         }
 
     // Of a page of the user's own list every entry is made up: all its titles take the shape of the page's first one.
@@ -198,7 +223,7 @@ internal class Sanitiser(
                     },
                 )
             }
-        return JsonObject(answer + (ENTRIES to JsonArray(made)))
+        return JsonObject(answer.mapValues { (key, value) -> if (key == ENTRIES) JsonArray(made) else values(value, key) })
     }
 
     // A title no list holds: ids MAL does not have, and a list of one value wherever the shape has a list.
@@ -369,6 +394,7 @@ internal class Sanitiser(
         const val ENTRIES = "data"
         const val LINKS = "paging"
         const val NODE = "node"
+        val OWNERS_TEXTS = setOf("comments", "tags")
         const val START = "start_date"
         const val FINISH = "finish_date"
         const val UPDATED = "updated_at"

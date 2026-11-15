@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -159,7 +160,8 @@ internal class PlantedMal : Dispatcher() {
             put("updated_at", entry.getValue("updated_at"))
             entry["start_date"]?.let { put("start_date", it) }
             entry["finish_date"]?.let { put("finish_date", it) }
-            put("comments", "${entry["comments"].orEmpty()} $token")
+            put("comments", "${entry["comments"].orEmpty()} $USER_NAME $token")
+            putJsonArray("tags") { add(JsonPrimitive("a planted tag")) }
         }
 
     private fun page(
@@ -252,7 +254,7 @@ internal class PlantedMal : Dispatcher() {
         const val PICTURE = "https://cdn.example/userimages/4815162.jpg"
         const val TITLE = 5L
         const val UPDATED_AT = "2016-06-07T08:09:10+00:00"
-        const val CHANGED_AT = "2026-11-14T12:00:00+00:00"
+        const val CHANGED_AT = "2026-11-14T21:00:00.123+09:00"
         const val NOT_FOUND = """{"message":"","error":"not_found"}"""
         val LISTED = 101L..140L
         const val LAST_COMPLETED = 135L

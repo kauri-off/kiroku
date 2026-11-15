@@ -158,6 +158,7 @@ class SignedInRecorderTest {
                 listOf(entry, "DELETE $change", entry, "DELETE $change", list),
             events.filter { it != "pause" },
         )
+        assertEquals(RecordingRequests, events.count { it != "pause" } - 1)
         val pages = mal.asked.filter { "sort=anime_title" in it }.map { it.substringAfter("sort=anime_title") }
         assertEquals(listOf("&limit=14&offset=0", "&limit=14&offset=14", "&limit=14&offset=28"), pages)
         assertTrue(mal.asked.filter { it.startsWith("GET /v2/users/@me/animelist") }.all { "nsfw=true" in it })
@@ -221,12 +222,13 @@ class SignedInRecorderTest {
         assertEquals((0 until 30).map { "\"${statuses[it % 5]}\"" }, entries.map { "${it["list_status"]!!.jsonObject["status"]}" })
         assertEquals(
             """{"status":"completed","score":2,"num_episodes_watched":24,"is_rewatching":false,""" +
-                """"updated_at":"2021-02-01T00:00:00+00:00","comments":"","start_date":"2021-01-02","finish_date":"2021-02-01"}""",
+                """"updated_at":"2021-02-01T00:00:00+00:00","comments":"","tags":[],""" +
+                """"start_date":"2021-01-02","finish_date":"2021-02-01"}""",
             "${entries[1]["list_status"]}",
         )
         assertEquals(
             """{"status":"plan_to_watch","score":0,"num_episodes_watched":0,"is_rewatching":false,""" +
-                """"updated_at":"2021-02-04T00:00:00+00:00","comments":""}""",
+                """"updated_at":"2021-02-04T00:00:00+00:00","comments":"","tags":[]}""",
             "${entries[4]["list_status"]}",
         )
         assertEquals(""""2021-01"""", "${entries[2]["list_status"]!!.jsonObject["start_date"]}")
@@ -249,13 +251,14 @@ class SignedInRecorderTest {
 
         assertNull(stored("entry_absent.200.json")["my_list_status"])
         assertEquals(""""plan_to_watch"""", "${stored("add_planned.200.json")["status"]}")
-        assertEquals("\" access-token\"", "${stored("add_planned.200.json")["comments"]}")
+        assertEquals("\"\" []", "${stored("add_planned.200.json")["comments"]} ${stored("add_planned.200.json")["tags"]}")
+        assertEquals("\"\"", "${stored("entry_full.200.json")["my_list_status"]!!.jsonObject["comments"]}")
         val scored = stored("score_set_read.200.json")["my_list_status"]!!.jsonObject
         assertEquals(
             """7 11 "2100-01-01" "2020-05"""",
             "${scored["score"]} ${scored["num_episodes_watched"]} ${scored["finish_date"]} ${scored["start_date"]}",
         )
-        assertEquals(""""${PlantedMal.CHANGED_AT}"""", "${scored["updated_at"]}")
+        assertEquals(""""2026-11-14T12:00:00+00:00"""", "${scored["updated_at"]}")
         assertEquals(""""2020-02-02"""", "${stored("finish_set_read.200.json")["my_list_status"]!!.jsonObject["finish_date"]}")
         assertNull(stored("finish_cleared_read.200.json")["my_list_status"]!!.jsonObject["finish_date"])
         assertEquals(""""bad_request"""", "${stored("score_refused.400.json")["error"]}")
@@ -648,6 +651,49 @@ class SignedInRecorderTest {
         assertEquals(listOf("kept, journal there: true"), seen)
         assertEquals(TITLE, Journal(file).read()!!.title.id)
         syncedDirectory(file.parentFile!!)
+    }
+
+    @Test
+    fun `no stored file keeps an offset or a part of a second that MAL wrote`() {
+        recorder(signedIn()).recorded()
+
+        val moment = Regex("""\d{4}-\d\d-\d\dT[0-9:.]+(Z|[+-]\d\d:\d\d)?""")
+        val moments = files.recorded.texts().flatMap { (name, text) -> moment.findAll(text).map { "$name ${it.value}" } }
+        assertTrue(moments.size > SignedInAnswers.size)
+        assertEquals(emptyList<String>(), moments.filterNot { Regex(""".* \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00""").matches(it) })
+        assertTrue(""""updated_at": "2026-11-14T12:00:00+00:00"""" in files.recorded.texts().getValue("add_planned.200.json"))
+    }
+
+    @Test
+    fun `a read-back that is not MAL's own answer for the title keeps the journal`() {
+        instead("score=7") { answer(429, "{}") }
+        val session = signedIn()
+        recorder(session).recorded()
+        mal.removalsDoNothing = true
+        val readBack = "anime/$TITLE?fields=id,num_episodes"
+
+        instead(readBack) { answer(200, "<html>Maintenance</html>", "text/html") }
+        assertEquals(Recording.Leftover(title, ListAfter.Left, Halt.Unexpected(200)), recorder(session).state.value)
+        instead(readBack) { answer(200, """{"id":6,"num_episodes":12}""") }
+        assertEquals(Recording.Leftover(title, ListAfter.Left, Halt.Unexpected(200)), recorder(session).state.value)
+        instead(readBack) { answer(404, "<html>Not found</html>", "text/html") }
+        assertEquals(Recording.Leftover(title, ListAfter.Left, Halt.Unexpected(404)), recorder(session).state.value)
+
+        assertTrue(journal.exists())
+        assertTrue(TITLE in mal.onTheList())
+    }
+
+    @Test
+    fun `a title MAL says it no longer knows leaves nothing to remove, and the journal goes`() {
+        instead("score=7") { answer(429, "{}") }
+        val session = signedIn()
+        recorder(session).recorded()
+        instead("anime/$TITLE") { answer(404, PlantedMal.NOT_FOUND) }
+
+        assertEquals(Recording.Leftover(title, ListAfter.Removed, null), recorder(session).state.value)
+
+        assertFalse(journal.exists())
+        assertEquals(Recording.Idle, recorder(session).state.value)
     }
 
     @Test
