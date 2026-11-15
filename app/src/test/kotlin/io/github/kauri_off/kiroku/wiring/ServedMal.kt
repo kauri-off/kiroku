@@ -25,9 +25,9 @@ class ServedMal : ExternalResource() {
     @Volatile
     var pages: List<String> = publicPages
 
-    // The answer to a change of the list.
+    // The answer to a change of the list; a test that expects none gets a server error with no body.
     @Volatile
-    var write: (RecordedRequest) -> MockResponse = { answer(500, recorded("title_unknown.404.json")) }
+    var write: (RecordedRequest) -> MockResponse = { answer(500, "") }
 
     val hosts: MalHosts get() = MalHosts(server.url("/v2/").toString(), server.url("/v1/oauth2/").toString())
 
@@ -87,7 +87,7 @@ class ServedMal : ExternalResource() {
             return json.toString()
         }
 
-        // A title's list status as a recorded page has it, which is what MAL answers a write with.
+        // A title's list status as a recorded page has it, served as a write's answer.
         fun listStatus(
             page: String,
             id: Long,

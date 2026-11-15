@@ -127,7 +127,7 @@ class ListEngine(
             override suspend fun download(
                 titles: List<Anime>,
                 entries: Map<AnimeId, StoredEntry?>,
-                at: Instant,
+                at: Instant?,
             ) = storeCall(unwritable) { store.download(titles, entries, at) }
 
             override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) = storeCall(unwritable) { store.restore(entries) }
@@ -162,6 +162,9 @@ class ListEngine(
     private val pending = mutableMapOf<AnimeId, Int>()
     private val touched = mutableMapOf<AnimeId, Long>()
     private var changes = 0L
+
+    // The change count at the last write MAL may have made unseen; a download begun after it ends what is owed.
+    private var owedSince: Long? = null
     private val accepted = mutableListOf<Request>()
     private var restored = false
     private var stopped = false
@@ -393,8 +396,9 @@ class ListEngine(
                                 .filterNot { it in pending || (touched[it] ?: 0) > since }
                                 .associateWith { fetched[it]?.let { StoredEntry.settled(it.record) } }
                                 .filter { (id, entry) -> entry != stored[id] }
-                        val now = clock.instant()
+                        val now = clock.instant().takeIf { owedSince.let { it == null || it <= since } }
                         local.download(fetched.values.map { it.anime }, changed, now)
+                        if (now != null) owedSince = null
                         syncedAt.value = now
                         Outcome.Success(Unit)
                     }
@@ -425,12 +429,7 @@ class ListEngine(
                         val stored = local.read(id)?.entry
                         val back = mapOf(id to stored?.confirmed?.let { StoredEntry.settled(it) })
                         touch(id)
-                        if (outcome.error.unsure) {
-                            local.restore(back)
-                            syncedAt.value = null
-                        } else {
-                            local.write(back)
-                        }
+                        if (outcome.error.unsure) owe(back) else local.write(back)
                         val shown = stored?.shown
                         val retry = shown?.let { ListWrite.Save(put.anime, it.values) } ?: ListWrite.Remove(put.anime)
                         WriteFailure(outcome.error, retry, settled?.owner)
@@ -443,8 +442,15 @@ class ListEngine(
         }
     }
 
-    // MAL may have made a write whose answer was lost or could not be read: what it has is learnt by a download.
-    private val DataError.unsure: Boolean get() = this == DataError.ServerError
+    // MAL may have made a write whose answer was lost, could not be read, or was cut off: a download says what it has.
+    private val DataError.unsure: Boolean get() = this == DataError.ServerError || this == DataError.NoConnection
+
+    // The list counts as never downloaded until a download begun after now succeeds, also across a process death (W5).
+    private suspend fun owe(entries: Map<AnimeId, StoredEntry?>) {
+        local.restore(entries)
+        syncedAt.value = null
+        owedSince = ++changes
+    }
 
     // A request the store or the engine failed under is a failed write (W2); its Retry carries the title's last edit.
     private suspend fun lost(
@@ -497,12 +503,27 @@ class ListEngine(
             } else {
                 if (!current(direct)) return expired
                 when (val outcome = mal.put(confirmed?.anime ?: write.anime, values?.sent)) {
-                    is Outcome.Failure -> return outcome
+                    is Outcome.Failure -> return outcome.also { failedUnseen(direct, it.error) }
                     is Outcome.Success -> outcome.value
                 }
             }
         locked { if (list == direct.list) confirm(entry?.anime ?: write.anime, entry?.record) }
         return Outcome.Success(Unit)
+    }
+
+    // N9's write owes a download on the same rule; a store that fails to keep that still gets the download.
+    private suspend fun failedUnseen(
+        direct: Direct,
+        error: DataError,
+    ) {
+        if (!error.unsure) return
+        val owes =
+            try {
+                locked { (list == direct.list).also { if (it) owe(emptyMap()) } }
+            } catch (_: StoreFailure) {
+                true
+            }
+        if (owes) scope.launch { sync() }
     }
 
     private suspend fun current(request: Request): Boolean = locked { settled is Session.SignedIn && list == request.list }
@@ -548,6 +569,7 @@ class ListEngine(
         pending.clear()
         epochs.clear()
         touched.clear()
+        owedSince = null
         syncedAt.value = null
         local.clear(owner)
         restored = true

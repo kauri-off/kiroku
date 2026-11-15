@@ -59,7 +59,7 @@ internal class LiveGraph(
     private val built = lazy { liveSession(parts) }
     private val account by built
     override val session: SessionRepository by lazy { SignOutForgets(account) { list } }
-    override val list by lazy { liveList(parts, account, listStore) { preferences.clear() } }
+    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetListSorts() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { liveAiring(parts) }
     override val search by lazy { liveSearch(parts) }
@@ -78,7 +78,7 @@ internal class LiveGraph(
     }
 }
 
-// S9: a sign-out takes the user's list and choices with it at once, also when nothing has asked for the list yet.
+// S9: a sign-out takes the user's list and its sorts with it at once, also when nothing has asked for the list yet.
 private class SignOutForgets(
     private val account: SessionRepository,
     private val list: () -> ListSource,

@@ -141,9 +141,12 @@ abstract class ListEngineContract {
         @Volatile
         var answering: (Anime) -> Anime = { it }
 
-        // MAL makes this many writes more, and the app cannot read its answer to any of them.
+        // MAL makes this many writes more, and its answer to each is lost as [unreadAs].
         @Volatile
         var unreadAnswers = 0
+
+        @Volatile
+        var unreadAs: DataError = DataError.ServerError
 
         override suspend fun fetch(): Outcome<List<ListEntry>> {
             fetchesUnder += session()
@@ -167,7 +170,7 @@ abstract class ListEngineContract {
             val answer = inner.put(anime, values).also { afterPut() }
             if (unreadAnswers > 0) {
                 unreadAnswers--
-                return Outcome.Failure(DataError.ServerError)
+                return Outcome.Failure(unreadAs)
             }
             return answer.answered().also { fault() }
         }
@@ -187,7 +190,7 @@ abstract class ListEngineContract {
         class Download(
             val titles: List<Anime>,
             val entries: Map<AnimeId, StoredEntry?>,
-            val at: Instant,
+            val at: Instant?,
         )
 
         @Volatile
@@ -243,7 +246,7 @@ abstract class ListEngineContract {
         override suspend fun download(
             titles: List<Anime>,
             entries: Map<AnimeId, StoredEntry?>,
-            at: Instant,
+            at: Instant?,
         ) = writing("download") {
             downloads += Download(titles, entries, at)
             inner.download(titles, entries, at)
@@ -1337,21 +1340,97 @@ abstract class ListEngineContract {
         }
 
     @Test
-    fun `a write MAL refused, or that failed offline, asks for no download`() =
+    fun `a write MAL refused asks for no download`() =
         runTest {
             val s = subject()
             val failures = failures(s)
             s.server.refusingWrites.value = true
             s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
-            s.server.refusingWrites.value = false
-            s.server.offline.value = true
-            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
-            settle()
 
-            assertEquals(listOf(DataError.Refused, DataError.NoConnection), failures.map { it.error })
+            assertEquals(listOf(DataError.Refused), failures.map { it.error })
             assertEquals(0, s.server.listDownloads)
             assertEquals(seededAt, s.syncedAt())
+            assertEquals(seededAt, s.local.state().syncedAt)
+        }
+
+    @Test
+    fun `a write that failed offline owes a download until one succeeds`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.server.offline.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+
+            assertEquals(listOf(DataError.NoConnection), failures.map { it.error })
+            assertNull(s.syncedAt())
+            assertNull(s.local.state().syncedAt)
+            s.server.offline.value = false
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(fixtures.now, s.local.state().syncedAt)
+            assertEquals(12, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a write MAL made before the connection dropped is shown by the download it owes`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.mal.unreadAnswers = 1
+            s.mal.unreadAs = DataError.NoConnection
+            s.mal.afterPut = { s.server.offline.value = true }
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+            assertNull(s.local.state().syncedAt)
+            s.server.offline.value = false
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(13, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a download that began before the write failed does not end the download it owes`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.server.writeLatency = { 500.milliseconds }
+            s.mal.unreadAnswers = 1
+            val running = async { s.list.sync() }
+            runCurrent()
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            // The running download ends at 2 s; the one the failure owes follows it and is still asking at 2.5 s.
+            advanceTimeBy(2500.milliseconds)
+            assertEquals(Outcome.Success(Unit), running.await())
+            s.server.offline.value = true
+            settle()
+
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+            assertNull(s.syncedAt())
+            assertNull(s.local.state().syncedAt)
+            s.server.offline.value = false
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(13, s.shownWatched(anime))
+            assertEquals(fixtures.now, s.local.state().syncedAt)
+        }
+
+    @Test
+    fun `N9 a send whose answer cannot be read owes a download that shows what MAL made`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.mal.unreadAnswers = 1
+            assertEquals(Outcome.Failure(DataError.ServerError), s.list.send(ListWrite.MarkWatched(anime, 13)))
+            assertNull(s.local.state().syncedAt)
+            settle()
+
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(13, s.shownWatched(anime))
+            assertEquals(fixtures.now, s.syncedAt())
         }
 
     @Test

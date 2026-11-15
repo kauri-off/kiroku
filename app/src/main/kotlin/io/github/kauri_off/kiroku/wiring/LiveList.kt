@@ -17,16 +17,16 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
-// The list of a live source: the engine over MAL's list and the source's store, whose owner's choices go with it (S9).
+// The list of a live source: the engine over MAL's list and the source's store, whose owner's sorts go with it (S9).
 internal fun liveList(
     parts: LiveParts,
     session: MalSession,
     store: (LiveParts) -> LocalList,
-    forgetChoices: suspend () -> Unit,
+    forgetSorts: suspend () -> Unit,
 ): ListRepository =
     ListEngine(
         MalRemoteList(parts.http, session),
-        StoreOnFirstUse({ store(parts) }, forgetChoices),
+        StoreOnFirstUse({ store(parts) }, forgetSorts),
         session.observeSession(),
         parts.clock,
         parts.scope,
@@ -36,7 +36,7 @@ internal fun liveList(
 // The store is built at the engine's first call of it, which comes after the session is known, and off the main thread.
 private class StoreOnFirstUse(
     build: () -> LocalList,
-    private val forgetChoices: suspend () -> Unit,
+    private val forgetSorts: suspend () -> Unit,
 ) : LocalList {
     private val built = lazy(build)
 
@@ -62,14 +62,15 @@ private class StoreOnFirstUse(
     override suspend fun download(
         titles: List<Anime>,
         entries: Map<AnimeId, StoredEntry?>,
-        at: Instant,
+        at: Instant?,
     ) = store().download(titles, entries, at)
 
     override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) = store().restore(entries)
 
-    // The choices go first: a list that is still the last owner's after a failure is cleared again at its next use.
+    // Only a new owner forgets the sorts, and first: a list still the last owner's after a failure is cleared again.
     override suspend fun clear(owner: SignInId?) {
-        forgetChoices()
-        store().clear(owner)
+        val store = store()
+        if (store.state().owner != owner) forgetSorts()
+        store.clear(owner)
     }
 }

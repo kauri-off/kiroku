@@ -182,19 +182,21 @@ class StoredPreferencesTest {
     }
 
     @Test
-    fun `a clear forgets every choice, also for a new process, and one the disk fails throws and keeps them`() {
+    fun `forgetting the list's sorts leaves every other choice, also for a new process, and a disk that fails it throws`() {
         val score = TabSort(ListSort.Score, SortDirection.Ascending)
+        val other = stringPreferencesKey("another_choice")
+        written(other to "kept", sort("dropped") to "score", direction("dropped") to "ascending")
         process {
             it.setListSort(ListStatus.Completed, score)
-            it.setListSort(ListStatus.Watching, TabSort(ListSort.Title))
             writesFail = true
-            assertTrue(runCatching { it.clear() }.exceptionOrNull() is PreferencesFailure)
+            assertTrue(runCatching { it.forgetListSorts() }.exceptionOrNull() is PreferencesFailure)
             writesFail = false
             assertEquals(score, it.observeListSorts().first().getValue(ListStatus.Completed))
-            it.clear()
+            it.forgetListSorts()
             assertEquals(defaults, it.observeListSorts().first())
         }
         process { assertEquals(defaults, it.observeListSorts().first()) }
+        assertEquals(mapOf<Preferences.Key<*>, Any>(Pair(other, "kept")), stored().asMap())
         assertEquals(emptyList<Throwable>(), reports)
     }
 

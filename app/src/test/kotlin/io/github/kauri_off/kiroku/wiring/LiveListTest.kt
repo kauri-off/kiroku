@@ -16,12 +16,14 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.db.RoomLocalList
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.list.ListContent
+import io.github.kauri_off.kiroku.list.ListEvent
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.title.TitlePage
@@ -51,6 +53,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.seconds
@@ -97,16 +100,43 @@ class LiveListTest {
         LiveParts(context, LiveSource("served", mal.hosts), "0123abcd", Clock.systemUTC(), scope, unexpected::add, device = online)
 
     // A whole sign-in: MAL's page is opened, and the browser comes back with a code for its state.
-    private suspend fun LiveGraph.signInOnce() {
+    private suspend fun SignIn.once() {
         var address: String? = null
-        signIn.start {
+        start {
             address = it
             true
         }
         val state = checkNotNull(address).toHttpUrl().queryParameter("state")
-        signIn.redirected("${BuildConfig.OAUTH_REDIRECT}?code=the-code&state=$state")
-        assertEquals(SignInStep.SignedIn, signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
+        redirected("${BuildConfig.OAUTH_REDIRECT}?code=the-code&state=$state")
+        assertEquals(SignInStep.SignedIn, step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
     }
+
+    private suspend fun LiveGraph.signInOnce() = signIn.once()
+
+    // The List screen over the graph, shown until the test ends.
+    private fun TestScope.listScreen(graph: LiveGraph): ListViewModel =
+        ListViewModel(
+            graph.list,
+            graph.anime,
+            graph.airing,
+            graph.session,
+            graph.connection,
+            graph.preferences,
+            graph.clock,
+            graph.titleLanguage,
+            SavedStateHandle(),
+            ShellMessages(backgroundScope, graph.list),
+            graph.background,
+        ).also { showing(it.state, it.shown) }
+
+    private suspend fun ListViewModel.showingRows(count: Int): ListContent.Tabs =
+        state.first { state -> (state.content as? ListContent.Tabs)?.pages?.values?.sumOf { it.rows.size } == count }.content
+            as ListContent.Tabs
+
+    private fun lastUpdatedFirst(
+        entries: List<ListEntry>,
+        status: ListStatus,
+    ) = entries.filter { it.status == status }.sortedByDescending { it.updatedAt }.map { it.anime.id }
 
     private suspend fun LiveGraph.ids(): Set<Long> =
         list
@@ -160,8 +190,20 @@ class LiveListTest {
             graph.preferences.setListSort(ListStatus.Completed, TabSort(ListSort.Score, SortDirection.Ascending))
             val first = graph.list.observeEntries().first()
             assertTrue(parts.tokenFile.length() > 0)
+            // A List screen stays open through the sign-out and the next sign-in, as the debug menu leaves it.
+            val screen = listScreen(graph)
+            assertEquals(
+                ListSort.Score,
+                screen
+                    .showingRows(30)
+                    .pages
+                    .getValue(ListStatus.Completed)
+                    .sort,
+            )
+            screen.onEvent(ListEvent.SelectTab(ListStatus.Completed))
 
             graph.session.signOut()
+            assertEquals(ListContent.SignedOut, screen.state.first { it.content == ListContent.SignedOut }.content)
 
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
             assertEquals(0L, parts.tokenFile.length())
@@ -184,6 +226,57 @@ class LiveListTest {
             assertEquals(Outcome.Success(Unit), graph.list.sync())
             assertEquals(ServedMal.ids(mal.pages).toSet(), graph.ids())
             assertEquals(emptyList<String>(), mal.writes)
+
+            val second = graph.list.observeEntries().first()
+            val shown = screen.showingRows(second.size)
+            assertEquals(ListStatus.Watching, screen.state.value.tab)
+            val completed = shown.pages.getValue(ListStatus.Completed)
+            assertEquals(ListSort.LastUpdated, completed.sort)
+            assertEquals(lastUpdatedFirst(second, ListStatus.Completed), completed.rows.map { it.id })
+            assertEquals(defaults, graph.preferences.observeListSorts().first())
+        }
+
+    // The sorts are forgotten first, so a clear cut short leaves the list as the last owner's, and its next use clears both.
+    @Test
+    fun `a sign-out whose sorts could not be forgotten keeps the list's owner and entries until the next read clears both`() =
+        runTest(dispatcher) {
+            val parts = parts(process())
+            val session = liveSession(parts)
+            var failing = false
+            val list = liveList(parts, session, ::liveListStore) { if (failing) throw IOException("The disk is full") }
+            liveSignIn(parts, session).once()
+            assertEquals(Outcome.Success(Unit), list.sync())
+
+            failing = true
+            session.signOut()
+            assertEquals(emptyList<ListEntry>(), list.observeEntries().first())
+            assertEquals(30, store(parts).readAll().size)
+            assertNotNull(store(parts).state().owner)
+
+            failing = false
+            assertEquals(emptyList<ListEntry>(), list.observeEntries().first())
+            assertEquals(emptyMap<AnimeId, StoredEntry>(), store(parts).readAll())
+            assertEquals(StoredList(null, null), store(parts).state())
+        }
+
+    @Test
+    fun `a start signed out leaves the choices, which only a new owner of the list forgets`() =
+        runTest(dispatcher) {
+            val graph = LiveGraph(parts(process()))
+            val score = TabSort(ListSort.Score, SortDirection.Ascending)
+            graph.preferences.setListSort(ListStatus.Completed, score)
+            assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
+            assertEquals(
+                score,
+                graph.preferences
+                    .observeListSorts()
+                    .first()
+                    .getValue(ListStatus.Completed),
+            )
+
+            graph.signInOnce()
+            assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
+            assertEquals(defaults, graph.preferences.observeListSorts().first())
         }
 
     @Test
@@ -225,27 +318,9 @@ class LiveListTest {
             val entries = graph.list.observeEntries().first()
             assertEquals(emptyMap<AnimeId, Any>(), graph.airing.observeAiring().first())
 
-            val list =
-                ListViewModel(
-                    graph.list,
-                    graph.anime,
-                    graph.airing,
-                    graph.session,
-                    graph.connection,
-                    graph.preferences,
-                    graph.clock,
-                    graph.titleLanguage,
-                    SavedStateHandle(),
-                    ShellMessages(backgroundScope, graph.list),
-                    graph.background,
-                )
-            showing(list.state, list.shown)
-            val tabs =
-                list.state
-                    .first { state -> (state.content as? ListContent.Tabs)?.pages?.values?.sumOf { it.rows.size } == entries.size }
-                    .content as ListContent.Tabs
+            val tabs = listScreen(graph).showingRows(entries.size)
 
-            val lastUpdated = entries.filter { it.status == ListStatus.Watching }.sortedByDescending { it.updatedAt }.map { it.anime.id }
+            val lastUpdated = lastUpdatedFirst(entries, ListStatus.Watching)
             assertEquals(5, lastUpdated.size)
             assertEquals(ListSort.UpNext, tabs.pages.getValue(ListStatus.Watching).sort)
             assertEquals(
@@ -266,27 +341,19 @@ class LiveListTest {
         }
 
     @Test
-    fun `a +1 is one write that carries the entry's five values, the others as MAL had them`() =
-        runTest(dispatcher) {
+    fun `a +1 is one write that carries the entry's five values, and the row ends with the count MAL answered`() =
+        runTest(dispatcher, timeout = 30.seconds) {
             val id = 63293L
             val graph = LiveGraph(parts(process()))
             graph.signInOnce()
             assertEquals(Outcome.Success(Unit), graph.list.sync())
-            val answer = ServedMal.listStatus(mal.pages[1], id).put("num_episodes_watched", 5)
+            // MAL keeps another count than the one sent, so the row can only show it from MAL's answer.
+            val answer = ServedMal.listStatus(mal.pages[1], id).put("num_episodes_watched", 6)
             mal.write = { ServedMal.answer(200, answer.toString()) }
-            val asked = mal.arrived.value
             val entry = checkNotNull(graph.list.observeEntry(AnimeId(id)).first())
 
             graph.list.write(ListWrite.MarkNextWatched(entry.anime))
-            mal.arrived.first { it > asked }
-            assertEquals(
-                5,
-                graph.list
-                    .observeEntry(AnimeId(id))
-                    .first()
-                    ?.values
-                    ?.watchedEpisodes,
-            )
+            graph.list.observeEntry(AnimeId(id)).first { it?.values?.watchedEpisodes == 6 }
             val form = "status=watching&score=0&num_watched_episodes=5&start_date=2026-10-14&finish_date="
             assertEquals(listOf("PATCH /v2/anime/$id/my_list_status $form"), mal.writes)
         }

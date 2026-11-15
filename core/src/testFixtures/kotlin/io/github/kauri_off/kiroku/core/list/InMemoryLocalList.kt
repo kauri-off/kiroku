@@ -61,7 +61,7 @@ class InMemoryLocalList(
     override suspend fun download(
         titles: List<Anime>,
         entries: Map<AnimeId, StoredEntry?>,
-        at: Instant,
+        at: Instant?,
     ) {
         synchronized(guard) {
             for (anime in titles) if (this.titles[anime.id] != anime) this.titles[anime.id] = anime

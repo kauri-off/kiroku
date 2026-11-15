@@ -115,11 +115,11 @@ class RoomLocalList(
     override suspend fun download(
         titles: List<Anime>,
         entries: Map<AnimeId, StoredEntry?>,
-        at: Instant,
+        at: Instant?,
     ) = transaction {
         titleDao.merge(titles.map { it.toRow() })
         put(entries)
-        listDao.setState { it.copy(syncedAt = at.toColumn()) }
+        listDao.setState { it.copy(syncedAt = at?.toColumn()) }
     }
 
     override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) =
