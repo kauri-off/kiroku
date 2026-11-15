@@ -12,8 +12,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.Call
+import okhttp3.Dispatcher
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
@@ -45,6 +47,10 @@ class MalHttp(
     log: ((String) -> Unit)? = null,
     private val repeatReadsAfter: List<Duration> = RepeatReadsAfter,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    // Answers every request in MAL's place on the device itself, so none reaches a host; only debug builds have one.
+    private val standIn: Interceptor? = null,
+    // Where OkHttp runs a call; a test's may run it on the caller's own thread.
+    private val calls: Dispatcher? = null,
 ) {
     val backOff = MalBackOff(clock)
 
@@ -58,6 +64,8 @@ class MalHttp(
             .addInterceptor(UserAgent("Kiroku/$appVersion"))
             .addInterceptor(MarkSends)
             .apply { if (log != null) addInterceptor(RequestLog(log)) }
+            .apply { if (standIn != null) addInterceptor(standIn) }
+            .apply { if (calls != null) dispatcher(calls) }
             .addNetworkInterceptor(SendLimits)
             .addNetworkInterceptor(ClientId(hosts.api.toHttpUrl(), clientId))
             .build()

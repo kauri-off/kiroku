@@ -47,6 +47,14 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case("waiting-for-save") { Menu(ScenarioState.Ready(several, ResetState.WaitingForSave)) },
             case("save-dropped") { Menu(ScenarioState.Ready(Scenario(), ResetState.SaveDropped)) },
             case("real-account") { Menu(ScenarioState.Unavailable) },
+            case("sandbox") {
+                Menu(
+                    ScenarioState.Ready(several.copy(store = StoreFault.None), sandbox = true),
+                    source = SourceState(DataSource.Sandbox, DataSource.Sandbox),
+                    signOut = SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))),
+                    recorder = RecorderState(null),
+                )
+            },
             case("signed-out") { Menu(ScenarioState.Unavailable, signOut = SignOutState.Account(Session.SignedOut)) },
             case("source-chosen") { Menu(ScenarioState.Unavailable, source = SourceState(DataSource.Account, chosen = DataSource.Demo)) },
             case(

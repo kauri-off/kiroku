@@ -47,6 +47,10 @@ class DemoServer(
     @Volatile
     var writeLatency: (ListRequest) -> Duration = { this.latency }
 
+    // A client of MAL in front of this list: what gets past the scripted failures is asked through it, as the engine would.
+    @Volatile
+    var reachedThrough: RemoteList? = null
+
     private val sending = MutableStateFlow(0)
 
     // The writes received and not answered yet.
@@ -117,12 +121,13 @@ class DemoServer(
                 downloads++
                 list.values.toList()
             }
+        val answer = reachedThrough?.fetch() ?: Outcome.Success(snapshot)
         delay(latency)
-        return Outcome.Success(snapshot)
+        return answer
     }
 
     override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> =
-        load(needsSignIn = true)?.let { Outcome.Failure(it) } ?: Outcome.Success(entry(id))
+        load(needsSignIn = true)?.let { Outcome.Failure(it) } ?: reachedThrough?.fetchEntry(id) ?: Outcome.Success(entry(id))
 
     override suspend fun put(
         anime: Anime,
@@ -152,17 +157,28 @@ class DemoServer(
                 else -> null
             }
         if (error != null) return Outcome.Failure(error)
-        return synchronized(guard) {
+        synchronized(guard) { titles.getOrPut(anime.id) { anime } }
+        return reachedThrough?.put(anime, values) ?: applied(anime.id, values)
+    }
+
+    // A write that reached MAL, for a title it knows. A status left out is the one MAL has; a new entry needs one.
+    fun applied(
+        id: AnimeId,
+        values: SentValues?,
+    ): Outcome<ListEntry?> =
+        synchronized(guard) {
+            val anime = titles[id] ?: return Outcome.Failure(DataError.NotFound)
             val stored =
                 values?.let { sent ->
-                    // A status left out is the one MAL has; a new entry needs one.
-                    val status = sent.status ?: list[anime.id]?.status ?: return Outcome.Failure(DataError.InvalidRequest)
+                    val status = sent.status ?: list[id]?.status ?: return Outcome.Failure(DataError.InvalidRequest)
                     ListValues(status, sent.watchedEpisodes, sent.score, sent.startDate, sent.finishDate)
                 }
             store(anime, stored)
-            Outcome.Success(list[anime.id])
+            Outcome.Success(list[id])
         }
-    }
+
+    // The titles MAL knows, the ones on the list among them.
+    fun title(id: AnimeId): Anime? = synchronized(guard) { titles[id] }
 
     private fun store(
         anime: Anime,

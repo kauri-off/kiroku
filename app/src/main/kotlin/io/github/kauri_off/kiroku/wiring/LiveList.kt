@@ -25,8 +25,9 @@ internal fun liveList(
     parts: LiveParts,
     session: SessionRepository,
     store: (LiveParts) -> LocalList,
+    remote: RemoteList = UnreachableList,
 ): ListRepository =
-    ListEngine(UnreachableList, StoreOnFirstUse { store(parts) }, session.observeSession(), parts.clock, parts.scope, parts.unexpected)
+    ListEngine(remote, StoreOnFirstUse { store(parts) }, session.observeSession(), parts.clock, parts.scope, parts.unexpected)
 
 // MAL's list, which no client reaches yet.
 private object UnreachableList : RemoteList {

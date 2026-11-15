@@ -51,6 +51,12 @@ android {
 
     sourceSets.named("preview") {
         kotlin.directories += "src/debug/kotlin"
+        assets.directories += "src/test/resources/mal"
+    }
+
+    // The sandbox's titles: the client-id recorder's public answers, as assets of the debug and preview builds alone.
+    sourceSets.named("debug") {
+        assets.directories += "src/test/resources/mal"
     }
 
     lint {

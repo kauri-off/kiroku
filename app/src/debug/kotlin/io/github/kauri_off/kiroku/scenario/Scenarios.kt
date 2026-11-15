@@ -3,7 +3,6 @@ package io.github.kauri_off.kiroku.scenario
 import android.content.Context
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.Outcome
-import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -38,12 +37,55 @@ enum class ResetState {
     val busy: Boolean get() = this == WaitingForSave || this == Running
 }
 
-// The demo's failures, switched while the app runs; a new process starts with every one off.
-class Scenarios(
+// What the panel's switches act on: the demo's MAL and store, or the sandbox's MAL.
+interface ScenarioSubject {
+    // The sandbox's: it has no store of its own to fail.
+    val sandbox: Boolean
+
+    fun apply(scenario: Scenario)
+
+    val saving: Boolean
+
+    suspend fun awaitSaves(): Boolean
+
+    suspend fun reset(): Outcome<Unit>
+}
+
+private class DemoScenarios(
     private val demo: Demo,
+) : ScenarioSubject {
+    private val normal = demo.server.latency
+
+    override val sandbox = false
+
+    override fun apply(scenario: Scenario) {
+        with(demo.server) {
+            offline.value = scenario.offline
+            sessionExpired.value = scenario.sessionExpired
+            latency = if (scenario.slow) Scenarios.SLOW else normal
+            refusingWrites.value = scenario.writes == WriteFault.Refused
+            failingWrites.value = scenario.writes == WriteFault.ServerError
+        }
+        demo.store.unreadable.value = scenario.store == StoreFault.Unreadable
+        demo.store.failingWrites.value = scenario.store == StoreFault.WritesFail
+    }
+
+    override val saving get() = demo.saving
+
+    override suspend fun awaitSaves() = demo.awaitSaves()
+
+    override suspend fun reset() = demo.reset()
+}
+
+// The failures of the source the app runs on, switched while it runs; a new process starts with every one off.
+class Scenarios(
+    private val subject: ScenarioSubject,
     private val scope: CoroutineScope,
 ) {
-    private val normal = demo.server.latency
+    constructor(demo: Demo, scope: CoroutineScope) : this(DemoScenarios(demo), scope)
+
+    val sandbox: Boolean get() = subject.sandbox
+
     private val current = MutableStateFlow(Scenario())
     private val resets = MutableStateFlow(ResetState.Idle)
 
@@ -58,30 +100,22 @@ class Scenarios(
     }
 
     private fun apply(scenario: Scenario) {
-        with(demo.server) {
-            offline.value = scenario.offline
-            sessionExpired.value = scenario.sessionExpired
-            latency = if (scenario.slow) SLOW else normal
-            refusingWrites.value = scenario.writes == WriteFault.Refused
-            failingWrites.value = scenario.writes == WriteFault.ServerError
-        }
-        demo.store.unreadable.value = scenario.store == StoreFault.Unreadable
-        demo.store.failingWrites.value = scenario.store == StoreFault.WritesFail
+        subject.apply(scenario)
         current.value = scenario
     }
 
     // An edit on its way to MAL is answered under the scenarios it was made in; then all are off and the list is back.
     fun reset() {
         if (resets.value.busy) return
-        resets.value = if (demo.saving) ResetState.WaitingForSave else ResetState.Running
+        resets.value = if (subject.saving) ResetState.WaitingForSave else ResetState.Running
         scope.launch {
             resets.value =
                 try {
-                    val settled = demo.awaitSaves()
+                    val settled = subject.awaitSaves()
                     resets.value = ResetState.Running
                     apply(Scenario())
                     when {
-                        demo.reset() is Outcome.Failure -> ResetState.Failed
+                        subject.reset() is Outcome.Failure -> ResetState.Failed
                         !settled -> ResetState.SaveDropped
                         else -> ResetState.Idle
                     }
@@ -98,5 +132,10 @@ class Scenarios(
     }
 }
 
-// The demo's scenarios, or null when the app runs on another source.
-val Context.scenarios: Scenarios? get() = (appGraph as? DemoGraph)?.scenarios
+// A graph whose failures the panel switches.
+interface ScenariosOwner {
+    val scenarios: Scenarios
+}
+
+// The scenarios of the demo or the sandbox, or null on the real account.
+val Context.scenarios: Scenarios? get() = (appGraph as? ScenariosOwner)?.scenarios

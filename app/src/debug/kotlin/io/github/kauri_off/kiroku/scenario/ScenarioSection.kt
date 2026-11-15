@@ -36,6 +36,8 @@ sealed interface ScenarioState {
     data class Ready(
         val scenario: Scenario,
         val reset: ResetState = ResetState.Idle,
+        // On the sandbox: no store to fail, and its own list to reset.
+        val sandbox: Boolean = false,
     ) : ScenarioState
 }
 
@@ -56,7 +58,7 @@ fun ScenarioRoute() {
         } else {
             val scenario by scenarios.scenario.collectAsScreenState()
             val reset by scenarios.reset.collectAsScreenState()
-            ScenarioState.Ready(scenario, reset)
+            ScenarioState.Ready(scenario, reset, scenarios.sandbox)
         }
     ScenarioSection(state) { event ->
         when (event) {
@@ -101,15 +103,20 @@ private fun Switches(
         scenario.writes.ordinal,
         enabled,
     ) { change(scenario.copy(writes = WriteFault.entries[it])) }
-    Choice(
-        R.string.scenarios_store,
-        R.string.scenarios_store_detail,
-        StoreFault.entries.map { it.label },
-        scenario.store.ordinal,
-        enabled,
-    ) { change(scenario.copy(store = StoreFault.entries[it])) }
-    SectionHeader(stringResource(R.string.scenarios_reset_title), Modifier.padding(top = Spacing.xl))
-    SectionDetail(R.string.scenarios_reset_detail)
+    if (!state.sandbox) {
+        Choice(
+            R.string.scenarios_store,
+            R.string.scenarios_store_detail,
+            StoreFault.entries.map { it.label },
+            scenario.store.ordinal,
+            enabled,
+        ) { change(scenario.copy(store = StoreFault.entries[it])) }
+    }
+    SectionHeader(
+        stringResource(if (state.sandbox) R.string.scenarios_reset_title_sandbox else R.string.scenarios_reset_title),
+        Modifier.padding(top = Spacing.xl),
+    )
+    SectionDetail(if (state.sandbox) R.string.scenarios_reset_detail_sandbox else R.string.scenarios_reset_detail)
     OutlinedButton(
         onClick = { onEvent(ScenarioEvent.Reset) },
         enabled = enabled,

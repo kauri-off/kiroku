@@ -4,8 +4,10 @@
     <string name="source_detail">What the app starts on. Each source has its own sign-in and its own stored list</string>
     <string name="source_account">MyAnimeList</string>
     <string name="source_demo">Demo</string>
+    <string name="source_sandbox">Sandbox</string>
     <string name="source_running_account">Still on MyAnimeList until the app starts again</string>
     <string name="source_running_demo">Still on demo data until the app starts again</string>
+    <string name="source_running_sandbox">Still in the sandbox until the app starts again</string>
     <string name="source_restart">Restart</string>
     <string name="source_not_kept">The choice could not be saved</string>
 </resources>

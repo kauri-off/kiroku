@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.wiring.LiveGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.runBlocking
@@ -100,6 +101,7 @@ private val DataSource.label: Int
         when (this) {
             DataSource.Account -> R.string.source_account
             DataSource.Demo -> R.string.source_demo
+            DataSource.Sandbox -> R.string.source_sandbox
         }
 
 private val DataSource.stillRunning: Int
@@ -107,6 +109,7 @@ private val DataSource.stillRunning: Int
         when (this) {
             DataSource.Account -> R.string.source_running_account
             DataSource.Demo -> R.string.source_running_demo
+            DataSource.Sandbox -> R.string.source_running_sandbox
         }
 
 // The app's first screen in a task of its own, as a tap on its icon gives.
@@ -118,7 +121,12 @@ fun relaunchIntent(context: Context): Intent =
 fun restartApp(
     context: Context,
     patience: Duration = 2.seconds,
-    beforeExit: suspend () -> Unit = { (context.appGraph as? LiveGraph)?.writeOwed() },
+    beforeExit: suspend () -> Unit = {
+        when (val graph = context.appGraph) {
+            is LiveGraph -> graph.writeOwed()
+            is SandboxGraph -> graph.writeOwed()
+        }
+    },
     exit: () -> Unit = { Runtime.getRuntime().exit(0) },
 ) {
     runBlocking { withTimeoutOrNull(patience) { beforeExit() } }

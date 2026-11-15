@@ -2,18 +2,20 @@ package io.github.kauri_off.kiroku.source
 
 import android.content.Context
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import io.github.kauri_off.kiroku.wiring.malClientId
 import java.io.File
 import java.io.IOException
 
-// What a debug or preview build runs on. Each has its own stores, and the demo keeps nothing and reaches no host.
+// What a debug or preview build runs on. Each has its own stores; only the real account reaches a host.
 enum class DataSource(
     val key: String,
 ) {
     Account(notShown("account")),
     Demo(notShown("demo")),
+    Sandbox(notShown("sandbox")),
 }
 
 // The source the app starts on: kept in a file of one word, read when a process builds its graph.
@@ -51,4 +53,10 @@ class SourceChoice(
 }
 
 // What this process runs on, whatever was chosen since it started.
-val Context.runningSource: DataSource get() = if (appGraph is DemoGraph) DataSource.Demo else DataSource.Account
+val Context.runningSource: DataSource
+    get() =
+        when (appGraph) {
+            is DemoGraph -> DataSource.Demo
+            is SandboxGraph -> DataSource.Sandbox
+            else -> DataSource.Account
+        }
