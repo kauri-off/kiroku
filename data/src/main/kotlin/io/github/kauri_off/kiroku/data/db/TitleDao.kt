@@ -32,7 +32,10 @@ internal abstract class TitleDao {
 
     // The one door of a whole summary from MAL, by TitleRow.mergedWith; a title it does not change is not written.
     @Transaction
-    open suspend fun merge(rows: List<TitleRow>) {
+    open suspend fun merge(
+        rows: List<TitleRow>,
+        unread: Set<Unread> = emptySet(),
+    ) {
         val newer = rows.associateBy { it.id }
         val stored =
             newer.keys
@@ -40,7 +43,7 @@ internal abstract class TitleDao {
                 .flatMap { rows(it) }
                 .associateBy { it.id }
         insert(newer.values.filter { it.id !in stored })
-        update(stored.values.mapNotNull { old -> old.mergedWith(newer.getValue(old.id)).takeIf { it != old } })
+        update(stored.values.mapNotNull { old -> old.mergedWith(newer.getValue(old.id), unread).takeIf { it != old } })
     }
 
     // Every title with what its page holds; no entry may be left.
@@ -80,14 +83,15 @@ internal abstract class TitleDao {
         row: TitleDetailsRow,
         related: List<TitleRelationRow>,
         recommended: List<TitleRecommendationRow>,
+        unread: Set<Unread> = emptySet(),
     ) {
         val stored = details(row.titleId)
-        if (stored == null) insert(row) else update(stored.mergedWith(row))
-        if (relations(row.titleId) != related) {
+        if (stored == null) insert(row) else update(stored.mergedWith(row, unread))
+        if ((stored == null || Unread.Related !in unread) && relations(row.titleId) != related) {
             deleteRelations(row.titleId)
             insertRelations(related)
         }
-        if (recommendations(row.titleId) != recommended) {
+        if ((stored == null || Unread.Recommendations !in unread) && recommendations(row.titleId) != recommended) {
             deleteRecommendations(row.titleId)
             insertRecommendations(recommended)
         }

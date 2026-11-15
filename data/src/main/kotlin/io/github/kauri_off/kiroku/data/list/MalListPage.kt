@@ -3,7 +3,9 @@ package io.github.kauri_off.kiroku.data.list
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.data.anime.AnimeNode
+import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.dateOf
+import io.github.kauri_off.kiroku.data.anime.given
 import io.github.kauri_off.kiroku.data.anime.toAnime
 import io.github.kauri_off.kiroku.data.db.listStatuses
 import io.github.kauri_off.kiroku.data.network.MalJson
@@ -19,10 +21,11 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
 
-// One page of a user's list: its entries, and the offset of the next page, which the last page has none of.
+// One page of a user's list: its entries, the offset of the next page, which the last page has none of, and its repairs.
 internal class ListPage(
     val entries: List<ListEntry>,
     val next: Int?,
+    val repaired: Set<String>,
 )
 
 @Serializable
@@ -41,28 +44,36 @@ private class ItemNode(
 internal val NEVER_UPDATED: Instant = Instant.EPOCH
 
 // Every entry is mapped or the page fails, as does a page without its entries: none may leave the list.
-internal fun JsonObject.toListPage(): ListPage {
+internal fun JsonObject.toListPage(repairs: Repairs): ListPage {
     val page = MalJson.decodeFromJsonElement(PageNode.serializer(), this)
-    return ListPage(page.data.map { listEntryOf(it.node, it.values) }, nextOf(page.paging))
+    val entries = page.data.map { listEntryOf(it.node, it.values, repairs) }
+    return ListPage(entries, nextOf(page.paging), repairs.fields.toSet())
 }
 
-// A score of 0, or any value missing or unreadable, is absent; only a list status the app does not know fails.
+// A score of 0, or any value missing or unreadable, is absent, an unreadable one noted; only an unknown list status fails.
 private fun listEntryOf(
     node: AnimeNode,
     values: JsonElement?,
+    repairs: Repairs,
 ): ListEntry {
-    val anime = node.toAnime()
+    val anime = node.toAnime(repairs.within("node"))
     val fields = values as? JsonObject ?: JsonObject(emptyMap())
+    val noted = repairs.within("list_status")
+
+    fun <T : Any> read(
+        key: String,
+        value: T?,
+    ): T? = noted.read(key, fields[key].given(), value)
     return ListEntry(
         anime,
         ListValues(
             status = requireNotNull(fields.text("status")?.let(listStatuses.values::get)) { "No list status the app knows" },
-            watchedEpisodes = fields.number("num_episodes_watched")?.takeIf { it >= 0 } ?: 0,
-            score = fields.number("score")?.takeIf { it in 1..10 },
-            startDate = fields.text("start_date")?.let(::dateOf),
-            finishDate = fields.text("finish_date")?.let(::dateOf),
+            watchedEpisodes = read("num_episodes_watched", fields.number("num_episodes_watched")?.takeIf { it >= 0 }) ?: 0,
+            score = read("score", fields.number("score")?.takeIf { it in 0..10 })?.takeIf { it > 0 },
+            startDate = read("start_date", fields.text("start_date")?.let(::dateOf)),
+            finishDate = read("finish_date", fields.text("finish_date")?.let(::dateOf)),
         ),
-        fields.text("updated_at")?.let(::updatedAtOf) ?: NEVER_UPDATED,
+        read("updated_at", fields.text("updated_at")?.let(::updatedAtOf)) ?: NEVER_UPDATED,
     )
 }
 

@@ -48,10 +48,12 @@ class ImmediateMainTest {
                     graph.airing,
                     graph.session,
                     graph.connection,
+                    graph.preferences,
                     graph.clock,
                     graph.titleLanguage,
                     SavedStateHandle(),
                     messages,
+                    graph.background,
                 )
             val title =
                 TitleViewModel(

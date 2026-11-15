@@ -3,12 +3,14 @@ package io.github.kauri_off.kiroku.data.list
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
+import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import io.github.kauri_off.kiroku.data.session.SessionFixture
@@ -53,7 +55,7 @@ class MalListsTest {
             page(offset) ?: answer(200, body("list_public_${offset / 10 + 1}"))
         }
 
-    private fun recordedEntries(): List<ListEntry> = (1..3).flatMap { recordedJson("list_public_$it").toListPage().entries }
+    private fun recordedEntries(): List<ListEntry> = (1..3).flatMap { recordedJson("list_public_$it").toListPage(Repairs()).entries }
 
     private fun download(of: ListUser = user) = runBlocking { lists.list(of) }
 
@@ -97,6 +99,45 @@ class MalListsTest {
         assertEquals(Outcome.Failure(DataError.ServerError), download())
         assertTrue(network.unexpected.single() is UnusableAnswer)
         assertTrue(asked.none { it.url.queryParameter("offset") == "20" })
+    }
+
+    // Each page's repairs are reported once, with the same report as a title page's, only when the whole list is read.
+    @Test
+    fun `a repaired title and a repaired list value are each reported once per download, and a clean list reports nothing`() {
+        val node = recordedJson("list_public_2").edited(listOf("data", "4", "node", "mean"), JsonPrimitive("broken"))
+        val values = recordedJson("list_public_3").edited(listOf("data", "0", "list_status", "score"), JsonPrimitive("eight"))
+        serve { offset ->
+            when (offset) {
+                10 -> answer(200, node.toString())
+                20 -> answer(200, values.toString())
+                else -> null
+            }
+        }
+
+        repeat(2) { download() as Outcome.Success }
+
+        val reported = network.unexpected.map { (it as RepairedAnswer).fields }
+        assertEquals(List(2) { listOf(setOf("node.mean"), setOf("list_status.score")) }.flatten(), reported)
+
+        network.unexpected.clear()
+        serve()
+        download() as Outcome.Success
+        assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `a download that fails reports nothing of the repaired pages it read`() {
+        val repaired = recordedJson("list_public_1").edited(listOf("data", "0", "list_status", "score"), JsonPrimitive("eight"))
+        serve { offset ->
+            when (offset) {
+                0 -> answer(200, repaired.toString())
+                10 -> answer(500, "")
+                else -> null
+            }
+        }
+
+        assertEquals(Outcome.Failure(DataError.ServerError), download())
+        assertTrue(network.unexpected.isEmpty())
     }
 
     // A recorded page whose next link is [link].
