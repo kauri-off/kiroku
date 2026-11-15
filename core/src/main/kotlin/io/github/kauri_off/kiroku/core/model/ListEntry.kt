@@ -3,18 +3,26 @@ package io.github.kauri_off.kiroku.core.model
 import java.time.Instant
 import java.time.LocalDate
 
-enum class ListStatus { Watching, Planned, Completed, OnHold, Dropped }
+// An entry's status as MAL gives it: one the app knows, or MAL's code of one it does not, kept as MAL gave it.
+sealed interface EntryStatus {
+    data class Unrecognized(
+        val malCode: String,
+    ) : EntryStatus
+}
+
+// The statuses the app knows, the only ones a user can choose and the app can send.
+enum class ListStatus : EntryStatus { Watching, Planned, Completed, OnHold, Dropped }
 
 data class ListEntry(
     val anime: Anime,
     val values: ListValues,
     val updatedAt: Instant,
 ) {
-    val status: ListStatus get() = values.status
+    val status: EntryStatus get() = values.status
 }
 
 data class ListValues(
-    val status: ListStatus,
+    val status: EntryStatus,
     val watchedEpisodes: Int,
     val score: Int?,
     val startDate: PartialDate?,
@@ -59,5 +67,21 @@ fun ListValues.showsCount(total: Int?): Boolean =
     when (status) {
         ListStatus.Planned -> watchedEpisodes > 0
         ListStatus.Completed -> watchedEpisodes != total
-        ListStatus.Watching, ListStatus.OnHold, ListStatus.Dropped -> true
+        ListStatus.Watching, ListStatus.OnHold, ListStatus.Dropped, is EntryStatus.Unrecognized -> true
+    }
+
+// Whether a title with this status gets airing data while it is unfinished (section 4); one the app does not know does not.
+val EntryStatus.tracked: Boolean
+    get() =
+        when (this) {
+            ListStatus.Watching, ListStatus.Planned, ListStatus.OnHold -> true
+            ListStatus.Completed, ListStatus.Dropped, is EntryStatus.Unrecognized -> false
+        }
+
+// Whether a title with this status may be notified of (section 5.1); one the app does not know never is.
+fun EntryStatus.notified(alsoPlanned: Boolean): Boolean =
+    when (this) {
+        ListStatus.Watching -> true
+        ListStatus.Planned -> alsoPlanned
+        ListStatus.Completed, ListStatus.OnHold, ListStatus.Dropped, is EntryStatus.Unrecognized -> false
     }

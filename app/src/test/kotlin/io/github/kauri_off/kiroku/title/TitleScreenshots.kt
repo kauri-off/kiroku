@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -74,6 +75,7 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("refreshing") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(refreshing = true)) },
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
             case("planned-scored") { Screen(TitleFixtures.plannedScored) },
+            case("unknown-status") { Screen(TitleFixtures.unknownStatus) },
             case("first-episode-aired") { Screen(TitleFixtures.firstEpisodeAired) },
             case("finished-with-sequel") { Screen(TitleFixtures.of(FixtureAnime.prequel)) },
             case("related-see-all-only") { Screen(TitleFixtures.relatedOutsideTheStrip) },
@@ -138,7 +140,7 @@ fun TitleInShell(
 object TitleFixtures {
     private val set = Fixtures.reference
 
-    private val statuses: Map<AnimeId, ListStatus> =
+    private val statuses: Map<AnimeId, EntryStatus> =
         set.entries.associate { it.anime.id to it.status }
 
     fun page(
@@ -172,6 +174,14 @@ object TitleFixtures {
             val anime = FixtureAnime.exactToWatch
             val entry = checkNotNull(set.entryFor(anime.id))
             return of(anime, entry.copy(values = entry.values.copy(status = ListStatus.Planned, score = 10)))
+        }
+
+    // A status MAL gave that the app does not know, named by its code.
+    val unknownStatus: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.onHoldAiring
+            val entry = checkNotNull(set.entryFor(anime.id))
+            return of(anime, entry.copy(values = entry.values.copy(status = Fixtures.unknownListStatus)))
         }
 
     // Episode 1 aired an hour ago and MAL still says "not yet aired": the stored count decides.

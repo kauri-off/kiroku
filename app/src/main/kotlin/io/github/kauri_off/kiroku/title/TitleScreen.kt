@@ -70,6 +70,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -98,6 +99,7 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.genreName
 import io.github.kauri_off.kiroku.text.label
 import io.github.kauri_off.kiroku.text.relationName
+import io.github.kauri_off.kiroku.text.statusName
 
 // The title page of ARCHITECTURE section 9.4: one column in a fixed order, drawn from [state] alone. Its snackbars go
 // to [snackbars], the host the caller draws.
@@ -346,7 +348,7 @@ private fun OnList(
 
 @Composable
 private fun StatusButton(
-    status: ListStatus,
+    status: EntryStatus,
     onEvent: (TitleEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -356,7 +358,7 @@ private fun StatusButton(
         contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight, hasEndIcon = true),
         modifier = modifier.heightIn(min = PrimaryButtonHeight),
     ) {
-        Text(stringResource(status.label()), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
+        Text(statusName(status), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
         Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(PrimaryButtonHeight)))
         Icon(
             painterResource(R.drawable.ic_arrow_drop_down),
@@ -552,7 +554,7 @@ private fun Related(
                         card.related.relation
                             .stripLabel()
                             .orEmpty(),
-                    caption2 = card.status?.let { stringResource(it.label()) } ?: typeAndYear(anime),
+                    caption2 = card.status?.let { statusName(it) } ?: typeAndYear(anime),
                     posterUrl = anime.posterUrl,
                     onClick = { onEvent(TitleEvent.OpenRelated(anime.id)) },
                 )
@@ -578,7 +580,7 @@ private fun Sequel(
             lines =
                 listOfNotNull(
                     typeAndYear(anime).takeIf { it.isNotEmpty() },
-                    sequel.status?.let { stringResource(it.label()) },
+                    sequel.status?.let { statusName(it) },
                 ).map { RowLine(it) },
         )
     }

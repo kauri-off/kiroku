@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.edit
 
 import androidx.lifecycle.SavedStateHandle
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -57,6 +58,21 @@ class SavedSheetTest {
                 assertEquals(SavedSheet(state.draft, state.beforeAutomatic, "17", 12, dialog, state.closing), read)
                 assertEquals(state.copy(closing = false), read!!.applyTo(opened))
             }
+        }
+    }
+
+    @Test
+    fun `a status the app does not know is written and read back as MAL's code, whatever the code holds`() {
+        for (code in listOf("rewatching", "a;b", "?Watching", "")) {
+            val values = ListValues(EntryStatus.Unrecognized(code), 3, score = null, null, PartialDate.OnlyYear(Year.of(2024)))
+            val state = EditSheetState.of("Title", values, total = 24, malEpisodes = 24, today)
+            val handle = SavedStateHandle()
+            SavedSheet.save(handle, state)
+            assertEquals(code, values, SavedSheet.read(handle)?.draft)
+        }
+        for (status in ListStatus.entries) {
+            val values = ListValues(status, 3, score = 7, null, null)
+            assertEquals(values, SavedSheet.values(SavedSheet.encode(values)))
         }
     }
 }

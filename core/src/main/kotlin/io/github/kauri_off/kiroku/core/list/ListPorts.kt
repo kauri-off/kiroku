@@ -3,8 +3,11 @@ package io.github.kauri_off.kiroku.core.list
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -20,9 +23,31 @@ interface RemoteList {
     // Sets the title's values, or removes it for null, and answers with the entry as MAL has it afterwards.
     suspend fun put(
         anime: Anime,
-        values: ListValues?,
+        values: SentValues?,
     ): Outcome<ListEntry?>
 }
+
+// Values as they are sent to MAL. A status the app does not know is never sent: it is left out, and MAL keeps it.
+data class SentValues(
+    val status: ListStatus?,
+    val watchedEpisodes: Int,
+    val score: Int?,
+    val startDate: PartialDate?,
+    val finishDate: PartialDate?,
+)
+
+val ListValues.sent: SentValues
+    get() =
+        SentValues(
+            when (val status = status) {
+                is ListStatus -> status
+                is EntryStatus.Unrecognized -> null
+            },
+            watchedEpisodes,
+            score,
+            startDate,
+            finishDate,
+        )
 
 // An entry without its title: its values and when they last changed.
 data class ListRecord(

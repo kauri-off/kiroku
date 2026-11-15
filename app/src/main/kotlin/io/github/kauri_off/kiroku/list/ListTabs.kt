@@ -52,7 +52,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ScrollAxisRange
 import androidx.compose.ui.semantics.horizontalScrollAxisRange
 import androidx.compose.ui.semantics.scrollBy
@@ -60,12 +59,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
-import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.design.theme.AtSystemScale
 import io.github.kauri_off.kiroku.design.theme.PageSettle
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.notShown
-import io.github.kauri_off.kiroku.text.label
+import io.github.kauri_off.kiroku.text.statusName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -287,6 +286,7 @@ fun rememberListTabMotion(pager: PagerState): ListTabMotion {
 @Composable
 internal fun ListTabs(
     motion: ListTabMotion,
+    statuses: List<EntryStatus>,
     onEvent: (ListEvent) -> Unit,
 ) {
     val row = motion.row
@@ -303,7 +303,7 @@ internal fun ListTabs(
                 contents =
                     listOf(
                         {
-                            ListStatus.entries.forEachIndexed { index, status ->
+                            statuses.forEachIndexed { index, status ->
                                 Tab(
                                     selected = index == selected,
                                     onClick = {
@@ -319,7 +319,7 @@ internal fun ListTabs(
                                             ) { derivedStateOf { (1f - abs(index - motion.header)).coerceIn(0f, 1f) } }
                                         // Drawn in the blend of the two colours by the header, so the stock fade has nothing to animate.
                                         BasicText(
-                                            stringResource(status.label()),
+                                            statusName(status),
                                             style = LocalTextStyle.current,
                                             color = { lerp(inactive, active, weight.value) },
                                         )

@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.core.airing
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -24,7 +25,7 @@ class AiringTest {
 
     private fun entry(
         anime: Anime,
-        status: ListStatus,
+        status: EntryStatus,
         watched: Int,
     ) = ListEntry(anime, ListValues(status, watched, null, null, null), Instant.EPOCH)
 
@@ -48,7 +49,7 @@ class AiringTest {
 
     @Test
     fun `A8 to watch exists only in watching`() {
-        ListStatus.entries.filter { it != ListStatus.Watching }.forEach { status ->
+        (ListStatus.entries.filter { it != ListStatus.Watching } + EntryStatus.Unrecognized("rewatching")).forEach { status ->
             assertNull(toWatch(entry(FixtureAnime.exactToWatch, status, 12), airing(AiredCount.Exact(14))))
         }
     }

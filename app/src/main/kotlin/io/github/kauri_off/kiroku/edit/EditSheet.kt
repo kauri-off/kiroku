@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.offset
 import androidx.compose.ui.window.DialogProperties
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
@@ -323,8 +324,9 @@ private fun Actions(
 }
 
 @Composable
+// A status the app does not know is none of the options, so none is chosen.
 private fun StatusChoice(
-    status: ListStatus,
+    status: EntryStatus,
     modifier: Modifier,
     onChoose: (ListStatus) -> Unit,
 ) {

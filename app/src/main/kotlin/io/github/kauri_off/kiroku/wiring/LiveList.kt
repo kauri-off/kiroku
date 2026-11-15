@@ -5,11 +5,11 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.list.RemoteList
+import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
-import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -38,7 +38,7 @@ private object UnreachableList : RemoteList {
 
     override suspend fun put(
         anime: Anime,
-        values: ListValues?,
+        values: SentValues?,
     ): Outcome<ListEntry?> = unavailable
 }
 

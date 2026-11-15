@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.core.list.defaultSort
 import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
@@ -110,9 +111,9 @@ class ListViewModelTest {
         // The snackbar's action, tapped wherever the user is by then.
         fun tapAction() = messages.ended(messages.current.value!!, actionPerformed = true)
 
-        fun page(status: ListStatus = state.tab): ListPage = (state.content as ListContent.Tabs).pages.getValue(status)
+        fun page(status: EntryStatus = state.tab): ListPage = (state.content as ListContent.Tabs).pages.getValue(status)
 
-        fun ids(status: ListStatus = state.tab): List<AnimeId> = page(status).rows.map { it.id }
+        fun ids(status: EntryStatus = state.tab): List<AnimeId> = page(status).rows.map { it.id }
     }
 
     private fun test(
@@ -531,6 +532,69 @@ class ListViewModelTest {
             advanceUntilIdle()
             assertEquals(upNext() + anime.id, s.ids())
         }
+
+    private val unknown = ListFixtureStates.unknownStatus
+    private val withUnknown = ListFixtureStates.withUnknownStatus
+
+    @Test
+    fun `entries whose status the app does not know have a last tab of their own, which keeps no sort, until no entry has it`() {
+        val preferences = DemoPreferences()
+        test(demo = { Demo(set.copy(entries = withUnknown), it) }, preferences = preferences) { s ->
+            assertEquals(ListStatus.entries + unknown, (s.state.content as ListContent.Tabs).statuses)
+            val shown = withUnknown.filter { it.status == unknown }
+            val expected = order(shown, ListSort.LastUpdated, set.airing::get, today) { it.anime.titles.romaji }.map { it.anime.id }
+            assertEquals(2, expected.size)
+            assertEquals(expected, s.ids(unknown))
+            assertEquals(ListSort.LastUpdated, s.page(unknown).sort)
+            assertFalse(ListSort.UpNext in s.page(unknown).sorts)
+            assertTrue(s.page(unknown).rows.none { it.plusOne })
+
+            s.list.onEvent(ListEvent.SelectTab(unknown))
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            advanceUntilIdle()
+            assertEquals(unknown, s.state.tab)
+            assertEquals(ListSort.Title, s.page().sort)
+            assertEquals(ListStatus.entries.associateWith(TabSort::defaultFor), preferences.observeListSorts().first())
+
+            for (entry in shown) s.graph.list.write(ListWrite.Save(entry.anime, entry.values.copy(status = ListStatus.Dropped)))
+            advanceUntilIdle()
+            assertEquals(unknown, s.state.tab)
+            assertEquals(emptyList<AnimeId>(), s.ids())
+
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(ListStatus.entries, (s.state.content as ListContent.Tabs).statuses)
+            assertEquals(ListStatus.Dropped, s.state.tab)
+            assertTrue(s.ids().containsAll(expected))
+        }
+    }
+
+    @Test
+    fun `a status the app does not know that a sync brings opens its tab at once, and the tab survives process death`() {
+        val saved = SavedStateHandle()
+        val anime = FixtureAnime.onHoldAiring
+        test(saved = saved) { s ->
+            val values =
+                s.graph.demo.server
+                    .entry(anime.id)!!
+                    .values
+            s.graph.demo.server
+                .editOnWebsite(anime, values.copy(status = unknown))
+            s.list.onEvent(ListEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(ListStatus.entries + unknown, (s.state.content as ListContent.Tabs).statuses)
+            assertEquals(listOf(anime.id), s.ids(unknown))
+            assertFalse(anime.id in s.ids(ListStatus.OnHold))
+            ListStatus.entries.forEach { assertEquals(it.name, 0, s.page(it).ordering) }
+            s.list.onEvent(ListEvent.SelectTab(unknown))
+            advanceUntilIdle()
+        }
+        test(demo = {
+            Demo(set.copy(entries = withUnknown), it)
+        }, saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })) { s ->
+            assertEquals(unknown, s.state.tab)
+        }
+    }
 
     @Test
     fun `the events the route handles change nothing here`() =

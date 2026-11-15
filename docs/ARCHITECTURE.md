@@ -604,8 +604,9 @@ sign-in button disabled, and "Sign-in failed, try again".
 ### 9.3 List (the start screen)
 
 - Top app bar: the title "My list", a filter-by-text icon, a sort icon.
-- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped. No counts. The tabs' pages can also be
-  switched by swiping the list sideways; each tab keeps its own scroll position.
+- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped, then one per list status the app does not know
+  while an entry has it. No counts. The tabs' pages can also be switched by swiping the list sideways; each tab keeps
+  its own scroll position.
 - Rows (`AnimeRow`), at most three logical lines and one action.
 
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
@@ -625,7 +626,7 @@ progress bar.
 **Default order.** Watching is sorted by default as "Up next": titles with episodes to watch first, the most recently
 aired on top; then titles with a known time for the next episode or the premiere, the soonest first; then the rest, by
 last update. "Up next" groups a row only by what the row shows, so the order never contradicts the rows. The other
-tabs default to "Last updated". The sort and direction chosen for each tab are remembered.
+tabs default to "Last updated". The sort and direction chosen for each of the five tabs are remembered.
 
 **Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's sort
 or direction is changed, and on pull-to-refresh, and only then does the tab's page start from the top. An edit, a

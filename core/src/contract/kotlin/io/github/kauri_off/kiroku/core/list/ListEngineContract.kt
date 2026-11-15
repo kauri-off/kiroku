@@ -9,9 +9,9 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
@@ -156,7 +156,7 @@ abstract class ListEngineContract {
 
         override suspend fun put(
             anime: Anime,
-            values: ListValues?,
+            values: SentValues?,
         ): Outcome<ListEntry?> {
             putsUnder += session()
             fault()
@@ -477,10 +477,39 @@ abstract class ListEngineContract {
             val restored = seen.last().single { it.anime.id == FixtureAnime.oneShortOfTotal.id }.values
             assertEquals(before.values, restored)
             assertEquals(
-                listOf(ListRequest(before.anime.id, completed), ListRequest(before.anime.id, before.values)),
+                listOf(ListRequest(before.anime.id, completed.sent), ListRequest(before.anime.id, before.values.sent)),
                 s.server.requests,
             )
             assertEquals(before.values, s.server.entry(before.anime.id)?.values)
+        }
+
+    // The owner's rule: what the app sends MAL never carries a status code the app does not know.
+    @Test
+    fun `a write to an entry whose status the app does not know leaves the status out, MAL keeps it, and a chosen one is sent`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.onHoldAiring
+            val website = checkNotNull(s.server.entry(anime.id)).values.copy(status = EntryStatus.Unrecognized("rewatching"))
+            s.server.editOnWebsite(anime, website)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(website, s.shown(anime.id)?.values)
+
+            s.list.write(ListWrite.StepWatched(anime, 1))
+            settle()
+            val stepped = website.copy(watchedEpisodes = website.watchedEpisodes + 1)
+            assertEquals(stepped, s.shown(anime.id)?.values)
+            assertEquals(stepped, s.server.entry(anime.id)?.values)
+
+            assertEquals(Outcome.Success(Unit), s.list.send(ListWrite.MarkWatched(anime, stepped.watchedEpisodes + 1)))
+            val marked = stepped.copy(watchedEpisodes = stepped.watchedEpisodes + 1)
+            assertEquals(marked, s.server.entry(anime.id)?.values)
+
+            val chosen = marked.copy(status = ListStatus.Watching)
+            s.list.write(ListWrite.Save(anime, chosen))
+            settle()
+            assertEquals(chosen, s.server.entry(anime.id)?.values)
+            assertEquals(listOf(null, null, ListStatus.Watching), s.server.requests.map { it.values?.status })
+            assertEquals(listOf(stepped.sent, marked.sent, chosen.sent), s.server.requests.map { it.values })
         }
 
     @Test
@@ -1094,7 +1123,7 @@ abstract class ListEngineContract {
             s.list.write(ListWrite.Save(added, values))
             s.list.write(ListWrite.Remove(removed))
             advanceTimeBy(1500.milliseconds)
-            assertEquals(listOf(ListRequest(confirmed.id, s.shown(confirmed.id)?.values)), s.server.requests)
+            assertEquals(listOf(ListRequest(confirmed.id, s.shown(confirmed.id)?.values?.sent)), s.server.requests)
 
             // The store as the process left it, and MAL having taken the request whose answer never came.
             kill(s, process)
@@ -1241,7 +1270,18 @@ abstract class ListEngineContract {
             s.session.value = b
             settle()
 
-            assertEquals(listOf(ListRequest(anime.id, s.server.entry(anime.id)?.values)), s.server.requests)
+            assertEquals(
+                listOf(
+                    ListRequest(
+                        anime.id,
+                        s.server
+                            .entry(anime.id)
+                            ?.values
+                            ?.sent,
+                    ),
+                ),
+                s.server.requests,
+            )
             assertEquals(Outcome.Failure(DataError.SessionExpired), sent.await())
             assertEquals(0, s.mal.entryReads)
             assertNull(s.shown(anime.id))

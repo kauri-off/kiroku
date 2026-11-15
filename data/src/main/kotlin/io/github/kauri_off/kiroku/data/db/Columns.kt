@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.db
 
 import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.AiringStatus
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MediaType
@@ -90,13 +91,14 @@ class Codes<T : Any>(
 
 // Codes no recording holds: g, dropped, every source but original, manga, light_novel, visual_novel and game.
 val listStatuses =
-    Codes(ListStatus.entries) {
+    Codes<EntryStatus>(ListStatus.entries, EntryStatus::Unrecognized) {
         when (it) {
             ListStatus.Watching -> "watching"
             ListStatus.Planned -> "plan_to_watch"
             ListStatus.Completed -> "completed"
             ListStatus.OnHold -> "on_hold"
             ListStatus.Dropped -> "dropped"
+            is EntryStatus.Unrecognized -> it.malCode
         }
     }
 

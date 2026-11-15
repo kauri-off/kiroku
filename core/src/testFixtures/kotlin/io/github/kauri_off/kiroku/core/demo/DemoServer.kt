@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.core.demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.RemoteList
+import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -17,7 +18,7 @@ import kotlin.time.Duration
 
 data class ListRequest(
     val id: AnimeId,
-    val values: ListValues?,
+    val values: SentValues?,
 )
 
 // The demo's MAL: the list as the website has it, with scripted latency and failures.
@@ -125,7 +126,7 @@ class DemoServer(
 
     override suspend fun put(
         anime: Anime,
-        values: ListValues?,
+        values: SentValues?,
     ): Outcome<ListEntry?> {
         sending.update { it + 1 }
         try {
@@ -137,7 +138,7 @@ class DemoServer(
 
     private suspend fun answer(
         anime: Anime,
-        values: ListValues?,
+        values: SentValues?,
     ): Outcome<ListEntry?> {
         val request = ListRequest(anime.id, values)
         delay(writeLatency(request))
@@ -151,12 +152,16 @@ class DemoServer(
                 else -> null
             }
         if (error != null) return Outcome.Failure(error)
-        return Outcome.Success(
-            synchronized(guard) {
-                store(anime, values)
-                list[anime.id]
-            },
-        )
+        return synchronized(guard) {
+            val stored =
+                values?.let { sent ->
+                    // A status left out is the one MAL has; a new entry needs one.
+                    val status = sent.status ?: list[anime.id]?.status ?: return Outcome.Failure(DataError.InvalidRequest)
+                    ListValues(status, sent.watchedEpisodes, sent.score, sent.startDate, sent.finishDate)
+                }
+            store(anime, stored)
+            Outcome.Success(list[anime.id])
+        }
     }
 
     private fun store(

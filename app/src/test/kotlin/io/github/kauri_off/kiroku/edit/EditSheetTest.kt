@@ -85,7 +85,7 @@ class EditSheetTest {
 
     // Save writes the draft, so the draft must be what the sheet shows when Save is tapped.
     private fun assertTheSheetShows(values: ListValues) {
-        compose.onNode(hasText(statusNames.getValue(values.status)) and isToggleable()).assertIsOn()
+        compose.onNode(hasText(statusNames.getValue(values.status as ListStatus)) and isToggleable()).assertIsOn()
         field.assertTextContains(values.watchedEpisodes.toString(), substring = true)
         dateField("Start date").assertTextContains(values.startDate.shown(), substring = true)
         dateField("Finish date").assertTextContains(values.finishDate.shown(), substring = true)

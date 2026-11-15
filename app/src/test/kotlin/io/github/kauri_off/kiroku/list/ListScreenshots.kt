@@ -42,6 +42,7 @@ class ListScreenshots : ScreenshotRegistry() {
             case("completed", content = screen(ListFixtureStates.completed)),
             case("on-hold", content = screen(ListFixtureStates.onHold)),
             case("dropped", content = screen(ListFixtureStates.dropped)),
+            case("unknown-status", content = screen(ListFixtureStates.unknown)),
             case("watching-tabs-scrolled", content = { ScrolledTabsListScreen(ListFixtureStates.watching) }),
             case("sort-sheet", content = screen(ListFixtureStates.sortSheet)),
             case("sort-sheet-title", content = screen(ListFixtureStates.sortSheetTitle)),
