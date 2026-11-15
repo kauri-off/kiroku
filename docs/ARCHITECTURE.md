@@ -336,8 +336,9 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - The app opens on List, tab Watching. Signed out, List shows its empty state with one "Sign in" button; "Browse
   without an account" on the sign-in screen goes to Search.
 - Predictive back is on.
-- Deep links: `https://myanimelist.net/anime/{id}` (with or without a slug or trailing slash),
-  `https://myanimelist.net/profile/{name}`, and the OAuth redirect.
+- Deep links: a title's page, `https://[www.]myanimelist.net/anime/{id}` with or without its name and a trailing
+  slash, from Android 12, once the user has allowed the app's links in the system's settings;
+  `https://myanimelist.net/profile/{name}`; and the OAuth redirect.
 
 ### 6.4 Stack, wiring and demo mode
 

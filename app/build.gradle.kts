@@ -613,21 +613,35 @@ abstract class VerifyShortcuts : DefaultTask() {
     }
 }
 
-// What a merged manifest gets wrong about its build type's redirect, registered with MAL; nothing when it is right.
+// What a merged manifest gets wrong about the addresses it takes, its build type's redirect and MAL's title pages; nothing when right.
 object RedirectRule {
     const val ANDROID = "http://schemas.android.com/apk/res/android"
     const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
+    const val LINK = "io.github.kauri_off.kiroku.link.LinkActivity"
+
+    // True from Android 12, whose filters can match a title's page exactly; false before.
+    const val LINK_ENABLED = "@bool/links_claimed"
     const val VIEW = "android.intent.action.VIEW"
     const val DEFAULT = "android.intent.category.DEFAULT"
     const val BROWSABLE = "android.intent.category.BROWSABLE"
     private val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
 
-    // An intent filter: its actions and categories, the attributes of each of its data elements, and whatever else it holds.
+    // A title's page on MAL from a browser: the forms `animeLink` in :core opens, and no other page of MAL's.
+    val linkData =
+        listOf(
+            mapOf("scheme" to "https"),
+            mapOf("host" to "myanimelist.net"),
+            mapOf("host" to "www.myanimelist.net"),
+        ) +
+            listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") }
+
+    // An intent filter: actions, categories, each data element's attributes, other children, and its own attributes.
     data class Filter(
         val actions: List<String>,
         val categories: Set<String>,
         val data: List<Map<String, String>>,
         val other: List<String> = emptyList(),
+        val attributes: Map<String, String> = emptyMap(),
     )
 
     fun parse(manifest: File): org.w3c.dom.Document =
@@ -637,7 +651,7 @@ object RedirectRule {
             .newDocumentBuilder()
             .parse(manifest)
 
-    // Only a filter with data or the browser's category takes an address; one activity has one, this one, and a browser reaches it.
+    // Only a filter with data or the browser's category takes an address; the redirect's and the link's activities have one each.
     fun problems(
         manifest: org.w3c.dom.Document,
         redirect: String,
@@ -656,16 +670,28 @@ object RedirectRule {
                 setOf(DEFAULT, BROWSABLE),
                 listOf(mapOf("scheme" to redirect.substringBefore("://"), "host" to redirect.substringAfter("://"))),
             )
+        val link = components.filter { it.name() == LINK }
+        val linkFilters = link.flatMap { it.filters() }
+        val title = Filter(listOf(VIEW), setOf(DEFAULT, BROWSABLE), linkData)
         val exported = components.filter { it.getAttributeNS(ANDROID, "exported") == "true" }.mapTo(mutableSetOf()) { it.name() }
         val shut =
             components.any {
                 it.name() == ACTIVITY && (it.getAttributeNS(ANDROID, "enabled") == "false" || it.hasAttributeNS(ANDROID, "permission"))
             }
+        val linkOpen = link.all { it.getAttributeNS(ANDROID, "enabled") == LINK_ENABLED && !it.hasAttributeNS(ANDROID, "permission") }
         return listOfNotNull(
-            "Addresses are taken by $takers, not by $ACTIVITY alone".takeIf { takers != listOf(ACTIVITY) },
+            "Addresses are taken by $takers, not by $ACTIVITY and $LINK alone".takeIf {
+                takers.sorted() !=
+                    listOf(
+                        LINK,
+                        ACTIVITY,
+                    ).sorted()
+            },
             "$ACTIVITY takes $own, not $redirect from a browser and nothing else".takeIf { own != listOf(browser) },
             "$ACTIVITY is disabled or asks for a permission, so no browser reaches it".takeIf { shut },
-            "Other apps can start $exported, not ${alsoExported + ACTIVITY}".takeIf { exported != alsoExported + ACTIVITY },
+            "$LINK takes $linkFilters, not a title's page on MAL from a browser and nothing else".takeIf { linkFilters != listOf(title) },
+            "$LINK is not enabled by $LINK_ENABLED alone, or asks for a permission".takeIf { !linkOpen },
+            "Other apps can start $exported, not ${alsoExported + ACTIVITY + LINK}".takeIf { exported != alsoExported + ACTIVITY + LINK },
         )
     }
 
@@ -684,6 +710,10 @@ object RedirectRule {
                         (0 until data.attributes.length).map { data.attributes.item(it) }.associate { it.localName to it.nodeValue }
                     },
                 other = (parts.keys - setOf("action", "category", "data")).sorted(),
+                attributes =
+                    filter.attributes.let { all ->
+                        (0 until all.length).map(all::item).associate { it.localName to it.nodeValue }
+                    },
             )
         }
 }
@@ -708,7 +738,8 @@ abstract class VerifyRedirect : DefaultTask() {
         val problems = RedirectRule.problems(RedirectRule.parse(manifest.get().asFile), redirect.get(), alsoExported.get())
         check(problems.isEmpty()) { problems.joinToString("\n") }
         report.get().asFile.writeText(
-            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}; exported besides it: ${alsoExported.get()}\n",
+            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}, ${RedirectRule.LINK} a title's page on MAL; " +
+                "exported besides them: ${alsoExported.get()}\n",
         )
     }
 }
@@ -744,6 +775,10 @@ abstract class VerifyRedirectRule : DefaultTask() {
         val ownData: (
             org.w3c.dom.Document,
         ) -> org.w3c.dom.Element = { ownFilter(it).getElementsByTagName("data").item(0) as org.w3c.dom.Element }
+        val link: (org.w3c.dom.Document) -> org.w3c.dom.Element = { it.component("activity", RedirectRule.LINK) }
+        val linkFilter: (
+            org.w3c.dom.Document,
+        ) -> org.w3c.dom.Element = { link(it).getElementsByTagName("intent-filter").item(0) as org.w3c.dom.Element }
         val wrong =
             mapOf<String, (org.w3c.dom.Document) -> Unit>(
                 // Another taker of an address: the launcher is exported already, so only its filter is new.
@@ -780,6 +815,35 @@ abstract class VerifyRedirectRule : DefaultTask() {
                 "the redirect activity asks for a permission" to
                     { own(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
                 "there is no redirect activity" to { own(it).let { activity -> activity.parentNode.removeChild(activity) } },
+                // The link activity claims more of MAL's site, or claims it where a filter cannot match a title's page exactly.
+                "the link takes a manga's page" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/manga/[1-9][0-9]*")) },
+                "the link takes a title's sub-pages" to
+                    { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*/[^/]+/.*")) },
+                "the link takes an id that is no number" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/.*")) },
+                "the link takes a path prefix" to { linkFilter(it).addData(mapOf("pathPrefix" to "/anime/")) },
+                "the link takes every path" to { document -> linkFilter(document).removeData { "pathAdvancedPattern" in it } },
+                "the link takes http" to { linkFilter(it).addData(mapOf("scheme" to "http")) },
+                "the link takes another host" to { linkFilter(it).addData(mapOf("host" to "m.myanimelist.net")) },
+                "the link takes any host" to { document -> linkFilter(document).removeData { "host" in it } },
+                "the link takes a title's page not from a browser" to { document ->
+                    val categories = linkFilter(document).getElementsByTagName("category")
+                    val browsable =
+                        (0 until categories.length).map { categories.item(it) as org.w3c.dom.Element }.single {
+                            it.name() == RedirectRule.BROWSABLE
+                        }
+                    browsable.parentNode.removeChild(browsable)
+                },
+                "the link has a second filter" to { link(it).filter(listOf(mapOf("scheme" to "https", "host" to "myanimelist.net"))) },
+                "the link asks for verification of a domain the app does not own" to
+                    { linkFilter(it).setAttributeNS(android, "android:autoVerify", "true") },
+                "the link's filter has a priority" to { linkFilter(it).setAttributeNS(android, "android:priority", "999") },
+                "the redirect's filter asks for verification" to { ownFilter(it).setAttributeNS(android, "android:autoVerify", "true") },
+                "the link is claimed before Android 12" to { link(it).setAttributeNS(android, "android:enabled", "true") },
+                "the link asks for a permission" to
+                    { link(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
+                "the link is not exported" to { link(it).setAttributeNS(android, "android:exported", "false") },
+                "there is no link activity" to { link(it).let { activity -> activity.parentNode.removeChild(activity) } },
+                "the launcher takes a title's page" to { main(it).filter(RedirectRule.linkData) },
                 // Something else is newly open to other apps.
                 "another activity is exported" to { it.added("activity").setAttributeNS(android, "android:exported", "true") },
                 "another provider is exported" to { it.added("provider").setAttributeNS(android, "android:exported", "true") },
@@ -817,6 +881,16 @@ abstract class VerifyRedirectRule : DefaultTask() {
         name: String,
     ) {
         appendChild(ownerDocument.createElement(tag).also { it.setAttributeNS(RedirectRule.ANDROID, "android:name", name) })
+    }
+
+    // Takes out of a filter each data element one of whose attributes [which] names.
+    private fun org.w3c.dom.Element.removeData(which: (Set<String>) -> Boolean) {
+        val data = getElementsByTagName("data")
+        (0 until data.length)
+            .map { data.item(it) as org.w3c.dom.Element }
+            .filter { element ->
+                which((0 until element.attributes.length).mapTo(mutableSetOf()) { element.attributes.item(it).localName })
+            }.forEach { removeChild(it) }
     }
 
     private fun org.w3c.dom.Element.addData(attributes: Map<String, String>) {

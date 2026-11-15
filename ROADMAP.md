@@ -63,8 +63,8 @@ Goal: the owner signs in and uses their real list and real title pages (ARCHITEC
 
 Acceptance: over three days of use, every list change made in the app is on the website and the reverse; no
 sign-out happened that the owner did not cause; three title pages match myanimelist.net for related titles and
-statistics; a `myanimelist.net/anime/{id}` link opens the title page with the List beneath it; the owner's findings
-on the Russian strings so far are fixed.
+statistics; a `myanimelist.net/anime/{id}` link, once allowed in Android's settings, opens the title page with the
+List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
@@ -142,14 +142,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-25 Posters from the network.**
 
-- [ ] **M2-26 The real title page and its link.** The live graph's titles are M2-17. A
-  `myanimelist.net/anime/{id}` link, with or without a slug or a trailing slash, opens the title page with the
-  List beneath it (section 6.3); no other address is claimed. While the system does not let the app open these
-  links, the app says so once in a screen of its own that leads to the system's setting for it; the row in Settings
-  comes with M7.
-  **Needs:** M2-17, M2-24.
-  **Check:** a parser test with ten forms of the address; `tools/emu run` on the demo source: the link starts
-  the app on the title page, and Back shows the List.
+- [x] **M2-26 The real title page and its link.**
 
 - [ ] **M2-27 [L] Watch order on the title page.** The page follows the chain of sequels, one request per title,
   each stored, and shows the watch order, so a film between seasons does not hide the next season; the order is
