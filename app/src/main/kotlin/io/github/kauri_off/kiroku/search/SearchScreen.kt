@@ -81,6 +81,7 @@ fun SearchScreen(
 ) {
     BackHandler(enabled = state.query.text.isNotEmpty()) { onEvent(SearchEvent.Clear) }
     // Leaving for another screen closes the view at once: a new, closed bar replaces the open one.
+    // Only for events that leave the screen: a new bar learns where the collapsed bar is when Search is laid out again.
     var bars by rememberSaveable { mutableIntStateOf(0) }
     val bar = key(bars) { rememberBar() }
     val events: (SearchEvent) -> Unit = { event ->

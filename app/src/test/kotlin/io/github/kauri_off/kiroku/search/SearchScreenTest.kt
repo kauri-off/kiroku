@@ -17,8 +17,6 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.longClick
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -172,16 +170,31 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `a search view closed by leaving for a browse list fades its content in again when it next opens`() {
+    fun `a search view closed by leaving for a browse list fades its content in again when it next opens`() =
+        leavingClosesTheView(SearchFixtureStates.start, "Top rated", SearchEvent.Browse(BrowseList.TopRated))
+
+    @Test
+    fun `a search view closed by opening a title fades its content in again when it next opens`() {
+        val state = SearchFixtureStates.digitsQuery
+        val id = checkNotNull(queriedId(state.query.text.toString()))
+        leavingClosesTheView(state, "Open title #${id.value}", SearchEvent.Open(id))
+    }
+
+    // Opens the view by its field, taps [row] in it, then takes the screen out of composition and back as the
+    // navigation does: the view is closed and its content hidden, so it fades in again.
+    private fun leavingClosesTheView(
+        state: SearchState,
+        row: String,
+        leaves: SearchEvent,
+    ) {
         val composed = mutableStateOf(true)
         lateinit var bar: SearchBarState
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                // As the navigation keeps a screen it covers: out of composition, its saved state kept.
                 val holder = rememberSaveableStateHolder()
                 if (composed.value) {
                     holder.SaveableStateProvider(SEARCH) {
-                        SearchScreen(SearchFixtureStates.start, { events += it }, SnackbarHostState(), rememberBar = {
+                        SearchScreen(state, { events += it }, SnackbarHostState(), rememberBar = {
                             rememberContainedSearchBarState().also { bar = it }
                         })
                     }
@@ -191,9 +204,9 @@ class SearchScreenTest {
         compose.onNode(hasSetTextAction()).performClick()
         compose.waitForIdle()
         assertEquals(listOf(1f, 1f), saved(bar))
-        compose.onAllNodesWithText("Top rated").onLast().performClick()
+        compose.onNode(hasText(row) and hasAnyAncestor(isDialog())).performClick()
         compose.waitForIdle()
-        assertEquals(listOf<SearchEvent>(SearchEvent.Browse(BrowseList.TopRated)), events)
+        assertEquals(listOf(leaves), events)
         composed.value = false
         compose.waitForIdle()
         composed.value = true
@@ -307,16 +320,25 @@ class SearchFieldAutofillTest {
 class SearchViewRowsTest {
     @Test
     fun theRowsOfTheSearchViewHaveTheViewsColour() {
+        for (state in listOf(SearchFixtureStates.searchView, SearchFixtureStates.typing)) assertOneColour(state)
+    }
+
+    // The page under the bar keeps its rows on the page's own colour.
+    @Test
+    fun thePageRowsHaveThePagesColour() {
+        for (state in listOf(SearchFixtureStates.start, SearchFixtureStates.results)) assertOneColour(state)
+    }
+
+    // A line down the screen inside the rows' start padding, from under the field: rows, headers and the space
+    // after them are one colour.
+    private fun assertOneColour(state: SearchState) {
         for (variant in listOf(Variant.EnLight, Variant.EnDark)) {
-            for (state in listOf(SearchFixtureStates.searchView, SearchFixtureStates.typing)) {
-                Shot.launch(variant) { SearchScreen(state, {}, SnackbarHostState()) }.use { shot ->
-                    val image = shot.image()
-                    // A line down the view inside the rows' start padding, from under the field.
-                    val x = shot.dpToPx(EDGE_DP).toInt()
-                    val top = shot.dpToPx(BELOW_FIELD_DP).toInt()
-                    val colours = (top until image.height * 3 / 4).map { image.getPixel(x, it) }.toSet()
-                    assertEquals("${variant.id} ${state.content}: ${colours.map { Integer.toHexString(it) }}", 1, colours.size)
-                }
+            Shot.launch(variant) { SearchScreen(state, {}, SnackbarHostState()) }.use { shot ->
+                val image = shot.image()
+                val x = shot.dpToPx(EDGE_DP).toInt()
+                val top = shot.dpToPx(BELOW_FIELD_DP).toInt()
+                val colours = (top until image.height * 3 / 4).map { image.getPixel(x, it) }.toSet()
+                assertEquals("${variant.id} ${state.content}: ${colours.map { Integer.toHexString(it) }}", 1, colours.size)
             }
         }
     }
