@@ -539,7 +539,8 @@ class ListViewModelTest {
     @Test
     fun `entries whose status the app does not know have a last tab of their own, which keeps no sort, until no entry has it`() {
         val preferences = DemoPreferences()
-        test(demo = { Demo(set.copy(entries = withUnknown), it) }, preferences = preferences) { s ->
+        val saved = SavedStateHandle()
+        test(demo = { Demo(set.copy(entries = withUnknown), it) }, saved = saved, preferences = preferences) { s ->
             assertEquals(ListStatus.entries + unknown, (s.state.content as ListContent.Tabs).statuses)
             val shown = withUnknown.filter { it.status == unknown }
             val expected = order(shown, ListSort.LastUpdated, set.airing::get, today) { it.anime.titles.romaji }.map { it.anime.id }
@@ -566,6 +567,9 @@ class ListViewModelTest {
             assertEquals(ListStatus.entries, (s.state.content as ListContent.Tabs).statuses)
             assertEquals(ListStatus.Dropped, s.state.tab)
             assertTrue(s.ids().containsAll(expected))
+        }
+        test(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })) { s ->
+            assertEquals(ListStatus.Dropped, s.state.tab)
         }
     }
 

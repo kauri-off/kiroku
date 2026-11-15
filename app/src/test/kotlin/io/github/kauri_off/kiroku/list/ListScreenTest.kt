@@ -202,6 +202,15 @@ class ListScreenTest {
     }
 
     @Test
+    fun `a list that loads with a status the app does not know selected shows that tab and selects no other on the way`() {
+        show(ListFixtureStates.unknown.copy(content = ListContent.Loading))
+        show(ListFixtureStates.unknown)
+        compose.onNode(hasText("Rewatching") and isSelected()).assertIsDisplayed()
+        compose.onNodeWithText(FixtureAnime.onHoldAiring.titles.romaji).assertIsDisplayed()
+        assertEquals(emptyList<ListEvent>(), events)
+    }
+
+    @Test
     fun `each tab keeps its scroll position`() {
         showFollowing(ListFixtureStates.watching)
         compose.onRoot().performTouchInput { swipeUp() }

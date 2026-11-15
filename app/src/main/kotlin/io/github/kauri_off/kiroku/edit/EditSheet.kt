@@ -84,6 +84,7 @@ import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.label
+import io.github.kauri_off.kiroku.text.statusName
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -323,15 +324,21 @@ private fun Actions(
     }
 }
 
+// A status the app does not know is none of the options, so none is chosen; a screen reader hears its name.
 @Composable
-// A status the app does not know is none of the options, so none is chosen.
 private fun StatusChoice(
     status: EntryStatus,
     modifier: Modifier,
     onChoose: (ListStatus) -> Unit,
 ) {
     val options = ListStatus.entries
-    ConnectedChoice(options.map { stringResource(it.label()) }, options.indexOf(status), { onChoose(options[it]) }, modifier)
+    val unknown = (status as? EntryStatus.Unrecognized)?.let { statusName(it) }
+    ConnectedChoice(
+        options.map { stringResource(it.label()) },
+        options.indexOf(status),
+        { onChoose(options[it]) },
+        if (unknown == null) modifier else modifier.semantics { stateDescription = unknown },
+    )
 }
 
 // Read by the control it names, so a screen reader hears it once.

@@ -9,6 +9,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertAll
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isOff
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -29,6 +32,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -237,6 +241,24 @@ class EditSheetTest {
         compose.waitForIdle()
         assertTheSheetShows(EditSheetState.newEntry)
         assertFalse(state.hasChanges)
+    }
+
+    // A status the app does not know: no option chosen, its name for a screen reader alone, Save only once one is chosen.
+    @Test
+    fun aStatusTheAppDoesNotKnowIsNoOptionAndSaveWaitsForOne() {
+        sheet(EditSheetState.of(TITLE, saved.copy(status = Fixtures.unknownListStatus), total = 24, malEpisodes = 24, today))
+        val options = compose.onAllNodes(isToggleable())
+        options.assertCountEquals(5)
+        options.assertAll(isOff())
+        val named = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Rewatching")
+        compose.onNode(named).assertExists()
+        compose.onNodeWithText("Rewatching").assertDoesNotExist()
+        save.assertIsNotEnabled()
+        compose.onNode(hasText("On hold") and isToggleable()).performClick()
+        compose.waitForIdle()
+        compose.onNode(hasText("On hold") and isToggleable()).assertIsOn()
+        compose.onNode(named).assertDoesNotExist()
+        save.assertIsEnabled()
     }
 
     @Test

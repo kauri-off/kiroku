@@ -54,6 +54,9 @@ object Fixtures {
     // MAL's code of a list status the app does not know, which no entry of the set has.
     val unknownListStatus = EntryStatus.Unrecognized("rewatching")
 
+    // One wider than a phone's tab row, with a doubled separator and digits.
+    val longUnknownListStatus = EntryStatus.Unrecognized("on_hold_until_the_second_cour_is_announced__2027_v2")
+
     val reference: FixtureSet by lazy {
         FixtureSet(
             clock = FixtureTime.clock,

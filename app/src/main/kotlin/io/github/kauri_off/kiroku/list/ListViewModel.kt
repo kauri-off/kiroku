@@ -172,7 +172,7 @@ class ListViewModel(
         when (event) {
             is ListEvent.SelectTab -> {
                 model.update { it.copy(tab = event.status) }
-                saved[TAB] = savedTab(event.status)
+                saveTab()
             }
             is ListEvent.PlusOne -> plusOne(event.id)
             ListEvent.StartFilter -> filterBy("")
@@ -437,7 +437,7 @@ class ListViewModel(
                 } else {
                     ShellMessage.Text.EpisodeWatched(after.values.watchedEpisodes)
                 }
-            ShellMessage(text, ShellMessage.Action.Undo(change.undo))
+            ShellMessage(text, change.undo?.let(ShellMessage.Action::Undo))
         }
     }
 
@@ -496,6 +496,12 @@ class ListViewModel(
                 }
         }
         model.update { it.copy(refreshing = false, refreshes = if (fromUser) it.refreshes + 1 else it.refreshes) }
+        // A tab that went with the order gave way to another, which is the one to restore.
+        saveTab()
+    }
+
+    private fun saveTab() {
+        saved[TAB] = savedTab(model.value.tab)
     }
 
     private companion object {

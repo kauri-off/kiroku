@@ -100,8 +100,9 @@ fun ListScreen(
 ) {
     BackHandler(enabled = state.filterText != null) { onEvent(ListEvent.EndFilter) }
     val tabs = state.content as? ListContent.Tabs
-    val statuses = tabs?.statuses ?: ListStatus.entries
-    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab).coerceAtLeast(0)) { statuses.size }
+    // Before the tabs are known, a tab of a status the app does not know stands where it will be.
+    val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
+    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
     val motion = rememberListTabMotion(pager)
     Scaffold(
         modifier = modifier.withoutTravelledTaps(),

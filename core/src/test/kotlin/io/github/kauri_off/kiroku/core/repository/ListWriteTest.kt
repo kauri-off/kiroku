@@ -118,7 +118,7 @@ class ListWriteTest {
     private fun undo(
         change: ListChange,
         now: ListValues?,
-    ) = change.undo.applyTo(now?.let(::entry), today)
+    ) = change.undo!!.applyTo(now?.let(::entry), today)
 
     private val list = SignInId("a")
 

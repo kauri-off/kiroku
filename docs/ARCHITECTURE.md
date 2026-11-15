@@ -416,7 +416,8 @@ applied to the entry's values as they are when sent, not to values read earlier.
   shows 12, and Retry sends 14.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
-  while it still holds what the edit put there.
+  while it still holds what the edit put there. A change off a status the app does not know offers no Undo, as that
+  status is never sent to MAL.
 - **W4. A sync never reverts an edit made while it was running**, including an edit whose request completed
   before the sync's download did. A title added during a sync is not deleted by it, and one removed during a sync
   does not come back. Removals made on the website are still reflected for every other entry.
@@ -604,9 +605,9 @@ sign-in button disabled, and "Sign-in failed, try again".
 ### 9.3 List (the start screen)
 
 - Top app bar: the title "My list", a filter-by-text icon, a sort icon.
-- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped, then one per list status the app does not know
-  while an entry has it. No counts. The tabs' pages can also be switched by swiping the list sideways; each tab keeps
-  its own scroll position.
+- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped, then one per list status the app does not know,
+  named by section 10's fall-back, from when an entry has it until the list is next ordered without one. No counts.
+  The tabs' pages can also be switched by swiping the list sideways; each tab keeps its own scroll position.
 - Rows (`AnimeRow`), at most three logical lines and one action.
 
 **Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
@@ -706,12 +707,13 @@ order of items 2 to 8 does not change, and the above-the-fold rule stays.
 ### 9.5 Edit sheet
 
 A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
-edits; the status as a connected group of five single-choice toggle buttons, in as few rows as fit; an
-`EpisodeStepper`; a score slider 0 to 10 with the score names; start and finish dates; a text button "Remove from
-list" (asks for confirmation); "Save", on screen without scrolling whenever the keyboard is closed. Limit: nothing
-else. Nothing is written before "Save", and "Save" writes exactly what the sheet shows, an automatic status change
-(W7) included. The count has no ceiling (W9). Dismissing the sheet with unsaved changes, by swipe or Back, asks
-"Discard changes?". Rewatching, tags, comments and priority come after 1.0.
+edits; the status as a connected group of five single-choice toggle buttons, in as few rows as fit, none chosen for a
+status the app does not know, which Save then waits for; an `EpisodeStepper`; a score slider 0 to 10 with the score
+names; start and finish dates; a text button "Remove from list" (asks for confirmation); "Save", on screen without
+scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before "Save", and "Save" writes
+exactly what the sheet shows, an automatic status change (W7) included. The count has no ceiling (W9). Dismissing the
+sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come
+after 1.0.
 
 ### 9.6 Search
 

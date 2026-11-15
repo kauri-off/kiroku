@@ -124,6 +124,25 @@ object ListFixtureStates {
     // Its own last tab, named by MAL's code.
     val unknown = state(unknownStatus, tabs(withUnknownStatus))
 
+    // The same with a code longer than the tab row is wide.
+    val unknownLongCode =
+        Fixtures.longUnknownListStatus.let { long ->
+            state(
+                long,
+                tabs(
+                    withUnknownStatus.map {
+                        if (it.status ==
+                            unknownStatus
+                        ) {
+                            it.copy(values = it.values.copy(status = long))
+                        } else {
+                            it
+                        }
+                    },
+                ),
+            )
+        }
+
     // The widest line 2 a Watching row has: three-digit counts, a score of 10, episodes to watch and "+1".
     private const val LONG_TOTAL = 366
     private const val LONG_WATCHED = 120
