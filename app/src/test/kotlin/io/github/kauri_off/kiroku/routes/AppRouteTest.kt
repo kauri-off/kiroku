@@ -580,22 +580,32 @@ class AppRouteTest {
     }
 
     @Test
-    fun `during a back gesture only the screen on top draws the snackbar`() {
+    fun `the page keeps the snackbar under a back gesture, and through Back's transition one screen shows it`() {
         app()
         openKagerou()
         scope.launch { snackbars.showSnackbar("Message", duration = SnackbarDuration.Indefinite) }
         compose.waitForIdle()
+        val messages = { compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().size }
         val dispatcher = compose.activity.onBackPressedDispatcher
         compose.runOnUiThread {
             dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT))
             dispatcher.dispatchOnBackProgressed(BackEventCompat(0f, 0f, 0.5f, BackEventCompat.EDGE_LEFT))
         }
         compose.waitForIdle()
-        shows("My list")
-        compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().let { assertEquals("the List under the page drew it", 0, it.size) }
+        assertEquals("the List is drawn under the gesture", 0, compose.onAllNodes(hasText("My list")).fetchSemanticsNodes().size)
+        assertEquals(1, messages())
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
         compose.waitForIdle()
-        compose.onAllNodes(hasText("Message")).fetchSemanticsNodes().let { assertEquals(1, it.size) }
+        assertEquals(1, messages())
+        compose.mainClock.autoAdvance = false
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        repeat(MID_TRANSITION_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+        shows("My list")
+        assertEquals(1, messages())
+        compose.mainClock.autoAdvance = true
     }
 
     private fun plusOnTitlePage() = compose.onNode(hasContentDescription("Plus one episode") and hasClickAction()).performClick()
@@ -760,6 +770,7 @@ class AppRouteTest {
 
     private companion object {
         const val FRAMES = 10
+        const val MID_TRANSITION_FRAMES = 5
 
         // Longer than a message with an action is shown.
         const val AWAY_MILLIS = 20_000L

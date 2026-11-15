@@ -113,7 +113,7 @@ class ShellRouteTest {
     }
 
     @Test
-    fun backFromTheSearchRootPreviewsTheListAndACancelledGestureRestoresSearch() {
+    fun aGestureFromTheSearchRootDrawsOnlySearchAndACancelledGestureLeavesSearch() {
         shell()
         compose.onNodeWithText("Open").performClick()
         tab("Search").performClick()
@@ -126,17 +126,10 @@ class ShellRouteTest {
         compose.waitForIdle()
         drawn.clear()
         compose.onRoot().captureToImage()
-        assertEquals("both screens are drawn under the gesture", setOf("Page 1", "Search root"), drawn)
-        assertEquals(
-            "only the screen on top may draw the snackbar",
-            mapOf("Page 1" to false, "Search root" to true),
-            onTop.filterKeys {
-                it in
-                    drawn
-            },
-        )
-        shows("Page 1, 0 taps")
-        hides("Search root")
+        assertEquals("only the screen on top is drawn under the gesture", setOf("Search root"), drawn)
+        assertEquals(mapOf("Search root" to true), onTop.filterKeys { it in drawn })
+        hides("Page 1, 0 taps")
+        shows("Search root")
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
         compose.waitForIdle()
         hides("Page 1, 0 taps")
