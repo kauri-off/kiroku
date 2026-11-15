@@ -898,14 +898,12 @@ Each of these could change a decision above.
 
 1. **A sign-in with the app killed while the browser is open has not been run on a phone.** A sign-in has: MAL
    granted a token with a lifetime.
-2. **The shape of MAL's user statistics** is known from dailyAL's working code, not from MAL's reference, which
-   shows no samples. The recorded responses decide.
-3. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
+2. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
    list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
    (believed to be three characters).
-4. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
+3. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
    it). How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not measured.
-5. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
+4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-6. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
+5. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
    not be reached from the maintainer's machine.
