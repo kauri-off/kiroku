@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Tests changed-screenshots on two made-up sets.
+set -uo pipefail
+SRC=$(cd "$(dirname "$0")" && pwd)
+T=$(mktemp -d)
+trap 'rm -rf "$T"' EXIT
+fails=0
+
+set_of() {
+  rm -rf "$T/$1"
+  mkdir -p "$T/$1/list" "$T/$1/search" "$T/$1/title"
+  printf a > "$T/$1/list/content__en-light.png"
+  printf b > "$T/$1/list/content__ru-dark.png"
+  printf c > "$T/$1/search/content__en-light.png"
+  printf d > "$T/$1/title/content__en-light.png"
+  printf 'x\n' > "$T/$1/title/NOT_SHOWN.txt"
+  printf '%s\n' "$2" > "$T/$1/RENDERED_AT"
+  printf 'ubuntu24 1\n' > "$T/$1/RUNNER_IMAGE"
+}
+
+check() {
+  local name=$1 want=$2 out
+  out=$("$SRC/changed-screenshots" "$T/main" "$T/pr")
+  if ! grep -qF -- "$want" <<< "$out"; then
+    echo "FAIL $name: no line \"$want\" in:"
+    echo "$out"
+    fails=$((fails + 1))
+  fi
+}
+
+refuse() {
+  local name=$1 want=$2 out
+  out=$("$SRC/changed-screenshots" "$T/main" "$T/pr")
+  if grep -qF -- "$want" <<< "$out"; then
+    echo "FAIL $name: \"$want\" in:"
+    echo "$out"
+    fails=$((fails + 1))
+  fi
+}
+
+set_of main 1111111
+set_of pr 2222222
+check "names main's commit" 'main at `1111111`'
+check "nothing changed" 'No image differs.'
+refuse "nothing changed, no table" '| Screen |'
+refuse "same image, no note" 'runner images'
+
+printf 'B' > "$T/pr/list/content__ru-dark.png"
+printf 'y\n' > "$T/pr/title/NOT_SHOWN.txt"
+check "one image changed" '| list | 1 | 0 | 0 |'
+check "names the changed image" '- `list/content__ru-dark.png`'
+refuse "an unchanged image" 'list/content__en-light.png'
+refuse "an unchanged screen" '| search |'
+refuse "a file that is not an image" '| title |'
+
+set_of pr 2222222
+rm "$T/pr/search/content__en-light.png"
+printf e > "$T/pr/search/empty__en-light.png"
+mkdir -p "$T/pr/gallery"
+printf f > "$T/pr/gallery/gallery__en-light.png"
+check "a removed and an added image" '| search | 0 | 1 | 1 |'
+check "a new screen" '| gallery | 0 | 1 | 0 |'
+check "names the added image" '- `search/empty__en-light.png`'
+check "names the removed image" '- `search/content__en-light.png`'
+refuse "an unchanged screen" '| list |'
+
+set_of pr 2222222
+printf 'ubuntu24 2\n' > "$T/pr/RUNNER_IMAGE"
+check "another runner image" '(`ubuntu24 1` and `ubuntu24 2`)'
+
+rm -rf "$T/main"
+mkdir -p "$T/main"
+check "an empty set of main's" '| list | 0 | 2 | 0 |'
+
+if ! "$SRC/changed-screenshots" "$T/main" "$T/none" > /dev/null 2>&1; then :; else
+  echo "FAIL a missing directory is accepted"
+  fails=$((fails + 1))
+fi
+
+[[ $fails -eq 0 ]] && echo "changed-screenshots: all cases pass"
+exit $((fails > 0))

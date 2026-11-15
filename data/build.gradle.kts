@@ -42,6 +42,17 @@ android {
         assets.directories += "schemas"
     }
 
+    // The app's preview build takes this module with the tools of its debug menu, as its debug build does.
+    buildTypes {
+        create("preview") {
+            initWith(getByName("release"))
+        }
+    }
+
+    sourceSets.named("preview") {
+        kotlin.directories += "src/debug/kotlin"
+    }
+
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
         warningsAsErrors = false

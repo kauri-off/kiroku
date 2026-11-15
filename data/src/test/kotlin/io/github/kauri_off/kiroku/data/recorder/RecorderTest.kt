@@ -92,7 +92,7 @@ class RecorderTest {
                 .addHeader("Set-Cookie", "planted=cookie")
                 .addHeader("X-Planted", "planted-header")
                 .body(
-                    """{"echo":"$CLIENT_ID, ${PUBLIC.uppercase()}","paging":{"next":"https://mal.example/v2/users/$PUBLIC/animelist?offset=10"}}""",
+                    """{"echo":"$CLIENT_ID","name":"${PUBLIC.uppercase()}","paging":{"next":"https://mal.example/v2/users/$PUBLIC/animelist?offset=10"}}""",
                 ).build()
         api.answers { repeating }
         signIn.answers { repeating }
@@ -120,7 +120,13 @@ class RecorderTest {
         assertEquals("client_id=$CLIENT_ID&grant_type=refresh_token&refresh_token=$REFRESH", refresh.body!!.utf8())
 
         assertEquals(setOf("title.200.json", "list.200.json", "as_user.200.json", "refresh.200.json"), stored.keys)
-        assertTrue(stored.values.all { "users/public-user/animelist?offset=10" in it && "client-id, public-user" in it })
+        assertTrue(
+            stored.values.all {
+                "users/public-user/animelist?offset=10" in it &&
+                    "\"echo\": \"client-id\"" in it &&
+                    "\"name\": \"public-user\"" in it
+            },
+        )
         val written = (stored.keys + stored.values + said).joinToString("\n")
         for (secret in listOf(CLIENT_ID, PUBLIC, TOKEN, REFRESH, "planted", CLIENT_ID_HEADER, AUTHORIZATION, "Bearer", "Cookie")) {
             assertFalse(secret, written.contains(secret, ignoreCase = true))

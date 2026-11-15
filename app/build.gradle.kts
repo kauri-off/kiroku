@@ -478,6 +478,8 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/source/",
                 "io/github/kauri_off/kiroku/debugmenu/",
                 "io/github/kauri_off/kiroku/design/gallery/",
+                "io/github/kauri_off/kiroku/recorder/",
+                "io/github/kauri_off/kiroku/data/recorder/",
             ),
         )
         report.set(layout.buildDirectory.file("reports/release-classes.txt"))
