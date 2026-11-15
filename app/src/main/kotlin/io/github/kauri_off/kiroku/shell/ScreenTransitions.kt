@@ -2,16 +2,14 @@ package io.github.kauri_off.kiroku.shell
 
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.unveilIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material3.MaterialTheme
@@ -19,7 +17,6 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -55,29 +52,17 @@ private fun slide(
     (slideInHorizontally(motionScheme.slowEffectsSpec()) { from } + fadeIn(motionScheme.slowEffectsSpec())) togetherWith
         (slideOutHorizontally(motionScheme.fastEffectsSpec()) { -from } + fadeOut(motionScheme.fastEffectsSpec()))
 
-// Back's preview as NavDisplay seeks it: the page shrinks in place and fades over a veiled screen that grows to its size.
-@OptIn(ExperimentalAnimationApi::class)
-internal fun backPreview(
-    motionScheme: MotionScheme,
-    scrim: Color,
-): ContentTransform =
-    (
-        scaleIn(
-            motionScheme.fastEffectsSpec(),
-            initialScale = UNDER_SCALE,
-        ) + unveilIn(motionScheme.fastEffectsSpec(), scrim, true)
-    ) togetherWith
-        (scaleOut(motionScheme.fastEffectsSpec(), targetScale = PAGE_SCALE) + fadeOut(motionScheme.fastEffectsSpec()))
+// The back gesture's preview: none; the screen under is there when the gesture commits.
+internal val noPreview: ContentTransform = EnterTransition.None togetherWith ExitTransition.None
 
-internal const val PAGE_SCALE = 0.9f
-internal const val UNDER_SCALE = 0.95f
-
-// A leaving screen takes no touch, key or accessibility input, and touch passes under it once its fade has ended.
+// A leaving screen takes no touch, key or accessibility input; once it is off the stack and faded, touch passes under it.
 @Composable
-internal fun NoInputWhileLeaving(content: @Composable () -> Unit) {
-    val transition = LocalNavAnimatedContentScope.current.transition
-    val drawn by transition.animateFloat({ MaterialTheme.motionScheme.fastEffectsSpec() }) { if (it == EnterExitState.PostExit) 0f else 1f }
-    val leaving = transition.targetState == EnterExitState.PostExit
+internal fun NoInputWhileLeaving(
+    inStack: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val leaving = LocalNavAnimatedContentScope.current.transition.targetState == EnterExitState.PostExit
+    val drawn by animateFloatAsState(if (inStack) 1f else 0f, MaterialTheme.motionScheme.fastEffectsSpec())
     val passes =
         Modifier.graphicsLayer {
             clip = drawn == 0f

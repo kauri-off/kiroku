@@ -1,6 +1,5 @@
 package io.github.kauri_off.kiroku.shell
 
-import androidx.compose.material3.DrawerDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -69,7 +68,6 @@ fun ShellRoute(
     val motionScheme = MaterialTheme.motionScheme
     val step = with(LocalDensity.current) { Spacing.xxl.roundToPx() }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val scrim = DrawerDefaults.scrimColor
     ShellScreen(
         state = ShellState(navigator.current),
         onEvent = { event ->
@@ -82,7 +80,7 @@ fun ShellRoute(
             entries = navigator.visible.flatMap { decorated.getValue(it) },
             transitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
             popTransitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
-            predictivePopTransitionSpec = { backPreview(motionScheme, scrim) },
+            predictivePopTransitionSpec = { noPreview },
             onBack = { navigator.back() },
         )
     }
@@ -99,6 +97,7 @@ private fun NavEntry<NavKey>.scopedTo(
     val entry = this
     return NavEntry(key, notShown("${destination.name}/$depth/$contentKey"), metadata) {
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
-        CompositionLocalProvider(LocalOnTop provides onTop) { NoInputWhileLeaving { entry.Content() } }
+        val inStack = destination in navigator.visible && navigator.stackOf(destination).getOrNull(depth) == key
+        CompositionLocalProvider(LocalOnTop provides onTop) { NoInputWhileLeaving(inStack) { entry.Content() } }
     }
 }

@@ -1,13 +1,10 @@
 package io.github.kauri_off.kiroku.shell
 
-import androidx.activity.BackEventCompat
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.res.stringResource
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.R
@@ -42,7 +39,7 @@ class ShellScreenshots : ScreenshotRegistry() {
             case("search") { Screens(remember { navigatorOf(selected = Destination.Search) }) },
         )
 
-    // ARCHITECTURE 8.5: along a stack, across destinations, and Back's gesture held half-way, cancelled or released.
+    // ARCHITECTURE 8.5: along a stack and across destinations; Back's gesture moves nothing, which ShellTransitionTest compares.
     override val transitions =
         listOf(
             navigatorOf().let { navigator ->
@@ -61,19 +58,10 @@ class ShellScreenshots : ScreenshotRegistry() {
                     "list",
                     MotionBounds.SCREEN,
                     at = ACROSS,
-                    lead = BAR_LEAD,
                     change = { navigator.select(Destination.Search) },
                 ) {
                     Screens(navigator)
                 }
-            },
-            Transition("title", start = "title", millis = GESTURE, at = GESTURE_MOMENTS, name = "title-gesture-cancelled") { changed ->
-                Screens(remember { navigatorOf(TITLE) })
-                Gesture(changed, completes = false)
-            },
-            Transition("list", start = "title", millis = GESTURE, at = GESTURE_MOMENTS, name = "list-gesture-completed") { changed ->
-                Screens(remember { navigatorOf(TITLE) })
-                Gesture(changed, completes = true)
             },
         )
 
@@ -83,13 +71,8 @@ class ShellScreenshots : ScreenshotRegistry() {
         // The slow effects spring does most of its way early: the moments are taken while the screens move.
         val MOMENTS = listOf(32L, 80L, 160L, MotionBounds.SCREEN)
 
-        // The bar's indicator moves before the screens, whose fade is over within a few frames.
-        const val BAR_LEAD = 32L
-        val ACROSS = listOf(48L, 64L, 80L, MotionBounds.SCREEN)
-
-        // The finger reaches half-way in eight frames, holds for eight and lets go; the rest settles.
-        const val GESTURE = 700L
-        val GESTURE_MOMENTS = listOf(48L, 128L, 288L, GESTURE)
+        // The bar's indicator moves first and the screens' fade is over within a few frames: every frame of it is shown.
+        val ACROSS = listOf(16L, 32L, 48L, 64L, 80L, MotionBounds.SCREEN)
     }
 }
 
@@ -113,29 +96,6 @@ private val screenEntries: ShellEntries = { _, snackbars ->
     entry<SearchRoot> { PlaceholderScreen(PlaceholderState(Destination.Search, sessionExpired = false), {}, snackbars) }
     entry<ProfileRoot> { PlaceholderScreen(PlaceholderState(Destination.Profile, sessionExpired = false), {}, snackbars) }
 }
-
-// A back gesture from the left edge, moved half-way frame by frame, held, then let go or cancelled.
-@Composable
-private fun Gesture(
-    changed: Boolean,
-    completes: Boolean,
-) {
-    val dispatcher = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher
-    LaunchedEffect(changed) {
-        if (!changed) return@LaunchedEffect
-        dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT))
-        for (step in 1..STEPS) {
-            withFrameNanos {}
-            dispatcher.dispatchOnBackProgressed(BackEventCompat(0f, 0f, HALF * step / STEPS, BackEventCompat.EDGE_LEFT))
-        }
-        repeat(HOLD) { withFrameNanos {} }
-        if (completes) dispatcher.onBackPressed() else dispatcher.dispatchOnBackCancelled()
-    }
-}
-
-private const val STEPS = 8
-private const val HOLD = 8
-private const val HALF = 0.5f
 
 @Composable
 private fun Shell(

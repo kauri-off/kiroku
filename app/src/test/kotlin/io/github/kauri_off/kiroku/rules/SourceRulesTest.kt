@@ -275,7 +275,7 @@ class SourceRulesTest {
             "animateFloatAsState(target, MaterialTheme.motionScheme.fastEffectsSpec())",
             "AnimatedVisibility(visible, enter = fadeIn(motionScheme.defaultEffectsSpec()), exit = fadeOut(motionScheme.fastEffectsSpec())) { }",
             "Modifier.animateContentSize(motionScheme.fastEffectsSpec())",
-            "unveilIn(motionScheme.fastEffectsSpec(), scrim, true)",
+            "unveilIn(motionScheme.fastEffectsSpec())",
             "animatable.animateTo(1f, motionScheme.slowEffectsSpec())",
             "state.animateScrollToItem(0)",
         )) {
@@ -364,7 +364,7 @@ class SourceRulesTest {
                 "object : OnBackPressedCallback(true) { override fun handleOnBackProgressed(e: BackEventCompat) { } }",
             )
         for (source in planted) assertEquals(source, 1, backGestureProblems("A.kt", "val a = $source\n").size)
-        val clean = "NavDisplay(entries, predictivePopTransitionSpec = { backPreview(motionScheme, scrim) }, onBack = back)\n"
+        val clean = "NavDisplay(entries, predictivePopTransitionSpec = { noPreview }, onBack = back)\n"
         assertEquals(emptyList<String>(), backGestureProblems("A.kt", clean + "BackHandler(enabled) { clear() }\n"))
     }
 

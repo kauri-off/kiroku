@@ -421,7 +421,7 @@ class ShellTransitionTest {
     }
 
     @Test
-    fun `a held gesture shows the screen Back leads to, and a cancelled one restores the page exactly, its scroll and its stack`() {
+    fun `a held gesture changes nothing on screen, and a cancelled one leaves the page as it was, its scroll and its stack`() {
         shell.show()
         val rest = shell.left("List root")
         shell.scrollTo("List root", ROWS_SCROLLED)
@@ -429,14 +429,13 @@ class ShellTransitionTest {
         shell.settle()
         shell.scrollTo("Page 1", ROWS_SCROLLED)
         val before = shell.image()
-        shell.gesture(QUARTER)
-        shell.frames(START_FRAMES)
-        shell.gesture(HALF, start = false)
-        shell.frames(START_FRAMES)
-        assertTrue("the List shows under the page as it was", shell.exists("List root, row $ROWS_SCROLLED"))
+        for (progress in listOf(QUARTER, HALF)) {
+            shell.gesture(progress, start = progress == QUARTER)
+            shell.frames(START_FRAMES)
+            assertEquals("at $progress", null, before.differences(shell.image()))
+        }
         shell.cancel()
         shell.settle()
-        assertFalse(shell.exists("List root"))
         assertEquals(null, before.differences(shell.image()))
         shell.open("Page 1")
         shell.settle()
@@ -448,38 +447,39 @@ class ShellTransitionTest {
     }
 
     @Test
-    fun `a completed gesture ends on the screen under it as it was`() {
+    fun `a committed gesture shows the screen under at once, as it was, and it takes a tap at once`() {
         shell.show()
-        val rest = shell.left("List root")
-        shell.scrollTo("List root", ROWS_SCROLLED)
         val list = shell.image()
+        val tap = shell.tapWhere("Open from List root")
         shell.open("List root")
         shell.settle()
         shell.gesture(HALF)
         shell.frames(START_FRAMES)
         shell.release()
-        shell.assertAtRest("List root, row $ROWS_SCROLLED", rest, gone = "Page 1")
+        shell.frames(START_FRAMES)
         assertEquals(null, list.differences(shell.image()))
+        tap()
+        shell.settle()
+        assertTrue("the List did not take the tap", shell.exists("Page 1"))
     }
 
     @Test
-    fun `a gesture from the root of Search shows the List and a cancelled one keeps Search`() {
+    fun `a gesture from the root of Search changes nothing until it commits, then shows the List at once`() {
         shell.show()
-        val rest = shell.left("List root")
         shell.onUi { select(Destination.Search) }
         shell.settle()
         val before = shell.image()
         shell.gesture(HALF)
         shell.frames(START_FRAMES)
-        assertTrue(shell.exists("List root"))
+        assertEquals(null, before.differences(shell.image()))
         shell.cancel()
         shell.settle()
-        assertFalse(shell.exists("List root"))
         assertEquals(null, before.differences(shell.image()))
         shell.gesture(HALF)
         shell.frames(START_FRAMES)
         shell.release()
-        shell.assertAtRest("List root", rest, gone = "Search root")
+        shell.frames(START_FRAMES)
+        assertEquals("the List's content is there at once", shell.colours.getValue("List root"), shell.edge())
     }
 
     @Test
