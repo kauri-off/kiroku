@@ -31,7 +31,7 @@ enum class SandboxWrites { Work, Refused, Fail }
 // MAL on the device: the HTTP client's last step, answering every request from [list] and passing none on.
 class SandboxMal(
     private val list: MalList,
-    private val tokens: SandboxTokens = SandboxTokens(),
+    private val tokens: SandboxTokens,
 ) : Interceptor {
     // No request gets an answer, as with no connection.
     @Volatile
@@ -46,6 +46,9 @@ class SandboxMal(
 
     @Volatile
     var writes = SandboxWrites.Work
+
+    // The access tokens it granted expire now, as when their lifetime ends: the next request is rejected once.
+    fun expireAccess() = tokens.expireAccess()
 
     // Every request it answered, as method, host and path.
     val asked = CopyOnWriteArrayList<String>()
@@ -144,7 +147,7 @@ class SandboxMal(
         200 to
             buildJsonObject {
                 put("token_type", "Bearer")
-                put("expires_in", TOKEN_SECONDS)
+                put("expires_in", SandboxTokens.ACCESS_LIFETIME.seconds)
                 put("access_token", pair.first)
                 put("refresh_token", pair.second)
             }.toString()
@@ -264,7 +267,6 @@ class SandboxMal(
         private const val LIST_STATUS = "list_status"
         private const val DEFAULT_PAGE = 100
         private const val LARGEST_PAGE = 1000
-        private const val TOKEN_SECONDS = 2_678_400
         private const val EPISODE_DAYS = 24.0 / (24 * 60)
         private val JSON = "application/json; charset=UTF-8".toMediaType()
         private val DEFAULT_PROFILE = setOf("id", "name", "joined_at")

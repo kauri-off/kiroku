@@ -47,6 +47,8 @@ sealed interface ScenarioEvent {
     ) : ScenarioEvent
 
     data object Reset : ScenarioEvent
+
+    data object ExpireAccess : ScenarioEvent
 }
 
 @Composable
@@ -64,6 +66,7 @@ fun ScenarioRoute() {
         when (event) {
             is ScenarioEvent.Change -> scenarios?.set(event.scenario)
             ScenarioEvent.Reset -> scenarios?.reset()
+            ScenarioEvent.ExpireAccess -> scenarios?.expireAccess()
         }
     }
 }
@@ -94,6 +97,19 @@ private fun Switches(
     }
     SwitchRow(R.string.design_session_expired, R.string.scenarios_session_detail, scenario.sessionExpired, enabled) {
         change(scenario.copy(sessionExpired = it))
+    }
+    if (state.sandbox) {
+        ListItem(
+            supportingContent = { Text(stringResource(R.string.scenarios_access_expired_detail)) },
+            content = { Text(stringResource(R.string.scenarios_access_expired)) },
+        )
+        OutlinedButton(
+            onClick = { onEvent(ScenarioEvent.ExpireAccess) },
+            enabled = enabled,
+            modifier = Modifier.padding(horizontal = Spacing.l),
+        ) {
+            Text(stringResource(R.string.scenarios_access_expire))
+        }
     }
     SwitchRow(R.string.scenarios_slow, R.string.scenarios_slow_detail, scenario.slow, enabled) { change(scenario.copy(slow = it)) }
     Choice(

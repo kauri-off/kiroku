@@ -5,6 +5,9 @@
     <string name="scenarios_offline">Offline</string>
     <string name="scenarios_offline_detail">Every request to MyAnimeList fails with “No connection”</string>
     <string name="scenarios_session_detail">MyAnimeList answers every request that needs the sign-in as expired</string>
+    <string name="scenarios_access_expired">Access token expired</string>
+    <string name="scenarios_access_expired_detail">The next request is rejected once; the app refreshes its sign-in and asks again</string>
+    <string name="scenarios_access_expire">Expire now</string>
     <string name="scenarios_slow">Slow</string>
     <string name="scenarios_slow_detail">Every answer from MyAnimeList takes a few seconds</string>
     <string name="scenarios_writes">Saving to MyAnimeList</string>

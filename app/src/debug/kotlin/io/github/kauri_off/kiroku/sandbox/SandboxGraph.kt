@@ -70,6 +70,8 @@ class SandboxGraph internal constructor(
                 }
         }
 
+        override fun expireAccess() = this@SandboxGraph.sandbox.mal.expireAccess()
+
         override val saving = false
 
         override suspend fun awaitSaves() = true

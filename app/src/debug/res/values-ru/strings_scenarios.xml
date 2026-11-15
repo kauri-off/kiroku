@@ -5,6 +5,9 @@
     <string name="scenarios_offline">Нет сети</string>
     <string name="scenarios_offline_detail">Любой запрос к MyAnimeList завершается ошибкой «Нет соединения»</string>
     <string name="scenarios_session_detail">На запросы, которым нужен вход, MyAnimeList отвечает, что сессия истекла</string>
+    <string name="scenarios_access_expired">Токен доступа истёк</string>
+    <string name="scenarios_access_expired_detail">Следующий запрос будет отклонён один раз: приложение обновит вход и повторит запрос</string>
+    <string name="scenarios_access_expire">Просрочить сейчас</string>
     <string name="scenarios_slow">Медленно</string>
     <string name="scenarios_slow_detail">Каждый ответ MyAnimeList приходит через несколько секунд</string>
     <string name="scenarios_writes">Сохранение в MyAnimeList</string>

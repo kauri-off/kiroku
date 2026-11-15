@@ -34,7 +34,7 @@ internal class SandboxFixture(
 ) : ExternalResource() {
     val folder = TemporaryFolder()
     val clock = TestClock(Instant.parse("2026-11-13T10:00:00Z"))
-    val tokens = SandboxTokens()
+    val tokens by lazy { SandboxTokens(clock) }
     val list by lazy { SandboxList(titles ?: sandboxTitles, clock, starting = { starting() }) }
     val mal by lazy { SandboxMal(list, tokens) }
     val client by lazy { SandboxClient(mal, clock = clock) }

@@ -358,12 +358,12 @@ was chosen against, and why:
   (detekt's current line is alpha).
 - **Not used at all:** a chart library, AppCompat, `kotlinx-datetime`, a paging library, Google Play Services,
   Firebase, any closed-source dependency (which keeps F-Droid possible).
-- **Demo mode:** a debug or preview build can run entirely on the fixtures, held in memory, writes included; it
-  chooses between the demo, the sandbox and the real account, each with its own stores, and without a choice starts
-  on the demo when it has no client id. Demo data follows the device's date, so every weekday and weekly slot in it stays what
-  it claims, and every "today" does on a device between UTC−9 and UTC+8. A new process starts again from the
-  fixtures. Debug builds and the preview build (the release build's code) have a debug menu that makes the demo
-  or the sandbox fail and resets it. A release build holds none of it.
+- **Demo mode:** a debug or preview build chooses between the demo, the sandbox and the real account, each with its
+  own stores, and without a choice starts on the demo when it has no client id. The demo runs entirely on the
+  fixtures, held in memory, writes included; its data follows the device's date, so every weekday and weekly slot in
+  it stays what it claims, and every "today" does on a device between UTC−9 and UTC+8, and a new process starts it
+  again from the fixtures. Debug builds and the preview build (the release build's code) have a debug menu that
+  makes the demo or the sandbox fail and resets it. A release build holds none of it.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.

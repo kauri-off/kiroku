@@ -49,6 +49,9 @@ interface ScenarioSubject {
     suspend fun awaitSaves(): Boolean
 
     suspend fun reset(): Outcome<Unit>
+
+    // The sandbox's: every access token it granted expires now, and the next request is rejected once.
+    fun expireAccess() = Unit
 }
 
 private class DemoScenarios(
@@ -98,6 +101,8 @@ class Scenarios(
         resets.value = ResetState.Idle
         apply(scenario)
     }
+
+    fun expireAccess() = subject.expireAccess()
 
     private fun apply(scenario: Scenario) {
         subject.apply(scenario)

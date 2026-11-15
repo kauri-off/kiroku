@@ -17,8 +17,9 @@ import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.time.Clock
 
-// The engine over MAL's real client, the sandbox and the database; the contract's server keeps the list and its failures.
+// The engine over MAL's real client, the sandbox and its write rules, and the database; the contract's server scripts failures.
 @RunWith(RobolectricTestRunner::class)
 class SandboxListEngineTest : ListEngineContract() {
     @get:Rule
@@ -37,7 +38,7 @@ class SandboxListEngineTest : ListEngineContract() {
     }
 
     override fun remote(server: DemoServer): RemoteList {
-        val tokens = SandboxTokens()
+        val tokens = SandboxTokens(Clock.systemUTC())
         val mal = SandboxMal(DemoServerList(server), tokens)
         val client = SandboxClient(mal, io = scope.dispatcher, inline = true)
         served += server to mal
@@ -50,11 +51,18 @@ class SandboxListEngineTest : ListEngineContract() {
     @After
     fun close() = runBlocking { sessions.forEach { it.close() } }
 
-    // Each download the scripted server let through was the client's, page by page from the sandbox.
+    // Each download, write and read of one entry the scripted server let through was the client's, answered by the sandbox.
     @After
-    fun downloadedThroughTheSandbox() {
+    fun answeredByTheSandbox() {
         for ((server, mal) in served) {
-            assertEquals(server.listDownloads, mal.asked.count { it == "GET sandbox.invalid/v2/users/@me/animelist" })
+            val downloads = mal.asked.count { it == "GET sandbox.invalid/v2/users/@me/animelist" }
+            val writes = mal.asked.count { it.startsWith("PATCH ") || it.startsWith("DELETE ") }
+            val entries = mal.asked.count { it.startsWith("GET sandbox.invalid/v2/anime/") }
+            assertEquals(
+                "downloads, writes and reads of one entry",
+                listOf(server.listDownloads, server.writesAnswered, server.entryReadsAnswered),
+                listOf(downloads, writes, entries),
+            )
         }
     }
 }

@@ -18,8 +18,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import java.time.Instant
 
-// The contract's scripted server as the list the sandbox answers from: its titles in MAL's form, its rules for a write.
+// The contract's scripted server as the list the sandbox answers from: its titles in MAL's form, the sandbox's rules.
 internal class DemoServerList(
     private val server: DemoServer,
 ) : MalList {
@@ -40,18 +41,20 @@ internal class DemoServerList(
 
     override fun entry(id: Long): Listed? = server.entry(AnimeId(id))?.listed()
 
+    // The sandbox's own rule for a write, its result stored in the server's list as the server stores any write.
     override fun write(
         id: Long,
         form: Map<String, String>,
     ): Written {
-        val status = form["status"]?.let { listStatuses.of(it) as? ListStatus ?: return Written.Refused }
+        val title = server.title(AnimeId(id)) ?: return Written.Unknown
+        val listed = written(entry(id), form, title.malEpisodes, Instant.EPOCH) ?: return Written.Refused
         val sent =
             SentValues(
-                status = status,
-                watchedEpisodes = form.getValue("num_watched_episodes").toInt(),
-                score = form.getValue("score").toInt().takeIf { it > 0 },
-                startDate = form.getValue("start_date").takeIf { it.isNotEmpty() }?.let(::partialDateOf),
-                finishDate = form.getValue("finish_date").takeIf { it.isNotEmpty() }?.let(::partialDateOf),
+                status = listStatuses.of(listed.status) as? ListStatus,
+                watchedEpisodes = listed.watched,
+                score = listed.score.takeIf { it > 0 },
+                startDate = listed.startDate?.let(::partialDateOf),
+                finishDate = listed.finishDate?.let(::partialDateOf),
             )
         return when (val outcome = server.applied(AnimeId(id), sent)) {
             is Outcome.Success -> Written.Done(checkNotNull(outcome.value).listed())

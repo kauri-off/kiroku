@@ -13,7 +13,7 @@ class Sandbox(
 ) {
     private val site = lazy { SandboxList(SandboxTitles.read(read, poster), clock, file(LIST)) }
 
-    val mal = SandboxMal(OnFirstRequest(site), SandboxTokens(file(TOKENS)))
+    val mal = SandboxMal(OnFirstRequest(site), SandboxTokens(clock, file(TOKENS)))
 
     // The list the sandbox started with, as of now.
     fun reset() = site.value.reset()

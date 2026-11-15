@@ -323,6 +323,7 @@ abstract class VerifyReleasePackage : DefaultTask() {
                         .toSet()
                 }
             val recorded = recordedAnswers.files.filter { it.isFile }.associateBy { sha256(it.readBytes()) }
+            check(recorded.isNotEmpty()) { "No recorded answers to check ${file.name} against" }
             val answers =
                 ZipFile(file).use { zip ->
                     zip

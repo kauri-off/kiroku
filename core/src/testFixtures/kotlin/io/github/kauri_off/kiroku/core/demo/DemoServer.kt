@@ -63,10 +63,17 @@ class DemoServer(
     private val titles = entries.associateTo(mutableMapOf()) { it.anime.id to it.anime }
     private val received = mutableListOf<ListRequest>()
     private var downloads = 0
+    private var answeredWrites = 0
+    private var answeredEntryReads = 0
 
     val requests: List<ListRequest> get() = synchronized(guard) { received.toList() }
 
     val listDownloads: Int get() = synchronized(guard) { downloads }
+
+    // The writes and the reads of one entry that got past the scripted failures, which MAL itself answered.
+    val writesAnswered: Int get() = synchronized(guard) { answeredWrites }
+
+    val entryReadsAnswered: Int get() = synchronized(guard) { answeredEntryReads }
 
     fun entry(id: AnimeId): ListEntry? = synchronized(guard) { list[id] }
 
@@ -126,8 +133,11 @@ class DemoServer(
         return answer
     }
 
-    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> =
-        load(needsSignIn = true)?.let { Outcome.Failure(it) } ?: reachedThrough?.fetchEntry(id) ?: Outcome.Success(entry(id))
+    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+        load(needsSignIn = true)?.let { return Outcome.Failure(it) }
+        synchronized(guard) { answeredEntryReads++ }
+        return reachedThrough?.fetchEntry(id) ?: Outcome.Success(entry(id))
+    }
 
     override suspend fun put(
         anime: Anime,
@@ -157,7 +167,10 @@ class DemoServer(
                 else -> null
             }
         if (error != null) return Outcome.Failure(error)
-        synchronized(guard) { titles.getOrPut(anime.id) { anime } }
+        synchronized(guard) {
+            titles.getOrPut(anime.id) { anime }
+            answeredWrites++
+        }
         return reachedThrough?.put(anime, values) ?: applied(anime.id, values)
     }
 

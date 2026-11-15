@@ -11,6 +11,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -87,7 +88,8 @@ class SandboxRecordingsTest {
         assertTrue("$name: values present", (mine == null) == (his == null))
         if (mine == null || his == null) return
         for (key in VALUES) assertTrue("$name: $key", mine[key] == his[key])
-        assertTrue("$name: updated_at", mine.text("updated_at")?.let(::timeOf) == his.text("updated_at")?.let(::timeOf))
+        val hisTime = OwnerRecordings.read(name) { his.text("updated_at")?.let(::timeOf) }
+        assertTrue("$name: updated_at", mine.text("updated_at")?.let(::timeOf) == hisTime)
     }
 
     // The sandbox holds [entry] for the title, and its clock is at [now].
@@ -114,7 +116,7 @@ class SandboxRecordingsTest {
         for (write in OwnTitleWrites) {
             val name = write.name
             val recorded = answer(name)
-            val written = (recorded.json as? JsonObject)?.text("updated_at")?.let(::timeOf)
+            val written = OwnerRecordings.read(name) { (recorded.json as? JsonObject)?.text("updated_at")?.let(::timeOf) }
             given(before, written ?: Instant.EPOCH)
             val given = ask(name, "PATCH", "anime/$id/my_list_status", write.form(total))
             assertGivesBack(name, recorded, given) { it as? JsonObject }
@@ -192,6 +194,29 @@ class SandboxRecordingsTest {
         }
     }
 
+    // The access token lives no longer on the sandbox than MAL gave it, and the answers have the same keys and types.
+    @Test
+    fun `token_granted - the sandbox's token answer gives a lifetime no longer than MAL's`() {
+        val recorded = answer(TOKEN_GRANTED)
+        val lifetime = OwnerRecordings.read(TOKEN_GRANTED) { (recorded.json.jsonObject["expires_in"] as JsonPrimitive).longOrNull!! }
+        val (status, body) =
+            sandbox.ask(
+                "POST",
+                "token",
+                mapOf("grant_type" to "refresh_token", "refresh_token" to sandbox.signedIn.refresh, "client_id" to SandboxMal.CLIENT_ID),
+                bearer = null,
+                host = SandboxMal.Hosts.signIn,
+            )
+        assertTrue("$TOKEN_GRANTED: status", status == recorded.status)
+        val given = OwnerRecordings.read("the sandbox's token answer") { Json.parseToJsonElement(body).jsonObject }
+        assertTrue(
+            "$TOKEN_GRANTED: expires_in type",
+            shape(recorded.json.jsonObject.getValue("expires_in")) == shape(given.getValue("expires_in")),
+        )
+        assertTrue("$TOKEN_GRANTED: expires_in", (given["expires_in"] as JsonPrimitive).longOrNull!! <= lifetime)
+        assertTrue("$TOKEN_GRANTED: refresh", SandboxTokens.ACCESS_LIFETIME < SandboxTokens.REFRESH_LIFETIME)
+    }
+
     private fun offsetIn(link: JsonElement?): String? =
         (link as? JsonPrimitive)?.contentOrNull?.substringAfter("offset=", "")?.substringBefore('&')
 
@@ -199,6 +224,7 @@ class SandboxRecordingsTest {
         const val ABSENT = "entry_absent"
         const val OWN = "my_list_status"
         const val LAST_READ = "status_refused_read"
+        const val TOKEN_GRANTED = "token_granted"
         val READ_BACK = "id,num_episodes,my_list_status{${MalFields.LIST_VALUES}}"
         val VALUES = listOf("status", "score", "num_episodes_watched", "start_date", "finish_date")
 

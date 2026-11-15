@@ -14,7 +14,7 @@ import java.time.temporal.ChronoUnit
 
 // The titles of the sandbox: MAL's own, from the answers the client-id recorder committed, with no picture of MAL's.
 object SandboxTitles {
-    // Public answers whose titles the sandbox knows; titles not safe for work are left out.
+    // Public answers whose titles the sandbox knows: no user's list, and no title not safe for work.
     val Answers =
         listOf(
             "title_airing",
@@ -23,9 +23,6 @@ object SandboxTitles {
             "title_no_related",
             "title_not_yet_aired",
             "title_unknown_episode_count",
-            "list_public_1",
-            "list_public_2",
-            "list_public_3",
             "ranking_airing",
             "ranking_upcoming",
         )

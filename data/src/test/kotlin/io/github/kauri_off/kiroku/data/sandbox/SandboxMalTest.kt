@@ -163,9 +163,10 @@ class SandboxMalTest {
     }
 
     @Test
-    fun `a list page has the shape of MAL's public pages, each title's node too, and the next page starts where it ended`() {
+    fun `a list page and each title's node have MAL's shapes, and the next page starts where the page ended`() {
         val public = parse(recorded("list_public_1.200.json")).jsonObject
-        val listed = public["data"]!!.jsonArray.map { it.jsonObject["node"]!!.jsonObject }
+        val ranked = parse(recorded("ranking_airing.200.json")).jsonObject
+        val listed = ranked["data"]!!.jsonArray.map { it.jsonObject["node"]!!.jsonObject }
         for (node in listed) {
             put(
                 node.id!!,
@@ -271,6 +272,28 @@ class SandboxMalTest {
             )
         }
 
+    // S5 on the sandbox's clock: the token is rejected once, the session's one refresh is granted, the request is asked again.
+    @Test
+    fun `an access token is rejected after its lifetime or when expired now, and one refresh and one retry follow`() =
+        runBlocking {
+            for (expire in listOf({ sandbox.clock.now += SandboxTokens.ACCESS_LIFETIME }, { sandbox.mal.expireAccess() })) {
+                assertTrue(client.fetch() is Outcome.Success)
+                val before = sandbox.mal.asked.size
+                expire()
+                assertTrue(client.fetch() is Outcome.Success)
+                assertEquals(listOf(LIST, TOKEN, LIST), sandbox.mal.asked.drop(before))
+                assertTrue(sandbox.session.observeSession().first() is Session.SignedIn)
+            }
+        }
+
+    @Test
+    fun `a refresh token is rejected after its month, and the session then expires`() =
+        runBlocking {
+            sandbox.clock.now += SandboxTokens.REFRESH_LIFETIME
+            assertEquals(Outcome.Failure(DataError.SessionExpired), client.fetch())
+            assertTrue(sandbox.session.observeSession().first() is Session.Expired)
+        }
+
     @Test
     fun `offline, refusing and failing writes, and slow answers reach the client as MAL's would`() {
         put(planned)
@@ -293,7 +316,7 @@ class SandboxMalTest {
     @Test
     fun `the list and the tokens outlive the process in their files`() {
         val folder = sandbox.folder.newFolder()
-        val tokens = SandboxTokens(File(folder, "tokens"))
+        val tokens = SandboxTokens(sandbox.clock, File(folder, "tokens"))
         val pair = tokens.granted()
         val first = SandboxList(sandboxTitles, sandbox.clock, File(folder, "list"))
         sandbox.clock.now = sandbox.clock.now.plusSeconds(3600)
@@ -303,7 +326,7 @@ class SandboxMalTest {
 
         val second = SandboxList(sandboxTitles, sandbox.clock, File(folder, "list"))
         assertEquals(first.entries(), second.entries())
-        assertTrue(SandboxTokens(File(folder, "tokens")).accepts(pair.first))
+        assertTrue(SandboxTokens(sandbox.clock, File(folder, "tokens")).accepts(pair.first))
         second.reset()
         assertEquals(
             SandboxTitles.startingList(sandboxTitles, sandbox.clock.now),
@@ -329,6 +352,8 @@ class SandboxMalTest {
 
     private companion object {
         const val FINISHED = 1L
+        const val LIST = "GET sandbox.invalid/v2/users/@me/animelist"
+        const val TOKEN = "POST sandbox.invalid/v1/oauth2/token"
         const val TOTAL = 26
         const val NO_TOTAL = 21L
         val day = PartialDate.Day(LocalDate.of(2001, 1, 1))
