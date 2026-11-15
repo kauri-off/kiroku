@@ -22,6 +22,8 @@ import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.authorised
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import retrofit2.http.DELETE
@@ -67,9 +69,10 @@ class MalRemoteList(
         return read { repairs, token -> listEntryOf(anime, api.set(anime.id.value, form, token), repairs) }
     }
 
-    // MAL answers a removal of a title that is not on the list as it answers any removal; a 404 for it is a removal too.
+    // MAL answers a removal with an empty array, also for a title not on the list; a 404 for that is a removal too.
+    // Any other answer, a page a redirect led to included, is not a removal.
     private suspend fun remove(id: AnimeId): Outcome<ListEntry?> =
-        when (val answer = session.authorised(http) { api.remove(id.value, it) }) {
+        when (val answer = session.authorised(http) { check(api.remove(id.value, it) == REMOVED) { "Not a removal" } }) {
             is Outcome.Success -> Outcome.Success(null)
             is Outcome.Failure -> if (answer.error == DataError.NotFound) Outcome.Success(null) else answer
         }
@@ -111,6 +114,8 @@ private fun JsonObject.toOwnEntry(repairs: Repairs): Pair<AnimeId, ListEntry?> {
 
 private const val MY_LIST_STATUS = "my_list_status"
 
+private val REMOVED = JsonArray(emptyList())
+
 private fun <T, R> Outcome<T>.map(transform: (T) -> R): Outcome<R> =
     when (this) {
         is Outcome.Success -> Outcome.Success(transform(value))
@@ -137,5 +142,5 @@ private interface EntryApi {
     suspend fun remove(
         @Path("id") id: Long,
         @Header(AUTHORIZATION) authorization: String,
-    )
+    ): JsonElement
 }

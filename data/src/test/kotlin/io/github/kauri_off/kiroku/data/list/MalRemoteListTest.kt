@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.anime.recordedTitle
@@ -21,9 +22,13 @@ import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.ACCESS
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.CHANGED_AT
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.REFRESH
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.TITLE
+import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
+import io.github.kauri_off.kiroku.data.session.granted
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -33,11 +38,14 @@ import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.net.URLDecoder
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -177,7 +185,7 @@ class MalRemoteListTest {
     // Every value a recorded list gives is sent back in the form MAL gave it: nothing is filled in, no date's precision lost.
     @Test
     fun `an entry of a recorded list written back unchanged carries each of its values as MAL gave it`() {
-        for (name in (1..3).map { "list_public_$it" }) assertWrittenAsGiven(name, recordedJson(name))
+        for (name in (1..3).map { "list_public_$it" }) assertWrittenAsGiven(name, RecordedAnswers.named(name).body)
     }
 
     @Test
@@ -274,6 +282,91 @@ class MalRemoteListTest {
         assertEquals(Outcome.Failure(DataError.SessionExpired), runBlocking { signedOut.put(anime, null) })
         assertEquals(Outcome.Failure(DataError.SessionExpired), runBlocking { signedOut.fetchEntry(listed) })
         assertTrue(requests.isEmpty())
+    }
+
+    // The owner's pages go through the same function: a page that cannot be decoded fails by its name alone.
+    @Test
+    fun `a list page that cannot be decoded fails the round trip by its name, with no value of it in the failure`() {
+        val marker = "planted-value-3e9a"
+        val pages =
+            listOf(
+                recordedJson("list_public_1").edited(listOf("data", "0", "node", "title"), JsonObject(mapOf("x" to JsonPrimitive(marker)))),
+                recordedJson("list_public_1").edited(listOf("data", "0", "node"), JsonArray(listOf(JsonPrimitive(marker)))),
+            )
+        for (page in pages) {
+            val failure = assertThrows(AssertionError::class.java) { assertWrittenAsGiven("list_public_1", page.toString()) }
+            val printed = StringWriter().also { failure.printStackTrace(PrintWriter(it)) }.toString()
+            assertEquals("list_public_1 could not be read", failure.message)
+            assertTrue(marker !in printed)
+        }
+    }
+
+    @Test
+    fun `a removal is confirmed only by MAL's answer to one, not by another success or a page a redirect led to`() {
+        val title = anime.copy(id = listed)
+        val others =
+            listOf(
+                answer(200, ""),
+                answer(200, "<html>portal</html>", "text/html"),
+                answer(200, "{}"),
+                answer(200, "[1]"),
+            )
+        for (other in others) {
+            mal.instead = { if (it.method == "DELETE") other else null }
+            assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { client.put(title, null) })
+        }
+        val elsewhere = network.api.url("/elsewhere")
+        mal.instead = {
+            when {
+                it.method == "DELETE" ->
+                    MockResponse
+                        .Builder()
+                        .code(303)
+                        .setHeader("Location", elsewhere)
+                        .build()
+                it.url.encodedPath == "/elsewhere" -> answer(200, "<html>portal</html>", "text/html")
+                else -> null
+            }
+        }
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { client.put(title, null) })
+        assertTrue(listed.value in mal.onTheList())
+    }
+
+    @Test
+    fun `a write whose token MAL rejects is sent once more after one refresh, with the new token`() {
+        sessions.answer = { granted(ACCESS, "refresh-2") }
+        val session = sessions.open()
+        val stale = MalRemoteList(network.http, session)
+
+        runBlocking { session.signIn(TokenGrant("stale-access-1", REFRESH)) }
+        val entry = runBlocking { stale.put(anime, values) }
+        assertEquals(Outcome.Success(ListEntry(anime, values, OffsetDateTime.parse(CHANGED_AT).toInstant())), entry)
+        assertEquals(1, sessions.grants.size)
+        assertEquals(
+            listOf("Bearer stale-access-1", "Bearer $ACCESS"),
+            requests.filter { it.method == "PATCH" }.map { it.headers[AUTHORIZATION] },
+        )
+
+        runBlocking { session.signIn(TokenGrant("stale-access-2", REFRESH)) }
+        assertEquals(Outcome.Success(null), runBlocking { stale.put(anime.copy(id = listed), null) })
+        assertEquals(2, sessions.grants.size)
+        assertEquals(
+            listOf("Bearer stale-access-2", "Bearer $ACCESS"),
+            requests.filter { it.method == "DELETE" }.map { it.headers[AUTHORIZATION] },
+        )
+        assertTrue(listed.value !in mal.onTheList())
+    }
+
+    // Today's rule, which ROADMAP's task "A write carries only what the user changed" is to replace.
+    @Test
+    fun `a write after a score MAL gave unreadably sends no score, score 0, which clears MAL's`() {
+        val page = recordedJson("list_public_1").edited(listOf("data", "0", "list_status", "score"), JsonPrimitive("eight"))
+        val read = page.toListPage(Repairs()).entries[0]
+        assertNull(read.values.score)
+
+        runBlocking { client.put(anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1)) }
+
+        assertEquals("0", requests.single().form()["score"])
     }
 
     @Test
