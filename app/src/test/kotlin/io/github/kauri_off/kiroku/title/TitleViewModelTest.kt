@@ -418,6 +418,30 @@ class TitleViewModelTest {
         }
 
     @Test
+    fun `a title store that cannot be read fails the page, and Retry reads it again`() =
+        test(before = { titlesUnreadable.value = true }) { s ->
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+
+            s.graph.titlesUnreadable.value = false
+            s.title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(FixtureDetails.full, s.shown.page.details)
+
+            s.graph.titlesUnreadable.value = true
+            advanceUntilIdle()
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+        }
+
+    // The page reads one entry per title it shows: itself and its related titles, never the whole list.
+    @Test
+    fun `the page reads the list entries of the titles it shows, not the list`() =
+        test { s ->
+            val shown = setOf(FixtureAnime.exactToWatch.id) + FixtureDetails.full.related.map { it.anime.id }
+            assertEquals(shown, s.graph.entriesRead)
+            assertEquals(0, s.graph.wholeListReads)
+        }
+
+    @Test
     fun `a failed pulled refresh with the details shown keeps the page and says so`() =
         test { s ->
             s.graph.demo.server.offline.value = true

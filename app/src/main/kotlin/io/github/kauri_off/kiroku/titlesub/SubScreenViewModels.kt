@@ -21,8 +21,11 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
+import io.github.kauri_off.kiroku.title.airingOf
+import io.github.kauri_off.kiroku.title.entriesOf
 import io.github.kauri_off.kiroku.title.knownAiring
 import io.github.kauri_off.kiroku.title.knownEntries
+import io.github.kauri_off.kiroku.title.withRead
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,15 +115,23 @@ class RelatedViewModel(
 
     private val retries = MutableStateFlow(0)
 
-    // A list that cannot be read fails the screen, since the related titles' list statuses would be unknown.
-    private val listRead =
-        list
-            .observeEntries()
-            .map { list -> ListRead(list.associateBy { it.anime.id }) }
-            .readAgainOnRetry(retries) { ListRead(failure = it) }
-
+    // Of the list and the airing, only the related titles. A list that cannot be read fails the screen, since their
+    // list statuses would be unknown.
     private val sources: StateFlow<Sources?> =
-        combine(title, listRead, airing.observeAiring(), ::Sources)
+        title
+            .withRead({
+                it.details
+                    ?.related
+                    .orEmpty()
+                    .map { related -> related.anime.id }
+                    .toSet()
+            }) { ids ->
+                combine(
+                    list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
+                    airing.airingOf(ids),
+                    ::Pair,
+                )
+            }.map { (title, around) -> Sources(title, around.first, around.second) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<RelatedState> =

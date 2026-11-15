@@ -70,6 +70,7 @@ data class TitlePage private constructor(
     val title: String,
     val total: Int?,
     val facts: HeaderFacts,
+    val score: MalScore,
     val entry: ListValues?,
     val airing: AiringPhase?,
     // Null while the details are loading.
@@ -107,6 +108,7 @@ data class TitlePage private constructor(
                 title = anime.titles.preferred(language),
                 total = total,
                 facts = headerFacts(anime, total, onList = entry != null, phase),
+                score = anime.meanScore?.let(MalScore::Given) ?: if (details == null) MalScore.NotKnownYet else MalScore.None,
                 entry = entry?.values,
                 airing = phase,
                 details = details,
@@ -130,6 +132,18 @@ data class TitleMoment(
             TitleEvent.CollapseSynopsis -> copy(synopsisExpanded = false)
             else -> this
         }
+}
+
+// MAL's score as the header states it. Only the title's own page says that MAL has none: a row's title may lack a value
+// its page has, so until the page is read an absent score is not known yet.
+sealed interface MalScore {
+    data class Given(
+        val value: Double,
+    ) : MalScore
+
+    data object None : MalScore
+
+    data object NotKnownYet : MalScore
 }
 
 // The header's facts line. Each fact the page states elsewhere is left out: the episode count when the list block

@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -43,6 +45,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -73,11 +76,18 @@ class TestGraph(
     // The list syncs asked for so far.
     val syncs: Int get() = syncCount.get()
 
+    private val listReads = ListReads()
+
+    // Collections of the whole list so far, and the titles whose entries were read one by one.
+    val wholeListReads: Int get() = listReads.whole.get()
+    val entriesRead: Set<AnimeId> get() = listReads.titles.toSet()
+
     override val list: ListRepository =
         CountedList(
             demo.list.let { if (lateObservers) LateList(it) else it }.let { if (slowWrites) SlowWrites(it) else it },
             counter,
             syncCount,
+            listReads,
         )
 
     // While true, the list's store cannot be read.
@@ -94,7 +104,10 @@ class TestGraph(
     // While true, the store holds no title and no details, as before a title is first stored.
     val titlesUnstored = MutableStateFlow(false)
 
-    override val anime: AnimeRepository = CountedAnime(demo.anime, counter, refreshCount, titlesUnstored)
+    // While true, the title store cannot be read: its flows end with a storage error.
+    val titlesUnreadable = MutableStateFlow(false)
+
+    override val anime: AnimeRepository = CountedAnime(demo.anime, counter, refreshCount, titlesUnstored, titlesUnreadable)
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
@@ -128,19 +141,25 @@ private class Readers {
         }.onStart { open.incrementAndGet() }.onCompletion { open.decrementAndGet() }
 }
 
+private class ListReads {
+    val whole = AtomicInteger()
+    val titles: MutableSet<AnimeId> = ConcurrentHashMap.newKeySet()
+}
+
 private class CountedList(
     private val inner: ListRepository,
     private val readers: Readers,
     private val syncs: AtomicInteger,
+    private val reads: ListReads,
 ) : ListRepository by inner {
     override suspend fun sync(): Outcome<Unit> {
         syncs.incrementAndGet()
         return inner.sync()
     }
 
-    override fun observeEntries(): Flow<List<ListEntry>> = readers.of(inner.observeEntries())
+    override fun observeEntries(): Flow<List<ListEntry>> = readers.of(inner.observeEntries()).onStart { reads.whole.incrementAndGet() }
 
-    override fun observeEntry(id: AnimeId): Flow<ListEntry?> = readers.of(inner.observeEntry(id))
+    override fun observeEntry(id: AnimeId): Flow<ListEntry?> = readers.of(inner.observeEntry(id)).onStart { reads.titles += id }
 }
 
 private class CountedAnime(
@@ -148,6 +167,7 @@ private class CountedAnime(
     private val readers: Readers,
     private val refreshes: AtomicInteger,
     private val unstored: StateFlow<Boolean>,
+    private val unreadable: StateFlow<Boolean>,
 ) : AnimeRepository by inner {
     override fun observeAnime(id: AnimeId): Flow<Anime?> = readers.of(stored(inner.observeAnime(id)))
 
@@ -155,7 +175,11 @@ private class CountedAnime(
 
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = readers.of(stored(inner.observeRefreshedAt(id)))
 
-    private fun <T> stored(flow: Flow<T?>): Flow<T?> = combine(flow, unstored) { value, unstored -> value.takeUnless { unstored } }
+    private fun <T> stored(flow: Flow<T?>): Flow<T?> =
+        combine(flow, unstored, unreadable) { value, unstored, unreadable ->
+            if (unreadable) throw DataException(DataError.StorageError)
+            value.takeUnless { unstored }
+        }
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         refreshes.incrementAndGet()

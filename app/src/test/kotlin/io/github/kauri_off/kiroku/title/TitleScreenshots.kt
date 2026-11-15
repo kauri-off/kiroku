@@ -74,6 +74,7 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("added-snackbar") { Screen(TitleFixtures.added, TitleFixtures.addedMessage) },
             case("completed-snackbar") { Screen(TitleFixtures.completed, TitleFixtures.completedMessage) },
             case("above-total") { Screen(TitleFixtures.aboveTotal) },
+            case("opened-from-related") { Screen(TitleFixtures.openedFromRelated) },
         )
 }
 
@@ -157,6 +158,14 @@ object TitleFixtures {
                     RelatedAnime(FixtureAnime.relatedOther, RelationType.Other),
                 )
             return of(anime, details = details.copy(related = related))
+        }
+
+    // A related row's title, neither on the list nor stored, its page loading for over a second; the row gave no
+    // score, rank or episode count.
+    val openedFromRelated: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.relatedFullStory.copy(meanScore = null, rank = null, malEpisodes = null)
+            return of(anime, entry = null, airing = null, details = null).copy(detailsWait = DetailsWait.Loading)
         }
 
     // "Add to list" was tapped: the title is Planned and the snackbar offers "Change".
