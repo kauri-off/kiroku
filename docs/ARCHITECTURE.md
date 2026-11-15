@@ -378,6 +378,8 @@ was chosen against, and why:
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
 - A value is stored under MAL's own code, so a code the app learns later needs no migration.
+- A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
+  itself cannot be read.
 - Every schema change is a real migration with a migration test. **There is no destructive fallback**: it would
   erase the record of announced episodes and announce them again (N10).
 

@@ -15,7 +15,9 @@ import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -53,6 +55,7 @@ class TestGraph(
     lateObservers: Boolean = false,
     // A write takes time before it is applied.
     slowWrites: Boolean = false,
+    override val preferences: PreferencesRepository = demo.preferences,
 ) : AppGraph {
     private val counter = Readers()
 
@@ -98,6 +101,9 @@ class TestGraph(
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
+
+    // The test's main dispatcher, so that the state a view model builds is built within the test's scheduler.
+    override val background: CoroutineDispatcher = Dispatchers.Main
 
     // While set, the connection says this whatever the demo's server does, as when a request and the system disagree.
     val connectionSays = MutableStateFlow<Boolean?>(null)

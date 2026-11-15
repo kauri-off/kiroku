@@ -136,12 +136,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-22 Screens refresh by themselves.**
 
-- [ ] **M2-23 List state for a real store.** The sort and direction of each tab are kept across restarts, in the
-  preferences store, which `:data` gains here. The List's state is produced off the main thread, and a change to one
-  entry rebuilds its row and its tab alone.
-  **Needs:** M2-22.
-  **Check:** tests: a new process over the same store shows the chosen sorts; after a "+1" every other row is
-  the same object and one row recomposes; no state is built on the main thread.
+- [x] **M2-23 List state for a real store.**
 
 - [ ] **M2-24 [L] Title page for a real store.** A title opened from a related row that is neither on the list
   nor stored shows, for the score, the episode count and the rank it does not know yet, what the hand-off
