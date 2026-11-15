@@ -200,11 +200,7 @@ on the Russian strings so far are fixed.
   **Check:** a test that counts the work of the fling's frames, in the style of `ListFrameWorkTest`; frame times
   before and after from `tools/emu`, in the hand-off.
 
-- [ ] **M2-31 Changed screenshots in CI.** A pull request's run lists the screenshots that differ from those of
-  `main`'s last run, so a change to a shared component shows on every screen it moves.
-  **Needs:** nothing.
-  **Check:** a pull request that changes one string lists that screen's images and no other; one that changes
-  none lists nothing.
+- [x] **M2-31 Changed screenshots in CI.**
 
 - [ ] **M2-32 Compose and Material update.** When a Compose BOM brings material3 1.5.0 stable, the pin goes.
   Then: whether `MaterialExpressiveTheme` now supplies the Expressive type scale itself, which the theme's own
