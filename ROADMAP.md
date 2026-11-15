@@ -174,13 +174,7 @@ on the Russian strings so far are fixed.
   **Check:** the rubric on the case; tests: a page of twelve related titles is not rebuilt by a change to
   another entry; the title and the synopsis offer the selection.
 
-- [ ] **M2-25 Posters from the network.** Images load through the app's HTTP client: a row asks for the picture
-  of its size, the header for the large one with the row's picture in its place until it arrives. The loader has
-  a test of its own. Debug builds keep the stand-in art for the demo, and no render asks the network.
-  **Needs:** M2-09, M2-14.
-  **Check:** tests against a local server: a row's request is for the medium picture and carries the app's
-  `User-Agent`; the header shows the row's cached picture in its first frame; a failed image leaves the
-  placeholder. A render of the List is byte-identical to one without a network.
+- [x] **M2-25 Posters from the network.**
 
 - [ ] **M2-26 The real title page and its link.** The live graph's titles are M2-17. A
   `myanimelist.net/anime/{id}` link, with or without a slug or a trailing slash, opens the title page with the

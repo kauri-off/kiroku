@@ -242,7 +242,7 @@ private fun Gap(
 private fun Header(page: TitlePage) {
     val anime = page.anime
     Row(Modifier.padding(horizontal = Spacing.l), horizontalArrangement = Arrangement.spacedBy(Spacing.l)) {
-        Poster(anime.posterUrl, PosterSize.Header)
+        Poster(anime.posterUrl, PosterSize.Header, large = anime.largePosterUrl)
         Column(Modifier.weight(1f)) {
             TitleText(
                 page.title,

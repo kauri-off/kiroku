@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.standin.StandInPosters
+import mockwebserver3.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -30,6 +31,15 @@ class StandInPostersTest {
         assertNotEquals(placeholder, drawn)
         assertNotEquals(RemoteImages.BLOCK, drawn)
         assertEquals(RemoteImages.BLOCK, centre("https://cdn.myanimelist.net/images/anime/1/1.jpg"))
+    }
+
+    @Test
+    fun aRenderAsksNoHost() {
+        MockWebServer().use { server ->
+            server.start()
+            assertEquals(RemoteImages.BLOCK, centre(server.url("/images/anime/1/1.jpg").toString()))
+            assertEquals(0, server.requestCount)
+        }
     }
 
     @Test

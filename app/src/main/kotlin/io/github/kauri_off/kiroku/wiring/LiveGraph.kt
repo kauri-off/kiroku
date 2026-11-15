@@ -60,6 +60,7 @@ internal class LiveGraph(
     override val user by lazy { liveUser(parts, account) }
     override val connection by lazy { liveConnection(parts) }
     override val signIn by lazy { liveSignIn(parts, account) }
+    override val images = parts.http.callFactory
 
     // For whatever is about to end the process: a session nobody asked for has nothing to write.
     suspend fun writeOwed() {

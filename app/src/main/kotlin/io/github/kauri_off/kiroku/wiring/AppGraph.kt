@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineScope
+import okhttp3.Call
 import java.time.Clock
 
 interface AppGraph {
@@ -22,6 +23,9 @@ interface AppGraph {
     val search: SearchRepository
     val user: UserRepository
     val connection: Connection
+
+    // The HTTP client images are fetched through; a graph without one reaches no host for them.
+    val images: Call.Factory? get() = null
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
