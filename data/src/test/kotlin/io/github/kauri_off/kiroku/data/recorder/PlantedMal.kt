@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.recorder
 
+import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
@@ -14,7 +15,7 @@ import mockwebserver3.RecordedRequest
 import java.net.URLDecoder
 import java.util.concurrent.CopyOnWriteArrayList
 
-// Not MAL and no mapper's fixture: it keeps a list as requests change it and plants a user's values in its answers.
+// Not MAL and no mapper's fixture: it keeps a list as requests change it and plants a user's values and secrets in its answers.
 internal class PlantedMal : Dispatcher() {
     class Title(
         val name: String,
@@ -67,6 +68,9 @@ internal class PlantedMal : Dispatcher() {
     @Volatile
     var instead: (RecordedRequest) -> MockResponse? = { null }
 
+    // The body of every answer the server gave of its own, in order.
+    val bodies = CopyOnWriteArrayList<String>()
+
     // Called when a request has arrived, before it is answered.
     @Volatile
     var arrived: (String) -> Unit = {}
@@ -93,12 +97,12 @@ internal class PlantedMal : Dispatcher() {
         val token = request.headers["Authorization"].orEmpty().removePrefix("Bearer ")
         tokens += token
         instead(request)?.let { return it }
-        if (token !in valid) return answer(401, """{"error":"invalid_token"}""")
+        if (token !in valid) return sent(401, """{"error":"invalid_token"}""")
         val path = request.url.encodedPath.removePrefix("/v2/")
         val query = request.url
         return synchronized(list) {
             when {
-                path == "users/@me" -> answer(200, if (query.queryParameter("fields") == "id") """{"id":$user}""" else profile())
+                path == "users/@me" -> sent(200, if (query.queryParameter("fields") == "id") """{"id":$user}""" else profile())
                 path == "users/@me/animelist" ->
                     page(
                         query.queryParameter("fields") != null,
@@ -109,10 +113,15 @@ internal class PlantedMal : Dispatcher() {
                     )
                 path.endsWith("/my_list_status") -> change(path.split('/')[1].toLong(), request.method, form(body), token)
                 path.startsWith("anime/") -> title(path.removePrefix("anime/").toLong())
-                else -> answer(404, NOT_FOUND)
+                else -> sent(404, NOT_FOUND)
             }
         }
     }
+
+    private fun sent(
+        status: Int,
+        body: String,
+    ): MockResponse = answer(status, body).also { bodies += body }
 
     private fun profile(): String =
         buildJsonObject {
@@ -127,6 +136,7 @@ internal class PlantedMal : Dispatcher() {
             put("is_supporter", true)
             put("email", "planted@mail.example")
             put("about", "")
+            put("client", NetworkFixture.CLIENT_ID)
             putJsonObject("anime_statistics") {
                 put("num_items_watching", 31)
                 put("num_items", 1234)
@@ -197,20 +207,20 @@ internal class PlantedMal : Dispatcher() {
                     if (offset + limit < entries.size) put("next", link + (offset + limit))
                 }
             }
-        return answer(200, body.toString())
+        return sent(200, body.toString())
     }
 
     private fun known(id: Long): Title = titles[id] ?: Title("Listed $id", 24)
 
     private fun title(id: Long): MockResponse {
         val entry = list[id]
-        if (entry == null && id !in titles) return answer(404, NOT_FOUND)
+        if (entry == null && id !in titles) return sent(404, NOT_FOUND)
         val body =
             buildJsonObject {
                 node(id, known(id))
                 if (entry != null && tellsTheEntry) put("my_list_status", values(entry, "no token"))
             }
-        return answer(200, body.toString())
+        return sent(200, body.toString())
     }
 
     private fun change(
@@ -220,14 +230,14 @@ internal class PlantedMal : Dispatcher() {
         token: String,
     ): MockResponse {
         if (method == "DELETE") {
-            if (removalsDoNothing && id in list) return answer(200, "[]")
-            list.remove(id) ?: return answer(404, NOT_FOUND)
-            return answer(200, if (answersRemovalsInJson) "[]" else "")
+            if (removalsDoNothing && id in list) return sent(200, "[]")
+            list.remove(id) ?: return sent(404, NOT_FOUND)
+            return sent(200, if (answersRemovalsInJson) "[]" else "")
         }
         val refused =
             form["score"]?.let { it.toInt() !in 0..10 } == true ||
                 form["status"]?.let { it !in setOf("watching", "completed", "on_hold", "dropped", "plan_to_watch") } == true
-        if (refused) return answer(400, """{"message":"Invalid value, user $user","error":"bad_request"}""")
+        if (refused) return sent(400, """{"message":"Invalid value, user $user","error":"bad_request"}""")
         val entry = (list[id] ?: mapOf("status" to "watching", "score" to "0", "num_episodes_watched" to "0")).toMutableMap()
         entry["updated_at"] = CHANGED_AT
         for ((name, value) in form) {
@@ -238,7 +248,7 @@ internal class PlantedMal : Dispatcher() {
             }
         }
         list[id] = entry
-        return answer(200, values(entry, token).toString())
+        return sent(200, values(entry, token).toString())
     }
 
     private fun form(body: String): Map<String, String> =
@@ -269,29 +279,8 @@ internal class PlantedMal : Dispatcher() {
                 "updated_at" to UPDATED_AT,
             )
 
-        // What no stored file may hold: the user's values, the tokens and the headers of an answer.
-        val PLANTED =
-            listOf(
-                ACCESS,
-                REFRESH,
-                USER_NAME,
-                "$USER_ID",
-                PICTURE,
-                "userimages",
-                "planted",
-                "Planted",
-                "1991-07-13",
-                "2011-03-05",
-                "1234",
-                "567.89",
-                "7.65",
-                "43210",
-                "2015-04-05",
-                "2015-06-21",
-                "2016-06-07",
-                "Bearer",
-                "Cookie",
-            )
+        // What no stored file may hold: the tokens, the client id and the headers of an answer.
+        val SECRETS = listOf(ACCESS, REFRESH, NetworkFixture.CLIENT_ID, "Bearer", "Cookie", "planted=cookie", "planted-header")
 
         fun answer(
             status: Int,

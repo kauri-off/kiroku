@@ -2,9 +2,8 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -26,30 +25,26 @@ internal fun Sanitiser.kept(
     json: String?,
 ): Kept = Kept("$name.$status.${if (json != null) "json" else "txt"}", json ?: plain("$status, ${type ?: "no content type"}\n"))
 
-// A stored answer as the rules of its kind leave it (an own-list page, a recorder's own title, any other); null when not JSON.
+// A stored answer as the sanitiser leaves it; null when it is not JSON or is a signed-in answer, which is kept as MAL sent it.
 internal fun cleanedStored(
     file: String,
     text: String,
-): String? {
-    val name = file.substringBefore('.')
-    val page =
-        OwnListPage
-            .matchEntire(name)
-            ?.groupValues
-            ?.get(1)
-            ?.toIntOrNull()
-    if (page != null) return Sanitiser(emptyMap()).ownList(text, (page - 1) * KEPT_ENTRIES)
-    val answer =
-        try {
-            Json.parseToJsonElement(text) as? JsonObject
-        } catch (_: SerializationException) {
-            null
-        }
-    val own = (answer?.get("id") as? JsonPrimitive)?.longOrNull.takeIf { name in OwnEntryAnswers }
-    return Sanitiser(emptyMap(), ownTitle = own).json(text)
-}
+): String? = if (file.substringBefore('.') in SignedInAnswers) null else Sanitiser(emptyMap()).json(text)
 
-private val OwnListPage = Regex("""own_list_(\d+)""")
+// A signed-in answer as MAL sent it, without [Sanitiser]'s secrets; stored as `.json` when it is JSON.
+internal fun Sanitiser.asSent(
+    name: String,
+    status: Int,
+    body: String,
+): Kept {
+    val json =
+        try {
+            Json.parseToJsonElement(body).let { it is JsonObject || it is JsonArray }
+        } catch (_: SerializationException) {
+            false
+        }
+    return Kept("$name.$status.${if (json) "json" else "txt"}", asSent(body))
+}
 
 // Where a run's answers wait: empty before the run's first request.
 internal fun emptied(run: File): Boolean {
