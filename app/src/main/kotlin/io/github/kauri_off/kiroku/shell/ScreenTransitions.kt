@@ -2,8 +2,6 @@ package io.github.kauri_off.kiroku.shell
 
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,9 +49,6 @@ private fun slide(
 ): ContentTransform =
     (slideInHorizontally(motionScheme.slowEffectsSpec()) { from } + fadeIn(motionScheme.slowEffectsSpec())) togetherWith
         (slideOutHorizontally(motionScheme.fastEffectsSpec()) { -from } + fadeOut(motionScheme.fastEffectsSpec()))
-
-// The back gesture's preview: none; the screen under is there when the gesture commits.
-internal val noPreview: ContentTransform = EnterTransition.None togetherWith ExitTransition.None
 
 // A leaving screen takes no touch, key or accessibility input; once it is off the stack and faded, touch passes under it.
 @Composable

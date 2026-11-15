@@ -347,7 +347,7 @@ class SourceRulesTest {
     @Test
     fun appCodeLeavesTheBackGestureToNavDisplay() {
         val sources = appSources()
-        assertTrue(sources.any { it.path.endsWith("shell/ShellRoute.kt") })
+        assertTrue(sources.any { relative(it) == BACK_HANDLER_SOURCE })
         assertEquals(emptyList<String>(), sources.flatMap { backGestureProblems(relative(it), it.readText()) })
     }
 
@@ -364,8 +364,21 @@ class SourceRulesTest {
                 "object : OnBackPressedCallback(true) { override fun handleOnBackProgressed(e: BackEventCompat) { } }",
             )
         for (source in planted) assertEquals(source, 1, backGestureProblems("A.kt", "val a = $source\n").size)
-        val clean = "NavDisplay(entries, predictivePopTransitionSpec = { noPreview }, onBack = back)\n"
-        assertEquals(emptyList<String>(), backGestureProblems("A.kt", clean + "BackHandler(enabled) { clear() }\n"))
+        val inTheHandlersFile =
+            planted.filter { "NavigationBackHandler" !in it && "rememberNavigationEventState" !in it } +
+                listOf(
+                    "handled.transitionState",
+                    "(handled.transitionState as InProgress).latestEvent.progress",
+                    "NavigationEventHandler(handled, onBackCompleted = back)",
+                    "NavDisplay(scenes, rememberNavigationEventState(scenes).also { it.transitionState })",
+                )
+        for (source in inTheHandlersFile) assertEquals(source, 1, backGestureProblems(BACK_HANDLER_SOURCE, "val a = $source\n").size)
+        val handler = "NavigationBackHandler(scenes, rememberNavigationEventState(scenes), onBackCompleted = back)\n"
+        assertEquals(emptyList<String>(), backGestureProblems(BACK_HANDLER_SOURCE, handler))
+        assertEquals(
+            emptyList<String>(),
+            backGestureProblems("A.kt", "NavDisplayWithoutPreview(entries, transition, back)\nBackHandler(enabled) { clear() }\n"),
+        )
     }
 
     @Test

@@ -261,7 +261,7 @@ internal fun ImageBitmap.differences(other: ImageBitmap): String? {
     return "${differing.size} pixels differ in x ${xs.min()}..${xs.max()}, y ${ys.min()}..${ys.max()}"
 }
 
-// ARCHITECTURE 8.5: the screen transitions, and the back gesture whose preview is NavDisplay's own.
+// ARCHITECTURE 8.5: the screen transitions, and the back gesture that shows nothing until it commits.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -421,7 +421,7 @@ class ShellTransitionTest {
     }
 
     @Test
-    fun `a held gesture changes nothing on screen, and a cancelled one leaves the page as it was, its scroll and its stack`() {
+    fun `a held gesture changes nothing on screen, and a cancelled one leaves the page as it was, its scroll, focus and stack`() {
         shell.show()
         val rest = shell.left("List root")
         shell.scrollTo("List root", ROWS_SCROLLED)
@@ -437,6 +437,8 @@ class ShellTransitionTest {
         shell.cancel()
         shell.settle()
         assertEquals(null, before.differences(shell.image()))
+        compose.runOnUiThread { shell.useKeyboard() }
+        shell.focus("Open from Page 1")
         shell.open("Page 1")
         shell.settle()
         shell.back()
@@ -446,25 +448,48 @@ class ShellTransitionTest {
         shell.assertAtRest("List root, row $ROWS_SCROLLED", rest, gone = "Page 1")
     }
 
-    @Test
-    fun `a committed gesture shows the screen under at once, as it was, and it takes a tap at once`() {
-        shell.show()
-        val list = shell.image()
-        val tap = shell.tapWhere("Open from List root")
-        shell.open("List root")
-        shell.settle()
+    // Where [name] is and the colour at the end edge, frame by frame, from [change] to a screen's time.
+    private fun path(
+        name: String,
+        change: () -> Unit,
+    ): List<Pair<Float?, Color>> {
+        change()
+        val path = mutableListOf<Pair<Float?, Color>>()
+        repeat(START_FRAMES + (MotionBounds.SCREEN / FRAME).toInt()) {
+            shell.frames(1)
+            path += (if (shell.exists(name)) shell.left(name) else null) to shell.edge()
+        }
+        return path
+    }
+
+    // A gesture held and then committed, from the moment it commits.
+    private fun committed() {
         shell.gesture(HALF)
         shell.frames(START_FRAMES)
         shell.release()
-        shell.frames(START_FRAMES)
-        assertEquals(null, list.differences(shell.image()))
+    }
+
+    @Test
+    fun `a committed gesture brings the List back as Back does, from the start, and the List then takes a tap`() {
+        shell.show()
+        val rest = shell.left("List root")
+        shell.open("List root")
+        shell.settle()
+        val byBack = path("List root") { shell.back() }
+        shell.open("List root")
+        shell.settle()
+        val tap = shell.tapWhere("Open from Page 1")
+        val byGesture = path("List root") { committed() }
+        assertTrue("Back moved nothing: $byBack", byBack.mapNotNull { it.first }.distinct().size > 1)
+        assertEquals(byBack, byGesture)
+        shell.assertAtRest("List root", rest, gone = "Page 1")
         tap()
         shell.settle()
         assertTrue("the List did not take the tap", shell.exists("Page 1"))
     }
 
     @Test
-    fun `a gesture from the root of Search changes nothing until it commits, then shows the List at once`() {
+    fun `a gesture from the root of Search changes nothing until it commits, then fades through to the List as Back does`() {
         shell.show()
         shell.onUi { select(Destination.Search) }
         shell.settle()
@@ -475,11 +500,14 @@ class ShellTransitionTest {
         shell.cancel()
         shell.settle()
         assertEquals(null, before.differences(shell.image()))
-        shell.gesture(HALF)
-        shell.frames(START_FRAMES)
-        shell.release()
-        shell.frames(START_FRAMES)
-        assertEquals("the List's content is there at once", shell.colours.getValue("List root"), shell.edge())
+        val byBack = path("List root") { shell.back() }
+        shell.onUi { select(Destination.Search) }
+        shell.settle()
+        val byGesture = path("List root") { committed() }
+        val list = shell.colours.getValue("List root")
+        assertTrue("Back faded nothing: $byBack", byBack.first().second != list)
+        assertEquals(byBack, byGesture)
+        assertEquals(list, shell.edge())
     }
 
     @Test
@@ -530,6 +558,7 @@ class ShellTransitionTest {
 
     private companion object {
         const val START_FRAMES = ShellDriver.START_FRAMES
+        const val FRAME = ShellDriver.FRAME
         const val MID_FLIGHT_FRAMES = 5
         const val ROWS_SCROLLED = 30
         const val QUARTER = 0.25f

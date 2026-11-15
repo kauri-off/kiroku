@@ -561,7 +561,7 @@ change legible, or preventing a jump. Decoration is not a purpose.
   tests set for its spring.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
   reversed mid-flight, ends in the state of the last input, and never blocks a tap. The back gesture shows no preview:
-  the screen changes when it commits, and a cancel changes nothing. With the system's animations turned off, every
+  a commit plays Back's transition, and a cancel changes nothing. With the system's animations turned off, every
   screen is complete and correct immediately. An idle screen has no animation running.
 
 A task that adds or changes an animation shows with tests that it settles within its time, that re-triggering it
