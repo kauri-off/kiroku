@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.MediaType
@@ -18,7 +19,7 @@ fun statusLine(
     values: ListValues,
     total: Int?,
 ): String {
-    val name = stringResource(values.status.label())
+    val name = values.status.named { stringResource(it) }
     return when {
         !values.showsCount(total) -> name
         total == null -> stringResource(R.string.common_status_count, name, values.watchedEpisodes)
@@ -35,6 +36,9 @@ fun ListStatus.label(): Int =
         ListStatus.OnHold -> R.string.common_status_on_hold
         ListStatus.Dropped -> R.string.common_status_dropped
     }
+
+@Composable
+fun statusName(status: EntryStatus): String = status.named { stringResource(it) }
 
 @Composable
 fun mediaTypeLabel(type: MediaType): String = type.named { stringResource(it) }

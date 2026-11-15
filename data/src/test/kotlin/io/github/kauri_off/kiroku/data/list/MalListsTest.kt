@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.edited
@@ -93,7 +94,7 @@ class MalListsTest {
 
     @Test
     fun `a middle page with an entry that cannot be mapped fails the download, and is reported`() {
-        val broken = recordedJson("list_public_2").edited(listOf("data", "4", "list_status", "status"), JsonPrimitive("rewatching"))
+        val broken = recordedJson("list_public_2").edited(listOf("data", "4", "list_status", "status"), JsonNull)
         serve { offset -> if (offset == 10) answer(200, broken.toString()) else null }
 
         assertEquals(Outcome.Failure(DataError.ServerError), download())
@@ -123,6 +124,19 @@ class MalListsTest {
         serve()
         download() as Outcome.Success
         assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `an entry whose list status the app does not know is downloaded with MAL's code and reported, and the list is whole`() {
+        val unknown = recordedJson("list_public_2").edited(listOf("data", "4", "list_status", "status"), JsonPrimitive("rewatching"))
+        serve { offset -> if (offset == 10) answer(200, unknown.toString()) else null }
+
+        val entries = (download() as Outcome.Success).value
+
+        val expected = recordedEntries().toMutableList()
+        expected[14] = expected[14].copy(values = expected[14].values.copy(status = EntryStatus.Unrecognized("rewatching")))
+        assertEquals(expected, entries)
+        assertEquals(listOf(setOf("list_status.status")), network.unexpected.map { (it as RepairedAnswer).fields })
     }
 
     @Test

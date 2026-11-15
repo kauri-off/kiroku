@@ -33,6 +33,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
@@ -171,6 +172,42 @@ class ListScreenTest {
             ).assertIsDisplayed()
         swipe(left = false)
         assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned), ListEvent.SelectTab(ListStatus.Watching)), events)
+    }
+
+    @Test
+    fun `a status the app does not know is a last tab named by its code, its rows edited, and the tab beside it takes its place`() {
+        showFollowing(ListFixtureStates.unknown)
+        compose.onNode(hasText("Rewatching") and isSelected()).assertIsDisplayed()
+        compose.onNodeWithText(FixtureAnime.onHoldAiring.titles.romaji).performTouchInput { longClick() }
+        noneShown(plusOne)
+        swipe(left = true)
+        swipe(left = false)
+        assertEquals(listOf(ListEvent.Edit(FixtureAnime.onHoldAiring.id), ListEvent.SelectTab(ListStatus.Dropped)), events)
+
+        events.clear()
+        shown = ListFixtureStates.unknown.copy(content = ListFixtureStates.tabs())
+        compose.waitForIdle()
+        shown = ListFixtureStates.dropped
+        compose.waitForIdle()
+        compose.onNode(hasText("Dropped") and isSelected()).assertIsDisplayed()
+        compose
+            .onNodeWithText(
+                ListFixtureStates.dropped.page!!
+                    .rows
+                    .first()
+                    .title,
+            ).assertIsDisplayed()
+        compose.onNodeWithText("Rewatching").assertDoesNotExist()
+        assertEquals(emptyList<ListEvent>(), events)
+    }
+
+    @Test
+    fun `a list that loads with a status the app does not know selected shows that tab and selects no other on the way`() {
+        show(ListFixtureStates.unknown.copy(content = ListContent.Loading))
+        show(ListFixtureStates.unknown)
+        compose.onNode(hasText("Rewatching") and isSelected()).assertIsDisplayed()
+        compose.onNodeWithText(FixtureAnime.onHoldAiring.titles.romaji).assertIsDisplayed()
+        assertEquals(emptyList<ListEvent>(), events)
     }
 
     @Test

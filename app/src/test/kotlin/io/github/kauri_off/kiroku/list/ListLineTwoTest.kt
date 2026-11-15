@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.Density
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.DrawnTitleKey
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.composeRule
@@ -42,7 +43,7 @@ class ListLineTwoTest {
     private fun widest(sort: ListSort): ListState {
         val rows =
             ListFixtureStates
-                .sorted(ListFixtureStates.watching.tab, sort)
+                .sorted(ListStatus.Watching, sort)
                 .page!!
                 .rows
                 .filter { it.sortedBy != null }

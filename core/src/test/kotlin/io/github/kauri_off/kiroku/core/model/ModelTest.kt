@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.model
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -58,6 +59,28 @@ class ModelTest {
         val counts = StatusCounts(watching = 1, completed = 2, onHold = 3, dropped = 4, planned = 5)
         assertEquals(listOf(1, 5, 2, 3, 4), ListStatus.entries.map { counts[it] })
         assertEquals(15, counts.total)
+    }
+
+    private val unknown = EntryStatus.Unrecognized("rewatching")
+
+    // The rule of section 4 and 5.1 for a status the app does not know: such a title is not watched for airing.
+    @Test
+    fun `a status the app does not know is not tracked, is never notified and is in no count`() {
+        val all = ListStatus.entries + unknown
+        assertEquals(listOf(ListStatus.Watching, ListStatus.Planned, ListStatus.OnHold), all.filter { it.tracked })
+        assertEquals(listOf(ListStatus.Watching), all.filter { it.notified(alsoPlanned = false) })
+        assertEquals(listOf(ListStatus.Watching, ListStatus.Planned), all.filter { it.notified(alsoPlanned = true) })
+        val statuses = listOf(ListStatus.Watching, unknown, ListStatus.Completed, ListStatus.Watching, ListStatus.Dropped, unknown)
+        assertEquals(StatusCounts(watching = 2, completed = 1, onHold = 0, dropped = 1, planned = 0), StatusCounts.of(statuses))
+        assertEquals(StatusCounts(1, 1, 1, 1, 1), StatusCounts.of(ListStatus.entries))
+    }
+
+    @Test
+    fun `a status the app does not know is shown with its count, which a step changes and W7 completes`() {
+        val values = ListValues(unknown, 3, 8, earlier, null)
+        assertTrue(values.showsCount(12))
+        assertEquals(values.copy(watchedEpisodes = 4), values.withWatched(4, 12, today))
+        assertEquals(ListValues(ListStatus.Completed, 12, 8, earlier, day), values.withWatched(12, 12, today))
     }
 
     @Test

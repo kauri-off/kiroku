@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Broadcast
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MediaType
@@ -142,11 +143,13 @@ class ColumnsTest {
             assertEquals(code, sources.toColumn(Source.Unrecognized(code)))
             assertEquals(code, ageRatings.toColumn(AgeRating.Unrecognized(code)))
             assertEquals(code, relationTypes.toColumn(RelationType.Unrecognized(code)))
+            assertEquals(code, listStatuses.toColumn(EntryStatus.Unrecognized(code)))
             assertEquals(MediaType.Unrecognized(code), mediaTypes.of(code))
             assertEquals(AiringStatus.Unrecognized(code), airingStatuses.of(code))
             assertEquals(Source.Unrecognized(code), sources.of(code))
             assertEquals(AgeRating.Unrecognized(code), ageRatings.of(code))
             assertEquals(RelationType.Unrecognized(code), relationTypes.of(code))
+            assertEquals(EntryStatus.Unrecognized(code), listStatuses.of(code))
         }
     }
 
@@ -171,11 +174,15 @@ class ColumnsTest {
                 relationTypes.toColumn(RelationType.Unrecognized(relationTypes.toColumn(relation)))
             }
         }
+        for (status in ListStatus.entries) {
+            assertThrows(
+                IllegalArgumentException::class.java,
+            ) { listStatuses.toColumn(EntryStatus.Unrecognized(listStatuses.toColumn(status))) }
+        }
     }
 
     @Test
     fun `a code of a type that has no unrecognised value is an error when no value is stored under it`() {
-        assertThrows(IllegalStateException::class.java) { listStatuses.of("watched") }
         assertThrows(IllegalStateException::class.java) { seasons.of("autumn") }
     }
 

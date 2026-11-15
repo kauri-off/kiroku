@@ -40,6 +40,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.moscow
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.weekly
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -50,6 +51,12 @@ import java.time.Duration
 import java.time.LocalDate
 
 object Fixtures {
+    // MAL's code of a list status the app does not know, which no entry of the set has.
+    val unknownListStatus = EntryStatus.Unrecognized("rewatching")
+
+    // One wider than a phone's tab row, with a doubled separator and digits.
+    val longUnknownListStatus = EntryStatus.Unrecognized("on_hold_until_the_second_cour_is_announced__2027_v2")
+
     val reference: FixtureSet by lazy {
         FixtureSet(
             clock = FixtureTime.clock,

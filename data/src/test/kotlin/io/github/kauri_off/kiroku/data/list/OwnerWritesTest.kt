@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -136,7 +137,7 @@ class OwnerWritesTest {
         asked: Asked,
     ): Outcome<ListEntry?> {
         served(name, asked)
-        return runBlocking { client.put(title, values) }.also { assertAskedAsRecorded() }
+        return runBlocking { client.put(title, values?.sent) }.also { assertAskedAsRecorded() }
     }
 
     // A read-back: the recorder asked fewer fields than the client does, so only the method and the path are compared.

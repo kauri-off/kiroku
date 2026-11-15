@@ -48,8 +48,8 @@ data class EditSheetState(
     // An empty field is not a count; the draft then holds the count from before typing.
     val countEmpty: Boolean get() = typed?.isEmpty() == true
 
-    // Save writes the draft, so it is allowed only while the sheet shows exactly the draft.
-    val canSave: Boolean get() = !countEmpty
+    // Save writes the draft, so it is allowed only while the sheet shows exactly the draft, a status chosen included.
+    val canSave: Boolean get() = !countEmpty && draft.status is ListStatus
 
     val mayLeave: Boolean get() = closing || !hasChanges
 

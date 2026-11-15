@@ -4,6 +4,8 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeSeason
+import io.github.kauri_off.kiroku.core.model.EntryStatus
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Season
@@ -11,6 +13,12 @@ import io.github.kauri_off.kiroku.core.model.Source
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
 
 // MAL's values as interface text (ARCHITECTURE section 10): [string] reads a resource; a value the app does not know is its code as words.
+
+inline fun EntryStatus.named(string: (Int) -> String): String =
+    when (this) {
+        is ListStatus -> string(label())
+        is EntryStatus.Unrecognized -> malCodeAsText(malCode)
+    }
 
 inline fun MediaType.named(string: (Int) -> String): String =
     when (this) {

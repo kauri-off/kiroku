@@ -3,11 +3,11 @@ package io.github.kauri_off.kiroku.data.list
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.RemoteList
+import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.data.anime.AnimeNode
 import io.github.kauri_off.kiroku.data.anime.Repairs
@@ -57,13 +57,13 @@ class MalRemoteList(
 
     override suspend fun put(
         anime: Anime,
-        values: ListValues?,
+        values: SentValues?,
     ): Outcome<ListEntry?> = if (values == null) remove(anime.id) else set(anime, values)
 
     // MAL answers a change with the entry's values afterwards, the same as a read of it gives.
     private suspend fun set(
         anime: Anime,
-        values: ListValues,
+        values: SentValues,
     ): Outcome<ListEntry?> {
         val form = values.form()
         return read { repairs, token -> listEntryOf(anime, api.set(anime.id.value, form, token), repairs) }
@@ -86,7 +86,8 @@ class MalRemoteList(
     }
 }
 
-internal fun ListValues.form(): Map<String, String> = listForm(status, watchedEpisodes, score, startDate, finishDate)
+// A status the app does not know is left out of [SentValues], so MAL keeps it.
+internal fun SentValues.form(): Map<String, String> = listForm(status, watchedEpisodes, score, startDate, finishDate)
 
 // A write carries the values the app holds, each in MAL's own form, and nothing else. MAL keeps a value left out, and an
 // empty date clears its own.

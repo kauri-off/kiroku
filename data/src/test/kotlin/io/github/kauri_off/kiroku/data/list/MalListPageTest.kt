@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.list
 
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -134,9 +135,23 @@ class MalListPageTest {
         assertEquals(Instant.parse("2022-12-15T02:45:03Z"), firstWith("updated_at", JsonPrimitive("2022-12-15T11:45:03+09:00")).updatedAt)
     }
 
+    // The owner's rule: nothing fails because MAL sends a value the app does not know.
     @Test
-    fun `a list status the app does not know, or none, fails the page and leaves no entry out`() {
-        val unknown = wrongShapes + listOf(JsonPrimitive("rewatching"), JsonPrimitive(""), JsonPrimitive(1), JsonPrimitive("Completed"))
+    fun `a list status the app does not know keeps MAL's code and is noted, and every other entry is as it was`() {
+        val recorded = page.toListPage(Repairs()).entries
+        for (code in listOf("rewatching", "Completed", "on hold")) {
+            val repairs = Repairs()
+            val mapped = page.edited(listOf("data", "0", "list_status", "status"), JsonPrimitive(code)).toListPage(repairs)
+            assertEquals(code, EntryStatus.Unrecognized(code), mapped.entries.first().status)
+            assertEquals(code, recorded.first().values.copy(status = EntryStatus.Unrecognized(code)), mapped.entries.first().values)
+            assertEquals(code, recorded.drop(1), mapped.entries.drop(1))
+            assertEquals(code, setOf("list_status.status"), repairs.fields)
+        }
+    }
+
+    @Test
+    fun `no list status, or one that is not a code, fails the page and leaves no entry out`() {
+        val unknown = wrongShapes + listOf(JsonPrimitive(""), JsonPrimitive(" "), JsonPrimitive(1))
         for (value in unknown) assertThrows("$value", IllegalArgumentException::class.java) { firstWith("status", value) }
         for (values in wrongShapes) {
             val edited = page.edited(listOf("data", "0", "list_status"), values)

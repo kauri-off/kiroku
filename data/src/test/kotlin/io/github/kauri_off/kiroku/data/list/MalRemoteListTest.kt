@@ -2,7 +2,9 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -105,7 +107,7 @@ class MalRemoteListTest {
 
     @Test
     fun `a change is one PATCH of the title's list status as the user, and answers with the entry as MAL has it then`() {
-        val entry = runBlocking { client.put(anime, values) }
+        val entry = runBlocking { client.put(anime, values.sent) }
 
         assertEquals(Outcome.Success(ListEntry(anime, values, OffsetDateTime.parse(CHANGED_AT).toInstant())), entry)
         val request = requests.single()
@@ -138,9 +140,9 @@ class MalRemoteListTest {
             )
         assertEquals(ListStatus.entries.toSet(), codes.keys)
         for ((status, code) in codes) {
-            assertEquals(code, values.copy(status = status).form()["status"])
+            assertEquals(code, values.copy(status = status).sent.form()["status"])
         }
-        val empty = ListValues(ListStatus.Planned, 0, null, null, null).form()
+        val empty = ListValues(ListStatus.Planned, 0, null, null, null).sent.form()
         assertEquals(
             mapOf(
                 "status" to "plan_to_watch",
@@ -151,18 +153,18 @@ class MalRemoteListTest {
             ),
             empty,
         )
-        assertEquals("2020", values.copy(startDate = PartialDate.OnlyYear(Year.of(2020))).form()["start_date"])
+        assertEquals("2020", values.copy(startDate = PartialDate.OnlyYear(Year.of(2020))).sent.form()["start_date"])
 
         for (status in ListStatus.entries) {
             requests.clear()
             val sent = values.copy(status = status, score = null, finishDate = null)
-            val answer = runBlocking { client.put(anime, sent) } as Outcome.Success
+            val answer = runBlocking { client.put(anime, sent.sent) } as Outcome.Success
             assertEquals(status.name, sent, answer.value!!.values)
             assertEquals(codes.getValue(status), requests.single().form()["status"])
         }
     }
 
-    // fix/unknown-list-status: a status the app does not know is left out, and MAL keeps its own (the recordings' rule).
+    // A status the app does not know is never sent: it is left out, and MAL keeps its own (the recordings' rule).
     @Test
     fun `a write without a status leaves the status out and carries the other four`() {
         val form = listForm(null, 3, null, null, PartialDate.Day(LocalDate.of(2021, 4, 5)))
@@ -170,11 +172,24 @@ class MalRemoteListTest {
     }
 
     @Test
+    fun `a write to an entry whose status the app does not know carries no status field`() {
+        val read = (runBlocking { client.fetchEntry(listed) } as Outcome.Success).value!!
+        val unknown = read.values.copy(status = EntryStatus.Unrecognized("rewatching"), watchedEpisodes = read.values.watchedEpisodes + 1)
+
+        assertTrue(runBlocking { client.put(read.anime, unknown.sent) } is Outcome.Success)
+
+        val write = requests.last()
+        assertEquals("PATCH", write.method)
+        assertEquals(setOf("score", "num_watched_episodes", "start_date", "finish_date"), write.form().keys)
+        assertEquals("${unknown.watchedEpisodes}", write.form()["num_watched_episodes"])
+    }
+
+    @Test
     fun `a write carries the five values the app holds, and nothing else MAL gave the entry`() {
         val read = (runBlocking { client.fetchEntry(listed) } as Outcome.Success).value!!
         assertTrue(mal.bodies.last().contains("comments"))
 
-        runBlocking { client.put(read.anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1)) }
+        runBlocking { client.put(read.anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1).sent) }
 
         val write = requests.last()
         assertEquals("PATCH", write.method)
@@ -251,7 +266,7 @@ class MalRemoteListTest {
         val unreadable = status.edited(listOf("score"), JsonPrimitive("eight"))
         mal.instead = { if (it.method == "PATCH") answer(200, unreadable.toString()) else null }
 
-        val entry = (runBlocking { client.put(anime, values) } as Outcome.Success).value!!
+        val entry = (runBlocking { client.put(anime, values.sent) } as Outcome.Success).value!!
 
         assertNull(entry.values.score)
         assertEquals(anime, entry.anime)
@@ -271,14 +286,14 @@ class MalRemoteListTest {
             for (write in listOf(values, null)) {
                 requests.clear()
                 mal.instead = { answer(status, "{}") }
-                assertEquals("$status $write", Outcome.Failure(error), runBlocking { client.put(anime, write) })
+                assertEquals("$status $write", Outcome.Failure(error), runBlocking { client.put(anime, write?.sent) })
                 assertEquals("$status $write", 1, requests.size)
             }
         }
         mal.instead = { null }
         requests.clear()
         val signedOut = client(signedIn = false)
-        assertEquals(Outcome.Failure(DataError.SessionExpired), runBlocking { signedOut.put(anime, values) })
+        assertEquals(Outcome.Failure(DataError.SessionExpired), runBlocking { signedOut.put(anime, values.sent) })
         assertEquals(Outcome.Failure(DataError.SessionExpired), runBlocking { signedOut.put(anime, null) })
         assertEquals(Outcome.Failure(DataError.SessionExpired), runBlocking { signedOut.fetchEntry(listed) })
         assertTrue(requests.isEmpty())
@@ -339,7 +354,7 @@ class MalRemoteListTest {
         val stale = MalRemoteList(network.http, session)
 
         runBlocking { session.signIn(TokenGrant("stale-access-1", REFRESH)) }
-        val entry = runBlocking { stale.put(anime, values) }
+        val entry = runBlocking { stale.put(anime, values.sent) }
         assertEquals(Outcome.Success(ListEntry(anime, values, OffsetDateTime.parse(CHANGED_AT).toInstant())), entry)
         assertEquals(1, sessions.grants.size)
         assertEquals(
@@ -364,7 +379,7 @@ class MalRemoteListTest {
         val read = page.toListPage(Repairs()).entries[0]
         assertNull(read.values.score)
 
-        runBlocking { client.put(anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1)) }
+        runBlocking { client.put(anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1).sent) }
 
         assertEquals("0", requests.single().form()["score"])
     }

@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -20,7 +21,7 @@ import java.time.LocalDate
 data class ListState(
     val owner: ListOwner,
     val content: ListContent,
-    val tab: ListStatus = ListStatus.Watching,
+    val tab: EntryStatus = ListStatus.Watching,
     val sortSheetOpen: Boolean = false,
     // The text that filters every tab's rows; null when the list is not being filtered.
     val filter: String? = null,
@@ -61,13 +62,19 @@ sealed interface ListContent {
 
     // Every tab's page, so that a swipe shows the next tab's rows as they come in.
     data class Tabs(
-        val pages: Map<ListStatus, ListPage>,
+        val pages: Map<EntryStatus, ListPage>,
     ) : ListContent {
         init {
-            require(pages.keys == ListStatus.entries.toSet())
+            require(pages.keys.containsAll(ListStatus.entries))
         }
+
+        val statuses: List<EntryStatus> = tabOrder(pages.keys)
     }
 }
+
+// The five tabs, then one for each status the app does not know, by MAL's code.
+internal fun tabOrder(statuses: Collection<EntryStatus>): List<EntryStatus> =
+    ListStatus.entries + statuses.filterIsInstance<EntryStatus.Unrecognized>().distinct().sortedBy { it.malCode }
 
 // One tab: its rows, filtered when a filter is typed, in the order last computed for [sort] and [direction].
 data class ListPage(
@@ -130,7 +137,7 @@ sealed interface Line3 {
 
 sealed interface ListEvent {
     data class SelectTab(
-        val status: ListStatus,
+        val status: EntryStatus,
     ) : ListEvent
 
     data class Open(

@@ -53,6 +53,22 @@ data class StatusCounts(
         }
 
     val total: Int get() = watching + completed + onHold + dropped + planned
+
+    companion object {
+        // A list's counts; an entry whose status the app does not know is in none of them.
+        fun of(statuses: Iterable<EntryStatus>): StatusCounts {
+            val counts = statuses.filterIsInstance<ListStatus>().groupingBy { it }.eachCount()
+
+            fun count(status: ListStatus) = counts[status] ?: 0
+            return StatusCounts(
+                count(ListStatus.Watching),
+                count(ListStatus.Completed),
+                count(ListStatus.OnHold),
+                count(ListStatus.Dropped),
+                count(ListStatus.Planned),
+            )
+        }
+    }
 }
 
 sealed interface RelationType {

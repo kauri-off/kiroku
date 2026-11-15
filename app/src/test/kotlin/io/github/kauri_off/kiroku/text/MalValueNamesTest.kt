@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.Genre
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Season
@@ -136,7 +137,7 @@ class MalValueNamesTest {
             mapOf(
                 "media_type" to mediaTypes.values.mapValues { it.value.name() },
                 "status" to airingStatuses.values.mapValues { it.value.name() },
-                "list_status" to listStatuses.values.mapValues { it.value.label() },
+                "list_status" to listStatuses.values.mapValues { (it.value as ListStatus).label() },
                 "rating" to ageRatings.values.mapValues { it.value.name() },
                 "source" to sources.values.mapValues { it.value.name() },
                 "season" to seasons.values.mapValues { AnimeSeason(YEAR, it.value).name() },

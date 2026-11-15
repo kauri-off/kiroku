@@ -209,7 +209,7 @@ class SwipedMessageTest {
             show()
             val before = runBlocking { graph.list.observeEntry(anime.id).first()!! }
             val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
-            val message = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo))
+            val message = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo!!))
             post(message)
             compose.waitForIdle()
             val rest = left("Moved to Completed")
@@ -250,7 +250,7 @@ class SwipedMessageTest {
             show()
             val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
             val after = watched()
-            post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)))
+            post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo!!)))
             compose.waitForIdle()
             drag("Moved to Completed", -SwipeHarness.PAST)
             compose.waitForIdle()
