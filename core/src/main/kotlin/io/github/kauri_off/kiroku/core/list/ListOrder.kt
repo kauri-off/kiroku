@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.airing.airingPhase
 import io.github.kauri_off.kiroku.core.airing.nextAirsAt
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -29,12 +30,12 @@ val ListSort.defaultDirection: SortDirection?
 
 // The sorts a tab offers; "Up next" needs airing data, which another user's list does not have.
 fun sortsFor(
-    status: ListStatus,
+    status: EntryStatus,
     withAiring: Boolean,
 ): List<ListSort> = ListSort.entries.filter { it != ListSort.UpNext || (status == ListStatus.Watching && withAiring) }
 
 fun defaultSort(
-    status: ListStatus,
+    status: EntryStatus,
     withAiring: Boolean,
 ): ListSort = if (ListSort.UpNext in sortsFor(status, withAiring)) ListSort.UpNext else ListSort.LastUpdated
 
@@ -49,7 +50,7 @@ data class TabSort(
 
     companion object {
         // A tab of the user's own list where nothing was chosen.
-        fun defaultFor(status: ListStatus): TabSort = TabSort(defaultSort(status, withAiring = true))
+        fun defaultFor(status: EntryStatus): TabSort = TabSort(defaultSort(status, withAiring = true))
     }
 }
 

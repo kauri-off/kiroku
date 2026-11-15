@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.core.repository
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.list.SentValues
+import io.github.kauri_off.kiroku.core.list.sent
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -22,6 +25,13 @@ class ListWriteTest {
     private fun entry(values: ListValues) = ListEntry(anime, values, Instant.EPOCH)
 
     private fun watching(watched: Int) = ListValues(ListStatus.Watching, watched, 8, earlier, null)
+
+    // The owner's rule: a status code the app does not know is never sent to MAL, which keeps it.
+    @Test
+    fun `values are sent as they are, except a status the app does not know, which is left out`() {
+        for (status in ListStatus.entries) assertEquals(SentValues(status, 9, 8, earlier, day), ListValues(status, 9, 8, earlier, day).sent)
+        assertEquals(SentValues(null, 9, 8, earlier, day), ListValues(EntryStatus.Unrecognized("rewatching"), 9, 8, earlier, day).sent)
+    }
 
     @Test
     fun `mark watched applies to the entry as it is when sent`() {
@@ -108,7 +118,7 @@ class ListWriteTest {
     private fun undo(
         change: ListChange,
         now: ListValues?,
-    ) = change.undo.applyTo(now?.let(::entry), today)
+    ) = change.undo!!.applyTo(now?.let(::entry), today)
 
     private val list = SignInId("a")
 

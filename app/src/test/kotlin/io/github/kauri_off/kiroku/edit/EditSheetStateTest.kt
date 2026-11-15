@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.edit
 
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -23,6 +24,22 @@ class EditSheetStateTest {
         saved: ListValues?,
         total: Int,
     ) = EditSheetState.of("Kagerou Toshokan 2nd Season", saved, total, malEpisodes = total, today)
+
+    // A status MAL gave that the app does not know is none of the five, and Save writes only one of them.
+    @Test
+    fun aStatusTheAppDoesNotKnowIsNotChosenAndSaveWaitsForOne() {
+        val opened = sheet(watching.copy(status = EntryStatus.Unrecognized("rewatching")), 24)
+        assertFalse(opened.canSave)
+        val stepped = opened.afterAll(EditSheetEvent.WatchedChanged(20), EditSheetEvent.ScoreChanged(9), EditSheetEvent.SaveClicked)
+        assertFalse(stepped.canSave)
+        assertFalse(stepped.closing)
+        val chosen = stepped.after(EditSheetEvent.StatusChosen(ListStatus.OnHold))
+        assertEquals(watching.copy(status = ListStatus.OnHold, watchedEpisodes = 20, score = 9), chosen.draft)
+        assertTrue(chosen.after(EditSheetEvent.SaveClicked).closing)
+        val completed = opened.after(EditSheetEvent.WatchedChanged(24))
+        assertEquals(ListStatus.Completed, completed.draft.status)
+        assertTrue(completed.canSave)
+    }
 
     @Test
     fun reachingTheTotalShowsCompletedAndTodayBeforeSave() {

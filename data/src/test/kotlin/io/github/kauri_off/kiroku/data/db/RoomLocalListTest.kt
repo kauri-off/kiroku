@@ -10,11 +10,16 @@ import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.data.anime.Repairs
+import io.github.kauri_off.kiroku.data.anime.edited
+import io.github.kauri_off.kiroku.data.anime.recordedJson
+import io.github.kauri_off.kiroku.data.list.toListPage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
@@ -23,6 +28,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -284,7 +290,7 @@ class RoomLocalListTest {
             val s = seeded()
             val broken = fixtures.entries.first()
 
-            s.database.execute("UPDATE list_entry SET confirmed_status = 'broken' WHERE title_id = ${broken.anime.id.value}")
+            s.database.execute("UPDATE list_entry SET confirmed_watched = -1 WHERE title_id = ${broken.anime.id.value}")
 
             assertEquals(
                 fixtures.entries.map { it.anime.id }.sortedBy { it.value } - broken.anime.id,
@@ -293,7 +299,7 @@ class RoomLocalListTest {
                     .keys
                     .toList(),
             )
-            assertEquals(listOf("java.lang.IllegalStateException"), s.unexpected.map { it.message })
+            assertEquals(listOf("java.lang.IllegalArgumentException"), s.unexpected.map { it.message })
             s.store.download(fixtures.entries.map { it.anime }, mapOf(broken.anime.id to StoredEntry.settled(broken.record)), syncedAt)
             assertEquals(fixtures.entries.settled(), s.store.readAll())
         }
@@ -404,6 +410,38 @@ class RoomLocalListTest {
                 s.store.write(mapOf(fixtures.entries[0].anime.id to StoredEntry.settled(record)))
                 assertEquals(StoredEntry.settled(record), s.store.read(fixtures.entries[0].anime.id)?.entry)
             }
+        }
+
+    @Test
+    fun `an entry whose list status the app does not know is stored and read back with MAL's code`() =
+        runTest {
+            val unknown = EntryStatus.Unrecognized("rewatching")
+            val entries =
+                recordedJson("list_public_1")
+                    .edited(listOf("data", "0", "list_status", "status"), JsonPrimitive(unknown.malCode))
+                    .toListPage(Repairs())
+                    .entries
+            val entry = entries.first()
+            assertEquals(unknown, entry.status)
+
+            val s = seeded(entries)
+
+            assertEquals(StoredEntry.settled(entry.record), s.store.read(entry.anime.id)?.entry)
+            assertEquals(
+                entry.values,
+                s.store
+                    .observeEntry(entry.anime.id)
+                    .first()
+                    ?.values,
+            )
+            assertEquals(
+                entries.map { it.values }.toSet(),
+                s.store
+                    .observeEntries()
+                    .first()
+                    .map { it.values }
+                    .toSet(),
+            )
         }
 
     @Test

@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.edit
 
 import androidx.lifecycle.SavedStateHandle
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -37,6 +38,7 @@ internal data class SavedSheet(
         private val SEPARATOR = notShown(";")
         private val REMOVE = notShown("remove")
         private val DISCARD = notShown("discard")
+        private val UNRECOGNIZED = notShown("?")
 
         fun save(
             handle: SavedStateHandle,
@@ -66,19 +68,30 @@ internal data class SavedSheet(
             listOf(DRAFT, BEFORE, TYPED, TYPING_FROM, DIALOG, CLOSING).forEach { handle.remove<Any>(it) }
         }
 
+        // The status goes last, so that MAL's code of one the app does not know may hold anything.
         fun encode(values: ListValues): String =
             listOf(
-                values.status.name,
                 values.watchedEpisodes.toString(),
                 values.score?.toString().orEmpty(),
                 values.startDate?.let(::encode).orEmpty(),
                 values.finishDate?.let(::encode).orEmpty(),
+                when (val status = values.status) {
+                    is ListStatus -> status.name
+                    is EntryStatus.Unrecognized -> UNRECOGNIZED + status.malCode
+                },
             ).joinToString(SEPARATOR)
 
         fun values(text: String): ListValues {
-            val (status, watched, score, start, finish) = text.split(SEPARATOR)
+            val (watched, score, start, finish, status) = text.split(SEPARATOR, limit = 5)
             return ListValues(
-                ListStatus.valueOf(status),
+                if (status.startsWith(
+                        UNRECOGNIZED,
+                    )
+                ) {
+                    EntryStatus.Unrecognized(status.removePrefix(UNRECOGNIZED))
+                } else {
+                    ListStatus.valueOf(status)
+                },
                 watched.toInt(),
                 score.toIntOrNull(),
                 start.ifEmpty { null }?.let(::date),

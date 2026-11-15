@@ -239,7 +239,7 @@ class DemoTest {
             assertEquals(Outcome.Success(Unit), demo.reset())
             val sent = demo.server.requests
 
-            assertNull(demo.list.write(change.undo))
+            assertNull(demo.list.write(change.undo!!))
             settle()
 
             assertEquals(listOf(DataError.ListEnded), failures.map { it.error })

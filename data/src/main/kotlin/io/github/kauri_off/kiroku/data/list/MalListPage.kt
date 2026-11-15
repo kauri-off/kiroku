@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.data.list
 
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.data.anime.AnimeNode
@@ -50,13 +52,19 @@ internal fun JsonObject.toListPage(repairs: Repairs): ListPage {
     return ListPage(entries, nextOf(page.paging), repairs.fields.toSet())
 }
 
-// A score of 0, or any value missing or unreadable, is absent, an unreadable one noted; only an unknown list status fails.
+// A score of 0, or any value missing or unreadable, is absent, an unreadable one noted; only a missing list status fails.
 private fun listEntryOf(
     node: AnimeNode,
     values: JsonElement?,
     repairs: Repairs,
+): ListEntry = listEntryOf(node.toAnime(repairs.within("node")), values, repairs)
+
+// An entry's values as MAL gives them, in a list, a title's own answer or a write's, with the title they belong to.
+internal fun listEntryOf(
+    anime: Anime,
+    values: JsonElement?,
+    repairs: Repairs,
 ): ListEntry {
-    val anime = node.toAnime(repairs.within("node"))
     val fields = values as? JsonObject ?: JsonObject(emptyMap())
     val noted = repairs.within("list_status")
 
@@ -67,7 +75,7 @@ private fun listEntryOf(
     return ListEntry(
         anime,
         ListValues(
-            status = requireNotNull(fields.text("status")?.let(listStatuses.values::get)) { "No list status the app knows" },
+            status = statusOf(fields.text("status"), noted),
             watchedEpisodes = read("num_episodes_watched", fields.number("num_episodes_watched")?.takeIf { it >= 0 }) ?: 0,
             score = read("score", fields.number("score")?.takeIf { it in 0..10 })?.takeIf { it > 0 },
             startDate = read("start_date", fields.text("start_date")?.let(::dateOf)),
@@ -75,6 +83,15 @@ private fun listEntryOf(
         ),
         read("updated_at", fields.text("updated_at")?.let(::updatedAtOf)) ?: NEVER_UPDATED,
     )
+}
+
+// A status the app does not know is kept as MAL's code and noted, so that the entry stays on the list.
+private fun statusOf(
+    code: String?,
+    noted: Repairs,
+): EntryStatus {
+    requireNotNull(code) { "No list status" }
+    return listStatuses.of(code).also { if (it is EntryStatus.Unrecognized) noted.note("status") }
 }
 
 // No next link is the last page; of a link only its offset is used, and one without an offset fails.

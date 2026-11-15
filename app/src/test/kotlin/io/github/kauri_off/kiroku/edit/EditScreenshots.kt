@@ -39,6 +39,7 @@ class EditScreenshots : ScreenshotRegistry() {
             case("partial-dates") { EditSheet(EditFixtures.partialDates, onEvent = {}) },
             case("date-picker") { EditSheet(EditFixtures.existing.copy(dialog = EditDialog.PickDate(DateField.Start)), onEvent = {}) },
             case("status-chosen") { EditSheet(EditFixtures.statusChosen, onEvent = {}) },
+            case("unknown-status") { EditSheet(EditFixtures.unknownStatus, onEvent = {}) },
         )
 
     // Choosing a status reshapes and recolours two toggle buttons, the stock component's own motion; no button moves.
@@ -96,6 +97,16 @@ object EditFixtures {
         )
 
     val statusChosen = existing.after(EditSheetEvent.StatusChosen(ListStatus.OnHold))
+
+    // A status MAL gave that the app does not know: none is chosen, and Save waits for one.
+    val unknownStatus =
+        sheet(
+            FixtureAnime.onHoldAiring,
+            Fixtures.reference.entries
+                .first { it.anime.id == FixtureAnime.onHoldAiring.id }
+                .values
+                .copy(status = Fixtures.unknownListStatus),
+        )
 
     val changed =
         existing

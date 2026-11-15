@@ -93,7 +93,7 @@ class ListTabsTest {
                         Column {
                             Box(Modifier.testTag(STOCK)) { StockRow(selected) }
                             Box(Modifier.testTag(OURS)) {
-                                ListTabs(rememberListTabMotion(rememberPagerState(initialPage = selected) { statuses.size })) {}
+                                ListTabs(rememberListTabMotion(rememberPagerState(initialPage = selected) { statuses.size }), statuses) {}
                             }
                         }
                     }

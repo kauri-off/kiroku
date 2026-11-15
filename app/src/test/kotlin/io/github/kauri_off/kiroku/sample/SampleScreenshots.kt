@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.sample
 
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.screenshots.ShowcaseRegistry
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
@@ -21,7 +22,7 @@ object SampleFixtures {
                 SampleRow(
                     id = entry.anime.id,
                     title = entry.anime.titles.romaji,
-                    status = entry.status,
+                    status = entry.status as ListStatus,
                     watched = entry.values.watchedEpisodes,
                     total = entry.anime.malEpisodes,
                 )

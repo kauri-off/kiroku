@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.core.list.order
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -28,7 +29,7 @@ object ListFixtureStates {
     // Rows in the order computed for [ordered]; [shown] holds the entries as they are now, so an edit after the
     // order was computed changes a row in place, and a title that left the tab leaves its row.
     fun rows(
-        status: ListStatus,
+        status: EntryStatus,
         sort: ListSort = defaultSort(status, withAiring = true),
         ordered: List<ListEntry> = set.entries,
         shown: List<ListEntry> = ordered,
@@ -51,7 +52,7 @@ object ListFixtureStates {
         override: Map<ListStatus, ListPage> = emptyMap(),
     ): ListContent.Tabs =
         ListContent.Tabs(
-            ListStatus.entries.associateWith { status ->
+            tabOrder(entries.map { it.status }).associateWith { status ->
                 val sort = defaultSort(status, withAiring = !readOnly)
                 val page =
                     override[status]
@@ -66,7 +67,7 @@ object ListFixtureStates {
     ) = mapOf(ListStatus.Watching to ListPage(sort, sortsFor(ListStatus.Watching, withAiring = true), rows))
 
     private fun state(
-        status: ListStatus = ListStatus.Watching,
+        status: EntryStatus = ListStatus.Watching,
         content: ListContent = tabs(),
     ) = ListState(owner = ListOwner.Me, content = content, tab = status, now = set.now)
 
@@ -106,6 +107,41 @@ object ListFixtureStates {
     val dropped = state(ListStatus.Dropped)
 
     val sortSheet = watching.copy(sortSheetOpen = true)
+
+    // MAL's code of a status the app does not know.
+    val unknownStatus = Fixtures.unknownListStatus
+
+    // On hold's airing and finished titles, with [unknownStatus] in place of their status.
+    val withUnknownStatus =
+        set.entries.map {
+            if (it.anime.id == FixtureAnime.onHoldAiring.id || it.anime.id == FixtureAnime.onHoldFinished.id) {
+                it.copy(values = it.values.copy(status = unknownStatus))
+            } else {
+                it
+            }
+        }
+
+    // Its own last tab, named by MAL's code.
+    val unknown = state(unknownStatus, tabs(withUnknownStatus))
+
+    // The same with a code longer than the tab row is wide.
+    val unknownLongCode =
+        Fixtures.longUnknownListStatus.let { long ->
+            state(
+                long,
+                tabs(
+                    withUnknownStatus.map {
+                        if (it.status ==
+                            unknownStatus
+                        ) {
+                            it.copy(values = it.values.copy(status = long))
+                        } else {
+                            it
+                        }
+                    },
+                ),
+            )
+        }
 
     // The widest line 2 a Watching row has: three-digit counts, a score of 10, episodes to watch and "+1".
     private const val LONG_TOTAL = 366

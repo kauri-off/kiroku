@@ -97,7 +97,7 @@ class ListEngine(
 
             override suspend fun put(
                 anime: Anime,
-                values: ListValues?,
+                values: SentValues?,
             ) = remoteCall { remote.put(anime, values) }.about(anime.id)
 
             // An answer about another title is the engine's own exception, and nothing of it is stored.
@@ -412,7 +412,7 @@ class ListEngine(
     private suspend fun send(put: Put) {
         val id = put.id
         val signedIn = locked { if ((epochs[id] ?: 0) != put.epoch || list != put.list) return else settled is Session.SignedIn }
-        val outcome = if (signedIn) mal.put(put.anime, put.values) else expired
+        val outcome = if (signedIn) mal.put(put.anime, put.values?.sent) else expired
         val failure =
             locked {
                 if (list != put.list) return@locked null
@@ -487,7 +487,7 @@ class ListEngine(
                 confirmed
             } else {
                 if (!current(direct)) return expired
-                when (val outcome = mal.put(confirmed?.anime ?: write.anime, values)) {
+                when (val outcome = mal.put(confirmed?.anime ?: write.anime, values?.sent)) {
                     is Outcome.Failure -> return outcome
                     is Outcome.Success -> outcome.value
                 }

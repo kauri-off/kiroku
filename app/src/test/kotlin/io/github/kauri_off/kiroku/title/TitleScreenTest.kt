@@ -80,6 +80,12 @@ class TitleScreenTest {
     }
 
     @Test
+    fun theStatusButtonNamesAStatusTheAppDoesNotKnowByItsCodeAndOpensTheSheet() {
+        show(TitleFixtures.unknownStatus)
+        sends(TitleEvent.Edit) { compose.onNodeWithText("Rewatching").assertIsDisplayed().performClick() }
+    }
+
+    @Test
     fun theAiringBlockWritesCoresFigures() {
         show(TitleFixtures.of(FixtureAnime.exactToWatch))
         compose.onNodeWithText("14\u00A0aired\u00A0· 2\u00A0to\u00A0watch").assertIsDisplayed()

@@ -9,9 +9,9 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
@@ -156,7 +156,7 @@ abstract class ListEngineContract {
 
         override suspend fun put(
             anime: Anime,
-            values: ListValues?,
+            values: SentValues?,
         ): Outcome<ListEntry?> {
             putsUnder += session()
             fault()
@@ -454,7 +454,7 @@ abstract class ListEngineContract {
                     }
                 }
             assertEquals(listOf(12 to 13, 13 to 14, 14 to 15), counts)
-            s.list.write(checkNotNull(changes.last().await()).undo)
+            s.list.write(checkNotNull(changes.last().await()).undo!!)
             assertEquals(14, s.shownWatched(anime))
             assertNull(s.list.write(ListWrite.Save(anime, checkNotNull(s.list.observeEntry(anime.id).first()).values)))
         }
@@ -469,7 +469,7 @@ abstract class ListEngineContract {
             val now = checkNotNull(s.list.observeEntry(anime.id).first()).values
             s.list.write(ListWrite.Save(anime, now.copy(score = 10)))
             s.list.write(ListWrite.StepWatched(anime, 1))
-            s.list.write(change.undo)
+            s.list.write(change.undo!!)
             val after = checkNotNull(s.list.observeEntry(anime.id).first()).values
             assertEquals(ListStatus.Watching, after.status)
             assertEquals(10, after.score)
@@ -497,10 +497,70 @@ abstract class ListEngineContract {
             val restored = seen.last().single { it.anime.id == FixtureAnime.oneShortOfTotal.id }.values
             assertEquals(before.values, restored)
             assertEquals(
-                listOf(ListRequest(before.anime.id, completed), ListRequest(before.anime.id, before.values)),
+                listOf(ListRequest(before.anime.id, completed.sent), ListRequest(before.anime.id, before.values.sent)),
                 s.server.requests,
             )
             assertEquals(before.values, s.server.entry(before.anime.id)?.values)
+        }
+
+    // The owner's rule: what the app sends MAL never carries a status code the app does not know.
+    @Test
+    fun `a write to an entry whose status the app does not know leaves the status out, MAL keeps it, and a chosen one is sent`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.onHoldAiring
+            val website = checkNotNull(s.server.entry(anime.id)).values.copy(status = EntryStatus.Unrecognized("rewatching"))
+            s.server.editOnWebsite(anime, website)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(website, s.shown(anime.id)?.values)
+
+            s.list.write(ListWrite.StepWatched(anime, 1))
+            settle()
+            val stepped = website.copy(watchedEpisodes = website.watchedEpisodes + 1)
+            assertEquals(stepped, s.shown(anime.id)?.values)
+            assertEquals(stepped, s.server.entry(anime.id)?.values)
+
+            assertEquals(Outcome.Success(Unit), s.list.send(ListWrite.MarkWatched(anime, stepped.watchedEpisodes + 1)))
+            val marked = stepped.copy(watchedEpisodes = stepped.watchedEpisodes + 1)
+            assertEquals(marked, s.server.entry(anime.id)?.values)
+
+            val chosen = marked.copy(status = ListStatus.Watching)
+            s.list.write(ListWrite.Save(anime, chosen))
+            settle()
+            assertEquals(chosen, s.server.entry(anime.id)?.values)
+            assertEquals(listOf(null, null, ListStatus.Watching), s.server.requests.map { it.values?.status })
+            assertEquals(listOf(stepped.sent, marked.sent, chosen.sent), s.server.requests.map { it.values })
+        }
+
+    // The owner's decision: no Undo for a change off a status the app does not know, which cannot be sent back.
+    @Test
+    fun `a change off a status the app does not know offers no Undo, and any other change of that entry undoes as usual`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.oneShortOfTotal
+            val website = checkNotNull(s.server.entry(anime.id)).values.copy(status = Fixtures.unknownListStatus)
+            s.server.editOnWebsite(anime, website)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+
+            val step = checkNotNull(s.list.write(ListWrite.StepWatched(anime, -1)))
+            settle()
+            s.list.write(checkNotNull(step.undo))
+            settle()
+            assertEquals(website, s.shown(anime.id)?.values)
+            assertEquals(website, s.server.entry(anime.id)?.values)
+
+            val completing = checkNotNull(s.list.write(ListWrite.MarkNextWatched(anime)))
+            assertTrue(completing.completed)
+            assertNull(completing.undo)
+            settle()
+            assertEquals(ListStatus.Completed, s.server.entry(anime.id)?.status)
+
+            s.server.editOnWebsite(anime, website)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            val chosen = checkNotNull(s.list.write(ListWrite.Save(anime, website.copy(status = ListStatus.OnHold))))
+            assertNull(chosen.undo)
+            val scored = checkNotNull(s.list.write(ListWrite.Save(anime, website.copy(status = ListStatus.OnHold, score = 9))))
+            assertTrue(scored.undo != null)
         }
 
     @Test
@@ -1114,7 +1174,7 @@ abstract class ListEngineContract {
             s.list.write(ListWrite.Save(added, values))
             s.list.write(ListWrite.Remove(removed))
             advanceTimeBy(1500.milliseconds)
-            assertEquals(listOf(ListRequest(confirmed.id, s.shown(confirmed.id)?.values)), s.server.requests)
+            assertEquals(listOf(ListRequest(confirmed.id, s.shown(confirmed.id)?.values?.sent)), s.server.requests)
 
             // The store as the process left it, and MAL having taken the request whose answer never came.
             kill(s, process)
@@ -1261,7 +1321,18 @@ abstract class ListEngineContract {
             s.session.value = b
             settle()
 
-            assertEquals(listOf(ListRequest(anime.id, s.server.entry(anime.id)?.values)), s.server.requests)
+            assertEquals(
+                listOf(
+                    ListRequest(
+                        anime.id,
+                        s.server
+                            .entry(anime.id)
+                            ?.values
+                            ?.sent,
+                    ),
+                ),
+                s.server.requests,
+            )
             assertEquals(Outcome.Failure(DataError.SessionExpired), sent.await())
             assertEquals(0, s.mal.entryReads)
             assertNull(s.shown(anime.id))
@@ -2116,13 +2187,13 @@ abstract class ListEngineContract {
             runCurrent()
             s.session.value = b
             assertEquals(Outcome.Success(Unit), s.list.sync())
-            assertNull(s.list.write(change.undo))
-            assertEquals(Outcome.Failure(DataError.ListEnded), s.list.send(change.undo))
+            assertNull(s.list.write(change.undo!!))
+            assertEquals(Outcome.Failure(DataError.ListEnded), s.list.send(change.undo!!))
             settle()
 
             assertEquals(sent, s.server.requests)
             assertEquals(13, s.shownWatched(anime))
-            assertEquals(listOf(failed(DataError.ListEnded, change.undo)), failures)
+            assertEquals(listOf(failed(DataError.ListEnded, change.undo!!)), failures)
         }
 
     @Test
@@ -2136,13 +2207,13 @@ abstract class ListEngineContract {
             s.session.value = expired
             runCurrent()
 
-            assertNull(s.list.write(change.undo))
+            assertNull(s.list.write(change.undo!!))
             runCurrent()
-            assertEquals(listOf(failed(DataError.SessionExpired, change.undo)), failures)
+            assertEquals(listOf(failed(DataError.SessionExpired, change.undo!!)), failures)
             s.session.value = b
             assertNull(s.list.write(failures.single().retry))
             runCurrent()
-            assertEquals(failed(DataError.ListEnded, change.undo), failures.last())
+            assertEquals(failed(DataError.ListEnded, change.undo!!), failures.last())
             assertEquals(1, s.server.requests.size)
         }
 

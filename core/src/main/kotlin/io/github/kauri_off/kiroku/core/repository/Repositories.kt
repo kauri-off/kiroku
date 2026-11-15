@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -135,7 +136,9 @@ data class ListChange(
 
     val anime: Anime get() = (after ?: before)!!.anime
 
-    val undo: ListWrite get() = ListWrite.Undo(this)
+    // None for a change off a status the app does not know: that status is never sent, so it cannot be put back.
+    val undo: ListWrite?
+        get() = if (before?.status is EntryStatus.Unrecognized && after?.status != before.status) null else ListWrite.Undo(this)
 
     // W7 moved the title to Completed.
     val completed: Boolean get() = after?.status == ListStatus.Completed && before?.status != ListStatus.Completed

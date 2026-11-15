@@ -9,8 +9,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
-import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
@@ -94,7 +94,7 @@ data class TitlePage private constructor(
             entry: ListEntry?,
             airing: Airing?,
             details: AnimeDetails?,
-            listStatuses: Map<AnimeId, ListStatus>,
+            listStatuses: Map<AnimeId, EntryStatus>,
             language: TitleLanguage,
             clock: Clock,
             pageRead: Boolean = details != null,
@@ -171,7 +171,7 @@ data class ChainCard(
     val anime: Anime,
     val title: String,
     // The user's status for that title, when it is on their list.
-    val status: ListStatus?,
+    val status: EntryStatus?,
     val current: Boolean,
 )
 
@@ -179,7 +179,7 @@ data class RelatedCard(
     val related: RelatedAnime,
     val title: String,
     // The user's status for that title, when it is on their list.
-    val status: ListStatus?,
+    val status: EntryStatus?,
 )
 
 sealed interface TitleEvent {

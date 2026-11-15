@@ -143,7 +143,7 @@ class StoreThreadsTest {
     }
 
     private suspend fun corrupt() {
-        database.execute("UPDATE list_entry SET shown_status = 'broken', confirmed_status = 'broken'")
+        database.execute("UPDATE list_entry SET shown_watched = -1, confirmed_watched = -1")
         database.execute("UPDATE title SET start_date = 'broken'")
         database.execute("UPDATE title_details SET season = 'broken'")
     }

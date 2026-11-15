@@ -358,12 +358,12 @@ class TitleViewModel(
         }
     }
 
-    // A change that completes the title (W7) says so, with an Undo of that change alone.
+    // A change that completes the title (W7) says so, with an Undo of that change alone when it has one.
     private fun watched(write: (Anime) -> ListWrite) {
         val page = shownPage() ?: return
         if (page.entry == null) return
         messages.write(write(page.anime)) { change ->
-            if (change.completed) ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo)) else null
+            if (change.completed) ShellMessage(ShellMessage.Text.MovedToCompleted, change.undo?.let(ShellMessage.Action::Undo)) else null
         }
     }
 

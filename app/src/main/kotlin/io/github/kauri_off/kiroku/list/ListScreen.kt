@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
@@ -84,7 +85,7 @@ import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
-import io.github.kauri_off.kiroku.text.label
+import io.github.kauri_off.kiroku.text.statusName
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 
@@ -99,7 +100,8 @@ fun ListScreen(
 ) {
     BackHandler(enabled = state.filterText != null) { onEvent(ListEvent.EndFilter) }
     val tabs = state.content as? ListContent.Tabs
-    val statuses = ListStatus.entries
+    // Before the tabs are known, a tab of a status the app does not know stands where it will be.
+    val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
     val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
     val motion = rememberListTabMotion(pager)
     Scaffold(
@@ -107,7 +109,7 @@ fun ListScreen(
         topBar = {
             Column {
                 TopBar(state.filterText, state.owner, showActions = tabs != null, onEvent = onEvent)
-                if (tabs != null) ListTabs(motion, onEvent)
+                if (tabs != null) ListTabs(motion, tabs.statuses, onEvent)
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
         },
@@ -133,6 +135,7 @@ fun ListScreen(
                     modifier = body.fillMaxSize(),
                 ) {
                     Pages(
+                        content.statuses,
                         state.tab,
                         Shown(content, state.filter.orEmpty(), state.owner, state.now),
                         motion,
@@ -158,20 +161,25 @@ private data class Shown(
 // One page per tab, each with its own scroll position; once the screen has settled all are composed.
 @Composable
 private fun Pages(
-    tab: ListStatus,
+    statuses: List<EntryStatus>,
+    tab: EntryStatus,
     shown: Shown,
     motion: ListTabMotion,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val statuses = ListStatus.entries
     val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
     val selected = rememberUpdatedState(tab)
+    val tabs = rememberUpdatedState(statuses)
     LaunchedEffect(motion) {
-        motion.followRest { index -> if (statuses[index] != selected.value) events.value(ListEvent.SelectTab(statuses[index])) }
+        motion.followRest { index ->
+            val status = tabs.value.getOrNull(index) ?: return@followRest
+            if (status != selected.value) events.value(ListEvent.SelectTab(status))
+        }
     }
-    LaunchedEffect(tab) { motion.show(statuses.indexOf(tab)) }
+    val index = statuses.indexOf(tab)
+    LaunchedEffect(index) { if (index >= 0) motion.show(index) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(motion) {
         lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
@@ -196,7 +204,7 @@ private fun Pages(
                 }
             }.nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,
-        key = { statuses[it] },
+        key = { statuses[it].pageKey },
         flingBehavior =
             PagerDefaults.flingBehavior(
                 pager,
@@ -207,6 +215,14 @@ private fun Pages(
         Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown.filter, shown.owner, shown.now, padding, onEvent)
     }
 }
+
+// A page's key is saved in a Bundle, which takes MAL's code but not the status that holds it.
+private val EntryStatus.pageKey: Any
+    get() =
+        when (this) {
+            is ListStatus -> this
+            is EntryStatus.Unrecognized -> malCode
+        }
 
 // The bars' height read in layout, since the tab row arrives in the frame that composes the rows.
 private fun Modifier.belowBars(padding: PaddingValues): Modifier =
@@ -246,7 +262,7 @@ private fun Modifier.withoutTravelledTaps(): Modifier =
 // returning within one order animate (ARCHITECTURE 8.5).
 @Composable
 private fun Page(
-    status: ListStatus,
+    status: EntryStatus,
     page: ListPage,
     filter: String,
     owner: ListOwner,
@@ -274,13 +290,13 @@ private fun Page(
 private fun emptyState(
     filter: String,
     owner: ListOwner,
-    status: ListStatus,
+    status: EntryStatus,
     onEvent: (ListEvent) -> Unit,
 ): ScreenState =
     if (filter.isEmpty()) {
         val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
         ScreenState.Empty(
-            stringResource(R.string.list_empty, stringResource(status.label())),
+            stringResource(R.string.list_empty, statusName(status)),
             search.takeIf { owner == ListOwner.Me },
         )
     } else {

@@ -116,7 +116,7 @@ class ShellMessagesTest {
         shell()
         val before = runBlocking { graph.list.observeEntry(anime.id).first()!! }
         val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
-        compose.runOnUiThread { messages.post(ShellMessage(ShellMessage.Text.EpisodeWatched(13), ShellMessage.Action.Undo(change.undo))) }
+        compose.runOnUiThread { messages.post(ShellMessage(ShellMessage.Text.EpisodeWatched(13), ShellMessage.Action.Undo(change.undo!!))) }
         compose.onNodeWithText("Episode\u00A013 watched").assertExists()
         recreate()
         compose.onNodeWithText("Episode\u00A013 watched").assertExists()
@@ -247,7 +247,7 @@ class ShellMessagesTest {
 
     private val otherFailed = ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(ListWrite.SetWatched(other, 1)))
 
-    private fun undoOf(change: ListChange) = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo))
+    private fun undoOf(change: ListChange) = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo!!))
 
     // Posts [waiting] behind a shown Retry while the store cannot be read, and brings the store back after its first failure.
     private fun waitingThroughFailure(
@@ -388,7 +388,7 @@ class ShellMessagesTest {
         val change = runBlocking { checkNotNull(graph.list.write(ListWrite.MarkNextWatched(anime))) }
         runBlocking { graph.demo.session.signOut() }
         compose.waitForIdle()
-        runBlocking { graph.list.write(change.undo) }
+        runBlocking { graph.list.write(change.undo!!) }
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertExists()
         compose.onNodeWithText("Retry").assertDoesNotExist()
@@ -421,7 +421,7 @@ class ShellMessagesTest {
         assertEquals(before, watched())
         val change = runBlocking { graph.list.write(ListWrite.StepWatched(other, -1)) }!!
         compose.runOnUiThread {
-            shell.messages.post(ShellMessage(ShellMessage.Text.EpisodeWatched(10), ShellMessage.Action.Undo(change.undo)))
+            shell.messages.post(ShellMessage(ShellMessage.Text.EpisodeWatched(10), ShellMessage.Action.Undo(change.undo!!)))
         }
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertExists()
