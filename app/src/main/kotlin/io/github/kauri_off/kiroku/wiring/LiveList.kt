@@ -1,18 +1,15 @@
 package io.github.kauri_off.kiroku.wiring
 
-import io.github.kauri_off.kiroku.core.error.DataError
-import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.list.LocalList
-import io.github.kauri_off.kiroku.core.list.RemoteList
-import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListRepository
-import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.data.list.MalRemoteList
+import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -20,31 +17,26 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
-// The list of a live source: the engine over MAL's list and the source's store.
+// The list of a live source: the engine over MAL's list and the source's store, whose owner's choices go with it (S9).
 internal fun liveList(
     parts: LiveParts,
-    session: SessionRepository,
+    session: MalSession,
     store: (LiveParts) -> LocalList,
+    forgetChoices: suspend () -> Unit,
 ): ListRepository =
-    ListEngine(UnreachableList, StoreOnFirstUse { store(parts) }, session.observeSession(), parts.clock, parts.scope, parts.unexpected)
-
-// MAL's list, which no client reaches yet.
-private object UnreachableList : RemoteList {
-    private val unavailable = Outcome.Failure(DataError.ServerError)
-
-    override suspend fun fetch(): Outcome<List<ListEntry>> = unavailable
-
-    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> = unavailable
-
-    override suspend fun put(
-        anime: Anime,
-        values: SentValues?,
-    ): Outcome<ListEntry?> = unavailable
-}
+    ListEngine(
+        MalRemoteList(parts.http, session),
+        StoreOnFirstUse({ store(parts) }, forgetChoices),
+        session.observeSession(),
+        parts.clock,
+        parts.scope,
+        parts.unexpected,
+    )
 
 // The store is built at the engine's first call of it, which comes after the session is known, and off the main thread.
 private class StoreOnFirstUse(
     build: () -> LocalList,
+    private val forgetChoices: suspend () -> Unit,
 ) : LocalList {
     private val built = lazy(build)
 
@@ -75,5 +67,9 @@ private class StoreOnFirstUse(
 
     override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) = store().restore(entries)
 
-    override suspend fun clear(owner: SignInId?) = store().clear(owner)
+    // The choices go first: a list that is still the last owner's after a failure is cleared again at its next use.
+    override suspend fun clear(owner: SignInId?) {
+        forgetChoices()
+        store().clear(owner)
+    }
 }

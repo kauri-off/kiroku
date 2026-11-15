@@ -423,15 +423,28 @@ class ListEngine(
                         epochs[id] = put.epoch + 1
                         pending.remove(id)
                         val stored = local.read(id)?.entry
-                        save(id, stored?.confirmed?.let { StoredEntry.settled(it) })
+                        val back = mapOf(id to stored?.confirmed?.let { StoredEntry.settled(it) })
+                        touch(id)
+                        if (outcome.error.unsure) {
+                            local.restore(back)
+                            syncedAt.value = null
+                        } else {
+                            local.write(back)
+                        }
                         val shown = stored?.shown
                         val retry = shown?.let { ListWrite.Save(put.anime, it.values) } ?: ListWrite.Remove(put.anime)
                         WriteFailure(outcome.error, retry, settled?.owner)
                     }
                 }
             }
-        if (failure != null) failures.tryEmit(failure)
+        if (failure != null) {
+            failures.tryEmit(failure)
+            if (failure.error.unsure) scope.launch { sync() }
+        }
     }
+
+    // MAL may have made a write whose answer was lost or could not be read: what it has is learnt by a download.
+    private val DataError.unsure: Boolean get() = this == DataError.ServerError
 
     // A request the store or the engine failed under is a failed write (W2); its Retry carries the title's last edit.
     private suspend fun lost(

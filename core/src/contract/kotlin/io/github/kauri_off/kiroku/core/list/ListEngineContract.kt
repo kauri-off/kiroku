@@ -141,6 +141,10 @@ abstract class ListEngineContract {
         @Volatile
         var answering: (Anime) -> Anime = { it }
 
+        // MAL makes this many writes more, and the app cannot read its answer to any of them.
+        @Volatile
+        var unreadAnswers = 0
+
         override suspend fun fetch(): Outcome<List<ListEntry>> {
             fetchesUnder += session()
             fault()
@@ -160,11 +164,12 @@ abstract class ListEngineContract {
         ): Outcome<ListEntry?> {
             putsUnder += session()
             fault()
-            return inner
-                .put(anime, values)
-                .also { afterPut() }
-                .answered()
-                .also { fault() }
+            val answer = inner.put(anime, values).also { afterPut() }
+            if (unreadAnswers > 0) {
+                unreadAnswers--
+                return Outcome.Failure(DataError.ServerError)
+            }
+            return answer.answered().also { fault() }
         }
 
         private fun Outcome<ListEntry?>.answered() =
@@ -1199,6 +1204,7 @@ abstract class ListEngineContract {
             settle()
 
             val left = s.local.readAll() to s.local.state()
+            val downloads = s.server.listDownloads
             process.cancel()
             runCurrent()
             assertEquals(left, s.local.readAll() to s.local.state())
@@ -1208,7 +1214,7 @@ abstract class ListEngineContract {
 
             assertEquals(s.server.entries().toSet(), shown.toSet())
             assertEquals(shown, restarted.observeEntries().first())
-            assertEquals(0, s.server.listDownloads)
+            assertEquals(downloads, s.server.listDownloads)
         }
 
     @Test
@@ -1284,6 +1290,68 @@ abstract class ListEngineContract {
             s.editOnWebsite(anime, 20)
             assertEquals(Outcome.Success(Unit), s.list.sync())
             assertEquals(20, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a write MAL made whose answer could not be read returns to MAL's last confirmed values until a download that follows shows it`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.mal.unreadAnswers = 1
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            val shown = checkNotNull(s.shown(anime.id)).values
+            advanceTimeBy(1500.milliseconds)
+
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+            assertNull(s.syncedAt())
+            assertEquals(listOf(failed(DataError.ServerError, ListWrite.Save(anime, shown))), failures)
+            settle()
+
+            assertEquals(13, s.shownWatched(anime))
+            assertEquals(1, s.server.listDownloads)
+            assertEquals(fixtures.now, s.syncedAt())
+            s.list.write(failures.single().retry)
+            settle()
+            assertEquals(1, s.server.requests.size)
+        }
+
+    @Test
+    fun `the download owed after an unreadable answer stays owed, also in the store, until one succeeds`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.mal.unreadAnswers = 1
+            s.mal.afterPut = { s.server.offline.value = true }
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+            assertNull(s.syncedAt())
+            assertNull(s.local.state().syncedAt)
+            s.server.offline.value = false
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(13, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a write MAL refused, or that failed offline, asks for no download`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            s.server.refusingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            s.server.refusingWrites.value = false
+            s.server.offline.value = true
+            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
+            settle()
+
+            assertEquals(listOf(DataError.Refused, DataError.NoConnection), failures.map { it.error })
+            assertEquals(0, s.server.listDownloads)
+            assertEquals(seededAt, s.syncedAt())
         }
 
     @Test
@@ -1370,9 +1438,11 @@ abstract class ListEngineContract {
             settle()
             assertEquals(12, s.shownWatched(anime))
             assertEquals(DataError.ServerError, failures.single().error)
+            // The write and the download it owes.
+            assertEquals(listOf(bug, bug), s.unexpected)
             assertEquals(Outcome.Failure(DataError.ServerError), s.list.sync())
             assertEquals(Outcome.Failure(DataError.ServerError), s.list.send(ListWrite.MarkWatched(anime, 13)))
-            assertEquals(listOf(bug, bug, bug), s.unexpected)
+            assertEquals(listOf(bug, bug, bug, bug), s.unexpected)
 
             s.mal.throwing = null
             s.list.write(ListWrite.MarkNextWatched(anime))

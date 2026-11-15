@@ -84,6 +84,15 @@ class StoredPreferences internal constructor(
         }
     }
 
+    // Every choice goes with the list's owner (S9); a disk that fails this throws, and nothing is reported here.
+    suspend fun clear() {
+        try {
+            store.edit { it.clear() }
+        } catch (e: IOException) {
+            throw PreferencesFailure(e)
+        }
+    }
+
     private fun sortOf(
         stored: Preferences,
         status: ListStatus,

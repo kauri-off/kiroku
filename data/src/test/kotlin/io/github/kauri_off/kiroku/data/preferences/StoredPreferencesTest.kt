@@ -182,6 +182,23 @@ class StoredPreferencesTest {
     }
 
     @Test
+    fun `a clear forgets every choice, also for a new process, and one the disk fails throws and keeps them`() {
+        val score = TabSort(ListSort.Score, SortDirection.Ascending)
+        process {
+            it.setListSort(ListStatus.Completed, score)
+            it.setListSort(ListStatus.Watching, TabSort(ListSort.Title))
+            writesFail = true
+            assertTrue(runCatching { it.clear() }.exceptionOrNull() is PreferencesFailure)
+            writesFail = false
+            assertEquals(score, it.observeListSorts().first().getValue(ListStatus.Completed))
+            it.clear()
+            assertEquals(defaults, it.observeListSorts().first())
+        }
+        process { assertEquals(defaults, it.observeListSorts().first()) }
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
     fun `a file the disk cannot read gives every tab its default and is reported`() {
         process { it.setListSort(ListStatus.Completed, TabSort(ListSort.Score)) }
         readsFail = true

@@ -475,6 +475,7 @@ val verifyReleaseClasses =
             listOf(
                 "io/github/kauri_off/kiroku/core/demo/",
                 "io/github/kauri_off/kiroku/core/fixtures/",
+                "io/github/kauri_off/kiroku/core/list/InMemoryLocalList",
                 "io/github/kauri_off/kiroku/standin/",
                 "io/github/kauri_off/kiroku/scenario/",
                 "io/github/kauri_off/kiroku/source/",
