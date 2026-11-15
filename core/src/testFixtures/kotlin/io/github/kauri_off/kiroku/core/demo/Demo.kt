@@ -7,7 +7,9 @@ import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
@@ -42,15 +44,19 @@ class Demo(
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
 
-    private val details = DemoAnimeRepository(fixtures, server)
+    private val details = DemoAnimeRepository(fixtures, server, clock)
 
     val anime: AnimeRepository = details
+
+    val connection: Connection = DemoConnection(server)
 
     val airing: AiringRepository = DemoAiringRepository(fixtures, server)
 
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
     val user: UserRepository = DemoUserRepository(fixtures, server, signIn)
+
+    val preferences: PreferencesRepository = DemoPreferences()
 
     // Whether an edit is on its way to MAL.
     val saving: Boolean get() = server.writing.value > 0 || store.unconfirmed.value

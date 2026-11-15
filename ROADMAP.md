@@ -87,19 +87,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-11 Sign-in in the app.**
 
-- [ ] **M2-12 [A] Recorder for answers that need the sign-in.** A tool of debug and preview builds, opened from
-  the debug menu, that sends a fixed list of requests through the app's own owner of the tokens and stores the
-  answers in the app's storage: the profile with statistics; the own list in pages; and, on one title that is not
-  on the list, an add, a count, a count above the total, a completion, each date set and cleared, a score set and
-  cleared, a value MAL should refuse, the entry read back after each, the removal and a second removal. The list
-  covers what M2 to M6 need from a signed-in user, so one session is enough. The owner's list is as it was
-  afterwards, also after an interrupted run. Every value of the profile is replaced unless it is on a list of
-  harmless ones; list pages keep ten entries; no header and no token is stored, only the lifetime MAL gave the
-  access token.
-  **Needs:** M2-09, M2-10.
-  **Check:** tests against a local server with planted personal values: none is in the files; a run interrupted
-  after the add removes the title at the next start; a title already on the list is refused before any write.
-  The release guards show no release build holds the tool, and no other app can start it.
+- [x] **M2-12 [A] Recorder for answers that need the sign-in.**
 
 - [ ] **M2-13 [O] The owner signs in and records.** With the debug build: he signs in; signs in once more with
   the app killed while the browser is open; runs the recorder on a title that is not on his list. On the website
@@ -112,21 +100,11 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-14 Title client and mappers.**
 
-- [ ] **M2-15 List client: reading.** The list download of `RemoteList`: it asks with `nsfw=true`, reads the
-  pages in an order edits do not change, and fails when any page fails. A list score of 0 is no score; dates may
-  be partial. It serves the signed-in user and, in M6, a named one.
-  **Needs:** M2-05, M2-14, and the list answers of M2-10.
-  **Check:** tests on the recorded pages behind a local server: three pages give every entry once; a failed
-  middle page fails the download; the request carries `nsfw=true` and the order.
+- [x] **M2-15 List client: reading.**
 
 - [x] **M2-16 [A] Database: the titles and the list's store.**
 
-- [ ] **M2-17 Anime repository.** The titles of section 7.1 over M2-14 and M2-16: a page shows what is stored,
-  refreshes what is stale, and keeps what is stored when a refresh fails. A title reached from a related row has
-  that row's data from the first frame.
-  **Needs:** M2-14, M2-16.
-  **Check:** tests: stored details are shown without a request while fresh; a failed refresh changes nothing
-  stored and is reported; a refresh of the details does not lose a value the summary had.
+- [x] **M2-17 Anime repository.**
 
 - [x] **M2-18 Translated MAL values and the genre table.**
 
@@ -156,38 +134,13 @@ on the Russian strings so far are fixed.
   entry and no token, and the next sign-in shows nothing of the one before; with the airing source empty, no
   row and no title page shows an airing line. A release build holds no in-memory store.
 
-- [ ] **M2-22 Screens refresh by themselves.** A screen refreshes what is stale when it is shown, and a screen
-  left in the background past its state's stop timeout counts as shown again (section 7.1). A screen that shows
-  a failure tries once more when the connection returns. On demo data, where the scenario panel's "offline" is
-  the connection.
-  **Needs:** M2-06, M2-09.
-  **Check:** view-model tests for the List, the title page and its sub-screens: a fresh screen shown again asks
-  nothing, a stale one refreshes once; a failed load is repeated once when the connection returns and not again
-  while it stays.
+- [x] **M2-22 Screens refresh by themselves.**
 
-- [ ] **M2-23 List state for a real store.** The sort and direction of each tab are kept across restarts, in the
-  preferences store, which `:data` gains here. The List's state is produced off the main thread, and a change to one
-  entry rebuilds its row and its tab alone.
-  **Needs:** M2-22.
-  **Check:** tests: a new process over the same store shows the chosen sorts; after a "+1" every other row is
-  the same object and one row recomposes; no state is built on the main thread.
+- [x] **M2-23 List state for a real store.**
 
-- [ ] **M2-24 [L] Title page for a real store.** A title opened from a related row that is neither on the list
-  nor stored shows, for the score, the episode count and the rank it does not know yet, what the hand-off
-  proposes and the owner accepts, without a claim that MAL has none. The title and the synopsis can be selected
-  and copied. The page and its sub-screens read the entries of the titles they show, not the list. Case:
-  `opened-from-related`.
-  **Needs:** M2-22.
-  **Check:** the rubric on the case; tests: a page of twelve related titles is not rebuilt by a change to
-  another entry; the title and the synopsis offer the selection.
+- [x] **M2-24 [L] Title page for a real store.**
 
-- [ ] **M2-25 Posters from the network.** Images load through the app's HTTP client: a row asks for the picture
-  of its size, the header for the large one with the row's picture in its place until it arrives. The loader has
-  a test of its own. Debug builds keep the stand-in art for the demo, and no render asks the network.
-  **Needs:** M2-09, M2-14.
-  **Check:** tests against a local server: a row's request is for the medium picture and carries the app's
-  `User-Agent`; the header shows the row's cached picture in its first frame; a failed image leaves the
-  placeholder. A render of the List is byte-identical to one without a network.
+- [x] **M2-25 Posters from the network.**
 
 - [ ] **M2-26 The real title page and its link.** The live graph's titles are M2-17. A
   `myanimelist.net/anime/{id}` link, with or without a slug or a trailing slash, opens the title page with the
@@ -216,11 +169,7 @@ on the Russian strings so far are fixed.
   **Check:** a test that counts the work of the fling's frames, in the style of `ListFrameWorkTest`; frame times
   before and after from `tools/emu`, in the hand-off.
 
-- [ ] **M2-31 Changed screenshots in CI.** A pull request's run lists the screenshots that differ from those of
-  `main`'s last run, so a change to a shared component shows on every screen it moves.
-  **Needs:** nothing.
-  **Check:** a pull request that changes one string lists that screen's images and no other; one that changes
-  none lists nothing.
+- [x] **M2-31 Changed screenshots in CI.**
 
 - [ ] **M2-32 Compose and Material update.** When a Compose BOM brings material3 1.5.0 stable, the pin goes.
   Then: whether `MaterialExpressiveTheme` now supplies the Expressive type scale itself, which the theme's own

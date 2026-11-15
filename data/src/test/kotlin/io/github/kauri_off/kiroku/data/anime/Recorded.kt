@@ -23,7 +23,7 @@ internal val titlePages =
 
 internal fun recordedJson(name: String): JsonObject = MalJson.parseToJsonElement(RecordedAnswers.named(name).body).jsonObject
 
-internal fun recordedTitle(name: String): MalTitle = recordedJson(name).toTitle()
+internal fun recordedTitle(name: String): MalTitle = recordedJson(name).toTitle(Repairs())
 
 // Every title node of every recorded answer, the pages themselves included, each with the answer it came from.
 internal val recordedNodes: List<Pair<String, JsonObject>> by lazy {
@@ -44,13 +44,24 @@ private fun titleNodesIn(element: JsonElement): List<JsonObject> =
 
 internal fun JsonObject.toNode(): AnimeNode = MalJson.decodeFromJsonElement(AnimeNode.serializer(), this)
 
-// A recorded answer with one value at [path] removed, or replaced by [value]: for a shape no recording holds.
+// A recorded answer with one value at [path] removed, or replaced by [value]: for a shape no recording holds. A step
+// into an array is an index.
 internal fun JsonObject.edited(
     path: List<String>,
     value: JsonElement? = null,
 ): JsonObject {
     val key = path.first()
     check(key in this) { "The recording has no $key" }
-    if (path.size > 1) return JsonObject(this + (key to getValue(key).jsonObject.edited(path.drop(1), value)))
+    if (path.size > 1) return JsonObject(this + (key to getValue(key).edited(path.drop(1), value)))
     return JsonObject(if (value == null) this - key else this + (key to value))
+}
+
+private fun JsonElement.edited(
+    path: List<String>,
+    value: JsonElement?,
+): JsonElement {
+    if (this is JsonObject) return edited(path, value)
+    val index = path.first().toInt()
+    check(this is JsonArray && index in indices && path.size > 1) { "The recording has no ${path.first()}" }
+    return JsonArray(toMutableList().also { it[index] = it[index].edited(path.drop(1), value) })
 }

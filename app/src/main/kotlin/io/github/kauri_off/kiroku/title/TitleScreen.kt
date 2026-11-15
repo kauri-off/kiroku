@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -87,6 +88,7 @@ import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
+import io.github.kauri_off.kiroku.design.component.TitleSelection
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.stepButtonMargin
@@ -242,28 +244,33 @@ private fun Gap(
 private fun Header(page: TitlePage) {
     val anime = page.anime
     Row(Modifier.padding(horizontal = Spacing.l), horizontalArrangement = Arrangement.spacedBy(Spacing.l)) {
-        Poster(anime.posterUrl, PosterSize.Header)
+        Poster(anime.posterUrl, PosterSize.Header, large = anime.largePosterUrl)
         Column(Modifier.weight(1f)) {
-            TitleText(
-                page.title,
-                maxLines = Int.MAX_VALUE,
-                style = MaterialTheme.typography.headlineSmallEmphasized.copy(lineBreak = LineBreak.Heading),
-                modifier = Modifier.semantics { heading() },
-            )
+            TitleSelection {
+                TitleText(
+                    page.title,
+                    maxLines = Int.MAX_VALUE,
+                    style = MaterialTheme.typography.headlineSmallEmphasized.copy(lineBreak = LineBreak.Heading),
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
             val facts = factsLine(page.facts)
             if (facts.isNotEmpty()) {
                 Spacer(Modifier.height(Spacing.xs))
                 Text(facts, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(Spacing.l))
-            val score = anime.meanScore
-            StatNumber(
-                value = score?.let { scoreText(it) } ?: stringResource(R.string.title_no_score_value),
-                caption = stringResource(R.string.title_mal_score),
-                spokenValue = if (score == null) stringResource(R.string.title_no_score) else null,
-            )
+            // A score not known yet is left out, so nothing claims that MAL has none.
+            val score = page.score
+            if (score != MalScore.NotKnownYet) {
+                Spacer(Modifier.height(Spacing.l))
+                StatNumber(
+                    value = (score as? MalScore.Given)?.let { scoreText(it.value) } ?: stringResource(R.string.title_no_score_value),
+                    caption = stringResource(R.string.title_mal_score),
+                    spokenValue = if (score == MalScore.None) stringResource(R.string.title_no_score) else null,
+                )
+            }
             anime.rank?.let { rank ->
-                Spacer(Modifier.height(Spacing.xs))
+                Spacer(Modifier.height(if (score == MalScore.NotKnownYet) Spacing.l else Spacing.xs))
                 Text(
                     stringResource(R.string.title_ranked, countText(rank)),
                     style = MaterialTheme.typography.bodyMedium,
@@ -486,14 +493,16 @@ private fun Synopsis(
         if (synopsis != null) {
             SectionHeader(stringResource(R.string.title_synopsis))
             var cut by remember(synopsis) { mutableStateOf(false) }
-            Text(
-                synopsis,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (expanded) Int.MAX_VALUE else SYNOPSIS_LINES,
-                overflow = TextOverflow.Ellipsis,
-                onTextLayout = { if (!expanded) cut = it.hasVisualOverflow },
-                modifier = Modifier.padding(horizontal = Spacing.l),
-            )
+            SelectionContainer {
+                Text(
+                    synopsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = if (expanded) Int.MAX_VALUE else SYNOPSIS_LINES,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { if (!expanded) cut = it.hasVisualOverflow },
+                    modifier = Modifier.padding(horizontal = Spacing.l),
+                )
+            }
             if (expanded) {
                 Box(Modifier.padding(start = ButtonEdge)) {
                     LabelButton(stringResource(R.string.title_synopsis_less)) { onEvent(TitleEvent.CollapseSynopsis) }

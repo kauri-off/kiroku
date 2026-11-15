@@ -3,6 +3,10 @@ package io.github.kauri_off.kiroku.title
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import coil3.SingletonImageLoader
+import coil3.asImage
+import coil3.compose.LocalPlatformContext
+import coil3.memory.MemoryCache
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
@@ -21,14 +25,20 @@ import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.screenshots.ArrivingPoster
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
 import io.github.kauri_off.kiroku.screenshots.shown
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
+import io.github.kauri_off.kiroku.standin.StandInPosters
 import java.time.Duration
+
+private const val FRAME = 16L
 
 class TitleScreenshots : ScreenshotRegistry() {
     override val content = contentCase("airing-on-list") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch)) }
@@ -74,7 +84,41 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("added-snackbar") { Screen(TitleFixtures.added, TitleFixtures.addedMessage) },
             case("completed-snackbar") { Screen(TitleFixtures.completed, TitleFixtures.completedMessage) },
             case("above-total") { Screen(TitleFixtures.aboveTotal) },
+            case("opened-from-related") { Screen(TitleFixtures.openedFromRelated) },
+            case("poster-arriving") { Arriving(inMemory = false, arrived = false) },
+            case("poster-arrived") { Arriving(inMemory = true, arrived = false) },
         )
+
+    // The header's large picture fades in over the row's on the fast effects spring, which does most of its way early.
+    override val transitions =
+        listOf(
+            Transition(
+                "poster-arrived",
+                start = "poster-arriving",
+                millis = MotionBounds.CHANGE,
+                at = listOf(FRAME, 2 * FRAME, 4 * FRAME, MotionBounds.CHANGE),
+            ) { changed ->
+                Arriving(inMemory = false, arrived = changed)
+            },
+        )
+}
+
+// The header with the row's picture in memory and the large one on its way, there at once, or arriving now.
+@Composable
+private fun Arriving(
+    inMemory: Boolean,
+    arrived: Boolean,
+) {
+    val anime = FixtureAnime.exactToWatch.copy(largePosterUrl = ArrivingPoster.URL)
+    ArrivingPoster.inMemory = inMemory
+    ArrivingPoster.arrived.tryEmit(arrived)
+    val loader = SingletonImageLoader.get(LocalPlatformContext.current)
+    remember(loader) {
+        MemoryCache.Value(StandInPosters.draw(anime.id.value).asImage()).also { row ->
+            loader.memoryCache?.set(MemoryCache.Key(checkNotNull(anime.posterUrl)), row)
+        }
+    }
+    Screen(TitleFixtures.of(anime))
 }
 
 @Composable
@@ -157,6 +201,14 @@ object TitleFixtures {
                     RelatedAnime(FixtureAnime.relatedOther, RelationType.Other),
                 )
             return of(anime, details = details.copy(related = related))
+        }
+
+    // A related row's title, neither on the list nor stored, its page loading for over a second; the row gave no
+    // score, rank or episode count.
+    val openedFromRelated: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.relatedFullStory.copy(meanScore = null, rank = null, malEpisodes = null)
+            return of(anime, entry = null, airing = null, details = null).copy(detailsWait = DetailsWait.Loading)
         }
 
     // "Add to list" was tapped: the title is Planned and the snackbar offers "Change".

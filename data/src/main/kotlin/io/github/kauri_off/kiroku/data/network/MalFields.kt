@@ -11,5 +11,12 @@ object MalFields {
         "$SUMMARY,end_date,synopsis,start_season,source,studios,rating,statistics," +
             "related_anime{$SUMMARY},recommendations{$SUMMARY}"
 
-    const val LIST_ENTRY = "$SUMMARY,list_status{status,score,num_episodes_watched,start_date,finish_date,updated_at}"
+    internal const val LIST_VALUES = "status,score,num_episodes_watched,start_date,finish_date,updated_at"
+
+    const val LIST_ENTRY = "$SUMMARY,list_status{$LIST_VALUES}"
+
+    // One title as the signed-in user has it on the list.
+    const val OWN_ENTRY = "$SUMMARY,my_list_status{$LIST_VALUES}"
+
+    const val PROFILE = "id,name,picture,joined_at,anime_statistics"
 }

@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
@@ -15,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
@@ -24,9 +26,12 @@ import io.github.kauri_off.kiroku.core.repository.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import java.time.Clock
+import java.time.Instant
 
 internal class DemoSessionRepository(
     private val signIn: MutableStateFlow<SignInId?>,
@@ -49,24 +54,41 @@ internal class DemoSessionRepository(
 internal class DemoAnimeRepository(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
+    private val clock: Clock,
 ) : AnimeRepository {
+    private class Fetched(
+        val details: AnimeDetails,
+        val at: Instant,
+    )
+
     private val anime = fixtures.anime.associateBy { it.id }
-    private val cached = MutableStateFlow(emptyMap<AnimeId, AnimeDetails>())
+    private val cached = MutableStateFlow(emptyMap<AnimeId, Fetched>())
 
     override fun observeAnime(id: AnimeId): Flow<Anime?> = flowOf(anime[id])
 
-    override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = cached.map { it[id] }
+    override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = cached.map { it[id]?.details }.distinctUntilChanged()
+
+    override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = cached.map { it[id]?.at }.distinctUntilChanged()
+
+    override fun observePagesRead(): Flow<Set<AnimeId>> = cached.map { it.keys }.distinctUntilChanged()
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
         val details = fixtures.details[id] ?: return Outcome.Failure(DataError.NotFound)
-        cached.value += id to details
+        cached.value += id to Fetched(details, clock.instant())
         return Outcome.Success(Unit)
     }
 
     fun forget() {
         cached.value = emptyMap()
     }
+}
+
+// The scenario panel's "offline" is the demo's connection.
+internal class DemoConnection(
+    private val server: DemoServer,
+) : Connection {
+    override fun observeOnline(): Flow<Boolean> = server.offline.map { !it }
 }
 
 internal class DemoAiringRepository(
@@ -115,7 +137,7 @@ internal class DemoSearchRepository(
                 BrowseList.ThisSeason ->
                     fixtures.anime.filter { it.airingStatus != AiringStatus.Finished }.map { Ranked(null, it) }
                 BrowseList.TopAiring ->
-                    byRank(fixtures.anime.filter { it.airingStatus == AiringStatus.Airing })
+                    byRank(fixtures.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
                         .mapIndexed { index, it -> Ranked(index + 1, it) }
                 BrowseList.TopRated -> byRank(fixtures.anime).map { Ranked(it.rank, it) }
                 BrowseList.MostPopular ->

@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.titlesub
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -14,12 +15,18 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.readAgainOnRetry
+import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
+import io.github.kauri_off.kiroku.title.airingOf
+import io.github.kauri_off.kiroku.title.entriesOf
 import io.github.kauri_off.kiroku.title.knownAiring
 import io.github.kauri_off.kiroku.title.knownEntries
+import io.github.kauri_off.kiroku.title.withRead
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +34,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,7 +44,9 @@ abstract class SubScreenViewModel(
     private val id: AnimeId,
     private val anime: AnimeRepository,
     session: SessionRepository,
-    opened: TitleSummary?,
+    connection: Connection,
+    private val clock: Clock,
+    private val opened: TitleSummary?,
 ) : ViewModel() {
     protected class Title(
         val anime: Anime?,
@@ -50,20 +58,34 @@ abstract class SubScreenViewModel(
     }
 
     private val failure = MutableStateFlow<DataError?>(null)
-    private var refreshed = false
+    private var load: Job? = null
 
     protected val title: Flow<Title> =
         combine(anime.observeAnime(id), anime.observeDetails(id), session.observeSession(), failure) { stored, details, session, failure ->
             Title(stored ?: opened?.anime, details ?: opened?.page?.details, session, failure)
-        }.onStart { if (!refreshed) refresh() }
-
-    protected fun refresh() {
-        refreshed = true
-        failure.value = null
-        viewModelScope.launch {
-            val result = anime.refresh(id)
-            if (result is Outcome.Failure) failure.value = result.error
         }
+
+    private val loads = ShownLoads(viewModelScope, connection, ::refreshIfStale, ::refresh)
+
+    // Collected while the screen is shown; showing it refreshes stale details.
+    val shown: StateFlow<Unit> get() = loads.shown
+
+    private suspend fun refreshIfStale() {
+        if (anime.stale(id, opened?.anime, clock.instant()) && load?.isActive != true) refresh()
+    }
+
+    // A newer load replaces an older one, so the older one's end never stands for the screen.
+    protected fun refresh() {
+        load?.cancel()
+        failure.value = null
+        loads.started()
+        load =
+            viewModelScope.launch {
+                val result = anime.refresh(id)
+                val error = (result as? Outcome.Failure)?.error
+                failure.value = error
+                loads.ended(error)
+            }
     }
 }
 
@@ -73,9 +95,11 @@ class RelatedViewModel(
     list: ListSource,
     airing: AiringRepository,
     session: SessionRepository,
+    connection: Connection,
+    clock: Clock,
     private val titleLanguage: TitleLanguage,
     opened: TitleSummary? = null,
-) : SubScreenViewModel(id, anime, session, opened) {
+) : SubScreenViewModel(id, anime, session, connection, clock, opened) {
     private class ListRead(
         val entries: Map<AnimeId, ListEntry> = emptyMap(),
         val failure: DataError? = null,
@@ -91,15 +115,22 @@ class RelatedViewModel(
 
     private val retries = MutableStateFlow(0)
 
-    // A list that cannot be read fails the screen, since the related titles' list statuses would be unknown.
-    private val listRead =
-        list
-            .observeEntries()
-            .map { list -> ListRead(list.associateBy { it.anime.id }) }
-            .readAgainOnRetry(retries) { ListRead(failure = it) }
-
+    // Of the list and the airing, only the related titles; a list that cannot be read fails the screen.
     private val sources: StateFlow<Sources?> =
-        combine(title, listRead, airing.observeAiring(), ::Sources)
+        title
+            .withRead({
+                it.details
+                    ?.related
+                    .orEmpty()
+                    .map { related -> related.anime.id }
+                    .toSet()
+            }) { ids ->
+                combine(
+                    list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
+                    airing.airingOf(ids),
+                    ::Pair,
+                )
+            }.map { (title, around) -> Sources(title, around.first, around.second) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<RelatedState> =
@@ -153,10 +184,11 @@ class DetailsViewModel(
     id: AnimeId,
     anime: AnimeRepository,
     session: SessionRepository,
+    connection: Connection,
     private val titleLanguage: TitleLanguage,
     private val clock: Clock,
     opened: TitleSummary? = null,
-) : SubScreenViewModel(id, anime, session, opened) {
+) : SubScreenViewModel(id, anime, session, connection, clock, opened) {
     val state: StateFlow<DetailsState> =
         title
             .map(::build)

@@ -1,8 +1,12 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.os.Looper
+import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
+import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import kotlinx.coroutines.Dispatchers
@@ -63,12 +67,38 @@ class DebugReporterTest {
             assertTrue(logged.toString(), logged[1].startsWith("Stands for: java.io."))
         }
 
+    @Test
+    fun `a file of choices that cannot be read at a start is logged, and the build does not crash`() =
+        runTest {
+            File(context.noBackupFilesDir, "account.preferences_pb").writeText("not a preferences file")
+            assertTrue(SourceChoice(context).choose(DataSource.Account))
+            val graph = createGraph(context, "0123abcd", Clock.systemUTC(), backgroundScope)
+
+            val sorts = withContext(Dispatchers.Default) { withTimeout(10_000) { graph.preferences.observeListSorts().first() } }
+            assertEquals(ListStatus.entries.associateWith(TabSort::defaultFor), sorts)
+
+            mainThread.idle()
+            val logged = ShadowLog.getLogsForTag(LOG_TAG).map { it.msg }
+            assertEquals("Unexpected: io.github.kauri_off.kiroku.data.preferences.PreferencesFailure", logged.first())
+        }
+
     private suspend fun logged(enough: (List<String>) -> Boolean): List<String> {
         while (true) {
             val logged = ShadowLog.getLogsForTag(LOG_TAG).map { it.msg }
             if (enough(logged)) return logged
             delay(10)
         }
+    }
+
+    // Nothing fails on a value of MAL's the app cannot read, and the report of it is not silent either.
+    @Test
+    fun `an answer of MAL's read in part or for another title is logged, and the build does not crash`() {
+        reportUnexpected(RepairedAnswer(setOf("start_date")))
+        reportUnexpected(AnotherTitleAnswer())
+        mainThread.idle()
+
+        val logged = ShadowLog.getLogsForTag(LOG_TAG).map { it.msg }.filter { it.startsWith("Unexpected: ") }
+        assertEquals(listOf(RepairedAnswer::class.java.name, AnotherTitleAnswer::class.java.name).map { "Unexpected: $it" }, logged)
     }
 
     @Test

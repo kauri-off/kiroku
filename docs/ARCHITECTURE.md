@@ -87,6 +87,7 @@ AniList (from live queries):
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
 | MAL | Refused when reading another user's list | "This list is private". Not treated as rate limiting. |
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
+| MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). |
 | An optional source (after 1.0) | Any failure | Its section collapses to one line, "Unavailable · Retry", and never blocks or delays the rest of the page. |
 
@@ -173,7 +174,8 @@ the background.
 - **A2. Correct between refreshes.** The aired count rises when a stored air time passes, with no network call, and
   a visible screen updates at that moment without polling.
 - **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's, otherwise unknown. A
-  title MAL marks as finished has aired completely. The aired count never exceeds a known total.
+  title MAL marks as finished has aired completely. The aired count never exceeds a known total. An airing status
+  the app does not know is read as airing by every rule, freshness included.
 - **A4. A schedule numbered differently is not used.** When AniList's episode numbers evidently continue an
   earlier season (they run past MAL's total, or reach a number that a show with MAL's start date cannot have
   reached), AniList's data is not used for that title.
@@ -345,6 +347,8 @@ was chosen against, and why:
 - **Navigation:** Jetpack Navigation 3. Navigation Compose is more machinery than this app needs.
 - **Network:** OkHttp, Retrofit and kotlinx.serialization, with AniList queries sent as plain requests. Not Ktor (a
   second HTTP abstraction) and not Apollo (code generation and a plugin for a few queries).
+- **Images:** Coil, fetching only through the app's HTTP client; Coil's own client and discovered components are not
+  used.
 - **Storage:** Room, with its annotation processor only in `:data`; DataStore Preferences for settings.
 - **Sign-in:** Custom Tabs and the Keystore directly (`security-crypto` is deprecated).
 - **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
@@ -371,9 +375,13 @@ was chosen against, and why:
   holds everything shown from cache: titles, the user's list, related titles, airing data, the record of announced
   episodes, the user's profile. Cached data is refreshed when it is shown stale, on pull-to-refresh, and by
   periodic background work.
+- A screen counts as shown while it is on top and started, and as shown again only after its state's stop timeout;
+  a load that failed for want of a connection is repeated once when the connection returns while it is shown.
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
 - A value is stored under MAL's own code, so a code the app learns later needs no migration.
+- A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
+  itself cannot be read.
 - Every schema change is a real migration with a migration test. **There is no destructive fallback**: it would
   erase the record of announced episodes and announce them again (N10).
 
@@ -536,7 +544,8 @@ change legible, or preventing a jump. Decoration is not a purpose.
   zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
   shape are the feedback).
 - **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page.
+  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page, and on a tap moves
+  once, from where it is shown to the tab's place.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme, and only from its
   effects springs, because the spatial ones overshoot: fast for a change inside a component and for an exit, default
   for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
@@ -628,10 +637,11 @@ order is next computed.
 **Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens the
 entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
 clearing the field ends it. Sort opens a bottom sheet with at most five sorts and, for every sort but "Up next", a
-choice of its direction. "+1" answers with a snackbar that offers Undo, and works at and above the total (W9). When it
-completes the title (W7), the row leaves Watching and the snackbar says where it went; Undo puts back the count, the
-status and the dates. After a row leaves its tab, a "+1" on a row that moved up is not applied until the rows have
-stood still a moment, so a tap meant for the row that left lands on no other.
+choice of its direction. A choice applies at once; the sheet stays open until it is dismissed. "+1" answers with a
+snackbar that offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves
+Watching and the snackbar says where it went; Undo puts back the count, the status and the dates. After a row leaves its
+tab, a "+1" on a row that moved up is not applied until the rows have stood still a moment, so a tap meant for the row
+that left lands on no other.
 
 **Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
 progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.
@@ -644,9 +654,10 @@ episode total, the year, the premiere and a related title each appear in one pla
 1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share". When the session has expired
    (S6), the `SessionBanner` under it, in every state.
 2. **Header.** Must show: the poster; the full title with no line cap; the facts line; the MAL score as a `StatNumber`
-   ("—" when there is none); the rank as its own short line, when MAL gives one. Limits: the facts line holds at most
-   three facts (type, year, episode count), and leaves one out when another element of the page states it or when it
-   says nothing, as an episode count of 1 does. The header holds nothing besides these five elements.
+   ("—" when the title's page gives none; left out until that page is read); the rank as its own short line, when MAL
+   gives one. Limits: the facts line holds at most three facts (type, year, episode count), and leaves one out when
+   another element of the page states it or when it says nothing, as an episode count of 1 does. The header holds
+   nothing besides these five elements.
 3. **List block.** Not on the list: one filled button "Add to list" across the content width. It adds the title as
    Planned, and its snackbar offers "Change", which opens the edit sheet. On the list, must show, as one block: the
    status as a tonal button in the same place, which opens the edit sheet; under it, side by side and each under its
@@ -714,6 +725,8 @@ else. Nothing is written before "Save", and "Save" writes exactly what the sheet
 - A query that is only digits shows one extra row above the results, "Open title #<id>", which opens the title page
   of that MAL id. Limit: nothing else is added to the results.
 - A browse list uses the same row, with the rank in front of the title for ranked lists.
+- A long press on a result or a browse row opens the title's edit sheet, as on the List; a title not on the list
+  starts from what "Add to list" gives it. Signed out, a row has no long press.
 - No filters in 1.0 (section 2.2).
 
 ### 9.7 Profile

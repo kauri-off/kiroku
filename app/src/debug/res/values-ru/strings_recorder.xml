@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recorder_title">Запись ответов</string>
+    <string name="recorder_detail">Записывает, что MyAnimeList отвечает вошедшему пользователю. Добавляет в ваш список один тайтл, меняет его и снова удаляет</string>
+    <string name="recorder_unavailable">Запись работает только с MyAnimeList. Выберите MyAnimeList в разделе «Источник данных»</string>
+    <string name="recorder_title_id">Номер тайтла на MyAnimeList</string>
+    <string name="recorder_title_id_detail">Число из адреса тайтла. Тайтла не должно быть в вашем списке, он должен быть завершён, и в нём должно быть не меньше 3\u00A0серий</string>
+    <string name="recorder_check">Проверить тайтл</string>
+    <string name="recorder_checking">Спрашиваем MyAnimeList о тайтле</string>
+    <string name="recorder_confirm_title">Записать на этом тайтле?</string>
+    <plurals name="recorder_confirm_named">
+        <item quantity="one">«%1$s», %2$d\u00A0серия</item>
+        <item quantity="few">«%1$s», %2$d\u00A0серии</item>
+        <item quantity="many">«%1$s», %2$d\u00A0серий</item>
+        <item quantity="other">«%1$s», %2$d\u00A0серии</item>
+    </plurals>
+    <string name="recorder_confirm_writes">Kiroku добавит этот тайтл в ваш список на MyAnimeList, изменит его статус, число просмотренных серий, оценку и даты и снова удалит его. Больше в списке ничего не изменится</string>
+    <plurals name="recorder_confirm_requests">
+        <item quantity="one">Будет отправлен %d\u00A0запрос</item>
+        <item quantity="few">Будет отправлено %d\u00A0запроса, по одному в две секунды: это около двух минут</item>
+        <item quantity="many">Будет отправлено %d\u00A0запросов, по одному в две секунды: это около двух минут</item>
+        <item quantity="other">Будет отправлено %d\u00A0запроса, по одному в две секунды: это около двух минут</item>
+    </plurals>
+    <string name="recorder_record">Записать</string>
+    <string name="recorder_cancel">Отмена</string>
+    <string name="recorder_running">Записано ответов: %1$d\u00A0из\u00A0%2$d</string>
+    <string name="recorder_removing">Удаляем тайтл «%1$s» из вашего списка</string>
+    <string name="recorder_recorded">Запись завершена. Сохранено ответов: %1$d</string>
+    <string name="recorder_stopped">Запись остановлена на запросе %1$s</string>
+    <string name="recorder_stopped_answers">Получено ответов: %1$d. Прежние записи не заменены</string>
+    <string name="recorder_folder">Папка: %1$s</string>
+    <string name="recorder_list_untouched">В вашем списке ничего не изменено</string>
+    <string name="recorder_list_same">Тайтл «%1$s» был добавлен в ваш список и снова удалён. В списке те же тайтлы, что и раньше</string>
+    <string name="recorder_list_removed">Тайтл «%1$s» удалён из вашего списка</string>
+    <string name="recorder_list_differs">Тайтл «%1$s» удалён из вашего списка, но тайтлы в списке не те же, что до записи. Сверьте список с myanimelist.net</string>
+    <string name="recorder_list_left">Тайтл «%1$s» мог остаться в вашем списке. Он будет удалён при следующем запуске приложения или сейчас, кнопкой ниже. На сайте: myanimelist.net/anime/%2$d</string>
+    <string name="recorder_leftover_removed">Тайтл «%1$s», оставленный в вашем списке прошлой записью, удалён</string>
+    <string name="recorder_check_website">Для проверки: на myanimelist.net/anime/%1$d должна быть кнопка «Add to My List»</string>
+    <string name="recorder_remove_now">Удалить сейчас</string>
+    <string name="recorder_done">Готово</string>
+    <string name="recorder_halt_on_the_list">Этот тайтл уже есть в вашем списке. Выберите тот, которого в списке нет</string>
+    <string name="recorder_halt_not_finished">Этот тайтл ещё не завершён</string>
+    <string name="recorder_halt_too_few_episodes">В этом тайтле меньше 3\u00A0серий, или MyAnimeList не знает, сколько их</string>
+    <string name="recorder_halt_no_such_title">На MyAnimeList нет тайтла с таким номером</string>
+    <string name="recorder_halt_not_signed_in">Вход не выполнен. Войдите и повторите</string>
+    <string name="recorder_halt_no_answer">MyAnimeList не ответил</string>
+    <string name="recorder_halt_storage">Устройство не смогло сохранить файл</string>
+    <string name="recorder_halt_another_account">Вход выполнен в другой аккаунт, а не в тот, с которым шла запись. Войдите в тот аккаунт</string>
+    <string name="recorder_halt_still_on_the_list">MyAnimeList ответил на удаление, но всё ещё показывает тайтл в вашем списке</string>
+    <string name="recorder_halt_refused">MyAnimeList отклоняет запросы (ответ %1$d). Повторите позже</string>
+    <string name="recorder_halt_unexpected">MyAnimeList ответил %1$d, чего запись не ожидала</string>
+</resources>

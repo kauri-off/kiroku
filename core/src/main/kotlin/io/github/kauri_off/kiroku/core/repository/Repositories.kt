@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -194,6 +195,12 @@ interface AnimeRepository {
 
     fun observeDetails(id: AnimeId): Flow<AnimeDetails?>
 
+    // When the details were last fetched; null when they never were.
+    fun observeRefreshedAt(id: AnimeId): Flow<Instant?>
+
+    // The titles whose page is stored.
+    fun observePagesRead(): Flow<Set<AnimeId>>
+
     suspend fun refresh(id: AnimeId): Outcome<Unit>
 }
 
@@ -255,4 +262,15 @@ interface UserRepository {
     suspend fun refreshOwnProfile(): Outcome<Unit>
 
     fun loadList(userName: String): Flow<UserListLoad>
+}
+
+// The person's choices, kept across restarts. A choice that cannot be read counts as never made, and is reported.
+interface PreferencesRepository {
+    // Every tab of the user's own list with its sort: the one chosen, or the tab's default.
+    fun observeListSorts(): Flow<Map<ListStatus, TabSort>>
+
+    suspend fun setListSort(
+        status: ListStatus,
+        sort: TabSort,
+    )
 }

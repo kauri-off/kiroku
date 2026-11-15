@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Usage: changed-screenshots <main's set> <this run's set>. Writes Markdown naming, by screen, the images that
+# changed, were added or were removed; always exits 0 once given two directories.
+set -uo pipefail
+export LC_ALL=C
+
+if [[ $# -ne 2 || ! -d $1 || ! -d $2 ]]; then
+  echo "usage: $0 <main's screenshot directory> <this run's screenshot directory>" >&2
+  exit 2
+fi
+
+hashes() { (cd "$1" && find . -type f -name '*.png' -printf '%P\0' | sort -z | xargs -0 -r sha256sum); }
+first_line() { [[ -f $1 ]] && head -n 1 "$1"; }
+
+base_commit=$(first_line "$1/RENDERED_AT")
+base_image=$(first_line "$1/RUNNER_IMAGE")
+head_image=$(first_line "$2/RUNNER_IMAGE")
+
+echo "### Screenshots that differ from main's"
+echo
+echo "Compared with the set rendered from main at \`${base_commit:-an unknown commit}\`."
+if [[ $base_image != "$head_image" ]]; then
+  echo "The two sets come from different runner images (\`${base_image:-unknown}\` and \`${head_image:-unknown}\`), so an"
+  echo "image can differ without a change to the app."
+fi
+echo
+
+awk '
+  { p = substr($0, 67) }
+  FILENAME == ARGV[1] { base[p] = $1; next }
+  !(p in base) { print "added", p; next }
+  base[p] != $1 { print "changed", p }
+  { delete base[p] }
+  END { for (p in base) print "removed", p }
+' <(hashes "$1") <(hashes "$2") | sort -k2 | awk '
+  {
+    p = substr($0, length($1) + 2)
+    screen = index(p, "/") ? substr(p, 1, index(p, "/") - 1) : "."
+    if (!(screen in seen)) { seen[screen] = 1; order[++screens] = screen }
+    count[screen, $1]++
+    names[screen, $1] = names[screen, $1] "- `" p "`\n"
+  }
+  END {
+    if (screens == 0) { print "No image differs."; exit }
+    print "| Screen | Changed | Added | Removed |"
+    print "|---|---|---|---|"
+    for (i = 1; i <= screens; i++) {
+      s = order[i]
+      printf "| %s | %d | %d | %d |\n", s, count[s, "changed"], count[s, "added"], count[s, "removed"]
+    }
+    for (i = 1; i <= screens; i++) {
+      s = order[i]
+      print ""
+      print "<details><summary>" s "</summary>"
+      split("changed added removed", kinds, " ")
+      for (k = 1; k <= 3; k++) {
+        if (count[s, kinds[k]] == 0) continue
+        print ""
+        print toupper(substr(kinds[k], 1, 1)) substr(kinds[k], 2) ":"
+        print ""
+        printf "%s", names[s, kinds[k]]
+      }
+      print ""
+      print "</details>"
+    }
+  }
+'
+exit 0

@@ -173,7 +173,7 @@ class MalSession internal constructor(
     internal suspend fun signIn(grant: TokenGrant): Outcome<Unit> =
         guarded(Outcome.Failure(DataError.StorageError)) {
             change {
-                val signedIn = Stored.SignedIn(Tokens(UUID.randomUUID().toString(), grant.access, grant.refresh, now()))
+                val signedIn = Stored.SignedIn(Tokens(UUID.randomUUID().toString(), grant.access, grant.refresh, now(), grant.lifetime))
                 if (written(signedIn)) {
                     owed = null
                     state.value = signedIn
@@ -217,6 +217,9 @@ class MalSession internal constructor(
             if (due(tokens)) renew(tokens)
         }
     }
+
+    // The seconds MAL gave the access token in use; null when nobody is signed in or MAL did not say.
+    internal suspend fun accessTokenLifetime(): Long? = guarded(null) { (stored() as? Stored.SignedIn)?.tokens?.lifetime }
 
     // One more try at a value the file did not take, for whatever is about to end the process.
     suspend fun writeOwed() {
@@ -314,7 +317,8 @@ class MalSession internal constructor(
         if ((now as? Stored.SignedIn)?.tokens !== used) return Outcome.Success(now)
         val next =
             when (val answer = ask(refreshGrant(used.refresh))) {
-                is TokenResult.Granted -> Stored.SignedIn(Tokens(used.signIn, answer.grant.access, answer.grant.refresh, now()))
+                is TokenResult.Granted ->
+                    Stored.SignedIn(Tokens(used.signIn, answer.grant.access, answer.grant.refresh, now(), answer.grant.lifetime))
                 TokenResult.Rejected -> Stored.Expired(used.signIn)
                 is TokenResult.Failed -> return Outcome.Failure(answer.error)
             }

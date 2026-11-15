@@ -5,6 +5,8 @@ import android.os.Looper
 import android.util.Log
 import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.data.network.OddAnswer
+import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.scenario.Scenarios
@@ -17,8 +19,12 @@ private val UNEXPECTED = notShown("An exception the app did not expect")
 
 // A debug build crashes on an exception nobody expected, on the main thread, so it is never missed.
 internal val reportUnexpected: (Throwable) -> Unit = { e ->
-    // S8: tokens that cannot be read never crash the app, so that report is logged as a release build logs it.
-    if (e is TokensNotRead) logTypes(e) else Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
+    // S8: tokens or choices that cannot be read, and MAL's odd answers (section 2.3), never crash the app: they are logged.
+    if (e is TokensNotRead || e is PreferencesFailure || e is OddAnswer) {
+        logTypes(e)
+    } else {
+        Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
+    }
 }
 
 // One line per request: no header, value or body.
@@ -47,4 +53,6 @@ class DemoGraph(
     override val airing = demo.airing
     override val search = demo.search
     override val user = demo.user
+    override val connection = demo.connection
+    override val preferences = demo.preferences
 }

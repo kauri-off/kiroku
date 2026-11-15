@@ -1,6 +1,15 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
@@ -33,6 +42,7 @@ class ListScreenshots : ScreenshotRegistry() {
             case("completed", content = screen(ListFixtureStates.completed)),
             case("on-hold", content = screen(ListFixtureStates.onHold)),
             case("dropped", content = screen(ListFixtureStates.dropped)),
+            case("watching-tabs-scrolled", content = { ScrolledTabsListScreen(ListFixtureStates.watching) }),
             case("sort-sheet", content = screen(ListFixtureStates.sortSheet)),
             case("sort-sheet-title", content = screen(ListFixtureStates.sortSheetTitle)),
             case("sort-sheet-last-updated", content = screen(ListFixtureStates.sortSheetLastUpdated)),
@@ -88,5 +98,42 @@ class ListScreenshots : ScreenshotRegistry() {
             ) { changed ->
                 FixtureListScreen(if (changed) ListFixtureStates.dropped else ListFixtureStates.watching)
             },
+            // The tab row scrolled by hand to its end, a far tab tapped: the row moves once, from there to the tab.
+            Transition(
+                "completed",
+                start = "watching-tabs-scrolled",
+                millis = TAB_SWITCH,
+                at = listOf(FRAME, TAB_SWITCH / 6, TAB_SWITCH / 3, TAB_SWITCH),
+                lead = 2 * FRAME,
+            ) { changed ->
+                ScrolledTabsListScreen(if (changed) ListFixtureStates.completed else ListFixtureStates.watching)
+            },
         )
 }
+
+// The List with its tab row scrolled by hand to the end, through the row's own scroll action, once it is laid out.
+@Composable
+private fun ScrolledTabsListScreen(state: ListState) {
+    FixtureListScreen(state)
+    val root = LocalView.current as ViewRootForTest
+    LaunchedEffect(root) {
+        repeat(LAYOUT_FRAMES) {
+            withFrameNanos {}
+            val row =
+                root.semanticsOwner.unmergedRootSemanticsNode
+                    .all()
+                    .firstOrNull { node -> node.children.any { it.isTab() } }
+            val range = row?.config?.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)
+            if (range != null && range.maxValue() > 0f) {
+                row.config[SemanticsActions.ScrollBy].action?.invoke(range.maxValue(), 0f)
+                return@LaunchedEffect
+            }
+        }
+    }
+}
+
+private fun SemanticsNode.all(): Sequence<SemanticsNode> = sequenceOf(this) + children.asSequence().flatMap { it.all() }
+
+private fun SemanticsNode.isTab() = config.getOrNull(SemanticsProperties.Role) == Role.Tab
+
+private const val LAYOUT_FRAMES = 10

@@ -17,6 +17,9 @@ data class StoredDetails(
     val fetchedAt: Instant,
 )
 
+// A value of MAL's page that the mapper could read only in part: a stored value of it stands.
+enum class Unread { BroadcastTime, Genres, Studios, Related, Recommendations }
+
 // The titles in the database, the cache of their pages; [unexpected] hears of a named title left out as unreadable.
 class TitleStore(
     private val database: KirokuDatabase,
@@ -39,6 +42,13 @@ class TitleStore(
             .map { stored -> stored?.let { StoredDetails(it.toDetails(unexpected), instantOf(it.details.fetchedAt)) } }
             .flowOn(dispatcher)
 
+    fun observeDetailed(): Flow<Set<AnimeId>> =
+        dao
+            .observeDetailed()
+            .map { ids -> ids.mapTo(HashSet(), ::AnimeId) }
+            .distinctUntilChanged()
+            .flowOn(dispatcher)
+
     // Titles known only in part, as a title's page names them: stored only where none is stored.
     suspend fun addUnknown(titles: List<Anime>) = withContext(dispatcher) { dao.insertIfAbsent(titles.map { it.toRow() }) }
 
@@ -47,6 +57,7 @@ class TitleStore(
         anime: Anime,
         details: AnimeDetails,
         at: Instant,
+        unread: Set<Unread> = emptySet(),
     ) {
         require(details.id == anime.id)
         val id = anime.id.value
@@ -58,9 +69,9 @@ class TitleStore(
                 }
             val recommended = details.recommendations.mapIndexed { position, it -> TitleRecommendationRow(id, position, it.id.value) }
             database.transaction {
-                dao.merge(listOf(anime.toRow()))
+                dao.merge(listOf(anime.toRow()), unread)
                 dao.insertIfAbsent(named.map { it.toRow() })
-                dao.mergeDetails(details.toRow(at), related, recommended)
+                dao.mergeDetails(details.toRow(at), related, recommended, unread)
             }
         }
     }

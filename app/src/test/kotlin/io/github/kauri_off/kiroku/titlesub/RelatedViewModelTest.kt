@@ -35,7 +35,17 @@ class RelatedViewModelTest {
         graph: TestGraph,
         id: AnimeId = FixtureAnime.premiereYear.id,
         opened: TitleSummary? = null,
-    ) = RelatedViewModel(id, graph.anime, graph.list, graph.airing, graph.session, graph.titleLanguage, opened)
+    ) = RelatedViewModel(
+        id,
+        graph.anime,
+        graph.list,
+        graph.airing,
+        graph.session,
+        graph.connection,
+        graph.clock,
+        graph.titleLanguage,
+        opened,
+    )
 
     @Test
     fun `a list that cannot be read fails the screen, and Retry shows it and follows the list again`() =
@@ -43,7 +53,7 @@ class RelatedViewModelTest {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope).apply { listUnreadable = true }
             val related = related(graph)
-            showing(related.state)
+            showing(related.state, related.shown)
             advanceUntilIdle()
             assertEquals(DataError.StorageError, (related.state.value as RelatedState.Failed).error)
 
@@ -58,13 +68,27 @@ class RelatedViewModelTest {
         }
 
     @Test
+    fun `Related reads the list entries of the titles it shows, not the list`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val related = related(graph)
+            showing(related.state, related.shown)
+            advanceUntilIdle()
+            val details = graph.anime.observeDetails(FixtureAnime.premiereYear.id).first()!!
+            assertEquals(details.related.map { it.anime.id }.toSet(), graph.entriesRead)
+            assertEquals(0, graph.wholeListReads)
+            scope.cancel()
+        }
+
+    @Test
     fun `both sub-screens read their sources only while shown, and show what changed meanwhile when shown again`() =
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
             val related = related(graph)
             val details = details(graph)
-            val screens = listOf(showing(related.state), showing(details.state))
+            val screens = listOf(showing(related.state, related.shown), showing(details.state, details.shown))
             advanceUntilIdle()
             assertTrue(graph.readers > 0)
             screens.forEach { it.cancel() }
@@ -73,8 +97,8 @@ class RelatedViewModelTest {
             assertEquals(0, graph.readers)
             graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             advanceUntilIdle()
-            showing(related.state)
-            showing(details.state)
+            showing(related.state, related.shown)
+            showing(details.state, details.shown)
             runCurrent()
             assertTrue(graph.readers > 0)
             assertEquals(13, watched(related))
@@ -88,15 +112,15 @@ class RelatedViewModelTest {
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
-            graph.demo.server.offline.value = true
+            graph.demo.server.failingLoads.value = true
             val related = related(graph)
             val details = details(graph)
-            showing(related.state)
-            showing(details.state)
+            showing(related.state, related.shown)
+            showing(details.state, details.shown)
             advanceUntilIdle()
-            assertEquals(DataError.NoConnection, (related.state.value as RelatedState.Failed).error)
-            assertEquals(DataError.NoConnection, (details.state.value as DetailsState.Failed).error)
-            graph.demo.server.offline.value = false
+            assertEquals(DataError.ServerError, (related.state.value as RelatedState.Failed).error)
+            assertEquals(DataError.ServerError, (details.state.value as DetailsState.Failed).error)
+            graph.demo.server.failingLoads.value = false
             advanceTimeBy(STOPPED_AFTER_MILLIS)
             runCurrent()
             assertTrue(related.state.value is RelatedState.Failed)
@@ -123,7 +147,7 @@ class RelatedViewModelTest {
             advanceUntilIdle()
             assertEquals(0, graph.readers)
             assertEquals(0, graph.refreshes)
-            var screens = listOf(showing(related.state), showing(details.state))
+            var screens = listOf(showing(related.state, related.shown), showing(details.state, details.shown))
             runCurrent()
             assertEquals(2, graph.refreshes)
             advanceUntilIdle()
@@ -131,7 +155,7 @@ class RelatedViewModelTest {
             advanceTimeBy(STOPPED_AFTER_MILLIS)
             runCurrent()
             assertEquals(0, graph.readers)
-            screens = listOf(showing(related.state), showing(details.state))
+            screens = listOf(showing(related.state, related.shown), showing(details.state, details.shown))
             runCurrent()
             advanceUntilIdle()
             assertTrue(graph.readers > 0)
@@ -147,7 +171,7 @@ class RelatedViewModelTest {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
             val shown = related(graph)
-            showing(shown.state)
+            showing(shown.state, shown.shown)
             advanceUntilIdle()
             val summary = pageSummaryOf(graph)
             graph.readsHeld = true
@@ -155,8 +179,8 @@ class RelatedViewModelTest {
             val details = details(graph, opened = summary)
             assertEquals(shown.state.value, related.state.value)
             assertTrue(details.state.value is DetailsState.Shown)
-            showing(related.state)
-            showing(details.state)
+            showing(related.state, related.shown)
+            showing(details.state, details.shown)
             runCurrent()
             assertEquals(shown.state.value, related.state.value)
             assertTrue(details.state.value is DetailsState.Shown)
@@ -171,7 +195,7 @@ class RelatedViewModelTest {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
             val shown = related(graph)
-            showing(shown.state)
+            showing(shown.state, shown.shown)
             advanceUntilIdle()
             val summary = pageSummaryOf(graph)
             val expected = shown.state.value
@@ -180,8 +204,8 @@ class RelatedViewModelTest {
             val related = related(graph, opened = summary)
             val details = details(graph, opened = summary)
             val before = details.state.value
-            showing(related.state)
-            showing(details.state)
+            showing(related.state, related.shown)
+            showing(details.state, details.shown)
             advanceUntilIdle()
             assertEquals(3, graph.refreshes)
             assertEquals(expected, related.state.value)
@@ -198,7 +222,7 @@ class RelatedViewModelTest {
             val graph = TestGraph.over(scope)
             val full = FixtureAnime.exactToWatch
             val partial = full.copy(meanScore = null, rank = null, malEpisodes = null)
-            showing(related(graph).state)
+            related(graph).let { showing(it.state, it.shown) }
             advanceUntilIdle()
             val summary = pageSummaryOf(graph)
             val page = summary.page!!
@@ -255,7 +279,15 @@ class RelatedViewModelTest {
     private fun details(
         graph: TestGraph,
         opened: TitleSummary? = null,
-    ) = DetailsViewModel(FixtureAnime.premiereYear.id, graph.anime, graph.session, graph.titleLanguage, graph.clock, opened)
+    ) = DetailsViewModel(
+        FixtureAnime.premiereYear.id,
+        graph.anime,
+        graph.session,
+        graph.connection,
+        graph.titleLanguage,
+        graph.clock,
+        opened,
+    )
 
     private fun watched(related: RelatedViewModel) =
         (related.state.value as RelatedState.Shown)

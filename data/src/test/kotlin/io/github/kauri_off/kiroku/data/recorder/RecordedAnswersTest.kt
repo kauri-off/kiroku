@@ -11,7 +11,7 @@ import org.junit.Test
 
 // Section 11.1: every recorded answer in the repository can be recorded again from a recorder's list.
 class RecordedAnswersTest {
-    private val listed = ClientIdRequests.flatMap { it.files }
+    private val listed = ClientIdRequests.flatMap { it.files } + SignedInAnswers
 
     @Test
     fun `every recorded answer is named by a recorder's list`() {
@@ -35,17 +35,19 @@ class RecordedAnswersTest {
         val texts = RecordedAnswers.files.filter { it.extension == "json" }.flatMap { freeTexts(Json.parseToJsonElement(it.readText())) }
 
         assertTrue(texts.any { it.isNotEmpty() })
-        for (paragraph in texts.flatMap { it.lines() }) {
-            assertTrue(paragraph, paragraph.codePointCount(0, paragraph.length) <= FREE_TEXT_LIMIT || FreeTextSource.matches(paragraph))
+        for (text in texts) {
+            val paragraphs = text.lines().filter { it.isNotEmpty() }
+            for ((index, paragraph) in paragraphs.withIndex()) {
+                val closingSource = index == paragraphs.lastIndex && isClosingSource(paragraph)
+                assertTrue(paragraph, paragraph.codePointCount(0, paragraph.length) <= FREE_TEXT_LIMIT || closingSource)
+            }
         }
     }
 
     @Test
     fun `every recorded answer is as the sanitiser leaves it`() {
-        val sanitiser = Sanitiser(emptyMap())
-
         for (file in RecordedAnswers.files.filter { it.extension == "json" }) {
-            assertEquals(file.name, file.readText(), sanitiser.json(file.readText()))
+            assertEquals(file.name, file.readText(), cleanedStored(file.name, file.readText()))
         }
     }
 

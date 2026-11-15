@@ -15,6 +15,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -214,6 +215,21 @@ class ListFrameWorkTest {
     }
 
     @Test
+    fun `a PlusOne composes its own row and its own page alone`() {
+        app()
+        compose.mainClock.autoAdvance = true
+        settle()
+        counts.clear()
+        counting = true
+        compose.onAllNodesWithContentDescription("Plus one episode")[0].performClick()
+        settle()
+        counting = false
+        compose.onNodeWithText("Undo").assertExists()
+        assertEquals("rows composed", 1, counts[ROW] ?: 0)
+        assertEquals("pages composed", 1, counts[PAGE] ?: 0)
+    }
+
+    @Test
     fun `the List's first frame composes only the shown page, and each later frame one more page`() {
         val pages = firstFrames()
         assertEquals("pages composed per frame: $pages", listOf(1, 1, 1, 1, 1), pages.filter { it > 0 })
@@ -358,6 +374,7 @@ class ListFrameWorkTest {
         const val QUICK_MOVES = 6
         const val QUICK_STEP = 0.05f
         const val PAGE = "io.github.kauri_off.kiroku.list.Page"
+        const val ROW = "io.github.kauri_off.kiroku.design.component.AnimeRow"
 
         val pageComposables =
             listOf(

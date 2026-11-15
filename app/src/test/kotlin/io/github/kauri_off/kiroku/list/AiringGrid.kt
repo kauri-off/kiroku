@@ -12,20 +12,22 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Titles
 
-// Every list status, MAL airing status and watched count around an aired count of 2 out of 24, and airing shapes.
+// Every list status, MAL airing status (an unknown one too) and watched count around an aired count of 2 out of 24, and airing shapes.
 object AiringGrid {
     private val now = Fixtures.reference.now
     private const val GRID_ID = 990_000L
     private const val DAY = 86_400L
 
+    private val airingStatuses = AiringStatus.known + AiringStatus.Unrecognized("on_hiatus")
+
     val entries: List<ListEntry> =
         ListStatus.entries.flatMap { status ->
-            AiringStatus.entries.flatMap { airingStatus ->
+            airingStatuses.withIndex().flatMap { (index, airingStatus) ->
                 (0..3).map { watched ->
                     val anime =
                         FixtureAnime.exactToWatch.copy(
-                            id = AnimeId(GRID_ID + status.ordinal * 100L + airingStatus.ordinal * 10L + watched),
-                            titles = Titles("$watched ${airingStatus.name} ${status.name}"),
+                            id = AnimeId(GRID_ID + status.ordinal * 100L + index * 10L + watched),
+                            titles = Titles("$watched $airingStatus ${status.name}"),
                         )
                     ListEntry(anime.copy(airingStatus = airingStatus), ListValues(status, watched, null, null, null), now)
                 }

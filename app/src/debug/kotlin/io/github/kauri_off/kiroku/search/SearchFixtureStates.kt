@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.search
 
 import androidx.compose.foundation.text.input.TextFieldState
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
@@ -33,7 +34,8 @@ object SearchFixtureStates {
                 when (list) {
                     BrowseList.ThisSeason -> set.anime.filter { it.airingStatus != AiringStatus.Finished }.map { hit(it) }
                     BrowseList.TopAiring ->
-                        byRank(set.anime.filter { it.airingStatus == AiringStatus.Airing }).mapIndexed { i, anime -> hit(anime, i + 1) }
+                        byRank(set.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
+                            .mapIndexed { i, anime -> hit(anime, i + 1) }
                     BrowseList.TopRated -> byRank(set.anime).mapIndexed { i, anime -> hit(anime, i + 1) }
                     BrowseList.MostPopular ->
                         set.anime
@@ -85,7 +87,7 @@ object SearchFixtureStates {
         content: SearchContent,
         expanded: Boolean = false,
         sessionExpired: Boolean = false,
-    ) = SearchState(TextFieldState(text), expanded, content, sessionExpired)
+    ) = SearchState(TextFieldState(text), expanded, content, sessionExpired, editable = true)
 
     private fun results(
         query: String,
@@ -119,7 +121,7 @@ object SearchFixtureStates {
     fun browse(
         list: BrowseList,
         more: More = More.None,
-    ) = BrowseState(list, Paged.Shown(browseRows(list), more))
+    ) = BrowseState(list, Paged.Shown(browseRows(list), more), editable = true)
 
     val browseLoading = BrowseState(BrowseList.TopAiring, Paged.Loading)
 

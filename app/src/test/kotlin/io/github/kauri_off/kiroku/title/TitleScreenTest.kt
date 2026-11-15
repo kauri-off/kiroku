@@ -101,6 +101,18 @@ class TitleScreenTest {
         compose.onNodeWithText("Episodes watched").assertDoesNotExist()
     }
 
+    // Decision for M2-24: a score not known yet is left out; "—" is said only once the title's page was read.
+    @Test
+    fun aScoreNotKnownYetIsLeftOutAndOnlyARefreshedPageSaysMalHasNone() {
+        show(TitleFixtures.openedFromRelated)
+        compose.onNodeWithText("TV\u00A0· 2024").assertIsDisplayed()
+        compose.onNodeWithText("MAL score").assertDoesNotExist()
+        compose.onNodeWithContentDescription("No score").assertDoesNotExist()
+        compose.onNodeWithText("Ranked", substring = true).assertDoesNotExist()
+        show(TitleFixtures.of(FixtureAnime.premiereTimeLater))
+        compose.onNodeWithContentDescription("No score").assertIsDisplayed()
+    }
+
     @Test
     fun theFactsLineLeavesOutASingleEpisode() {
         show(TitleFixtures.of(FixtureAnime.film))

@@ -156,6 +156,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(testFixtures(project(":core")))
     "previewImplementation"(testFixtures(project(":core")))
@@ -170,6 +171,7 @@ dependencies {
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.coil.test)
+    testImplementation(libs.okhttp.mockwebserver3)
 }
 
 val screenshotsRecorded =
@@ -478,6 +480,8 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/source/",
                 "io/github/kauri_off/kiroku/debugmenu/",
                 "io/github/kauri_off/kiroku/design/gallery/",
+                "io/github/kauri_off/kiroku/recorder/",
+                "io/github/kauri_off/kiroku/data/recorder/",
             ),
         )
         report.set(layout.buildDirectory.file("reports/release-classes.txt"))

@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.titlesub
 
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.airing.nextStart
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AgeRating
@@ -117,7 +118,7 @@ fun detailsState(
             details.studios.takeIf { it.isNotEmpty() }?.let(Fact::Studios),
             details.rating?.let(Fact::Rating),
             anime.averageEpisodeDuration?.let(Fact::EpisodeLength),
-            anime.broadcast?.takeIf { anime.airingStatus != AiringStatus.Finished }?.let { broadcast ->
+            anime.broadcast?.takeIf { anime.airingStatus.effective != AiringStatus.Finished }?.let { broadcast ->
                 val start = broadcast.nextStart(clock.instant())?.atZone(clock.zone)
                 if (start == null) {
                     Fact.Broadcast(broadcast.dayOfWeek, null)

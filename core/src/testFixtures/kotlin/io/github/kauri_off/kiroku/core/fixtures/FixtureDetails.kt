@@ -402,7 +402,7 @@ object FixtureDetails {
         ): Int = (members.toLong() * (base + (seed * salt % spread).toInt()) / 1_000).toInt()
         return when (anime.airingStatus) {
             AiringStatus.NotYetAired -> stats(0, 0, 0, 0, members)
-            AiringStatus.Airing -> {
+            AiringStatus.Airing, is AiringStatus.Unrecognized -> {
                 val watching = share(540, 90, 37)
                 val completed = share(4, 9, 11)
                 val onHold = share(31, 17, 13)

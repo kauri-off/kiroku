@@ -1,13 +1,25 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.animation.core.snap
+import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -158,6 +170,99 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `a search view closed by leaving for a browse list fades its content in again when it next opens`() =
+        leavingClosesTheView(SearchFixtureStates.start, "Top rated", SearchEvent.Browse(BrowseList.TopRated))
+
+    @Test
+    fun `a search view closed by opening a title fades its content in again when it next opens`() {
+        val state = SearchFixtureStates.digitsQuery
+        val id = checkNotNull(queriedId(state.query.text.toString()))
+        leavingClosesTheView(state, "Open title #${id.value}", SearchEvent.Open(id))
+    }
+
+    // Opens the view by its field, taps [row] in it, then takes the screen out of composition and back as the
+    // navigation does: the view is closed and its content hidden, so it fades in again.
+    private fun leavingClosesTheView(
+        state: SearchState,
+        row: String,
+        leaves: SearchEvent,
+    ) {
+        val composed = mutableStateOf(true)
+        lateinit var bar: SearchBarState
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val holder = rememberSaveableStateHolder()
+                if (composed.value) {
+                    holder.SaveableStateProvider(SEARCH) {
+                        SearchScreen(state, { events += it }, SnackbarHostState(), rememberBar = {
+                            rememberContainedSearchBarState().also { bar = it }
+                        })
+                    }
+                }
+            }
+        }
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(1f, 1f), saved(bar))
+        compose.onNode(hasText(row) and hasAnyAncestor(isDialog())).performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(leaves), events)
+        composed.value = false
+        compose.waitForIdle()
+        composed.value = true
+        compose.waitForIdle()
+        assertEquals(listOf(0f, 0f), saved(bar))
+    }
+
+    @Test
+    fun `signing in from the banner of the open search view closes the view`() {
+        lateinit var bar: SearchBarState
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SearchScreen(SearchFixtureStates.sessionExpired, { events += it }, SnackbarHostState(), rememberBar = {
+                    rememberContainedSearchBarState().also { bar = it }
+                })
+            }
+        }
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(1f, 1f), saved(bar))
+        compose.onNode(hasText("Sign in") and hasAnyAncestor(isDialog())).performClick()
+        compose.waitForIdle()
+        assertEquals(listOf<SearchEvent>(SearchEvent.SignIn), events)
+        assertEquals(listOf(0f, 0f), saved(bar))
+    }
+
+    // The bar's progress and its content's, as the state saves them.
+    private fun saved(bar: SearchBarState): Any? = with(SearchBarState.Saver(snap(), snap())) { SaverScope { true }.save(bar) }
+
+    @Test
+    fun `a long press on a result, or its spoken action, asks to edit it, on the list or not`() {
+        show(SearchFixtureStates.results)
+        val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
+        val listed = rows.first { it.entry != null }
+        val notListed = rows.first { it.entry == null }
+        compose.onNode(hasText(listed.title) and hasClickAction()).performTouchInput { longClick() }
+        val row = compose.onNode(hasText(notListed.title) and hasClickAction()).fetchSemanticsNode()
+        val edit = row.config[SemanticsActions.OnLongClick]
+        assertEquals("Edit", edit.label)
+        compose.runOnIdle { edit.action!!() }
+        compose.waitForIdle()
+        assertEquals(listOf(SearchEvent.Edit(listed.id), SearchEvent.Edit(notListed.id)), events)
+    }
+
+    @Test
+    fun `with no list to edit a result offers no edit`() {
+        show(SearchFixtureStates.results.copy(editable = false))
+        val title = FixtureAnime.exactToWatch.titles.romaji
+        compose.onNode(hasText(title) and hasClickAction()).performTouchInput { longClick() }
+        compose
+            .onNode(hasText(title) and hasClickAction())
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        assertTrue(events.toString(), events.none { it is SearchEvent.Edit })
+    }
+
+    @Test
     fun `a failed further page keeps the rows and offers Retry`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
         show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Failed(DataError.Refused))))
@@ -209,6 +314,41 @@ class SearchFieldAutofillTest {
     }
 }
 
+// The search view's rows lie on the view's own container, so the view reads as one surface from the bar down.
+@RunWith(io.github.kauri_off.kiroku.screenshots.ScreenshotRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class SearchViewRowsTest {
+    @Test
+    fun theRowsOfTheSearchViewHaveTheViewsColour() {
+        for (state in listOf(SearchFixtureStates.searchView, SearchFixtureStates.typing)) assertOneColour(state)
+    }
+
+    // The page under the bar keeps its rows on the page's own colour.
+    @Test
+    fun thePageRowsHaveThePagesColour() {
+        for (state in listOf(SearchFixtureStates.start, SearchFixtureStates.results)) assertOneColour(state)
+    }
+
+    // A line down the screen inside the rows' start padding, from under the field: rows, headers and the space
+    // after them are one colour.
+    private fun assertOneColour(state: SearchState) {
+        for (variant in listOf(Variant.EnLight, Variant.EnDark)) {
+            Shot.launch(variant) { SearchScreen(state, {}, SnackbarHostState()) }.use { shot ->
+                val image = shot.image()
+                val x = shot.dpToPx(EDGE_DP).toInt()
+                val top = shot.dpToPx(BELOW_FIELD_DP).toInt()
+                val colours = (top until image.height * 3 / 4).map { image.getPixel(x, it) }.toSet()
+                assertEquals("${variant.id} ${state.content}: ${colours.map { Integer.toHexString(it) }}", 1, colours.size)
+            }
+        }
+    }
+
+    private companion object {
+        const val BELOW_FIELD_DP = 100
+        const val EDGE_DP = 8
+    }
+}
+
 // With the keyboard up in the search view, the end of a long result list scrolls to just above the keyboard.
 @RunWith(io.github.kauri_off.kiroku.screenshots.ScreenshotRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -235,3 +375,5 @@ class SearchViewKeyboardTest {
         const val MAX_GAP_DP = 16
     }
 }
+
+private const val SEARCH = "search"

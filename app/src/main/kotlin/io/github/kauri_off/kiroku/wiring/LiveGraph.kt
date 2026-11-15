@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
@@ -33,13 +34,17 @@ internal class LiveParts(
     val scope: CoroutineScope,
     val unexpected: (Throwable) -> Unit,
     log: ((String) -> Unit)? = null,
-    device: Device = AndroidDevice(context),
+    // The requests' judgement of the connection and the screens' are this one device's.
+    val device: Device = AndroidDevice(context),
 ) {
     // The only HTTP client of the source.
     val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log)
 
     // A file of this source alone, named after it: tokens open only under the name they were sealed with.
     fun file(kind: String): File = File(context.noBackupFilesDir, notShown("${source.name}.$kind"))
+
+    // The source's own database, named after it; built on its first use, which is off the main thread.
+    val database by lazy { KirokuDatabase.open(context, notShown("${source.name}.db")) }
 }
 
 // The app over one live source. Each area is in its own file and is built when it is first asked for.
@@ -57,7 +62,13 @@ internal class LiveGraph(
     override val airing by lazy { liveAiring(parts) }
     override val search by lazy { liveSearch(parts) }
     override val user by lazy { liveUser(parts, account) }
+    override val connection by lazy { liveConnection(parts) }
+    override val preferences by lazy { livePreferences(parts) }
     override val signIn by lazy { liveSignIn(parts, account) }
+    override val images = parts.http.callFactory
+
+    // What debug and preview builds record MAL's answers with; it looks at once for a title an earlier run left on the list.
+    val recorder = liveRecorder(parts, built)
 
     // For whatever is about to end the process: a session nobody asked for has nothing to write.
     suspend fun writeOwed() {

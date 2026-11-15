@@ -2,26 +2,36 @@ package io.github.kauri_off.kiroku.title
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
+import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -31,6 +41,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,7 +60,7 @@ class TitleViewModelTest {
         val title: TitleViewModel,
         private val test: TestScope,
     ) {
-        var screen: Job = test.showing(title.state)
+        var screen: Job = test.showing(title.state, title.shown)
 
         // What the page shows once the events so far have been handled.
         val state: TitleState get() = test.runCurrent().let { title.state.value }
@@ -246,14 +260,14 @@ class TitleViewModelTest {
     // Section 7.2: the failure stands where the details would be, and is also said by a message on the first screen.
     @Test
     fun `details that could not load show the failure under the page until Retry loads them, and say so once`() =
-        test(before = { demo.server.offline.value = true }) { s ->
+        test(before = { demo.server.failingLoads.value = true }) { s ->
             assertEquals(FixtureAnime.exactToWatch, s.shown.page.anime)
-            assertEquals(DetailsWait.Failed(DataError.NoConnection), s.shown.detailsWait)
-            assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), s.message)
+            assertEquals(DetailsWait.Failed(DataError.ServerError), s.shown.detailsWait)
+            assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.ServerError)), s.message)
             s.messages.ended(s.messages.current.value!!, actionPerformed = false)
-            s.graph.demo.server.offline.value = false
+            s.graph.demo.server.failingLoads.value = false
             advanceTimeBy(STOPPED_AFTER_MILLIS)
-            assertEquals(DetailsWait.Failed(DataError.NoConnection), s.shown.detailsWait)
+            assertEquals(DetailsWait.Failed(DataError.ServerError), s.shown.detailsWait)
             s.title.onEvent(TitleEvent.Retry)
             advanceUntilIdle()
             assertEquals(FixtureDetails.full, s.shown.page.details)
@@ -262,10 +276,10 @@ class TitleViewModelTest {
 
     @Test
     fun `a failure stays while the list changes under it`() =
-        test(before = { demo.server.offline.value = true }) { s ->
-            val failed = DetailsWait.Failed(DataError.NoConnection)
+        test(before = { demo.server.failingLoads.value = true }) { s ->
+            val failed = DetailsWait.Failed(DataError.ServerError)
             assertEquals(failed, s.shown.detailsWait)
-            s.graph.demo.server.offline.value = false
+            s.graph.demo.server.failingLoads.value = false
             s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             advanceUntilIdle()
             assertEquals(13, s.watched())
@@ -273,6 +287,68 @@ class TitleViewModelTest {
             s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactCaughtUp))
             advanceUntilIdle()
             assertEquals(failed, s.shown.detailsWait)
+        }
+
+    // The connection's return repeats a failure shown in place as a Retry would: the wait at once, and no message.
+    @Test
+    fun `details that failed in place are repeated as a Retry when the connection returns`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            graph.demo.server.offline.value = true
+            val messages = ShellMessages(scope, graph.list)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
+            showing(title.state, title.shown)
+            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            advanceUntilIdle()
+            val failed = DetailsWait.Failed(DataError.NoConnection)
+            assertEquals(failed, wait())
+            messages.ended(messages.current.value!!, actionPerformed = false)
+            graph.connectionSays.value = true
+            runCurrent()
+            assertEquals(DetailsWait.Loading, wait())
+            advanceTimeBy(DETAILS_LATENCY + 1.seconds)
+            runCurrent()
+            assertEquals(failed, wait())
+            assertNull(messages.current.value)
+            title.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    // With the details shown, the repeat runs as one the page started: no wait shown at once, a failure said by a message.
+    @Test
+    fun `a failed refresh of details shown is repeated as the page's own when the connection returns`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
+            val graph = TestGraph(Demo(Fixtures.reference, scope, DETAILS_LATENCY, clock))
+            val messages = ShellMessages(scope, graph.list)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
+            var screen = showing(title.state, title.shown)
+            val wait = { (title.state.value as TitleState.Shown).detailsWait }
+            advanceUntilIdle()
+            screen.cancel()
+            advanceTimeBy(STOPPED_AFTER_MILLIS)
+            clock.instant += Duration.ofDays(1)
+            graph.demo.server.offline.value = true
+            screen = showing(title.state, title.shown)
+            runCurrent()
+            advanceTimeBy(DETAILS_LATENCY + 1.seconds)
+            runCurrent()
+            val noConnection = ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection))
+            assertEquals(noConnection, messages.current.value?.message)
+            assertEquals(FixtureDetails.full, (title.state.value as TitleState.Shown).page.details)
+            messages.ended(messages.current.value!!, actionPerformed = false)
+            graph.connectionSays.value = true
+            runCurrent()
+            assertEquals(DetailsWait.Brief, wait())
+            assertEquals(3, graph.refreshes)
+            advanceTimeBy(DETAILS_LATENCY + 1.seconds)
+            runCurrent()
+            assertEquals(noConnection, messages.current.value?.message)
+            screen.cancel()
+            title.viewModelScope.cancel()
+            scope.cancel()
         }
 
     // A wait the person started needs no second's grace; a Retry that fails says so in place, with no message.
@@ -284,7 +360,7 @@ class TitleViewModelTest {
             graph.demo.server.offline.value = true
             val messages = ShellMessages(scope, graph.list)
             val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), messages)
-            showing(title.state)
+            showing(title.state, title.shown)
             val wait = { (title.state.value as TitleState.Shown).detailsWait }
             advanceUntilIdle()
             val failed = DetailsWait.Failed(DataError.NoConnection)
@@ -304,12 +380,12 @@ class TitleViewModelTest {
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
-            graph.demo.server.offline.value = true
+            graph.demo.server.failingLoads.value = true
             val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
-            showing(title.state)
+            showing(title.state, title.shown)
             val shown = { title.state.value as TitleState.Shown }
             advanceUntilIdle()
-            graph.demo.server.offline.value = false
+            graph.demo.server.failingLoads.value = false
             title.onEvent(TitleEvent.Refresh)
             runCurrent()
             assertTrue(shown().refreshing)
@@ -329,7 +405,7 @@ class TitleViewModelTest {
             val scope = foregroundScope()
             val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
             val title = title(graph, AnimeId(999_999_999), SavedStateHandle(), ShellMessages(scope, graph.list))
-            showing(title.state)
+            showing(title.state, title.shown)
             advanceUntilIdle()
             assertEquals(DataError.NotFound, (title.state.value as TitleState.Failed).error)
             title.onEvent(TitleEvent.Retry)
@@ -350,6 +426,155 @@ class TitleViewModelTest {
             s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             advanceUntilIdle()
             assertEquals(13, s.watched())
+        }
+
+    @Test
+    fun `a title store that cannot be read fails the page, and Retry reads it again`() =
+        test(before = { titlesUnreadable.value = true }) { s ->
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+
+            s.graph.titlesUnreadable.value = false
+            s.title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(FixtureDetails.full, s.shown.page.details)
+
+            s.graph.titlesUnreadable.value = true
+            advanceUntilIdle()
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+        }
+
+    // The refresh after a store that cannot be read reads the stored details again, which fails too.
+    @Test
+    fun `a title store that cannot be read and a refresh that fails show the error state, not a crash`() =
+        test(before = {
+            titlesUnreadable.value = true
+            demo.server.offline.value = true
+        }) { s ->
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+            s.title.onEvent(TitleEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(DataError.StorageError, (s.state as TitleState.Failed).error)
+            assertEquals(2, s.graph.refreshes)
+        }
+
+    // Each build of the page reads the clock once for its moment, so the clock's reads count the builds.
+    @Test
+    fun `an airing change of a title the page does not show builds nothing, and one of a title it shows builds it`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val changed = MutableStateFlow(emptyMap<AnimeId, Airing>())
+            val airing =
+                object : AiringRepository by graph.airing {
+                    override fun observeAiring() = combine(graph.airing.observeAiring(), changed) { stored, changed -> stored + changed }
+                }
+            val clock = CountedClock(graph.clock)
+            val title =
+                TitleViewModel(
+                    FixtureAnime.exactToWatch.id,
+                    graph.anime,
+                    graph.list,
+                    airing,
+                    graph.session,
+                    graph.connection,
+                    clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                )
+            showing(title.state, title.shown)
+            advanceUntilIdle()
+            val shown = shownTitles(FixtureAnime.exactToWatch.id, FixtureDetails.full)
+            val other =
+                Fixtures.reference.entries
+                    .first { it.anime.id !in shown }
+                    .anime.id
+            val someAiring = Fixtures.reference.airing.getValue(FixtureAnime.estimatedToWatch.id)
+
+            var reads = clock.reads
+            changed.value = mapOf(other to someAiring)
+            advanceUntilIdle()
+            assertEquals("builds for another title's airing", 0, clock.reads - reads)
+
+            reads = clock.reads
+            changed.value = mapOf(FixtureAnime.exactToWatch.id to someAiring)
+            advanceUntilIdle()
+            assertTrue("builds for the page's own airing", clock.reads > reads)
+            scope.cancel()
+        }
+
+    // Every state the page passes through, also those a later one replaces at once.
+    @Test
+    fun `a related card shows its list status in the first state that shows it`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
+            val states = mutableListOf<TitleState>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { title.state.collect { states += it } }
+            showing(title.state, title.shown)
+            advanceUntilIdle()
+            val onList = Fixtures.reference.entries.associate { it.anime.id to it.status }
+            val withDetails = states.filterIsInstance<TitleState.Shown>().filter { it.page.details != null }
+            assertTrue(withDetails.isNotEmpty())
+            for (state in withDetails) {
+                for (card in state.page.related + listOfNotNull(state.page.sequel)) {
+                    assertEquals(card.title, onList[card.related.anime.id], card.status)
+                }
+            }
+            assertTrue(
+                withDetails
+                    .last()
+                    .page.related
+                    .any { it.status != null },
+            )
+            scope.cancel()
+        }
+
+    // A title on the list that MAL gives no score: the List hands on whether its page was read.
+    @Test
+    fun `a list title MAL gives no score shows its dash in the first frame once its page was read`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val id = FixtureAnime.premiereTimeLater.id
+            val messages = ShellMessages(scope, graph.list)
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.anime,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    messages,
+                    graph.background,
+                )
+            showing(list.state, list.shown)
+            advanceUntilIdle()
+
+            fun firstFrame(): MalScore {
+                graph.readsHeld = true
+                val title = title(graph, id, SavedStateHandle(), messages, checkNotNull(list.summaryOf(id)))
+                return (title.state.value as TitleState.Shown).page.score.also { graph.readsHeld = false }
+            }
+            assertEquals("never read", MalScore.NotKnownYet, firstFrame())
+            assertEquals(Outcome.Success(Unit), graph.anime.refresh(id))
+            advanceUntilIdle()
+            assertEquals("read before", MalScore.None, firstFrame())
+            scope.cancel()
+        }
+
+    // The page reads one entry per title it shows: itself and its related titles, never the whole list.
+    @Test
+    fun `the page reads the list entries of the titles it shows, not the list`() =
+        test { s ->
+            val shown = setOf(FixtureAnime.exactToWatch.id) + FixtureDetails.full.related.map { it.anime.id }
+            assertEquals(shown, s.graph.entriesRead)
+            assertEquals(0, s.graph.wholeListReads)
         }
 
     @Test
@@ -407,7 +632,7 @@ class TitleViewModelTest {
             val scope = foregroundScope()
             val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
             val title = title(graph, FixtureAnime.exactToWatch.id, SavedStateHandle(), ShellMessages(scope, graph.list))
-            showing(title.state)
+            showing(title.state, title.shown)
             val shown = { title.state.value as TitleState.Shown }
             runCurrent()
             assertNull(shown().page.details)
@@ -435,26 +660,25 @@ class TitleViewModelTest {
             s.graph.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             advanceUntilIdle()
             assertEquals(0, s.graph.readers)
-            s.screen = showing(s.title.state)
+            s.screen = showing(s.title.state, s.title.shown)
             assertEquals(13, s.watched())
             assertTrue(s.graph.readers > 0)
         }
 
     @Test
-    fun `the details are refreshed once, not again when the page is shown again`() =
-        test(before = { demo.server.offline.value = true }) { s ->
-            assertTrue(s.shown.detailsWait is DetailsWait.Failed)
+    fun `the details are refreshed once, not again when the page is shown again while they are fresh`() =
+        test { s ->
+            assertEquals(FixtureDetails.full, s.shown.page.details)
             assertEquals(1, s.graph.refreshes)
-            s.graph.demo.server.offline.value = false
             s.screen.cancel()
             advanceTimeBy(STOPPED_AFTER_MILLIS)
             runCurrent()
             assertEquals(0, s.graph.readers)
-            s.screen = showing(s.title.state)
+            s.screen = showing(s.title.state, s.title.shown)
             runCurrent()
             advanceUntilIdle()
             assertEquals(1, s.graph.refreshes)
-            assertTrue(s.shown.detailsWait is DetailsWait.Failed)
+            assertEquals(FixtureDetails.full, s.shown.page.details)
         }
 
     @Test
@@ -467,7 +691,7 @@ class TitleViewModelTest {
             assertEquals(0, graph.readers)
             assertEquals(0, graph.refreshes)
             assertEquals(TitleState.Loading(null), title.state.value)
-            showing(title.state)
+            showing(title.state, title.shown)
             runCurrent()
             assertTrue(graph.readers > 0)
             assertEquals(1, graph.refreshes)
@@ -487,7 +711,7 @@ class TitleViewModelTest {
             assertEquals(FixtureAnime.exactToWatch, first.page.anime)
             assertEquals(12, first.page.entry?.watchedEpisodes)
             assertNull(first.page.details)
-            showing(title.state)
+            showing(title.state, title.shown)
             advanceTimeBy(PATIENCE_MILLIS - 1)
             runCurrent()
             val held = (title.state.value as TitleState.Shown).page
@@ -509,7 +733,7 @@ class TitleViewModelTest {
             val summary = TitleSummary(anime, null, null, graph.session.observeSession().first())
             val messages = ShellMessages(scope, graph.list)
             val title = title(graph, anime.id, SavedStateHandle(), messages, summary)
-            showing(title.state)
+            showing(title.state, title.shown)
             advanceUntilIdle()
             assertEquals(anime, (title.state.value as TitleState.Shown).page.anime)
             assertNull(messages.current.value)
@@ -554,7 +778,7 @@ class TitleViewModelTest {
             assertEquals(full, (title.state.value as TitleState.Shown).page.anime)
             graph.readsHeld = false
             graph.titlesUnstored.value = true
-            showing(title.state)
+            showing(title.state, title.shown)
             advanceUntilIdle()
             assertEquals(full, (title.state.value as TitleState.Shown).page.anime)
             scope.cancel()
@@ -577,7 +801,31 @@ class TitleViewModelTest {
         saved: SavedStateHandle,
         messages: ShellMessages,
         opened: TitleSummary? = null,
-    ) = TitleViewModel(id, graph.anime, graph.list, graph.airing, graph.session, graph.clock, graph.titleLanguage, saved, messages, opened)
+    ) = TitleViewModel(
+        id,
+        graph.anime,
+        graph.list,
+        graph.airing,
+        graph.session,
+        graph.connection,
+        graph.clock,
+        graph.titleLanguage,
+        saved,
+        messages,
+        opened,
+    )
+
+    private class CountedClock(
+        private val inner: Clock,
+    ) : Clock() {
+        var reads = 0
+
+        override fun instant(): Instant = inner.instant().also { reads++ }
+
+        override fun getZone(): ZoneId = inner.zone
+
+        override fun withZone(zone: ZoneId): Clock = inner.withZone(zone)
+    }
 
     private companion object {
         const val STOPPED_AFTER_MILLIS = 5_001L

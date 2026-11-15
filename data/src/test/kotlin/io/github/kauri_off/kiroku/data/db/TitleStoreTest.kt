@@ -377,7 +377,7 @@ class TitleStoreTest {
             val recommended = details.recommendations[0]
             val ids = "${related.anime.id.value}, ${recommended.id.value}"
 
-            s.database.execute("UPDATE title SET airing_status = 'broken' WHERE id IN ($ids)")
+            s.database.execute("UPDATE title SET start_date = 'broken' WHERE id IN ($ids)")
 
             val shown = s.titles.observeDetails(anime.id).first()
             assertEquals(
@@ -391,7 +391,10 @@ class TitleStoreTest {
                 ),
                 shown,
             )
-            assertEquals(listOf("java.lang.IllegalStateException", "java.lang.IllegalStateException"), s.unexpected.map { it.message })
+            assertEquals(
+                listOf("java.time.format.DateTimeParseException", "java.time.format.DateTimeParseException"),
+                s.unexpected.map { it.message },
+            )
             assertTrue(s.unexpected.all { it is UnreadableRow })
             assertTrue(runCatching { s.titles.observeAnime(related.anime.id).first() }.isFailure)
         }
