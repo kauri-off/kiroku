@@ -115,8 +115,7 @@ class RelatedViewModel(
 
     private val retries = MutableStateFlow(0)
 
-    // Of the list and the airing, only the related titles. A list that cannot be read fails the screen, since their
-    // list statuses would be unknown.
+    // Of the list and the airing, only the related titles; a list that cannot be read fails the screen.
     private val sources: StateFlow<Sources?> =
         title
             .withRead({

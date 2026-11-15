@@ -36,8 +36,7 @@ fun shownTitles(
     details: AnimeDetails?,
 ): Set<AnimeId> = setOf(id) + details?.related.orEmpty().map { it.anime.id }
 
-// Each value with what [read] gives for the value's key. [read] starts again only when the key changes, and a value
-// is emitted only with what was read for its own key, so the two never disagree.
+// Each value with what [read] gave for that value's own key; [read] starts again only when the key changes.
 @OptIn(ExperimentalCoroutinesApi::class)
 fun <T, K, R> Flow<T>.withRead(
     key: (T) -> K,

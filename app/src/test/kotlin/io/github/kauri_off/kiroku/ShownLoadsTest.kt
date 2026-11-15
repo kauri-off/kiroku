@@ -276,6 +276,7 @@ class ShownLoadsTest(
                     val list =
                         ListViewModel(
                             graph.list,
+                            graph.anime,
                             graph.airing,
                             graph.session,
                             graph.connection,

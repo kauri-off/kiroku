@@ -93,6 +93,7 @@ data class TitlePage private constructor(
             listStatuses: Map<AnimeId, ListStatus>,
             language: TitleLanguage,
             clock: Clock,
+            pageRead: Boolean = details != null,
         ): TitlePage {
             require(entry == null || entry.anime.id == anime.id)
             val now = ZonedDateTime.now(clock)
@@ -108,7 +109,7 @@ data class TitlePage private constructor(
                 title = anime.titles.preferred(language),
                 total = total,
                 facts = headerFacts(anime, total, onList = entry != null, phase),
-                score = anime.meanScore?.let(MalScore::Given) ?: if (details == null) MalScore.NotKnownYet else MalScore.None,
+                score = anime.meanScore?.let(MalScore::Given) ?: if (pageRead) MalScore.None else MalScore.NotKnownYet,
                 entry = entry?.values,
                 airing = phase,
                 details = details,
@@ -134,8 +135,7 @@ data class TitleMoment(
         }
 }
 
-// MAL's score as the header states it. Only the title's own page says that MAL has none: a row's title may lack a value
-// its page has, so until the page is read an absent score is not known yet.
+// MAL's score as the header states it; only the title's own page, once read, says MAL gives none.
 sealed interface MalScore {
     data class Given(
         val value: Double,

@@ -17,6 +17,9 @@ internal abstract class TitleDao {
     @Query("SELECT * FROM title_details WHERE title_id = :id")
     abstract fun observeDetails(id: Long): Flow<DetailsWithTitles?>
 
+    @Query("SELECT title_id FROM title_details")
+    abstract fun observeDetailed(): Flow<List<Long>>
+
     @Query("SELECT * FROM title WHERE id IN (:ids)")
     protected abstract suspend fun rows(ids: List<Long>): List<TitleRow>
 

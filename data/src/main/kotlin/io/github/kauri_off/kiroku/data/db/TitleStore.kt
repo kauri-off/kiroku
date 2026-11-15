@@ -42,6 +42,13 @@ class TitleStore(
             .map { stored -> stored?.let { StoredDetails(it.toDetails(unexpected), instantOf(it.details.fetchedAt)) } }
             .flowOn(dispatcher)
 
+    fun observeDetailed(): Flow<Set<AnimeId>> =
+        dao
+            .observeDetailed()
+            .map { ids -> ids.mapTo(HashSet(), ::AnimeId) }
+            .distinctUntilChanged()
+            .flowOn(dispatcher)
+
     // Titles known only in part, as a title's page names them: stored only where none is stored.
     suspend fun addUnknown(titles: List<Anime>) = withContext(dispatcher) { dao.insertIfAbsent(titles.map { it.toRow() }) }
 

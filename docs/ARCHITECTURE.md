@@ -654,9 +654,10 @@ episode total, the year, the premiere and a related title each appear in one pla
 1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share". When the session has expired
    (S6), the `SessionBanner` under it, in every state.
 2. **Header.** Must show: the poster; the full title with no line cap; the facts line; the MAL score as a `StatNumber`
-   ("—" when there is none); the rank as its own short line, when MAL gives one. Limits: the facts line holds at most
-   three facts (type, year, episode count), and leaves one out when another element of the page states it or when it
-   says nothing, as an episode count of 1 does. The header holds nothing besides these five elements.
+   ("—" when the title's page gives none; left out until that page is read); the rank as its own short line, when MAL
+   gives one. Limits: the facts line holds at most three facts (type, year, episode count), and leaves one out when
+   another element of the page states it or when it says nothing, as an episode count of 1 does. The header holds
+   nothing besides these five elements.
 3. **List block.** Not on the list: one filled button "Add to list" across the content width. It adds the title as
    Planned, and its snackbar offers "Change", which opens the edit sheet. On the list, must show, as one block: the
    status as a tonal button in the same place, which opens the edit sheet; under it, side by side and each under its

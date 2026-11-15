@@ -42,6 +42,8 @@ class MalAnimeRepository(
             .distinctUntilChanged()
             .readable()
 
+    override fun observePagesRead(): Flow<Set<AnimeId>> = store.observeDetailed().readable()
+
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         val answer = titles.title(id, adult())
         if (answer !is Outcome.Success) return answer as Outcome.Failure

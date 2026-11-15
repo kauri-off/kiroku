@@ -181,6 +181,8 @@ private class CountedAnime(
 
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = readers.of(stored(inner.observeRefreshedAt(id)))
 
+    override fun observePagesRead(): Flow<Set<AnimeId>> = readers.of(stored(inner.observePagesRead()).map { it.orEmpty() })
+
     private fun <T> stored(flow: Flow<T?>): Flow<T?> =
         combine(flow, unstored, unreadable) { value, unstored, unreadable ->
             if (unreadable) throw DataException(DataError.StorageError)

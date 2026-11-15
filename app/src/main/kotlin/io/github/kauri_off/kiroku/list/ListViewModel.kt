@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -42,6 +43,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
@@ -61,6 +63,7 @@ import java.time.ZoneId
 // The user's own list, its orders fixed at moments and its state built on [background], one step at a time, in order.
 class ListViewModel(
     private val list: ListSource,
+    private val anime: AnimeRepository,
     private val airing: AiringRepository,
     session: SessionRepository,
     connection: Connection,
@@ -101,6 +104,9 @@ class ListViewModel(
     @Volatile private var settled = false
 
     @Volatile private var entriesLoaded = false
+
+    // The titles whose page is stored, for the summary a title page opens with; no part of what the List shows.
+    @Volatile private var pagesRead: Set<AnimeId> = emptySet()
 
     // What the pages are built from; a tab switch, the sort sheet or the refresh indicator changes none of it.
     private data class Shown(
@@ -145,6 +151,7 @@ class ListViewModel(
             coroutineScope {
                 launch { reading().collect() }
                 launch { session.observeSession().collect { session -> model.update { it.copy(session = session) } } }
+                launch { anime.observePagesRead().catch { if (it !is DataException) throw it }.collect { pagesRead = it } }
                 emitAll(combine(model, snapshotFlow { typed.value }, ::build))
             }
         }.flowOn(lane)
@@ -237,7 +244,7 @@ class ListViewModel(
     fun summaryOf(id: AnimeId): TitleSummary? {
         val model = model.value
         val entry = model.entries[id] ?: return null
-        return TitleSummary(entry.anime, entry, model.airing[id], model.session)
+        return TitleSummary(entry.anime, entry, model.airing[id], model.session, pageRead = id in pagesRead)
     }
 
     private fun build(

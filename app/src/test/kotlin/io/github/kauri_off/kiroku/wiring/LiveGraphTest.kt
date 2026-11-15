@@ -240,6 +240,8 @@ class LiveGraphTest {
 
                     override fun observeRefreshedAt(id: AnimeId) = flowOf<Instant?>(null)
 
+                    override fun observePagesRead() = flowOf(emptySet<AnimeId>())
+
                     override suspend fun refresh(id: AnimeId) = Outcome.Success(Unit)
                 }
             val titles = liveTitles(parts(backgroundScope)) { nothing.also { built += Thread.currentThread() } }

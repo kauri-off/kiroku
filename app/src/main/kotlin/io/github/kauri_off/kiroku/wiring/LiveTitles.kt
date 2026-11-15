@@ -42,5 +42,7 @@ private class TitlesOnFirstUse(
 
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = flow { emitAll(titles().observeRefreshedAt(id)) }
 
+    override fun observePagesRead(): Flow<Set<AnimeId>> = flow { emitAll(titles().observePagesRead()) }
+
     override suspend fun refresh(id: AnimeId) = titles().refresh(id)
 }

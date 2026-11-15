@@ -192,11 +192,16 @@ class MalAnimeRepositoryTest {
             val s = subject()
             s.database.execute("ALTER TABLE title RENAME TO title_gone")
             s.database.execute("ALTER TABLE title_details RENAME TO title_details_gone")
-            for (flow in listOf(s.titles.observeAnime(id), s.titles.observeDetails(id), s.titles.observeRefreshedAt(id))) {
+            for (flow in listOf(
+                s.titles.observeAnime(id),
+                s.titles.observeDetails(id),
+                s.titles.observeRefreshedAt(id),
+                s.titles.observePagesRead(),
+            )) {
                 val ended = runCatching { flow.first() }.exceptionOrNull()
                 assertEquals(DataError.StorageError, (ended as DataException).error)
             }
-            assertEquals(3, network.unexpected.size)
+            assertEquals(4, network.unexpected.size)
         }
 
     @Test
@@ -215,6 +220,17 @@ class MalAnimeRepositoryTest {
                 assertNull("never fetched, so stale", s.titles.observeRefreshedAt(anime.id).first())
             }
             assertEquals(1, network.api.requestCount)
+        }
+
+    // A title its page names is stored, but its own page is not read.
+    @Test
+    fun `the pages read are the titles whose own page is stored, not the titles a page names`() =
+        runTest {
+            val s = subject()
+            assertEquals(emptySet<AnimeId>(), s.titles.observePagesRead().first())
+            serve("title_airing")
+            s.titles.refresh(id)
+            assertEquals(setOf(id), s.titles.observePagesRead().first())
         }
 
     @Test

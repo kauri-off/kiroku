@@ -65,9 +65,18 @@ class TitleViewModel(
         val session: Session?,
         // The title's own store could not be read.
         val storeFailure: DataError? = null,
+        // The opener knew the title's page was read; the store's details say so once they are read.
+        val pageRead: Boolean = false,
     ) {
         // The store's answers are not known yet; the summary stands in for them in build.
-        constructor(opened: TitleSummary) : this(null, null, ListRead(opened.knownEntries()), opened.knownAiring(), opened.session)
+        constructor(opened: TitleSummary) : this(
+            null,
+            null,
+            ListRead(opened.knownEntries()),
+            opened.knownAiring(),
+            opened.session,
+            pageRead = opened.pageRead,
+        )
     }
 
     private class ListRead(
@@ -134,7 +143,7 @@ class TitleViewModel(
     // What the page shows of [id], itself or a related title, for the screen it opens.
     fun summaryOf(id: AnimeId): TitleSummary? {
         val sources = sources.value ?: return null
-        if (sources.list.failure != null || sources.storeFailure != null) return null
+        if (sources.list.failure != null) return null
         val entry = sources.list.entries[id]
         val details = sources.details
         if (id == this.id) {
@@ -191,6 +200,7 @@ class TitleViewModel(
                         sources.list.entries.mapValues { it.value.status },
                         titleLanguage,
                         clock,
+                        pageRead = details != null || sources.pageRead,
                     ),
                     session,
                     moment,
