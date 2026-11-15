@@ -39,7 +39,7 @@ import java.time.YearMonth
 
 // The mappers on MAL's recorded answers only.
 class MalAnimeTest {
-    private val mapped by lazy { recordedNodes.map { (answer, node) -> Triple(answer, node, node.toNode().toAnime()) } }
+    private val mapped by lazy { recordedNodes.map { (answer, node) -> Triple(answer, node, node.toNode().toAnime(Repairs())) } }
 
     private fun JsonObject.text(vararg path: String): String? {
         var element: JsonObject = this
@@ -167,7 +167,7 @@ class MalAnimeTest {
     @Test
     fun `a code the app does not know is kept as MAL's code`() {
         val node = recordedNodes.first { (_, node) -> "media_type" in node }.second
-        val title = node.edited(listOf("media_type"), JsonPrimitive("web_film")).toNode().toAnime()
+        val title = node.edited(listOf("media_type"), JsonPrimitive("web_film")).toNode().toAnime(Repairs())
         assertEquals(MediaType.Unrecognized("web_film"), title.mediaType)
     }
 
@@ -290,21 +290,21 @@ class MalAnimeTest {
     @Test
     fun `a picture without its medium size is no picture, and the rest of the title is read`() {
         val whole = recordedTitle("title_airing")
-        val edited = recordedJson("title_airing").edited(listOf("main_picture", "medium")).toTitle()
+        val edited = recordedJson("title_airing").edited(listOf("main_picture", "medium")).toTitle(Repairs())
         assertEquals(whole.copy(anime = whole.anime.copy(posterUrl = null, largePosterUrl = null)), edited)
     }
 
     @Test
     fun `statistics missing a count are no statistics, and the rest of the title is read`() {
         val whole = recordedTitle("title_airing")
-        val edited = recordedJson("title_airing").edited(listOf("statistics", "status", "dropped")).toTitle()
+        val edited = recordedJson("title_airing").edited(listOf("statistics", "status", "dropped")).toTitle(Repairs())
         assertEquals(whole.copy(details = whole.details.copy(statistics = null)), edited)
     }
 
     @Test
     fun `a broadcast time that does not parse is no time, and the rest of the title is read`() {
         val whole = recordedTitle("title_airing")
-        val edited = recordedJson("title_airing").edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")).toTitle()
+        val edited = recordedJson("title_airing").edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")).toTitle(Repairs())
         assertEquals(whole.copy(anime = whole.anime.copy(broadcast = Broadcast(DayOfWeek.FRIDAY, null))), edited)
     }
 
@@ -314,7 +314,7 @@ class MalAnimeTest {
     private fun airingEdited(
         vararg path: String,
         value: JsonElement? = null,
-    ): MalTitle = recordedJson("title_airing").edited(path.toList(), value).toTitle()
+    ): MalTitle = recordedJson("title_airing").edited(path.toList(), value).toTitle(Repairs())
 
     private fun MalTitle.withAnime(change: Anime.() -> Anime) = copy(anime = anime.change())
 
@@ -350,7 +350,7 @@ class MalAnimeTest {
         assertEquals(10, finished.details.recommendations.size)
         assertEquals(
             finished.withDetails { copy(recommendations = recommendations.drop(1)) },
-            recordedJson("title_finished").edited(listOf("recommendations", "0", "node", "id")).toTitle(),
+            recordedJson("title_finished").edited(listOf("recommendations", "0", "node", "id")).toTitle(Repairs()),
         )
     }
 
@@ -397,11 +397,11 @@ class MalAnimeTest {
         )
 
         val page = recordedJson("title_unknown_episode_count")
-        val whole = page.toTitle()
+        val whole = page.toTitle(Repairs())
         val untitled = whole.details.related.indexOfFirst { it.anime.id.value == 57413L }
         assertEquals(
             whole.withDetails { copy(related = whole.details.related.filterIndexed { i, _ -> i != untitled }) },
-            page.edited(listOf("related_anime", untitled.toString(), "node", "title")).toTitle(),
+            page.edited(listOf("related_anime", untitled.toString(), "node", "title")).toTitle(Repairs()),
         )
     }
 
@@ -437,7 +437,7 @@ class MalAnimeTest {
         val finished = recordedTitle("title_finished")
         assertEquals(
             finished.withDetails { copy(endDate = null) },
-            recordedJson("title_finished").edited(listOf("end_date"), JsonPrimitive("spring")).toTitle(),
+            recordedJson("title_finished").edited(listOf("end_date"), JsonPrimitive("spring")).toTitle(Repairs()),
         )
     }
 
@@ -480,10 +480,63 @@ class MalAnimeTest {
     fun `a list entry's title without a usable id is an error, never left out, and one without a status is kept`() {
         val entry = recordedJson("list_public_1").getValue("data").jsonArray[0]
         val node = entry.jsonObject.getValue("node").jsonObject
-        assertThrows(IllegalArgumentException::class.java) { node.edited(listOf("id")).toNode().toAnime() }
+        assertThrows(IllegalArgumentException::class.java) { node.edited(listOf("id")).toNode().toAnime(Repairs()) }
         assertEquals(
-            node.toNode().toAnime().copy(airingStatus = AiringStatus.Unrecognized("")),
-            node.edited(listOf("status")).toNode().toAnime(),
+            node.toNode().toAnime(Repairs()).copy(airingStatus = AiringStatus.Unrecognized("")),
+            node.edited(listOf("status")).toNode().toAnime(Repairs()),
         )
+    }
+
+    // The owner's rule: no answer fails on a value the app cannot read, and none is read in part silently.
+    @Test
+    fun `a value the mapper leaves out or fills in is noted by MAL's field, and MAL's own empty values are not`() {
+        fun repaired(edit: JsonObject): Set<String> = Repairs().also { edit.toTitle(it) }.fields
+
+        val json = recordedJson("title_airing")
+        val broken = JsonPrimitive("broken")
+        val cases =
+            listOf(
+                json.edited(listOf("title")) to "title",
+                json.edited(listOf("status")) to "status",
+                json.edited(listOf("start_date"), broken) to "start_date",
+                json.edited(listOf("mean"), JsonPrimitive(11)) to "mean",
+                json.edited(listOf("rank"), JsonPrimitive(0)) to "rank",
+                json.edited(listOf("num_episodes"), JsonPrimitive(-1)) to "num_episodes",
+                json.edited(listOf("average_episode_duration"), broken) to "average_episode_duration",
+                json.edited(listOf("main_picture", "medium")) to "main_picture",
+                json.edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")) to "broadcast.start_time",
+                json.edited(listOf("broadcast", "day_of_the_week"), JsonPrimitive("someday")) to "broadcast",
+                json.edited(listOf("status"), JsonPrimitive("")) to "status",
+                json.edited(listOf("genres", "0", "name")) to "genres",
+                json.edited(listOf("start_season", "season"), broken) to "start_season",
+                json.edited(listOf("studios", "0", "name")) to "studios",
+                json.edited(listOf("statistics", "status", "dropped")) to "statistics",
+                json.edited(listOf("related_anime", "0", "node", "id")) to "related_anime",
+                json.edited(listOf("related_anime", "0", "relation_type")) to "related_anime",
+                json.edited(listOf("related_anime", "0", "node", "start_date"), broken) to "related_anime.start_date",
+                json.edited(listOf("recommendations", "0", "node", "id")) to "recommendations",
+                json.edited(listOf("recommendations", "0", "node", "mean"), broken) to "recommendations.mean",
+            )
+        for ((edit, field) in cases) assertEquals(field, setOf(field), repaired(edit))
+
+        val malsOwn =
+            listOf(
+                json.edited(listOf("mean"), JsonNull),
+                json.edited(listOf("num_episodes"), JsonPrimitive(0)),
+                json.edited(listOf("average_episode_duration"), JsonPrimitive(0)),
+                json.edited(listOf("alternative_titles", "en"), JsonPrimitive("")),
+                json.edited(listOf("start_date"), JsonPrimitive("")),
+                json.edited(listOf("media_type"), JsonPrimitive("web_film")),
+                json.edited(listOf("status"), JsonPrimitive("on_hiatus")),
+                // dailyAL reads "other" as a day MAL sends, and moelist a broadcast without a day.
+                json.edited(listOf("broadcast", "day_of_the_week"), JsonPrimitive("other")),
+                json.edited(listOf("broadcast", "day_of_the_week")),
+                json.edited(listOf("broadcast", "day_of_the_week"), JsonNull),
+            )
+        for (edit in malsOwn) assertEquals(emptySet<String>(), repaired(edit))
+        for (name in titlePages) assertEquals(name, emptySet<String>(), repaired(recordedJson(name)))
+        for ((name, node) in recordedNodes) {
+            assertEquals(name, emptySet<String>(), Repairs().also { node.toNode().toAnime(it) }.fields)
+        }
     }
 }

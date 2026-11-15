@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.list
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.anime.toAnime
@@ -29,7 +30,7 @@ class MalListPageTest {
     private val page = recordedJson("list_public_1")
 
     // The first entry: completed, scored 8, 12 watched, both dates given.
-    private val first: ListEntry = page.toListPage().entries.first()
+    private val first: ListEntry = page.toListPage(Repairs()).entries.first()
 
     private fun firstWith(
         key: String,
@@ -37,7 +38,7 @@ class MalListPageTest {
     ): ListEntry =
         page
             .edited(listOf("data", "0", "list_status", key), value)
-            .toListPage()
+            .toListPage(Repairs())
             .entries
             .first()
 
@@ -47,14 +48,14 @@ class MalListPageTest {
     fun `every recorded entry is mapped with its title and its values, in the page's order`() {
         for (name in listOf("list_public_1", "list_public_2", "list_public_3")) {
             val recorded = recordedJson(name).getValue("data").jsonArray.map { it.jsonObject }
-            val entries = recordedJson(name).toListPage().entries
+            val entries = recordedJson(name).toListPage(Repairs()).entries
             assertEquals(
                 recorded.map {
                     it
                         .getValue("node")
                         .jsonObject
                         .toNode()
-                        .toAnime()
+                        .toAnime(Repairs())
                 },
                 entries.map { it.anime },
             )
@@ -69,14 +70,14 @@ class MalListPageTest {
 
     @Test
     fun `MAL's list status codes are the app's statuses`() {
-        val statuses = (1..3).flatMap { recordedJson("list_public_$it").toListPage().entries.map(ListEntry::status) }.toSet()
+        val statuses = (1..3).flatMap { recordedJson("list_public_$it").toListPage(Repairs()).entries.map(ListEntry::status) }.toSet()
         assertEquals(setOf(ListStatus.Completed, ListStatus.OnHold, ListStatus.Planned, ListStatus.Watching), statuses)
         assertEquals(ListStatus.Dropped, firstWith("status", JsonPrimitive("dropped")).status)
     }
 
     @Test
     fun `a score of 0 is no score, and an entry without a start or finish date has none`() {
-        val entries = page.toListPage().entries.associateBy { it.anime.id.value }
+        val entries = page.toListPage(Repairs()).entries.associateBy { it.anime.id.value }
         val unscored = entries.getValue(41457).values
         assertNull(unscored.score)
         assertEquals(PartialDate.Day(LocalDate.parse("2023-07-27")), unscored.startDate)
@@ -139,7 +140,7 @@ class MalListPageTest {
         for (value in unknown) assertThrows("$value", IllegalArgumentException::class.java) { firstWith("status", value) }
         for (values in wrongShapes) {
             val edited = page.edited(listOf("data", "0", "list_status"), values)
-            assertThrows("$values", IllegalArgumentException::class.java) { edited.toListPage() }
+            assertThrows("$values", IllegalArgumentException::class.java) { edited.toListPage(Repairs()) }
         }
     }
 
@@ -147,18 +148,18 @@ class MalListPageTest {
     fun `an entry whose title has no usable id fails the page and leaves no entry out`() {
         for (id in listOf(null, JsonNull, JsonPrimitive("x"), JsonPrimitive(0), JsonPrimitive(-3))) {
             val edited = page.edited(listOf("data", "0", "node", "id"), id)
-            assertThrows("$id", IllegalArgumentException::class.java) { edited.toListPage() }
+            assertThrows("$id", IllegalArgumentException::class.java) { edited.toListPage(Repairs()) }
         }
     }
 
     @Test
     fun `only a page without a next link is the last, and of a next link only its offset is read`() {
-        assertEquals(10, page.toListPage().next)
-        assertNull(recordedJson("list_public_3").toListPage().next)
-        assertNull(page.edited(listOf("paging", "next")).toListPage().next)
-        assertNull(page.edited(listOf("paging", "next"), JsonNull).toListPage().next)
-        assertNull(page.edited(listOf("paging")).toListPage().next)
-        assertNull(page.edited(listOf("paging"), JsonNull).toListPage().next)
+        assertEquals(10, page.toListPage(Repairs()).next)
+        assertNull(recordedJson("list_public_3").toListPage(Repairs()).next)
+        assertNull(page.edited(listOf("paging", "next")).toListPage(Repairs()).next)
+        assertNull(page.edited(listOf("paging", "next"), JsonNull).toListPage(Repairs()).next)
+        assertNull(page.edited(listOf("paging")).toListPage(Repairs()).next)
+        assertNull(page.edited(listOf("paging"), JsonNull).toListPage(Repairs()).next)
         val link = "https://api.myanimelist.net/v2/users/public-user/animelist"
         val unreadable =
             listOf(JsonPrimitive(10), JsonPrimitive("not a link"), JsonPrimitive(""), JsonObject(emptyMap())) +
@@ -171,19 +172,19 @@ class MalListPageTest {
                     "$link?start=10",
                 ).map(::JsonPrimitive)
         for (next in unreadable) {
-            assertThrows("$next", IllegalStateException::class.java) { page.edited(listOf("paging", "next"), next).toListPage() }
+            assertThrows("$next", IllegalStateException::class.java) { page.edited(listOf("paging", "next"), next).toListPage(Repairs()) }
         }
-        assertThrows(IllegalStateException::class.java) { page.edited(listOf("paging"), JsonPrimitive("next")).toListPage() }
+        assertThrows(IllegalStateException::class.java) { page.edited(listOf("paging"), JsonPrimitive("next")).toListPage(Repairs()) }
     }
 
     @Test
     fun `a page without its entries fails, and is never a page with none`() {
         for (data in listOf(null, JsonNull, JsonObject(emptyMap()), JsonPrimitive("[]"))) {
-            assertThrows("$data", SerializationException::class.java) { page.edited(listOf("data"), data).toListPage() }
+            assertThrows("$data", SerializationException::class.java) { page.edited(listOf("data"), data).toListPage(Repairs()) }
             assertThrows(
                 "$data",
                 SerializationException::class.java,
-            ) { recordedJson("list_public_3").edited(listOf("data"), data).toListPage() }
+            ) { recordedJson("list_public_3").edited(listOf("data"), data).toListPage(Repairs()) }
         }
     }
 
@@ -193,7 +194,7 @@ class MalListPageTest {
             page
                 .edited(listOf("data", "0", "list_status", "status"), JsonPrimitive("plan_to_watch"))
                 .edited(listOf("data", "0", "list_status", "num_episodes_watched"), JsonPrimitive(40))
-                .toListPage()
+                .toListPage(Repairs())
                 .entries
                 .first()
                 .values
@@ -206,5 +207,37 @@ class MalListPageTest {
         val backwards = firstWith("start_date", JsonPrimitive("2026-11-01")).values
         assertEquals(PartialDate.Day(LocalDate.parse("2026-11-01")), backwards.startDate)
         assertEquals(PartialDate.Day(LocalDate.parse("2026-10-07")), backwards.finishDate)
+    }
+
+    // The owner's rule: an unreadable value is absent but not silent; MAL's own empty values are not repairs.
+    @Test
+    fun `an entry's value read as absent because it is unreadable is noted by its field, and MAL's own empty values are not`() {
+        fun repaired(
+            key: String,
+            value: JsonElement?,
+        ): Set<String> = Repairs().also { page.edited(listOf("data", "0", "list_status", key), value).toListPage(it) }.fields
+
+        val unreadable =
+            mapOf(
+                "score" to listOf(JsonPrimitive("eight"), JsonPrimitive(7.5), JsonPrimitive(11), JsonPrimitive(-1), JsonPrimitive(true)),
+                "num_episodes_watched" to listOf(JsonPrimitive("twelve"), JsonPrimitive(-1), JsonArray(emptyList())),
+                "start_date" to listOf(JsonPrimitive("2021-13-01"), JsonPrimitive(2021), JsonObject(emptyMap())),
+                "finish_date" to listOf(JsonPrimitive("soon")),
+                "updated_at" to listOf(JsonPrimitive("yesterday"), JsonPrimitive(1_671_104_703)),
+            )
+        for ((key, values) in unreadable) {
+            for (value in values) assertEquals("$key $value", setOf("list_status.$key"), repaired(key, value))
+        }
+        for (key in unreadable.keys) {
+            for (value in listOf(null, JsonNull, JsonPrimitive(""))) assertEquals("$key $value", emptySet<String>(), repaired(key, value))
+        }
+        assertEquals(emptySet<String>(), repaired("score", JsonPrimitive(0)))
+        assertEquals(
+            setOf("node.mean"),
+            Repairs().also { page.edited(listOf("data", "0", "node", "mean"), JsonPrimitive("broken")).toListPage(it) }.fields,
+        )
+        for (name in listOf("list_public_1", "list_public_2", "list_public_3")) {
+            assertEquals(name, emptySet<String>(), recordedJson(name).toListPage(Repairs()).repaired)
+        }
     }
 }

@@ -17,6 +17,9 @@ data class StoredDetails(
     val fetchedAt: Instant,
 )
 
+// A value of MAL's page that the mapper could read only in part: a stored value of it stands.
+enum class Unread { BroadcastTime, Genres, Studios, Related, Recommendations }
+
 // The titles in the database, the cache of their pages; [unexpected] hears of a named title left out as unreadable.
 class TitleStore(
     private val database: KirokuDatabase,
@@ -47,6 +50,7 @@ class TitleStore(
         anime: Anime,
         details: AnimeDetails,
         at: Instant,
+        unread: Set<Unread> = emptySet(),
     ) {
         require(details.id == anime.id)
         val id = anime.id.value
@@ -58,9 +62,9 @@ class TitleStore(
                 }
             val recommended = details.recommendations.mapIndexed { position, it -> TitleRecommendationRow(id, position, it.id.value) }
             database.transaction {
-                dao.merge(listOf(anime.toRow()))
+                dao.merge(listOf(anime.toRow()), unread)
                 dao.insertIfAbsent(named.map { it.toRow() })
-                dao.mergeDetails(details.toRow(at), related, recommended)
+                dao.mergeDetails(details.toRow(at), related, recommended, unread)
             }
         }
     }

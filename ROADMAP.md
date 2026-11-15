@@ -104,12 +104,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-16 [A] Database: the titles and the list's store.**
 
-- [ ] **M2-17 Anime repository.** The titles of section 7.1 over M2-14 and M2-16: a page shows what is stored,
-  refreshes what is stale, and keeps what is stored when a refresh fails. A title reached from a related row has
-  that row's data from the first frame.
-  **Needs:** M2-14, M2-16.
-  **Check:** tests: stored details are shown without a request while fresh; a failed refresh changes nothing
-  stored and is reported; a refresh of the details does not lose a value the summary had.
+- [x] **M2-17 Anime repository.**
 
 - [x] **M2-18 Translated MAL values and the genre table.**
 

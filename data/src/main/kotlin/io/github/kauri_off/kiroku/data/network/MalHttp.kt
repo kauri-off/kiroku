@@ -41,7 +41,7 @@ class MalHttp(
     private val device: Device,
     private val clock: Clock,
     // Hears of an answer that could not be used and of a fault of this layer, each without its message.
-    private val unexpected: (Throwable) -> Unit,
+    internal val unexpected: (Throwable) -> Unit,
     log: ((String) -> Unit)? = null,
     private val repeatReadsAfter: List<Duration> = RepeatReadsAfter,
     private val io: CoroutineDispatcher = Dispatchers.IO,
@@ -218,6 +218,19 @@ internal class UnusableAnswer(
         stackTrace = cause.stackTrace
     }
 }
+
+// An answer of MAL's the app used in part or not at all, for a value it did not expect; it never quotes a value.
+sealed class OddAnswer(
+    message: String,
+) : Exception(message)
+
+// An answer the mapper read with values left out or filled in, by MAL's field names.
+class RepairedAnswer(
+    val fields: Set<String>,
+) : OddAnswer(fields.joinToString())
+
+// A title's page that answered for another title than the one asked.
+class AnotherTitleAnswer : OddAnswer("id")
 
 // A 2xx that is empty, or cannot be read and does not say it is JSON: a portal's or a proxy's page, not MAL's.
 internal class NotAnAnswer : IOException()
