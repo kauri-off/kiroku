@@ -4,6 +4,9 @@ import android.graphics.Color
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Composer
+import androidx.compose.runtime.CompositionTracer
+import androidx.compose.runtime.InternalComposeTracingApi
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -19,9 +22,13 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import coil3.request.SuccessResult
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.list.FixtureListScreen
+import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.wiring.Pictures
 import io.github.kauri_off.kiroku.wiring.Pictures.Companion.BLUE
 import io.github.kauri_off.kiroku.wiring.Pictures.Companion.GREEN
@@ -151,6 +158,54 @@ class PosterFadeTest {
         assertIdle()
     }
 
+    @OptIn(InternalComposeTracingApi::class)
+    @Test
+    fun `pictures arriving on the List compose no row and no page`() {
+        val entries =
+            Fixtures.reference.entries.map { entry ->
+                val id = entry.anime.id.value
+                entry.copy(anime = entry.anime.copy(posterUrl = pictures.picture("/medium/$id.png", RED, held = true)))
+            }
+        val composed = mutableMapOf<String, Int>()
+        var counting = false
+        Composer.setTracer(
+            object : CompositionTracer {
+                override fun isTraceInProgress() = true
+
+                override fun traceEventStart(
+                    key: Int,
+                    dirty1: Int,
+                    dirty2: Int,
+                    info: String,
+                ) {
+                    if (counting) composed.merge(info.substringBefore(" ("), 1, Int::plus)
+                }
+
+                override fun traceEventEnd() = Unit
+            },
+        )
+        try {
+            compose.setContent {
+                Themed { FixtureListScreen(ListFixtureStates.watching.copy(content = ListFixtureStates.tabs(entries))) }
+            }
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+            counting = true
+            // Every request the rows started; OkHttp sends only five to one host at a time.
+            val asked = pictures.asked.size
+            pictures.release()
+            compose.waitUntil(5_000) { pictures.ended.size >= asked }
+            compose.waitForIdle()
+            compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
+            counting = false
+        } finally {
+            Composer.setTracer(null)
+        }
+        assertTrue(pictures.ended.all { it.second is SuccessResult })
+        assertEquals("$composed", 0, (composed[ROW] ?: 0) + (composed[PAGE] ?: 0))
+        assertIdle()
+    }
+
     private fun arrive(url: String) {
         compose.waitUntil(5_000) { pictures.hasEnded(url) }
         compose.waitForIdle()
@@ -181,6 +236,8 @@ class PosterFadeTest {
     companion object {
         const val POSTER = "poster"
         const val FRAME = 16L
+        const val ROW = "io.github.kauri_off.kiroku.design.component.AnimeRow"
+        const val PAGE = "io.github.kauri_off.kiroku.list.Page"
     }
 }
 
