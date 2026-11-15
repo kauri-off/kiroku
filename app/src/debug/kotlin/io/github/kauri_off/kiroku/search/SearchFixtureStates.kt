@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.search
 
 import androidx.compose.foundation.text.input.TextFieldState
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
@@ -33,7 +34,8 @@ object SearchFixtureStates {
                 when (list) {
                     BrowseList.ThisSeason -> set.anime.filter { it.airingStatus != AiringStatus.Finished }.map { hit(it) }
                     BrowseList.TopAiring ->
-                        byRank(set.anime.filter { it.airingStatus == AiringStatus.Airing }).mapIndexed { i, anime -> hit(anime, i + 1) }
+                        byRank(set.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
+                            .mapIndexed { i, anime -> hit(anime, i + 1) }
                     BrowseList.TopRated -> byRank(set.anime).mapIndexed { i, anime -> hit(anime, i + 1) }
                     BrowseList.MostPopular ->
                         set.anime

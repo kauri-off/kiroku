@@ -65,7 +65,7 @@ class MalTitlesTest {
 
     @Test
     fun `an answer the mapper cannot read is a server error, and reported`() {
-        val page = recordedJson("title_airing").edited(listOf("status"))
+        val page = recordedJson("title_airing").edited(listOf("id"))
         network.api.enqueue(answer(200, page.toString(), "application/json; charset=UTF-8"))
 
         assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { titles.title(AnimeId(61987), adult = false) })

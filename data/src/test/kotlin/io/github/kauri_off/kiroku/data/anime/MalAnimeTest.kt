@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.data.anime
 
 import io.github.kauri_off.kiroku.core.model.AgeRating
 import io.github.kauri_off.kiroku.core.model.AiringStatus
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.Broadcast
@@ -13,6 +15,8 @@ import io.github.kauri_off.kiroku.core.model.Source
 import io.github.kauri_off.kiroku.core.model.StatusCounts
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.data.network.MalFields
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
@@ -23,6 +27,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
@@ -301,5 +306,184 @@ class MalAnimeTest {
         val whole = recordedTitle("title_airing")
         val edited = recordedJson("title_airing").edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")).toTitle()
         assertEquals(whole.copy(anime = whole.anime.copy(broadcast = Broadcast(DayOfWeek.FRIDAY, null))), edited)
+    }
+
+    // Nothing fails because MAL sends a value or a shape the app does not expect: each makes its own value absent.
+    private val airing by lazy { recordedTitle("title_airing") }
+
+    private fun airingEdited(
+        vararg path: String,
+        value: JsonElement? = null,
+    ): MalTitle = recordedJson("title_airing").edited(path.toList(), value).toTitle()
+
+    private fun MalTitle.withAnime(change: Anime.() -> Anime) = copy(anime = anime.change())
+
+    private fun MalTitle.withDetails(change: AnimeDetails.() -> AnimeDetails) = copy(details = details.change())
+
+    @Test
+    fun `an airing status the app does not know is kept as MAL's code, in a title and in a related one`() {
+        assertEquals(
+            airing.withAnime { copy(airingStatus = AiringStatus.Unrecognized("on_hiatus")) },
+            airingEdited("status", value = JsonPrimitive("on_hiatus")),
+        )
+        val related = airing.details.related
+        val first = related[0].copy(anime = related[0].anime.copy(airingStatus = AiringStatus.Unrecognized("on_hiatus")))
+        assertEquals(
+            airing.withDetails { copy(related = listOf(first) + related.drop(1)) },
+            airingEdited("related_anime", "0", "node", "status", value = JsonPrimitive("on_hiatus")),
+        )
+    }
+
+    @Test
+    fun `a season the app does not know, or one without its year, is no season`() {
+        val none = airing.withDetails { copy(season = null) }
+        assertEquals(none, airingEdited("start_season", "season", value = JsonPrimitive("monsoon")))
+        assertEquals(none, airingEdited("start_season", "year"))
+    }
+
+    @Test
+    fun `a related title or a recommendation that cannot be mapped is left out, and the page shows`() {
+        val related = airing.details.related
+        assertEquals(airing.withDetails { copy(related = related.drop(1)) }, airingEdited("related_anime", "0", "node", "id"))
+        assertEquals(airing.withDetails { copy(related = related - related[1]) }, airingEdited("related_anime", "1", "relation_type"))
+        val finished = recordedTitle("title_finished")
+        assertEquals(10, finished.details.recommendations.size)
+        assertEquals(
+            finished.withDetails { copy(recommendations = recommendations.drop(1)) },
+            recordedJson("title_finished").edited(listOf("recommendations", "0", "node", "id")).toTitle(),
+        )
+    }
+
+    // Only a node without a usable id cannot be mapped, and one without any title: the owner's rule for every node.
+    @Test
+    fun `a title without a usable id cannot be mapped`() {
+        for (id in listOf(null, JsonNull, JsonPrimitive(0), JsonPrimitive(-5), JsonPrimitive("x"))) {
+            assertThrows(id.toString(), IllegalArgumentException::class.java) { airingEdited("id", value = id) }
+        }
+    }
+
+    @Test
+    fun `a title without its status has the unknown one, which has no name`() {
+        val none = airing.withAnime { copy(airingStatus = AiringStatus.Unrecognized("")) }
+        assertEquals(none, airingEdited("status"))
+        assertEquals(none, airingEdited("status", value = JsonNull))
+        assertEquals(none, airingEdited("status", value = JsonPrimitive(" ")))
+        val related = airing.details.related
+        val first = related[0].copy(anime = related[0].anime.copy(airingStatus = AiringStatus.Unrecognized("")))
+        assertEquals(
+            airing.withDetails { copy(related = listOf(first) + related.drop(1)) },
+            airingEdited("related_anime", "0", "node", "status"),
+        )
+    }
+
+    @Test
+    fun `a title without MAL's main title takes the English one, then the Japanese one, and with neither is left out`() {
+        val titles = airing.anime.titles
+        assertEquals(
+            airing.withAnime { copy(titles = titles.copy(romaji = titles.english!!, english = null)) },
+            airingEdited("title", value = JsonPrimitive("")),
+        )
+        assertEquals(airing.withAnime { copy(titles = titles.copy(romaji = titles.english!!, english = null)) }, airingEdited("title"))
+
+        val related = airing.details.related
+        val noEnglish = related.indexOfFirst { it.anime.id.value == 65119L }
+        val japanese = related[noEnglish].anime.titles
+        assertNull(japanese.english)
+        val fallenTitles = japanese.copy(romaji = japanese.japanese!!, japanese = null)
+        val fallen = related[noEnglish].copy(anime = related[noEnglish].anime.copy(titles = fallenTitles))
+        assertEquals(
+            airing.withDetails { copy(related = related.toMutableList().also { it[noEnglish] = fallen }) },
+            airingEdited("related_anime", noEnglish.toString(), "node", "title"),
+        )
+
+        val page = recordedJson("title_unknown_episode_count")
+        val whole = page.toTitle()
+        val untitled = whole.details.related.indexOfFirst { it.anime.id.value == 57413L }
+        assertEquals(
+            whole.withDetails { copy(related = whole.details.related.filterIndexed { i, _ -> i != untitled }) },
+            page.edited(listOf("related_anime", untitled.toString(), "node", "title")).toTitle(),
+        )
+    }
+
+    @Test
+    fun `a null where MAL leaves a field out is that field left out`() {
+        assertEquals(airing.withAnime { copy(averageEpisodeDuration = null) }, airingEdited("average_episode_duration", value = JsonNull))
+        val related = airing.details.related
+        val first = related[0].copy(anime = related[0].anime.copy(averageEpisodeDuration = null))
+        assertEquals(
+            airing.withDetails { copy(related = listOf(first) + related.drop(1)) },
+            airingEdited("related_anime", "0", "node", "average_episode_duration", value = JsonNull),
+        )
+        assertEquals(
+            airing.withAnime { copy(titles = titles.copy(synonyms = emptyList())) },
+            airingEdited("alternative_titles", "synonyms", value = JsonNull),
+        )
+        assertEquals(airing.withDetails { copy(studios = emptyList()) }, airingEdited("studios", value = JsonNull))
+        assertEquals(airing.withDetails { copy(related = emptyList()) }, airingEdited("related_anime", value = JsonNull))
+        assertEquals(airing.withDetails { copy(recommendations = emptyList()) }, airingEdited("recommendations", value = JsonNull))
+        assertEquals(airing.withDetails { copy(statistics = null) }, airingEdited("statistics", "status", value = JsonNull))
+    }
+
+    @Test
+    fun `a broadcast without its day is no broadcast`() {
+        val none = airing.withAnime { copy(broadcast = null) }
+        assertEquals(none, airingEdited("broadcast", "day_of_the_week"))
+        assertEquals(none, airingEdited("broadcast", "day_of_the_week", value = JsonNull))
+    }
+
+    @Test
+    fun `a date that does not parse is no date`() {
+        assertEquals(airing.withAnime { copy(startDate = null) }, airingEdited("start_date", value = JsonPrimitive("2026-13-02")))
+        val finished = recordedTitle("title_finished")
+        assertEquals(
+            finished.withDetails { copy(endDate = null) },
+            recordedJson("title_finished").edited(listOf("end_date"), JsonPrimitive("spring")).toTitle(),
+        )
+    }
+
+    @Test
+    fun `a genre or a studio without its id or name, or with a blank name, is left out`() {
+        val noFirst = airing.withAnime { copy(genres = genres!!.drop(1)) }
+        assertEquals(noFirst, airingEdited("genres", "0", "name"))
+        assertEquals(noFirst, airingEdited("genres", "0", "name", value = JsonPrimitive(" ")))
+        assertEquals(noFirst, airingEdited("genres", "0", "id"))
+        assertEquals(airing.withDetails { copy(studios = emptyList()) }, airingEdited("studios", "0", "name"))
+    }
+
+    @Test
+    fun `an episode count, a mean or a rank that is not a number, or out of range, is absent`() {
+        assertEquals(airing.withAnime { copy(malEpisodes = null) }, airingEdited("num_episodes", value = JsonPrimitive("twelve")))
+        assertEquals(airing.withAnime { copy(malEpisodes = null) }, airingEdited("num_episodes", value = JsonPrimitive(-1)))
+        assertEquals(airing.withAnime { copy(meanScore = null) }, airingEdited("mean", value = JsonPrimitive(10.5)))
+        assertEquals(airing.withAnime { copy(meanScore = null) }, airingEdited("mean", value = JsonPrimitive("high")))
+        assertEquals(airing.withAnime { copy(rank = null) }, airingEdited("rank", value = JsonPrimitive(0)))
+        assertEquals(airing.withAnime { copy(rank = null) }, airingEdited("rank", value = JsonNull))
+        assertEquals(
+            airing.withAnime { copy(averageEpisodeDuration = null) },
+            airingEdited("average_episode_duration", value = JsonPrimitive(1440.5)),
+        )
+    }
+
+    @Test
+    fun `a number MAL gives in quotes is read as the number, in every numeric field`() {
+        val quoted = listOf("id", "num_episodes", "mean", "rank", "average_episode_duration")
+        val json = recordedJson("title_airing")
+        for (key in quoted) {
+            val text = json.getValue(key).jsonPrimitive.content
+            assertEquals(key, airing, airingEdited(key, value = JsonPrimitive(text)))
+        }
+        assertEquals(airing, airingEdited("start_season", "year", value = JsonPrimitive("2026")))
+    }
+
+    // The list keeps every entry (section 2.2): a node it cannot map, one without a usable id, fails the download.
+    @Test
+    fun `a list entry's title without a usable id is an error, never left out, and one without a status is kept`() {
+        val entry = recordedJson("list_public_1").getValue("data").jsonArray[0]
+        val node = entry.jsonObject.getValue("node").jsonObject
+        assertThrows(IllegalArgumentException::class.java) { node.edited(listOf("id")).toNode().toAnime() }
+        assertEquals(
+            node.toNode().toAnime().copy(airingStatus = AiringStatus.Unrecognized("")),
+            node.edited(listOf("status")).toNode().toAnime(),
+        )
     }
 }

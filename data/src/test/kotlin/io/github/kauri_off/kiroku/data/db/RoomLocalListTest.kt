@@ -251,7 +251,7 @@ class RoomLocalListTest {
             backgroundScope.launch { runCatching { s.store.observeEntry(anime.id).collect {} }.onFailure { ended += it } }
             runCurrent()
 
-            s.database.execute("UPDATE title SET airing_status = 'broken' WHERE id = ${anime.id.value}")
+            s.database.execute("UPDATE title SET start_date = 'broken' WHERE id = ${anime.id.value}")
             runCurrent()
             s.store.write(mapOf(other.anime.id to other.watched(99)))
             runCurrent()
@@ -259,14 +259,14 @@ class RoomLocalListTest {
             val ids = fixtures.entries.map { it.anime.id }.sortedBy { it.value }
             assertEquals(ids - anime.id, seen.last().map { it.anime.id })
             assertEquals(seen.last(), s.store.observeEntries().first())
-            assertEquals(listOf("java.lang.IllegalStateException"), s.unexpected.map { it.message })
+            assertEquals(listOf("java.time.format.DateTimeParseException"), s.unexpected.map { it.message })
             assertTrue(s.unexpected.all { it is UnreadableRow && it.cause == null && it.stackTrace.isNotEmpty() })
             assertEquals(1, ended.size)
             assertTrue(runCatching { s.store.observeEntry(anime.id).first() }.isFailure)
             assertTrue(runCatching { s.store.read(anime.id) }.isFailure)
             assertEquals(fixtures.entries.size, s.store.readAll().size)
 
-            s.database.execute("UPDATE title SET airing_status = 'currently_airing' WHERE id = ${anime.id.value}")
+            s.database.execute("UPDATE title SET start_date = '2025-10-11' WHERE id = ${anime.id.value}")
             assertEquals(
                 ids,
                 s.store

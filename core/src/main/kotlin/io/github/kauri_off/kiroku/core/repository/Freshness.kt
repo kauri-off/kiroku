@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.repository
 
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import java.time.Instant
@@ -26,7 +27,10 @@ fun detailsStale(
     anime: Anime?,
     refreshedAt: Instant?,
     now: Instant,
-): Boolean = stale(refreshedAt, now, if (anime?.airingStatus == AiringStatus.Airing) Freshness.airingDetails else Freshness.details)
+): Boolean {
+    val airing = anime?.airingStatus?.effective == AiringStatus.Airing
+    return stale(refreshedAt, now, if (airing) Freshness.airingDetails else Freshness.details)
+}
 
 // A time after now means the clock was set back, so nothing is known of the age.
 private fun stale(

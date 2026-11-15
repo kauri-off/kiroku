@@ -100,7 +100,7 @@ class ColumnsTest {
         )
         assertEquals(
             listOf("not_yet_aired", "currently_airing", "finished_airing"),
-            AiringStatus.entries.map(airingStatuses::toColumn),
+            AiringStatus.known.map(airingStatuses::toColumn),
         )
         assertEquals(listOf("winter", "spring", "summer", "fall"), Season.entries.map(seasons::toColumn))
         assertEquals(
@@ -126,7 +126,7 @@ class ColumnsTest {
     @Test
     fun `every value comes back from its code, also one of a type's values added later`() {
         for (status in ListStatus.entries) assertEquals(status, listStatuses.of(listStatuses.toColumn(status)))
-        for (status in AiringStatus.entries) assertEquals(status, airingStatuses.of(airingStatuses.toColumn(status)))
+        for (status in AiringStatus.known) assertEquals(status, airingStatuses.of(airingStatuses.toColumn(status)))
         for (season in Season.entries) assertEquals(season, seasons.of(seasons.toColumn(season)))
         for (type in objectsOf(MediaType::class.java)) assertEquals(type, mediaTypes.of(mediaTypes.toColumn(type)))
         for (source in objectsOf(Source::class.java)) assertEquals(source, sources.of(sources.toColumn(source)))
@@ -138,10 +138,12 @@ class ColumnsTest {
     fun `a code the app does not recognise is stored and read as MAL gave it`() {
         for (code in listOf("web_film", "?", "", "pg_13 new")) {
             assertEquals(code, mediaTypes.toColumn(MediaType.Unrecognized(code)))
+            assertEquals(code, airingStatuses.toColumn(AiringStatus.Unrecognized(code)))
             assertEquals(code, sources.toColumn(Source.Unrecognized(code)))
             assertEquals(code, ageRatings.toColumn(AgeRating.Unrecognized(code)))
             assertEquals(code, relationTypes.toColumn(RelationType.Unrecognized(code)))
             assertEquals(MediaType.Unrecognized(code), mediaTypes.of(code))
+            assertEquals(AiringStatus.Unrecognized(code), airingStatuses.of(code))
             assertEquals(Source.Unrecognized(code), sources.of(code))
             assertEquals(AgeRating.Unrecognized(code), ageRatings.of(code))
             assertEquals(RelationType.Unrecognized(code), relationTypes.of(code))
@@ -152,6 +154,11 @@ class ColumnsTest {
     fun `an unrecognised value under a known code is refused, as it would read back as another value`() {
         for (type in objectsOf(MediaType::class.java)) {
             assertThrows(IllegalArgumentException::class.java) { mediaTypes.toColumn(MediaType.Unrecognized(mediaTypes.toColumn(type))) }
+        }
+        for (status in AiringStatus.known) {
+            assertThrows(IllegalArgumentException::class.java) {
+                airingStatuses.toColumn(AiringStatus.Unrecognized(airingStatuses.toColumn(status)))
+            }
         }
         for (source in objectsOf(Source::class.java)) {
             assertThrows(IllegalArgumentException::class.java) { sources.toColumn(Source.Unrecognized(sources.toColumn(source))) }
@@ -169,7 +176,6 @@ class ColumnsTest {
     @Test
     fun `a code of a type that has no unrecognised value is an error when no value is stored under it`() {
         assertThrows(IllegalStateException::class.java) { listStatuses.of("watched") }
-        assertThrows(IllegalStateException::class.java) { airingStatuses.of("") }
         assertThrows(IllegalStateException::class.java) { seasons.of("autumn") }
     }
 
