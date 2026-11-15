@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="links_title">Ссылки на MyAnimeList</string>
+    <string name="links_sentence">Ссылки на тайтлы с сайта myanimelist.net открываются в браузере, пока вы не разрешите приложению открывать их в настройках Android</string>
+    <string name="links_open_settings">Открыть настройки</string>
+</resources>

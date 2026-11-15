@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.PATIENCE
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.link.NoticeSeen
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import org.junit.Assert.assertEquals
@@ -42,6 +43,9 @@ import kotlin.time.toJavaDuration
 class ScenarioOverlayTest {
     @get:Rule(order = 0)
     val source = StartsOn(DataSource.Demo)
+
+    @get:Rule(order = 0)
+    val noticeSeen = NoticeSeen()
 
     @get:Rule(order = 1)
     val compose = createAndroidComposeRule<MainActivity>()

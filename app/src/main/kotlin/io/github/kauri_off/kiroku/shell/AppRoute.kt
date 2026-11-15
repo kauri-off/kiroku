@@ -7,11 +7,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
+import io.github.kauri_off.kiroku.link.AppLinks
+import io.github.kauri_off.kiroku.link.LinkNoticeTurn
+import io.github.kauri_off.kiroku.link.LinksKey
+import io.github.kauri_off.kiroku.link.LinksRoute
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
@@ -44,6 +49,7 @@ fun AppRoute(
     graph: AppGraph,
     navigator: ShellNavigator = rememberShellNavigator(),
     snackbars: SnackbarHostState = remember { SnackbarHostState() },
+    links: AppLinks? = null,
 ) {
     val messages = viewModel { ShellViewModel(graph.list) }.messages
     val covers = remember { MessageCovers() }
@@ -54,6 +60,7 @@ fun AppRoute(
         edit?.let { navigator.showEditorOf(it) }
     }
     SignInTurns(graph, navigator)
+    if (links != null) LinkTurns(links, navigator)
     CompositionLocalProvider(LocalMessageCovers provides covers) {
         ShellRoute(navigator, snackbars, remember(graph, messages) { appEntries(graph, messages) })
     }
@@ -69,6 +76,31 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
         else -> open(page)
     }
 }
+
+// Each link handed over is acted on once; the notice about them is shown once, when due.
+@Composable
+private fun LinkTurns(
+    links: AppLinks,
+    navigator: ShellNavigator,
+) {
+    val link by links.link.collectAsScreenState()
+    LaunchedEffect(link) {
+        link?.let {
+            navigator.openLink(it.id)
+            links.taken(it)
+        }
+    }
+    LinkNoticeTurn(links.notice, navigator)
+}
+
+// A link opens its title over the List alone (section 6.3), whatever was shown.
+fun ShellNavigator.openLink(id: AnimeId) {
+    home(Destination.List)
+    open(linkedTitle(id))
+}
+
+// The List's stack a link builds over its root.
+fun linkedTitle(id: AnimeId): NavKey = TitleKey(id.value)
 
 fun appEntries(
     graph: AppGraph,
@@ -137,6 +169,7 @@ fun appEntries(
         entry<RelatedKey> { key -> RelatedRoute(key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
+        entry<LinksKey> { LinksRoute(snackbars, onBack = { back() }) }
         entry<SignInKey> {
             SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })
         }
