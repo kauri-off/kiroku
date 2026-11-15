@@ -46,6 +46,8 @@ private class StoreOnFirstUse(
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = flow { emitAll(store().observeEntry(id)) }
 
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> = flow { emitAll(store().observeEntriesOf(ids)) }
+
     override suspend fun state() = store().state()
 
     override suspend fun read(id: AnimeId) = store().read(id)

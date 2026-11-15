@@ -176,6 +176,9 @@ interface ListSource {
 
     fun observeEntry(id: AnimeId): Flow<ListEntry?>
 
+    // The entries of [ids] that exist, in one read of the store however many there are.
+    fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>>
+
     // When the whole list was last downloaded; null when it never was, or when a sync is owed (W5).
     fun observeSyncedAt(): Flow<Instant?>
 
@@ -197,6 +200,9 @@ interface AnimeRepository {
     fun observeAnime(id: AnimeId): Flow<Anime?>
 
     fun observeDetails(id: AnimeId): Flow<AnimeDetails?>
+
+    // The stored details of those of [ids] that have them, in one read of the store however many there are.
+    fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>>
 
     // When the details were last fetched; null when they never were.
     fun observeRefreshedAt(id: AnimeId): Flow<Instant?>

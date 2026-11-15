@@ -6,6 +6,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.chainWalk
+import io.github.kauri_off.kiroku.core.model.sequelChain
 import io.github.kauri_off.kiroku.core.repository.detailsStale
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.RoomLocalList
@@ -98,6 +100,30 @@ class MalAnimeRepositoryTest {
             val (anime, _, at) = s.stored()
             assertTrue("an airing title's details are stale after six hours", detailsStale(anime, at, network.clock.now))
             assertEquals(1, network.api.requestCount)
+            assertTrue(network.unexpected.isEmpty())
+        }
+
+    // The recorded relations of two pages: an airing third season between its prequel and its sequel, and a second
+    // season with its prequel alone, whose own pages are not stored.
+    @Test
+    fun `the stored pages of several titles are read together, and tell the chain as MAL recorded it`() =
+        runTest {
+            val s = subject()
+            val notYetAired = recordedTitle("title_not_yet_aired")
+            serve("title_airing")
+            serve("title_not_yet_aired")
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(notYetAired.anime.id))
+
+            val prequel = AnimeId(58514)
+            val sequel = AnimeId(62841)
+            val pages = s.titles.observeDetailsOf(setOf(id, notYetAired.anime.id, prequel)).first()
+            assertEquals(mapOf(id to airing.details, notYetAired.anime.id to notYetAired.details), pages)
+            val related = pages.mapValues { it.value.related }
+            assertEquals(listOf(id, sequel, prequel), chainWalk(id, related))
+            assertEquals(listOf(prequel, id, sequel), sequelChain(airing.anime, related).order.map { it.id })
+            assertEquals(listOf(notYetAired.anime.id, AnimeId(52701)), chainWalk(notYetAired.anime.id, related))
+            assertEquals(emptyMap<AnimeId, Any>(), s.titles.observeDetailsOf(setOf(prequel, sequel)).first())
             assertTrue(network.unexpected.isEmpty())
         }
 

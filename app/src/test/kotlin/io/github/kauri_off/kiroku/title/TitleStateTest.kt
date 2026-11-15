@@ -112,42 +112,49 @@ class TitleStateTest {
     }
 
     @Test
-    fun theStripIsCoresWithoutTheSequelAndSeeAllCoversTheRest() {
+    fun theStripIsCoresWithoutTheWatchOrderAndSeeAllCoversTheRest() {
         val state = TitleFixtures.page(FixtureAnime.exactToWatch)
         val details = checkNotNull(state.details)
-        val sequel = checkNotNull(state.sequel)
-        assertEquals(relatedStrip(details.related - sequel.related), state.related.map { it.related })
-        assertFalse(state.related.any { it.related.anime.id == sequel.related.anime.id })
+        val chain = state.chain.map { it.anime.id }.toSet()
+        assertEquals(relatedStrip(details.related.filter { it.anime.id !in chain }), state.related.map { it.related })
+        assertFalse(state.related.any { it.related.anime.id in chain })
         assertTrue(state.related.size <= RELATED_STRIP_LIMIT)
         assertTrue(state.moreRelated)
         state.related.forEach { assertEquals(set.entryFor(it.related.anime.id)?.status, it.status) }
-        assertTrue(state.related.any { it.status != null })
         assertFalse(TitleFixtures.page(FixtureAnime.exactCaughtUp).moreRelated)
     }
 
     @Test
-    fun theSequelRowHoldsTheDirectSequelWithItsListStatus() {
-        val content = TitleFixtures.page(FixtureAnime.exactToWatch)
-        assertEquals(
-            FixtureAnime.premiereYear.id,
-            content.sequel
-                ?.related
-                ?.anime
-                ?.id,
-        )
+    fun theWatchOrderHoldsTheChainInOrderWithListStatusesAndMarksThePagesOwnTitle() {
+        val chain = listOf(FixtureAnime.prequel, FixtureAnime.exactToWatch, FixtureAnime.premiereYear)
+        for (anime in chain) {
+            val page = TitleFixtures.page(anime)
+            assertEquals(chain.map { it.id }, page.chain.map { it.anime.id })
+            assertEquals(listOf(anime.id), page.chain.filter { it.current }.map { it.anime.id })
+            page.chain.forEach { assertEquals(set.entryFor(it.anime.id)?.status, it.status) }
+            assertTrue(page.chain.any { !it.current && it.status != null })
+        }
         val finished = TitleFixtures.page(FixtureAnime.prequel)
-        assertEquals(
-            FixtureAnime.exactToWatch.id,
-            finished.sequel
-                ?.related
-                ?.anime
-                ?.id,
-        )
-        assertEquals(ListStatus.Watching, finished.sequel?.status)
         assertTrue(finished.related.isEmpty())
         assertFalse(finished.moreRelated)
-        assertEquals(null, TitleFixtures.page(FixtureAnime.premiereYear).sequel)
-        assertEquals(null, TitleFixtures.page(FixtureAnime.notOnListAiring).sequel)
+        assertEquals(emptyList<ChainCard>(), TitleFixtures.page(FixtureAnime.notOnListAiring).chain)
+        assertEquals(emptyList<ChainCard>(), TitleFixtures.page(FixtureAnime.exactToWatch, details = null).chain)
+    }
+
+    // Only the pages stored so far tell the chain: before the walk, the page's own relations alone.
+    @Test
+    fun theWatchOrderShowsWhatTheStoredPagesTell() {
+        val own = TitleFixtures.page(FixtureAnime.exactToWatch, chainPages = emptyMap())
+        assertEquals(
+            listOf(FixtureAnime.prequel, FixtureAnime.exactToWatch, FixtureAnime.premiereYear).map { it.id },
+            own.chain.map { it.anime.id },
+        )
+        val film = TitleFixtures.filmBetweenSeasons
+        assertEquals(
+            listOf(FixtureAnime.prequel.id, FixtureAnime.exactToWatch.id, film.id, FixtureAnime.premiereYear.id),
+            TitleFixtures.chainOfFour.page.chain
+                .map { it.anime.id },
+        )
     }
 
     // The total is stated once: by the progress when the title is on the list, by the header otherwise.
@@ -206,9 +213,9 @@ class TitleStateTest {
         assertEquals(ListStatus.Completed, page.entry?.status)
     }
 
-    // Review M1: the only related titles besides the sequel are relations the strip leaves out.
+    // The only related titles besides the watch order are relations the strip leaves out.
     @Test
-    fun seeAllIsOfferedWheneverARelatedTitleIsOutsideTheSequelRowAndTheStrip() {
+    fun seeAllIsOfferedWheneverARelatedTitleIsOutsideTheWatchOrderAndTheStrip() {
         val anime = FixtureAnime.exactToWatch
         val details = checkNotNull(set.details[anime.id])
         val sequel = RelatedAnime(FixtureAnime.premiereYear, RelationType.Sequel)

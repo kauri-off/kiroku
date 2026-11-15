@@ -238,6 +238,8 @@ class LiveGraphTest {
 
                     override fun observeDetails(id: AnimeId) = flowOf<AnimeDetails?>(null)
 
+                    override fun observeDetailsOf(ids: Set<AnimeId>) = flowOf(emptyMap<AnimeId, AnimeDetails>())
+
                     override fun observeRefreshedAt(id: AnimeId) = flowOf<Instant?>(null)
 
                     override fun observePagesRead() = flowOf(emptySet<AnimeId>())

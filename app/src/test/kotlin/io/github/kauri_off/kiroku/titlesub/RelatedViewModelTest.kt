@@ -76,7 +76,8 @@ class RelatedViewModelTest {
             showing(related.state, related.shown)
             advanceUntilIdle()
             val details = graph.anime.observeDetails(FixtureAnime.premiereYear.id).first()!!
-            assertEquals(details.related.map { it.anime.id }.toSet(), graph.entriesRead)
+            assertEquals(listOf(details.related.map { it.anime.id }.toSet()), graph.entryQueries)
+            assertEquals(emptySet<AnimeId>(), graph.entriesRead)
             assertEquals(0, graph.wholeListReads)
             scope.cancel()
         }

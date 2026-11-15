@@ -17,7 +17,7 @@ import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.relatedStrip
-import io.github.kauri_off.kiroku.core.model.sequelOf
+import io.github.kauri_off.kiroku.core.model.sequelChain
 import java.time.Clock
 import java.time.ZonedDateTime
 
@@ -45,6 +45,8 @@ sealed interface TitleState {
         val detailsWait: DetailsWait = DetailsWait.Loading,
         // A refresh pulled by hand is running.
         val refreshing: Boolean = false,
+        // The walk along the chain of sequels has run for a second and goes on.
+        val chainLoading: Boolean = false,
     ) : TitleState
 }
 
@@ -75,16 +77,18 @@ data class TitlePage private constructor(
     val airing: AiringPhase?,
     // Null while the details are loading.
     val details: AnimeDetails?,
-    val sequel: RelatedCard?,
-    // The strip leaves out the sequel, which has its own row.
+    // The watch order, this title included; empty for a title with no sequel and no prequel.
+    val chain: List<ChainCard>,
+    // The strip leaves out the titles of the watch order.
     val related: List<RelatedCard>,
-    // True when the title has a related title that neither the sequel row nor the strip shows.
+    // True when the title has a related title that neither the watch order nor the strip shows.
     val moreRelated: Boolean,
     // The clock's instant in its zone; every day and time on the page is computed in this zone.
     val now: ZonedDateTime,
 ) {
     companion object {
-        // The total and the whole airing block come from :core.
+        // The total, the whole airing block and the watch order come from :core. [chainPages]: the stored pages of the
+        // other titles of the chain of sequels.
         fun of(
             anime: Anime,
             entry: ListEntry?,
@@ -94,14 +98,19 @@ data class TitlePage private constructor(
             language: TitleLanguage,
             clock: Clock,
             pageRead: Boolean = details != null,
+            chainPages: Map<AnimeId, AnimeDetails> = emptyMap(),
         ): TitlePage {
             require(entry == null || entry.anime.id == anime.id)
             val now = ZonedDateTime.now(clock)
             val total = episodeTotal(anime, airing)
             val phase = airingPhase(anime, entry?.values, airing, now.toLocalDate())
             val related = details?.related.orEmpty()
-            val sequel = sequelOf(related)
-            val strip = relatedStrip(related - listOfNotNull(sequel).toSet())
+            val chain =
+                details
+                    ?.let { sequelChain(anime, chainPages.mapValues { it.value.related } + (anime.id to it.related)) }
+                    ?.takeIf { it.shown }
+            val inChain = chain?.walk.orEmpty().toSet()
+            val strip = relatedStrip(related.filter { it.anime.id !in inChain })
 
             fun card(it: RelatedAnime) = RelatedCard(it, it.anime.titles.preferred(language), listStatuses[it.anime.id])
             return TitlePage(
@@ -113,9 +122,12 @@ data class TitlePage private constructor(
                 entry = entry?.values,
                 airing = phase,
                 details = details,
-                sequel = sequel?.let(::card),
+                chain =
+                    chain?.order.orEmpty().map {
+                        ChainCard(it, it.titles.preferred(language), listStatuses[it.id], current = it.id == anime.id)
+                    },
                 related = strip.map(::card),
-                moreRelated = related.size > strip.size + listOfNotNull(sequel).size,
+                moreRelated = related.size > strip.size + related.count { it.anime.id in inChain },
                 now = now,
             )
         }
@@ -152,6 +164,15 @@ data class HeaderFacts(
     val type: MediaType?,
     val year: Int?,
     val episodes: Int?,
+)
+
+// A title of the watch order. The page's own title is [current], and its row opens nothing.
+data class ChainCard(
+    val anime: Anime,
+    val title: String,
+    // The user's status for that title, when it is on their list.
+    val status: EntryStatus?,
+    val current: Boolean,
 )
 
 data class RelatedCard(
