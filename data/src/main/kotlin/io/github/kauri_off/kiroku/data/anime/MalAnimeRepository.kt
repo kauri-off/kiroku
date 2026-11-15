@@ -35,6 +35,9 @@ class MalAnimeRepository(
             .distinctUntilChanged()
             .readable()
 
+    override fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>> =
+        store.observeDetailsOf(ids).distinctUntilChanged().readable()
+
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> =
         store
             .observeDetails(id)

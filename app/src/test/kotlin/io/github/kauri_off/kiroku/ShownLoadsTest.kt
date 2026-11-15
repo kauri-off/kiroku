@@ -62,6 +62,8 @@ class ShownLoadsTest(
         private val name: String,
         // What this screen asks MAL for, counted.
         val loads: (TestGraph) -> Int,
+        // Every request it makes, with the title page's walk along its chain after its own load.
+        val asked: (TestGraph) -> Int = loads,
         val open: (TestGraph, CoroutineScope) -> Opened,
     ) {
         override fun toString() = name
@@ -81,6 +83,7 @@ class ShownLoadsTest(
         private var collecting: Job? = null
 
         val loads: Int get() = screen.loads(graph)
+        val asked: Int get() = screen.asked(graph)
 
         fun show() {
             collecting = test.showing(opened.state, opened.shown)
@@ -126,12 +129,14 @@ class ShownLoadsTest(
             s.show()
             settle()
             assertEquals("the first show of a screen never loaded", 1, s.loads)
+            val asked = s.asked
             s.hide()
             advanceTimeBy(STOPPED_AFTER)
             s.age(Duration.ofMinutes(1))
             s.show()
             settle()
             assertEquals("fresh", 1, s.loads)
+            assertEquals("fresh, nothing at all", asked, s.asked)
             s.hide()
             advanceTimeBy(STOPPED_AFTER)
             s.age(STALE)
@@ -148,12 +153,14 @@ class ShownLoadsTest(
         test { s ->
             s.show()
             settle()
+            val asked = s.asked
             s.hide()
             advanceTimeBy(ROTATION)
             s.age(STALE)
             s.show()
             settle()
             assertEquals(1, s.loads)
+            assertEquals(asked, s.asked)
         }
 
     // The List's pages beside the shown one are no screens of their own.
@@ -165,13 +172,21 @@ class ShownLoadsTest(
             s.opened.onSelectTabs()
             settle()
             assertTrue(s.graph.readers > 0)
-            assertEquals(0, s.loads)
+            assertEquals(0, s.asked)
             s.show()
             settle()
             assertEquals(1, s.loads)
+            val asked = s.asked
+            s.hide()
+            advanceTimeBy(STOPPED_AFTER)
+            s.age(STALE)
+            settle()
+            assertEquals("drawn alone, stale", asked, s.asked)
+            s.show()
+            settle()
             s.opened.onSelectTabs()
             settle()
-            assertEquals(1, s.loads)
+            assertEquals(2, s.loads)
             drawn.cancel()
         }
 
@@ -291,7 +306,8 @@ class ShownLoadsTest(
                         list.onEvent(ListEvent.Retry)
                     }) { ListStatus.entries.forEach { list.onEvent(ListEvent.SelectTab(it)) } }
                 },
-                Screen("Title page", TestGraph::refreshes) { graph, scope ->
+                // Its loads are its own title's; its walk asks for the chain's other titles after the first.
+                Screen("Title page", { graph -> graph.requested.count { it == title } }, asked = TestGraph::refreshes) { graph, scope ->
                     val page =
                         TitleViewModel(
                             title,

@@ -68,6 +68,9 @@ internal class DemoAnimeRepository(
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = cached.map { it[id]?.details }.distinctUntilChanged()
 
+    override fun observeDetailsOf(ids: Set<AnimeId>): Flow<Map<AnimeId, AnimeDetails>> =
+        cached.map { cached -> cached.filterKeys(ids::contains).mapValues { it.value.details } }.distinctUntilChanged()
+
     override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = cached.map { it[id]?.at }.distinctUntilChanged()
 
     override fun observePagesRead(): Flow<Set<AnimeId>> = cached.map { it.keys }.distinctUntilChanged()

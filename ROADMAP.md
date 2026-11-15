@@ -140,12 +140,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-26 The real title page and its link.**
 
-- [ ] **M2-27 [L] Watch order on the title page.** The page follows the chain of sequels, one request per title,
-  each stored, and shows the watch order, so a film between seasons does not hide the next season; the order is
-  decided in `:core`. Cases: `chain-loading`, `chain-of-four`, `chain-failed`.
-  **Needs:** M2-26, and section 9.4 changed by its own procedure (section 9.1).
-  **Check:** the rubric on the cases; tests: a chain is walked once and read from the store afterwards; a
-  failure in the chain leaves the page as it was.
+- [x] **M2-27 [L] Watch order on the title page.**
 
 - [x] **M2-28 Back gesture preview.**
 
@@ -291,7 +286,7 @@ P1 to P5; each starts with a budget change (ARCHITECTURE section 9.1). The sourc
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|
 | P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics, behind an Anime / Manga switch; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
-| P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the franchise in watch order; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
+| P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
 | P3 | Schedule and discovery | A weekly schedule of the user's airing titles as the fourth destination; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
 | P4 | Community, read-only | Forum boards, topics and posts as the fifth destination; a title's discussions; users' reviews of a title | MAL, Jikan |
 | P5 | Reach | F-Droid; community translations, each reviewed by a speaker; Russian titles as a fourth title language; a pure-black theme; a choice of start tab; reference screenshots compared in CI; an "Up next" widget | Shikimori for Russian titles |

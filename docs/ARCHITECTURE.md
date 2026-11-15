@@ -672,17 +672,19 @@ episode total, the year, the premiere and a related title each appear in one pla
    to watch; the second is the next episode, when its time is known exactly. A title that has not aired yet shows its
    premiere alone. The list row and this block show the same numbers for the same title (A1), also for a title outside
    the tracked set (A12).
-5. **Sequel** (must show when the title has a direct sequel; absent otherwise): a `SectionHeader` over one `AnimeRow`
-   that opens it, with the user's list status for it when it is on their list. Which sequel is decided in `:core`: of
-   several, the one that starts first. It is not repeated in the Related strip. Following the chain of sequels across
-   titles is not on the page in 1.0.
+5. **Watch order** (must show when the title has a sequel or a prequel; absent otherwise): a `SectionHeader` over the
+   chain of sequels and prequels in the order to watch it, which `:core` decides: for each other title an `AnimeRow`
+   that opens it, with the user's list status for it when it is on their list, and in this title's place its poster
+   and the words "This title", which open nothing. Limit: six titles, those nearest to this one. A title in it is not
+   repeated in the Related strip.
 6. **Synopsis:** a `SectionHeader` over the text, line cap four, which expands and collapses in place. Under it one
    line of plain text with the genres, line cap one.
-7. **Related** (must show when the title has related anime other than the sequel): a `SectionHeader` over a horizontal
-   strip of at most ten `PosterCard`s. A card shows the title, the relation, and the user's list status for that title
-   or else its type and year. Order: prequel, sequel, parent story, full story, side story, spin-off, alternative
-   setting, alternative version, summary; within a type by start date. "See all" is shown whenever a related title is
-   not in the strip; the types "other" and "character" appear only there. Related manga are not shown in 1.0.
+7. **Related** (must show when the title has related anime other than the watch order's): a `SectionHeader` over a
+   horizontal strip of at most ten `PosterCard`s. A card shows the title, the relation, and the user's list status for
+   that title or else its type and year. Order: prequel, sequel, parent story, full story, side story, spin-off,
+   alternative setting, alternative version, summary; within a type by start date. "See all" is shown whenever a
+   related title is not in the strip; the types "other" and "character" appear only there. Related manga are not shown
+   in 1.0.
 8. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
    percentages, and one line with the member count.
 9. **More:** rows that open sub-screens: "Details", and "Recommendations" when MAL gives any.

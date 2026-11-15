@@ -111,6 +111,8 @@ class ListEngine(
 
             override fun observeEntry(id: AnimeId) = store.observeEntry(id).storeFlow()
 
+            override fun observeEntriesOf(ids: Set<AnimeId>) = store.observeEntriesOf(ids).storeFlow()
+
             override suspend fun state() = storeCall(unreadable) { store.state() }
 
             override suspend fun read(id: AnimeId) = storeCall(unreadable) { store.read(id) }
@@ -234,6 +236,8 @@ class ListEngine(
     override fun observeEntries(): Flow<List<ListEntry>> = shown(emptyList()) { local.observeEntries() }
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = shown(null) { local.observeEntry(id) }
+
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> = shown(emptyMap()) { local.observeEntriesOf(ids) }
 
     override fun observeSyncedAt(): Flow<Instant?> = shown(null) { syncedAt }
 

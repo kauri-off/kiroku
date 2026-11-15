@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -43,6 +44,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -74,7 +77,6 @@ import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
-import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.EpisodeStepper
@@ -98,7 +100,6 @@ import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.genreName
 import io.github.kauri_off.kiroku.text.label
-import io.github.kauri_off.kiroku.text.relationName
 import io.github.kauri_off.kiroku.text.statusName
 
 // The title page of ARCHITECTURE section 9.4: one column in a fixed order, drawn from [state] alone. Its snackbars go
@@ -186,6 +187,10 @@ private fun TitleContent(
 ) {
     val page = state.page
     val direction = LocalLayoutDirection.current
+    // Whether the watch order was on the page before this composition; read and set without a recomposition.
+    val chainShown = remember { BooleanArray(1) }
+    val chainWasShown = chainShown[0]
+    SideEffect { chainShown[0] = page.chain.isNotEmpty() }
     RefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = { onEvent(TitleEvent.Refresh) },
@@ -223,7 +228,7 @@ private fun TitleContent(
                         }
                 }
             } else {
-                details(details, page, state.moment.synopsisExpanded, onEvent)
+                details(details, state, chainWasShown, onEvent)
             }
         }
     }
@@ -448,26 +453,26 @@ private fun DetailsLoading() {
 
 private fun LazyListScope.details(
     details: AnimeDetails,
-    page: TitlePage,
-    synopsisExpanded: Boolean,
+    state: TitleState.Shown,
+    chainWasShown: Boolean,
     onEvent: (TitleEvent) -> Unit,
 ) {
-    page.sequel?.let { sequel ->
-        item(key = Section.Sequel) { Gap { Sequel(sequel, onEvent) } }
-    }
-    // The sequel's row ends in its own padding.
-    val afterSequel = if (page.sequel != null) Spacing.l else Spacing.xl
+    val page = state.page
+    val synopsisExpanded = state.moment.synopsisExpanded
+    if (page.chain.isNotEmpty()) watchOrder(page.chain, state.chainLoading, animated = chainWasShown, onEvent)
+    // The last row of the watch order ends in its own padding, and so does its indicator's room.
+    val afterChain = if (page.chain.isNotEmpty()) Spacing.l else Spacing.xl
     val genres = page.anime.genres.orEmpty()
     val synopsis = details.synopsis != null || genres.isNotEmpty()
     if (synopsis) {
         item(key = Section.Synopsis) {
-            Gap(afterSequel) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
+            Gap(afterChain) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
         }
     }
     // Drawn whenever there is something to open from it: the strip, or only "See all" when no related title fits it.
     val related = page.related.isNotEmpty() || page.moreRelated
     if (related) {
-        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterSequel) { Related(page, onEvent) } }
+        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterChain) { Related(page, onEvent) } }
     }
     details.statistics?.let { statistics ->
         // The strip's cards end in their own blank room.
@@ -476,7 +481,7 @@ private fun LazyListScope.details(
                 page.related.isNotEmpty() -> Spacing.s
                 related -> Spacing.xl
                 synopsis -> Spacing.xl
-                else -> afterSequel
+                else -> afterChain
             }
         item(key = Section.Statistics) { Gap(space) { Statistics(statistics) } }
     }
@@ -563,27 +568,81 @@ private fun Related(
     }
 }
 
-// The direct sequel as a row of its own, above the strip, for whoever looks for what to watch next.
-@Composable
-private fun Sequel(
-    sequel: RelatedCard,
+// The chain of sequels in the order to watch it, one row per title; the page's own title is marked and opens nothing.
+// A title the walk finds fades in, as content that finishes loading does, once the section is [animated]: it arrives
+// with the rest of the details without a fade. Nothing slides: a move cannot be kept to the frame the walk changes
+// the rows, and every other change of height, a refresh among them, is not animated (section 8.5).
+private fun LazyListScope.watchOrder(
+    chain: List<ChainCard>,
+    loading: Boolean,
+    animated: Boolean,
     onEvent: (TitleEvent) -> Unit,
 ) {
-    Column {
-        SectionHeader(relationName(RelationType.Sequel))
-        val anime = sequel.related.anime
+    item(key = Section.WatchOrder) { Gap { SectionHeader(stringResource(R.string.title_watch_order)) } }
+    chain.forEachIndexed { index, card ->
+        item(key = card.anime.id.value, contentType = card.current) {
+            val modifier = chainItem(animated).then(if (index == 0) Modifier.trimTop(ListItemTop) else Modifier)
+            ChainRow(card, place = index + 1, of = chain.size, onEvent, modifier)
+        }
+    }
+    if (loading) item(key = Section.ChainLoading) { ChainLoading(chainItem(animated)) }
+}
+
+@Composable
+private fun LazyItemScope.chainItem(animated: Boolean): Modifier {
+    val motionScheme = MaterialTheme.motionScheme
+    return Modifier.animateItem(
+        fadeInSpec = if (animated) motionScheme.defaultEffectsSpec() else null,
+        placementSpec = null,
+        fadeOutSpec = null,
+    )
+}
+
+// Every other title of the chain is a row that opens it. The page's own title, which the header above states, is its
+// poster and "This title", in the place of an AnimeRow without a click.
+@Composable
+private fun ChainRow(
+    card: ChainCard,
+    place: Int,
+    of: Int,
+    onEvent: (TitleEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val anime = card.anime
+    if (!card.current) {
         AnimeRow(
-            modifier = Modifier.trimTop(ListItemTop),
-            title = sequel.title,
+            modifier = modifier.testTag(TitleTags.chainRow),
+            title = card.title,
             posterUrl = anime.posterUrl,
             onClick = { onEvent(TitleEvent.OpenRelated(anime.id)) },
             lines =
                 listOfNotNull(
                     typeAndYear(anime).takeIf { it.isNotEmpty() },
-                    sequel.status?.let { statusName(it) },
+                    card.status?.let { statusName(it) },
                 ).map { RowLine(it) },
         )
+        return
     }
+    // In a supporting colour, as it opens nothing; a screen reader hears its place in the order too.
+    val spoken = pluralStringResource(R.plurals.title_this_title_spoken, of, place, of)
+    ListItem(
+        modifier = modifier.testTag(TitleTags.chainRow).clearAndSetSemantics { contentDescription = spoken },
+        leadingContent = { Poster(anime.posterUrl, PosterSize.Row) },
+        verticalAlignment = Alignment.CenterVertically,
+        content = { Text(stringResource(R.string.title_this_title), color = MaterialTheme.colorScheme.onSurfaceVariant) },
+    )
+}
+
+@Composable
+private fun ChainLoading(modifier: Modifier) {
+    val loading = stringResource(R.string.title_loading_watch_order)
+    LinearWavyProgressIndicator(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.l, vertical = Spacing.s)
+            .testTag(WAVY_INDICATOR)
+            .semantics { contentDescription = loading },
+    )
 }
 
 @Composable
@@ -672,6 +731,7 @@ internal object TitleTags {
     val list = notShown("title-list-block")
     val airing = notShown("title-airing-block")
     val detailsFailed = notShown("title-details-failed")
+    val chainRow = notShown("title-chain-row")
 }
 
-private enum class Section { Header, List, Airing, Loading, Failed, Sequel, Synopsis, Related, Statistics, More }
+private enum class Section { Header, List, Airing, Loading, Failed, WatchOrder, ChainLoading, Synopsis, Related, Statistics, More }

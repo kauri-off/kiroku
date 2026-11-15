@@ -4,10 +4,13 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.chainWalk
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
@@ -18,23 +21,34 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 
-// The list entries of [ids] alone; a change to another title's entry is not heard.
+// The list entries of [ids] alone, in one read; a change to another title's entry is not heard.
 fun ListSource.entriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
-    if (ids.isEmpty()) {
-        flowOf(emptyMap())
-    } else {
-        combine(ids.map(::observeEntry)) { entries -> entries.filterNotNull().associateBy { it.anime.id } }.distinctUntilChanged()
-    }
+    if (ids.isEmpty()) flowOf(emptyMap()) else observeEntriesOf(ids).distinctUntilChanged()
 
 // The airing of [ids] alone.
 fun AiringRepository.airingOf(ids: Set<AnimeId>): Flow<Map<AnimeId, Airing>> =
     observeAiring().map { airing -> airing.filterKeys(ids::contains) }.distinctUntilChanged()
 
-// The titles a page about [id] shows: the title and its related titles.
+// The titles a page about [id] shows: the title, its related titles and the titles of its chain of sequels.
 fun shownTitles(
     id: AnimeId,
     details: AnimeDetails?,
-): Set<AnimeId> = setOf(id) + details?.related.orEmpty().map { it.anime.id }
+    chainPages: Map<AnimeId, AnimeDetails> = emptyMap(),
+): Set<AnimeId> = setOf(id) + details?.related.orEmpty().map { it.anime.id } + chainWalk(id, chainPages.related())
+
+// The stored pages of the titles of the chain of sequels around [id], [id] included: read together, and read again
+// whenever the chain the pages tell of differs from the titles read.
+@OptIn(ExperimentalCoroutinesApi::class)
+fun AnimeRepository.chainPagesOf(id: AnimeId): Flow<Map<AnimeId, AnimeDetails>> =
+    channelFlow {
+        val titles = MutableStateFlow(setOf(id))
+        titles.flatMapLatest(::observeDetailsOf).collect { pages ->
+            val chain = chainWalk(id, pages.related()).toSet()
+            if (chain == titles.value) send(pages) else titles.value = chain
+        }
+    }
+
+private fun Map<AnimeId, AnimeDetails>.related() = mapValues { it.value.related }
 
 // Each value with what [read] gave for that value's own key; [read] starts again only when the key changes.
 @OptIn(ExperimentalCoroutinesApi::class)

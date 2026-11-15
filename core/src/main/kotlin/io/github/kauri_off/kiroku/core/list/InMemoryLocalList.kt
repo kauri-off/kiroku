@@ -33,6 +33,9 @@ class InMemoryLocalList(
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = shown.map { it[id] }.distinctUntilChanged { old, new -> old === new }
 
+    override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
+        shown.map { shown -> shown.filterKeys(ids::contains) }.distinctUntilChanged()
+
     override suspend fun state(): StoredList = synchronized(guard) { state }
 
     override suspend fun read(id: AnimeId): StoredTitle? = synchronized(guard) { titles[id]?.let { StoredTitle(it, stored[id]) } }

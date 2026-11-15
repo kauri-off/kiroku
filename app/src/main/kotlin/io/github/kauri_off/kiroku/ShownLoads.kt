@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -28,6 +29,10 @@ class ShownLoads(
     connection: Connection,
     whenShown: suspend () -> Unit,
     again: () -> Unit,
+    // The screen stopped being shown, heard at once rather than after the stop timeout.
+    hidden: () -> Unit = {},
+    // The screen is shown again within its stop timeout, as after a rotation, when [whenShown] does not run.
+    shownAgain: () -> Unit = {},
 ) {
     private val watchers = MutableStateFlow(Unit)
     private val owed = MutableStateFlow(false)
@@ -35,12 +40,39 @@ class ShownLoads(
     // A load was repeated since the connection was last seen gone, so it is not repeated while the connection stays.
     private var spent = false
 
+    // The stop timeouts that ran out so far: none during a hide means the next show is no new one.
+    private var stops = 0
+
     // What the route collects while its screen is shown (CountAsShown).
     val shown: StateFlow<Unit> = watchers.asStateFlow()
 
+    // Whether the screen is shown now: it stops being shown at once, not after the stop timeout.
+    val isShowing: Boolean get() = watchers.subscriptionCount.value > 0
+
     init {
         scope.launch {
-            WhileShown.command(watchers.subscriptionCount).collect { if (it == SharingCommand.START) whenShown() }
+            var stopsAtHide = -1
+            watchers.subscriptionCount
+                .map { it > 0 }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { shown ->
+                    if (!shown) {
+                        stopsAtHide = stops
+                        hidden()
+                    } else if (stops == stopsAtHide) {
+                        shownAgain()
+                    }
+                }
+        }
+        scope.launch {
+            WhileShown.command(watchers.subscriptionCount).collect {
+                if (it == SharingCommand.START) {
+                    whenShown()
+                } else if (it == SharingCommand.STOP) {
+                    stops++
+                }
+            }
         }
         scope.launch {
             val showing = watchers.subscriptionCount.map { it > 0 }.distinctUntilChanged()

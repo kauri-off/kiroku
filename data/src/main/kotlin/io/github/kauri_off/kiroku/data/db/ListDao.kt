@@ -16,6 +16,9 @@ internal abstract class ListDao {
     @Query("$LISTED AND e.title_id = :id")
     abstract fun observeListed(id: Long): Flow<ListedRow?>
 
+    @Query("$LISTED AND e.title_id IN (:ids)")
+    abstract fun observeListed(ids: List<Long>): Flow<List<ListedRow>>
+
     @Transaction
     @Query("SELECT * FROM title WHERE id = :id")
     abstract suspend fun title(id: Long): TitleWithEntry?
