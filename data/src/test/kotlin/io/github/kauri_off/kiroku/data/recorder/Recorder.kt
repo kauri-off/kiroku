@@ -80,7 +80,8 @@ internal class Recorder(
     private val say: (String) -> Unit,
     private val pause: () -> Unit,
 ) {
-    private val sanitiser = Sanitiser(users.entries.associate { (user, name) -> name to user.standIn } + (http.clientId to "client-id"))
+    private val sanitiser =
+        Sanitiser(mapOf(http.clientId to "client-id"), names = users.entries.associate { (user, name) -> name to user.standIn })
 
     var sent = 0
         private set

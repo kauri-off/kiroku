@@ -23,29 +23,87 @@ class SanitiserTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private val sanitiser = Sanitiser(mapOf("Some_Name-7" to "public-user", "" to "private-user", "the-client-id-0f3a" to "client-id"))
+    private val sanitiser =
+        Sanitiser(mapOf("the-client-id-0f3a" to "client-id"), names = mapOf("Some_Name-7" to "public-user", "" to "private-user"))
 
     @Test
-    fun `a user's name and the client id are replaced wherever an answer repeats them`() {
+    fun `a user's name is replaced where it names the user, and the client id wherever an answer repeats it`() {
         val planted =
             """
-            {"data":[{"node":{"id":1,"title":"A title","studios":[{"name":"by some_name-7"}]}}],
-            "some_name-7":{"id":"the-client-id-0f3a"},
-            "paging":{"next":"https:\/\/api.myanimelist.net\/v2\/users\/SOME_NAME-7\/animelist?offset=10&fields=id"}}
+            {"data":[{"node":{"id":1,"title":"Some_Name-7 no Bouken","studios":[{"name":"SOME_NAME-7"}]}}],
+            "echo":{"id":"x the-client-id-0f3a x"},
+            "paging":{"next":"https:\/\/api.myanimelist.net\/v2\/users\/SOME_NAME-7\/animelist?offset=10&fields=id",
+            "previous":"https://api.myanimelist.net/v2/users/some_name-7"}}
             """.trimIndent()
 
         val cleaned = sanitiser.json(planted)!!
 
-        assertFalse(cleaned.contains("some_name-7", ignoreCase = true))
         assertFalse(cleaned.contains("the-client-id-0f3a", ignoreCase = true))
         val answer = Json.parseToJsonElement(cleaned).jsonObject
         assertEquals(
-            """"https://api.myanimelist.net/v2/users/public-user/animelist?offset=10&fields=id"""",
-            "${answer["paging"]!!.jsonObject["next"]}",
+            """{"next":"https://api.myanimelist.net/v2/users/public-user/animelist?offset=10&fields=id",""" +
+                """"previous":"https://api.myanimelist.net/v2/users/public-user"}""",
+            "${answer["paging"]}",
         )
-        assertEquals("""{"id":"client-id"}""", "${answer["public-user"]}")
-        assertTrue(""""name":"by public-user"""" in "$answer")
-        assertTrue(""""title":"A title"""" in "$answer")
+        assertEquals("""{"id":"x client-id x"}""", "${answer["echo"]}")
+        assertTrue(""""name":"public-user"""" in "$answer")
+        // A title that holds the name is MAL's own text and stays whole.
+        assertTrue(""""title":"Some_Name-7 no Bouken"""" in "$answer")
+    }
+
+    @Test
+    fun `a title that holds a user's name survives, whatever the name`() {
+        val bebop = Sanitiser(emptyMap(), names = mapOf("Bebop" to "owner-user", "an" to "other-user"))
+        val planted = """{"title":"Cowboy Bebop","synopsis":"Humans and titans","name":"bebop","next":"users/an/animelist?q=users/and"}"""
+
+        assertEquals(
+            """{"title":"Cowboy Bebop","synopsis":"Humans and titans","name":"owner-user","next":"users/other-user/animelist?q=users/and"}""",
+            "${Json.parseToJsonElement(bebop.json(planted)!!)}",
+        )
+    }
+
+    @Test
+    fun `a user's id is replaced wherever it stands as a whole number, an error's message included`() {
+        val owner = Sanitiser(emptyMap(), userId = "4815162")
+        val planted = """{"id":4815162,"message":"no entry of user 4815162.","rank":14815162,"mean":4815162.5,"link":"u/4815162/x"}"""
+
+        assertEquals(
+            """{"id":0,"message":"no entry of user 0.","rank":14815162,"mean":4815162.5,"link":"u/0/x"}""",
+            "${Json.parseToJsonElement(owner.json(planted)!!)}",
+        )
+        assertEquals("user 0", owner.plain("user 4815162"))
+        assertEquals("""{"id":4815162}""", "${Json.parseToJsonElement(Sanitiser(emptyMap(), userId = "x").json("""{"id":4815162}""")!!)}")
+    }
+
+    @Test
+    fun `a page of a user's own list keeps MAL's shape and nothing of an entry`() {
+        val real =
+            """{"node":{"id":%d,"title":"Real %d","genres":[{"id":1,"name":"Action"},{"id":9,"name":"Ecchi"}],"mean":8.5,"rank":%d},""" +
+                """"list_status":{"status":"dropped","score":3,"num_episodes_watched":5,"updated_at":"2019-03-04T05:06:07.123-05:00",""" +
+                """"start_date":"2019-02","tags":["mine"]}}"""
+        val all = (1..12).joinToString(",") { real.format(it, it, it) }
+        val planted = """{"data":[$all],"paging":{"next":"users/@me/animelist?offset=24&limit=12"}}"""
+        val own = Sanitiser(emptyMap())
+
+        val stored = own.ownList(planted, first = 10)!!
+        val page = Json.parseToJsonElement(stored).jsonObject
+        val entries = page["data"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals(KEPT_ENTRIES, entries.size)
+        assertEquals(
+            """{"id":90000011,"title":"Made-up title 11","genres":[{"id":3,"name":"made-up-4"}],"mean":5.5,"rank":6}""",
+            "${entries[0]["node"]}",
+        )
+        assertEquals(
+            """{"status":"watching","score":1,"num_episodes_watched":11,"updated_at":"2021-02-10T00:00:00+00:00","tags":[],""" +
+                """"start_date":"2021-01-11"}""",
+            "${entries[0]["list_status"]}",
+        )
+        assertEquals(entries[0]["node"]!!.jsonObject.keys, entries[9]["node"]!!.jsonObject.keys)
+        assertEquals("""{"next":"users/@me/animelist?offset=20&limit=10"}""", "${page["paging"]}")
+        for (ofTheUser in listOf("Real", "Action", "Ecchi", "2019", "8.5", "mine")) assertFalse(ofTheUser, ofTheUser in stored)
+        assertEquals(stored, own.ownList(stored, first = 10))
+        assertEquals(stored, cleanedStored("own_list_2.200.json", stored))
     }
 
     @Test
@@ -172,9 +230,9 @@ class SanitiserTest {
     fun `a name where a paragraph is cut leaves no part of itself`() {
         val start = "https://myanimelist.net/profile/".padEnd(FREE_TEXT_LIMIT - 5, 'a')
 
-        val answer = cleaned("${buildJsonObject { put("synopsis", "${start}Some_Name-7/and/on/and/on/and/on") }}")
+        val answer = cleaned("${buildJsonObject { put("synopsis", "${start}the-client-id-0f3a/and/on/and/on/and/on") }}")
 
-        assertEquals("${start}publ…", answer["synopsis"]!!.jsonPrimitive.content)
+        assertEquals("${start}clie…", answer["synopsis"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -209,7 +267,7 @@ class SanitiserTest {
 
         assertEquals(
             """{"status":"completed","score":8,"num_episodes_watched":12,"is_rewatching":false,""" +
-                """"updated_at":"2022-01-01T15:23:53+09:00","start_date":"2020-01-08","finish_date":"2020-01",""" +
+                """"updated_at":"2020-01-15T15:23:53+00:00","start_date":"2020-01-08","finish_date":"2020-01",""" +
                 """"comments":"","tags":[],"priority":0,"num_times_rewatched":0,"rewatch_value":0,"something_new":""}""",
             "${entries[0]["list_status"]}",
         )
@@ -219,7 +277,7 @@ class SanitiserTest {
         )
         assertEquals(
             """{"status":"watching","score":0,"num_episodes_watched":3,"is_rewatching":false,""" +
-                """"updated_at":"2022-01-01T19:47:51+00:00","start_date":"2020"}""",
+                """"updated_at":"2020-01-10T19:47:51+00:00","start_date":"2020"}""",
             "${entries[2]["list_status"]}",
         )
         assertEquals("""{"id":7,"title":"A","mean":8.5}""", "${entries[0]["node"]}")
@@ -244,7 +302,7 @@ class SanitiserTest {
             listOf(
                 """{"status":"completed","start_date":"2024-10-12","finish_date":"2024-10-19"}""",
                 """{"status":"watching","start_date":"2019"}""",
-                """{"status":"watching","start_date":"2031-01-10"}""",
+                """{"status":"watching","start_date":"2026-11-01"}""",
                 """{"status":"watching","start_date":"2020-01-11"}""",
             ),
             values,
@@ -253,10 +311,11 @@ class SanitiserTest {
 
     @Test
     fun `the values of a recorder's own title stay as MAL wrote them, and no other title's do`() {
-        val own = Sanitiser(mapOf("Some_Name-7" to "owner-user"), ownTitle = 7)
-        val values = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"by Some_Name-7"}"""
-        val madeUp = """{"status":"watching","score":3,"start_date":"2020-01-13","comments":""}"""
-        val kept = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"by owner-user"}"""
+        val own = Sanitiser(emptyMap(), ownTitle = 7)
+        val ofMal = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"mine","updated_at":"""
+        val values = """$ofMal"2026-11-14T15:00:00.123+03:00"}"""
+        val madeUp = """{"status":"watching","score":3,"start_date":"2020-01-13","comments":"","updated_at":"2020-01-13T02:23:48+00:00"}"""
+        val kept = """$ofMal"2026-11-14T12:00:00+00:00"}"""
 
         val page =
             Json.parseToJsonElement(

@@ -30,6 +30,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
@@ -61,6 +62,9 @@ sealed interface Halt {
 
     // Another user is signed in than the one whose list the title was put on.
     data object AnotherAccount : Halt
+
+    // MAL answered the removal, and still shows the title on the list.
+    data object StillOnTheList : Halt
 
     // MAL limits requests.
     data class Refused(
@@ -178,6 +182,8 @@ class SignedInRecorder internal constructor(
     private var stored = 0
     private var running: RecordedTitle? = null
     private var secrets = emptyMap<String, String>()
+    private var names = emptyMap<String, String>()
+    private var userId: String? = null
     private var ownTitle: Long? = null
 
     internal val started: Job = work.launch { busy.withLock { journal.read()?.let { shown.value = leftover(it) } } }
@@ -202,7 +208,8 @@ class SignedInRecorder internal constructor(
     private val Recording.settled: Boolean
         get() =
             when (this) {
-                is Recording.Checked, is Recording.NotStarted, is Recording.Recorded -> true
+                is Recording.Checked, is Recording.NotStarted -> true
+                is Recording.Recorded -> list != ListAfter.Left
                 is Recording.Stopped -> list != ListAfter.Left
                 is Recording.Leftover -> list != ListAfter.Left
                 else -> false
@@ -224,6 +231,8 @@ class SignedInRecorder internal constructor(
         stored = 0
         running = title
         secrets = emptyMap()
+        names = emptyMap()
+        userId = null
         ownTitle = null
     }
 
@@ -244,7 +253,6 @@ class SignedInRecorder internal constructor(
             lifetime()
             val user = profile()
             val before = ownList()
-            ask("own_list_dropped", get("$OWN_LIST&status=dropped&limit=$KEPT_ENTRIES"))
             val absent = ask(ABSENT, entry(checked.id, MalFields.OWN_ENTRY), expected = ::knownOrNot)
             val title = recordable(absent, checked.id)
             if (title.id in before) throw Halted(Halt.OnTheList, ABSENT)
@@ -252,7 +260,7 @@ class SignedInRecorder internal constructor(
             written = true
             changes(title)
             filed(RUN) { keep(files.run, files.recorded) }
-            return Recording.Recorded(title, stored, files.recorded, compared(before))
+            return Recording.Recorded(title, stored, files.recorded, compared(title, user, before))
         } catch (halted: Halted) {
             val left = journal.read()
             val list =
@@ -260,7 +268,7 @@ class SignedInRecorder internal constructor(
                     !written -> ListAfter.Untouched
                     left == null -> ListAfter.Removed
                     // MAL answers, so the title can be taken off now; otherwise that waits for the next start.
-                    halted.halt is Halt.Unexpected && removed(left) == null -> ListAfter.Removed
+                    (halted.halt is Halt.Unexpected || halted.halt is Halt.Storage) && removed(left) == null -> ListAfter.Removed
                     else -> ListAfter.Left
                 }
             return Recording.Stopped(checked, halted.at, halted.halt, stored, files.run, list)
@@ -277,8 +285,8 @@ class SignedInRecorder internal constructor(
         }
         ask("entry_full", entry(title.id, MalFields.OWN_ENTRY))
         ask(REMOVED, delete(title.id))
+        offTheList(ask("removed_read", entry(title.id, READ_BACK)), "removed_read")
         journal.delete()
-        ask("removed_read", entry(title.id, READ_BACK))
         ask("removed_again", delete(title.id), expected = ::knownOrNot)
     }
 
@@ -295,11 +303,20 @@ class SignedInRecorder internal constructor(
             val user = ask(USER, get("users/@me?fields=id"), kept = false)
             if (userOf(user) != left.user) throw Halted(Halt.AnotherAccount, USER)
             ask(REMOVED, delete(left.title.id), kept = false, expected = ::knownOrNot)
+            offTheList(ask(READ, entry(left.title.id, READ_BACK), kept = false), READ)
             journal.delete()
             null
         } catch (halted: Halted) {
             halted.halt
         }
+
+    // The journal goes only once MAL itself shows the title without an entry.
+    private fun offTheList(
+        read: Answer,
+        at: String,
+    ) {
+        if (read.json()?.get("my_list_status").holdsValues) throw Halted(Halt.StillOnTheList, at)
+    }
 
     private suspend fun lifetime() {
         val seconds = session.value.accessTokenLifetime() ?: return
@@ -307,7 +324,7 @@ class SignedInRecorder internal constructor(
         store(TOKEN_GRANTED, sanitiser.kept(TOKEN_GRANTED, OK, null, sanitiser.json("""{"expires_in":$seconds}""")))
     }
 
-    // Who is signed in, as the journal names them. From here on the user's name and picture are replaced in every answer.
+    // Who is signed in, as the journal names them. From here on the user's name, id and picture are replaced in every answer.
     private suspend fun profile(): String {
         val answer = ask(PROFILE, get("users/@me?fields=${MalFields.PROFILE}"), clean = Sanitiser::profile, learn = ::personal)
         return userOf(answer) ?: throw Halted(Halt.Unexpected(answer.status), PROFILE)
@@ -315,11 +332,9 @@ class SignedInRecorder internal constructor(
 
     private fun personal(profile: String) {
         val values = json(profile) ?: return
-        secrets =
-            listOfNotNull(
-                values.text("name")?.let { it to "owner-user" },
-                values.text("picture")?.let { it to "https://example.org/owner-picture" },
-            ).toMap()
+        secrets = listOfNotNull(values.text("picture")?.let { it to "https://example.org/owner-picture" }).toMap()
+        names = listOfNotNull(values.text("name")?.let { it to "owner-user" }).toMap()
+        userId = (values["id"] as? JsonPrimitive)?.content
     }
 
     private fun userOf(answer: Answer): String? =
@@ -331,30 +346,58 @@ class SignedInRecorder internal constructor(
     private suspend fun ownList(): Set<Long> {
         val titles = titlesOnTheList()
         val size = ((titles.size + PAGES - 1) / PAGES).coerceIn(1, LARGEST_PAGE)
-        repeat(PAGES) { page -> ask("own_list_${page + 1}", get("$OWN_LIST&sort=anime_title&limit=$size&offset=${page * size}")) }
+        repeat(PAGES) { page ->
+            val third = get("$OWN_LIST&sort=anime_title&limit=$size&offset=${page * size}")
+            ask("own_list_${page + 1}", third, clean = { ownList(it, page * KEPT_ENTRIES) })
+        }
         return titles
     }
 
-    // Read whole, adult titles included, and not stored.
+    // Read whole, adult titles included, and not stored: page after page until MAL names no next one.
     private suspend fun titlesOnTheList(): Set<Long> {
         val titles = mutableSetOf<Long>()
-        repeat(MOST_PAGES) { page ->
-            val answer = ask(COUNT, get("users/@me/animelist?nsfw=true&limit=$LARGEST_PAGE&offset=${page * LARGEST_PAGE}"), kept = false)
-            val entries = answer.json()?.get("data") as? JsonArray ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
+        var offset = 0L
+        repeat(MOST_PAGES) {
+            val answer = ask(COUNT, get("users/@me/animelist?nsfw=true&limit=$LARGEST_PAGE&offset=$offset"), kept = false)
+            val page = answer.json()
+            val entries = page?.get("data") as? JsonArray ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
             entries.mapTo(titles) { entry ->
                 ((entry as? JsonObject)?.get("node") as? JsonObject)?.number("id") ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
             }
-            if (entries.size < LARGEST_PAGE) return titles
+            val next = (page["paging"] as? JsonObject)?.get("next")?.takeUnless { it is JsonNull } ?: return titles
+            // Of MAL's link only the place where the next page starts is taken; a link that does not go on ends the check.
+            val start =
+                (next as? JsonPrimitive)
+                    ?.content
+                    ?.toHttpUrlOrNull()
+                    ?.queryParameter("offset")
+                    ?.toLongOrNull()
+            if (start == null || start <= offset) throw Halted(Halt.Unexpected(answer.status), COUNT)
+            offset = start
         }
         throw Halted(Halt.Unexpected(OK), COUNT)
     }
 
-    private suspend fun compared(before: Set<Long>): ListAfter =
+    // A title MAL's list still holds is journalled again, so that it can be taken off.
+    private suspend fun compared(
+        title: RecordedTitle,
+        user: String,
+        before: Set<Long>,
+    ): ListAfter {
+        val after =
+            try {
+                titlesOnTheList()
+            } catch (_: Halted) {
+                return ListAfter.Removed
+            }
+        if (title.id !in after) return if (after == before) ListAfter.Same else ListAfter.Differs
         try {
-            if (titlesOnTheList() == before) ListAfter.Same else ListAfter.Differs
-        } catch (_: Halted) {
-            ListAfter.Removed
+            journal.write(Journal.Left(title, user))
+        } catch (_: IOException) {
+            return ListAfter.Left
         }
+        return ListAfter.Left
+    }
 
     // The title of [answer] when a recording may be made on it: MAL knows it, it has ended, and it is not on the list.
     private fun recordable(
@@ -452,7 +495,7 @@ class SignedInRecorder internal constructor(
                         val body = response.body.string()
                         learn(body)
                         // The token is a secret of its answer: whatever repeats it is stored without it.
-                        val sanitiser = Sanitiser(secrets + (accessToken to "access-token"), ownTitle)
+                        val sanitiser = Sanitiser(secrets + (accessToken to "access-token"), names, userId, ownTitle)
                         val stored = sanitiser.kept(name, response.code, response.header("Content-Type"), sanitiser.clean(body))
                         Attempt.Answered(Outcome.Success(Answer(response.code, body, stored)))
                     }
@@ -512,6 +555,7 @@ class SignedInRecorder internal constructor(
         const val CHECK = "check"
         const val COUNT = "count"
         const val USER = "user"
+        const val READ = "read"
         const val JOURNAL = "journal"
         const val RUN = "files"
     }

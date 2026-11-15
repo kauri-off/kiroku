@@ -40,6 +40,7 @@
     <string name="recorder_halt_no_answer">MyAnimeList не ответил</string>
     <string name="recorder_halt_storage">Устройство не смогло сохранить файл</string>
     <string name="recorder_halt_another_account">Вход выполнен в другой аккаунт, а не в тот, с которым шла запись. Войдите в тот аккаунт</string>
+    <string name="recorder_halt_still_on_the_list">MyAnimeList ответил на удаление, но всё ещё показывает тайтл в вашем списке</string>
     <string name="recorder_halt_refused">MyAnimeList отклоняет запросы (ответ %1$d). Повторите позже</string>
     <string name="recorder_halt_unexpected">MyAnimeList ответил %1$d, чего запись не ожидала</string>
 </resources>

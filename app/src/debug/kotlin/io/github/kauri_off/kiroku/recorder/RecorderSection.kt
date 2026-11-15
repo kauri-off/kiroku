@@ -136,7 +136,13 @@ private val Recording.busy: Boolean
 
 // The recorder's title may still be on the list: nothing new starts until it is off.
 private val Recording.left: Boolean
-    get() = (this as? Recording.Stopped)?.list == ListAfter.Left || (this as? Recording.Leftover)?.list == ListAfter.Left
+    get() =
+        when (this) {
+            is Recording.Stopped -> list == ListAfter.Left
+            is Recording.Leftover -> list == ListAfter.Left
+            is Recording.Recorded -> list == ListAfter.Left
+            else -> false
+        }
 
 @Composable
 private fun Confirmation(
@@ -270,6 +276,7 @@ private fun Halt.text(): String =
         Halt.NoAnswer -> stringResource(R.string.recorder_halt_no_answer)
         Halt.Storage -> stringResource(R.string.recorder_halt_storage)
         Halt.AnotherAccount -> stringResource(R.string.recorder_halt_another_account)
+        Halt.StillOnTheList -> stringResource(R.string.recorder_halt_still_on_the_list)
         is Halt.Refused -> stringResource(R.string.recorder_halt_refused, status)
         is Halt.Unexpected -> stringResource(R.string.recorder_halt_unexpected, status)
     }

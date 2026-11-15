@@ -47,7 +47,7 @@ class RecordedAnswersTest {
     @Test
     fun `every recorded answer is as the sanitiser leaves it`() {
         for (file in RecordedAnswers.files.filter { it.extension == "json" }) {
-            assertEquals(file.name, file.readText(), sanitiserOfStored(file.name, file.readText()).json(file.readText()))
+            assertEquals(file.name, file.readText(), cleanedStored(file.name, file.readText()))
         }
     }
 

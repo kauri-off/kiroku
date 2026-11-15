@@ -111,6 +111,27 @@ class RecorderSectionTest {
     }
 
     @Test
+    fun `a title MAL still shows after its removal is said to be there, and can be removed at a touch`() {
+        show(Recording.Leftover(title, ListAfter.Left, Halt.StillOnTheList))
+
+        compose.onNodeWithText("MyAnimeList answered the removal and still shows the title on your list").assertExists()
+        compose.onNodeWithText("“Cowboy Bebop” may still be on your list", substring = true).assertExists()
+        compose.onNodeWithText("left on your list, is removed", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Remove now").performClick()
+        assertEquals(listOf<RecorderEvent>(RecorderEvent.Remove), events)
+    }
+
+    @Test
+    fun `a recording whose title the list still holds offers the removal, not the end`() {
+        show(Recording.Recorded(title, 46, folder, ListAfter.Left))
+
+        compose.onNodeWithText("“Cowboy Bebop” may still be on your list", substring = true).assertExists()
+        compose.onNodeWithText("Done").assertDoesNotExist()
+        compose.onNodeWithText("Check title").assertIsNotEnabled()
+        compose.onNodeWithText("Remove now").assertExists()
+    }
+
+    @Test
     fun `a title that is on the list is refused in words`() {
         show(Recording.NotStarted(Halt.OnTheList))
 

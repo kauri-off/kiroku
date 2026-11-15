@@ -26,20 +26,30 @@ internal fun Sanitiser.kept(
     json: String?,
 ): Kept = Kept("$name.$status.${if (json != null) "json" else "txt"}", json ?: plain("$status, ${type ?: "no content type"}\n"))
 
-// The rules a stored answer is held to: one that holds a recorder's own title keeps that title's values, as when stored.
-internal fun sanitiserOfStored(
+// A stored answer as the rules of its kind leave it (an own-list page, a recorder's own title, any other); null when not JSON.
+internal fun cleanedStored(
     file: String,
     text: String,
-): Sanitiser {
+): String? {
+    val name = file.substringBefore('.')
+    val page =
+        OwnListPage
+            .matchEntire(name)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
+    if (page != null) return Sanitiser(emptyMap()).ownList(text, (page - 1) * KEPT_ENTRIES)
     val answer =
         try {
             Json.parseToJsonElement(text) as? JsonObject
         } catch (_: SerializationException) {
             null
         }
-    val own = (answer?.get("id") as? JsonPrimitive)?.longOrNull.takeIf { file.substringBefore('.') in OwnEntryAnswers }
-    return Sanitiser(emptyMap(), own)
+    val own = (answer?.get("id") as? JsonPrimitive)?.longOrNull.takeIf { name in OwnEntryAnswers }
+    return Sanitiser(emptyMap(), ownTitle = own).json(text)
 }
+
+private val OwnListPage = Regex("""own_list_(\d+)""")
 
 // Where a run's answers wait: empty before the run's first request.
 internal fun emptied(run: File): Boolean {

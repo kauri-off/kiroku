@@ -43,6 +43,25 @@ internal class PlantedMal : Dispatcher() {
     @Volatile
     var answersRemovalsInJson = true
 
+    // The most entries a page holds, whatever limit is asked; a list that goes on names its next page.
+    @Volatile
+    var largestPage = 1000
+
+    // True: the link to the next page says no place to go on from.
+    @Volatile
+    var brokenNext = false
+
+    // True: a removal is answered as done and removes nothing.
+    @Volatile
+    var removalsDoNothing = false
+
+    // Titles the whole list keeps quiet about, and titles it goes on showing after their removal.
+    @Volatile
+    var listHides = emptySet<Long>()
+
+    @Volatile
+    var listStillShows = emptySet<Long>()
+
     // An answer in place of the server's own, for the requests a test wants to fail.
     @Volatile
     var instead: (RecordedRequest) -> MockResponse? = { null }
@@ -140,7 +159,7 @@ internal class PlantedMal : Dispatcher() {
             put("updated_at", entry.getValue("updated_at"))
             entry["start_date"]?.let { put("start_date", it) }
             entry["finish_date"]?.let { put("finish_date", it) }
-            put("comments", "${entry["comments"].orEmpty()} $USER_NAME $token")
+            put("comments", "${entry["comments"].orEmpty()} $token")
         }
 
     private fun page(
@@ -150,8 +169,12 @@ internal class PlantedMal : Dispatcher() {
         offset: Int,
         token: String,
     ): MockResponse {
-        val entries = list.entries.filter { status == null || it.value["status"] == status }
-        val link = "https://api.myanimelist.net/v2/users/$USER_NAME/animelist?token=$token&limit=$limit&offset="
+        val stale = listStillShows.filter { it !in list }.associateWith { PERSONAL_ENTRY }
+        val shown = (list + stale).toSortedMap().entries.filter { it.key !in listHides }
+        val entries = shown.filter { status == null || it.value["status"] == status }
+        val limit = minOf(limit, largestPage)
+        val place = if (brokenNext) "page=" else "offset="
+        val link = "https://api.myanimelist.net/v2/users/$USER_NAME/animelist?token=$token&limit=$limit&$place"
         val body =
             buildJsonObject {
                 put(
@@ -195,13 +218,14 @@ internal class PlantedMal : Dispatcher() {
         token: String,
     ): MockResponse {
         if (method == "DELETE") {
+            if (removalsDoNothing && id in list) return answer(200, "[]")
             list.remove(id) ?: return answer(404, NOT_FOUND)
             return answer(200, if (answersRemovalsInJson) "[]" else "")
         }
         val refused =
             form["score"]?.let { it.toInt() !in 0..10 } == true ||
                 form["status"]?.let { it !in setOf("watching", "completed", "on_hold", "dropped", "plan_to_watch") } == true
-        if (refused) return answer(400, """{"message":"Invalid value of $USER_NAME","error":"bad_request"}""")
+        if (refused) return answer(400, """{"message":"Invalid value, user $user","error":"bad_request"}""")
         val entry = (list[id] ?: mapOf("status" to "watching", "score" to "0", "num_episodes_watched" to "0")).toMutableMap()
         entry["updated_at"] = CHANGED_AT
         for ((name, value) in form) {

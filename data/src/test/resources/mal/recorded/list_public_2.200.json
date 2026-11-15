@@ -229,8 +229,8 @@
                 "score": 0,
                 "num_episodes_watched": 5,
                 "is_rewatching": false,
-                "updated_at": "2022-10-09T17:29:03+00:00",
-                "start_date": "2023-06-26"
+                "updated_at": "2022-04-12T17:29:03+00:00",
+                "start_date": "2022-04-12"
             }
         },
         {
@@ -276,9 +276,9 @@
                 "score": 1,
                 "num_episodes_watched": 1,
                 "is_rewatching": false,
-                "updated_at": "2022-06-14T13:17:20+00:00",
-                "start_date": "2013-06-05",
-                "finish_date": "2013-08-04"
+                "updated_at": "2022-09-28T13:17:20+00:00",
+                "start_date": "2022-07-30",
+                "finish_date": "2022-09-28"
             }
         },
         {
@@ -362,8 +362,8 @@
                 "score": 0,
                 "num_episodes_watched": 4,
                 "is_rewatching": false,
-                "updated_at": "2022-11-23T03:01:07+00:00",
-                "start_date": "2027-07-29"
+                "updated_at": "2026-10-14T03:01:07+00:00",
+                "start_date": "2026-10-14"
             }
         },
         {
@@ -416,9 +416,9 @@
                 "score": 9,
                 "num_episodes_watched": 1,
                 "is_rewatching": false,
-                "updated_at": "2022-08-12T22:42:32+00:00",
-                "start_date": "2012-10-29",
-                "finish_date": "2012-11-06"
+                "updated_at": "2025-02-06T22:42:32+00:00",
+                "start_date": "2025-01-29",
+                "finish_date": "2025-02-06"
             }
         },
         {
@@ -465,9 +465,9 @@
                 "score": 1,
                 "num_episodes_watched": 13,
                 "is_rewatching": false,
-                "updated_at": "2022-02-18T03:15:40+00:00",
-                "start_date": "2026-03-23",
-                "finish_date": "2026-05-22"
+                "updated_at": "2026-05-06T03:15:40+00:00",
+                "start_date": "2026-03-07",
+                "finish_date": "2026-05-06"
             }
         }
     ],

@@ -47,6 +47,6 @@ internal val OwnEntryAnswers: Set<String> = OwnTitleWrites.mapTo(mutableSetOf("e
 
 // Every answer the signed-in recorder stores, in the order of its requests.
 internal val SignedInAnswers: List<String> =
-    listOf(TOKEN_GRANTED, "profile", "own_list_1", "own_list_2", "own_list_3", "own_list_dropped", "entry_absent") +
+    listOf(TOKEN_GRANTED, "profile", "own_list_1", "own_list_2", "own_list_3", "entry_absent") +
         OwnTitleWrites.flatMap { listOf(it.name, "${it.name}_read") } +
         listOf("entry_full", "removed", "removed_read", "removed_again")

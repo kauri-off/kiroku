@@ -38,6 +38,7 @@
     <string name="recorder_halt_no_answer">MyAnimeList did not answer</string>
     <string name="recorder_halt_storage">The device could not store a file</string>
     <string name="recorder_halt_another_account">Another account is signed in than the one the recording was made with. Sign in with that account</string>
+    <string name="recorder_halt_still_on_the_list">MyAnimeList answered the removal and still shows the title on your list</string>
     <string name="recorder_halt_refused">MyAnimeList is refusing requests (answer %1$d). Try again later</string>
     <string name="recorder_halt_unexpected">MyAnimeList answered %1$d, which the recorder did not expect</string>
 </resources>

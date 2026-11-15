@@ -139,7 +139,7 @@ class SignedInRecorderTest {
         assertEquals(listBefore, mal.onTheList())
         assertTrue(mal.tokens.all { it == ACCESS })
         // Once in the repository, each file is as the rules for stored answers leave it.
-        for ((name, text) in files.recorded.texts()) assertEquals(name, text, sanitiserOfStored(name, text).json(text))
+        for ((name, text) in files.recorded.texts()) assertEquals(name, text, cleanedStored(name, text))
         assertFalse(journal.exists())
         assertFalse(files.run.exists())
         assertEquals(emptyList<Throwable>(), fixture.unexpected)
@@ -154,7 +154,7 @@ class SignedInRecorderTest {
         val list = "GET /v2/users/@me/animelist"
         val changes = allWrites.dropLast(2).flatMap { listOf(it, entry) }
         assertEquals(
-            listOf(entry, "GET /v2/users/@me", list, list, list, list, list, entry) + changes +
+            listOf(entry, "GET /v2/users/@me", list, list, list, list, entry) + changes +
                 listOf(entry, "DELETE $change", entry, "DELETE $change", list),
             events.filter { it != "pause" },
         )
@@ -201,20 +201,46 @@ class SignedInRecorderTest {
         assertEquals(listOf(true, true, false, false, true), statistics.values.map { "$it".toLongOrNull() != null })
         assertEquals(statistics.size, statistics.values.toSet().size)
 
-        val page = stored("own_list_1.200.json")
-        assertEquals(KEPT_ENTRIES, page["data"]!!.jsonArray.size)
-        val first = page["data"]!!.jsonArray[0].jsonObject
-        assertEquals(101L, first["node"]!!.jsonObject["id"]!!.jsonPrimitive.long)
-        val values = first["list_status"]!!.jsonObject
+        assertEquals(""""Invalid value, user 0"""", "${stored("score_refused.400.json")["message"]}")
+    }
+
+    @Test
+    fun `of the user's own list the pages keep MAL's shape and links, and no entry's title or values`() {
+        recorder(signedIn()).recorded()
+
+        val pages = (1..3).map { stored("own_list_$it.200.json") }
+        val entries = pages.flatMap { page -> page["data"]!!.jsonArray.map { it.jsonObject } }
+        assertEquals(listOf(KEPT_ENTRIES, KEPT_ENTRIES, KEPT_ENTRIES), pages.map { it["data"]!!.jsonArray.size })
+        assertEquals((90_000_001L..90_000_030L).toList(), entries.map { it["node"]!!.jsonObject["id"]!!.jsonPrimitive.long })
+        assertEquals(setOf("id", "title", "num_episodes", "status", "start_date"), entries[0]["node"]!!.jsonObject.keys)
         assertEquals(
-            """"completed" 24 "" 2""",
-            "${values["status"]} ${values["num_episodes_watched"]} ${values["comments"]} ${values["score"]}",
+            """{"id":90000001,"title":"Made-up title 1","num_episodes":24,"status":"finished_airing","start_date":"2020-01-01"}""",
+            "${entries[0]["node"]}",
         )
+        val statuses = listOf("watching", "completed", "on_hold", "dropped", "plan_to_watch")
+        assertEquals((0 until 30).map { "\"${statuses[it % 5]}\"" }, entries.map { "${it["list_status"]!!.jsonObject["status"]}" })
+        assertEquals(
+            """{"status":"completed","score":2,"num_episodes_watched":24,"is_rewatching":false,""" +
+                """"updated_at":"2021-02-01T00:00:00+00:00","comments":"","start_date":"2021-01-02","finish_date":"2021-02-01"}""",
+            "${entries[1]["list_status"]}",
+        )
+        assertEquals(
+            """{"status":"plan_to_watch","score":0,"num_episodes_watched":0,"is_rewatching":false,""" +
+                """"updated_at":"2021-02-04T00:00:00+00:00","comments":""}""",
+            "${entries[4]["list_status"]}",
+        )
+        assertEquals(""""2021-01"""", "${entries[2]["list_status"]!!.jsonObject["start_date"]}")
         assertEquals(
             """"https://api.myanimelist.net/v2/users/owner-user/animelist?token=access-token&limit=10&offset=10"""",
-            "${page["paging"]!!.jsonObject["next"]}",
+            "${pages[0]["paging"]!!.jsonObject["next"]}",
         )
-        assertEquals(5, stored("own_list_dropped.200.json")["data"]!!.jsonArray.size)
+        // Nothing of a title that is on the list: its name, its id, the day it started.
+        val texts =
+            files.recorded
+                .texts()
+                .filterKeys { it.startsWith("own_list") }
+                .values
+        for (text in texts) for (real in listOf("Listed", "2019-07-01", "\"id\": 1")) assertFalse("$real in $text", real in text)
     }
 
     @Test
@@ -223,7 +249,7 @@ class SignedInRecorderTest {
 
         assertNull(stored("entry_absent.200.json")["my_list_status"])
         assertEquals(""""plan_to_watch"""", "${stored("add_planned.200.json")["status"]}")
-        assertEquals("\" owner-user access-token\"", "${stored("add_planned.200.json")["comments"]}")
+        assertEquals("\" access-token\"", "${stored("add_planned.200.json")["comments"]}")
         val scored = stored("score_set_read.200.json")["my_list_status"]!!.jsonObject
         assertEquals(
             """7 11 "2100-01-01" "2020-05"""",
@@ -366,7 +392,8 @@ class SignedInRecorderTest {
         assertEquals(listOf("score_set", Halt.Unexpected(500), ListAfter.Removed), listOf(end.at, end.halt, end.list))
         val sent = allWrites.takeWhile { "score=7" !in it } + allWrites.first { "score=7" in it }
         assertEquals(sent + "DELETE $change", mal.writes)
-        assertEquals(listOf("GET /v2/users/@me?fields=id", "DELETE $change"), mal.asked.takeLast(2))
+        assertEquals(listOf("GET /v2/users/@me?fields=id", "DELETE $change"), mal.asked.takeLast(3).take(2))
+        assertTrue(mal.asked.last().startsWith("GET /v2/anime/$TITLE?"))
         assertEquals(listBefore, mal.onTheList())
         assertFalse(journal.exists())
         assertEquals(mapOf("score_set.200.json" to "an earlier run's"), files.recorded.texts())
@@ -459,6 +486,168 @@ class SignedInRecorderTest {
 
         assertEquals(writes, mal.writes.size)
         assertTrue(journal.exists())
+    }
+
+    @Test
+    fun `a removal at the next start that MAL fails to make leaves the journal and does not say removed`() {
+        instead("score=7") { answer(429, "{}") }
+        val session = signedIn()
+        recorder(session).recorded()
+        instead("DELETE") { answer(500, """{"error":"internal"}""") }
+
+        assertEquals(Recording.Leftover(title, ListAfter.Left, Halt.Unexpected(500)), recorder(session).state.value)
+
+        assertTrue(journal.exists())
+        assertTrue(TITLE in mal.onTheList())
+    }
+
+    @Test
+    fun `a write MAL answers with 403 stops the run, and nothing more is sent`() {
+        instead("score=7") { answer(403, """{"error":"forbidden"}""") }
+
+        val end = recorder(signedIn()).recorded() as Recording.Stopped
+
+        assertEquals(listOf("score_set", Halt.Refused(403), ListAfter.Left), listOf(end.at, end.halt, end.list))
+        assertTrue(mal.asked.last().endsWith("score=7"))
+        assertTrue(journal.exists())
+    }
+
+    @Test
+    fun `the journal stays while MAL still shows the title after its removal, in a run and at a start`() {
+        mal.removalsDoNothing = true
+        val session = signedIn()
+        val recorder = recorder(session)
+
+        val end = recorder.recorded() as Recording.Stopped
+
+        assertEquals(listOf("removed_read", Halt.StillOnTheList, ListAfter.Left), listOf(end.at, end.halt, end.list))
+        assertEquals(1, mal.writes.count { it.startsWith("DELETE") })
+        assertTrue(journal.exists())
+        assertFalse(files.recorded.exists())
+
+        assertEquals(Recording.Leftover(title, ListAfter.Left, Halt.StillOnTheList), recorder(session).state.value)
+        assertTrue(journal.exists())
+
+        mal.removalsDoNothing = false
+        runBlocking { recorder.remove().join() }
+        assertEquals(Recording.Leftover(title, ListAfter.Removed, null), recorder.state.value)
+        assertTrue(mal.asked.last().startsWith("GET /v2/anime/$TITLE?"))
+        assertFalse(journal.exists())
+        assertEquals(listBefore, mal.onTheList())
+    }
+
+    @Test
+    fun `a title the whole list still holds after the recording is journalled again and can be removed`() {
+        val recorder = recorder(signedIn())
+        mal.arrived = { if (it.startsWith("DELETE")) mal.listStillShows = setOf(TITLE) }
+
+        val end = recorder.recorded()
+
+        assertEquals(Recording.Recorded(title, SignedInAnswers.size, files.recorded, ListAfter.Left), end)
+        assertTrue(journal.exists())
+        recorder.dismiss()
+        assertEquals(end, recorder.state.value)
+
+        mal.listStillShows = emptySet()
+        runBlocking { recorder.remove().join() }
+        assertEquals(Recording.Leftover(title, ListAfter.Removed, null), recorder.state.value)
+        assertFalse(journal.exists())
+    }
+
+    @Test
+    fun `the whole list is read page after page until MAL names no next one`() {
+        mal.largestPage = 15
+
+        val end = recorder(signedIn()).recorded()
+
+        assertEquals(Recording.Recorded(title, SignedInAnswers.size, files.recorded, ListAfter.Same), end)
+        val whole = mal.asked.filter { "animelist?nsfw=true" in it }.map { it.substringAfter("&offset=") }
+        assertEquals(listOf("0", "15", "30", "0", "15", "30"), whole)
+    }
+
+    @Test
+    fun `a title on the last page of the list is refused before any write`() {
+        mal.largestPage = 15
+        mal.titles += 500L to PlantedMal.Title("On the last page", 12)
+        val last = RecordedTitle(500, "On the last page", 12)
+        val recorder = recorder(signedIn())
+        assertEquals(Recording.Checked(last), recorder.checked(500))
+        mal.addedElsewhere(500)
+        mal.tellsTheEntry = false
+
+        runBlocking { recorder.record(last).join() }
+
+        val end = recorder.state.value as Recording.Stopped
+        assertEquals(listOf("entry_absent", Halt.OnTheList, ListAfter.Untouched), listOf(end.at, end.halt, end.list))
+        assertEquals(emptyList<String>(), mal.writes)
+    }
+
+    @Test
+    fun `a list whose next page cannot be found is no list to check against, and nothing is written`() {
+        mal.largestPage = 15
+        mal.brokenNext = true
+
+        val end = recorder(signedIn()).recorded() as Recording.Stopped
+
+        assertEquals(listOf("count", Halt.Unexpected(200), ListAfter.Untouched), listOf(end.at, end.halt, end.list))
+        assertEquals(emptyList<String>(), mal.writes)
+        assertFalse(journal.exists())
+    }
+
+    @Test
+    fun `the title's own answer is asked again just before the first write, whatever the list says`() {
+        val recorder = recorder(signedIn())
+        val checked = recorder.checked() as Recording.Checked
+        mal.addedElsewhere(TITLE)
+        mal.listHides = setOf(TITLE)
+
+        runBlocking { recorder.record(checked.title).join() }
+
+        val end = recorder.state.value as Recording.Stopped
+        assertEquals(listOf("entry_absent", Halt.OnTheList, ListAfter.Untouched), listOf(end.at, end.halt, end.list))
+        assertEquals(emptyList<String>(), mal.writes)
+        assertFalse(journal.exists())
+    }
+
+    @Test
+    fun `an add MAL refuses ends the run there, and the title is taken off in case it was added`() {
+        instead("status=plan_to_watch") { answer(400, """{"error":"bad_request"}""") }
+
+        val end = recorder(signedIn()).recorded() as Recording.Stopped
+
+        assertEquals(listOf("add_planned", Halt.Unexpected(400), ListAfter.Removed), listOf(end.at, end.halt, end.list))
+        assertEquals(listOf(allWrites.first(), "DELETE $change"), mal.writes)
+        assertFalse(journal.exists())
+    }
+
+    @Test
+    fun `a file that cannot be stored after the add ends the run, and the title is taken off at once`() {
+        val recorder = recorder(signedIn())
+        mal.arrived = {
+            if (it.startsWith("PATCH")) {
+                files.run.deleteRecursively()
+                files.run.writeText("no folder can be made here")
+            }
+        }
+
+        val end = recorder.recorded() as Recording.Stopped
+
+        assertEquals(listOf("add_planned", Halt.Storage, ListAfter.Removed), listOf(end.at, end.halt, end.list))
+        assertEquals(listOf(allWrites.first(), "DELETE $change"), mal.writes)
+        assertEquals(listBefore, mal.onTheList())
+        assertFalse(journal.exists())
+    }
+
+    @Test
+    fun `the journal's rename is synced in its folder once the journal is in its place`() {
+        val seen = mutableListOf<String>()
+        val file = File(folder.root, "kept/journal")
+
+        Journal(file) { seen += "${it.name}, journal there: ${file.exists()}" }.write(Journal.Left(title, "user"))
+
+        assertEquals(listOf("kept, journal there: true"), seen)
+        assertEquals(TITLE, Journal(file).read()!!.title.id)
+        syncedDirectory(file.parentFile!!)
     }
 
     @Test

@@ -9,10 +9,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
+import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoUnit
 
 internal const val KEPT_ENTRIES = 10
 
@@ -30,13 +34,27 @@ private val FreeTextSource = Regex("""\[Written by .*]|\(Source: .*\)""")
 internal fun isClosingSource(paragraph: String): Boolean =
     FreeTextSource.matches(paragraph) && paragraph.codePointCount(0, paragraph.length) <= SOURCE_LIMIT
 
+// No made-up day is after this one, which is before every recording.
+internal val LAST_MADE_UP_DAY: LocalDate = LocalDate.of(2026, 11, 1)
+
 // Section 11.1: what is stored of an answer holds none of [secrets], no prose and nothing of a user's list but its shape.
 internal class Sanitiser(
     secrets: Map<String, String>,
+    // User names and what stands for each: replaced where a value is the name, and after `users/` in an address.
+    names: Map<String, String> = emptyMap(),
+    // A user's id, replaced wherever it stands as a whole number.
+    userId: String? = null,
     // The title a recorder put on the list itself: its values there are the recorder's, and stay as MAL wrote them.
     private val ownTitle: Long? = null,
 ) {
     private val standIns = secrets.filterKeys { it.isNotBlank() }.toList()
+    private val users = names.filterKeys { it.isNotBlank() }.toList()
+    private val inAddress =
+        users.map { (name, standIn) ->
+            Regex("(?<=users/)" + Regex.escape(name) + """(?=[/?#"\s]|$)""", RegexOption.IGNORE_CASE) to standIn
+        }
+    private val asNumber =
+        userId?.takeIf { id -> id.isNotEmpty() && id.all(Char::isDigit) }?.let { Regex("""(?<![0-9])(?<![0-9]\.)$it(?![0-9]|\.[0-9])""") }
 
     private class Found(
         val start: Int,
@@ -49,6 +67,12 @@ internal class Sanitiser(
 
     // A user's profile as it is stored: its shape, with every value made up.
     fun profile(body: String): String? = stored(body, MadeUp()::of)
+
+    // A page of the user's own list: MAL's shape and links, and no entry's title or values. [first] counts the entries before it.
+    fun ownList(
+        body: String,
+        first: Int,
+    ): String? = stored(body) { ownEntries(page(it), first) }
 
     private fun stored(
         body: String,
@@ -64,8 +88,14 @@ internal class Sanitiser(
         return plain(Pretty.encodeToString(JsonElement.serializer(), cleaned(answer))) + "\n"
     }
 
-    // Secrets that overlap or touch are replaced as one, by the stand-in of the one that starts them.
+    // A text without the secrets, without a user's name where an address names the user, and without the user's id.
     fun plain(text: String): String {
+        val named = inAddress.fold(withoutSecrets(text)) { cleaned, (name, standIn) -> name.replace(cleaned) { standIn } }
+        return asNumber?.replace(named, "0") ?: named
+    }
+
+    // Secrets that overlap or touch are replaced as one, by the stand-in of the one that starts them.
+    private fun withoutSecrets(text: String): String {
         val found =
             standIns
                 .flatMap { (secret, standIn) -> starts(text, secret).map { Found(it, it + secret.length, standIn) } }
@@ -126,15 +156,102 @@ internal class Sanitiser(
                     json.mapValues { (key, value) ->
                         when {
                             key in FreeTexts && value.isText -> JsonPrimitive(shortened(plain(value.text)))
-                            key in LIST_VALUES && value is JsonObject && title != ownTitle ->
-                                JsonObject(value.mapValues { (name, its) -> madeUp(name, its, title, aired) })
+                            key in LIST_VALUES && value is JsonObject && title != ownTitle -> madeUp(value, title, aired)
+                            key == UPDATED && value.isText && ownTitle != null -> JsonPrimitive(inUtc(value.text))
                             else -> values(value)
                         }
                     },
                 )
             }
-            else -> json
+            is JsonPrimitive -> if (json.isString) JsonPrimitive(named(json.content)) else json
         }
+
+    // A value that is a user's name, whatever its case, is the user's stand-in.
+    private fun named(text: String): String = users.firstOrNull { (name, _) -> name.equals(text, ignoreCase = true) }?.second ?: text
+
+    // The moment MAL wrote, without the offset it wrote it in and without a part of a second.
+    private fun inUtc(moment: String): String =
+        try {
+            OffsetDateTime.parse(moment).withOffsetSameInstant(ZoneOffset.UTC).format(Moment) + UTC
+        } catch (_: DateTimeException) {
+            MADE_UP_MOMENT
+        }
+
+    // Of a page of the user's own list every entry is made up: all its titles take the shape of the page's first one.
+    private fun ownEntries(
+        page: JsonElement,
+        first: Int,
+    ): JsonElement {
+        val answer = page as? JsonObject ?: return page
+        val entries = answer[ENTRIES] as? JsonArray ?: return page
+        val shape = (entries.firstOrNull() as? JsonObject)?.get(NODE)
+        val made =
+            entries.mapIndexed { index, entry ->
+                val position = first + index
+                JsonObject(
+                    (entry as? JsonObject).orEmpty().mapValues { (key, value) ->
+                        when {
+                            key == NODE -> madeUpTitle(shape ?: value, position)
+                            key in LIST_VALUES && value is JsonObject -> ownValues(value, position)
+                            else -> MadeUp().of(value)
+                        }
+                    },
+                )
+            }
+        return JsonObject(answer + (ENTRIES to JsonArray(made)))
+    }
+
+    // A title no list holds: ids MAL does not have, and a list of one value wherever the shape has a list.
+    private fun madeUpTitle(
+        shape: JsonElement,
+        position: Int,
+    ): JsonElement {
+        val title = MadeUp(short = true).of(shape) as? JsonObject ?: return JsonNull
+        val own =
+            mapOf(
+                "id" to JsonPrimitive(OWN_FIRST_ID + position),
+                "title" to JsonPrimitive("Made-up title ${position + 1}"),
+                "num_episodes" to JsonPrimitive(OWN_EPISODES),
+                "media_type" to JsonPrimitive("tv"),
+                "status" to JsonPrimitive("finished_airing"),
+            )
+        return JsonObject(title.mapValues { (key, value) -> own[key] ?: value })
+    }
+
+    // The entry's place on the page decides its status, and the status its count, score and dates: nothing is the user's.
+    private fun ownValues(
+        real: JsonObject,
+        position: Int,
+    ): JsonObject {
+        val status = OWN_STATUSES[position % OWN_STATUSES.size]
+        val planned = status == "plan_to_watch"
+        val started = OWN_FIRST_DAY.plusDays(position.toLong())
+        val updated = started.plusDays(OWN_DAYS)
+        val values =
+            real.filterKeys { it != START && it != FINISH }.mapValues { (name, value) ->
+                when {
+                    value is JsonNull -> value
+                    name == "status" -> JsonPrimitive(status)
+                    name == "num_episodes_watched" ->
+                        JsonPrimitive(
+                            when (status) {
+                                "completed" -> OWN_EPISODES
+                                "plan_to_watch" -> 0
+                                else -> 1 + position % (OWN_EPISODES - 1)
+                            },
+                        )
+                    name == "score" -> JsonPrimitive(if (planned) 0 else 1 + position % 10)
+                    name == UPDATED && value.isText -> JsonPrimitive(updated.atStartOfDay().format(Moment) + UTC)
+                    else -> blank(value)
+                }
+            }
+        val dates =
+            listOfNotNull(
+                (START to JsonPrimitive(if (status == "on_hold") "$started".take(MONTH) else "$started")).takeUnless { planned },
+                (FINISH to JsonPrimitive("$updated")).takeIf { status == "completed" },
+            )
+        return JsonObject(values + dates)
+    }
 
     // Every paragraph is cut at a word, and every line break stays; no secret is in [text], so none is cut in two.
     private fun shortened(text: String): String {
@@ -148,22 +265,32 @@ internal class Sanitiser(
         return start.substringBeforeLast(' ').trimEnd() + "…"
     }
 
-    // The status and the count stay; the rest is made up from the title's id, a start never before the title's own.
+    // Status and count stay; the dates are made up in order: the title's start, start, finish, last change, the last day.
     private fun madeUp(
-        name: String,
-        value: JsonElement,
+        real: JsonObject,
         title: Long,
         aired: LocalDate?,
-    ): JsonElement {
-        val started = (aired ?: LocalDate.of(2020, 1, 1)).plusDays(title % 1000)
-        return when {
-            name in KEPT_LIST_VALUES || value is JsonNull -> value
-            name == "score" -> if ((value as? JsonPrimitive)?.longOrNull == 0L) value else JsonPrimitive(1 + title % 10)
-            name == "start_date" && value.isText -> JsonPrimitive(date(value.text, started))
-            name == "finish_date" && value.isText -> JsonPrimitive(date(value.text, started.plusDays(title % 100)))
-            name == "updated_at" && value.isText -> JsonPrimitive(moment(value.text, title))
-            else -> blank(value)
-        }
+    ): JsonObject {
+        val first = aired?.takeIf { it.year >= FIRST_YEAR }?.coerceAtMost(LAST_MADE_UP_DAY) ?: WITHOUT_A_START
+        val started = first.plusDays(Math.floorMod(title, ChronoUnit.DAYS.between(first, LAST_MADE_UP_DAY) + 1))
+        val finished = started.plusDays(Math.floorMod(title, MOST_DAYS)).coerceAtMost(LAST_MADE_UP_DAY)
+        val last = finished.takeIf { real[FINISH]?.isText == true } ?: started.takeIf { real[START]?.isText == true }
+        val updated =
+            last?.atStartOfDay()?.plusSeconds(Math.floorMod(title * 7919, SECONDS_OF_A_DAY))
+                ?: LocalDateTime.of(2022, 1, 1, 0, 0).plusSeconds(Math.floorMod(title * 7919, SECONDS_OF_A_YEAR))
+        return JsonObject(
+            real.mapValues { (name, value) ->
+                when {
+                    name in KEPT_LIST_VALUES || value is JsonNull -> value
+                    name == "score" ->
+                        if ((value as? JsonPrimitive)?.longOrNull == 0L) value else JsonPrimitive(1 + Math.floorMod(title, 10L))
+                    name == START && value.isText -> JsonPrimitive(date(value.text, started))
+                    name == FINISH && value.isText -> JsonPrimitive(date(value.text, finished))
+                    name == UPDATED && value.isText -> JsonPrimitive(updated.format(Moment) + UTC)
+                    else -> blank(value)
+                }
+            },
+        )
     }
 
     // A date as complete as MAL's was.
@@ -185,14 +312,6 @@ internal class Sanitiser(
             null
         }
 
-    private fun moment(
-        real: String,
-        title: Long,
-    ): String {
-        val made = LocalDateTime.of(2022, 1, 1, 0, 0).plusSeconds(title * 7919 % SECONDS_OF_A_YEAR)
-        return made.format(Moment) + (MomentStart.find(real)?.let { real.substring(it.value.length) } ?: "+00:00")
-    }
-
     private fun blank(value: JsonElement): JsonElement =
         when (value) {
             is JsonObject -> JsonObject(emptyMap())
@@ -206,19 +325,22 @@ internal class Sanitiser(
         }
 
     // Nothing of a profile is harmless: a value stays only when it is empty, and otherwise keeps its kind and its form.
-    private inner class MadeUp {
+    private inner class MadeUp(
+        // A list keeps one value, so that its length says nothing.
+        private val short: Boolean = false,
+    ) {
         private var made = 0
 
         fun of(json: JsonElement): JsonElement =
             when (json) {
                 is JsonObject -> JsonObject(json.mapValues { (_, value) -> of(value) })
-                is JsonArray -> JsonArray(json.map(::of))
+                is JsonArray -> JsonArray((if (short) json.take(1) else json).map(::of))
                 is JsonNull -> json
                 is JsonPrimitive -> if (json.isString) text(json.content) else number(json)
             }
 
         private fun text(real: String): JsonPrimitive {
-            val known = standIns.firstOrNull { (secret, _) -> secret.equals(real, ignoreCase = true) }?.second
+            val known = (users + standIns).firstOrNull { (secret, _) -> secret.equals(real, ignoreCase = true) }?.second
             return JsonPrimitive(
                 when {
                     real.isEmpty() -> real
@@ -246,7 +368,22 @@ internal class Sanitiser(
     private companion object {
         const val ENTRIES = "data"
         const val LINKS = "paging"
+        const val NODE = "node"
+        const val START = "start_date"
+        const val FINISH = "finish_date"
+        const val UPDATED = "updated_at"
+        const val UTC = "+00:00"
+        const val MONTH = 7
         const val SECONDS_OF_A_YEAR = 31_536_000L
+        const val SECONDS_OF_A_DAY = 86_400L
+        const val MOST_DAYS = 100L
+        const val FIRST_YEAR = 1900
+        val WITHOUT_A_START: LocalDate = LocalDate.of(2020, 1, 1)
+        const val OWN_FIRST_ID = 90_000_001L
+        const val OWN_EPISODES = 24
+        const val OWN_DAYS = 30L
+        val OWN_FIRST_DAY: LocalDate = LocalDate.of(2021, 1, 1)
+        val OWN_STATUSES = listOf("watching", "completed", "on_hold", "dropped", "plan_to_watch")
         val LIST_VALUES = setOf("list_status", "my_list_status")
         val KEPT_LIST_VALUES = setOf("status", "num_episodes_watched")
         val PARTIAL_DATES = setOf(4, 7)

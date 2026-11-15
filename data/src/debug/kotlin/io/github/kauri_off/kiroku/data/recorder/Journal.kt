@@ -11,12 +11,16 @@ import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 
 // The title a recording puts on the user's list: on the disk before the first write, and until MAL has taken the title off.
 internal class Journal(
     private val file: File,
+    // Makes a rename in a directory last through a loss of power.
+    private val synced: (File) -> Unit = ::syncedDirectory,
 ) {
     // [user] names the user without holding the id MAL gives them.
     class Left(
@@ -58,6 +62,7 @@ internal class Journal(
                 output.fd.sync()
             }
             Files.move(next.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            file.absoluteFile.parentFile?.let(synced)
         } finally {
             next.delete()
         }
@@ -73,5 +78,16 @@ internal class Journal(
         const val NAME = "name"
         const val USER = "user"
         const val NEXT = ".next"
+    }
+}
+
+// A system that cannot sync a directory leaves the rename as durable as the system makes it.
+internal fun syncedDirectory(directory: File) {
+    try {
+        FileChannel.open(directory.toPath(), StandardOpenOption.READ).use { it.force(true) }
+    } catch (_: IOException) {
+        return
+    } catch (_: UnsupportedOperationException) {
+        return
     }
 }

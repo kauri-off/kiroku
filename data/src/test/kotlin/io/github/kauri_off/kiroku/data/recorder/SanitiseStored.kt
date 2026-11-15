@@ -17,7 +17,7 @@ internal fun sanitiseStored(directory: File): List<String> =
         .sortedBy { it.name }
         .filter { file ->
             val stored = file.readText()
-            val cleaned = sanitiserOfStored(file.name, stored).json(stored) ?: stored
+            val cleaned = cleanedStored(file.name, stored) ?: stored
             if (cleaned != stored) file.writeText(cleaned)
             cleaned != stored
         }.map { it.name }
