@@ -2,9 +2,11 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.authorised
@@ -23,7 +25,8 @@ sealed interface ListUser {
     ) : ListUser
 }
 
-// A user's whole list from MAL, page after page, or the failure of the first page that failed.
+// A user's whole list from MAL, page after page, or the failure of the first page that failed; a page's repairs are
+// reported once the whole list is read.
 class MalLists internal constructor(
     private val http: MalHttp,
     private val session: MalSession,
@@ -35,6 +38,7 @@ class MalLists internal constructor(
 
     suspend fun list(user: ListUser): Outcome<List<ListEntry>> {
         val entries = mutableListOf<ListEntry>()
+        val repaired = mutableListOf<Set<String>>()
         var offset = 0
         while (true) {
             val page =
@@ -43,8 +47,11 @@ class MalLists internal constructor(
                     is Outcome.Success -> outcome.value
                 }
             entries += page.entries
-            offset = page.next ?: return Outcome.Success(entries)
+            if (page.repaired.isNotEmpty()) repaired += page.repaired
+            offset = page.next ?: break
         }
+        for (fields in repaired) http.unexpected(RepairedAnswer(fields))
+        return Outcome.Success(entries)
     }
 
     // The next page must start where this one ended, below the bound; anything else fails rather than end the list early.
@@ -53,7 +60,7 @@ class MalLists internal constructor(
         offset: Int,
     ): Outcome<ListPage> {
         suspend fun read(authorization: String?): ListPage {
-            val page = api.page(user.path, Asked + ("offset" to "$offset"), authorization).toListPage()
+            val page = api.page(user.path, Asked + ("offset" to "$offset"), authorization).toListPage(Repairs())
             val next = page.next ?: return page
             check(page.entries.isNotEmpty() && next == offset + page.entries.size) { "The next page is not after this one" }
             check(next < maxEntries) { "The list does not end" }

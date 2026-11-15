@@ -275,7 +275,7 @@ private fun JsonElement?.number(): JsonPrimitive? = this as? JsonPrimitive
 private fun JsonElement?.positiveLong(): Long? = number()?.longOrNull?.takeIf { it > 0 }
 
 // MAL gave a value here: not left out, not null, not empty.
-private fun JsonElement?.given(): Boolean = this != null && this !is JsonNull && !(this is JsonPrimitive && isString && content.isBlank())
+internal fun JsonElement?.given(): Boolean = this != null && this !is JsonNull && !(this is JsonPrimitive && isString && content.isBlank())
 
 private fun String?.given(): Boolean = this?.present() != null
 
