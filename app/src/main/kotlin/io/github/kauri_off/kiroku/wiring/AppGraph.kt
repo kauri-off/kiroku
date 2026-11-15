@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import okhttp3.Call
 import java.time.Clock
 
 interface AppGraph {
@@ -29,6 +30,9 @@ interface AppGraph {
 
     // Where a view model builds its state, off the main thread.
     val background: CoroutineDispatcher get() = Dispatchers.Default
+
+    // The HTTP client images are fetched through; a graph without one reaches no host for them.
+    val images: Call.Factory? get() = null
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji

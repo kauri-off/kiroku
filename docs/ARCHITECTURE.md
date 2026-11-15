@@ -347,6 +347,8 @@ was chosen against, and why:
 - **Navigation:** Jetpack Navigation 3. Navigation Compose is more machinery than this app needs.
 - **Network:** OkHttp, Retrofit and kotlinx.serialization, with AniList queries sent as plain requests. Not Ktor (a
   second HTTP abstraction) and not Apollo (code generation and a plugin for a few queries).
+- **Images:** Coil, fetching only through the app's HTTP client; Coil's own client and discovered components are not
+  used.
 - **Storage:** Room, with its annotation processor only in `:data`; DataStore Preferences for settings.
 - **Sign-in:** Custom Tabs and the Keystore directly (`security-crypto` is deprecated).
 - **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
