@@ -15,6 +15,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -66,31 +70,27 @@ class TitleChainMotionTest {
         assertTrue(Recomposer.runningRecomposers.value.none { it.hasPendingWork })
     }
 
-    // The rows below make room within the bound of a change, and the found title has faded in within that of an entrance.
+    // The found title fades in within the bound of an entrance; the rows and the sections below it, and the indicator
+    // leaving, are in place at once, as no slide can be kept to this change alone.
     @Test
-    fun `a title the walk finds comes in between the seasons, the rows below make room, and it settles within 400 ms`() {
+    fun `a title the walk finds fades in between the seasons within 400 ms, and nothing else moves`() {
         showAndSettle(TitleFixtures.chainLoading)
         val before = top(third)
-        val synopsisBefore = top(SYNOPSIS)
         set(TitleFixtures.chainOfFour)
-        repeat(4) { compose.mainClock.advanceTimeByFrame() }
-        val moving = top(third)
-        val synopsisMoving = top(SYNOPSIS)
-        compose.mainClock.advanceTimeBy(CHANGE_MS)
-        val settled = top(third)
-        val synopsisSettled = top(SYNOPSIS)
-        assertTrue("the third season is on its way down: $before < $moving < $settled", moving > before && moving < settled)
-        assertTrue(
-            "Synopsis moves with the rows: $synopsisBefore < $synopsisMoving < $synopsisSettled",
-            synopsisMoving > synopsisBefore && synopsisMoving < synopsisSettled,
-        )
-        assertTrue("the film comes before the third season", top(film) < settled)
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeByFrame()
+        val third2 = top(third)
+        val synopsis2 = top(SYNOPSIS)
+        val fading = compose.onNodeWithText(film).captureToImage().toPixelMap()
+        assertTrue("the third season made room", third2 > before)
+        assertTrue("the film comes before the third season", top(film) < third2)
         compose.onNodeWithContentDescription(LOADING).assertDoesNotExist()
-        compose.mainClock.advanceTimeBy(ENTER_MS - CHANGE_MS)
+        compose.mainClock.advanceTimeBy(ENTER_MS)
         val entered = compose.onNodeWithText(film).captureToImage().toPixelMap()
+        assertTrue("the film was fading in", !fading.buffer.contentEquals(entered.buffer))
         compose.mainClock.advanceTimeBy(SETTLED)
-        assertEquals(settled, top(third))
-        assertEquals(synopsisSettled, top(SYNOPSIS))
+        assertEquals(third2, top(third))
+        assertEquals(synopsis2, top(SYNOPSIS))
         assertTrue(
             "the film has faded in",
             entered.buffer.contentEquals(
@@ -151,9 +151,46 @@ class TitleChainMotionTest {
         }
     }
 
+    // A refresh that shortens the synopsis changes the height above Related, and is not animated (section 8.5).
+    @Test
+    fun `a refresh that changes a section's height moves the sections below it at once`() {
+        showAndSettle(TitleFixtures.chainOfFour)
+        val before = top(RELATED)
+        val details = checkNotNull(TitleFixtures.chainOfFour.page.details)
+        set(TitleFixtures.chainOfFourWith(details = details.copy(synopsis = "A short synopsis.")))
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeByFrame()
+        val first = top(RELATED)
+        assertTrue("Related moved", first < before)
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(first, top(RELATED))
+        assertIdle()
+    }
+
+    // "Add to list" becomes the list block, which is taller: the watch order and everything under it are in place at once.
+    @Test
+    fun `Add to list becoming the list block moves the watch order and the sections below at once`() {
+        showAndSettle(TitleFixtures.chainOfFourWith(entry = null))
+        val thirdBefore = top(third)
+        val anime = FixtureAnime.exactToWatch
+        set(
+            TitleFixtures.chainOfFourWith(
+                entry = ListEntry(anime, ListValues(ListStatus.Planned, 0, null, null, null), FixtureTime.reference),
+            ),
+        )
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeByFrame()
+        val thirdFirst = top(third)
+        val synopsisFirst = top(SYNOPSIS)
+        assertTrue("the third season moved", thirdFirst > thirdBefore)
+        compose.mainClock.advanceTimeBy(SETTLED)
+        assertEquals(thirdFirst, top(third))
+        assertEquals(synopsisFirst, top(SYNOPSIS))
+        assertIdle()
+    }
+
     private companion object {
         const val ENTER_MS = MotionBounds.ENTER
-        const val CHANGE_MS = MotionBounds.CHANGE
         const val SETTLED = 2_000L
     }
 }

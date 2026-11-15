@@ -282,7 +282,14 @@ object TitleFixtures {
 
     // The walk has read every page of the chain: the film comes between the seasons.
     val chainOfFour: TitleState.Shown
-        get() = TitleState.Shown(page(FixtureAnime.exactToWatch, chainPages = chainOfFourPages), set.session)
+        get() = chainOfFourWith()
+
+    // The same with the title's own entry and page as given, as "Add to list" or a refresh changes them.
+    fun chainOfFourWith(
+        entry: ListEntry? = set.entryFor(FixtureAnime.exactToWatch.id),
+        details: AnimeDetails? = set.details[FixtureAnime.exactToWatch.id],
+    ): TitleState.Shown =
+        TitleState.Shown(page(FixtureAnime.exactToWatch, entry = entry, details = details, chainPages = chainOfFourPages), set.session)
 
     // The walk has run for a second: the chain is what the title's own page tells, with the indicator under it.
     val chainLoading: TitleState.Shown

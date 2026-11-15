@@ -190,14 +190,7 @@ private fun TitleContent(
     // Whether the watch order was on the page before this composition; read and set without a recomposition.
     val chainShown = remember { BooleanArray(1) }
     val chainWasShown = chainShown[0]
-    // Whether the synopsis opened or closed in this composition, read and set as the above.
-    val expanded = state.moment.synopsisExpanded
-    val lastExpanded = remember { booleanArrayOf(expanded) }
-    val synopsisToggled = lastExpanded[0] != expanded
-    SideEffect {
-        chainShown[0] = page.chain.isNotEmpty()
-        lastExpanded[0] = expanded
-    }
+    SideEffect { chainShown[0] = page.chain.isNotEmpty() }
     RefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = { onEvent(TitleEvent.Refresh) },
@@ -235,7 +228,7 @@ private fun TitleContent(
                         }
                 }
             } else {
-                details(details, state, chainWasShown, sectionsMove = !synopsisToggled, onEvent)
+                details(details, state, chainWasShown, onEvent)
             }
         }
     }
@@ -462,7 +455,6 @@ private fun LazyListScope.details(
     details: AnimeDetails,
     state: TitleState.Shown,
     chainWasShown: Boolean,
-    sectionsMove: Boolean,
     onEvent: (TitleEvent) -> Unit,
 ) {
     val page = state.page
@@ -474,13 +466,13 @@ private fun LazyListScope.details(
     val synopsis = details.synopsis != null || genres.isNotEmpty()
     if (synopsis) {
         item(key = Section.Synopsis) {
-            Gap(afterChain, below(sectionsMove)) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
+            Gap(afterChain) { Synopsis(details.synopsis, synopsisExpanded, genres, onEvent) }
         }
     }
     // Drawn whenever there is something to open from it: the strip, or only "See all" when no related title fits it.
     val related = page.related.isNotEmpty() || page.moreRelated
     if (related) {
-        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterChain, below(sectionsMove)) { Related(page, onEvent) } }
+        item(key = Section.Related) { Gap(if (synopsis) Spacing.xl else afterChain) { Related(page, onEvent) } }
     }
     details.statistics?.let { statistics ->
         // The strip's cards end in their own blank room.
@@ -491,21 +483,11 @@ private fun LazyListScope.details(
                 synopsis -> Spacing.xl
                 else -> afterChain
             }
-        item(key = Section.Statistics) { Gap(space, below(sectionsMove)) { Statistics(statistics) } }
+        item(key = Section.Statistics) { Gap(space) { Statistics(statistics) } }
     }
     // A list row starts with its own padding.
-    item(key = Section.More) { Gap(Spacing.s, below(sectionsMove)) { More(details, onEvent) } }
+    item(key = Section.More) { Gap(Spacing.s) { More(details, onEvent) } }
 }
-
-// The sections under the watch order move with its rows, as items of the same list, and do not fade. In the frame the
-// synopsis opens or closes they are put in place at once, as on a page without the watch order.
-@Composable
-private fun LazyItemScope.below(moves: Boolean): Modifier =
-    Modifier.animateItem(
-        fadeInSpec = null,
-        placementSpec = if (moves) MaterialTheme.motionScheme.fastEffectsSpec() else null,
-        fadeOutSpec = null,
-    )
 
 @Composable
 private fun Synopsis(
@@ -587,8 +569,9 @@ private fun Related(
 }
 
 // The chain of sequels in the order to watch it, one row per title; the page's own title is marked and opens nothing.
-// Each row is an item of the page's list, so a title the walk finds joins with the list's own item animation. Until the
-// section is [animated], it arrives with the rest of the details and does not fade in on its own.
+// A title the walk finds fades in, as content that finishes loading does, once the section is [animated]: it arrives
+// with the rest of the details without a fade. Nothing slides: a move cannot be kept to the frame the walk changes
+// the rows, and every other change of height, a refresh among them, is not animated (section 8.5).
 private fun LazyListScope.watchOrder(
     chain: List<ChainCard>,
     loading: Boolean,
@@ -610,8 +593,8 @@ private fun LazyItemScope.chainItem(animated: Boolean): Modifier {
     val motionScheme = MaterialTheme.motionScheme
     return Modifier.animateItem(
         fadeInSpec = if (animated) motionScheme.defaultEffectsSpec() else null,
-        placementSpec = motionScheme.fastEffectsSpec(),
-        fadeOutSpec = motionScheme.fastEffectsSpec(),
+        placementSpec = null,
+        fadeOutSpec = null,
     )
 }
 
