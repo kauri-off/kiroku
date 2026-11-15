@@ -9,6 +9,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.nio.file.Files
 
 // Section 11.1: no answer of the signed-in recorder enters the repository, or a test's output.
 class SignedInAnswersTest {
@@ -37,9 +38,21 @@ class SignedInAnswersTest {
         val checkout = temporary.newFolder("checkout").also { File(it, ".git").mkdir() }
         val worktree = temporary.newFolder("worktree").also { File(it, ".git").writeText("gitdir: elsewhere") }
 
+        val link =
+            Files
+                .createSymbolicLink(
+                    File(temporary.root, "link").toPath(),
+                    File(checkout, "owner").apply { mkdir() }.toPath(),
+                ).toFile()
+
         assertFalse(insideACheckout(outside))
         assertTrue(insideACheckout(File(checkout, ".reference/owner-recordings")))
         assertTrue(insideACheckout(File(worktree, "build")))
+        assertTrue(insideACheckout(link))
+        assertEquals(outside.canonicalFile, ownerFolder(outside.path))
+        for (inside in listOf(File(checkout, ".reference/owner-recordings"), link)) {
+            assertThrows(IllegalStateException::class.java) { ownerFolder(inside.path) }
+        }
         assertFalse(insideACheckout(OwnerRecordings.folder))
     }
 

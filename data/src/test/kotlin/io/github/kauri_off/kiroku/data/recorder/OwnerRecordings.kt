@@ -7,11 +7,7 @@ import java.io.File
 internal object OwnerRecordings {
     const val FOLDER = "kiroku.ownerRecordings"
 
-    val folder: File by lazy {
-        val named = File(checkNotNull(System.getProperty(FOLDER)) { "The build names no folder in $FOLDER" }).absoluteFile
-        check(!insideACheckout(named)) { "$named is inside a git checkout: the signed-in recorder's answers stay outside every one" }
-        named
-    }
+    val folder: File by lazy { ownerFolder(checkNotNull(System.getProperty(FOLDER)) { "The build names no folder in $FOLDER" }) }
 
     // The answer [name], or the test is skipped, saying what is missing and where it goes.
     fun named(name: String): RecordedAnswer {
@@ -32,6 +28,13 @@ internal object OwnerRecordings {
         }
 }
 
-// A folder in a checkout or in a worktree of one, where `git add` could reach what it holds.
+// The folder named by [path], where it really is; one in a checkout is refused.
+internal fun ownerFolder(path: String): File {
+    val folder = File(path).canonicalFile
+    check(!insideACheckout(folder)) { "$folder is inside a git checkout: the signed-in recorder's answers stay outside every one" }
+    return folder
+}
+
+// A folder in a checkout or in a worktree of one, where `git add` could reach what it holds, followed through links.
 internal fun insideACheckout(folder: File): Boolean =
-    generateSequence(folder.absoluteFile) { it.parentFile }.any { File(it, ".git").exists() }
+    generateSequence(folder.canonicalFile) { it.parentFile }.any { File(it, ".git").exists() }

@@ -816,9 +816,9 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 - **Tests of MAL mappers run against responses recorded from the real API, never against shapes written from
   memory.** An agent can neither read the client id nor sign in, so responses that need only the client id are
   recorded by a build task that uses the id without printing it or any request header and is not part of any build
-  or check; those that need the user's sign-in, by the owner with a debug tool, as MAL sent them less the token.
+  or check; those needing the user's sign-in, by the owner with a debug tool, as sent less token and client id.
 - **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
-  reads recorded files before they are committed. The owner's are kept outside every checkout; tests on them skip.
+  reads recorded files before they are committed. The owner's stay outside all checkouts; tests skip without them.
 - Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
   itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another
