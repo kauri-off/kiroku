@@ -20,6 +20,8 @@ class AiringTest {
 
     private val today = LocalDate.of(2026, 1, 14)
 
+    private val unknownStatus = AiringStatus.Unrecognized("on_hiatus")
+
     private fun entry(
         anime: Anime,
         status: ListStatus,
@@ -72,11 +74,11 @@ class AiringTest {
 
     @Test
     fun `the aired count is shown while known, until MAL says finished, whatever else MAL says`() {
-        AiringStatus.entries.forEach { status ->
+        (AiringStatus.known + unknownStatus).forEach { status ->
             val anime = FixtureAnime.exactToWatch.copy(airingStatus = status)
             val phase = airingPhase(anime, null, airing(AiredCount.Exact(2)), today)
             assertEquals(
-                status.name,
+                status.toString(),
                 if (status ==
                     AiringStatus.Finished
                 ) {
@@ -98,7 +100,7 @@ class AiringTest {
                 Airing(AiredCount.Exact(2), 24, null, instant),
                 Airing(AiredCount.Estimated(2), 24, null, instant),
             )
-        for (status in AiringStatus.entries) {
+        for (status in AiringStatus.known + unknownStatus) {
             for (airing in airings) {
                 for (watched in 0..3) {
                     val entry = entry(FixtureAnime.exactToWatch.copy(airingStatus = status), ListStatus.Watching, watched)
@@ -111,6 +113,39 @@ class AiringTest {
                             ?.takeIf { it > 0 }
                     assertEquals("$status $airing $watched", expected, (phase as? AiringPhase.Aired)?.toWatch?.value)
                     if (phase !is AiringPhase.Aired) assertNull(toWatch(entry, airing)?.takeIf { it.value > 0 })
+                }
+            }
+        }
+    }
+
+    // The owner's rule for a status the app does not know: it is read as airing, by every rule of section 4.
+    @Test
+    fun `a title whose airing status the app does not know is read as an airing one`() {
+        assertEquals(AiringStatus.Airing, unknownStatus.effective)
+        for (status in AiringStatus.known) assertEquals(status, status.effective)
+        val airings =
+            listOf(
+                null,
+                Airing(AiredCount.Unknown, 24, null, null),
+                Airing(AiredCount.Exact(0), 24, ScheduledEpisode(1, instant), null),
+                Airing(AiredCount.Exact(2), 24, ScheduledEpisode(3, instant), instant),
+                Airing(AiredCount.Estimated(2), 24, null, instant),
+            )
+        val starts = listOf(null, PartialDate.Day(today.plusDays(3)), PartialDate.Day(today.minusDays(3)))
+        for (airing in airings) {
+            for (start in starts) {
+                for (status in ListStatus.entries) {
+                    val known = entry(FixtureAnime.exactToWatch.copy(startDate = start), status, 1)
+                    val unknown = known.copy(anime = known.anime.copy(airingStatus = unknownStatus))
+                    val case = "$airing $start $status"
+                    assertEquals(case, toWatch(known, airing), toWatch(unknown, airing))
+                    assertEquals(case, episodeTotal(known.anime, airing), episodeTotal(unknown.anime, airing))
+                    assertEquals(case, premiereOf(known.anime, airing, today), premiereOf(unknown.anime, airing, today))
+                    assertEquals(
+                        case,
+                        airingPhase(known.anime, known.values, airing, today),
+                        airingPhase(unknown.anime, unknown.values, airing, today),
+                    )
                 }
             }
         }

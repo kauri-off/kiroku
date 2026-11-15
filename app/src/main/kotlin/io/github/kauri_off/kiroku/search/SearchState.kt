@@ -12,6 +12,8 @@ data class SearchState(
     val expanded: Boolean,
     val content: SearchContent,
     val sessionExpired: Boolean = false,
+    // Whether a result's long press opens its edit sheet: only while there is a list to edit.
+    val editable: Boolean = false,
 )
 
 sealed interface SearchContent {
@@ -83,6 +85,10 @@ sealed interface SearchEvent {
     ) : SearchEvent
 
     data class Open(
+        val id: AnimeId,
+    ) : SearchEvent
+
+    data class Edit(
         val id: AnimeId,
     ) : SearchEvent
 

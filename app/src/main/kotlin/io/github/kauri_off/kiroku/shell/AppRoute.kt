@@ -93,11 +93,13 @@ fun appEntries(
             if (standIn == null) {
                 NotBuiltDestination(graph, Destination.Search, signIn, snackbars)
             } else {
-                SearchRoute(standIn, graph, snackbars, openTitle, onBrowse = { navigator.open(BrowseKey(it)) }, onSignIn = signIn)
+                SearchRoute(standIn, graph, messages, snackbars, openTitle, onBrowse = { navigator.open(BrowseKey(it)) }, onSignIn = signIn)
             }
         }
         entry<BrowseKey> { key ->
-            standIn?.let { BrowseRoute(it, key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
+            standIn?.let {
+                BrowseRoute(it, key, graph, messages, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn)
+            }
         }
         entry<ProfileRoot> {
             val profile = profileStandIn

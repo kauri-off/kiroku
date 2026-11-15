@@ -2,12 +2,17 @@ package io.github.kauri_off.kiroku.search
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -155,6 +160,32 @@ class SearchScreenTest {
         show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Ready)))
         show(results(SearchFixtureStates.query, Paged.Shown(rows.toList(), More.Ready)))
         assertEquals(listOf(SearchEvent.LoadMore), events)
+    }
+
+    @Test
+    fun `a long press on a result, or its spoken action, asks to edit it, on the list or not`() {
+        show(SearchFixtureStates.results)
+        val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
+        val listed = rows.first { it.entry != null }
+        val notListed = rows.first { it.entry == null }
+        compose.onNode(hasText(listed.title) and hasClickAction()).performTouchInput { longClick() }
+        val row = compose.onNode(hasText(notListed.title) and hasClickAction()).fetchSemanticsNode()
+        val edit = row.config[SemanticsActions.OnLongClick]
+        assertEquals("Edit", edit.label)
+        compose.runOnIdle { edit.action!!() }
+        compose.waitForIdle()
+        assertEquals(listOf(SearchEvent.Edit(listed.id), SearchEvent.Edit(notListed.id)), events)
+    }
+
+    @Test
+    fun `with no list to edit a result offers no edit`() {
+        show(SearchFixtureStates.results.copy(editable = false))
+        val title = FixtureAnime.exactToWatch.titles.romaji
+        compose.onNode(hasText(title) and hasClickAction()).performTouchInput { longClick() }
+        compose
+            .onNode(hasText(title) and hasClickAction())
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        assertTrue(events.toString(), events.none { it is SearchEvent.Edit })
     }
 
     @Test

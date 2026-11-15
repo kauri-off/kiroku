@@ -486,7 +486,6 @@ private fun SortChoices(
             chosen = directions.indexOfFirst { it.first == page.direction },
             onChoose = { onEvent(ListEvent.SelectDirection(directions[it].first)) },
             modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l),
-            reselect = true,
         )
     }
 }

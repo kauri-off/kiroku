@@ -271,7 +271,7 @@ class ListViewModelTest {
         }
 
     @Test
-    fun `the sort sheet opens, closes, and a new sort orders only its tab again`() =
+    fun `the sort sheet opens, stays open after a choice until dismissed, and a new sort orders only its tab again`() =
         test { s ->
             s.list.onEvent(ListEvent.OpenSort)
             assertTrue(s.state.sortSheetOpen)
@@ -279,7 +279,7 @@ class ListViewModelTest {
             assertFalse(s.state.sortSheetOpen)
             s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
-            assertFalse(s.state.sortSheetOpen)
+            assertTrue(s.state.sortSheetOpen)
             assertEquals(ListSort.Title, s.page().sort)
             assertEquals(
                 s
@@ -293,6 +293,9 @@ class ListViewModelTest {
             assertEquals(0, s.page(ListStatus.Planned).ordering)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertEquals(1, s.page().ordering)
+            assertTrue(s.state.sortSheetOpen)
+            s.list.onEvent(ListEvent.DismissSort)
+            assertFalse(s.state.sortSheetOpen)
         }
 
     @Test
@@ -305,7 +308,7 @@ class ListViewModelTest {
             val planned = s.page(ListStatus.Planned)
             s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
-            assertFalse(s.state.sortSheetOpen)
+            assertTrue(s.state.sortSheetOpen)
             assertEquals(SortDirection.Ascending, s.page().direction)
             assertEquals(
                 order(
@@ -323,9 +326,8 @@ class ListViewModelTest {
             assertSame(planned, s.page(ListStatus.Planned))
             assertEquals(2, s.page().ordering)
             assertEquals(0, s.page(ListStatus.Planned).ordering)
-            s.list.onEvent(ListEvent.OpenSort)
             s.list.onEvent(ListEvent.SelectDirection(SortDirection.Ascending))
-            assertFalse(s.state.sortSheetOpen)
+            assertTrue(s.state.sortSheetOpen)
             assertEquals(2, s.page().ordering)
             s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
             assertEquals(SortDirection.Ascending, s.page().direction)
