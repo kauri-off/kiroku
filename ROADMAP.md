@@ -100,12 +100,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-14 Title client and mappers.**
 
-- [ ] **M2-15 List client: reading.** The list download of `RemoteList`: it asks with `nsfw=true`, reads the
-  pages in an order edits do not change, and fails when any page fails. A list score of 0 is no score; dates may
-  be partial. It serves the signed-in user and, in M6, a named one.
-  **Needs:** M2-05, M2-14, and the list answers of M2-10.
-  **Check:** tests on the recorded pages behind a local server: three pages give every entry once; a failed
-  middle page fails the download; the request carries `nsfw=true` and the order.
+- [x] **M2-15 List client: reading.**
 
 - [x] **M2-16 [A] Database: the titles and the list's store.**
 
