@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,6 +73,13 @@ jobs:
       - name: Format, Lint, tests and screenshots
         run: ./gradlew --continue ktlintCheck lint test recordRoborazziDebug
 
+      - name: Name the runner image of the screenshots
+        if: success() || failure()
+        run: |
+          if [ -d app/build/outputs/roborazzi ]; then
+            echo "$ImageOS $ImageVersion" > app/build/outputs/roborazzi/RUNNER_IMAGE
+          fi
+
       - name: Keep the screenshots
         if: success() || failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -80,6 +88,36 @@ jobs:
           path: app/build/outputs/roborazzi/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Test the screenshot comparison
+        if: github.event_name == 'pull_request'
+        run: .github/scripts/changed-screenshots-test
+
+      # A report, not a check: main's set is that of the run for the base commit, else main's newest green run.
+      - name: Screenshots that differ from main's
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          base=$(git rev-parse HEAD^1)
+          runs="repos/$GH_REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1"
+          run=$(gh api "$runs&head_sha=$base" --jq '.workflow_runs[0].id // empty' || true)
+          if [ -z "$run" ]; then
+            run=$(gh api "$runs" --jq '.workflow_runs[0].id // empty' || true)
+            note="Main's run for the base commit \`$base\` has not passed, so the set is of another commit of main and the changes between the two show too."
+          fi
+          main="$RUNNER_TEMP/main-screenshots"
+          if [ -n "$run" ] && gh run download "$run" --name screenshots --dir "$main"; then
+            {
+              .github/scripts/changed-screenshots "$main" app/build/outputs/roborazzi
+              echo
+              echo "${note:-}"
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Main's screenshots are missing or expired, so none were compared." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Debug build
         env:
