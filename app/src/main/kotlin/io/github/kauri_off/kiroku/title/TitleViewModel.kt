@@ -153,24 +153,24 @@ class TitleViewModel(
 
     // A failure shown in place is tried again as a Retry would be; any other load runs as on opening.
     private val loads =
-        ShownLoads(viewModelScope, connection, ::refreshIfStale) {
-            refresh(if (failure.value != null) Asked.Retry else Asked.Shown)
-        }
+        ShownLoads(
+            viewModelScope,
+            connection,
+            ::refreshIfStale,
+            again = { refresh(if (failure.value != null) Asked.Retry else Asked.Shown) },
+            showing = ::showingChanged,
+        )
 
     // Collected while the page is shown; showing it refreshes stale details.
     val shown: StateFlow<Unit> get() = loads.shown
 
     // Only a shown page walks, so the page left for another one, another tab or a sign-out asks nothing more.
-    init {
-        viewModelScope.launch {
-            loads.showing.collect { showing ->
-                if (!showing && walking?.isActive == true) {
-                    walking?.cancel()
-                    cut = true
-                } else if (showing && cut && load?.isActive != true) {
-                    walkIfOwed()
-                }
-            }
+    private fun showingChanged(showing: Boolean) {
+        if (!showing && walking?.isActive == true) {
+            walking?.cancel()
+            cut = true
+        } else if (showing && cut && load?.isActive != true) {
+            walkIfOwed()
         }
     }
 

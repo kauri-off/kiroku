@@ -25,8 +25,8 @@
     <string name="title_watch_order">Watch order</string>
     <string name="title_this_title">This title</string>
     <plurals name="title_this_title_spoken">
-        <item quantity="one">This title, %1$d of %2$d title</item>
-        <item quantity="other">This title, %1$d of %2$d titles</item>
+        <item quantity="one">This title, %1$d\u00A0of\u00A0%2$d\u00A0title</item>
+        <item quantity="other">This title, %1$d\u00A0of\u00A0%2$d\u00A0titles</item>
     </plurals>
     <string name="title_loading_watch_order">Loading the watch order</string>
     <string name="title_related">Related</string>

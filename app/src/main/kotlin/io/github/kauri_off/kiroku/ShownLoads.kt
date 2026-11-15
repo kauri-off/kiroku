@@ -10,7 +10,6 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.detailsStale
 import io.github.kauri_off.kiroku.core.repository.listStale
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingCommand
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -29,6 +29,8 @@ class ShownLoads(
     connection: Connection,
     whenShown: suspend () -> Unit,
     again: () -> Unit,
+    // Hears each start and end of the screen being shown at once, without the stop timeout.
+    showing: (Boolean) -> Unit = {},
 ) {
     private val watchers = MutableStateFlow(Unit)
     private val owed = MutableStateFlow(false)
@@ -40,10 +42,16 @@ class ShownLoads(
     val shown: StateFlow<Unit> = watchers.asStateFlow()
 
     // Whether the screen is shown now: it stops being shown at once, not after the stop timeout.
-    val showing: Flow<Boolean> = watchers.subscriptionCount.map { it > 0 }.distinctUntilChanged()
     val isShowing: Boolean get() = watchers.subscriptionCount.value > 0
 
     init {
+        scope.launch {
+            watchers.subscriptionCount
+                .map { it > 0 }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect(showing)
+        }
         scope.launch {
             WhileShown.command(watchers.subscriptionCount).collect { if (it == SharingCommand.START) whenShown() }
         }

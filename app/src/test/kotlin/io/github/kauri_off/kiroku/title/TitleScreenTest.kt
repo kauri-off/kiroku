@@ -205,7 +205,7 @@ class TitleScreenTest {
     @Test
     fun theWatchOrderMarksThePagesOwnTitleAndShowsTheWalkWhileItRuns() {
         show(TitleFixtures.chainLoading)
-        val spoken = "This title, 2 of 3 titles"
+        val spoken = "This title, 2\u00A0of\u00A03\u00A0titles"
         compose
             .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .performScrollToNode(hasContentDescription(spoken))
@@ -221,7 +221,7 @@ class TitleScreenTest {
         show(TitleFixtures.chainOfFour)
         compose
             .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-            .performScrollToNode(hasContentDescription("This title, 2 of 4 titles"))
+            .performScrollToNode(hasContentDescription("This title, 2\u00A0of\u00A04\u00A0titles"))
         scrollTo(film.titles.romaji)
         sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(hasText(film.titles.romaji) and hasClickAction()).performClick() }
     }
@@ -307,8 +307,8 @@ class TitleSpokenPlaceTest {
         val resources = RuntimeEnvironment.getApplication().resources
 
         fun spoken(of: Int) = resources.getQuantityString(R.plurals.title_this_title_spoken, of, 2, of)
-        assertEquals("Этот тайтл, 2 из 2 тайтлов", spoken(2))
-        assertEquals("Этот тайтл, 2 из 5 тайтлов", spoken(5))
-        assertEquals("Этот тайтл, 2 из 21 тайтла", spoken(21))
+        assertEquals("Этот тайтл, 2\u00A0из\u00A02\u00A0тайтлов", spoken(2))
+        assertEquals("Этот тайтл, 2\u00A0из\u00A05\u00A0тайтлов", spoken(5))
+        assertEquals("Этот тайтл, 2\u00A0из\u00A021\u00A0тайтла", spoken(21))
     }
 }
