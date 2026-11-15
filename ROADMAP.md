@@ -87,19 +87,7 @@ on the Russian strings so far are fixed.
 
 - [x] **M2-11 Sign-in in the app.**
 
-- [ ] **M2-12 [A] Recorder for answers that need the sign-in.** A tool of debug and preview builds, opened from
-  the debug menu, that sends a fixed list of requests through the app's own owner of the tokens and stores the
-  answers in the app's storage: the profile with statistics; the own list in pages; and, on one title that is not
-  on the list, an add, a count, a count above the total, a completion, each date set and cleared, a score set and
-  cleared, a value MAL should refuse, the entry read back after each, the removal and a second removal. The list
-  covers what M2 to M6 need from a signed-in user, so one session is enough. The owner's list is as it was
-  afterwards, also after an interrupted run. Every value of the profile is replaced unless it is on a list of
-  harmless ones; list pages keep ten entries; no header and no token is stored, only the lifetime MAL gave the
-  access token.
-  **Needs:** M2-09, M2-10.
-  **Check:** tests against a local server with planted personal values: none is in the files; a run interrupted
-  after the add removes the title at the next start; a title already on the list is refused before any write.
-  The release guards show no release build holds the tool, and no other app can start it.
+- [x] **M2-12 [A] Recorder for answers that need the sign-in.**
 
 - [ ] **M2-13 [O] The owner signs in and records.** With the debug build: he signs in; signs in once more with
   the app killed while the browser is open; runs the recorder on a title that is not on his list. On the website
@@ -207,11 +195,7 @@ on the Russian strings so far are fixed.
   **Check:** a test that counts the work of the fling's frames, in the style of `ListFrameWorkTest`; frame times
   before and after from `tools/emu`, in the hand-off.
 
-- [ ] **M2-31 Changed screenshots in CI.** A pull request's run lists the screenshots that differ from those of
-  `main`'s last run, so a change to a shared component shows on every screen it moves.
-  **Needs:** nothing.
-  **Check:** a pull request that changes one string lists that screen's images and no other; one that changes
-  none lists nothing.
+- [x] **M2-31 Changed screenshots in CI.**
 
 - [ ] **M2-32 Compose and Material update.** When a Compose BOM brings material3 1.5.0 stable, the pin goes.
   Then: whether `MaterialExpressiveTheme` now supplies the Expressive type scale itself, which the theme's own
