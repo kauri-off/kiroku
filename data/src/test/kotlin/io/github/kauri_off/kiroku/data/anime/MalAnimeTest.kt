@@ -486,4 +486,52 @@ class MalAnimeTest {
             node.edited(listOf("status")).toNode().toAnime(),
         )
     }
+
+    // The owner's rule: no answer fails on a value the app cannot read, and none is read in part silently.
+    @Test
+    fun `a value the mapper leaves out or fills in is noted by MAL's field, and MAL's own empty values are not`() {
+        fun repaired(edit: JsonObject): Set<String> = Repairs().also { edit.toTitle(it) }.fields
+
+        val json = recordedJson("title_airing")
+        val broken = JsonPrimitive("broken")
+        val cases =
+            listOf(
+                json.edited(listOf("title")) to "title",
+                json.edited(listOf("status")) to "status",
+                json.edited(listOf("start_date"), broken) to "start_date",
+                json.edited(listOf("mean"), JsonPrimitive(11)) to "mean",
+                json.edited(listOf("rank"), JsonPrimitive(0)) to "rank",
+                json.edited(listOf("num_episodes"), JsonPrimitive(-1)) to "num_episodes",
+                json.edited(listOf("average_episode_duration"), broken) to "average_episode_duration",
+                json.edited(listOf("main_picture", "medium")) to "main_picture",
+                json.edited(listOf("broadcast", "start_time"), JsonPrimitive("24:00")) to "broadcast",
+                json.edited(listOf("broadcast", "day_of_the_week")) to "broadcast",
+                json.edited(listOf("genres", "0", "name")) to "genres",
+                json.edited(listOf("start_season", "season"), broken) to "start_season",
+                json.edited(listOf("studios", "0", "name")) to "studios",
+                json.edited(listOf("statistics", "status", "dropped")) to "statistics",
+                json.edited(listOf("related_anime", "0", "node", "id")) to "related_anime",
+                json.edited(listOf("related_anime", "0", "relation_type")) to "related_anime",
+                json.edited(listOf("related_anime", "0", "node", "start_date"), broken) to "related_anime.start_date",
+                json.edited(listOf("recommendations", "0", "node", "id")) to "recommendations",
+                json.edited(listOf("recommendations", "0", "node", "mean"), broken) to "recommendations.mean",
+            )
+        for ((edit, field) in cases) assertEquals(field, setOf(field), repaired(edit))
+
+        val malsOwn =
+            listOf(
+                json.edited(listOf("mean"), JsonNull),
+                json.edited(listOf("num_episodes"), JsonPrimitive(0)),
+                json.edited(listOf("average_episode_duration"), JsonPrimitive(0)),
+                json.edited(listOf("alternative_titles", "en"), JsonPrimitive("")),
+                json.edited(listOf("start_date"), JsonPrimitive("")),
+                json.edited(listOf("media_type"), JsonPrimitive("web_film")),
+                json.edited(listOf("status"), JsonPrimitive("on_hiatus")),
+            )
+        for (edit in malsOwn) assertEquals(emptySet<String>(), repaired(edit))
+        for (name in titlePages) assertEquals(name, emptySet<String>(), repaired(recordedJson(name)))
+        for ((name, node) in recordedNodes) {
+            assertEquals(name, emptySet<String>(), Repairs().also { node.toNode().toAnime(it) }.fields)
+        }
+    }
 }

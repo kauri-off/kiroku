@@ -24,6 +24,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
@@ -121,9 +122,32 @@ private class Recommendation(
     val node: AnimeNode,
 )
 
-internal fun JsonObject.toTitle(): MalTitle {
-    val anime = MalJson.decodeFromJsonElement(AnimeNode.serializer(), this).toAnime()
-    return MalTitle(anime, MalJson.decodeFromJsonElement(PageNode.serializer(), this).toDetails(anime.id))
+internal fun JsonObject.toTitle(repairs: Repairs = Repairs()): MalTitle {
+    val anime = MalJson.decodeFromJsonElement(AnimeNode.serializer(), this).toAnime(repairs)
+    return MalTitle(anime, MalJson.decodeFromJsonElement(PageNode.serializer(), this).toDetails(anime.id, repairs))
+}
+
+// MAL's fields that held a value the mapper could not read and left out or filled in; a related title's under its list's name.
+internal class Repairs private constructor(
+    private val prefix: String,
+    private val noted: MutableSet<String>,
+) {
+    constructor() : this("", sortedSetOf())
+
+    val fields: Set<String> get() = noted
+
+    fun note(field: String) {
+        noted += prefix + field
+    }
+
+    fun within(list: String) = Repairs("$prefix$list.", noted)
+
+    // [read] of a value MAL gave; noted when it gave one that reads as nothing.
+    fun <T : Any> read(
+        field: String,
+        given: Boolean,
+        read: T?,
+    ): T? = read.also { if (it == null && given) note(field) }
 }
 
 // MAL's media type for a title whose type it does not know yet.
@@ -132,60 +156,85 @@ const val NO_MEDIA_TYPE = "unknown"
 // MAL's status for a title it gives none.
 private val NO_STATUS = AiringStatus.Unrecognized("")
 
-// MAL's zero, empty and unreadable values are absent; a code the app does not know stays MAL's code. Only a node
-// without a usable id, or without any title, cannot be mapped; a missing status is the unknown one.
-internal fun AnimeNode.toAnime(): Anime =
-    Anime(
+// MAL's zero and empty values are absent, and so are unreadable ones, which are noted; a code the app does not know stays
+// MAL's code. Only a node without a usable id, or without any title, cannot be mapped; a missing status is the unknown one.
+internal fun AnimeNode.toAnime(repairs: Repairs = Repairs()): Anime {
+    val picture = mainPicture?.medium?.present()
+    val genresGiven = genres?.mapNotNull { genre -> genre.id?.let { id -> genre.name?.present()?.let { Genre(id, it) } } }
+    if (genresGiven != null && genresGiven.size < genres.size) repairs.note("genres")
+    return Anime(
         id = AnimeId(requireNotNull(id.positiveLong())),
-        titles = titles(),
-        posterUrl = mainPicture?.medium?.present(),
-        largePosterUrl = mainPicture?.large?.present()?.takeIf { mainPicture.medium?.present() != null },
+        titles = titles(repairs),
+        posterUrl = repairs.read("main_picture", mainPicture != null, picture),
+        largePosterUrl = mainPicture?.large?.present()?.takeIf { picture != null },
         mediaType = mediaType?.present()?.takeIf { it != NO_MEDIA_TYPE }?.let(mediaTypes::of),
-        airingStatus = status?.present()?.let(airingStatuses::of) ?: NO_STATUS,
-        malEpisodes = episodes.number()?.intOrNull?.takeIf { it > 0 },
-        startDate = startDate?.let(::dateOf),
-        broadcast = broadcast?.toBroadcast(),
-        meanScore = mean.number()?.doubleOrNull?.takeIf { it in 0.0..10.0 },
-        rank = rank.number()?.intOrNull?.takeIf { it > 0 },
-        genres = genres?.mapNotNull { genre -> genre.id?.let { id -> genre.name?.present()?.let { Genre(id, it) } } },
-        averageEpisodeDuration = episodeSeconds.positiveLong()?.let(Duration::ofSeconds),
+        airingStatus = repairs.read("status", true, status?.present()?.let(airingStatuses::of)) ?: NO_STATUS,
+        malEpisodes = repairs.read("num_episodes", episodes.given(), episodes.number()?.intOrNull?.takeIf { it >= 0 })?.takeIf { it > 0 },
+        startDate = repairs.read("start_date", startDate.given(), startDate?.let(::dateOf)),
+        broadcast = broadcast?.toBroadcast(repairs),
+        meanScore = repairs.read("mean", mean.given(), mean.number()?.doubleOrNull?.takeIf { it in 0.0..10.0 }),
+        rank = repairs.read("rank", rank.given(), rank.number()?.intOrNull?.takeIf { it > 0 }),
+        genres = genresGiven,
+        averageEpisodeDuration =
+            repairs
+                .read("average_episode_duration", episodeSeconds.given(), episodeSeconds.number()?.longOrNull?.takeIf { it >= 0 })
+                ?.takeIf { it > 0 }
+                ?.let(Duration::ofSeconds),
     )
+}
 
 // Without MAL's main title the English one takes its place, then the Japanese one (section 10's order).
-private fun AnimeNode.titles(): Titles {
+private fun AnimeNode.titles(repairs: Repairs): Titles {
     val english = alternativeTitles?.en?.present()
     val japanese = alternativeTitles?.ja?.present()
     val synonyms = alternativeTitles?.synonyms.orEmpty().mapNotNull { it.present() }
     title?.present()?.let { return Titles(it, english, japanese, synonyms) }
+    repairs.note("title")
     english?.let { return Titles(it, null, japanese, synonyms) }
     return Titles(requireNotNull(japanese), null, null, synonyms)
 }
 
-private fun PageNode.toDetails(id: AnimeId): AnimeDetails =
-    AnimeDetails(
+private fun PageNode.toDetails(
+    id: AnimeId,
+    repairs: Repairs,
+): AnimeDetails {
+    val named = studios.mapNotNull { it.name?.present() }
+    if (named.size < studios.size) repairs.note("studios")
+    return AnimeDetails(
         id = id,
         synopsis = synopsis?.present(),
-        endDate = endDate?.let(::dateOf),
-        season = startSeason?.toSeason(),
+        endDate = repairs.read("end_date", endDate.given(), endDate?.let(::dateOf)),
+        season = repairs.read("start_season", startSeason != null, startSeason?.toSeason()),
         source = source?.present()?.let(sources::of),
-        studios = studios.mapNotNull { it.name?.present() },
+        studios = named,
         rating = rating?.present()?.let(ageRatings::of),
-        statistics = statistics?.toStatistics(),
-        related = related.mapNotNull { mappedOrNull { it.toRelated() } },
-        recommendations = recommendations.mapNotNull { mappedOrNull { it.decoded(Recommendation.serializer()).node.toAnime() } },
+        statistics = repairs.read("statistics", statistics != null, statistics?.toStatistics()),
+        related = related.mappedOrLeftOut("related_anime", repairs) { it.toRelated(repairs.within("related_anime")) },
+        recommendations =
+            recommendations.mappedOrLeftOut("recommendations", repairs) {
+                it.decoded(Recommendation.serializer()).node.toAnime(repairs.within("recommendations"))
+            },
     )
-
-private fun JsonElement.toRelated(): RelatedAnime {
-    val related = decoded(Related.serializer())
-    return RelatedAnime(related.node.toAnime(), relationTypes.of(related.relation))
 }
 
-// A related title or a recommendation that cannot be mapped is left out; the page shows without it.
-private inline fun <T> mappedOrNull(map: () -> T): T? =
-    try {
-        map()
-    } catch (_: IllegalArgumentException) {
-        null
+private fun JsonElement.toRelated(repairs: Repairs): RelatedAnime {
+    val related = decoded(Related.serializer())
+    return RelatedAnime(related.node.toAnime(repairs), relationTypes.of(related.relation))
+}
+
+// A related title or a recommendation that cannot be mapped is left out, and noted; the page shows without it.
+private inline fun <T> List<JsonElement>.mappedOrLeftOut(
+    list: String,
+    repairs: Repairs,
+    map: (JsonElement) -> T,
+): List<T> =
+    mapNotNull {
+        try {
+            map(it)
+        } catch (_: IllegalArgumentException) {
+            repairs.note(list)
+            null
+        }
     }
 
 private fun <T> JsonElement.decoded(serializer: KSerializer<T>): T = MalJson.decodeFromJsonElement(serializer, this)
@@ -208,11 +257,15 @@ private fun JsonElement?.number(): JsonPrimitive? = this as? JsonPrimitive
 
 private fun JsonElement?.positiveLong(): Long? = number()?.longOrNull?.takeIf { it > 0 }
 
+// MAL gave a value here: not left out, not null, not empty.
+private fun JsonElement?.given(): Boolean = this != null && this !is JsonNull && !(this is JsonPrimitive && isString && content.isBlank())
+
+private fun String?.given(): Boolean = this?.present() != null
+
 // A broadcast without a weekday, or with a day that is not one, is no broadcast.
-private fun MalBroadcast.toBroadcast(): Broadcast? {
-    val named = day ?: return null
-    val weekday = DayOfWeek.entries.find { it.name.equals(named, ignoreCase = true) } ?: return null
-    return Broadcast(weekday, startTime?.present()?.let(::timeOf))
+private fun MalBroadcast.toBroadcast(repairs: Repairs): Broadcast? {
+    val weekday = repairs.read("broadcast", true, DayOfWeek.entries.find { it.name.equals(day, ignoreCase = true) }) ?: return null
+    return Broadcast(weekday, repairs.read("broadcast", startTime.given(), startTime?.present()?.let(::timeOf)))
 }
 
 // A time that does not parse is no time.

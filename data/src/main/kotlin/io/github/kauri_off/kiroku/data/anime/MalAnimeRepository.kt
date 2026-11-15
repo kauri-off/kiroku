@@ -1,0 +1,68 @@
+package io.github.kauri_off.kiroku.data.anime
+
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
+import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeDetails
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.data.db.TitleStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import java.time.Clock
+import java.time.Instant
+
+// The titles of section 7.1: what the store holds, refreshed from MAL's page; a refresh that fails leaves the store as it was.
+class MalAnimeRepository(
+    private val titles: MalTitles,
+    private val store: TitleStore,
+    private val clock: Clock,
+    // The setting "Show adult content in search", which inside a title changes only its recommendations.
+    private val adult: suspend () -> Boolean,
+    private val unexpected: (Throwable) -> Unit,
+) : AnimeRepository {
+    override fun observeAnime(id: AnimeId): Flow<Anime?> = store.observeAnime(id).readable()
+
+    override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> =
+        store
+            .observeDetails(id)
+            .map { it?.details }
+            .distinctUntilChanged()
+            .readable()
+
+    override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> =
+        store
+            .observeDetails(id)
+            .map { it?.fetchedAt }
+            .distinctUntilChanged()
+            .readable()
+
+    override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+        val answer = titles.title(id, adult())
+        if (answer !is Outcome.Success) return answer as Outcome.Failure
+        val (anime, details) = answer.value
+        // A page of another title is not the one asked for, which would otherwise never get its details.
+        if (anime.id != id) return Outcome.Failure(DataError.ServerError)
+        return try {
+            store.refresh(anime, details, clock.instant())
+            Outcome.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            unexpected(e)
+            Outcome.Failure(DataError.StorageError)
+        }
+    }
+
+    // A store that cannot be read is reported, and ends the flow as section 6.1 says.
+    private fun <T> Flow<T>.readable(): Flow<T> =
+        catch { e ->
+            if (e !is Exception || e is CancellationException) throw e
+            unexpected(e)
+            throw DataException(DataError.StorageError, e)
+        }
+}

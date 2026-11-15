@@ -6,10 +6,12 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
+import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -70,5 +72,21 @@ class MalTitlesTest {
 
         assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { titles.title(AnimeId(61987), adult = false) })
         assertTrue(network.unexpected.single() is UnusableAnswer)
+    }
+
+    @Test
+    fun `a page read with values left out or filled in is still the page, and reported by MAL's field names alone`() {
+        val page =
+            recordedJson("title_airing")
+                .edited(listOf("start_date"), JsonPrimitive("broken"))
+                .edited(listOf("related_anime", "0", "node", "id"))
+        network.api.enqueue(answer(200, page.toString(), "application/json; charset=UTF-8"))
+
+        val outcome = runBlocking { titles.title(AnimeId(61987), adult = false) }
+
+        assertEquals(Outcome.Success(page.toTitle()), outcome)
+        val report = network.unexpected.single() as RepairedAnswer
+        assertEquals(setOf("related_anime", "start_date"), report.fields)
+        assertEquals("related_anime, start_date", report.message)
     }
 }

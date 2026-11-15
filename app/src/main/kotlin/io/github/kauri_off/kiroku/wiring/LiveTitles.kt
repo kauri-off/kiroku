@@ -1,24 +1,42 @@
 package io.github.kauri_off.kiroku.wiring
 
-import io.github.kauri_off.kiroku.core.error.DataError
-import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.data.anime.MalAnimeRepository
+import io.github.kauri_off.kiroku.data.anime.MalTitles
+import io.github.kauri_off.kiroku.data.db.TitleStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import java.time.Instant
 
-// The titles of a live source, of which nothing is known and nothing can be fetched yet.
-@Suppress("UNUSED_PARAMETER")
+// The titles of a live source: its database's, refreshed from MAL's pages.
 internal fun liveTitles(parts: LiveParts): AnimeRepository =
-    object : AnimeRepository {
-        override fun observeAnime(id: AnimeId): Flow<Anime?> = flowOf(null)
-
-        override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = flowOf(null)
-
-        override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = flowOf(null)
-
-        override suspend fun refresh(id: AnimeId): Outcome<Unit> = Outcome.Failure(DataError.ServerError)
+    TitlesOnFirstUse {
+        val store = TitleStore(parts.database, Dispatchers.IO, parts.unexpected)
+        MalAnimeRepository(MalTitles(parts.http), store, parts.clock, { SHOW_ADULT }, parts.unexpected)
     }
+
+// The setting "Show adult content in search", off until Settings exist.
+private const val SHOW_ADULT = false
+
+// The repository and the database under it are built at its first call, off the main thread.
+private class TitlesOnFirstUse(
+    build: () -> AnimeRepository,
+) : AnimeRepository {
+    private val built = lazy(build)
+
+    private suspend fun titles(): AnimeRepository = if (built.isInitialized()) built.value else withContext(Dispatchers.IO) { built.value }
+
+    override fun observeAnime(id: AnimeId): Flow<Anime?> = flow { emitAll(titles().observeAnime(id)) }
+
+    override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = flow { emitAll(titles().observeDetails(id)) }
+
+    override fun observeRefreshedAt(id: AnimeId): Flow<Instant?> = flow { emitAll(titles().observeRefreshedAt(id)) }
+
+    override suspend fun refresh(id: AnimeId) = titles().refresh(id)
+}

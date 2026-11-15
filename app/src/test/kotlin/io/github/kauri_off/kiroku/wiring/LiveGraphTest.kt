@@ -1,14 +1,19 @@
 package io.github.kauri_off.kiroku.wiring
 
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.rules.appSources
+import io.github.kauri_off.kiroku.stale
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -18,7 +23,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +33,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import java.time.Clock
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
 // Nothing of the network or of the list's store is built before its first use, and each source has its own files.
@@ -145,6 +153,42 @@ class LiveGraphTest {
             val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
             parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
             assertEquals(Session.Expired(SignInId(signIn)), LiveGraph(parts).session.observeSession().first())
+        }
+
+    // Section 7.1: a title page shows what the source's own database holds and asks MAL nothing while it is fresh.
+    @Test
+    fun `the titles are the source's own database's, and a fresh title is shown without a request`() =
+        runTest {
+            val requests = mutableListOf<String>()
+            val parts =
+                LiveParts(
+                    context,
+                    LiveSource.Account,
+                    "0123abcd",
+                    Clock.systemUTC(),
+                    backgroundScope,
+                    unexpected::add,
+                    requests::add,
+                    device,
+                )
+            val titles = LiveGraph(parts, listStore = { store() }).anime
+            val anime = FixtureAnime.exactToWatch
+            assertNull(titles.observeAnime(anime.id).first())
+            assertTrue(context.getDatabasePath("account.db").isFile)
+
+            val fetched = Instant.now().minusSeconds(60)
+            TitleStore(
+                parts.database,
+                Dispatchers.IO,
+                unexpected::add,
+            ).refresh(anime, Fixtures.reference.details.getValue(anime.id), fetched)
+            assertEquals(anime, titles.observeAnime(anime.id).first())
+            assertEquals(Fixtures.reference.details[anime.id], titles.observeDetails(anime.id).first())
+            assertEquals(fetched, titles.observeRefreshedAt(anime.id).first())
+            assertFalse(titles.stale(anime.id, null, Instant.now()))
+            assertEquals(emptyList<String>(), requests)
+            assertEquals(0, device.clientBuilds.get())
+            assertEquals(emptyList<Throwable>(), unexpected)
         }
 
     // So a graph that is not a live graph, the demo's, holds no HTTP client.
