@@ -102,11 +102,14 @@ class ShellMessages(
 
     private var serial = 0L
 
+    // Ends the shown failure once its title comes to hold what its Retry would write, as when a download shows MAL made it.
+    private var made: Job? = null
+
     fun post(message: ShellMessage) {
         val posted = Posted(message, ++serial)
         val showing = shown.value
         when {
-            showing == null || !showing.message.mustStay -> shown.value = posted
+            showing == null || !showing.message.mustStay -> show(posted)
             message.mustStay -> waiting += Waiting(posted, watch(posted))
         }
     }
@@ -170,10 +173,41 @@ class ShellMessages(
                 null -> Unit
             }
         }
-        if (shown.value == posted) {
-            val next = waiting.removeFirstOrNull()
-            next?.watch?.cancel()
-            shown.value = next?.posted
+        if (shown.value == posted) showNext()
+    }
+
+    private fun showNext() {
+        val next = waiting.removeFirstOrNull()
+        next?.watch?.cancel()
+        show(next?.posted)
+    }
+
+    private fun show(posted: Posted?) {
+        made?.cancel()
+        shown.value = posted
+        made = posted?.let(::endWhenMade)
+    }
+
+    private fun endWhenMade(posted: Posted): Job? {
+        val retry = (posted.message.action as? ShellMessage.Action.Retry)?.write as? ListWrite.Retry ?: return null
+        val values =
+            when (val write = retry.failure.write) {
+                is ListWrite.Save -> write.values
+                is ListWrite.Remove -> null
+                else -> return null
+            }
+        return scope.launch {
+            // Values the title already held when the message showed say nothing of MAL: they may be the rollback's.
+            var start: Start? = null
+            try {
+                list.observeEntry(retry.anime.id).map { it?.values }.first { now ->
+                    val from = start ?: Start(now).also { start = it }
+                    now != from.values && now == values
+                }
+            } catch (_: DataException) {
+                return@launch
+            }
+            if (shown.value == posted) showNext()
         }
     }
 

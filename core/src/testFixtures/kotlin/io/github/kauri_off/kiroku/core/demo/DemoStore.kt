@@ -62,7 +62,7 @@ class DemoStore(
     override suspend fun download(
         titles: List<Anime>,
         entries: Map<AnimeId, StoredEntry?>,
-        at: Instant,
+        at: Instant?,
     ) = writing { inner.download(titles, entries, at) }
 
     override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) = writing { inner.restore(entries) }

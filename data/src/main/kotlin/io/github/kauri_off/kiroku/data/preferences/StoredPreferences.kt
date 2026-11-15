@@ -84,6 +84,21 @@ class StoredPreferences internal constructor(
         }
     }
 
+    // The list's sorts are its owner's and go with them (S9); every other choice stays. A disk that fails this throws.
+    suspend fun forgetListSorts() {
+        try {
+            store.edit { stored ->
+                stored
+                    .asMap()
+                    .keys
+                    .filter { it.name.startsWith(SORT) || it.name.startsWith(DIRECTION) }
+                    .forEach { stored -= it }
+            }
+        } catch (e: IOException) {
+            throw PreferencesFailure(e)
+        }
+    }
+
     private fun sortOf(
         stored: Preferences,
         status: ListStatus,
@@ -120,9 +135,12 @@ class StoredPreferences internal constructor(
     private class UnreadableChoice : Exception()
 
     private companion object {
-        fun sortKey(status: ListStatus) = stringPreferencesKey("list_sort_${listStatuses.toColumn(status)}")
+        const val SORT = "list_sort_"
+        const val DIRECTION = "list_direction_"
 
-        fun directionKey(status: ListStatus) = stringPreferencesKey("list_direction_${listStatuses.toColumn(status)}")
+        fun sortKey(status: ListStatus) = stringPreferencesKey("$SORT${listStatuses.toColumn(status)}")
+
+        fun directionKey(status: ListStatus) = stringPreferencesKey("$DIRECTION${listStatuses.toColumn(status)}")
 
         val sorts =
             Codes(ListSort.entries) {

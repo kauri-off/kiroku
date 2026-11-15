@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.wiring
 import android.content.Context
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
@@ -12,6 +13,7 @@ import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.time.Clock
 
@@ -56,8 +58,8 @@ internal class LiveGraph(
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
-    override val session: SessionRepository get() = account
-    override val list by lazy { liveList(parts, account, listStore) }
+    override val session: SessionRepository by lazy { SignOutForgets(account) { list } }
+    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetListSorts() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { liveAiring(parts) }
     override val search by lazy { liveSearch(parts) }
@@ -73,5 +75,17 @@ internal class LiveGraph(
     // For whatever is about to end the process: a session nobody asked for has nothing to write.
     suspend fun writeOwed() {
         if (built.isInitialized()) account.writeOwed()
+    }
+}
+
+// S9: a sign-out takes the user's list and its sorts with it at once, also when nothing has asked for the list yet.
+private class SignOutForgets(
+    private val account: SessionRepository,
+    private val list: () -> ListSource,
+) : SessionRepository by account {
+    override suspend fun signOut() {
+        account.signOut()
+        // A read of the list makes its store agree with the session; a store that fails it is cleared at its next use.
+        list().observeSyncedAt().first()
     }
 }

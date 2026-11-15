@@ -430,4 +430,73 @@ class ShellMessagesTest {
         assertEquals(before!! + 1, watched())
         compose.onNodeWithText("Episode\u00A010 watched").assertDoesNotExist()
     }
+
+    // A failed save that MAL made after all: once a download shows the title as the Retry would write it, the message goes.
+    @Test
+    fun `a failed save's message ends once its title holds what its Retry would write, and stays while it does not`() {
+        val shell = ShellViewModel(graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = true
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        val retry =
+            (
+                shell.messages.current.value!!
+                    .message.action as ShellMessage.Action.Retry
+            ).write as ListWrite.Retry
+        val values = (retry.failure.write as ListWrite.Save).values
+
+        // The engine runs on the main thread here, so a sync is launched there rather than waited for.
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+
+        graph.demo.server.editOnWebsite(anime, values)
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertDoesNotExist()
+        assertEquals(null, shell.messages.current.value)
+    }
+
+    // A "+1" then a "−1" whose first request fails: the Retry holds the values the title rolls back to, and MAL may
+    // hold the one in between, so the message stays until a change says more.
+    @Test
+    fun `a failed save whose Retry would write the values the title rolled back to keeps its message`() {
+        val shell = ShellViewModel(graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        val before = watched()
+        graph.demo.server.failingWrites.value = true
+        runBlocking {
+            graph.list.write(ListWrite.MarkNextWatched(anime))
+            graph.list.write(ListWrite.StepWatched(anime, -1))
+        }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        val retry =
+            (
+                shell.messages.current.value!!
+                    .message.action as ShellMessage.Action.Retry
+            ).write as ListWrite.Retry
+        assertEquals(before, (retry.failure.write as ListWrite.Save).values.watchedEpisodes)
+        assertEquals(before, watched())
+
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+    }
 }

@@ -121,13 +121,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
   given the state of a recorded answer, gives that answer back; in the sandbox no request leaves the device; the
   panel's "session expired" ends in the banner through a real rejected refresh.
 
-- [ ] **M2-21 The real list.** The live graph's list is the engine over M2-19 and M2-16; `InMemoryLocalList`
-  moves to the test fixtures. Signing out removes the tokens and everything stored about the user (S9). Until M3
-  there is no airing data: no screen shows an airing line, and Watching is ordered by the last update.
-  **Needs:** M2-11, M2-16, M2-19.
-  **Check:** tests over recorded answers behind a local server: a sign-in fills the list; a sign-out leaves no
-  entry and no token, and the next sign-in shows nothing of the one before; with the airing source empty, no
-  row and no title page shows an airing line. A release build holds no in-memory store.
+- [x] **M2-21 The real list.**
 
 - [ ] **M2-34 A write carries only what the user changed.** The engine hands the client the values MAL last
   confirmed, and a write sends only the values that differ from them, so neither a value MAL gave that the app could

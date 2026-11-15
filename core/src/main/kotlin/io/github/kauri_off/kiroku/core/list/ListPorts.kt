@@ -112,11 +112,12 @@ interface LocalList {
         entry: StoredEntry,
     )
 
-    // A whole download: every title's data, kept by the store's own rules, the changed entries, the time; a no-op wakes no observer.
+    // A whole download: every title's data, kept by the store's own rules, the changed entries, the time, or none while a
+    // download is still owed; a no-op wakes no observer.
     suspend fun download(
         titles: List<Anime>,
         entries: Map<AnimeId, StoredEntry?>,
-        at: Instant,
+        at: Instant?,
     )
 
     // W5: [write], and the list counts as never downloaded.
