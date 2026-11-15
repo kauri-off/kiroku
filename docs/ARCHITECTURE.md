@@ -817,9 +817,9 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 - **Tests of MAL mappers run against responses recorded from the real API, never against shapes written from
   memory.** An agent can neither read the client id nor sign in, so responses that need only the client id are
   recorded by a build task that uses the id without printing it or any request header and is not part of any build
-  or check, and responses that need the user's sign-in are recorded by the owner with a debug-only tool in the app.
+  or check; those needing the user's sign-in, by the owner with a debug tool, as sent less token and client id.
 - **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
-  reads recorded files before they are committed.
+  reads recorded files before they are committed. The owner's stay outside all checkouts; tests skip without them.
 - Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
   itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another
@@ -896,8 +896,8 @@ only when rendered on the same machine.
 
 Each of these could change a decision above.
 
-1. **The sign-in has not been run end to end.** The client is registered with the redirect URIs of section 3.1,
-   but no token exchange without a secret has been made.
+1. **A sign-in with the app killed while the browser is open has not been run on a phone.** A sign-in has: MAL
+   granted a token with a lifetime.
 2. **The shape of MAL's user statistics** is known from dailyAL's working code, not from MAL's reference, which
    shows no samples. The recorded responses decide.
 3. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private

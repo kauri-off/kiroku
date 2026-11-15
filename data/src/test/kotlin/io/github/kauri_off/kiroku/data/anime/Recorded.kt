@@ -33,7 +33,7 @@ internal val recordedNodes: List<Pair<String, JsonObject>> by lazy {
     }
 }
 
-private fun titleNodesIn(element: JsonElement): List<JsonObject> =
+internal fun titleNodesIn(element: JsonElement): List<JsonObject> =
     when (element) {
         is JsonObject ->
             listOfNotNull(element.takeIf { "id" in it && "title" in it && "status" in it }) +

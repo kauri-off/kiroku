@@ -146,7 +146,7 @@ sealed interface Recording {
     ) : Recording
 }
 
-// Where the answers go, all of them through the sanitiser: those of a run that ended, and those of the run in hand.
+// Where the answers go, each as MAL sent it: those of a run that ended, and those of the run in hand.
 class RecorderFolders(
     val recorded: File,
     val run: File,
@@ -181,10 +181,6 @@ class SignedInRecorder internal constructor(
     private var sent = 0
     private var stored = 0
     private var running: RecordedTitle? = null
-    private var secrets = emptyMap<String, String>()
-    private var names = emptyMap<String, String>()
-    private var userId: String? = null
-    private var ownTitle: Long? = null
 
     internal val started: Job = work.launch { busy.withLock { journal.read()?.let { shown.value = leftover(it) } } }
 
@@ -230,10 +226,6 @@ class SignedInRecorder internal constructor(
         sent = 0
         stored = 0
         running = title
-        secrets = emptyMap()
-        names = emptyMap()
-        userId = null
-        ownTitle = null
     }
 
     private suspend fun checked(id: Long): Recording =
@@ -277,7 +269,6 @@ class SignedInRecorder internal constructor(
 
     // The fixed list of changes, each read back; the title is on the list from the first to the removal.
     private suspend fun changes(title: RecordedTitle) {
-        ownTitle = title.id
         for ((index, write) in OwnTitleWrites.withIndex()) {
             val adds = index == 0
             ask(write.name, patch(title.id, write.form(title.episodes)), expected = if (adds) ::ok else ::answered)
@@ -328,17 +319,10 @@ class SignedInRecorder internal constructor(
         store(TOKEN_GRANTED, sanitiser.kept(TOKEN_GRANTED, OK, null, sanitiser.json("""{"expires_in":$seconds}""")))
     }
 
-    // Who is signed in, as the journal names them. From here on the user's name, id and picture are replaced in every answer.
+    // Who is signed in, as the journal names them.
     private suspend fun profile(): String {
-        val answer = ask(PROFILE, get("users/@me?fields=${MalFields.PROFILE}"), clean = Sanitiser::profile, learn = ::personal)
+        val answer = ask(PROFILE, get("users/@me?fields=${MalFields.PROFILE}"))
         return userOf(answer) ?: throw Halted(Halt.Unexpected(answer.status), PROFILE)
-    }
-
-    private fun personal(profile: String) {
-        val values = json(profile) ?: return
-        secrets = listOfNotNull(values.text("picture")?.let { it to "https://example.org/owner-picture" }).toMap()
-        names = listOfNotNull(values.text("name")?.let { it to "owner-user" }).toMap()
-        userId = (values["id"] as? JsonPrimitive)?.content
     }
 
     private fun userOf(answer: Answer): String? =
@@ -352,7 +336,7 @@ class SignedInRecorder internal constructor(
         val size = ((titles.size + PAGES - 1) / PAGES).coerceIn(1, LARGEST_PAGE)
         repeat(PAGES) { page ->
             val third = get("$OWN_LIST&sort=anime_title&limit=$size&offset=${page * size}")
-            ask("own_list_${page + 1}", third, clean = { ownList(it, page * KEPT_ENTRIES) })
+            ask("own_list_${page + 1}", third)
         }
         return titles
     }
@@ -472,11 +456,9 @@ class SignedInRecorder internal constructor(
         name: String,
         request: Request.Builder,
         kept: Boolean = true,
-        clean: Sanitiser.(String) -> String? = Sanitiser::json,
-        learn: (String) -> Unit = {},
         expected: (Int) -> Boolean = ::ok,
     ): Answer {
-        val answer = send(name, request, clean, learn)
+        val answer = send(name, request)
         if (kept) store(name, answer.kept)
         if (answer.status in REFUSALS) throw Halted(Halt.Refused(answer.status), name)
         if (!expected(answer.status)) throw Halted(Halt.Unexpected(answer.status), name)
@@ -487,8 +469,6 @@ class SignedInRecorder internal constructor(
     private suspend fun send(
         name: String,
         request: Request.Builder,
-        clean: Sanitiser.(String) -> String?,
-        learn: (String) -> Unit,
     ): Answer {
         if (sent++ > 0) pause()
         val outcome =
@@ -497,11 +477,9 @@ class SignedInRecorder internal constructor(
                     http.callFactory.newCall(request.header(AUTHORIZATION, bearer(accessToken)).build()).execute().use { response ->
                         if (response.code == UNAUTHORIZED) return@use Attempt.Rejected
                         val body = response.body.string()
-                        learn(body)
-                        // The token is a secret of its answer: whatever repeats it is stored without it.
-                        val sanitiser = Sanitiser(secrets + (accessToken to "access-token"), names, userId, ownTitle)
-                        val stored = sanitiser.kept(name, response.code, response.header("Content-Type"), sanitiser.clean(body))
-                        Attempt.Answered(Outcome.Success(Answer(response.code, body, stored)))
+                        // Section 11.1: the answer as MAL sent it, never the token or the client id it was asked with.
+                        val sanitiser = Sanitiser(mapOf(accessToken to "access-token", http.clientId to "client-id"))
+                        Attempt.Answered(Outcome.Success(Answer(response.code, body, sanitiser.asSent(name, response.code, body))))
                     }
                 } catch (_: IOException) {
                     Attempt.Answered(Outcome.Failure(DataError.NoConnection))

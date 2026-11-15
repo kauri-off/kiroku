@@ -2,8 +2,8 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.ACCESS
-import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.PLANTED
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.REFRESH
+import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.SECRETS
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.TITLE
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.USER_ID
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.answer
@@ -40,7 +40,7 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
-// Section 11.1: the signed-in recorder stores nothing of the user, and the user's list is afterwards as it was.
+// Section 11.1: the signed-in recorder stores MAL's answers as sent, without secrets, and the user's list is afterwards as it was.
 @RunWith(RobolectricTestRunner::class)
 class SignedInRecorderTest {
     @get:Rule
@@ -138,8 +138,6 @@ class SignedInRecorderTest {
         assertEquals(allWrites, mal.writes)
         assertEquals(listBefore, mal.onTheList())
         assertTrue(mal.tokens.all { it == ACCESS })
-        // Once in the repository, each file is as the rules for stored answers leave it.
-        for ((name, text) in files.recorded.texts()) assertEquals(name, text, cleanedStored(name, text))
         assertFalse(journal.exists())
         assertFalse(files.run.exists())
         assertEquals(emptyList<Throwable>(), fixture.unexpected)
@@ -165,84 +163,38 @@ class SignedInRecorderTest {
     }
 
     @Test
-    fun `nothing of the user, of a token or of a header is in what is stored`() {
+    fun `every answer is stored as MAL sent it, without a token, the client id or a header`() {
         recorder(signedIn()).recorded()
 
+        val sent = mal.bodies.map { it.replace(ACCESS, "access-token").replace(NetworkFixture.CLIENT_ID, "client-id") }
         val texts = files.recorded.texts()
-        for ((name, text) in texts) for (planted in PLANTED) assertFalse("$planted in $name", planted in name || planted in text)
-
-        val profile = stored("profile.200.json")
-        assertEquals(
-            setOf(
-                "id",
-                "name",
-                "picture",
-                "gender",
-                "birthday",
-                "location",
-                "joined_at",
-                "time_zone",
-                "is_supporter",
-                "email",
-                "about",
-                "anime_statistics",
-                "favourites",
-            ),
-            profile.keys,
-        )
-        assertEquals(""""owner-user"""", "${profile["name"]}")
-        assertEquals(""""https://example.org/owner-picture"""", "${profile["picture"]}")
-        assertEquals(""""2020-01-01"""", "${profile["birthday"]}")
-        assertEquals(""""2020-01-01T00:00:00+00:00"""", "${profile["joined_at"]}")
-        assertEquals("false", "${profile["is_supporter"]}")
-        assertEquals("\"\"", "${profile["about"]}")
-        assertTrue("${profile["email"]}".startsWith("\"made-up-"))
-        assertTrue("${profile["id"]}".toLong() != USER_ID)
-        val statistics = profile["anime_statistics"]!!.jsonObject
-        assertEquals(listOf(true, true, false, false, true), statistics.values.map { "$it".toLongOrNull() != null })
-        assertEquals(statistics.size, statistics.values.toSet().size)
-
-        assertEquals(""""Invalid value, user 0"""", "${stored("score_refused.400.json")["message"]}")
+        for ((name, text) in texts - "$TOKEN_GRANTED.200.json") assertTrue(name, text in sent)
+        for ((name, text) in texts) for (secret in SECRETS) assertFalse("$secret in $name", secret in name || secret in text)
+        val profile = texts.getValue("profile.200.json")
+        for (value in listOf(PlantedMal.USER_NAME, PlantedMal.PICTURE, "$USER_ID", "1991-07-13", "567.89", """"client":"client-id"""")) {
+            assertTrue(value, value in profile)
+        }
+        assertEquals(""""Invalid value, user $USER_ID"""", "${stored("score_refused.400.json")["message"]}")
     }
 
     @Test
-    fun `of the user's own list the pages keep MAL's shape and links, and no entry's title or values`() {
+    fun `the pages of the user's own list are stored whole, as MAL sent them`() {
         recorder(signedIn()).recorded()
 
         val pages = (1..3).map { stored("own_list_$it.200.json") }
         val entries = pages.flatMap { page -> page["data"]!!.jsonArray.map { it.jsonObject } }
-        assertEquals(listOf(KEPT_ENTRIES, KEPT_ENTRIES, KEPT_ENTRIES), pages.map { it["data"]!!.jsonArray.size })
-        assertEquals((90_000_001L..90_000_030L).toList(), entries.map { it["node"]!!.jsonObject["id"]!!.jsonPrimitive.long })
-        assertEquals(setOf("id", "title", "num_episodes", "status", "start_date"), entries[0]["node"]!!.jsonObject.keys)
+        assertEquals(listBefore.keys.toList(), entries.map { it["node"]!!.jsonObject["id"]!!.jsonPrimitive.long })
+        assertEquals(""""Listed 101"""", "${entries[0]["node"]!!.jsonObject["title"]}")
         assertEquals(
-            """{"id":90000001,"title":"Made-up title 1","num_episodes":24,"status":"finished_airing","start_date":"2020-01-01"}""",
-            "${entries[0]["node"]}",
-        )
-        val statuses = listOf("watching", "completed", "on_hold", "dropped", "plan_to_watch")
-        assertEquals((0 until 30).map { "\"${statuses[it % 5]}\"" }, entries.map { "${it["list_status"]!!.jsonObject["status"]}" })
-        assertEquals(
-            """{"status":"completed","score":2,"num_episodes_watched":24,"is_rewatching":false,""" +
-                """"updated_at":"2021-02-01T00:00:00+00:00","comments":"","tags":[],""" +
-                """"start_date":"2021-01-02","finish_date":"2021-02-01"}""",
-            "${entries[1]["list_status"]}",
+            """{"status":"completed","score":9,"num_episodes_watched":24,"is_rewatching":false,"updated_at":"${PlantedMal.UPDATED_AT}",""" +
+                """"start_date":"2015-04-05","finish_date":"2015-06-21",""" +
+                """"comments":"a planted note ${PlantedMal.USER_NAME} access-token","tags":["a planted tag"]}""",
+            "${entries[0]["list_status"]}",
         )
         assertEquals(
-            """{"status":"plan_to_watch","score":0,"num_episodes_watched":0,"is_rewatching":false,""" +
-                """"updated_at":"2021-02-04T00:00:00+00:00","comments":"","tags":[]}""",
-            "${entries[4]["list_status"]}",
-        )
-        assertEquals(""""2021-01"""", "${entries[2]["list_status"]!!.jsonObject["start_date"]}")
-        assertEquals(
-            """"https://api.myanimelist.net/v2/users/owner-user/animelist?token=access-token&limit=10&offset=10"""",
+            """"https://api.myanimelist.net/v2/users/${PlantedMal.USER_NAME}/animelist?token=access-token&limit=14&offset=14"""",
             "${pages[0]["paging"]!!.jsonObject["next"]}",
         )
-        // Nothing of a title that is on the list: its name, its id, the day it started.
-        val texts =
-            files.recorded
-                .texts()
-                .filterKeys { it.startsWith("own_list") }
-                .values
-        for (text in texts) for (real in listOf("Listed", "2019-07-01", "\"id\": 1")) assertFalse("$real in $text", real in text)
     }
 
     @Test
@@ -251,14 +203,17 @@ class SignedInRecorderTest {
 
         assertNull(stored("entry_absent.200.json")["my_list_status"])
         assertEquals(""""plan_to_watch"""", "${stored("add_planned.200.json")["status"]}")
-        assertEquals("\"\" []", "${stored("add_planned.200.json")["comments"]} ${stored("add_planned.200.json")["tags"]}")
-        assertEquals("\"\"", "${stored("entry_full.200.json")["my_list_status"]!!.jsonObject["comments"]}")
+        assertEquals(
+            """" ${PlantedMal.USER_NAME} access-token" ["a planted tag"]""",
+            "${stored("add_planned.200.json")["comments"]} ${stored("add_planned.200.json")["tags"]}",
+        )
+        assertEquals("\" ${PlantedMal.USER_NAME} no token\"", "${stored("entry_full.200.json")["my_list_status"]!!.jsonObject["comments"]}")
         val scored = stored("score_set_read.200.json")["my_list_status"]!!.jsonObject
         assertEquals(
             """7 11 "2100-01-01" "2020-05"""",
             "${scored["score"]} ${scored["num_episodes_watched"]} ${scored["finish_date"]} ${scored["start_date"]}",
         )
-        assertEquals(""""2026-11-14T12:00:00+00:00"""", "${scored["updated_at"]}")
+        assertEquals("\"${PlantedMal.CHANGED_AT}\"", "${scored["updated_at"]}")
         assertEquals(""""2020-02-02"""", "${stored("finish_set_read.200.json")["my_list_status"]!!.jsonObject["finish_date"]}")
         assertNull(stored("finish_cleared_read.200.json")["my_list_status"]!!.jsonObject["finish_date"])
         assertEquals(""""bad_request"""", "${stored("score_refused.400.json")["error"]}")
@@ -286,7 +241,7 @@ class SignedInRecorderTest {
         assertEquals(listBefore, mal.onTheList())
         assertFalse(journal.exists())
         assertFalse(files.recorded.exists())
-        for ((name, text) in files.run.texts()) for (planted in PLANTED) assertFalse("$planted in $name", planted in text)
+        for ((name, text) in files.run.texts()) for (secret in SECRETS) assertFalse("$secret in $name", secret in text)
     }
 
     @Test
@@ -408,7 +363,7 @@ class SignedInRecorderTest {
             files.run
                 .texts()
                 .values
-                .any { "planted" in it },
+                .any { text -> SECRETS.any(text::contains) },
         )
     }
 
@@ -654,17 +609,6 @@ class SignedInRecorderTest {
     }
 
     @Test
-    fun `no stored file keeps an offset or a part of a second that MAL wrote`() {
-        recorder(signedIn()).recorded()
-
-        val moment = Regex("""\d{4}-\d\d-\d\dT[0-9:.]+(Z|[+-]\d\d:\d\d)?""")
-        val moments = files.recorded.texts().flatMap { (name, text) -> moment.findAll(text).map { "$name ${it.value}" } }
-        assertTrue(moments.size > SignedInAnswers.size)
-        assertEquals(emptyList<String>(), moments.filterNot { Regex(""".* \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00""").matches(it) })
-        assertTrue(""""updated_at": "2026-11-14T12:00:00+00:00"""" in files.recorded.texts().getValue("add_planned.200.json"))
-    }
-
-    @Test
     fun `a read-back that is not MAL's own answer for the title keeps the journal`() {
         instead("score=7") { answer(429, "{}") }
         val session = signedIn()
@@ -724,18 +668,18 @@ class SignedInRecorderTest {
             files.recorded
                 .texts()
                 .values
-                .any { "planted" in it },
+                .any { "planted-access-token" in it || "planted-refresh-token" in it },
         )
     }
 
     @Test
-    fun `an answer without a body is stored as its kind and stops nothing`() {
+    fun `an answer without a body is stored empty and stops nothing`() {
         mal.answersRemovalsInJson = false
 
         val end = recorder(signedIn()).recorded()
 
         assertEquals(Recording.Recorded(title, SignedInAnswers.size, files.recorded, ListAfter.Same), end)
-        assertEquals("200, application/json; charset=UTF-8\n", files.recorded.texts()["removed.200.txt"])
+        assertEquals("", files.recorded.texts()["removed.200.txt"])
     }
 
     @Test

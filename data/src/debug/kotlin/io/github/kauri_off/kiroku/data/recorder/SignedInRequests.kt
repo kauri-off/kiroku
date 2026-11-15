@@ -42,14 +42,11 @@ internal val OwnTitleWrites: List<OwnWrite> =
 // The lifetime MAL gave the access token: the one part of a token answer that is stored.
 internal const val TOKEN_GRANTED = "token_granted"
 
-// The answers that hold the recorder's own title while it was on the list.
-internal val OwnEntryAnswers: Set<String> = OwnTitleWrites.mapTo(mutableSetOf("entry_full")) { "${it.name}_read" }
-
 // The requests of a recording on a list of one page: profile, list, three pages, the title, each write and its read-back,
 // the whole entry, two removals with the read-back between them, and the list again.
 val RecordingRequests: Int = 11 + 2 * OwnTitleWrites.size
 
-// Every answer the signed-in recorder stores, in the order of its requests.
+// Every answer the signed-in recorder stores, in the order of its requests; none of them is in the repository (section 11.1).
 internal val SignedInAnswers: List<String> =
     listOf(TOKEN_GRANTED, "profile", "own_list_1", "own_list_2", "own_list_3", "entry_absent") +
         OwnTitleWrites.flatMap { listOf(it.name, "${it.name}_read") } +

@@ -9,18 +9,19 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Section 11.1: every recorded answer in the repository can be recorded again from a recorder's list.
+// Section 11.1: every recorded answer in the repository can be recorded again from the client-id recorder's list.
 class RecordedAnswersTest {
     private val listed = ClientIdRequests.flatMap { it.files } + SignedInAnswers
 
     @Test
-    fun `every recorded answer is named by a recorder's list`() {
+    fun `every recorded answer is named by the client-id recorder's list`() {
         val stored = RecordedAnswers.files.map { it.name }
+        val ofTheClientId = ClientIdRequests.flatMap { it.files }
 
         assertTrue(stored.isNotEmpty())
         for (file in stored) {
             assertTrue(file, Regex("""[a-z0-9_]+\.\d{3}\.(json|txt)""").matches(file))
-            assertTrue(file, file.substringBefore('.') in listed)
+            assertTrue(file, file.substringBefore('.') in ofTheClientId)
         }
         assertEquals(stored.size, stored.map { it.substringBefore('.') }.distinct().size)
     }

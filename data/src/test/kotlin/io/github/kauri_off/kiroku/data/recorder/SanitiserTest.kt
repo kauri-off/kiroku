@@ -63,22 +63,6 @@ class SanitiserTest {
     }
 
     @Test
-    fun `a user's id is replaced in a text and where a key names it, and no number is changed for being equal to it`() {
-        val owner = Sanitiser(emptyMap(), userId = "1440")
-        val planted =
-            """{"id":1440,"average_episode_duration":1440,"statistics":{"watching":"1440"},"user_id":1440,""" +
-                """"user":{"id":1440,"rank":1440},""" +
-                """"users":[{"user":{"id":"1440"}}],"message":"no entry of user 1440.","mean":1440.5,"link":"u/1440/x, 11440"}"""
-
-        assertEquals(
-            """{"id":1440,"average_episode_duration":1440,"statistics":{"watching":"1440"},"user_id":0,"user":{"id":0,"rank":1440},""" +
-                """"users":[{"user":{"id":0}}],"message":"no entry of user 0.","mean":1440.5,"link":"u/0/x, 11440"}""",
-            "${Json.parseToJsonElement(owner.json(planted)!!)}",
-        )
-        assertEquals("user 0", owner.plain("user 1440"))
-    }
-
-    @Test
     fun `a moment is stored in UTC without a part of a second, wherever an answer holds one`() {
         val moments = """{"updated_at":"2026-11-14T21:00:00.123+09:00","created_at":"2026-11-14T12:00:00Z","""
         val planted = """$moments"day":"2026-11-14","at":"2026-11-14T12:00:00"}"""
@@ -87,37 +71,6 @@ class SanitiserTest {
             """{"updated_at":"2026-11-14T12:00:00+00:00","created_at":"2026-11-14T12:00:00+00:00","day":"2026-11-14","at":"2026-11-14T12:00:00"}""",
             "${Json.parseToJsonElement(sanitiser.json(planted)!!)}",
         )
-    }
-
-    @Test
-    fun `a page of a user's own list keeps MAL's shape and nothing of an entry`() {
-        val real =
-            """{"node":{"id":%d,"title":"Real %d","genres":[{"id":1,"name":"Action"},{"id":9,"name":"Ecchi"}],"mean":8.5,"rank":%d},""" +
-                """"list_status":{"status":"dropped","score":3,"num_episodes_watched":5,"updated_at":"2019-03-04T05:06:07.123-05:00",""" +
-                """"start_date":"2019-02","tags":["mine"]}}"""
-        val all = (1..12).joinToString(",") { real.format(it, it, it) }
-        val planted = """{"data":[$all],"paging":{"next":"users/@me/animelist?offset=24&limit=12"}}"""
-        val own = Sanitiser(emptyMap())
-
-        val stored = own.ownList(planted, first = 10)!!
-        val page = Json.parseToJsonElement(stored).jsonObject
-        val entries = page["data"]!!.jsonArray.map { it.jsonObject }
-
-        assertEquals(KEPT_ENTRIES, entries.size)
-        assertEquals(
-            """{"id":90000011,"title":"Made-up title 11","genres":[{"id":3,"name":"made-up-4"}],"mean":5.5,"rank":6}""",
-            "${entries[0]["node"]}",
-        )
-        assertEquals(
-            """{"status":"watching","score":1,"num_episodes_watched":11,"updated_at":"2021-02-10T00:00:00+00:00","tags":[],""" +
-                """"start_date":"2021-01-11"}""",
-            "${entries[0]["list_status"]}",
-        )
-        assertEquals(entries[0]["node"]!!.jsonObject.keys, entries[9]["node"]!!.jsonObject.keys)
-        assertEquals("""{"next":"users/@me/animelist?offset=20&limit=10"}""", "${page["paging"]}")
-        for (ofTheUser in listOf("Real", "Action", "Ecchi", "2019", "8.5", "mine")) assertFalse(ofTheUser, ofTheUser in stored)
-        assertEquals(stored, own.ownList(stored, first = 10))
-        assertEquals(stored, cleanedStored("own_list_2.200.json", stored))
     }
 
     @Test
@@ -324,47 +277,6 @@ class SanitiserTest {
     }
 
     @Test
-    fun `the values of a recorder's own title stay as MAL wrote them, and no other title's do`() {
-        val own = Sanitiser(emptyMap(), ownTitle = 7)
-        val ofMal = """{"status":"watching","score":9,"start_date":"2014-03-02","comments":"mine","updated_at":"""
-        val values = """$ofMal"2026-11-14T15:00:00.123+03:00"}"""
-        val madeUp = """{"status":"watching","score":3,"start_date":"2020-01-13","comments":"","updated_at":"2020-01-13T02:23:48+00:00"}"""
-        val kept = ofMal.replace("mine", "") + """"2026-11-14T12:00:00+00:00"}"""
-
-        val page =
-            Json.parseToJsonElement(
-                own.json("""{"data":[{"node":{"id":7},"list_status":$values},{"node":{"id":12},"list_status":$values}]}""")!!,
-            )
-        val title = Json.parseToJsonElement(own.json("""{"id":7,"my_list_status":$values}""")!!)
-        val other = Json.parseToJsonElement(own.json("""{"id":12,"my_list_status":$values}""")!!)
-
-        assertEquals(listOf(kept, madeUp), page.jsonObject["data"]!!.jsonArray.map { "${it.jsonObject["list_status"]}" })
-        assertEquals(kept, "${title.jsonObject["my_list_status"]}")
-        assertEquals(madeUp, "${other.jsonObject["my_list_status"]}")
-    }
-
-    @Test
-    fun `of a profile nothing stays but its shape`() {
-        val planted =
-            """
-            {"id":4815162,"name":"Some_Name-7","picture":"https://cdn.example/userimages/4815162.jpg","location":"Somewhere",
-            "birthday":"1991-07","joined_at":"2011-03-05T10:20:30+09:00","is_supporter":true,"about":"","nothing":null,
-            "anime_statistics":{"num_items":321,"num_days":12.75,"mean_score":0},"something_new":{"deep":["mine",5]}}
-            """.trimIndent()
-
-        val profile = Json.parseToJsonElement(sanitiser.profile(planted)!!)
-
-        assertEquals(
-            """{"id":1,"name":"public-user","picture":"https://example.org/made-up-2","location":"made-up-3",""" +
-                """"birthday":"2020-01","joined_at":"2020-01-01T00:00:00+00:00","is_supporter":false,"about":"","nothing":null,""" +
-                """"anime_statistics":{"num_items":4,"num_days":5.5,"mean_score":6},"something_new":{"deep":["made-up-7",8]}}""",
-            "$profile",
-        )
-        assertNull(sanitiser.profile("<html>Some_Name-7</html>"))
-        assertEquals(sanitiser.profile(planted), sanitiser.profile(planted))
-    }
-
-    @Test
     fun `the links of a page are those of a page of ten entries`() {
         val list = "https://api.myanimelist.net/v2/users/public-user/animelist"
         val ranking = "https://api.myanimelist.net/v2/anime/ranking?offset=10&ranking_type=airing&limit=10&fields=id%2Ctitle"
@@ -381,20 +293,20 @@ class SanitiserTest {
     }
 
     @Test
-    fun `stored answers are brought up to the rules, and one that follows them is left as it is`() {
+    fun `stored answers are brought up to the rules, and one that follows them or a signed-in one is left as it is`() {
         val long = "word ".repeat(40).trim()
         File(folder.root, "title.200.json").writeText("""{"id":1,"synopsis":"$long"}""")
         File(folder.root, "page.404.txt").writeText("<html>Not found</html>")
         val following = File(folder.root, "other.200.json").apply { writeText(sanitiser.json("""{"id":5}""")!!) }
         val written = following.lastModified()
-        // A recorder's own title keeps its values under the name of its read-back, and under no other.
-        val own = Sanitiser(emptyMap(), ownTitle = 5).json("""{"id":5,"my_list_status":{"status":"completed","score":7}}""")!!
-        val readBack = File(folder.root, "score_set_read.200.json").apply { writeText(own) }
-        val another = File(folder.root, "title_other.200.json").apply { writeText(own) }
+        // A signed-in answer is kept as MAL sent it, whatever it holds.
+        val asSent = """{"id":5,"synopsis":"$long","my_list_status":{"status":"completed","score":7}}"""
+        val readBack = File(folder.root, "score_set_read.200.json").apply { writeText(asSent) }
+        val another = File(folder.root, "title_other.200.json").apply { writeText(asSent) }
 
         assertEquals(listOf("title.200.json", "title_other.200.json"), sanitiseStored(folder.root))
 
-        assertEquals(own, readBack.readText())
+        assertEquals(asSent, readBack.readText())
         assertFalse(another.readText(), "\"score\": 7" in another.readText())
 
         assertFalse(long in File(folder.root, "title.200.json").readText())
