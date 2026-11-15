@@ -1,12 +1,13 @@
 package io.github.kauri_off.kiroku.shell
 
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavEntry
@@ -16,6 +17,7 @@ import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
+import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 
 // What each key shows. Every screen gets the shell's one snackbar host and draws it in its own scaffold.
@@ -63,6 +65,9 @@ fun ShellRoute(
                 }
             rememberDecoratedNavEntries(stack, decorators)
         }
+    val motionScheme = MaterialTheme.motionScheme
+    val step = with(LocalDensity.current) { Spacing.xxl.roundToPx() }
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     ShellScreen(
         state = ShellState(navigator.current),
         onEvent = { event ->
@@ -73,9 +78,9 @@ fun ShellRoute(
     ) {
         NavDisplay(
             entries = navigator.visible.flatMap { decorated.getValue(it) },
-            transitionSpec = { instant },
-            popTransitionSpec = { instant },
-            predictivePopTransitionSpec = { instant },
+            transitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
+            popTransitionSpec = { screenChange(navigator.way, motionScheme, step, rtl) },
+            predictivePopTransitionSpec = { noPreview },
             onBack = { navigator.back() },
         )
     }
@@ -92,9 +97,7 @@ private fun NavEntry<NavKey>.scopedTo(
     val entry = this
     return NavEntry(key, notShown("${destination.name}/$depth/$contentKey"), metadata) {
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
-        CompositionLocalProvider(LocalOnTop provides onTop) { entry.Content() }
+        val inStack = destination in navigator.visible && navigator.stackOf(destination).getOrNull(depth) == key
+        CompositionLocalProvider(LocalOnTop provides onTop) { NoInputWhileLeaving(inStack) { entry.Content() } }
     }
 }
-
-// Screens change without animation until the transitions of ARCHITECTURE section 8.5 are built.
-private val instant = ContentTransform(EnterTransition.None, ExitTransition.None)

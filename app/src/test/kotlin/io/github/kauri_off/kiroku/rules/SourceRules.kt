@@ -79,7 +79,7 @@ private val interfaceCode = Regex("""@Composable\b|^import androidx\.compose\.(?
 // Animation calls that fall back to Compose's own spec when their arguments name nothing from the motion scheme.
 private val specCalls =
     Regex(
-        """\b(animate(?!Scroll)\w*|Crossfade|AnimatedContent|AnimatedVisibility|fadeIn|fadeOut|slideIn\w*|slideOut\w*|""" +
+        """\b(animate(?!Scroll)\w*|Crossfade|AnimatedContent|AnimatedVisibility|fadeIn|fadeOut|slideIn\w*|slideOut\w*|unveilIn|veilOut|""" +
             """expandIn|expandVertically|expandHorizontally|shrinkOut|shrinkVertically|shrinkHorizontally|scaleIn|scaleOut)""" +
             """\s*(<[^>()]*>)?\s*[({]""",
     )
@@ -225,6 +225,21 @@ fun webViewProblems(
         if (webView.containsMatchIn(line)) "$name:${index + 1}: a WebView: ${line.trim()}" else null
     }
 }
+
+// ARCHITECTURE 8.5: app code may give NavDisplay a preview to seek, and never reads the back gesture itself.
+private val backGesture =
+    Regex(
+        """(?i)\w*navigationEvent\w*|\b(PredictiveBackHandler|NavigationBackHandler|OnBackAnimationCallback|""" +
+            """handleOnBackProgressed|SeekableTransitionState|BackEventCompat|BackEvent)\b""",
+    )
+
+fun backGestureProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (backGesture.containsMatchIn(line)) "$name:${index + 1}: the back gesture handled by the app: ${line.trim()}" else null
+    }
 
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =

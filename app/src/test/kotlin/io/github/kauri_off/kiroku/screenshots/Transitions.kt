@@ -8,18 +8,21 @@ import androidx.compose.runtime.snapshots.Snapshot
 import org.robolectric.shadows.ShadowChoreographer
 import java.io.File
 
-// A change from the case [start] to the case [case], shown as frames in one image: the start, then the moments [at]
-// from the first frame that moves, by default one third, two thirds and the end of [millis] (ARCHITECTURE 8.5). A
-// change that starts fast can show early moments instead. When one part reacts before the motion shown, [lead]
-// says by how long, and the moments are timed from the end of it. [content] shows the start state, then the end
-// state, in the end case's window.
+// ARCHITECTURE 8.5: a change from case [start] to case [case] as one image, the start then the moments [at].
 class Transition(
     val case: String,
     val start: String,
     val millis: Long,
     val variant: Variant = Variant.EnLight,
+    // Timed from the first frame that moves; a change that starts fast can show early moments.
     val at: List<Long> = listOf(millis / 3, 2 * millis / 3, millis),
+    // How long one part reacts before the motion shown; the moments are timed from its end.
     val lead: Long = 0,
+    // The image's name, the end case's unless two changes end on one case.
+    val name: String = case,
+    // Made with the state, outside composition, as input makes it.
+    val change: () -> Unit = {},
+    // Shows the start state, then the end state, in the end case's window.
     val content: @Composable (changed: Boolean) -> Unit,
 ) {
     init {
@@ -51,7 +54,10 @@ internal fun transitionFrames(
         // Unpaused, Robolectric runs every pending frame at once, so a whole animation would pass in one step.
         ShadowChoreographer.setPaused(true)
         try {
-            Snapshot.withMutableSnapshot { changed.value = true }
+            Snapshot.withMutableSnapshot {
+                changed.value = true
+                transition.change()
+            }
             Snapshot.sendApplyNotifications()
             // The frames are timed from the first one that differs, not from the frames it takes to start.
             var waited = 0L
@@ -75,15 +81,14 @@ internal fun transitionFrames(
     }
 }
 
-// Renders the frames image and reports a first or last frame that is not the still image of its case, and a change
-// that is late to start.
+// Renders the image; reports a first or last frame unlike its case's still image, and a change late to start.
 internal fun renderTransition(
     transition: Transition,
     cases: List<ScreenshotCase>,
     dir: File,
     write: (Bitmap, File) -> Unit = Shot::write,
 ): List<String> {
-    val name = "${transition.case}__${transition.variant.id}__frames"
+    val name = "${transition.name}__${transition.variant.id}__frames"
     val end = cases.firstOrNull { it.name == transition.case } ?: return listOf("$name: there is no case '${transition.case}'")
     val window = end.window
     val result = transitionFrames(transition, window)
@@ -133,6 +138,5 @@ private const val SETTLE_MILLIS = 2_000L
 private const val FRAME_MILLIS = 16L
 private const val MAX_LEAD_MILLIS = 2 * FRAME_MILLIS
 
-// A change may take this many frames to show: one to apply the state, one to start the animation at its start value,
-// one to move.
+// Frames a change may take to show: one to apply the state, one to start the animation, one to move.
 private const val START_FRAMES = 3
