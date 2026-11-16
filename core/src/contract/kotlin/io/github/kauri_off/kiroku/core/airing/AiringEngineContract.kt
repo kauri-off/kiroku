@@ -398,11 +398,11 @@ abstract class AiringEngineContract {
 
             assertEquals(Outcome.Failure(DataError.ServerError), s.engine.refresh())
 
+            assertEquals(1, s.unexpected.size)
             assertEquals(before[left.id], s.stored(left))
             assertEquals(tracked, s.stored().keys)
             assertNull(s.engine.observeSchedule(stranger.id).first())
             assertEquals(tracked - left.id, s.stored().filterValues { it.fetchedAt == s.clock.now }.keys)
-            assertEquals(1, s.unexpected.size)
         }
 
     @Test
