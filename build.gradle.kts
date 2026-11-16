@@ -28,11 +28,14 @@ val testSlot =
         maxParallelUsages.set(1)
     }
 
+// One module's tests at a time where memory is shared with other jobs; a CI runner's memory is the job's own.
+val oneTestTaskAtATime = providers.environmentVariable("GITHUB_ACTIONS").orNull != "true"
+
 subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     tasks.withType<Test>().configureEach {
-        usesService(testSlot)
+        if (oneTestTaskAtATime) usesService(testSlot)
         maxParallelForks = 1
         maxHeapSize = "1536m"
         timeout = Duration.ofMinutes(10)
