@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.core.fixtures
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Inexact
 import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import org.junit.Assert.assertEquals
@@ -62,6 +63,44 @@ class FixtureAiringConsistencyTest(
         set.airing.forEach { (id, airing) -> assertEquals(airing, airingAt(set.anime(id), set.schedules[id], now)) }
     }
 
+    // Each reason a count is not exact has its fixture titles, which the debug menu's airing counts are drawn with.
+    @Test
+    fun `the calculator gives every fixture title its case's reason, at every shift`() {
+        val expected =
+            mapOf(
+                FixtureAnime.estimatedToWatch to Inexact.NumberedDifferently,
+                FixtureAnime.estimatedCaughtUp to Inexact.TotalsDisagree,
+                FixtureAnime.droppedEstimated to Inexact.NoSchedule,
+                FixtureAnime.airedUnknown to Inexact.NoSchedule,
+                FixtureAnime.premiereDate to Inexact.NoSchedule,
+                FixtureAnime.premiereMonth to Inexact.NoSchedule,
+                FixtureAnime.premiereYear to Inexact.NoSchedule,
+                FixtureAnime.premiereUnannounced to Inexact.NoSchedule,
+            )
+        assertEquals(expected.mapKeys { it.key.id }, set.airing.filterValues { it.inexact != null }.mapValues { it.value.inexact })
+    }
+
+    // Their stored schedules change only the reason, and a wake once the total has aired: screens draw the weekly estimate.
+    @Test
+    fun `the titles whose schedule is not used or is doubted get what MAL's slot alone gives`() {
+        for (anime in listOf(FixtureAnime.estimatedToWatch, FixtureAnime.estimatedCaughtUp).map { set.anime(it.id) }) {
+            val schedule = set.schedules.getValue(anime.id)
+            generateSequence(now.minus(Duration.ofDays(70))) { it.plus(Duration.ofHours(1)) }
+                .takeWhile { it.isBefore(now.plus(Duration.ofDays(140))) }
+                .forEach { at ->
+                    val slot = airingAt(anime, null, at)
+                    val withSchedule = airingAt(anime, schedule, at)
+                    val running = (slot.aired as AiredCount.Known).value < checkNotNull(slot.total)
+                    val changesAt = if (running) withSchedule.changesAt else slot.changesAt
+                    assertEquals(
+                        "${anime.titles.romaji} at $at",
+                        slot,
+                        withSchedule.copy(inexact = Inexact.NoSchedule, changesAt = changesAt),
+                    )
+                }
+        }
+    }
+
     @Test
     fun `exact counts agree with the stored schedule at the fixture time`() {
         val exact = set.airing.filterValues { it.aired is AiredCount.Exact }
@@ -87,7 +126,9 @@ class FixtureAiringConsistencyTest(
             }
             val malTotal = anime.malEpisodes
             val schedulesTotal = schedule.totalEpisodes
-            if (malTotal != null && schedulesTotal != null) assertEquals(malTotal, schedulesTotal)
+            if (malTotal != null && schedulesTotal != null) {
+                assertEquals(id == FixtureAnime.estimatedCaughtUp.id, malTotal != schedulesTotal)
+            }
         }
     }
 
@@ -101,7 +142,6 @@ class FixtureAiringConsistencyTest(
             val broadcast = checkNotNull(anime.broadcast)
             assertEquals(broadcast.dayOfWeek, start.date.dayOfWeek)
             assertNotNull(anime.malEpisodes)
-            assertTrue(id !in set.schedules)
             val first =
                 start.date
                     .atTime(checkNotNull(broadcast.japanTime))

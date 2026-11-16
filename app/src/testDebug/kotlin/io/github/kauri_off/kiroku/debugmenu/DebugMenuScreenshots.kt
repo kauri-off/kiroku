@@ -4,8 +4,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import io.github.kauri_off.kiroku.airingcounts.AiringCountsSection
+import io.github.kauri_off.kiroku.airingcounts.AiringCountsState
+import io.github.kauri_off.kiroku.airingcounts.airingCounts
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.airingAt
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
@@ -33,15 +42,19 @@ import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceSection
 import io.github.kauri_off.kiroku.source.SourceState
 import java.io.File
+import java.time.Duration
 import java.time.Instant
 
 class DebugMenuScreenshots : ScreenshotRegistry() {
     private val several = Scenario(offline = true, slow = true, writes = WriteFault.Refused, store = StoreFault.WritesFail)
 
     override val content = contentCase { Menu(ScenarioState.Ready(Scenario())) }
-    override val loading = notShown("The menu reads its switches from memory and its build from the package, and never waits")
+    override val loading =
+        notShown(
+            "The menu reads its switches from memory and its build from the package; the airing counts appear once read, with nothing before",
+        )
     override val empty = notShown("The menu always has its build and the gallery; off the demo its scenarios say why there are none")
-    override val error = notShown("The menu makes no request that can fail")
+    override val error = notShown("The menu makes no request that can fail; a store it cannot read is the airing-counts-unreadable case")
 
     override val cases =
         listOf(
@@ -79,6 +92,8 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case(
                 "recorder-refused",
             ) { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.NotStarted(Halt.OnTheList), "21")) },
+            case("airing-counts-stopped") { Menu(ScenarioState.Unavailable, airingCounts = STOPPED) },
+            case("airing-counts-unreadable") { Menu(ScenarioState.Unavailable, airingCounts = AiringCountsState.Unreadable) },
             case("reports") { Menu(ScenarioState.Unavailable, reports = REPORTS) },
             case("reports-renamed") { Menu(ScenarioState.Unavailable, reports = RENAMED, renamed = true) },
             case("tab-on-list") { OverList(Scenario()) },
@@ -91,6 +106,23 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         const val SIGN_IN = "sign-in"
         val BUILD = BuildInfo("preview", "0.1.0", Commit(HASH, dirty = false), Instant.parse("2026-11-12T09:41:00Z"))
         val TITLE = RecordedTitle(1, "Cowboy Bebop", 26)
+        val FIXTURES = Fixtures.reference
+        val COUNTS = AiringCountsState.Read(airingCounts(FIXTURES.entries, FIXTURES.airing, FIXTURES.schedules, TitleLanguage.Romaji))
+
+        // The fixtures, with one title whose schedule stopped four weeks and a day ago and one the calculator gave no result.
+        val STOPPED: AiringCountsState =
+            FIXTURES.now.minus(Duration.ofDays(29)).let { last ->
+                val anime = FixtureAnime.exactOnBreak
+                val schedule = AiringSchedule((1..6).map { ScheduledEpisode(it, last.minus(Duration.ofDays(7L * (6 - it)))) }, 13)
+                AiringCountsState.Read(
+                    airingCounts(
+                        FIXTURES.entries,
+                        FIXTURES.airing + (anime.id to airingAt(anime, schedule, FIXTURES.now)) - FixtureAnime.exactToWatch.id,
+                        FIXTURES.schedules + (anime.id to schedule),
+                        TitleLanguage.Romaji,
+                    ),
+                )
+            }
         val RECORDED = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded")
         val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
         val RENAMED =
@@ -149,12 +181,14 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         recorder: RecorderState = RecorderState(if (scenarios == ScenarioState.Unavailable) Recording.Idle else null),
         reports: List<Report> = emptyList(),
         renamed: Boolean = false,
+        airingCounts: AiringCountsState = COUNTS,
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
             { SourceSection(source, onEvent = {}) },
             { SignOutSection(signOut, onEvent = {}) },
             { RecorderSection(recorder, onEvent = {}) },
+            { AiringCountsSection(airingCounts, onEvent = {}) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
             { ReportsSection(reports, renamed) },

@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.debugmenu
 
 import androidx.compose.runtime.Composable
+import io.github.kauri_off.kiroku.airingcounts.AiringCountsRoute
 import io.github.kauri_off.kiroku.recorder.RecorderRoute
 import io.github.kauri_off.kiroku.reports.ReportsRoute
 import io.github.kauri_off.kiroku.scenario.ScenarioRoute
@@ -14,6 +15,7 @@ val debugMenuSections: List<@Composable () -> Unit> =
         { SourceRoute() },
         { SignOutRoute() },
         { RecorderRoute() },
+        { AiringCountsRoute() },
         { BuildRoute() },
         { DesignRoute() },
         { ReportsRoute() },

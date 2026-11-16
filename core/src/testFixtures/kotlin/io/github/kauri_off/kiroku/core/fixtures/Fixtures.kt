@@ -127,6 +127,10 @@ object Fixtures {
             exactCaughtUp.id to AiringSchedule(weekly(9, japan("2026-01-15T00:00"), 1..12), 12),
             exactCaughtUpLater.id to AiringSchedule(weekly(1, japan("2025-12-29T23:00"), 1..12), 12),
             exactOnBreak.id to AiringSchedule(weekly(6, japan("2026-01-09T22:00"), 1..6), 13),
+            // A4: numbered on from an earlier season, so not used; the count stays MAL's weekly estimate.
+            estimatedToWatch.id to AiringSchedule(weekly(13, japan("2025-11-05T22:00"), 13..24), 12),
+            // A5: one episode more than MAL's total, so the schedule's count is an estimate.
+            estimatedCaughtUp.id to AiringSchedule(weekly(1, japan("2025-12-13T01:30"), 1..13), 13),
             unknownTotal.id to AiringSchedule(weekly(1122, japan("2026-01-17T18:00"), 1115..1122), null),
             longTitle.id to AiringSchedule(weekly(4, japan("2026-01-16T01:00"), 1..13), 13),
             premiereTimeSoon.id to AiringSchedule(weekly(1, japan("2026-01-18T00:30"), 1..12), 12),
