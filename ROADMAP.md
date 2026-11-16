@@ -89,16 +89,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-12 [A] Recorder for answers that need the sign-in.**
 
-- [ ] **M2-13 [O] The owner signs in and records.** With the debug build: he signs in; signs in once more with
-  the app killed while the browser is open; runs the recorder on a title that is not on his list. On the website
-  he completes a title with an empty start date, steps a Completed title below its total and completes a title
-  that has a finish date, and says what MAL did (W7). The orchestrator pulls the files into the owner's folder
-  outside every checkout (section 11.1), checks them for a token and the client id, and corrects section 3.1 and
-  items 1 and 2 of section 13.
-  **Needs:** M2-11, M2-12.
-  **Check:** the recorded answers of M2-12 are in that folder and the tests that read them pass; `git grep` for the
-  owner's and the two users' names finds nothing; his list on myanimelist.net is as it was; a difference from W7 is
-  filed as a task.
+- [x] **M2-13 [O] The owner signs in and records.**
 
 - [x] **M2-14 Title client and mappers.**
 

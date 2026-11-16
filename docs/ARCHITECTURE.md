@@ -907,7 +907,8 @@ Each of these could change a decision above.
    granted a token with a lifetime.
 2. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
    list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
-   (believed to be three characters).
+   (believed to be three characters); what its website changes by itself when an edit completes a title, which W7
+   assumes (through the API it changes nothing by itself).
 3. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
    it). How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
