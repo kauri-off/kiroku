@@ -30,7 +30,7 @@ internal fun liveList(
         session.observeSession(),
         parts.clock,
         parts.scope,
-        parts.unexpected,
+        unexpected = parts.unexpected,
     )
 
 // The store is built at the engine's first call of it, which comes after the session is known, and off the main thread.

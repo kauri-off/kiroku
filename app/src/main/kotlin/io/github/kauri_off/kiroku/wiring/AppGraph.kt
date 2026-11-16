@@ -36,6 +36,9 @@ interface AppGraph {
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
+
+    // True for made-up titles and users, as the demo and the sandbox have, which a screen not built yet may stand in with.
+    val madeUp: Boolean get() = false
 }
 
 interface AppGraphOwner {

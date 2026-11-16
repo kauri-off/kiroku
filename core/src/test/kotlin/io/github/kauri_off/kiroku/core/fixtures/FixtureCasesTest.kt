@@ -138,6 +138,16 @@ class FixtureCasesTest(
         assertEquals(entries.size, entries.map { it.anime.id }.toSet().size)
     }
 
+    // So no write for a fixture title reaches MAL, which holds titles of those ids.
+    @Test
+    fun `every title of the set has a made-up id`() {
+        val titles =
+            set.anime + set.entries.map { it.anime } + set.otherUserEntries.map { it.anime } +
+                set.details.values.flatMap { details -> details.related.map { it.anime } + details.recommendations }
+        val ids = titles.map { it.id } + set.schedules.keys + set.airing.keys + set.details.keys
+        assertEquals(emptyList<Long>(), ids.filterNot { it.madeUp }.map { it.value })
+    }
+
     @Test
     fun `every list status is present`() {
         assertEquals(ListStatus.entries.toSet(), entries.map { it.status }.toSet())

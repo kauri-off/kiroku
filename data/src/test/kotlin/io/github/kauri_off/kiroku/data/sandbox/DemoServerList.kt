@@ -26,18 +26,10 @@ internal class DemoServerList(
 ) : MalList {
     override fun title(id: Long): JsonObject? = server.title(AnimeId(id))?.toNode()
 
-    override fun entries(): List<Pair<Long, Listed>> =
-        server
-            .entries()
-            .sortedWith(
-                compareBy({
-                    it.anime.titles.romaji
-                        .lowercase()
-                }, { it.anime.id.value }),
-            ).map {
-                it.anime.id.value to
-                    it.listed()
-            }
+    override val pageSize: Int get() = server.pageSize
+
+    // Each page of a download reads the list anew.
+    override fun entries(): List<Pair<Long, Listed>> = server.pageRead().map { it.anime.id.value to it.listed() }
 
     override fun entry(id: Long): Listed? = server.entry(AnimeId(id))?.listed()
 

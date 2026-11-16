@@ -14,7 +14,7 @@ sealed interface DataError {
 
     data object SessionExpired : DataError
 
-    // An Undo or a Retry of a list that has ended: its sign-in is no longer the session's.
+    // An Undo, a Retry or a title's refresh of a list that has ended: its sign-in is no longer the session's.
     data object ListEnded : DataError
 
     data object NotFound : DataError

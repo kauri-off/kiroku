@@ -4,9 +4,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.wiring.AppGraph
+
+// The fixture user on made-up data alone; the real account has Profile's placeholder until its data layer exists.
+internal fun profileStandIn(graph: AppGraph): ProfileStandIn? = fixtureProfile.takeIf { graph.madeUp }
 
 // The fixture user as the signed-in one; of other names, the fixtures' public lists and private one, and no one else.
-internal val profileStandIn: ProfileStandIn? =
+internal val fixtureProfile: ProfileStandIn =
     object : ProfileStandIn {
         override val own: ProfileContent = ProfileFixtureStates.own
 

@@ -25,14 +25,11 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
@@ -47,6 +44,7 @@ import java.io.IOException
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import kotlin.random.Random
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
 class ListEngine(
@@ -56,6 +54,10 @@ class ListEngine(
     private val sessions: Flow<Session>,
     private val clock: Clock,
     private val scope: CoroutineScope,
+    // How many titles a download missed MAL is asked about in one sync.
+    private val checksPerSync: Int = CHECKS_PER_SYNC,
+    // Where a sync's checks start among the titles never left unanswered, so a restart that forgot them moves on.
+    private val random: Random = Random.Default,
     // Hears of what nobody expected: MAL's client's and the engine's own exceptions, and the first of a store's streak.
     private val unexpected: (Throwable) -> Unit,
 ) : ListRepository {
@@ -175,8 +177,13 @@ class ListEngine(
 
     // One lane: W1's order and N9's read before its write both rely on no other answer coming between.
     private val queue = Channel<Request>(Channel.UNLIMITED)
-    private val failures =
-        MutableSharedFlow<WriteFailure>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    // W2: each failure goes to a waiting collector, else waits for the next one; both guarded by [held] itself.
+    private val held = ArrayDeque<WriteFailure>()
+    private val collectors = ArrayDeque<CompletableDeferred<WriteFailure>>()
+
+    // Titles whose check after a download went unanswered, the longest unanswered first; guarded by the mutex.
+    private val unanswered = LinkedHashSet<AnimeId>()
 
     init {
         check(scope.isActive) { STOPPED }
@@ -267,7 +274,56 @@ class ListEngine(
                 }.retriedOverStore()
             }.distinctUntilChanged()
 
-    override fun observeWriteFailures(): Flow<WriteFailure> = failures.asSharedFlow()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeWriteFailures(): Flow<WriteFailure> =
+        flow {
+            while (true) {
+                val next = synchronized(held) { held.removeFirstOrNull()?.let(::CompletableDeferred) ?: waiting() }
+                val failure =
+                    try {
+                        next.await()
+                    } catch (e: CancellationException) {
+                        // A failure handed to a collector cut off before it heard it waits for the next one.
+                        synchronized(held) { collectors.remove(next) }
+                        if (next.isCompleted) hold(next.getCompleted())
+                        throw e
+                    }
+                emit(failure)
+            }
+        }
+
+    private fun waiting() = CompletableDeferred<WriteFailure>().also { collectors += it }
+
+    private fun hold(failure: WriteFailure) {
+        synchronized(held) {
+            collectors.removeFirstOrNull()?.let {
+                it.complete(failure)
+                return
+            }
+            held += failure
+            if (held.size > HELD_FAILURES) held.removeFirst()
+        }
+    }
+
+    // W2: a failure still held goes once MAL's settled values of its title are those its Retry would set.
+    private fun settled(
+        id: AnimeId,
+        entry: StoredEntry?,
+    ) {
+        if (entry?.unconfirmed == true) return
+        val values = entry?.confirmed?.values
+        synchronized(held) {
+            held.removeAll { failure ->
+                val write = failure.write
+                write.anime.id == id &&
+                    when (write) {
+                        is ListWrite.Save -> values != null && write.over(values) == values
+                        is ListWrite.Remove -> values == null
+                        else -> false
+                    }
+            }
+        }
+    }
 
     // W6: one download at a time; calls made while one runs share the one that follows it.
     override suspend fun sync(): Outcome<Unit> {
@@ -304,7 +360,7 @@ class ListEngine(
     override suspend fun write(write: ListWrite): ListChange? {
         val session = session()
         refused(write, session)?.let {
-            failures.tryEmit(it)
+            hold(it)
             return null
         }
         return try {
@@ -313,10 +369,10 @@ class ListEngine(
                     locked {
                         check(!stopped) { STOPPED }
                         val refused = refused(write, checkNotNull(settled))
-                        if (refused == null) edit(write) else null.also { failures.tryEmit(refused) }
+                        if (refused == null) edit(write) else null.also { hold(refused) }
                     }
                 } catch (_: StoreFailure) {
-                    failures.tryEmit(WriteFailure(DataError.StorageError, write.plain, write.list ?: session.owner))
+                    hold(WriteFailure(DataError.StorageError, write.plain, write.list ?: session.owner))
                     null
                 }
             }
@@ -387,18 +443,25 @@ class ListEngine(
             when (val outcome = mal.fetch()) {
                 is Outcome.Failure -> outcome
                 is Outcome.Success -> {
-                    val fetched = outcome.value.associateBy { it.anime.id }
+                    val fetched = outcome.value.associateByTo(mutableMapOf()) { it.anime.id }
+                    val missing =
+                        locked {
+                            if (list != began) return@locked emptySet()
+                            local.readAll().keys - fetched.keys - pending.keys - touched.filterValues { it > since }.keys
+                        }
+                    val kept = missing - checked(missing, fetched, began)
                     locked {
                         if (settled !is Session.SignedIn || list != began) return@locked expired
                         val stored = local.readAll()
                         val changed =
                             (stored.keys + fetched.keys)
-                                .filterNot { it in pending || (touched[it] ?: 0) > since }
+                                .filterNot { it in kept || it in pending || (touched[it] ?: 0) > since }
                                 .associateWith { fetched[it]?.let { StoredEntry.settled(it.record) } }
                                 .filter { (id, entry) -> entry != stored[id] }
                         val now = clock.instant().takeIf { owedSince.let { it == null || it <= since } }
                         local.download(fetched.values.map { it.anime }, changed, now)
-                        unsure.removeAll { it !in pending && (touched[it] ?: 0) <= since }
+                        unsure.removeAll { it !in kept && it !in pending && (touched[it] ?: 0) <= since }
+                        changed.forEach { (id, entry) -> settled(id, entry) }
                         if (now != null) owedSince = null
                         syncedAt.value = now
                         Outcome.Success(Unit)
@@ -408,6 +471,49 @@ class ListEngine(
         } catch (_: StoreFailure) {
             Outcome.Failure(DataError.StorageError)
         }
+
+    // 2.2: only MAL's answer removes a title a paged download missed; the titles it answered, at most [checksPerSync].
+    private suspend fun checked(
+        missing: Set<AnimeId>,
+        fetched: MutableMap<AnimeId, ListEntry>,
+        began: Int,
+    ): Set<AnimeId> {
+        val failed =
+            mutex.withLock {
+                unanswered.retainAll(missing)
+                unanswered.toList()
+            }
+        val fresh = (missing - failed.toSet()).sortedBy { it.value }
+        val start = if (fresh.isEmpty()) 0 else random.nextInt(fresh.size)
+        val asked = (fresh.drop(start) + fresh.take(start) + failed).take(checksPerSync)
+        val answered = mutableSetOf<AnimeId>()
+        var inARow = 0
+        for (id in asked) {
+            if (mutex.withLock { list != began }) break
+            val entry =
+                try {
+                    mal.fetchEntry(id)
+                } catch (e: IllegalStateException) {
+                    unexpected(e)
+                    Outcome.Failure(DataError.ServerError)
+                }
+            val error = (entry as? Outcome.Failure)?.error
+            if (error != null && error != DataError.NotFound) {
+                mutex.withLock {
+                    if (list == began) {
+                        unanswered.remove(id)
+                        unanswered += id
+                    }
+                }
+                if (error in ENDS_CHECKS || ++inARow == FAILED_IN_A_ROW) break else continue
+            }
+            inARow = 0
+            (entry as? Outcome.Success)?.value?.let { fetched[id] = it }
+            answered += id
+            mutex.withLock { unanswered.remove(id) }
+        }
+        return answered
+    }
 
     // W1 and W2: one request at a time; a failure returns the title to the confirmed values and drops its waiting edits.
     private suspend fun send(put: Put) {
@@ -452,7 +558,7 @@ class ListEngine(
                 }
             }
         if (failure != null) {
-            failures.tryEmit(failure)
+            hold(failure)
             if (failure.error.unsure) scope.launch { sync() }
         }
     }
@@ -502,7 +608,7 @@ class ListEngine(
                 (accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put) to settled?.owner
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
-        failures.tryEmit(WriteFailure(error, retry, owner))
+        hold(WriteFailure(error, retry, owner))
         scope.launch { sync() }
     }
 
@@ -604,6 +710,7 @@ class ListEngine(
                 shown?.values == answer.values -> StoredEntry.settled(shown)
                 else -> StoredEntry.settled(answer)
             }
+        settled(id, next)
         if (next == stored) return
         touch(id)
         if (title == null && next != null) local.add(anime, next) else local.write(mapOf(id to next))
@@ -632,6 +739,8 @@ class ListEngine(
         owedSince = null
         unsure.clear()
         syncedAt.value = null
+        synchronized(held) { held.clear() }
+        unanswered.clear()
         local.clear(owner)
         restored = true
     }
@@ -712,9 +821,19 @@ class ListEngine(
 
     private fun today(): LocalDate = LocalDate.now(clock)
 
-    private companion object {
-        const val STOPPED = "The list's scope has ended"
-        val expired = Outcome.Failure(DataError.SessionExpired)
-        const val WRONG_TITLE = "MAL's client answered about another title"
+    companion object {
+        // Asked one after another; a user who removed more on the website sees them go over the next syncs.
+        const val CHECKS_PER_SYNC = 20
+
+        private const val STOPPED = "The list's scope has ended"
+        private val expired = Outcome.Failure(DataError.SessionExpired)
+        private const val WRONG_TITLE = "MAL's client answered about another title"
+        private const val HELD_FAILURES = 16
+
+        // A failing entry endpoint costs this many checks, while one broken title holds back nothing.
+        private const val FAILED_IN_A_ROW = 2
+
+        // Answers that say MAL will not answer the next check either.
+        private val ENDS_CHECKS = setOf(DataError.Refused, DataError.NoConnection, DataError.SessionExpired)
     }
 }

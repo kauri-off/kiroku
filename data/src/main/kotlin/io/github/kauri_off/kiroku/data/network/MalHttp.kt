@@ -8,17 +8,21 @@ import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Dispatcher
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.Response
 import okhttp3.ResponseBody
 import retrofit2.Converter
 import retrofit2.HttpException
@@ -28,6 +32,8 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.lang.reflect.Type
 import java.time.Clock
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.reflect.KClass
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -53,6 +59,9 @@ class MalHttp(
     private val calls: Dispatcher? = null,
 ) {
     val backOff = MalBackOff(clock)
+
+    // False when the device answers in MAL's place, as the sandbox does, also for titles MAL does not have.
+    internal val reachesMal: Boolean get() = standIn == null
 
     private val client: OkHttpClient by lazy {
         offMainThread()
@@ -177,6 +186,42 @@ class MalHttp(
         return Tried(MalAnswer.Failed(DataError.ServerError))
     }
 
+    // A request to a source other than MAL over this client, sent once: MAL's repeats and back-off have no part in it.
+    internal suspend fun send(request: Request): Sent =
+        withContext(io) {
+            try {
+                val call = callFactory.newCall(request)
+                suspendCancellableCoroutine { sent ->
+                    sent.invokeOnCancellation { call.cancel() }
+                    call.enqueue(
+                        object : Callback {
+                            override fun onFailure(
+                                call: Call,
+                                e: IOException,
+                            ) = sent.resumeWithException(e)
+
+                            override fun onResponse(
+                                call: Call,
+                                response: Response,
+                            ) {
+                                val answer =
+                                    try {
+                                        response.use { Sent.Answered(it.code, it.headers, it.body.string()) }
+                                    } catch (e: IOException) {
+                                        return sent.resumeWithException(e)
+                                    }
+                                sent.resume(answer)
+                            }
+                        },
+                    )
+                }
+            } catch (e: NotSentAgain) {
+                e.status?.let { Sent.Answered(it, Headers.headersOf(), "") } ?: Sent.Unanswered(offline())
+            } catch (_: IOException) {
+                Sent.Unanswered(offline())
+            }
+        }
+
     private fun retryAfter(headers: Headers): JavaDuration? {
         val seconds = headers[RETRY_AFTER]?.trim()?.toLongOrNull()
         if (seconds != null) return JavaDuration.ofSeconds(seconds)
@@ -209,6 +254,19 @@ class MalHttp(
         private val TransferTimeout = 20.seconds
         private const val RETRY_AFTER = "Retry-After"
     }
+}
+
+// How a request of [MalHttp.send] ended.
+internal sealed interface Sent {
+    class Answered(
+        val status: Int,
+        val headers: Headers,
+        val body: String,
+    ) : Sent
+
+    class Unanswered(
+        val offline: Boolean,
+    ) : Sent
 }
 
 // A null where a field has a default is that default, as MAL leaving the field out would be.
