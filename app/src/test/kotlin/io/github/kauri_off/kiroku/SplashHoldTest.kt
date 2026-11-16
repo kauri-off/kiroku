@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -37,12 +36,9 @@ class SplashHoldTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { scope.cancel() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-    @After
-    fun stop() = scope.cancel()
 
     private fun view() = View(compose.activity)
 

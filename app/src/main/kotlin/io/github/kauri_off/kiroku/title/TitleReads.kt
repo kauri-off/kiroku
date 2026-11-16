@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.title
 
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -25,9 +26,20 @@ import kotlinx.coroutines.flow.shareIn
 fun ListSource.entriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
     if (ids.isEmpty()) flowOf(emptyMap()) else observeEntriesOf(ids).distinctUntilChanged()
 
-// The airing of [ids] alone; it ends as the list's read does when the list or the stored airing cannot be read.
-fun AiringRepository.airingOf(ids: Set<AnimeId>): Flow<Map<AnimeId, Airing>> =
-    observeAiring().map { airing -> airing.filterKeys(ids::contains) }.distinctUntilChanged()
+// The airing of [ids] alone, with [page]'s own result when given (A12); it ends when the list or the airing cannot be read.
+fun AiringRepository.airingOf(
+    ids: Set<AnimeId>,
+    page: Anime? = null,
+): Flow<Map<AnimeId, Airing>> =
+    (
+        if (page ==
+            null
+        ) {
+            observeAiring()
+        } else {
+            observePageAiring(page)
+        }
+    ).map { airing -> airing.filterKeys(ids::contains) }.distinctUntilChanged()
 
 // The titles a page about [id] shows: the title, its related titles and the titles of its chain of sequels.
 fun shownTitles(

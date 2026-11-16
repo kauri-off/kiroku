@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.demo
 
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.airing.effective
@@ -22,6 +23,7 @@ import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -104,14 +106,27 @@ class DemoAiringSource internal constructor(
     // The titles of each request received, answered or not.
     val requests: List<Set<AnimeId>> get() = received.toList()
 
+    // What the source has, as AniList's schedules change.
+    @Volatile
+    var schedules: Map<AnimeId, AiringSchedule> = fixtures.schedules
+
+    // Every request fails so, as AniList alone failing.
+    @Volatile
+    var failure: DataError? = null
+
+    // While set, a request is answered only once it completes, as AniList answering late or never.
+    @Volatile
+    var holding: CompletableDeferred<Unit>? = null
+
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> {
         received += titles.mapTo(mutableSetOf()) { it.id }
-        val error = server.load(needsSignIn = false)
+        holding?.await()
+        val error = server.load(needsSignIn = false) ?: failure
         return titles.associate { anime ->
-            anime.id to (error?.let { Outcome.Failure(it) } ?: Outcome.Success(fixtures.schedules[anime.id]?.let { FetchedAiring(it) }))
+            anime.id to (error?.let { Outcome.Failure(it) } ?: Outcome.Success(schedules[anime.id]?.let { FetchedAiring(it) }))
         }
     }
 }

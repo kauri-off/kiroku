@@ -5,12 +5,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -27,8 +29,10 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
+import io.github.kauri_off.kiroku.edit.EditSheetState
 import io.github.kauri_off.kiroku.plain
 import io.github.kauri_off.kiroku.premiereOn
 import io.github.kauri_off.kiroku.shell.ShellMessage
@@ -39,6 +43,7 @@ import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,10 +56,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -616,6 +625,457 @@ class ListViewModelTest {
             assertTrue(s.ids(ListStatus.Watching).isNotEmpty())
         }
     }
+
+    // Every state the List passes through, also those a later one replaces at once, from before it is first shown.
+    private fun TestScope.recorded(list: ListViewModel): List<ListState> {
+        val states = mutableListOf<ListState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { list.state.collect { states += it } }
+        return states
+    }
+
+    private fun listOver(
+        graph: TestGraph,
+        scope: CoroutineScope,
+    ) = ListViewModel(
+        graph.list,
+        graph.anime,
+        graph.airing,
+        graph.session,
+        graph.connection,
+        graph.preferences,
+        graph.clock,
+        graph.titleLanguage,
+        SavedStateHandle(),
+        ShellMessages(scope, graph.list),
+        graph.background,
+    )
+
+    // With no airing data stored, "Up next" by estimates differs from the order by the fixtures' schedules.
+    private fun startsWithNoAiringStored(downloaded: Boolean) =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val demo = if (downloaded) firstLoad(scope) else Demo(set, scope, airingStored = false)
+            val graph = TestGraph(demo)
+            if (downloaded) {
+                // A first download that reached the store before the List first reads it, its airing data still to come.
+                demo.airingSource.failure = DataError.NoConnection
+                graph.list.sync()
+                advanceUntilIdle()
+                demo.airingSource.failure = null
+            }
+            val watching =
+                graph.list
+                    .observeEntries()
+                    .first()
+                    .filter { it.status == ListStatus.Watching }
+            val estimates = watching.associate { it.anime.id to airingAt(it.anime, null, set.now) }
+            assertNotEquals(
+                order(watching, ListSort.UpNext, estimates::get) {
+                    it.anime.titles.romaji
+                },
+                order(watching, ListSort.UpNext, set.airing::get) { it.anime.titles.romaji },
+            )
+            val expected = order(watching, ListSort.UpNext, set.airing::get) { it.anime.titles.romaji }.map { it.anime.id }
+            val list = listOver(graph, scope)
+            val states = recorded(list)
+            showing(list.state, list.shown)
+            advanceUntilIdle()
+            val shown = states.mapNotNull { (it.content as? ListContent.Tabs)?.pages?.getValue(ListStatus.Watching) }
+            assertTrue(shown.isNotEmpty())
+            shown.forEach { assertEquals(expected, it.rows.map { row -> row.id }) }
+            assertEquals(0, shown.last().ordering)
+            assertTrue(demo.airingSource.requests.isNotEmpty())
+            list.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a start with no airing data stored shows Watching only in the order the airing refresh gives it`() =
+        startsWithNoAiringStored(downloaded = false)
+
+    @Test
+    fun `a first download already stored when the List first reads it shows Watching only in the order its airing data gives it`() =
+        startsWithNoAiringStored(downloaded = true)
+
+    // AniList fails meanwhile, so no airing data the engine asks for by itself is stored either.
+    @Test
+    fun `a start whose airing refresh never ends orders its stored list once the wait is over`() =
+        test(
+            demo = { Demo(set, it, airingStored = false).apply { airingSource.failure = DataError.NoConnection } },
+            airing = { inner ->
+                object : AiringRepository by inner {
+                    override suspend fun refreshStale(): Outcome<Unit> = awaitCancellation()
+                }
+            },
+        ) { s ->
+            assertEquals(set.entries.count { it.status == ListStatus.Watching }, s.ids(ListStatus.Watching).size)
+            assertEquals(0, s.page().ordering)
+        }
+
+    // The next episode of [anime] moved to an hour ago, as AniList can move it.
+    private fun movedSchedules(anime: Anime): Map<AnimeId, AiringSchedule> {
+        val schedule = set.schedules.getValue(anime.id)
+        val next = checkNotNull(set.airing.getValue(anime.id).nextEpisode).number
+        val moved =
+            schedule.copy(
+                episodes =
+                    schedule.episodes.map {
+                        if (it.number ==
+                            next
+                        ) {
+                            it.copy(airsAt = set.now.minusSeconds(HOUR))
+                        } else {
+                            it
+                        }
+                    },
+            )
+        return set.schedules + (anime.id to moved)
+    }
+
+    @Test
+    fun `a pull asks for every tracked title's airing and orders by what that brought, also when it ends after the sync`() =
+        test { s ->
+            val source = s.graph.demo.airingSource
+            val asked = source.requests.size
+            val moved = movedSchedules(FixtureAnime.exactCaughtUp)
+            source.schedules = moved
+            val answer = CompletableDeferred<Unit>()
+            source.holding = answer
+            val syncs = s.graph.demo.server.listDownloads
+            s.list.onEvent(ListEvent.Refresh)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            assertEquals(syncs + 1, s.graph.demo.server.listDownloads)
+            assertTrue(s.state.refreshing)
+            assertEquals(upNext(), s.ids())
+            answer.complete(Unit)
+            advanceUntilIdle()
+            val airing = set.copy(schedules = moved).airing
+            val expected =
+                order(
+                    set.entries.filter {
+                        it.status == ListStatus.Watching
+                    },
+                    ListSort.UpNext,
+                    airing::get,
+                ) { it.anime.titles.romaji }.map { it.anime.id }
+            assertNotEquals(upNext(), expected)
+            assertEquals(expected, s.ids())
+            assertEquals(1, s.page().ordering)
+            assertEquals(
+                set.entries
+                    .filter { it.tracked }
+                    .map { it.anime.id }
+                    .toSet(),
+                source.requests
+                    .drop(asked)
+                    .flatten()
+                    .toSet(),
+            )
+            assertNull(s.message)
+        }
+
+    @Test
+    fun `a pull orders also when AniList fails, and nothing says so`() =
+        test { s ->
+            s.graph.demo.airingSource.failure = DataError.ServerError
+            val asked = s.graph.demo.airingSource.requests.size
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertTrue(s.graph.demo.airingSource.requests.size > asked)
+            assertEquals(upNext(), s.ids())
+            assertEquals(1, s.page().ordering)
+            assertFalse(s.state.refreshing)
+            assertNull(s.message)
+        }
+
+    @Test
+    fun `a pull whose airing refresh outlasts the wait orders without it and ends`() =
+        test(airing = { inner ->
+            object : AiringRepository by inner {
+                override suspend fun refresh(): Outcome<Unit> = awaitCancellation()
+            }
+        }) { s ->
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(1, s.page().ordering)
+            assertFalse(s.state.refreshing)
+        }
+
+    // Shown again once its list and its airing are stale, the List asks for the tracked titles' airing though MAL fails.
+    private fun staleAiringIsAskedAfterAFailedSync(
+        offline: Boolean = false,
+        fail: (Demo) -> Unit,
+    ) {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val source = s.graph.demo.airingSource
+            val asked = source.requests.size
+            s.screen.cancel()
+            runCurrent()
+            advanceTimeBy(ROTATION + STOPPED_AFTER)
+            runCurrent()
+            fail(s.graph.demo)
+            clock.instant = set.now.plus(Duration.ofMinutes(20))
+            val syncs = s.graph.syncs
+            s.screen = showing(s.list.state, s.list.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(syncs + 1, s.graph.syncs)
+            val tracked =
+                set.entries
+                    .filter { it.tracked }
+                    .map { it.anime.id }
+                    .toSet()
+            if (offline) {
+                // Nothing is asked offline; the sync repeated once the connection is back asks after its success.
+                assertEquals(emptyList<Set<AnimeId>>(), source.requests.drop(asked))
+                s.graph.demo.server.offline.value = false
+                advanceUntilIdle()
+                assertEquals(syncs + 2, s.graph.syncs)
+            }
+            assertEquals(listOf(tracked), source.requests.drop(asked))
+        }
+    }
+
+    @Test
+    fun `with the session expired the List shown asks for its stale airing`() =
+        staleAiringIsAskedAfterAFailedSync { it.server.sessionExpired.value = true }
+
+    @Test
+    fun `offline the List shown asks nothing of AniList, and asks for its stale airing once the connection is back`() =
+        staleAiringIsAskedAfterAFailedSync(offline = true) { it.server.offline.value = true }
+
+    // N2's bound: the pull ends as MAL's failure says, whatever AniList does with the ask that follows it.
+    @Test
+    fun `a pull that MAL fails ends and says so without waiting for the airing it asks for`() {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val source = s.graph.demo.airingSource
+            val asked = source.requests.size
+            val answer = CompletableDeferred<Unit>()
+            source.holding = answer
+            s.graph.demo.server.failingLoads.value = true
+            clock.instant = set.now.plus(Duration.ofMinutes(20))
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertFalse(s.state.refreshing)
+            assertEquals(ShellMessage.Text.RefreshFailed(DataError.ServerError), s.message?.text)
+            assertTrue(source.requests.size > asked)
+            answer.complete(Unit)
+            advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun `with MAL failing the List shown asks for its stale airing`() =
+        staleAiringIsAskedAfterAFailedSync {
+            it.server.failingLoads.value =
+                true
+        }
+
+    // Section 6.2: the airing of the rows is a part of them; the list stays, and a pull reads it again.
+    @Test
+    fun `an airing read that fails alone shows the list without its airing and no message, and a pull reads it again`() {
+        val failing = MutableStateFlow(false)
+        test(airing = { inner ->
+            object : AiringRepository by inner {
+                override fun observeAiring() =
+                    combine(inner.observeAiring(), failing) { airing, failing ->
+                        if (failing) throw DataException(DataError.StorageError)
+                        airing
+                    }
+            }
+        }) { s ->
+            val anime = FixtureAnime.exactToWatch
+            val aired = Line3.ToWatch(AiredCount.Exact(2))
+            val line3 = {
+                s
+                    .page()
+                    .rows
+                    .single { it.id == anime.id }
+                    .line3
+            }
+            val ids = s.ids()
+            assertEquals(aired, line3())
+            failing.value = true
+            advanceUntilIdle()
+            assertNotEquals(aired, line3())
+            assertEquals(ids, s.ids())
+            assertNull(s.message)
+            failing.value = false
+            advanceUntilIdle()
+            assertNotEquals(aired, line3())
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(aired, line3())
+            assertNull(s.message)
+            // Followed again, not only read once by the pull's order.
+            s.graph.demo.airingSource.schedules = movedSchedules(anime)
+            s.graph.airing.refresh()
+            advanceUntilIdle()
+            assertEquals(Line3.ToWatch(AiredCount.Exact(3)), line3())
+            // A pull whose own order cannot read the airing orders the rows without it.
+            failing.value = true
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertNotEquals(Line3.ToWatch(AiredCount.Exact(3)), line3())
+            assertEquals(2, s.page().ordering)
+            assertNull(s.message)
+        }
+    }
+
+    @Test
+    fun `a start with no airing stored whose airing cannot be read orders its rows without it, and says nothing`() =
+        test(
+            demo = { Demo(set, it, airingStored = false) },
+            airing = { inner ->
+                object : AiringRepository by inner {
+                    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flow { throw DataException(DataError.StorageError) }
+                }
+            },
+        ) { s ->
+            assertEquals(set.entries.count { it.status == ListStatus.Watching }, s.ids(ListStatus.Watching).size)
+            assertEquals(0, s.page().ordering)
+            assertNull(s.message)
+        }
+
+    // The rows of the shown tab after [change], which must leave every row but [changed] the same object, in its place.
+    private suspend fun TestScope.inPlace(
+        s: Subject,
+        changed: AnimeId,
+        change: suspend () -> Unit,
+    ): ListRow {
+        val ids = s.ids()
+        val before = s.page().rows
+        change()
+        advanceUntilIdle()
+        assertEquals(ids, s.ids().take(ids.size))
+        assertEquals(0, s.page().ordering)
+        for ((old, new) in before.zip(s.page().rows)) {
+            if (new.id != changed) assertSame(new.title, old, new)
+        }
+        return s.page().rows.single { it.id == changed }
+    }
+
+    @Test
+    fun `a refresh that moves an episode updates its row in place, though the order would now differ`() =
+        test { s ->
+            val anime = FixtureAnime.exactCaughtUp
+            val moved = movedSchedules(anime)
+            val sorted =
+                order(set.entries.filter { it.status == ListStatus.Watching }, ListSort.UpNext, set.copy(schedules = moved).airing::get) {
+                    it.anime.titles.romaji
+                }.map { it.anime.id }
+            assertNotEquals(s.ids(), sorted)
+            s.graph.demo.airingSource.schedules = moved
+            val row = inPlace(s, anime.id) { assertEquals(Outcome.Success(Unit), s.graph.airing.refresh()) }
+            assertEquals(Line3.ToWatch(AiredCount.Exact(1)), row.line3)
+        }
+
+    // On a device most starts find their airing data stale; the order is not held for a refresh then.
+    @Test
+    fun `a start with airing data stored orders at once, whatever its airing refresh does`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope))
+            val airing =
+                object : AiringRepository by graph.airing {
+                    override suspend fun refreshStale(): Outcome<Unit> = awaitCancellation()
+                }
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.anime,
+                    airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    graph.background,
+                )
+            val screen = showing(list.state, list.shown)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            assertEquals(
+                upNext(),
+                (list.state.value.content as ListContent.Tabs)
+                    .pages
+                    .getValue(ListStatus.Watching)
+                    .rows
+                    .map { it.id },
+            )
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    // The List's read fails while the sync, which reads the store through the engine, goes on; a Retry then reads it again.
+    @Test
+    fun `Retry of an unreadable list during its first sync, with no airing stored, waits for the airing refresh alone`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope, latency = 20.seconds, airingStored = false))
+            val failing = MutableStateFlow(true)
+            val entries =
+                object : ListSource by graph.list {
+                    override fun observeEntries() =
+                        combine(graph.list.observeEntries(), failing) { entries, failing ->
+                            if (failing) throw DataException(DataError.StorageError)
+                            entries
+                        }
+                }
+            val list =
+                ListViewModel(
+                    entries,
+                    graph.anime,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    graph.background,
+                )
+            val screen = showing(list.state, list.shown)
+            advanceTimeBy(6.seconds)
+            runCurrent()
+            assertEquals(ListContent.Failed(ListFailure.Other), list.state.value.content)
+            failing.value = false
+            list.onEvent(ListEvent.Retry)
+            advanceTimeBy(7.seconds)
+            runCurrent()
+            assertEquals(set.entries.size, (list.state.value.content as ListContent.Tabs).pages.values.sumOf { it.rows.size })
+            advanceUntilIdle()
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a title that becomes tracked joins the end of its tab, and its airing data arrives in its row in place`() =
+        test { s ->
+            val anime = FixtureAnime.notOnListAiring
+            val asked = s.graph.demo.airingSource.requests.size
+            val row =
+                inPlace(s, anime.id) {
+                    s.graph.list.write(
+                        ListWrite.Save(anime, EditSheetState.newEntry.copy(status = ListStatus.Watching, watchedEpisodes = 1)),
+                    )
+                }
+            assertEquals(anime.id, s.ids().last())
+            assertEquals(
+                listOf(setOf(anime.id)),
+                s.graph.demo.airingSource.requests
+                    .drop(asked),
+            )
+            assertEquals(Line3.ToWatch(AiredCount.Exact(6)), row.line3)
+        }
 
     @Test
     fun `Retry syncs the list again`() =
@@ -1237,6 +1697,9 @@ class ListViewModelTest {
 
 private const val HOUR = 3_600L
 
+// Where a sync's own ordering runs.
+private val SYNC_ORDERS = setOf("sync", "ordered")
+
 // The lane on one thread, on which the sync's own work waits until [release] and everything else runs as it comes.
 private class SyncLast(
     private val inner: CoroutineDispatcher,
@@ -1253,7 +1716,7 @@ private class SyncLast(
         context: CoroutineContext,
         block: Runnable,
     ) {
-        val fromSync = Throwable().stackTrace.any { it.className == ListViewModel::class.java.name && it.methodName == "sync" }
+        val fromSync = Throwable().stackTrace.any { it.className == ListViewModel::class.java.name && it.methodName in SYNC_ORDERS }
         if (fromSync) queue += context to block else inner.dispatch(context, block)
     }
 

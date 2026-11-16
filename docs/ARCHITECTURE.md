@@ -315,11 +315,12 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   message, and the screen can be refreshed by pulling. A failed action of the person: a message with Retry that is
   not lost (section 7.2). A secondary part (a poster, a strip): a placeholder, loaded with the screen's next refresh.
 - **On the List no row moves under a finger.** A tab's order is computed when the app starts, when its sort or
-  direction is changed and on pull-to-refresh. An edit, a sync, an air time passing, a tab switch, the filter and
-  coming back from a title page keep the order and the scroll position, and update rows in place. A row whose title
-  no longer belongs to the tab leaves at once, and Undo puts it back in the same place; a title that joins the tab
-  appears at the end until the order is next computed. After a row leaves, a "+1" on a row that moved up is not
-  applied until the rows have stood still a moment.
+  direction is changed and on pull-to-refresh; at a start with no airing data stored, at a first download and on a
+  pull it waits for the airing refresh that follows, however that ends, for a bounded time. An edit, a sync, an air
+  time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position,
+  and update rows in place. A row whose title no longer belongs to the tab leaves at once, and Undo puts it back in
+  the same place; a title that joins the tab appears at the end until the order is next computed. After a row leaves,
+  a "+1" on a row that moved up is not applied until the rows have stood still a moment.
 - Text a person types is state the view model owns and changes inside the event; no flow sits between a keystroke and
   its field.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the

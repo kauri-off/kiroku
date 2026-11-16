@@ -59,7 +59,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -80,7 +79,7 @@ class AppRouteTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { scope.cancel() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
@@ -88,9 +87,6 @@ class AppRouteTest {
     private lateinit var navigator: ShellNavigator
 
     private val kagerou = FixtureAnime.exactToWatch
-
-    @After
-    fun stop() = scope.cancel()
 
     private fun app() {
         compose.setContent {

@@ -65,6 +65,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
 
 // The user's own list, its orders fixed at moments and its state built on [background], one step at a time, in order.
@@ -104,6 +105,9 @@ class ListViewModel(
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
     private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val retries = MutableStateFlow(0)
+
+    // Section 6.2: airing is a part of the rows, read again at the next pull or Retry when it could not be read.
+    private val airingReads = MutableStateFlow(0)
     private var syncing: Job? = null
     private val lane = background.limitedParallelism(1)
 
@@ -118,7 +122,8 @@ class ListViewModel(
     // The store was read and held no list: what a sync then brings is ordered once the airing data it asked for is there.
     @Volatile private var readEmpty = false
 
-    @Volatile private var downloading = false
+    // The syncs under way, of every owner.
+    private val downloads = AtomicInteger()
 
     // The titles whose page is stored, for the summary a title page opens with; no part of what the List shows.
     @Volatile private var pagesRead: Set<AnimeId> = emptySet()
@@ -195,10 +200,19 @@ class ListViewModel(
             ListEvent.DismissSort -> model.update { it.copy(sortSheetOpen = false) }
             is ListEvent.SelectSort -> choose { if (it.sort == event.sort) null else TabSort(event.sort) }
             is ListEvent.SelectDirection -> choose { if (it.sort.defaultDirection == null) null else it.copy(direction = event.direction) }
-            ListEvent.Refresh -> startSync(fromUser = true)
+            ListEvent.Refresh -> {
+                airingReads.update { it + 1 }
+                startSync(fromUser = true)
+            }
             ListEvent.Retry -> {
                 retries.update { it + 1 }
+                airingReads.update { it + 1 }
                 startSync(fromUser = false)
+                // A list that could not be read at the start is ordered as the start would have, also with no airing stored.
+                if (!settled) {
+                    val owners = model.value.owners
+                    viewModelScope.launch { if (noAiringStored()) orderedAtStart(owners, stale = true) }
+                }
             }
             is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
@@ -206,16 +220,53 @@ class ListViewModel(
 
     // A sync's end refreshes the stale airing data by itself; a list that needs no sync leaves that to its screen.
     private suspend fun syncIfStale() {
-        if (list.stale(clock.instant())) {
-            syncUnlessSyncing()
+        val stale = list.stale(clock.instant())
+        if (stale) syncUnlessSyncing()
+        if (!settled && noAiringStored()) {
+            val owners = model.value.owners
+            viewModelScope.launch { orderedAtStart(owners, stale) }
             return
         }
+        if (stale) return
         viewModelScope.launch { airing.refreshStale() }
         if (!settled) {
-            settled = true
-            withContext(lane) { model.update { if (it.orders == null && entriesLoaded) it.orderedAll() else it } }
+            withContext(lane) {
+                settled = true
+                model.update { if (it.orders == null && entriesLoaded) it.orderedAll() else it }
+            }
         }
     }
+
+    // A start with no airing data stored orders once the airing refresh ends; a list still to be downloaded is its sync's.
+    private suspend fun orderedAtStart(
+        owners: Int,
+        stale: Boolean,
+    ) {
+        val stored =
+            try {
+                list.observeEntries().first()
+            } catch (_: DataException) {
+                return
+            }
+        if (stale && stored.isEmpty()) return
+        ordered(owners, again = false) { airing.refreshStale() }
+    }
+
+    // Rows without airing data when it cannot be read: a part of them, not the list.
+    private suspend fun readAiring(): Map<AnimeId, Airing> =
+        try {
+            airing.observeAiring().first()
+        } catch (_: DataException) {
+            emptyMap()
+        }
+
+    // As after an install or a first sign-in, when what "Up next" needs is still to come.
+    private suspend fun noAiringStored(): Boolean =
+        try {
+            airing.observeSchedules().first().isEmpty()
+        } catch (_: DataException) {
+            false
+        }
 
     private fun startSync(fromUser: Boolean) {
         syncing = viewModelScope.launch { sync(fromUser) }
@@ -235,10 +286,12 @@ class ListViewModel(
             .flatMapLatest { owner ->
                 if (readFor !== NOBODY_YET && readFor != owner) forgetOwner()
                 readFor = owner
+                val schedules = airing.observeAiring().readAgainOnRetry(airingReads) { emptyMap() }
                 val read =
-                    combine(list.observeEntries(), airing.observeAiring(), ::Pair).map { (entries, schedule) ->
+                    combine(list.observeEntries(), schedules, ::Pair).map { (entries, schedule) ->
                         awaitSorts()
-                        received(entries, schedule)
+                        val waits = !settled && model.value.orders == null && entries.isNotEmpty() && noAiringStored()
+                        received(entries, schedule, waits)
                     }
                 if (owner == null) read else merge(read, owedDownloads())
             }.onStart { emit(Unit) }
@@ -300,9 +353,11 @@ class ListViewModel(
         }
     }
 
+    // [waitsForAiring]: no airing data was stored when the list was read, so the order is the airing refresh's to compute.
     private fun received(
         list: List<ListEntry>,
         schedule: Map<AnimeId, Airing>,
+        waitsForAiring: Boolean,
     ) {
         entriesLoaded = true
         if (list.isEmpty()) readEmpty = true
@@ -310,7 +365,8 @@ class ListViewModel(
             val read = model.copy(airing = schedule, entries = list.associateBy { it.anime.id })
             when {
                 read.orders != null -> read.withJoinedAppended()
-                readEmpty && downloading -> read
+                readEmpty && downloads.get() > 0 -> read
+                waitsForAiring && !settled -> read
                 list.isNotEmpty() || settled -> read.orderedAll()
                 else -> read
             }
@@ -519,62 +575,93 @@ class ListViewModel(
         model.update { it.copy(failure = null, refreshing = it.refreshing || fromUser) }
         loads.started()
         val owners = model.value.owners
-        downloading = true
-        val result = list.sync()
-        loads.ended((result as? Outcome.Failure)?.error)
-        if (model.value.owners != owners) {
-            downloading = false
-            model.update { it.copy(refreshing = false) }
-            return
-        }
-        // "Up next" is by the airing data the sync's end asked for, however that ended.
-        if (result is Outcome.Success && (fromUser || model.value.orders == null)) {
-            withTimeoutOrNull(AIRING_WAIT) { airing.refreshStale() }
-        }
-        downloading = false
-        settled = true
-        when (result) {
-            is Outcome.Success ->
-                if (fromUser || model.value.orders == null) {
-                    val read =
-                        try {
-                            list.observeEntries().first() to airing.observeAiring().first()
-                        } catch (e: DataException) {
-                            unreadable(e.error)
-                            null
+        // A pull asks for every tracked title's airing beside the sync; what is still asked after the wait goes on.
+        val pulled = if (fromUser) viewModelScope.launch { airing.refresh() } else null
+        downloads.incrementAndGet()
+        try {
+            val result = list.sync()
+            loads.ended((result as? Outcome.Failure)?.error)
+            if (model.value.owners != owners) {
+                model.update { it.copy(refreshing = false) }
+                return
+            }
+            // AniList is asked whatever MAL answered, an expired session included; offline the sync's repeat asks once it is back.
+            if (result is Outcome.Failure && result.error != DataError.NoConnection) viewModelScope.launch { airing.refreshStale() }
+            when (result) {
+                is Outcome.Success ->
+                    if (fromUser || model.value.orders == null) {
+                        ordered(owners, again = fromUser) {
+                            pulled?.join()
+                            airing.refreshStale()
                         }
-                    awaitSorts()
-                    if (read != null) {
-                        val (synced, schedule) = read
-                        entriesLoaded = true
-                        // Asked on the lane: the list may have arrived there first and been ordered at start.
-                        withContext(lane) {
-                            model.update {
-                                if (it.owners == owners && (fromUser || it.orders == null)) {
-                                    it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
-                                } else {
-                                    it
-                                }
-                            }
-                        }
+                    } else {
+                        settle(owners)
                     }
-                }
-            is Outcome.Failure ->
-                when {
-                    model.value.orders != null ->
-                        if (result.error != DataError.SessionExpired) {
-                            messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
-                        }
-                    entriesLoaded && model.value.entries.isNotEmpty() ->
-                        withContext(lane) {
-                            model.update { if (it.owners == owners && it.orders == null) it.orderedAll() else it }
-                        }
-                    else -> model.update { if (it.owners == owners) it.copy(failure = result.error.toListFailure()) else it }
-                }
+                is Outcome.Failure -> failed(result.error, owners)
+            }
+        } finally {
+            downloads.decrementAndGet()
         }
         model.update { it.copy(refreshing = false, refreshes = if (fromUser) it.refreshes + 1 else it.refreshes) }
         // A tab that went with the order gave way to another, which is the one to restore.
         saveTab()
+    }
+
+    // A list shown stays with a message; one stored and never ordered is ordered, after the airing refresh when none is stored.
+    private suspend fun failed(
+        error: DataError,
+        owners: Int,
+    ) {
+        val stored =
+            withContext(lane) {
+                val current = model.value
+                if (current.owners != owners) return@withContext false
+                val stored = current.orders == null && entriesLoaded && current.entries.isNotEmpty()
+                if (!stored) {
+                    settled = true
+                    if (current.orders == null) model.update { it.copy(failure = error.toListFailure()) }
+                }
+                stored
+            }
+        if (stored) {
+            ordered(owners, again = false) { if (noAiringStored()) airing.refreshStale() }
+        } else if (model.value.orders != null && error != DataError.SessionExpired) {
+            messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(error)))
+        }
+    }
+
+    // "Up next" by what [refresh] brought, however it ended, waited for up to AIRING_WAIT; read from the stores, ahead of the lane.
+    private suspend fun ordered(
+        owners: Int,
+        again: Boolean,
+        refresh: suspend () -> Unit,
+    ) {
+        withTimeoutOrNull(AIRING_WAIT) { refresh() }
+        val read =
+            try {
+                list.observeEntries().first() to readAiring()
+            } catch (e: DataException) {
+                unreadable(e.error)
+                return
+            }
+        awaitSorts()
+        val (synced, schedule) = read
+        withContext(lane) {
+            if (model.value.owners != owners) return@withContext
+            entriesLoaded = true
+            settled = true
+            model.update {
+                if (again || it.orders == null) {
+                    it.copy(entries = synced.associateBy { entry -> entry.anime.id }, airing = schedule).orderedAll()
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    private suspend fun settle(owners: Int) {
+        withContext(lane) { if (model.value.owners == owners) settled = true }
     }
 
     private fun saveTab() {

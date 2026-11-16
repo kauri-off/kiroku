@@ -170,28 +170,9 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-08 Live airing.**
 
-- [ ] **M3-09 The List and the title page on live airing.** On the List, the order computed at a first download,
-  at a pull-to-refresh and at a start with no airing data stored waits for the airing refresh that follows, however
-  it ends and no longer than a set wait, so that "Up next" is by the data that refresh brought; at any other time,
-  airing data that arrives or changes updates rows in place (section 6.2). On the title page a pull refreshes the
-  title's airing with its details, and a title outside the tracked set gets its airing for the page (A12). A
-  failure of AniList shows no message: the stored counts stay, or the estimate (section 2.3).
-  **Needs:** M3-04.
-  **Check:** `./gradlew :app:testDebugUnitTest`: under a shown tab, an air time passing, a refresh
-  that moves an episode and a title becoming tracked each update rows in place: no row moves, the scroll position
-  holds and every other row is the same object; after a sign-in Watching is in the order its rows show; a pull
-  orders after the airing refresh, also when AniList fails, and a refresh that outlasts the wait holds no order
-  back; a tracked title's page shows its row's numbers and an airing title that is not tracked shows exact ones on
-  its page (A1, A12); with AniList failing no message is posted.
+- [x] **M3-09 The List and the title page on live airing.**
 
-- [ ] **M3-10 Airing counts in the debug menu.** A section of the debug menu that counts, over the tracked titles
-  as stored, how many have an exact count, how many schedules are rejected for their numbering (A4), how many
-  counts are estimated for doubt (A5), how many from the weekly slot (A6) and how many are unknown, and lists each
-  title that is not exact with its reason. It reads M3-02's results and asks no source.
-  **Needs:** M3-04.
-  **Check:** tests: on the fixtures each count is the number of fixture titles of that kind and the counts add up
-  to the tracked titles; opening the section sends no request; its strings exist in both languages. The debug
-  menu's screenshots are rendered with the section.
+- [x] **M3-10 Airing counts in the debug menu.**
 
 - [ ] **M3-11 AniList in the scenario panel.** The panel's "offline" fails AniList as it fails MAL, and one more
   switch fails AniList alone, on the demo and on the sandbox, so that section 2.3's row for AniList can be seen on
