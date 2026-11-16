@@ -1,8 +1,10 @@
 package io.github.kauri_off.kiroku.core.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
-import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.error.StoreCalls
+import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -26,20 +28,16 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -49,8 +47,6 @@ import java.io.IOException
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration.Companion.seconds
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
 class ListEngine(
@@ -92,11 +88,6 @@ class ListEngine(
         var made = false
     }
 
-    // A store call that threw; it fails the one call the engine was asked in as a storage error.
-    private class StoreFailure(
-        cause: Throwable,
-    ) : Exception(cause)
-
     // MAL's client throwing fails the one call: an IOException as no connection, not signed in as expired, else reported.
     private val mal =
         object : RemoteList {
@@ -116,42 +107,37 @@ class ListEngine(
 
     private val local =
         object : LocalList {
-            override fun observeEntries() = store.observeEntries().storeFlow()
+            override fun observeEntries() = stores.observing(store.observeEntries())
 
-            override fun observeEntry(id: AnimeId) = store.observeEntry(id).storeFlow()
+            override fun observeEntry(id: AnimeId) = stores.observing(store.observeEntry(id))
 
-            override fun observeEntriesOf(ids: Set<AnimeId>) = store.observeEntriesOf(ids).storeFlow()
+            override fun observeEntriesOf(ids: Set<AnimeId>) = stores.observing(store.observeEntriesOf(ids))
 
-            override suspend fun state() = storeCall(unreadable) { store.state() }
+            override suspend fun state() = stores.reading { store.state() }
 
-            override suspend fun read(id: AnimeId) = storeCall(unreadable) { store.read(id) }
+            override suspend fun read(id: AnimeId) = stores.reading { store.read(id) }
 
-            override suspend fun readAll() = storeCall(unreadable) { store.readAll() }
+            override suspend fun readAll() = stores.reading { store.readAll() }
 
-            override suspend fun write(entries: Map<AnimeId, StoredEntry?>) = storeCall(unwritable) { store.write(entries) }
+            override suspend fun write(entries: Map<AnimeId, StoredEntry?>) = stores.writing { store.write(entries) }
 
             override suspend fun add(
                 anime: Anime,
                 entry: StoredEntry,
-            ) = storeCall(unwritable) { store.add(anime, entry) }
+            ) = stores.writing { store.add(anime, entry) }
 
             override suspend fun download(
                 titles: List<Anime>,
                 entries: Map<AnimeId, StoredEntry?>,
                 at: Instant?,
-            ) = storeCall(unwritable) { store.download(titles, entries, at) }
+            ) = stores.writing { store.download(titles, entries, at) }
 
-            override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) = storeCall(unwritable) { store.restore(entries) }
+            override suspend fun restore(entries: Map<AnimeId, StoredEntry?>) = stores.writing { store.restore(entries) }
 
-            override suspend fun clear(owner: SignInId?) = storeCall(unwritable) { store.clear(owner) }
-
-            private fun <T> Flow<T>.storeFlow() =
-                onEach { unreadable.set(false) }.catch { throw if (it is Exception) storeFailure(unreadable, it) else it }
+            override suspend fun clear(owner: SignInId?) = stores.writing { store.clear(owner) }
         }
 
-    // Whether the store's last read and its last write failed: only the first failure of a streak is reported.
-    private val unreadable = AtomicBoolean()
-    private val unwritable = AtomicBoolean()
+    private val stores = StoreCalls(scope, unexpected)
 
     // Held for every change to the store and to the fields below it, never while MAL is asked.
     private val mutex = Mutex()
@@ -276,17 +262,9 @@ class ListEngine(
                     }
                 }
                 flow {
-                    var failed = 0
-                    emitAll(
-                        flow {
-                            mutex.withLock { settle() }
-                            emitAll(stored())
-                        }.onEach { failed = 0 }
-                            .retryWhen { cause, _ ->
-                                (cause is StoreFailure && ++failed < STORE_ATTEMPTS).also { if (it) delay(STORE_RETRY) }
-                            }.catch { throw if (it is StoreFailure) DataException(DataError.StorageError, it.cause) else it },
-                    )
-                }
+                    mutex.withLock { settle() }
+                    emitAll(stored())
+                }.retriedOverStore()
             }.distinctUntilChanged()
 
     override fun observeWriteFailures(): Flow<WriteFailure> = failures.asSharedFlow()
@@ -720,39 +698,13 @@ class ListEngine(
         try {
             call()
         } catch (e: Exception) {
-            ended(e)
+            stores.ended(e)
             when {
                 sessions.first() !is Session.SignedIn -> expired
                 e is IOException -> Outcome.Failure(DataError.NoConnection)
                 else -> Outcome.Failure(DataError.ServerError).also { unexpected(e) }
             }
         }
-
-    private suspend inline fun <T> storeCall(
-        failing: AtomicBoolean,
-        call: () -> T,
-    ): T =
-        try {
-            call().also { failing.set(false) }
-        } catch (e: Exception) {
-            throw storeFailure(failing, e)
-        }
-
-    private suspend fun storeFailure(
-        failing: AtomicBoolean,
-        e: Exception,
-    ): Exception {
-        ended(e)
-        if (failing.compareAndSet(false, true)) unexpected(e)
-        return StoreFailure(e)
-    }
-
-    // A cancellation of the caller or of the engine's scope ends the call; any other is a failure like any exception.
-    private suspend fun ended(e: Exception) {
-        if (e !is CancellationException) return
-        currentCoroutineContext().ensureActive()
-        if (!scope.isActive) throw e
-    }
 
     private fun touch(id: AnimeId) {
         touched[id] = ++changes
@@ -764,7 +716,5 @@ class ListEngine(
         const val STOPPED = "The list's scope has ended"
         val expired = Outcome.Failure(DataError.SessionExpired)
         const val WRONG_TITLE = "MAL's client answered about another title"
-        const val STORE_ATTEMPTS = 3
-        val STORE_RETRY = 1.seconds
     }
 }

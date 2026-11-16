@@ -122,6 +122,13 @@ abstract class AiringEngineContract {
         @Volatile
         var failingWrites = false
 
+        // Only a write that forgets a title fails.
+        @Volatile
+        var failingForgets = false
+
+        @Volatile
+        var writesToFail = 0
+
         val writes = CopyOnWriteArrayList<Map<AnimeId, StoredAiring?>>()
 
         @Volatile
@@ -143,7 +150,11 @@ abstract class AiringEngineContract {
 
         override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
             fault()
-            if (failingWrites) throw IOException("The disk is full")
+            if (failingWrites || (failingForgets && null in titles.values)) throw IOException("The disk is full")
+            if (writesToFail > 0) {
+                writesToFail--
+                throw IOException("The write was aborted")
+            }
             writes += titles
             inner.write(titles)
             written.update { it + 1 }
@@ -236,6 +247,11 @@ abstract class AiringEngineContract {
         by: Duration,
     ) = copy(episodes = episodes.map { if (it.number == number) it.copy(airsAt = it.airsAt + by.toJavaDuration()) else it })
 
+    private fun AiringSchedule.at(
+        number: Int,
+        airsAt: Instant,
+    ) = copy(episodes = episodes.map { if (it.number == number) it.copy(airsAt = airsAt) else it })
+
     private fun AiringSchedule.without(vararg numbers: Int) = copy(episodes = episodes.filter { it.number !in numbers })
 
     private fun TestScope.childScope() = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]))
@@ -312,21 +328,36 @@ abstract class AiringEngineContract {
     @Test
     fun `A9 an answer that is complete from an instant keeps the earlier episodes it left out and replaces the rest by number`() =
         runTest {
-            val s = subject()
             val anime = FixtureAnime.exactToWatch
-            val before = s.schedule(anime)
-            // At the source episode 3 is gone, 14 was put off into the future, 15 moved and 16 is gone.
-            s.source.schedules += anime.id to before.without(3, 16).moved(14, 7.days).moved(15, 1.days)
-            s.source.upcomingOnly = true
+            val before = fixtures.schedules.getValue(anime.id)
+            val s = subject(now = before.episode(14)!!.airsAt.plusSeconds(86_400))
+            val early = s.clock.now.minusSeconds(3600)
+            val late = s.clock.now.plusSeconds(3600)
+            // At the source episode 3 is gone, 13 was put off, 14 is gone, 15 aired early, 16 moved and 17 is gone.
+            s.source.schedules += anime.id to
+                before
+                    .without(3, 14, 17)
+                    .at(13, late)
+                    .at(15, early)
+                    .moved(16, 1.days)
+            s.source.partial = true
 
             assertEquals(Outcome.Success(Unit), s.engine.refresh())
 
             val after = s.schedule(anime)
-            assertEquals((1..13).map { before.episode(it) }, (1..13).map { after.episode(it) })
-            assertEquals(before.moved(14, 7.days).episode(14), after.episode(14))
-            assertEquals(before.moved(15, 1.days).episode(15), after.episode(15))
-            assertNull(after.episode(16))
-            assertEquals(before.without(16).moved(14, 7.days).moved(15, 1.days), after)
+            assertEquals((1..12).map { before.episode(it) }, (1..12).map { after.episode(it) })
+            assertEquals(ScheduledEpisode(13, late), after.episode(13))
+            assertNull(after.episode(14))
+            assertEquals(ScheduledEpisode(15, early), after.episode(15))
+            assertNull(after.episode(17))
+            assertEquals(
+                before
+                    .without(14, 17)
+                    .at(13, late)
+                    .at(15, early)
+                    .moved(16, 1.days),
+                after,
+            )
         }
 
     @Test
@@ -339,12 +370,62 @@ abstract class AiringEngineContract {
                 val shift = java.time.Duration.between(fixture.episode(15)!!.airsAt, fixtures.now + airsIn.toJavaDuration())
                 val schedule = fixture.copy(episodes = fixture.episodes.map { it.copy(airsAt = it.airsAt + shift) })
                 val s = subject(schedules = fixtures.schedules + (anime.id to schedule), sourceAhead = sourceAhead)
-                s.source.upcomingOnly = true
+                s.source.partial = true
 
                 assertEquals(Outcome.Success(Unit), s.engine.refresh())
 
                 assertEquals("the source is ahead by $sourceAhead", schedule, s.schedule(anime))
             }
+        }
+
+    @Test
+    fun `A9 an answer that is complete only from after the instant asked for is refused, and reported`() =
+        runTest {
+            val anime = FixtureAnime.exactToWatch
+            val s = subject()
+            val before = s.stored(anime)
+            s.clock.advance(20.minutes)
+            s.source.schedules += anime.id to s.schedule(anime).without(15)
+            s.source.answering = { answers ->
+                val late =
+                    FetchedAiring(
+                        s.source.schedules.getValue(anime.id),
+                        s.source.asked
+                            .last()
+                            .plusMillis(1),
+                    )
+                answers + (anime.id to Outcome.Success(late))
+            }
+
+            assertEquals(Outcome.Failure(DataError.ServerError), s.engine.refresh())
+
+            assertEquals(before, s.stored(anime))
+            assertEquals(tracked - anime.id, s.stored().filterValues { it.fetchedAt == s.clock.now }.keys)
+            assertEquals(1, s.unexpected.size)
+        }
+
+    @Test
+    fun `the source is handed each title as the list has it, a page's as the page has it, and the earliest announceable instant`() =
+        runTest {
+            val s = subject(seeded = false)
+            assertEquals(
+                fixtures.entries
+                    .map { it.anime }
+                    .filter { it.id in tracked }
+                    .toSet(),
+                s.source.handed.toSet(),
+            )
+            assertEquals(tracked.size, s.source.handed.size)
+            assertEquals(listOf(s.clock.now - announceableFor.toJavaDuration()), s.source.asked.toList())
+
+            val page = FixtureAnime.notOnListAiring.copy(meanScore = 1.5)
+            val listed = FixtureAnime.exactToWatch
+            s.clock.advance(1.minutes)
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(listed.copy(meanScore = 1.5)))
+
+            assertEquals(listOf(page, listed), s.source.handed.takeLast(2))
+            assertEquals(s.clock.now - announceableFor.toJavaDuration(), s.source.asked.last())
         }
 
     @Test
@@ -400,7 +481,7 @@ abstract class AiringEngineContract {
 
             assertEquals(before[left.id], s.stored(left))
             assertEquals(tracked, s.stored().keys)
-            assertNull(s.engine.observeSchedule(stranger.id).first())
+            assertNull(s.engine.observePageSchedule(stranger.id).first())
             assertEquals(tracked - left.id, s.stored().filterValues { it.fetchedAt == s.clock.now }.keys)
             assertEquals(1, s.unexpected.size)
         }
@@ -493,7 +574,7 @@ abstract class AiringEngineContract {
         }
 
     @Test
-    fun `a sync that adds one tracked title asks the source for that title alone, once`() =
+    fun `a sync that adds one tracked title while the others are fresh asks the source for that title alone, once`() =
         runTest {
             val added = FixtureAnime.notOnListAiring
             val s = subject()
@@ -505,6 +586,52 @@ abstract class AiringEngineContract {
 
             assertEquals(listOf(setOf(added.id)), s.source.calls.toList())
             assertEquals(StoredAiring(fixtures.schedules[added.id], s.clock.now), s.stored(added))
+        }
+
+    @Test
+    fun `a sync that adds one tracked title while the others are stale asks for it in the next call, once, as for each of them`() =
+        runTest {
+            val added = FixtureAnime.notOnListAiring
+            val s = subject()
+            s.clock.advance(Freshness.airing + 1.minutes)
+            s.server.editOnWebsite(added, ListValues(ListStatus.Watching, 2, null, null, null))
+
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            runCurrent()
+
+            assertTrue(added.id in s.source.calls.first())
+            assertEquals(
+                (tracked + added.id).sortedBy { it.value },
+                s.source.calls
+                    .flatten()
+                    .sortedBy { it.value },
+            )
+            assertEquals(StoredAiring(fixtures.schedules[added.id], s.clock.now), s.stored(added))
+        }
+
+    @Test
+    fun `a list change that adds a title and removes another asks for the one at once, though forgetting the other fails`() =
+        runTest {
+            val added = FixtureAnime.notOnListAiring
+            val removed = FixtureAnime.exactToWatch
+            val s = subject()
+            s.store.failingForgets = true
+            s.clock.advance(1.minutes)
+            s.server.editOnWebsite(added, ListValues(ListStatus.Watching, 2, null, null, null))
+            s.server.editOnWebsite(removed, null)
+
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            advanceTimeBy(1.minutes)
+            runCurrent()
+
+            assertEquals(listOf(setOf(added.id)), s.source.calls.toList())
+            assertEquals(StoredAiring(fixtures.schedules[added.id], s.clock.now), s.stored(added))
+            assertEquals(tracked + added.id, s.stored().keys)
+
+            s.store.failingForgets = false
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+            assertEquals(tracked + added.id - removed.id, s.stored().keys)
+            assertEquals(1, s.source.calls.size)
         }
 
     @Test
@@ -530,7 +657,7 @@ abstract class AiringEngineContract {
             val s = subject()
             s.clock.advance(Freshness.airing - 1.milliseconds)
             s.engine.observeSchedules().first()
-            s.engine.observeSchedule(FixtureAnime.exactToWatch.id).first()
+            s.engine.observePageSchedule(FixtureAnime.exactToWatch.id).first()
             runCurrent()
             assertEquals(emptyList<Set<AnimeId>>(), s.source.calls.toList())
 
@@ -540,7 +667,7 @@ abstract class AiringEngineContract {
             assertEquals(listOf(tracked), s.source.calls.toList())
 
             s.engine.observeSchedules().first()
-            s.engine.observeSchedule(FixtureAnime.exactToWatch.id).first()
+            s.engine.observePageSchedule(FixtureAnime.exactToWatch.id).first()
             runCurrent()
             assertEquals(1, s.source.calls.size)
         }
@@ -632,13 +759,13 @@ abstract class AiringEngineContract {
             runCurrent()
             assertEquals(before, s.stored(anime))
 
-            s.clock.now = last + finaleKeptFor.toJavaDuration() - java.time.Duration.ofMillis(1)
+            s.clock.now = last + announceableFor.toJavaDuration() - java.time.Duration.ofMillis(1)
             assertEquals(Outcome.Success(Unit), s.engine.refresh())
             assertEquals(before, s.stored(anime))
             assertEquals(before.schedule, s.engine.observeSchedules().first()[anime.id])
             assertEquals(listOf(tracked - anime.id), s.source.calls.toList())
 
-            s.clock.now = last + finaleKeptFor.toJavaDuration()
+            s.clock.now = last + announceableFor.toJavaDuration()
             assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
             assertNull(s.stored(anime))
         }
@@ -720,6 +847,50 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `S9 a sign-out whose forgetting fails stores no answer that arrives after it, and forgets at the next use`() =
+        runTest {
+            val s = subject()
+            val before = s.stored()
+            s.source.latency = 1.seconds
+            s.clock.advance(20.minutes)
+            s.source.schedules += FixtureAnime.exactToWatch.id to s.schedule(FixtureAnime.exactToWatch).without(15)
+            val refresh = async { s.engine.refresh() }
+            runCurrent()
+            assertEquals(1, s.source.calls.size)
+            s.store.failingForgets = true
+
+            s.session.value = Session.SignedOut
+            advanceTimeBy(1.minutes)
+            runCurrent()
+
+            refresh.await()
+            assertEquals(emptyList<Map<AnimeId, StoredAiring?>>(), s.store.writes)
+            assertEquals(before, s.stored())
+            assertEquals(1, s.unexpected.size)
+
+            s.store.failingForgets = false
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+            assertEquals(emptyMap<AnimeId, StoredAiring>(), s.stored())
+            assertEquals(1, s.source.calls.size)
+        }
+
+    @Test
+    fun `S9 a forgetting that fails is tried again in a row, with no use of the engine between`() =
+        runTest {
+            val s = subject()
+            s.store.writesToFail = 1
+
+            s.session.value = Session.SignedOut
+            runCurrent()
+            assertEquals(tracked, s.stored().keys)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+
+            assertEquals(emptyMap<AnimeId, StoredAiring>(), s.stored())
+            assertEquals(1, s.unexpected.size)
+        }
+
+    @Test
     fun `S6 the refresh goes on while the session is expired`() =
         runTest {
             val s = subject()
@@ -743,15 +914,15 @@ abstract class AiringEngineContract {
             val offList = FixtureAnime.droppedEstimated
             val schedule = AiringSchedule(fixtures.schedules.getValue(page.id).episodes, 12)
             val s = subject(schedules = fixtures.schedules + (offList.id to schedule))
-            assertNull(s.engine.observeSchedule(page.id).first())
+            assertNull(s.engine.observePageSchedule(page.id).first())
 
             assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
             assertEquals(Outcome.Success(Unit), s.engine.refresh(offList))
             runCurrent()
 
             assertEquals(listOf(setOf(page.id), setOf(offList.id)), s.source.calls.toList())
-            assertEquals(fixtures.schedules[page.id], s.engine.observeSchedule(page.id).first())
-            assertEquals(schedule, s.engine.observeSchedule(offList.id).first())
+            assertEquals(fixtures.schedules[page.id], s.engine.observePageSchedule(page.id).first())
+            assertEquals(schedule, s.engine.observePageSchedule(offList.id).first())
             assertEquals(emptyList<Map<AnimeId, StoredAiring?>>(), s.store.writes)
             assertEquals(tracked, s.stored().keys)
             assertEquals(fixtures.schedules.filterKeys { it in tracked }, s.engine.observeSchedules().first())
@@ -772,7 +943,7 @@ abstract class AiringEngineContract {
 
             assertEquals(listOf(setOf(anime.id)), s.source.calls.toList())
             assertEquals(StoredAiring(s.source.schedules[anime.id], s.clock.now), s.stored(anime))
-            assertEquals(s.source.schedules[anime.id], s.engine.observeSchedule(anime.id).first())
+            assertEquals(s.source.schedules[anime.id], s.engine.observePageSchedule(anime.id).first())
         }
 
     @Test
@@ -788,19 +959,50 @@ abstract class AiringEngineContract {
 
             assertEquals(2, s.source.calls.size)
             assertNull(s.stored(page))
-            assertEquals(fixtures.schedules[page.id], s.engine.observeSchedule(page.id).first())
+            assertEquals(fixtures.schedules[page.id], s.engine.observePageSchedule(page.id).first())
             assertFalse(page.id in s.engine.observeSchedules().first())
 
             s.source.failure = null
             s.store.failingWrites = true
             assertEquals(Outcome.Failure(DataError.StorageError), s.engine.refresh(page))
-            assertEquals(fixtures.schedules[page.id], s.engine.observeSchedule(page.id).first())
+            assertEquals(fixtures.schedules[page.id], s.engine.observePageSchedule(page.id).first())
             s.store.failingWrites = false
             s.source.schedules += page.id to fixtures.schedules.getValue(page.id).moved(8, 1.days)
             assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
-            assertEquals(s.source.schedules[page.id], s.engine.observeSchedule(page.id).first())
+            assertEquals(s.source.schedules[page.id], s.engine.observePageSchedule(page.id).first())
             assertEquals(s.source.schedules[page.id], s.engine.observeSchedules().first()[page.id])
             assertEquals(1, s.unexpected.size)
+        }
+
+    @Test
+    fun `A12 what a page fetched goes once its title is stored, so a title that leaves the list again shows nothing`() =
+        runTest {
+            val page = FixtureAnime.notOnListAiring
+            val s = subject()
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
+
+            s.save(page, ListStatus.Watching)
+            runCurrent()
+            assertEquals(fixtures.schedules[page.id], s.schedule(page))
+            s.list.write(ListWrite.Remove(page))
+            runCurrent()
+
+            assertNull(s.stored(page))
+            assertNull(s.engine.observePageSchedule(page.id).first())
+        }
+
+    @Test
+    fun `A12 what a page fetched goes when the source no longer knows the title`() =
+        runTest {
+            val page = FixtureAnime.notOnListAiring
+            val s = subject()
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
+            assertEquals(fixtures.schedules[page.id], s.engine.observePageSchedule(page.id).first())
+
+            s.source.schedules -= page.id
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
+
+            assertNull(s.engine.observePageSchedule(page.id).first())
         }
 
     @Test
@@ -865,20 +1067,20 @@ abstract class AiringEngineContract {
             assertEquals(emptyList<Set<AnimeId>>(), s.source.calls.toList())
 
             s.shownList.unreadable.value = false
-            s.save(added, ListStatus.Watching)
             s.save(FixtureAnime.exactToWatch, ListStatus.Dropped)
             runCurrent()
+            assertEquals(tracked, s.stored().keys)
             assertEquals(emptyList<Set<AnimeId>>(), s.source.calls.toList())
 
-            s.engine.observeSchedule(added.id).first()
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+            assertEquals(tracked - FixtureAnime.exactToWatch.id, s.stored().keys)
+            assertEquals(listOf(tracked - FixtureAnime.exactToWatch.id), s.source.calls.toList())
+
+            s.save(added, ListStatus.Watching)
             runCurrent()
-            assertEquals(tracked + added.id - FixtureAnime.exactToWatch.id, s.stored().keys)
-            assertEquals(
-                tracked + added.id - FixtureAnime.exactToWatch.id,
-                s.source.calls
-                    .flatten()
-                    .toSet(),
-            )
+            assertEquals(setOf(added.id), s.source.calls.last())
+            assertEquals(2, s.source.calls.size)
+            assertEquals(fixtures.schedules[added.id], s.schedule(added))
         }
 
     @Test

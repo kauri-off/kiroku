@@ -3,6 +3,9 @@ package io.github.kauri_off.kiroku.core.airing
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.error.StoreCalls
+import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -25,7 +28,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
@@ -33,8 +35,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -43,8 +43,6 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.time.Clock
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
 // Airing data over a store and a source of episode times: the rules of what is asked and what is kept (section 4).
@@ -58,40 +56,36 @@ class AiringEngine(
     // Hears of what nobody expected: the source's and the engine's own exceptions, and the first of a store's streak.
     private val unexpected: (Throwable) -> Unit,
 ) {
-    // A store call that threw; it fails the one call the engine was asked in as a storage error.
-    private class StoreFailure(
-        cause: Throwable,
-    ) : Exception(cause)
-
     // The list as airing reads it: the tracked titles, and those in a tracked status that MAL has marked finished.
     private data class Tracking(
-        val tracked: Set<AnimeId>,
+        val tracked: Map<AnimeId, Anime>,
         val finished: Set<AnimeId>,
     )
 
+    private val stores = StoreCalls(scope, unexpected)
+
     private val local =
         object : AiringStore {
-            override fun observe() =
-                store.observe().onEach { unreadable.set(false) }.catch { throw if (it is Exception) storeFailure(unreadable, it) else it }
+            override fun observe() = stores.observing(store.observe())
 
-            override suspend fun read() = storeCall(unreadable) { store.read() }
+            override suspend fun read() = stores.reading { store.read() }
 
-            override suspend fun write(titles: Map<AnimeId, StoredAiring?>) = storeCall(unwritable) { store.write(titles) }
+            override suspend fun write(titles: Map<AnimeId, StoredAiring?>) = stores.writing { store.write(titles) }
         }
-
-    // Whether the store's last read and its last write failed: only the first failure of a streak is reported.
-    private val unreadable = AtomicBoolean()
-    private val unwritable = AtomicBoolean()
 
     // Held for every change to the store and to the fields below it, never while the source is asked.
     private val mutex = Mutex()
 
-    // The list the store was last made to agree with.
+    // The list as last read, which decides what an answer may store, and whether the store has yet to agree with it.
     private var settled: Tracking? = null
+    private var owed = false
+
+    // The titles that entered the tracked set and were not looked up in the store yet.
+    private val arrived = mutableSetOf<AnimeId>()
 
     // The titles asked for and not answered yet, of which [waiting] are not on their way to the source.
     private val asked = mutableMapOf<AnimeId, CompletableDeferred<DataError?>>()
-    private val waiting = LinkedHashSet<AnimeId>()
+    private val waiting = LinkedHashMap<AnimeId, Anime>()
 
     // Of the titles asked for, those a page asked for.
     private val forPages = mutableSetOf<AnimeId>()
@@ -110,9 +104,9 @@ class AiringEngine(
             try {
                 for (signal in wake) {
                     while (true) {
-                        val ids = mutex.withLock { waiting.toSet().also { waiting.clear() } }
-                        if (ids.isEmpty()) break
-                        answer(ids)
+                        val titles = mutex.withLock { waiting.toMap().also { waiting.clear() } }
+                        if (titles.isEmpty()) break
+                        answer(titles)
                     }
                 }
             } finally {
@@ -135,45 +129,40 @@ class AiringEngine(
             local.observe().map { stored -> stored.mapNotNull { (id, airing) -> airing.schedule?.let { id to it } }.toMap() }
         }
 
-    // One title's schedule: the stored one, else the one fetched for its page (A12).
-    fun observeSchedule(id: AnimeId): Flow<AiringSchedule?> =
+    // For a title's page alone, never for a notification: the stored schedule, else the one fetched for the page (A12).
+    fun observePageSchedule(id: AnimeId): Flow<AiringSchedule?> =
         shown {
             val stored = local.observe().map { it[id] }.distinctUntilChanged()
             combine(stored, pages.map { it[id] }.distinctUntilChanged()) { airing, page -> if (airing != null) airing.schedule else page }
         }
 
     // Asks for every tracked title, as a person's pull does, and returns once each is answered.
-    suspend fun refresh(): Outcome<Unit> = ask { tracking, _ -> tracking.tracked }
+    suspend fun refresh(): Outcome<Unit> = ask { tracking, _ -> tracking.tracked.values }
 
     // Asks for the tracked titles whose data is stale; a list sync and a new observer do this by themselves.
     suspend fun refreshStale(): Outcome<Unit> =
         ask { tracking, stored ->
             val now = clock.instant()
-            tracking.tracked.filter { airingStale(stored[it]?.fetchedAt, now) }
+            tracking.tracked.values.filter { airingStale(stored[it.id]?.fetchedAt, now) }
         }
 
     // For a title's page: a tracked title is refreshed; any other is fetched and held in memory (A12), unless finished.
     suspend fun refresh(anime: Anime): Outcome<Unit> =
         ask { tracking, _ ->
+            val tracked = tracking.tracked[anime.id]
             when {
-                anime.id in tracking.tracked -> listOf(anime.id)
+                tracked != null -> listOf(tracked)
                 anime.airingStatus.effective == AiringStatus.Finished -> emptyList()
-                else -> listOf(anime.id).also { forPages += anime.id }
+                else -> listOf(anime).also { forPages += anime.id }
             }
         }
 
-    // The store's own flow, which a new observer makes fresh; it is tried a few times in a row.
+    // The store's own flow, which a new observer makes fresh.
     private fun <T> shown(stored: () -> Flow<T>): Flow<T> =
         flow {
             follow()
             scope.launch { guarded { refreshStale() } }
-            var failed = 0
-            emitAll(
-                stored()
-                    .onEach { failed = 0 }
-                    .retryWhen { cause, _ -> (cause is StoreFailure && ++failed < STORE_ATTEMPTS).also { if (it) delay(STORE_RETRY) } }
-                    .catch { throw if (it is StoreFailure) DataException(DataError.StorageError, it.cause) else it },
-            )
+            emitAll(stored().retriedOverStore())
         }.distinctUntilChanged()
 
     // A list that cannot be read is followed again at the engine's next use.
@@ -195,46 +184,55 @@ class AiringEngine(
         }
     }
 
+    // A store that fails is asked a few times in a row, then again at the engine's next use.
     private suspend fun settle(tracking: Tracking) {
-        try {
-            mutex.withLock { if (tracking != settled) reconcile(tracking) }
-        } catch (_: StoreFailure) {
+        repeat(StoreCalls.ATTEMPTS) { attempt ->
+            if (attempt > 0) delay(StoreCalls.RETRY)
+            try {
+                mutex.withLock { if (tracking != settled || owed) reconcile(tracking) }
+                return
+            } catch (_: StoreFailure) {
+            }
         }
     }
 
     private fun tracking(entries: List<ListEntry>): Tracking {
         val (tracked, others) = entries.filter { it.status.tracked }.partition { it.tracked }
-        return Tracking(tracked.mapTo(mutableSetOf()) { it.anime.id }, others.mapTo(mutableSetOf()) { it.anime.id })
+        return Tracking(tracked.associate { it.anime.id to it.anime }, others.mapTo(mutableSetOf()) { it.anime.id })
     }
 
     // The store holds the tracked titles and A13's finales alone (S9); one new to the set is asked for at once (A11).
     private suspend fun reconcile(tracking: Tracking): Map<AnimeId, StoredAiring> {
+        arrived += tracking.tracked.keys - settled?.tracked?.keys.orEmpty()
+        arrived.retainAll(tracking.tracked.keys)
+        settled = tracking
+        owed = true
         val now = clock.instant()
         val stored = local.read()
+        want(arrived.filter { it !in stored }.map(tracking.tracked::getValue))
+        arrived.clear()
         val forgotten =
             stored.filterNot { (id, airing) -> id in tracking.tracked || (id in tracking.finished && airing.announceable(now)) }.keys
         if (forgotten.isNotEmpty()) local.write(forgotten.associateWith { null })
-        val known = settled?.tracked.orEmpty()
-        settled = tracking
-        want(tracking.tracked.filter { it !in known && it !in stored })
+        owed = false
         return stored - forgotten
     }
 
     // A13: the title's last episode can still be announced.
     private fun StoredAiring.announceable(now: Instant): Boolean {
         val last = schedule?.episodes?.maxOfOrNull { it.airsAt } ?: return false
-        return now < last + finaleKeptFor.toJavaDuration()
+        return now < last + announceableFor.toJavaDuration()
     }
 
     // The list as it is now decides what is asked; the call returns when each of those titles is answered.
-    private suspend fun ask(ids: suspend (Tracking, Map<AnimeId, StoredAiring>) -> Collection<AnimeId>): Outcome<Unit> {
+    private suspend fun ask(titles: suspend (Tracking, Map<AnimeId, StoredAiring>) -> Collection<Anime>): Outcome<Unit> {
         follow()
         val answers =
             try {
                 mutex.withLock {
                     // Read under the lock, so that no list older than one already settled is settled after it.
                     val tracking = tracking(list.observeEntries().first())
-                    want(ids(tracking, reconcile(tracking)))
+                    want(titles(tracking, reconcile(tracking)))
                 }
             } catch (e: DataException) {
                 return Outcome.Failure(e.error)
@@ -254,12 +252,12 @@ class AiringEngine(
     }
 
     // A title already asked for shares that answer, so no title is asked for twice at once.
-    private fun want(ids: Collection<AnimeId>): List<Deferred<DataError?>> {
+    private fun want(titles: Collection<Anime>): List<Deferred<DataError?>> {
         check(!stopped) { STOPPED }
         val answers =
-            ids.map { id ->
-                asked.getOrPut(id) {
-                    waiting += id
+            titles.map { anime ->
+                asked.getOrPut(anime.id) {
+                    waiting[anime.id] = anime
                     CompletableDeferred()
                 }
             }
@@ -268,49 +266,59 @@ class AiringEngine(
     }
 
     // One call to the source. A10: a title is stored only when its answer is whole, and any other stays as it was.
-    private suspend fun answer(ids: Set<AnimeId>) {
+    private suspend fun answer(titles: Map<AnimeId, Anime>) {
         val errors =
             try {
                 val began = clock.instant()
-                keep(ids, fetch(ids), began)
+                // A9: what a notification can still need is asked for, so an episode moved to an earlier time is not lost.
+                val since = began - announceableFor.toJavaDuration()
+                keep(titles.keys, fetch(titles, since), began, since)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 unexpected(e)
-                ids.associateWith { DataError.ServerError }
+                titles.keys.associateWith { DataError.ServerError }
             }
         mutex.withLock {
-            forPages -= ids
-            for (id in ids) asked.remove(id)?.complete(errors[id])
+            forPages -= titles.keys
+            for (id in titles.keys) asked.remove(id)?.complete(errors[id])
         }
     }
 
     // The source throwing fails every title of the call: an IOException as no connection, anything else reported.
-    private suspend fun fetch(ids: Set<AnimeId>): Map<AnimeId, Outcome<FetchedAiring?>> =
+    private suspend fun fetch(
+        titles: Map<AnimeId, Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> =
         try {
-            source.fetch(ids)
+            source.fetch(titles.values, since)
         } catch (e: Exception) {
-            ended(e)
+            stores.ended(e)
             val error = if (e is IOException) DataError.NoConnection else DataError.ServerError.also { unexpected(e) }
-            ids.associateWith { Outcome.Failure(error) }
+            titles.keys.associateWith { Outcome.Failure(error) }
         }
 
-    // An answer goes to the store for a title tracked when it arrives, to memory for one a page asked for, else nowhere.
+    // An answer goes to the store for a title the list tracks when it arrives, to memory for a page's, else nowhere.
     private suspend fun keep(
         ids: Set<AnimeId>,
         answers: Map<AnimeId, Outcome<FetchedAiring?>>,
         began: Instant,
+        since: Instant,
     ): Map<AnimeId, DataError?> {
         val errors = mutableMapOf<AnimeId, DataError?>()
         val fetched = mutableMapOf<AnimeId, FetchedAiring?>()
+        var broken: String? = null
         for (id in ids) {
-            when (val answer = answers[id]) {
-                null -> errors[id] = DataError.ServerError
-                is Outcome.Failure -> errors[id] = answer.error
-                is Outcome.Success -> fetched[id] = answer.value
+            val answer = answers[id]
+            val from = (answer as? Outcome.Success)?.value?.completeFrom
+            when {
+                answer == null -> errors[id] = DataError.ServerError.also { broken = UNANSWERED }
+                answer is Outcome.Failure -> errors[id] = answer.error
+                from != null && from > since -> errors[id] = DataError.ServerError.also { broken = LEFT_OUT }
+                answer is Outcome.Success -> fetched[id] = answer.value
             }
         }
-        if (ids.any { it !in answers }) unexpected(IllegalStateException(UNANSWERED))
+        broken?.let { unexpected(IllegalStateException(it)) }
         mutex.withLock {
             val tracked = settled?.tracked.orEmpty()
             val stored = fetched.filterKeys { it in tracked }
@@ -352,36 +360,9 @@ class AiringEngine(
         }
     }
 
-    private suspend inline fun <T> storeCall(
-        failing: AtomicBoolean,
-        call: () -> T,
-    ): T =
-        try {
-            call().also { failing.set(false) }
-        } catch (e: Exception) {
-            throw storeFailure(failing, e)
-        }
-
-    private suspend fun storeFailure(
-        failing: AtomicBoolean,
-        e: Exception,
-    ): Exception {
-        ended(e)
-        if (failing.compareAndSet(false, true)) unexpected(e)
-        return StoreFailure(e)
-    }
-
-    // A cancellation of the caller or of the engine's scope ends the call; any other is a failure like any exception.
-    private suspend fun ended(e: Exception) {
-        if (e !is CancellationException) return
-        currentCoroutineContext().ensureActive()
-        if (!scope.isActive) throw e
-    }
-
     private companion object {
         const val STOPPED = "The airing engine's scope has ended"
         const val UNANSWERED = "The airing source left a title it was asked for unanswered"
-        const val STORE_ATTEMPTS = 3
-        val STORE_RETRY = 1.seconds
+        const val LEFT_OUT = "The airing source left out episodes from after the instant it was asked for"
     }
 }
