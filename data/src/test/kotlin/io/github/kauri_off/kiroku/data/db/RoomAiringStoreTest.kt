@@ -91,6 +91,19 @@ class RoomAiringStoreTest {
         }
 
     @Test
+    fun `a clear empties both tables, a title whose rows cannot be read included`() =
+        runTest {
+            val s = subject()
+            s.store.write(mapOf(anime.id to stored(anime.id), other.id to stored(other.id)))
+            s.database.execute("UPDATE airing_episode SET number = 0 WHERE title_id = ${anime.id.value} AND number = 3")
+            assertEquals(setOf(other.id), s.store.read().keys)
+
+            s.store.clear()
+            assertEquals(0L, s.database.rows("airing"))
+            assertEquals(0L, s.database.rows("airing_episode"))
+        }
+
+    @Test
     fun `a schedule comes back to the nanosecond, with its total, and without one`() =
         runTest {
             val s = subject()

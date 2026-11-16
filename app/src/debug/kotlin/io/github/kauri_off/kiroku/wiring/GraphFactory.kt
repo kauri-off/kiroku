@@ -48,7 +48,7 @@ internal val requestLog: ((String) -> Unit)? = { Log.d(LOG_TAG, it) }
 internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
     when (SourceChoice(context).startsOn(clientId)) {
         DataSource.Account -> null
-        DataSource.Demo -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected), scope)
+        DataSource.Demo -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context)), scope)
         DataSource.Sandbox ->
             SandboxGraph.create(context, clock) { source, device ->
                 LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reportUnexpected, requestLog, device)

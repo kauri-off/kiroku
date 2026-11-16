@@ -61,6 +61,9 @@ class ServedMal : ExternalResource() {
         // Each recorded page holds this many entries.
         const val PAGE = 10
 
+        // AniList's place beside it, where nothing answers: a test of MAL's list reaches no real host for airing.
+        const val NO_ANILIST = "http://127.0.0.1:1/"
+
         fun recorded(name: String): String = resource("recorded/$name")
 
         val publicPages: List<String> = (1..3).map { recorded("list_public_$it.200.json") }

@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.data.anilist.AniListAiring
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
@@ -13,16 +14,22 @@ import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import okhttp3.Interceptor
 import java.io.File
 import java.time.Clock
+import kotlin.time.TimeSource
 
 // One source of live data: its hosts, the name that each of its files carries, and what answers in MAL's place, if anything.
 internal class LiveSource(
     val name: String,
     val hosts: MalHosts,
     val standIn: Interceptor? = null,
+    // Where AniList is asked, when not at its own address.
+    val aniList: String? = null,
+    // What AniList's requests are spaced by.
+    val aniListTime: TimeSource.WithComparableMarks = DeviceTime,
 ) {
     companion object {
         val Account = LiveSource(notShown("account"), MalHosts.Real)
@@ -40,30 +47,44 @@ internal class LiveParts(
     log: ((String) -> Unit)? = null,
     // The requests' judgement of the connection and the screens' are this one device's.
     val device: Device = AndroidDevice(context),
+    // Emits when the device's clock was set, which airing then reads again.
+    val clockSet: Flow<Unit> = deviceClockSet(context),
 ) {
     // The only HTTP client of the source.
     val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log, standIn = source.standIn)
+
+    // The only AniList client, one per process as its graph is: two would each keep under AniList's limit and together exceed it.
+    val aniList by lazy {
+        val block = file(ANILIST_BLOCK)
+        source.aniList?.let { AniListAiring(http, clock, block, it, source.aniListTime) }
+            ?: AniListAiring(http, clock, block, time = source.aniListTime)
+    }
 
     // A file of this source alone, named after it: tokens open only under the name they were sealed with.
     fun file(kind: String): File = File(context.noBackupFilesDir, notShown("${source.name}.$kind"))
 
     // The source's own database, named after it; built on its first use, which is off the main thread.
     val database by lazy { KirokuDatabase.open(context, notShown("${source.name}.db")) }
+
+    private companion object {
+        val ANILIST_BLOCK = notShown("anilist.block")
+    }
 }
 
 // The app over one live source. Each area is in its own file and is built when it is first asked for.
 internal class LiveGraph(
     parts: LiveParts,
     listStore: (LiveParts) -> LocalList = ::liveListStore,
+    airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
-    override val session: SessionRepository by lazy { SignOutForgets(account) { list } }
+    override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }) }
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetListSorts() } }
     override val anime by lazy { liveTitles(parts) }
-    override val airing by lazy { liveAiring(parts) }
+    override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
     override val search by lazy { liveSearch(parts) }
     override val user by lazy { liveUser(parts, account) }
     override val connection by lazy { liveConnection(parts) }
@@ -80,14 +101,16 @@ internal class LiveGraph(
     }
 }
 
-// S9: a sign-out takes the user's list and its sorts with it at once, also when nothing has asked for the list yet.
+// S9: a sign-out takes the user's list, its sorts and its airing data with it at once, also when nothing has asked for them yet.
 private class SignOutForgets(
     private val account: SessionRepository,
     private val list: () -> ListSource,
+    private val airing: () -> LiveAiring,
 ) : SessionRepository by account {
     override suspend fun signOut() {
         account.signOut()
         // A read of the list makes its store agree with the session; a store that fails it is cleared at its next use.
         list().observeSyncedAt().first()
+        airing().forget()
     }
 }
