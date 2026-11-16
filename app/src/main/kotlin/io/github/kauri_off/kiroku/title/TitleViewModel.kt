@@ -50,7 +50,7 @@ class TitleViewModel(
     private val id: AnimeId,
     private val anime: AnimeRepository,
     list: ListSource,
-    airing: AiringRepository,
+    private val airing: AiringRepository,
     session: SessionRepository,
     connection: Connection,
     private val clock: Clock,
@@ -113,6 +113,9 @@ class TitleViewModel(
     // A walk was stopped, or not started, because the page was not shown; it goes on when the page is shown again.
     private var cut = false
     private val retries = MutableStateFlow(0)
+
+    // Section 6.2: the page's airing is a part of it, read again at its next pull or Retry when it could not be read.
+    private val airingReads = MutableStateFlow(0)
     private var load: Job? = null
 
     // A store that cannot be read fails the page, as a list that cannot be read does, since its values would be unknown.
@@ -120,15 +123,14 @@ class TitleViewModel(
         combine(anime.observeAnime(id), anime.observeDetails(id), anime.chainPagesOf(id), ::Stored)
             .readAgainOnRetry(retries) { Stored(failure = it) }
 
-    // Of the list and the airing, only the titles the page shows: a change to any other title rebuilds nothing.
+    // Of the list and the airing, only the titles the page shows, the airing with the page's own title once known (A12).
     private val around =
-        stored.withRead({ shownTitles(id, it.details, it.chain) }) { ids ->
-            combine(
-                list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
-                airing.airingOf(ids).readAgainOnRetry(retries) { emptyMap() },
-                ::Around,
-            )
-        }
+        stored
+            .withRead({ shownTitles(id, it.details, it.chain) }) { ids ->
+                list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) }
+            }.withRead({ (stored, _) -> shownTitles(id, stored.details, stored.chain) to (stored.anime ?: opened?.anime) }) { (ids, page) ->
+                airing.airingOf(ids, page).readAgainOnRetry(airingReads) { emptyMap() }
+            }.map { (read, airing) -> read.first to Around(read.second, airing) }
 
     // Starts from what the opening screen showed, so the page needs no read for its first frame; build falls back to it.
     private val sources: StateFlow<Sources?> =
@@ -203,9 +205,13 @@ class TitleViewModel(
             is TitleEvent.StepWatched -> watched { ListWrite.StepWatched(it, event.by) }
             TitleEvent.Retry -> {
                 retries.update { it + 1 }
+                airingReads.update { it + 1 }
                 refresh(Asked.Retry)
             }
-            TitleEvent.Refresh -> refresh(Asked.Pull)
+            TitleEvent.Refresh -> {
+                airingReads.update { it + 1 }
+                refresh(Asked.Pull)
+            }
             else -> Unit
         }
         val next = moment.value.after(event)
@@ -261,7 +267,30 @@ class TitleViewModel(
     private suspend fun refreshIfStale() {
         val stale = anime.stale(id, opened?.anime, clock.instant())
         if (load?.isActive == true) return
-        if (stale) refresh(Asked.Shown) else walkIfOwed()
+        if (stale) {
+            refresh(Asked.Shown)
+        } else {
+            walkIfOwed()
+            viewModelScope.launch { (knownTitle() ?: storedTitle())?.let { airing.refreshStale(it) } }
+        }
+    }
+
+    // The page's title as known now, for what its airing is asked for with.
+    private fun knownTitle(): Anime? = sources.value?.let(::animeOf) ?: opened?.anime
+
+    private suspend fun storedTitle(): Anime? =
+        try {
+            anime.observeAnime(id).first()
+        } catch (_: DataException) {
+            null
+        }
+
+    // A12: a pull asks for the page's airing, a show only when it is stale; what comes of it is never a message (section 2.3).
+    private suspend fun askAiring(
+        page: Anime,
+        asked: Asked,
+    ) {
+        if (asked == Asked.Pull) airing.refresh(page) else airing.refreshStale(page)
     }
 
     // A wait the person asked for shows at once; one the page started only after a second (section 9.4).
@@ -274,34 +303,46 @@ class TitleViewModel(
         loads.started()
         load =
             viewModelScope.launch {
-                val wait =
-                    if (asked == Asked.Shown) {
-                        launch {
-                            delay(PATIENCE)
-                            waitShown.value = true
-                        }
-                    } else {
-                        null
-                    }
-                val result = anime.refresh(id)
-                wait?.cancel()
-                waitShown.value = false
+                // The airing beside the details, or once they are stored when the title is not known before.
+                coroutineScope {
+                    val known = knownTitle()
+                    if (known != null) launch { askAiring(known, asked) }
+                    if (loadDetails(asked) && known == null) storedTitle()?.let { askAiring(it, asked) }
+                }
                 refreshing.value = false
-                loads.ended((result as? Outcome.Failure)?.error)
-                if (result !is Outcome.Failure) {
-                    if (asked == Asked.Pull) walked = false
-                    walkIfOwed()
-                    return@launch
-                }
-                val shown =
-                    sources.filterNotNull().first().let { it.list.failure == null && it.storeFailure == null && animeOf(it) != null }
-                if (storedDetails() == null) failure.value = result.error
-                // Section 7.2: a Retry fails where it was tapped; any other failure is also said on the first screen.
-                if (shown && asked != Asked.Retry && result.error != DataError.SessionExpired) {
-                    messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
-                }
             }
     }
+
+    // Whether the details were loaded.
+    private suspend fun loadDetails(asked: Asked): Boolean =
+        coroutineScope {
+            val wait =
+                if (asked == Asked.Shown) {
+                    launch {
+                        delay(PATIENCE)
+                        waitShown.value = true
+                    }
+                } else {
+                    null
+                }
+            val result = anime.refresh(id)
+            wait?.cancel()
+            waitShown.value = false
+            loads.ended((result as? Outcome.Failure)?.error)
+            if (result !is Outcome.Failure) {
+                if (asked == Asked.Pull) walked = false
+                walkIfOwed()
+                return@coroutineScope true
+            }
+            val shown =
+                sources.filterNotNull().first().let { it.list.failure == null && it.storeFailure == null && animeOf(it) != null }
+            if (storedDetails() == null) failure.value = result.error
+            // Section 7.2: a Retry fails where it was tapped; any other failure is also said on the first screen.
+            if (shown && asked != Asked.Retry && result.error != DataError.SessionExpired) {
+                messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
+            }
+            false
+        }
 
     // After the page's own load, never beside it; a page not shown owes the walk to its next show.
     private fun walkIfOwed() {

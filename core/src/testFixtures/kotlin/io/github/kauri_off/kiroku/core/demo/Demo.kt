@@ -42,6 +42,8 @@ class Demo(
     // Whether [clock] runs with the dispatcher's time, so that airing can wait for an air time; if not, [clockSet] moves it.
     clockRuns: Boolean = false,
     clockSet: Flow<Unit> = emptyFlow(),
+    // Whether the airing store starts as fetched just now; if not, it starts empty, as after an install.
+    airingStored: Boolean = true,
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
@@ -69,7 +71,7 @@ class Demo(
         ListAiring(
             airingSource,
             InMemoryAiringStore(
-                fixtures.entries.filter { it.tracked }.associate {
+                fixtures.entries.filter { airingStored && it.tracked }.associate {
                     it.anime.id to
                         StoredAiring(fixtures.schedules[it.anime.id], clock.instant())
                 },
@@ -103,6 +105,8 @@ class Demo(
     // The demo as it started: every failure off, signed in, no details fetched, and the list synced back to the fixtures.
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
+        airingSource.failure = null
+        airingSource.schedules = fixtures.schedules
         store.reset()
         details.forget()
         if (signIn.value == null) signIn.value = SignInId("demo-${++signIns}")

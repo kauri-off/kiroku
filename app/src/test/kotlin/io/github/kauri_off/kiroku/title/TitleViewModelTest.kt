@@ -2,14 +2,19 @@ package io.github.kauri_off.kiroku.title
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringPhase
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
@@ -27,7 +32,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -38,6 +45,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -468,6 +476,9 @@ class TitleViewModelTest {
             val airing =
                 object : AiringRepository by graph.airing {
                     override fun observeAiring() = combine(graph.airing.observeAiring(), changed) { stored, changed -> stored + changed }
+
+                    override fun observePageAiring(page: Anime) =
+                        combine(graph.airing.observePageAiring(page), changed) { stored, changed -> stored + changed }
                 }
             val clock = CountedClock(graph.clock)
             val title =
@@ -592,6 +603,154 @@ class TitleViewModelTest {
             assertEquals(DetailsWait.Brief, s.shown.detailsWait)
             assertEquals(false, s.shown.refreshing)
             assertEquals(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)), s.message)
+        }
+
+    @Test
+    fun `A12 a title outside the list shows exact airing once shown, and a pull asks for it again however fresh`() =
+        test(id = FixtureAnime.notOnListAiring.id) { s ->
+            val anime = FixtureAnime.notOnListAiring
+            val source = s.graph.demo.airingSource
+            val now = s.graph.clock.instant()
+            assertEquals(listOf(setOf(anime.id)), source.requests)
+            assertEquals(titleAiring(anime, null, Fixtures.reference.airing[anime.id], now).phase, s.shown.page.airing)
+            assertEquals(AiredCount.Exact(7), (s.shown.page.airing as AiringPhase.Aired).aired)
+
+            val schedule = Fixtures.reference.schedules.getValue(anime.id)
+            val moved =
+                schedule.copy(
+                    episodes =
+                        schedule.episodes.map {
+                            if (it.number ==
+                                8
+                            ) {
+                                it.copy(airsAt = now.minusSeconds(HOUR))
+                            } else {
+                                it
+                            }
+                        },
+                )
+            source.schedules += anime.id to moved
+            s.title.onEvent(TitleEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(2, source.requests.size)
+            assertEquals(AiredCount.Exact(8), (s.shown.page.airing as AiringPhase.Aired).aired)
+            assertEquals(false, s.shown.refreshing)
+            assertNull(s.message)
+        }
+
+    @Test
+    fun `a page opened with its title known asks for its airing beside its details, not after them`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(Fixtures.reference, scope, latency = DETAILS_LATENCY))
+            graph.titlesUnstored.value = true
+            val anime = FixtureAnime.notOnListAiring
+            val summary = TitleSummary(anime, null, null, graph.session.observeSession().first())
+            val title = title(graph, anime.id, SavedStateHandle(), ShellMessages(scope, graph.list), summary)
+            showing(title.state, title.shown)
+            runCurrent()
+            assertEquals(listOf(setOf(anime.id)), graph.demo.airingSource.requests)
+            assertEquals(emptyList<AnimeId>(), graph.refreshed)
+            advanceUntilIdle()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a tracked title's page shows the List's own result, as its row does`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val messages = ShellMessages(scope, graph.list)
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.anime,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    messages,
+                    graph.background,
+                )
+            showing(list.state, list.shown)
+            advanceUntilIdle()
+            for (anime in listOf(FixtureAnime.exactToWatch, FixtureAnime.estimatedToWatch, FixtureAnime.premiereTimeSoon)) {
+                val title = title(graph, anime.id, SavedStateHandle(), messages)
+                val screen = showing(title.state, title.shown)
+                advanceUntilIdle()
+                val row = checkNotNull(list.summaryOf(anime.id))
+                assertSame(anime.titles.romaji, row.airing, title.summaryOf(anime.id)?.airing)
+                val page = (title.state.value as TitleState.Shown).page
+                assertEquals(
+                    anime.titles.romaji,
+                    titleAiring(anime, row.entry?.values, row.airing, graph.clock.instant()).phase,
+                    page.airing,
+                )
+                screen.cancel()
+            }
+            scope.cancel()
+        }
+
+    @Test
+    fun `with AniList failing a page shows the estimate and no message, also after a pull`() =
+        test(id = FixtureAnime.notOnListAiring.id, before = { demo.airingSource.failure = DataError.ServerError }) { s ->
+            assertEquals(AiredCount.Estimated(7), (s.shown.page.airing as AiringPhase.Aired).aired)
+            assertNull(s.message)
+            s.title.onEvent(TitleEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(2, s.graph.demo.airingSource.requests.size)
+            assertEquals(AiredCount.Estimated(7), (s.shown.page.airing as AiringPhase.Aired).aired)
+            assertNull(s.message)
+        }
+
+    // Section 6.2: the airing is a part of the page, read again at its next pull.
+    @Test
+    fun `an airing read that fails alone shows the page without its airing and no message, and a pull reads it again`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val failing = MutableStateFlow(true)
+            val airing =
+                object : AiringRepository by graph.airing {
+                    override fun observePageAiring(page: Anime) =
+                        flow {
+                            if (failing.value) throw DataException(DataError.StorageError)
+                            emitAll(graph.airing.observePageAiring(page))
+                        }
+                }
+            val messages = ShellMessages(scope, graph.list)
+            val anime = FixtureAnime.exactToWatch
+            val title =
+                TitleViewModel(
+                    anime.id,
+                    graph.anime,
+                    graph.list,
+                    airing,
+                    graph.session,
+                    graph.connection,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    messages,
+                )
+            showing(title.state, title.shown)
+            advanceUntilIdle()
+            val entry = Fixtures.reference.entries.single { it.anime.id == anime.id }
+            val shown = { title.state.value as TitleState.Shown }
+            assertEquals(titleAiring(anime, entry.values, null as Airing?, graph.clock.instant()).phase, shown().page.airing)
+            assertEquals(FixtureDetails.full, shown().page.details)
+            assertNull(messages.current.value)
+
+            failing.value = false
+            title.onEvent(TitleEvent.Refresh)
+            advanceUntilIdle()
+            val expected = Fixtures.reference.airing.getValue(anime.id)
+            assertEquals(titleAiring(anime, entry.values, expected, graph.clock.instant()).phase, shown().page.airing)
+            assertNull(messages.current.value)
+            scope.cancel()
         }
 
     @Test
@@ -1136,5 +1295,6 @@ class TitleViewModelTest {
         const val ROTATION_MILLIS = 1_000L
         const val PATIENCE_MILLIS = 1_000L
         val DETAILS_LATENCY = 3.seconds
+        const val HOUR = 3_600L
     }
 }

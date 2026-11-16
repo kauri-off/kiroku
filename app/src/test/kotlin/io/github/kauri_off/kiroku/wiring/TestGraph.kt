@@ -232,6 +232,8 @@ private class CountedAiring(
     private val readers: Readers,
 ) : AiringRepository by inner {
     override fun observeAiring(): Flow<Map<AnimeId, Airing>> = readers.of(inner.observeAiring())
+
+    override fun observePageAiring(page: Anime): Flow<Map<AnimeId, Airing>> = readers.of(inner.observePageAiring(page))
 }
 
 private class CountedSession(

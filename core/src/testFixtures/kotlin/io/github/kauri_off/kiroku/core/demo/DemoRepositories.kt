@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.demo
 
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.airing.effective
@@ -104,14 +105,22 @@ class DemoAiringSource internal constructor(
     // The titles of each request received, answered or not.
     val requests: List<Set<AnimeId>> get() = received.toList()
 
+    // What the source has, as AniList's schedules change.
+    @Volatile
+    var schedules: Map<AnimeId, AiringSchedule> = fixtures.schedules
+
+    // Every request fails so, as AniList alone failing.
+    @Volatile
+    var failure: DataError? = null
+
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> {
         received += titles.mapTo(mutableSetOf()) { it.id }
-        val error = server.load(needsSignIn = false)
+        val error = server.load(needsSignIn = false) ?: failure
         return titles.associate { anime ->
-            anime.id to (error?.let { Outcome.Failure(it) } ?: Outcome.Success(fixtures.schedules[anime.id]?.let { FetchedAiring(it) }))
+            anime.id to (error?.let { Outcome.Failure(it) } ?: Outcome.Success(schedules[anime.id]?.let { FetchedAiring(it) }))
         }
     }
 }
