@@ -9,13 +9,12 @@ import io.github.kauri_off.kiroku.link.LinksOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.DeviceClock
+import io.github.kauri_off.kiroku.wiring.applicationScope
 import io.github.kauri_off.kiroku.wiring.createGraph
 import io.github.kauri_off.kiroku.wiring.debugTools
 import io.github.kauri_off.kiroku.wiring.imageLoader
+import io.github.kauri_off.kiroku.wiring.reportUnexpected
 import io.github.kauri_off.kiroku.wiring.standInPosters
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 
 class KirokuApplication :
     Application(),
@@ -23,7 +22,7 @@ class KirokuApplication :
     LinksOwner,
     SingletonImageLoader.Factory {
     override val graph: AppGraph by lazy {
-        createGraph(this, BuildConfig.MAL_CLIENT_ID, DeviceClock, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        createGraph(this, BuildConfig.MAL_CLIENT_ID, DeviceClock, applicationScope(reportUnexpected))
     }
 
     override val links = AppLinks()
