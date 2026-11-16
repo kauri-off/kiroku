@@ -9,6 +9,7 @@ class StringRulesTest {
     fun aNumberIsJoinedToItsNeighbourInEveryString() {
         val strings = stringResources()
         assertTrue(strings.any { it.name.startsWith("values-ru/") })
+        assertTrue(strings.any { it.name.startsWith("values-ru/strings_scenarios.xml ") })
         assertTrue(strings.any { it.plural })
         assertEquals(emptyList<String>(), strings.flatMap { numberSpaceProblems(it.name, it.text, it.plural) })
     }

@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.recorder.RecorderSection
 import io.github.kauri_off.kiroku.recorder.RecorderState
 import io.github.kauri_off.kiroku.reports.Report
 import io.github.kauri_off.kiroku.reports.ReportsSection
+import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.EdgeMarker
 import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
@@ -46,7 +47,8 @@ import java.time.Duration
 import java.time.Instant
 
 class DebugMenuScreenshots : ScreenshotRegistry() {
-    private val several = Scenario(offline = true, slow = true, writes = WriteFault.Refused, store = StoreFault.WritesFail)
+    private val several =
+        Scenario(offline = true, slow = true, writes = WriteFault.Refused, store = StoreFault.WritesFail, aniList = AniListFault.Fails)
 
     override val content = contentCase { Menu(ScenarioState.Ready(Scenario())) }
     override val loading =
@@ -64,7 +66,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case("real-account") { Menu(ScenarioState.Unavailable) },
             case("sandbox") {
                 Menu(
-                    ScenarioState.Ready(several.copy(store = StoreFault.None), sandbox = true),
+                    ScenarioState.Ready(several.copy(store = StoreFault.None, aniList = AniListFault.NoAnswer), sandbox = true),
                     source = SourceState(DataSource.Sandbox, DataSource.Sandbox),
                     signOut = SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))),
                     recorder = RecorderState(null),

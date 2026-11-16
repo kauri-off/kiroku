@@ -52,7 +52,7 @@ class RecorderSectionTest {
         compose.onNodeWithText("Record on this title?").assertExists()
         compose.onNodeWithText("“Cowboy Bebop”, 26\u00A0episodes").assertExists()
         compose.onNodeWithText("Kiroku will add this title to your list on MyAnimeList", substring = true).assertExists()
-        val requests = "It sends $RecordingRequests\u00A0requests, two seconds apart, which takes about two minutes"
+        val requests = "It sends\u00A0$RecordingRequests\u00A0requests, two seconds apart, which takes about two minutes"
         compose.onNodeWithText(requests).assertExists()
         assertEquals(47, RecordingRequests)
         assertEquals(emptyList<RecorderEvent>(), events)
@@ -85,8 +85,8 @@ class RecorderSectionTest {
         show(Recording.Stopped(title, "score_set", Halt.Refused(429), 31, folder, ListAfter.Left))
 
         compose.onNodeWithText("The recording stopped at the request score_set").assertExists()
-        compose.onNodeWithText("MyAnimeList is refusing requests (answer 429). Try again later").assertExists()
-        compose.onNodeWithText("Answers so far: 31. They replaced no earlier recording").assertExists()
+        compose.onNodeWithText("MyAnimeList is refusing requests (answer\u00A0429). Try again later").assertExists()
+        compose.onNodeWithText("Answers so far:\u00A031. They replaced no earlier recording").assertExists()
         compose.onNodeWithText("Folder: ${folder.path}").assertExists()
         compose.onNodeWithText("myanimelist.net/anime/1", substring = true).assertExists()
         compose.onNodeWithText("“Cowboy Bebop” may still be on your list", substring = true).assertExists()
@@ -101,12 +101,12 @@ class RecorderSectionTest {
     fun `a recording that ended says where its answers are and what became of the list`() {
         show(Recording.Recorded(title, 47, folder, ListAfter.Same))
 
-        compose.onNodeWithText("Recording finished. Answers stored: 47").assertExists()
+        compose.onNodeWithText("Recording finished. Answers stored:\u00A047").assertExists()
         compose
             .onNodeWithText(
                 "“Cowboy Bebop” was added to your list and removed again. The list holds the same titles as before",
             ).assertExists()
-        compose.onNodeWithText("To check: myanimelist.net/anime/1 should offer “Add to My List”").assertExists()
+        compose.onNodeWithText("To check: “Add to My List” should be offered at myanimelist.net/anime/1").assertExists()
         compose.onNodeWithText("Remove now").assertDoesNotExist()
         compose.onNodeWithText("Check title").assertIsEnabled()
 

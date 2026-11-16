@@ -9,9 +9,11 @@ import io.github.kauri_off.kiroku.core.repository.SignInBrowser
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.sandbox.Sandbox
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioSubject
 import io.github.kauri_off.kiroku.scenario.Scenarios
@@ -27,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Clock
@@ -64,6 +67,12 @@ class SandboxGraph internal constructor(
                     WriteFault.Refused -> SandboxWrites.Refused
                     WriteFault.ServerError -> SandboxWrites.Fail
                 }
+            this@SandboxGraph.sandbox.aniList.fault =
+                when (scenario.aniList) {
+                    AniListFault.None -> SandboxAniListFault.None
+                    AniListFault.Fails -> SandboxAniListFault.Fails
+                    AniListFault.NoAnswer -> SandboxAniListFault.NoAnswer
+                }
         }
 
         override fun expireAccess() = this@SandboxGraph.sandbox.mal.expireAccess()
@@ -72,10 +81,10 @@ class SandboxGraph internal constructor(
 
         override suspend fun awaitSaves() = true
 
-        // The sandbox's list as it started, which the next sync brings to the app.
+        // The sandbox's list as it started, which the next sync brings to the app, and its schedules, which a refresh brings.
         override suspend fun reset(): Outcome<Unit> {
             withContext(Dispatchers.IO) { this@SandboxGraph.sandbox.reset() }
-            return list.sync()
+            return list.sync().also { parts.scope.launch { airing.refresh() } }
         }
     }
 
@@ -83,10 +92,11 @@ class SandboxGraph internal constructor(
         // The sandbox of this app's files; nothing is read or built before its first request.
         internal fun create(
             context: Context,
-            clock: Clock,
+            deviceClock: Clock,
             device: Device = AndroidDevice(context),
-            parts: (LiveSource, Device) -> LiveParts,
+            parts: (LiveSource, Device, Clock) -> LiveParts,
         ): SandboxGraph {
+            val clock = movedClock ?: deviceClock
             // The titles of the public answers the debug and preview builds hold as assets; posters are the stand-in art's.
             val sandbox =
                 Sandbox(
@@ -97,7 +107,7 @@ class SandboxGraph internal constructor(
                 )
             val sandboxDevice = SandboxDevice(device)
             val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = aniListTime)
-            return SandboxGraph(parts(source, sandboxDevice), sandbox, sandboxDevice)
+            return SandboxGraph(parts(source, sandboxDevice, clock), sandbox, sandboxDevice)
         }
 
         private val NAME = notShown("sandbox")
@@ -106,6 +116,11 @@ class SandboxGraph internal constructor(
         @VisibleForTesting
         @Volatile
         internal var aniListTime: TimeSource.WithComparableMarks = DeviceTime
+
+        // The clock of the sandbox and of the app on it, which a test may move on; the device's when null.
+        @VisibleForTesting
+        @Volatile
+        internal var movedClock: Clock? = null
     }
 }
 

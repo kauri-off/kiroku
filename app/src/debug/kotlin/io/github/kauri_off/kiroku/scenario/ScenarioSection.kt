@@ -119,6 +119,13 @@ private fun Switches(
         scenario.writes.ordinal,
         enabled,
     ) { change(scenario.copy(writes = WriteFault.entries[it])) }
+    Choice(
+        R.string.scenarios_anilist,
+        R.string.scenarios_anilist_detail,
+        AniListFault.entries.map { it.label },
+        scenario.aniList.ordinal,
+        enabled,
+    ) { change(scenario.copy(aniList = AniListFault.entries[it])) }
     if (!state.sandbox) {
         Choice(
             R.string.scenarios_store,
@@ -221,4 +228,12 @@ private val StoreFault.label: Int
             StoreFault.None -> R.string.scenarios_store_none
             StoreFault.WritesFail -> R.string.scenarios_store_writes_fail
             StoreFault.Unreadable -> R.string.scenarios_store_unreadable
+        }
+
+private val AniListFault.label: Int
+    get() =
+        when (this) {
+            AniListFault.None -> R.string.scenarios_anilist_none
+            AniListFault.Fails -> R.string.scenarios_anilist_fails
+            AniListFault.NoAnswer -> R.string.scenarios_anilist_no_answer
         }

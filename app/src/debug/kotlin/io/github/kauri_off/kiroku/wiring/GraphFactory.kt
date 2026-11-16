@@ -50,8 +50,8 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
         DataSource.Account -> null
         DataSource.Demo -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context)), scope)
         DataSource.Sandbox ->
-            SandboxGraph.create(context, clock) { source, device ->
-                LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reportUnexpected, requestLog, device)
+            SandboxGraph.create(context, clock) { source, device, sandboxClock ->
+                LiveParts(context, source, SandboxMal.CLIENT_ID, sandboxClock, scope, reportUnexpected, requestLog, device)
             }
     }
 }

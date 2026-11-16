@@ -86,7 +86,7 @@ class SandboxMal(
         if (offline) throw UnknownHostException(request.url.host)
         if (delayMillis > 0) Thread.sleep(delayMillis)
         val answer =
-            aniList?.takeIf { it.answers(request.url) }?.answer(request) ?: answer(request).let { SandboxAnswer(it.first, it.second) }
+            aniList?.takeIf { it.answers(request.url) }?.answer(chain) ?: answer(request).let { SandboxAnswer(it.first, it.second) }
         return Response
             .Builder()
             .request(request)

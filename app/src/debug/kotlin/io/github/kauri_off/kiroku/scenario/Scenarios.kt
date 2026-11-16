@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.scenario
 
 import android.content.Context
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CancellationException
@@ -16,12 +17,16 @@ enum class WriteFault { None, Refused, ServerError }
 
 enum class StoreFault { None, WritesFail, Unreadable }
 
+// AniList alone: MAL goes on answering. Offline and slow apply to AniList as well.
+enum class AniListFault { None, Fails, NoAnswer }
+
 data class Scenario(
     val offline: Boolean = false,
     val sessionExpired: Boolean = false,
     val slow: Boolean = false,
     val writes: WriteFault = WriteFault.None,
     val store: StoreFault = StoreFault.None,
+    val aniList: AniListFault = AniListFault.None,
 ) {
     val active: Boolean get() = this != Scenario()
 }
@@ -37,7 +42,7 @@ enum class ResetState {
     val busy: Boolean get() = this == WaitingForSave || this == Running
 }
 
-// What the panel's switches act on: the demo's MAL and store, or the sandbox's MAL.
+// What the panel's switches act on: the demo's MAL, AniList and store, or the sandbox's MAL and AniList.
 interface ScenarioSubject {
     // The sandbox's: it has no store of its own to fail.
     val sandbox: Boolean
@@ -71,6 +76,8 @@ private class DemoScenarios(
         }
         demo.store.unreadable.value = scenario.store == StoreFault.Unreadable
         demo.store.failingWrites.value = scenario.store == StoreFault.WritesFail
+        demo.airingSource.failure = DataError.ServerError.takeIf { scenario.aniList == AniListFault.Fails }
+        demo.airingSource.hold(scenario.aniList == AniListFault.NoAnswer)
     }
 
     override val saving get() = demo.saving

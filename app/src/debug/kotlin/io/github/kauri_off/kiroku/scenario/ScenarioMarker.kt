@@ -38,6 +38,11 @@ fun Scenario.names(): List<Int> =
             WriteFault.Refused -> add(R.string.scenarios_name_writes_refused)
             WriteFault.ServerError -> add(R.string.scenarios_name_write_errors)
         }
+        when (aniList) {
+            AniListFault.None -> Unit
+            AniListFault.Fails -> add(R.string.scenarios_name_anilist_fails)
+            AniListFault.NoAnswer -> add(R.string.scenarios_name_anilist_no_answer)
+        }
         when (store) {
             StoreFault.None -> Unit
             StoreFault.WritesFail -> add(R.string.scenarios_name_store_writes_fail)
