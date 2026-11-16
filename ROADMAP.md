@@ -195,22 +195,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   the others. `ListAndTitleAgreeTest` passes over the calculator's results for every fixture and every case of
   the airing grid, and a rule test fails when a screen's code builds an airing value itself.
 
-- [ ] **M3-03 [A] Airing refresh.** In `:core` only, as the list engine is: what is asked of AniList and what is
-  kept, over a port for AniList and a port for the store, with an in-memory store and a contract suite. The
-  tracked titles are read from the list (section 4). They are refreshed after a list sync and when their data is
-  observed stale, one refresh at a time; a newly tracked title is fetched at once (A11). A title's stored data
-  changes only when all of it arrived (A10), and by A9's rules. A title MAL has marked finished keeps the time of
-  its last episode for as long as N2 could still announce it (A13); any other title that leaves the tracked set is
-  forgotten, and a sign-out forgets them all (S9). The airing of a title outside the tracked set is fetched for
-  its page and held in memory alone (A12). A failure of AniList is an outcome and changes nothing stored (section
-  2.3). The periodic refresh comes with M4's background work. The hand-off states the two ports for the
-  orchestrator's approval before M3-05 and M3-06 start.
-  **Needs:** nothing.
-  **Check:** `tools/gw :core:test`: the contract suite holds a test for each of A9, A10, A11, the keeping of A13
-  and S9, and the in-memory store passes it; a sync that adds one tracked title asks AniList for that title alone,
-  once; of three titles refreshed with one failing, only the other two change; an episode whose time lies between
-  the device's clock and AniList's is neither lost nor counted twice; the airing fetched for a page reaches no
-  store.
+- [x] **M3-03 [A] Airing refresh.**
 
 - [ ] **M3-04 [A] One tick, and demo mode on it.** In `:core` only. `AiringRepository` becomes what M3 leaves: a
   screen observes M3-02's results over the list and M3-03's stored data, given again at the instant the earliest

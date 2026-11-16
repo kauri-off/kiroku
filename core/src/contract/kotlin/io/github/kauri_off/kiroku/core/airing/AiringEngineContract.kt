@@ -463,9 +463,10 @@ abstract class AiringEngineContract {
             assertNull(s.stored(added))
 
             s.list.write(ListWrite.MarkNextWatched(added))
-            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             s.save(FixtureAnime.exactOnBreak, ListStatus.OnHold)
+            s.save(FixtureAnime.exactCaughtUp, ListStatus.Dropped)
             runCurrent()
+            assertNull(s.stored(FixtureAnime.exactCaughtUp))
             assertEquals(1, s.source.calls.size)
 
             s.source.failure = null
