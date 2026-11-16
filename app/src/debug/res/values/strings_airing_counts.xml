@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="airing_counts_title">Airing counts</string>
+    <string name="airing_counts_detail">How the aired count of each tracked title is known, as stored on this device, with each title whose count is not exact. Nothing is asked of MAL or AniList</string>
+    <string name="airing_counts_unreadable">The list or its airing data could not be read</string>
+    <string name="airing_counts_retry">Retry</string>
+    <string name="airing_counts_tracked">Tracked titles</string>
+    <string name="airing_counts_exact">Exact</string>
+    <string name="airing_counts_numbered_differently">Numbered differently, not used (A4)</string>
+    <string name="airing_counts_doubt">Estimated for doubt (A5)</string>
+    <string name="airing_counts_no_schedule">No episode times, estimated from MAL (A6)</string>
+    <string name="airing_counts_unknown">Unknown</string>
+    <string name="airing_counts_aired">%d\u00A0aired</string>
+    <string name="airing_counts_aired_estimated">~%d\u00A0aired</string>
+    <string name="airing_counts_aired_unknown">Count unknown</string>
+    <string name="airing_counts_numbered">AniList numbers episodes\u00A0%1$d–%2$d</string>
+    <string name="airing_counts_totals">Totals: MAL\u00A0%1$d, AniList\u00A0%2$d</string>
+    <string name="airing_counts_stopped">AniList\'s last episode aired %s</string>
+    <string name="airing_counts_separator">" · "</string>
+</resources>
