@@ -325,12 +325,12 @@ class AiringEngine(
             var held = pages.value
             for ((id, airing) in fetched) {
                 if (id in tracked || id !in forPages) continue
-                held = if (airing == null) held - id else held + (id to airing.over(held[id]))
+                held = if (airing == null) held - id else held + (id to airing.over(held[id], began))
             }
             if (stored.isNotEmpty()) {
                 try {
                     val before = local.read()
-                    local.write(stored.mapValues { (id, airing) -> StoredAiring(airing?.over(before[id]?.schedule), began) })
+                    local.write(stored.mapValues { (id, airing) -> StoredAiring(airing?.over(before[id]?.schedule, began), began) })
                     held -= stored.keys
                 } catch (_: StoreFailure) {
                     for (id in stored.keys) errors[id] = DataError.StorageError
@@ -342,10 +342,17 @@ class AiringEngine(
     }
 
     // A9: an episode is its number. The answer's episodes, each at its first time, and the earlier ones it left out.
-    private fun FetchedAiring.over(stored: AiringSchedule?): AiringSchedule {
+    private fun FetchedAiring.over(
+        stored: AiringSchedule?,
+        asked: Instant,
+    ): AiringSchedule {
         val given = schedule.episodes.groupBy { it.number }.map { (_, same) -> same.minBy { it.airsAt } }
+        val from = completeFrom ?: return schedule.copy(episodes = given.sortedBy { it.number })
         val numbers = given.mapTo(mutableSetOf()) { it.number }
-        val kept = completeFrom?.let { from -> stored?.episodes?.filter { it.airsAt < from && it.number !in numbers } }.orEmpty()
+        val left = stored?.episodes.orEmpty().filter { it.number !in numbers }
+        // A partial answer that shows no aired episode says nothing of the latest one stored, which the count is read from.
+        val latest = left.filter { it.airsAt <= asked }.maxByOrNull { it.number }.takeIf { given.none { it.airsAt <= asked } }
+        val kept = left.filter { it.airsAt < from || it == latest }
         return schedule.copy(episodes = (kept + given).sortedBy { it.number })
     }
 

@@ -361,6 +361,30 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `a partial answer with no aired episode leaves the stored latest aired one, whatever the instant it is complete from`() =
+        runTest {
+            val anime = FixtureAnime.exactToWatch
+            val fixture = fixtures.schedules.getValue(anime.id)
+            val now = fixture.episode(14)!!.airsAt.plusSeconds(86_400)
+            val coming = fixture.without(*(1..14).toList().toIntArray())
+            val putOff = coming.copy(episodes = listOf(ScheduledEpisode(14, now.plusSeconds(3600))) + coming.episodes)
+            val cases =
+                listOf(
+                    Triple(coming, null, fixture),
+                    Triple(coming, Instant.EPOCH, fixture.without(*(1..13).toList().toIntArray())),
+                    Triple(putOff, Instant.EPOCH, putOff.copy(episodes = listOf(fixture.episode(13)!!) + putOff.episodes)),
+                )
+            for ((given, from, kept) in cases) {
+                val s = subject(now = now)
+                s.source.answering = { it + (anime.id to Outcome.Success(FetchedAiring(given, from ?: s.source.asked.last()))) }
+
+                assertEquals(Outcome.Success(Unit), s.engine.refresh())
+
+                assertEquals("complete from ${from ?: "the instant asked for"}", kept, s.schedule(anime))
+            }
+        }
+
+    @Test
     fun `A9 an episode whose time lies between the device's clock and the source's is neither lost nor stored twice`() =
         runTest {
             val anime = FixtureAnime.exactToWatch

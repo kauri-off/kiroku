@@ -8,7 +8,7 @@ import java.time.Instant
 
 // Where episode times come from. What it could not find out is a failure, never an exception and never "not known".
 interface AiringSource {
-    // Each of [titles] under its MAL id, whole or as a failure, leaving out no episode it has at or after [since].
+    // Each of [titles] under its MAL id, whole or a failure: no episode at or after [since] is left out, nor the latest aired.
     suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
@@ -18,7 +18,7 @@ interface AiringSource {
 // A title the source knows, with no episode time too; null stands only for a title it has no record of.
 data class FetchedAiring(
     val schedule: AiringSchedule,
-    // Nothing the source has at or after this instant is left out; earlier episodes may be. Null: nothing is left out.
+    // Only episodes before this instant are left out, and never the latest that has aired. Null: nothing is left out.
     val completeFrom: Instant? = null,
 )
 
