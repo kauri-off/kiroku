@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTitles
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
@@ -32,7 +33,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -52,7 +55,7 @@ import java.net.URI
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
-// The app on the sandbox, signed in, synced and written through MAL's real client, with no request leaving the device.
+// The app on the sandbox, signed in, synced and written through MAL's real client, and asking AniList, with no request leaving the device.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class SandboxAppTest {
@@ -146,6 +149,22 @@ class SandboxAppTest {
             withContext(Dispatchers.IO) { runInterruptible { call.execute().use { it.code } } }
         }
 
+    // A query to AniList through the app's one client, which the sandbox answers as AniList answers a query it cannot run.
+    private fun aniList(): Int =
+        waited {
+            val body = "{}".toRequestBody("application/json".toMediaType())
+            val call =
+                checkNotNull(graph.images).newCall(
+                    Request
+                        .Builder()
+                        .url("https://graphql.anilist.co")
+                        .post(body)
+                        .build(),
+                )
+            call.timeout().timeout(WAIT / 2, TimeUnit.MILLISECONDS)
+            withContext(Dispatchers.IO) { runInterruptible { call.execute().use { it.code } } }
+        }
+
     private fun signIn() =
         waited {
             graph.signIn.start { error("The sandbox opened a browser") }
@@ -162,7 +181,7 @@ class SandboxAppTest {
         }
 
     @Test
-    fun `signed in, synced, written, a title refreshed and pictures asked for, no request leaves the device`() {
+    fun `signed in, synced, written, a title refreshed, pictures and AniList asked for, no request leaves the device`() {
         assertEquals(DataSource.Sandbox, context.runningSource)
         signIn()
         assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
@@ -178,6 +197,7 @@ class SandboxAppTest {
         for (address in listOf(checkNotNull(watching.anime.posterUrl), "https://cdn.myanimelist.net/images/anime/4/19644.webp")) {
             assertEquals(404, picture(address))
         }
+        assertEquals(400, aniList())
         graph.scenarios.set(Scenario(sessionExpired = true))
         assertEquals(Outcome.Failure(DataError.SessionExpired), waited { graph.list.sync() })
 
@@ -194,6 +214,7 @@ class SandboxAppTest {
                 "GET sandbox.invalid/v2/anime/$id",
                 "GET example.invalid/kiroku/poster/$id.jpg",
                 "GET cdn.myanimelist.net/images/anime/4/19644.webp",
+                "POST graphql.anilist.co/",
             )
         for (request in expected) assertTrue(request, request in asked)
     }
@@ -267,7 +288,9 @@ class SandboxAppTest {
         signIn()
         assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
         val entries = waited { graph.list.observeEntries().first { it.isNotEmpty() } }
-        val (watching, other) = entries.filter { it.status == ListStatus.Watching }.take(2)
+        // One Piece, the first row of Watching: with no total, two more episodes always stay within it.
+        val watching = entries.single { it.anime.id.value == SandboxAiring.ON_A_BREAK }
+        val other = entries.first { it.status == ListStatus.Watching && it != watching }
         shows(watching.anime.titles.romaji)
 
         val saved = watching.values.copy(score = 9, watchedEpisodes = watching.values.watchedEpisodes + 2)

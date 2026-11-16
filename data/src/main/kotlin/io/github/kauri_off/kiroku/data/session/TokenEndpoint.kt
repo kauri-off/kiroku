@@ -66,7 +66,7 @@ internal fun TokenReply.read(): TokenResult =
             }
     }
 
-// OAuth's statuses for a grant or a client that is not valid; MAL's own answers are not recorded yet.
+// MAL's recorded refusal of a refresh token is 401; 400 is OAuth's status for an invalid grant, which no recording of MAL shows.
 internal fun rejectsGrant(status: Int): Boolean = status == 400 || status == 401
 
 @Serializable
