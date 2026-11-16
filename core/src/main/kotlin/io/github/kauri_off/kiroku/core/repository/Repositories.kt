@@ -231,7 +231,7 @@ interface AiringRepository {
     // For the page of [page] alone, never for a notification: the same with [page]'s own result, also from what the page fetched (A12).
     fun observePageAiring(page: Anime): Flow<Map<AnimeId, Airing>>
 
-    // The stored schedules, which are all a notification may read.
+    // The stored schedules whose numbering the source does not doubt, which are all a notification may read.
     fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
 
     // Asks for the tracked titles whose data is stale, as a screen does when it is shown.

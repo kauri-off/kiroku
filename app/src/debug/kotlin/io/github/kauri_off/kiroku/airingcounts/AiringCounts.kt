@@ -86,7 +86,7 @@ private fun kindOf(airing: Airing?): CountKind =
     when (airing?.inexact) {
         null -> if (airing == null) CountKind.Unknown else CountKind.Exact
         Inexact.NumberedDifferently -> CountKind.NumberedDifferently
-        Inexact.TotalsDisagree, Inexact.ScheduleStopped -> CountKind.Doubt
+        Inexact.TotalsDisagree, Inexact.ScheduleStopped, Inexact.NumberingDoubted -> CountKind.Doubt
         Inexact.NoSchedule -> if (airing.aired is AiredCount.Known) CountKind.NoSchedule else CountKind.Unknown
     }
 
@@ -103,7 +103,7 @@ private fun why(
             if (malTotal == null || total == 0) null else Why.TotalsDiffer(malTotal, total)
         }
         Inexact.ScheduleStopped -> airing.latestAiredAt?.let(Why::StoppedAfter)
-        Inexact.NoSchedule -> null
+        Inexact.NoSchedule, Inexact.NumberingDoubted -> null
         null -> if (airing == null) Why.NoResult else null
     }
 }

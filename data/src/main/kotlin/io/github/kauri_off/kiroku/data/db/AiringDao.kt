@@ -51,7 +51,7 @@ internal abstract class AiringDao {
 
     private companion object {
         const val STORED =
-            "SELECT a.title_id, a.fetched_at, a.known, a.total_episodes, e.number, e.airs_at FROM airing a " +
+            "SELECT a.title_id, a.fetched_at, a.known, a.total_episodes, a.doubted_over, e.number, e.airs_at FROM airing a " +
                 "LEFT JOIN airing_episode e ON e.title_id = a.title_id ORDER BY a.title_id, e.number"
     }
 }

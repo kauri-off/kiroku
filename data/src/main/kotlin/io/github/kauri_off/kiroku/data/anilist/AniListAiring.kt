@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.anilist
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -100,7 +101,8 @@ class AniListAiring(
             for ((malId, entries) in gathered) {
                 val entry = chosen(entries, now)
                 val episodes = entry.episodes.sortedWith(compareBy({ it.number }, { it.airsAt }))
-                results[asked.getValue(malId)] = Outcome.Success(FetchedAiring(AiringSchedule(episodes, entry.total)))
+                val schedule = AiringSchedule(episodes, entry.total, doubtedOver(entry, entries, now))
+                results[asked.getValue(malId)] = Outcome.Success(FetchedAiring(schedule))
             }
         }
 
@@ -293,6 +295,33 @@ internal fun chosen(
             .thenBy { entry -> entry.aired().maxOfOrNull { it.airsAt } ?: Instant.MIN }
             .thenByDescending { entry -> entry.episodes.minOfOrNull { it.airsAt } ?: Instant.MAX }
     return entries.reduce { best, entry -> if (preference.compare(entry, best) > 0) entry else best }
+}
+
+// Another entry's highest aired number when either restarts below the other or [chosen] aired less; a one-episode entry is a special.
+internal fun doubtedOver(
+    chosen: AniListEntry,
+    entries: List<AniListEntry>,
+    now: Instant,
+): Int? {
+    fun AniListEntry.aired() = episodes.filter { it.airsAt <= now }
+    val own = chosen.aired()
+    return entries
+        .filter { it != chosen && it.total != 1 }
+        .mapNotNull { other ->
+            val theirs = other.aired()
+            val highest = theirs.maxOfOrNull { it.number } ?: return@mapNotNull null
+            highest.takeIf { it > (own.maxOfOrNull { it.number } ?: 0) || restarts(own, theirs) || restarts(theirs, own) }
+        }.maxOrNull()
+}
+
+// [later] begins to air after [earlier]'s last aired episode, at a number below the highest [earlier] reached.
+private fun restarts(
+    earlier: List<ScheduledEpisode>,
+    later: List<ScheduledEpisode>,
+): Boolean {
+    val first = later.minByOrNull { it.airsAt } ?: return false
+    val last = earlier.maxOfOrNull { it.airsAt } ?: return false
+    return first.airsAt > last && later.minOf { it.number } < earlier.maxOf { it.number }
 }
 
 private const val RELEASING = "RELEASING"
