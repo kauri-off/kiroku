@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.title
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -56,8 +54,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -101,7 +97,6 @@ import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.TitleSelection
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
-import io.github.kauri_off.kiroku.design.component.scaledWidth
 import io.github.kauri_off.kiroku.design.component.stepButtonMargin
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -672,8 +667,8 @@ private fun LazyItemScope.chainItem(animated: Boolean): Modifier {
     )
 }
 
-// A strip card: the poster, the title in two lines, the place with the type and year, then the user's status, or
-// "This title" in the primary colour on the page's own card. Every card has the same lines, so all are one height.
+// The strip card with the place before the type and year, then the user's status, or "This title" in the primary
+// colour on the page's own card, which opens nothing. A screen reader hears the card as one sentence.
 @Composable
 private fun OrderCard(
     card: ChainCard,
@@ -684,54 +679,32 @@ private fun OrderCard(
     val anime = card.anime
     val facts = typeAndYear(anime)
     val place = card.place
-    val separator = stringResource(R.string.common_separator)
     val placed =
         when {
             place == null -> facts
             facts.isEmpty() -> place.toString()
             else -> stringResource(R.string.title_place_facts, place, facts)
         }
-    val spokenPlace = place?.let { pluralStringResource(R.plurals.title_place_spoken, of, it, of) }
-    val opens = if (card.current) Modifier else Modifier.clickable { onEvent(TitleEvent.OpenRelated(anime.id)) }
-    Column(
-        modifier
-            .testTag(TitleTags.chainCard)
-            .width(PosterSize.Strip.scaledWidth())
-            .clip(MaterialTheme.shapes.medium)
-            .then(opens)
-            .semantics(mergeDescendants = true) {},
-    ) {
-        Poster(anime.posterUrl, PosterSize.Strip)
-        Spacer(Modifier.height(Spacing.s))
-        TitleText(
+    val last = if (card.current) stringResource(R.string.title_this_title) else card.status?.let { statusName(it) }
+    val spoken =
+        listOfNotNull(
             card.title,
-            maxLines = CARD_TITLE_LINES,
-            minLines = CARD_TITLE_LINES,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        val spokenFacts = listOfNotNull(spokenPlace, facts.takeIf { it.isNotEmpty() }).joinToString(separator)
-        Caption(placed, Modifier.semantics { if (spokenPlace != null && !card.current) contentDescription = spokenFacts })
-        if (card.current) {
-            val spoken = spokenPlace?.let { pluralStringResource(R.plurals.title_this_title_spoken, of, checkNotNull(place), of) }
-            Caption(
-                stringResource(R.string.title_this_title),
-                if (spoken == null) Modifier else Modifier.semantics { contentDescription = spoken },
-                MaterialTheme.colorScheme.primary,
-            )
-        } else {
-            Caption(card.status?.let { statusName(it) }.orEmpty())
-        }
-        Spacer(Modifier.height(CardEnd))
-    }
+            place?.let { pluralStringResource(R.plurals.title_place_spoken, of, it, of) },
+            facts.takeIf { it.isNotEmpty() },
+            last,
+        ).joinToString(stringResource(R.string.common_list_separator))
+    PosterCard(
+        title = card.title,
+        caption1 = placed,
+        caption2 = last.orEmpty(),
+        posterUrl = anime.posterUrl,
+        onClick = if (card.current) null else ({ onEvent(TitleEvent.OpenRelated(anime.id)) }),
+        modifier = modifier.testTag(TitleTags.chainCard),
+        caption1Lines = 1,
+        caption2Marked = card.current,
+        spoken = spoken,
+    )
 }
-
-@Composable
-private fun Caption(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) = Text(text, modifier, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
 @Composable
 private fun ChainLoading(modifier: Modifier) {
@@ -788,12 +761,13 @@ private fun MoreRow(
     supporting: String?,
     onClick: () -> Unit,
 ) {
+    val spoken = listOfNotNull(label, supporting).joinToString(stringResource(R.string.common_list_separator))
     ListItem(
         onClick = onClick,
         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
         supportingContent = supporting?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
         // Labelled on the row itself, so a row cut off at the screen's edge is labelled too.
-        modifier = Modifier.semantics { contentDescription = label },
+        modifier = Modifier.semantics { contentDescription = spoken },
         content = { Text(label) },
     )
 }
@@ -807,7 +781,6 @@ internal fun DataError.message(): Int =
     }
 
 private const val SYNOPSIS_LINES = 4
-private const val CARD_TITLE_LINES = 2
 
 // The blank room under a strip card's last line, a label button's label and a statistics bar, and above a two-line
 // list item's first line.

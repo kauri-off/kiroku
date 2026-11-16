@@ -21,7 +21,7 @@ row. The owner is the final authority on the Russian column.
 | Undo | Undo | Отменить | Only for Undo. A dialog is dismissed with Cancel / «Отмена»; unsaved changes with Discard / Keep editing, «Не сохранять» / «Вернуться» |
 | Edit | Edit / Change | Изменить | A row's long press and its spoken action; the action of the "Added" snackbar |
 | The user's score | Your score / Not scored / Rate | Ваша оценка / Без оценки / Оценить | |
-| MAL's score and rank | MAL score / Ranked #12 / Rank | Оценка MAL / №12 в рейтинге / Место | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). «Место» is the caption under `№12` in the title page's header |
+| MAL's score and rank | MAL score / #12, Rank | Оценка MAL / №12, Место | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). The title page's header captions `#12` with Rank |
 | The default sort | Up next | На очереди | |
 | Synopsis, Related, Details | Synopsis, Related, Details | Описание, Связанное, Подробности | |
 | Airing status | Airing / Finished / Not yet aired | Выходит / Завершено / Ещё не вышло | |
