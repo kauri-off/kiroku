@@ -11,9 +11,12 @@
     </plurals>
     <string name="title_mal_score">Оценка MAL</string>
     <string name="title_no_score">Без оценки</string>
-    <string name="title_ranked">№%1$s в рейтинге</string>
+    <string name="title_rank">Место</string>
+    <string name="title_rank_value">№%1$s</string>
+    <string name="title_members">Участники</string>
     <string name="title_add_to_list">Добавить в список</string>
     <string name="title_rate">Оценить</string>
+    <string name="title_your_score_spoken">Ваша оценка:\u00A0%1$d</string>
     <string name="title_aired">Вышло\u00A0%d</string>
     <string name="title_aired_estimated">Вышло\u00A0~%d</string>
     <string name="title_to_watch">к\u00A0просмотру:\u00A0%d</string>
@@ -22,26 +25,26 @@
     <string name="title_synopsis">Описание</string>
     <string name="title_synopsis_more">Ещё</string>
     <string name="title_synopsis_less">Свернуть</string>
-    <string name="title_your_score_label">Ваша оценка</string>
     <string name="title_watch_order">Порядок просмотра</string>
     <string name="title_this_title">Этот тайтл</string>
-    <plurals name="title_this_title_spoken">
-        <item quantity="one">Этот тайтл, %1$d\u00A0из\u00A0%2$d\u00A0тайтла</item>
-        <item quantity="few">Этот тайтл, %1$d\u00A0из\u00A0%2$d\u00A0тайтлов</item>
-        <item quantity="many">Этот тайтл, %1$d\u00A0из\u00A0%2$d\u00A0тайтлов</item>
-        <item quantity="other">Этот тайтл, %1$d\u00A0из\u00A0%2$d\u00A0тайтла</item>
+    <string name="title_place_facts">%1$d\u00A0· %2$s</string>
+    <plurals name="title_place_spoken">
+        <item quantity="one">%1$d\u00A0из\u00A0%2$d\u00A0тайтла</item>
+        <item quantity="few">%1$d\u00A0из\u00A0%2$d\u00A0тайтлов</item>
+        <item quantity="many">%1$d\u00A0из\u00A0%2$d\u00A0тайтлов</item>
+        <item quantity="other">%1$d\u00A0из\u00A0%2$d\u00A0тайтла</item>
     </plurals>
     <string name="title_loading_watch_order">Загрузка порядка просмотра</string>
     <string name="title_related">Связанное</string>
     <string name="title_statistics">Статистика</string>
-    <plurals name="title_members">
-        <item quantity="one">%s\u00A0участник</item>
-        <item quantity="few">%s\u00A0участника</item>
-        <item quantity="many">%s\u00A0участников</item>
-        <item quantity="other">%s\u00A0участника</item>
-    </plurals>
     <string name="title_details">Подробности</string>
     <string name="title_recommendations">Рекомендации</string>
+    <plurals name="title_titles">
+        <item quantity="one">%d\u00A0тайтл</item>
+        <item quantity="few">%d\u00A0тайтла</item>
+        <item quantity="many">%d\u00A0тайтлов</item>
+        <item quantity="other">%d\u00A0тайтла</item>
+    </plurals>
     <string name="title_loading_details">Загрузка подробностей</string>
     <string name="title_not_found">Этого тайтла нет на MyAnimeList</string>
     <string name="title_could_not_load">Не удалось загрузить тайтл</string>
