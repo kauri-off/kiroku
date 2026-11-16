@@ -444,7 +444,7 @@ class ListEngine(
                     val missing =
                         locked {
                             if (list != began) return@locked emptySet()
-                            local.readAll().keys.filterTo(mutableSetOf()) { it !in fetched && it !in pending && (touched[it] ?: 0) <= since }
+                            local.readAll().keys - fetched.keys - pending.keys - touched.filterValues { it > since }.keys
                         }
                     val kept = missing - checked(missing, fetched)
                     locked {
