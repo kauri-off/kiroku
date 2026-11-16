@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -28,6 +29,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.edit.EditSheetState
@@ -41,6 +43,7 @@ import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +56,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -728,13 +732,22 @@ class ListViewModelTest {
     }
 
     @Test
-    fun `a pull asks for every tracked title's airing and orders by what that brought`() =
+    fun `a pull asks for every tracked title's airing and orders by what that brought, also when it ends after the sync`() =
         test { s ->
             val source = s.graph.demo.airingSource
             val asked = source.requests.size
             val moved = movedSchedules(FixtureAnime.exactCaughtUp)
             source.schedules = moved
+            val answer = CompletableDeferred<Unit>()
+            source.holding = answer
+            val syncs = s.graph.demo.server.listDownloads
             s.list.onEvent(ListEvent.Refresh)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            assertEquals(syncs + 1, s.graph.demo.server.listDownloads)
+            assertTrue(s.state.refreshing)
+            assertEquals(upNext(), s.ids())
+            answer.complete(Unit)
             advanceUntilIdle()
             val airing = set.copy(schedules = moved).airing
             val expected =
@@ -788,6 +801,90 @@ class ListViewModelTest {
             assertFalse(s.state.refreshing)
         }
 
+    // Shown again once its list and its airing are stale, the List asks for the tracked titles' airing though MAL fails.
+    private fun staleAiringIsAskedAfterAFailedSync(fail: (Demo) -> Unit) {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val source = s.graph.demo.airingSource
+            val asked = source.requests.size
+            s.screen.cancel()
+            runCurrent()
+            advanceTimeBy(ROTATION + STOPPED_AFTER)
+            runCurrent()
+            fail(s.graph.demo)
+            clock.instant = set.now.plus(Duration.ofMinutes(20))
+            val syncs = s.graph.syncs
+            s.screen = showing(s.list.state, s.list.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(syncs + 1, s.graph.syncs)
+            assertEquals(
+                listOf(
+                    set.entries
+                        .filter { it.tracked }
+                        .map { it.anime.id }
+                        .toSet(),
+                ),
+                source.requests.drop(asked),
+            )
+        }
+    }
+
+    @Test
+    fun `with the session expired the List shown asks for its stale airing`() =
+        staleAiringIsAskedAfterAFailedSync { it.server.sessionExpired.value = true }
+
+    @Test
+    fun `with MAL failing the List shown asks for its stale airing`() =
+        staleAiringIsAskedAfterAFailedSync {
+            it.server.failingLoads.value =
+                true
+        }
+
+    // Section 6.2: the airing of the rows is a part of them; the list stays, and a pull reads it again.
+    @Test
+    fun `an airing read that fails alone shows the list without its airing and no message, and a pull reads it again`() {
+        val failing = MutableStateFlow(false)
+        test(airing = { inner ->
+            object : AiringRepository by inner {
+                override fun observeAiring() =
+                    combine(inner.observeAiring(), failing) { airing, failing ->
+                        if (failing) throw DataException(DataError.StorageError)
+                        airing
+                    }
+            }
+        }) { s ->
+            val anime = FixtureAnime.exactToWatch
+            val aired = Line3.ToWatch(AiredCount.Exact(2))
+            val line3 = {
+                s
+                    .page()
+                    .rows
+                    .single { it.id == anime.id }
+                    .line3
+            }
+            val ids = s.ids()
+            assertEquals(aired, line3())
+            failing.value = true
+            advanceUntilIdle()
+            assertNotEquals(aired, line3())
+            assertEquals(ids, s.ids())
+            assertNull(s.message)
+            failing.value = false
+            advanceUntilIdle()
+            assertNotEquals(aired, line3())
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(aired, line3())
+            assertNull(s.message)
+            // Followed again, not only read once by the pull's order.
+            s.graph.demo.airingSource.schedules = movedSchedules(anime)
+            s.graph.airing.refresh()
+            advanceUntilIdle()
+            assertEquals(Line3.ToWatch(AiredCount.Exact(3)), line3())
+        }
+    }
+
     // The rows of the shown tab after [change], which must leave every row but [changed] the same object, in its place.
     private suspend fun TestScope.inPlace(
         s: Subject,
@@ -807,12 +904,102 @@ class ListViewModelTest {
     }
 
     @Test
-    fun `a refresh that moves an episode updates its row in place`() =
+    fun `a refresh that moves an episode updates its row in place, though the order would now differ`() =
         test { s ->
-            val anime = FixtureAnime.exactToWatch
-            s.graph.demo.airingSource.schedules = movedSchedules(anime)
+            val anime = FixtureAnime.exactCaughtUp
+            val moved = movedSchedules(anime)
+            val sorted =
+                order(set.entries.filter { it.status == ListStatus.Watching }, ListSort.UpNext, set.copy(schedules = moved).airing::get) {
+                    it.anime.titles.romaji
+                }.map { it.anime.id }
+            assertNotEquals(s.ids(), sorted)
+            s.graph.demo.airingSource.schedules = moved
             val row = inPlace(s, anime.id) { assertEquals(Outcome.Success(Unit), s.graph.airing.refresh()) }
-            assertEquals(Line3.ToWatch(AiredCount.Exact(3)), row.line3)
+            assertEquals(Line3.ToWatch(AiredCount.Exact(1)), row.line3)
+        }
+
+    // On a device most starts find their airing data stale; the order is not held for a refresh then.
+    @Test
+    fun `a start with airing data stored orders at once, whatever its airing refresh does`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope))
+            val airing =
+                object : AiringRepository by graph.airing {
+                    override suspend fun refreshStale(): Outcome<Unit> = awaitCancellation()
+                }
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.anime,
+                    airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    graph.background,
+                )
+            val screen = showing(list.state, list.shown)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            assertEquals(
+                upNext(),
+                (list.state.value.content as ListContent.Tabs)
+                    .pages
+                    .getValue(ListStatus.Watching)
+                    .rows
+                    .map { it.id },
+            )
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    // The List's read fails while the sync, which reads the store through the engine, goes on; a Retry then reads it again.
+    @Test
+    fun `Retry of an unreadable list during its first sync, with no airing stored, waits for the airing refresh alone`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope, latency = 20.seconds, airingStored = false))
+            val failing = MutableStateFlow(true)
+            val entries =
+                object : ListSource by graph.list {
+                    override fun observeEntries() =
+                        combine(graph.list.observeEntries(), failing) { entries, failing ->
+                            if (failing) throw DataException(DataError.StorageError)
+                            entries
+                        }
+                }
+            val list =
+                ListViewModel(
+                    entries,
+                    graph.anime,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    graph.background,
+                )
+            val screen = showing(list.state, list.shown)
+            advanceTimeBy(6.seconds)
+            runCurrent()
+            assertEquals(ListContent.Failed(ListFailure.Other), list.state.value.content)
+            failing.value = false
+            list.onEvent(ListEvent.Retry)
+            advanceTimeBy(7.seconds)
+            runCurrent()
+            assertEquals(set.entries.size, (list.state.value.content as ListContent.Tabs).pages.values.sumOf { it.rows.size })
+            advanceUntilIdle()
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
         }
 
     @Test

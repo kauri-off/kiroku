@@ -105,6 +105,9 @@ class ListViewModel(
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
     private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val retries = MutableStateFlow(0)
+
+    // Section 6.2: airing is a part of the rows, read again at the next pull or Retry when it could not be read.
+    private val airingReads = MutableStateFlow(0)
     private var syncing: Job? = null
     private val lane = background.limitedParallelism(1)
 
@@ -197,10 +200,19 @@ class ListViewModel(
             ListEvent.DismissSort -> model.update { it.copy(sortSheetOpen = false) }
             is ListEvent.SelectSort -> choose { if (it.sort == event.sort) null else TabSort(event.sort) }
             is ListEvent.SelectDirection -> choose { if (it.sort.defaultDirection == null) null else it.copy(direction = event.direction) }
-            ListEvent.Refresh -> startSync(fromUser = true)
+            ListEvent.Refresh -> {
+                airingReads.update { it + 1 }
+                startSync(fromUser = true)
+            }
             ListEvent.Retry -> {
                 retries.update { it + 1 }
+                airingReads.update { it + 1 }
                 startSync(fromUser = false)
+                // A list that could not be read at the start is ordered as the start would have, also with no airing stored.
+                if (!settled) {
+                    val owners = model.value.owners
+                    viewModelScope.launch { if (noAiringStored()) orderedAtStart(owners, stale = true) }
+                }
             }
             is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
@@ -240,6 +252,14 @@ class ListViewModel(
         ordered(owners, again = false) { airing.refreshStale() }
     }
 
+    // Rows without airing data when it cannot be read: a part of them, not the list.
+    private suspend fun readAiring(): Map<AnimeId, Airing> =
+        try {
+            airing.observeAiring().first()
+        } catch (_: DataException) {
+            emptyMap()
+        }
+
     // As after an install or a first sign-in, when what "Up next" needs is still to come.
     private suspend fun noAiringStored(): Boolean =
         try {
@@ -266,8 +286,9 @@ class ListViewModel(
             .flatMapLatest { owner ->
                 if (readFor !== NOBODY_YET && readFor != owner) forgetOwner()
                 readFor = owner
+                val schedules = airing.observeAiring().readAgainOnRetry(airingReads) { emptyMap() }
                 val read =
-                    combine(list.observeEntries(), airing.observeAiring(), ::Pair).map { (entries, schedule) ->
+                    combine(list.observeEntries(), schedules, ::Pair).map { (entries, schedule) ->
                         awaitSorts()
                         val waits = !settled && model.value.orders == null && entries.isNotEmpty() && noAiringStored()
                         received(entries, schedule, waits)
@@ -564,6 +585,8 @@ class ListViewModel(
                 model.update { it.copy(refreshing = false) }
                 return
             }
+            // AniList is asked whatever MAL answered: a sync's end asks only after a success, and an expired session never has one.
+            if (result is Outcome.Failure) viewModelScope.launch { airing.refreshStale() }
             when (result) {
                 is Outcome.Success ->
                     if (fromUser || model.value.orders == null) {
@@ -616,7 +639,7 @@ class ListViewModel(
         withTimeoutOrNull(AIRING_WAIT) { refresh() }
         val read =
             try {
-                list.observeEntries().first() to airing.observeAiring().first()
+                list.observeEntries().first() to readAiring()
             } catch (e: DataException) {
                 unreadable(e.error)
                 return

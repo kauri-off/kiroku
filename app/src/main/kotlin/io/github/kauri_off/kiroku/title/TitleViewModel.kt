@@ -118,6 +118,9 @@ class TitleViewModel(
     private val airingReads = MutableStateFlow(0)
     private var load: Job? = null
 
+    // The page's own airing ask, apart from its load: AniList's pace never holds the page's indicator or its walk.
+    private var airingAsk: Job? = null
+
     // A store that cannot be read fails the page, as a list that cannot be read does, since its values would be unknown.
     private val stored =
         combine(anime.observeAnime(id), anime.observeDetails(id), anime.chainPagesOf(id), ::Stored)
@@ -271,7 +274,7 @@ class TitleViewModel(
             refresh(Asked.Shown)
         } else {
             walkIfOwed()
-            viewModelScope.launch { (knownTitle() ?: storedTitle())?.let { airing.refreshStale(it) } }
+            viewModelScope.launch { (knownTitle() ?: storedTitle())?.let { askAiring(it, Asked.Shown) } }
         }
     }
 
@@ -286,11 +289,12 @@ class TitleViewModel(
         }
 
     // A12: a pull asks for the page's airing, a show only when it is stale; what comes of it is never a message (section 2.3).
-    private suspend fun askAiring(
+    private fun askAiring(
         page: Anime,
         asked: Asked,
     ) {
-        if (asked == Asked.Pull) airing.refresh(page) else airing.refreshStale(page)
+        airingAsk?.cancel()
+        airingAsk = viewModelScope.launch { if (asked == Asked.Pull) airing.refresh(page) else airing.refreshStale(page) }
     }
 
     // A wait the person asked for shows at once; one the page started only after a second (section 9.4).
@@ -304,12 +308,9 @@ class TitleViewModel(
         load =
             viewModelScope.launch {
                 // The airing beside the details, or once they are stored when the title is not known before.
-                coroutineScope {
-                    val known = knownTitle()
-                    if (known != null) launch { askAiring(known, asked) }
-                    if (loadDetails(asked) && known == null) storedTitle()?.let { askAiring(it, asked) }
-                }
-                refreshing.value = false
+                val known = knownTitle()
+                if (known != null) askAiring(known, asked)
+                if (loadDetails(asked) && known == null) storedTitle()?.let { askAiring(it, asked) }
             }
     }
 
@@ -328,6 +329,7 @@ class TitleViewModel(
             val result = anime.refresh(id)
             wait?.cancel()
             waitShown.value = false
+            refreshing.value = false
             loads.ended((result as? Outcome.Failure)?.error)
             if (result !is Outcome.Failure) {
                 if (asked == Asked.Pull) walked = false
