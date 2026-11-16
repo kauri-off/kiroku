@@ -781,6 +781,122 @@ abstract class ListEngineContract {
             assertEquals(opened, s.shown(anime.id)?.values)
         }
 
+    // MAL made the "+1" and the store could not keep its answer: the title stays marked until a download says more.
+    @Test
+    fun `when the store fails under MAL's answer, a download is owed and Retry of a take-back still sends it`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.server.failingLoads.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.list.write(ListWrite.StepWatched(anime, -1))
+            s.local.writesToFail = 1
+            settle()
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+            assertNull(s.syncedAt())
+            assertEquals(DataError.StorageError, failures.single().error)
+
+            assertTrue(s.list.write(failures.single().retry) != null)
+            settle()
+            assertEquals(listOf(13, 12), s.server.requests.map { it.values?.watchedEpisodes })
+            assertEquals(12, s.serverWatched(anime))
+            s.server.failingLoads.value = false
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(12, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `N9 a send whose answer was lost marks the title, so a save of the value it had is still sent`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val confirmed = checkNotNull(s.shown(anime.id)).values
+            s.mal.unreadAnswers = 1
+            s.mal.afterPut = { s.server.offline.value = true }
+            assertEquals(Outcome.Failure(DataError.ServerError), s.list.send(ListWrite.MarkWatched(anime, 13)))
+            settle()
+            s.mal.afterPut = {}
+            s.server.offline.value = false
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+
+            assertTrue(s.list.write(ListWrite.Save(anime, confirmed, setOf(ListField.WatchedEpisodes))) != null)
+            settle()
+            assertEquals(
+                confirmed.carrying(ListField.WatchedEpisodes),
+                s.server.requests
+                    .last()
+                    .values,
+            )
+            assertEquals(12, s.serverWatched(anime))
+        }
+
+    @Test
+    fun `a download begun before a write failed unseen keeps the title marked, so a save of the confirmed value is still sent`() =
+        runTest {
+            val s = subject(latency = 5.seconds)
+            s.server.writeLatency = { 1.seconds }
+            val anime = FixtureAnime.exactToWatch
+            val confirmed = checkNotNull(s.shown(anime.id)).values
+            val sync = async { s.list.sync() }
+            runCurrent()
+            s.mal.unreadAnswers = 1
+            s.list.write(ListWrite.Save(anime, confirmed.copy(score = 3), setOf(ListField.Score)))
+            advanceTimeBy(5500.milliseconds)
+            assertEquals(Outcome.Success(Unit), sync.await())
+            s.server.offline.value = true
+            settle()
+            s.server.offline.value = false
+            assertEquals(
+                3,
+                s.server
+                    .entry(anime.id)
+                    ?.values
+                    ?.score,
+            )
+            assertEquals(confirmed, s.shown(anime.id)?.values)
+
+            assertTrue(s.list.write(ListWrite.Save(anime, confirmed, setOf(ListField.Score))) != null)
+            settle()
+            assertEquals(
+                confirmed.carrying(ListField.Score),
+                s.server.requests
+                    .last()
+                    .values,
+            )
+            assertEquals(confirmed, s.server.entry(anime.id)?.values)
+        }
+
+    @Test
+    fun `W5 a title whose edit died with the process stays marked until a download, so a save of the confirmed value is sent`() =
+        runTest {
+            val process = childScope()
+            val s = subject(scope = process)
+            val anime = FixtureAnime.exactToWatch
+            val confirmed = checkNotNull(s.shown(anime.id)).values
+            s.server.latency = 1.minutes
+            s.list.write(ListWrite.Save(anime, confirmed.copy(score = 2), setOf(ListField.Score)))
+            runCurrent()
+            kill(s, process)
+            s.server.latency = 1.seconds
+            s.server.editOnWebsite(anime, confirmed.copy(score = 2))
+            s.server.failingLoads.value = true
+
+            val restarted = s.engine(backgroundScope)
+            assertEquals(confirmed, restarted.observeEntry(anime.id).first()?.values)
+            assertTrue(restarted.write(ListWrite.Save(anime, confirmed, setOf(ListField.Score))) != null)
+            settle()
+            assertEquals(
+                confirmed.carrying(ListField.Score),
+                s.server.requests
+                    .last()
+                    .values,
+            )
+            assertEquals(confirmed, s.server.entry(anime.id)?.values)
+        }
+
     @Test
     fun `after a restart a write carries its own change alone, not one that died with the process`() =
         runTest {
@@ -1902,7 +2018,7 @@ abstract class ListEngineContract {
         }
 
     @Test
-    fun `a store whose write fails under an answer returns the title to its confirmed values, and Retry sends the last edit`() =
+    fun `a store whose write fails under an answer owes a download that shows what MAL made, and Retry sends the last edit`() =
         runTest {
             val s = subject()
             val failures = failures(s)
@@ -1914,7 +2030,7 @@ abstract class ListEngineContract {
             s.local.writesToFail = 1
             settle()
 
-            assertEquals(12, s.shownWatched(anime))
+            assertEquals(13, s.shownWatched(anime))
             assertFalse(checkNotNull(s.local.read(anime.id)?.entry).unconfirmed)
             assertEquals(listOf(failed(DataError.StorageError, ListWrite.Save(anime, shown, setOf(ListField.WatchedEpisodes)))), failures)
             s.list.write(failures.single().retry)
@@ -1937,7 +2053,7 @@ abstract class ListEngineContract {
             advanceTimeBy(1500.milliseconds)
             s.local.throwing = false
             settle()
-            assertEquals(14, s.shownWatched(anime))
+            assertEquals(13, s.shownWatched(anime))
 
             s.list.write(failures.single().retry)
             settle()
@@ -2540,7 +2656,7 @@ abstract class ListEngineContract {
             settle()
 
             assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
-            assertEquals(12, s.shownWatched(anime))
+            assertEquals(13, s.shownWatched(anime))
             assertEquals(listOf(failed(DataError.ServerError, ListWrite.Save(anime, shown, setOf(ListField.WatchedEpisodes)))), failures)
             assertEquals(1, s.unexpected.size)
 

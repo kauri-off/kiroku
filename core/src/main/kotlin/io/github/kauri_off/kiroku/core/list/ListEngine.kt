@@ -487,7 +487,7 @@ class ListEngine(
         owedSince = ++changes
     }
 
-    // A request the store or the engine failed under is a failed write (W2); its Retry carries the title's last edit.
+    // A request the store or the engine failed under is a failed write (W2) MAL may have made; its Retry carries the last edit.
     private suspend fun lost(
         put: Put,
         error: DataError,
@@ -503,16 +503,21 @@ class ListEngine(
                 if (list != put.list) return
                 epochs[id] = put.epoch + 1
                 pending.remove(id)
+                touch(id)
                 try {
                     val confirmed = local.read(id)?.entry?.confirmed
-                    save(id, confirmed?.let { StoredEntry.settled(it) })
+                    local.restore(mapOf(id to confirmed?.let { StoredEntry.settled(it) }))
                 } catch (_: StoreFailure) {
                 }
+                syncedAt.value = null
+                owedSince = ++changes
+                unsure += id
                 only = touched(put)
                 (accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put) to settled?.owner
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
         failures.tryEmit(WriteFailure(error, retry, owner))
+        scope.launch { sync() }
     }
 
     // N9: the write is applied to the entry as MAL has it now, and nothing is sent when that changes nothing.
@@ -647,6 +652,7 @@ class ListEngine(
         if (unconfirmed.isEmpty()) return false
         local.restore(unconfirmed.mapValues { (_, stored) -> stored.confirmed?.let { StoredEntry.settled(it) } })
         syncedAt.value = null
+        unsure += unconfirmed.keys
         return true
     }
 
@@ -726,15 +732,6 @@ class ListEngine(
         if (e !is CancellationException) return
         currentCoroutineContext().ensureActive()
         if (!scope.isActive) throw e
-    }
-
-    // Values alone.
-    private suspend fun save(
-        id: AnimeId,
-        entry: StoredEntry?,
-    ) {
-        touch(id)
-        local.write(mapOf(id to entry))
     }
 
     private fun touch(id: AnimeId) {

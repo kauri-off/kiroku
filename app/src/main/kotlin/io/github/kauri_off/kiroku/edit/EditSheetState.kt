@@ -3,10 +3,12 @@ package io.github.kauri_off.kiroku.edit
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.episodeTotal
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.changedFrom
 import java.time.LocalDate
 
 enum class DateField { Start, Finish }
@@ -44,6 +46,9 @@ data class EditSheetState(
     val isNew: Boolean get() = saved == null
 
     val hasChanges: Boolean get() = draft != (saved ?: newEntry)
+
+    // What Save sets: the values changed from those the sheet opened with, and for a new entry its status too.
+    val set: Set<ListField> get() = draft.changedFrom(saved ?: newEntry) + if (isNew) setOf(ListField.Status) else emptySet()
 
     // An empty field is not a count; the draft then holds the count from before typing.
     val countEmpty: Boolean get() = typed?.isEmpty() == true

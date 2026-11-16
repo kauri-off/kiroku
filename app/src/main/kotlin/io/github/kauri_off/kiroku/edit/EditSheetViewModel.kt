@@ -9,7 +9,6 @@ import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
-import io.github.kauri_off.kiroku.core.model.changedFrom
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
@@ -70,7 +69,7 @@ class EditSheetViewModel(
         when (event) {
             EditSheetEvent.SaveClicked ->
                 if (anime != null && after.closing && !before.closing && (after.hasChanges || after.isNew)) {
-                    messages.write(ListWrite.Save(anime, after.draft, after.saved?.let { after.draft.changedFrom(it) }))
+                    messages.write(ListWrite.Save(anime, after.draft, after.set))
                 }
             EditSheetEvent.RemoveConfirmed -> if (anime != null && !before.closing && !after.isNew) messages.write(ListWrite.Remove(anime))
             EditSheetEvent.Dismissed -> {

@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -293,6 +294,40 @@ class EditSheetViewModelTest {
             assertEquals(15, s.values(anime)?.watchedEpisodes)
         }
     }
+
+    // The website added the title while the sheet was open: the add sets what the user set, and keeps the rest.
+    @Test
+    fun `adding a title the website put on the list meanwhile sets its status and the values set in the sheet alone`() =
+        test(open = null) { s ->
+            val added = FixtureAnime.notOnListAiring
+            s.editor.open(added.id)
+            advanceUntilIdle()
+            assertTrue(s.sheet.isNew)
+            s.editor.onEvent(EditSheetEvent.ScoreChanged(9))
+            val website = ListValues(ListStatus.Watching, 5, score = 7, startDate = null, finishDate = null)
+            s.graph.demo.server
+                .editOnWebsite(added, website)
+            assertEquals(Outcome.Success(Unit), s.graph.list.sync())
+            assertEquals(website, s.values(added))
+
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(
+                setOf(ListField.Status, ListField.Score),
+                s.graph.demo.server.requests
+                    .single()
+                    .values
+                    ?.fields,
+            )
+            val saved = website.copy(status = ListStatus.Planned, score = 9)
+            assertEquals(
+                saved,
+                s.graph.demo.server
+                    .entry(added.id)
+                    ?.values,
+            )
+            assertEquals(saved, s.values(added))
+        }
 
     @Test
     fun `a sheet closed before process death does not come back`() {
