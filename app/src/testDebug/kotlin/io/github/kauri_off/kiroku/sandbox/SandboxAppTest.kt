@@ -3,6 +3,9 @@ package io.github.kauri_off.kiroku.sandbox
 import android.os.Looper
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -292,6 +295,13 @@ class SandboxAppTest {
         }
         graph.scenarios.set(Scenario())
         assertEquals(other.values, waited { graph.list.observeEntry(other.anime.id).first { it?.values == other.values } }!!.values)
+        // The failure's message stays until it is acted on or swiped away (section 7.2): swiped, as a user would.
+        shows("Could not save")
+        compose.onNodeWithText("Could not save").performTouchInput { swipeRight() }
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            compose.onAllNodesWithText("Could not save").fetchSemanticsNodes().isEmpty()
+        }
 
         // S9: a sign-out leaves no token, entry or sort; the List left open says to sign in, and fills at the next sign-in.
         waited { graph.preferences.setListSort(ListStatus.Completed, TabSort(ListSort.Score, SortDirection.Ascending)) }
@@ -317,6 +327,14 @@ class SandboxAppTest {
         )
         assertEquals(saved, waited { graph.list.observeEntry(watching.anime.id).first { it != null } }!!.values)
         assertEquals(emptyList<URI>(), connections.asked)
+        settled()
+    }
+
+    // The List's own download after the sign-in has ended and the screen has drawn it, so nothing runs on after the test.
+    private fun settled() {
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        compose.waitForIdle()
+        shadowOf(Looper.getMainLooper()).idle()
     }
 
     // No user's list values and no title not safe for work reach a debug or preview build.
