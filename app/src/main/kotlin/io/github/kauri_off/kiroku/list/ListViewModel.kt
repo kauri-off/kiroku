@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.unchangedWithoutResultUntil
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -114,8 +115,10 @@ class ListViewModel(
 
     @Volatile private var entriesLoaded = false
 
-    // A first download is under way: its order is computed when the airing data it asked for is there, not as the list arrives.
-    @Volatile private var firstDownload = false
+    // The store was read and held no list: what a sync then brings is ordered once the airing data it asked for is there.
+    @Volatile private var readEmpty = false
+
+    @Volatile private var downloading = false
 
     // The titles whose page is stored, for the summary a title page opens with; no part of what the List shows.
     @Volatile private var pagesRead: Set<AnimeId> = emptySet()
@@ -133,7 +136,7 @@ class ListViewModel(
         val refreshes: Int,
     )
 
-    // Pages written against [now] in [zone]; until a Refresh or the day's end at [until], pages built again keep [now].
+    // Pages written against [now] in [zone]; until a Refresh or [until], the day's end here or in Japan, pages built again keep [now].
     private class Built(
         val shown: Shown,
         val content: ListContent,
@@ -275,6 +278,7 @@ class ListViewModel(
     private fun forgetOwner() {
         settled = false
         entriesLoaded = false
+        readEmpty = false
         viewModelScope.launch {
             filterBy(null)
             saveTab()
@@ -301,11 +305,12 @@ class ListViewModel(
         schedule: Map<AnimeId, Airing>,
     ) {
         entriesLoaded = true
+        if (list.isEmpty()) readEmpty = true
         model.update { model ->
             val read = model.copy(airing = schedule, entries = list.associateBy { it.anime.id })
             when {
                 read.orders != null -> read.withJoinedAppended()
-                firstDownload -> read
+                readEmpty && downloading -> read
                 list.isNotEmpty() || settled -> read.orderedAll()
                 else -> read
             }
@@ -315,6 +320,7 @@ class ListViewModel(
     // A list that cannot be read shows the error state, whatever it showed before.
     private fun unreadable(error: DataError) {
         entriesLoaded = false
+        readEmpty = false
         model.update { it.copy(orders = null, entries = emptyMap(), failure = error.toListFailure()) }
     }
 
@@ -368,7 +374,7 @@ class ListViewModel(
         now: Instant,
     ): Built {
         val today = now.atZone(clock.zone).toLocalDate()
-        val until = today.plusDays(1).atStartOfDay(clock.zone).toInstant()
+        val until = minOf(today.plusDays(1).atStartOfDay(clock.zone).toInstant(), unchangedWithoutResultUntil(now))
         val rowsBefore = rows
         val rowsNow = HashMap<AnimeId, BuiltRow>(rowsBefore.size)
         val content = content(model, filter) { entry, sort -> row(entry, model.airing[entry.anime.id], now, sort, rowsBefore, rowsNow) }
@@ -513,11 +519,11 @@ class ListViewModel(
         model.update { it.copy(failure = null, refreshing = it.refreshing || fromUser) }
         loads.started()
         val owners = model.value.owners
-        firstDownload = model.value.let { it.orders == null && it.entries.isEmpty() }
+        downloading = true
         val result = list.sync()
         loads.ended((result as? Outcome.Failure)?.error)
         if (model.value.owners != owners) {
-            firstDownload = false
+            downloading = false
             model.update { it.copy(refreshing = false) }
             return
         }
@@ -525,7 +531,7 @@ class ListViewModel(
         if (result is Outcome.Success && (fromUser || model.value.orders == null)) {
             withTimeoutOrNull(AIRING_WAIT) { airing.refreshStale() }
         }
-        firstDownload = false
+        downloading = false
         settled = true
         when (result) {
             is Outcome.Success ->

@@ -156,7 +156,7 @@ class AiringEngine(
     suspend fun refreshStale(anime: Anime): Outcome<Unit> =
         ask { tracking, stored ->
             val asked = if (anime.id in tracking.tracked) stored[anime.id]?.fetchedAt else pagesAsked[anime.id]
-            listOfNotNull(pageTitle(tracking, anime).takeIf { airingStale(asked, clock.instant()) })
+            if (airingStale(asked, clock.instant())) listOfNotNull(pageTitle(tracking, anime)) else emptyList()
         }
 
     // The title a page asks for: as the list has it when tracked, none when finished, else its own, marked as a page's.

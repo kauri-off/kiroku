@@ -284,10 +284,11 @@ class AiringCalculatorTest {
         ): Instant? {
             val anime = title.copy(broadcast = Broadcast(day, time))
             var changes = first.minus(Duration.ofDays(30))
-            while (airingAt(anime, null, changes).aired ==
-                AiredCount.Estimated(0)
-            ) {
-                changes = checkNotNull(airingAt(anime, null, changes).changesAt)
+            var steps = 0
+            while (airingAt(anime, null, changes).aired == AiredCount.Estimated(0)) {
+                val next = checkNotNull(airingAt(anime, null, changes).changesAt)
+                assertTrue("$day $time at $changes", next.isAfter(changes) && ++steps <= 3)
+                changes = next
             }
             assertEquals(AiredCount.Estimated(1), airingAt(anime, null, changes).aired)
             return changes
@@ -339,6 +340,20 @@ class AiringCalculatorTest {
         assertEquals(japan(start.plusDays(1)), airingAt(thursday, null, before).changesAt)
         assertEquals(Premiere.Unannounced, airingAt(thursday, null, japan(start.plusDays(1))).premiere)
         assertEquals(Premiere.Unannounced, airingAt(notYetAired.copy(startDate = null, broadcast = null), null, before).premiere)
+    }
+
+    @Test
+    fun `a title MAL marks finished with no total and a first episode to come has an exact 0 and its time, and shows no airing`() {
+        val early = finished.copy(malEpisodes = null)
+        val schedule = weekly(1..1, total = null)
+        val result = airingAt(early, schedule, week(-1))
+        assertEquals(Airing(AiredCount.Exact(0), null, episode(1), null), result)
+        assertEquals(Premiere.At(week(0)), result.premiere)
+        assertEquals(week(0), result.changesAt)
+        val shown = titleAiring(early, watching(0), schedule, week(-1))
+        assertNull(shown.phase)
+        assertEquals(UpNext.Rest, shown.upNext)
+        assertEquals(AiredCount.Exact(1), airingAt(early, schedule, week(0)).aired)
     }
 
     @Test
@@ -489,9 +504,16 @@ class AiringCalculatorTest {
         val set = Fixtures.reference
         val cases =
             set.anime.map { it to set.schedules[it.id] } +
-                listOf(title, finished, notYetAired, noSlot, title.copy(malEpisodes = null)).flatMap { anime ->
-                    listOf(null, weekly(1..12), weekly(1..6), weekly(1..13, total = 13), weekly(13..24, from = 0), weekly(1..8, total = 24))
-                        .map { anime to it }
+                listOf(title, finished, notYetAired, noSlot).flatMap { listOf(it, it.copy(malEpisodes = null)) }.flatMap { anime ->
+                    listOf(
+                        null,
+                        weekly(1..12),
+                        weekly(1..12, total = null),
+                        weekly(1..6),
+                        weekly(1..13, total = 13),
+                        weekly(13..24, from = 0),
+                        weekly(1..8, total = 24),
+                    ).map { anime to it }
                 } +
                 // A rejected schedule that is read once its first episode has aired.
                 (title.copy(startDate = null, broadcast = null) to weekly(2..12))

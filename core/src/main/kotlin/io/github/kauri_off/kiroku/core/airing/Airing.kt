@@ -163,13 +163,14 @@ internal fun premiereOf(
     airing: Airing?,
     today: LocalDate,
 ): Premiere? {
+    // A stored first episode still to come is the premiere's time, also where MAL's status already says finished.
+    airing?.nextEpisode?.takeIf { airing.aired == AiredCount.Exact(0) }?.let { return Premiere.At(it.airsAt) }
     val status = anime.airingStatus.effective
     if (status == AiringStatus.Finished) return null
     when (val aired = airing?.aired) {
         is AiredCount.Known -> if (aired.value > 0) return null
         AiredCount.Unknown, null -> if (status != AiringStatus.NotYetAired) return null
     }
-    airing?.nextEpisode?.takeIf { it.number == 1 }?.let { return Premiere.At(it.airsAt) }
     return when (val date = anime.startDate) {
         is PartialDate.Day -> if (date.date < today) Premiere.Unannounced else Premiere.OnDay(date.date)
         is PartialDate.Month ->
@@ -205,9 +206,10 @@ internal fun airingPhase(
     airing: Airing?,
     premiere: Premiere?,
 ): AiringPhase? {
-    premiere?.let { return AiringPhase.NotYetAired(it) }
+    // A3: a title MAL marks finished shows no airing, whatever a stored schedule still holds.
     val status = anime.airingStatus.effective
     if (status == AiringStatus.Finished) return null
+    premiere?.let { return AiringPhase.NotYetAired(it) }
     val aired = airing?.aired as? AiredCount.Known ?: return AiringPhase.CountUnknown
     val toWatch = values?.let { toWatch(status, it, airing) }?.takeIf { it.value > 0 }
     // An episode the user has already recorded as watched is not announced as next (W9).
@@ -291,3 +293,6 @@ private fun upNext(
 
 // MAL's dates are Japan's, so a day is over when it is over there.
 internal fun japanDay(now: Instant): LocalDate = now.atZone(JAPAN).toLocalDate()
+
+// Until when a title without a result reads the same as at [now]: the end of that day in Japan.
+fun unchangedWithoutResultUntil(now: Instant): Instant = japanDay(now).plusDays(1).atStartOfDay(JAPAN).toInstant()

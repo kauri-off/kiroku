@@ -1085,6 +1085,27 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `A12 a page that asked nothing leaves no mark, so a later answer for the list that comes too late is dropped`() =
+        runTest {
+            val page = FixtureAnime.notOnListAiring
+            val s = subject()
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+            s.source.schedules += page.id to fixtures.schedules.getValue(page.id).moved(8, 1.days)
+            s.source.latency = 1.seconds
+
+            s.save(page, ListStatus.Watching)
+            runCurrent()
+            s.list.write(ListWrite.Remove(page))
+            advanceTimeBy(2.seconds)
+            runCurrent()
+
+            assertEquals(listOf(setOf(page.id), setOf(page.id)), s.source.calls.toList())
+            assertNull(s.stored(page))
+            assertEquals(fixtures.schedules[page.id], s.engine.observePageSchedule(page.id).first())
+        }
+
+    @Test
     fun `A12 what a page fetched goes when the source no longer knows the title`() =
         runTest {
             val page = FixtureAnime.notOnListAiring

@@ -101,10 +101,11 @@ class ListAiring(
 
     private val read: Flow<Read> =
         asked
-            .onTick(time) { it.titles }
+            .onTick(time, unexpected) { it.titles }
             .map<_, Read> { (asked, results) ->
                 val ofList = results.filterKeys { !it.page }.mapKeys { it.key.id }
-                Results(asked, ofList, asked.pages.associateWith { id -> results[Key(id, page = true)] ?: ofList.getValue(id) })
+                val ofPages = asked.pages.mapNotNull { id -> (results[Key(id, page = true)] ?: ofList[id])?.let { id to it } }
+                Results(asked, ofList, ofPages.toMap())
             }.catch { cause ->
                 if (cause !is DataException && cause !is CancellationException) unexpected(cause)
                 emit(Failed((cause as? DataException)?.error ?: DataError.ServerError, cause.cause))
@@ -127,8 +128,12 @@ class ListAiring(
                 emitAll(
                     results
                         .mapNotNull { results ->
-                            val own = results.pages[page.id] ?: return@mapNotNull null
-                            if (results.list[page.id] === own) results.list else results.list + (page.id to own)
+                            val own = results.pages[page.id]
+                            when {
+                                page.id !in results.of.pages -> null
+                                own == null || results.list[page.id] === own -> results.list
+                                else -> results.list + (page.id to own)
+                            }
                         }.distinctUntilChanged(),
                 )
             } finally {

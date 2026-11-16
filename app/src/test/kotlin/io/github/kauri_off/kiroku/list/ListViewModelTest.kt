@@ -25,12 +25,15 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
+import io.github.kauri_off.kiroku.plain
 import io.github.kauri_off.kiroku.premiereOn
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.title.TitlePage
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -49,6 +52,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -192,6 +196,94 @@ class ListViewModelTest {
             val row = s.page().rows.single { it.id == FixtureAnime.exactToWatch.id }
             assertEquals(13, (row.line2 as Line2.Progress).watched)
         }
+
+    // The view model holds no list after a failed read, but the store does: only a store read empty waits for its sync.
+    @Test
+    fun `Retry from a list that could not be read shows the stored list while its sync still runs`() =
+        test(unreadable = true) { s ->
+            assertEquals(ListContent.Failed(ListFailure.Other), s.state.content)
+            s.graph.demo.server.latency = 10.seconds
+            s.graph.listUnreadable = false
+
+            s.list.onEvent(ListEvent.Retry)
+            advanceTimeBy(1.seconds)
+
+            assertEquals(set.entries.size, (s.state.content as ListContent.Tabs).pages.values.sumOf { it.rows.size })
+            assertEquals(upNext(), s.ids())
+            advanceUntilIdle()
+        }
+
+    @Test
+    fun `a stale stored list that is read after its sync started is shown while the sync still runs`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope, latency = 10.seconds))
+            graph.readsHeld = true
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.anime,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    graph.background,
+                )
+            val screen = showing(list.state, list.shown)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            assertEquals(1, graph.syncs)
+            assertEquals(ListContent.Loading, list.state.value.content)
+
+            graph.readsHeld = false
+            advanceTimeBy(1.seconds)
+            runCurrent()
+
+            assertEquals(set.entries.size, (list.state.value.content as ListContent.Tabs).pages.values.sumOf { it.rows.size })
+            advanceUntilIdle()
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a row without airing data and its title page judge a premiere by one day, Japan's, which ends before the device's here`() {
+        val anime = FixtureAnime.premiereDate
+        val premiere = (anime.startDate as PartialDate.Day).date
+        val end = premiere.plusDays(1).atStartOfDay(FixtureTime.japan).toInstant()
+        val clock = MovingClock(end.minusSeconds(1), FixtureTime.zone)
+        test(
+            demo = { Demo(set, it, clock = clock) },
+            airing = { inner ->
+                object : AiringRepository by inner {
+                    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flowOf(emptyMap())
+                }
+            },
+        ) { s ->
+            val entry = checkNotNull(set.entryFor(anime.id))
+
+            fun row() =
+                s
+                    .page(ListStatus.Planned)
+                    .rows
+                    .single { it.id == anime.id }
+                    .line2
+
+            fun page() = TitlePage.of(anime, entry, null, null, emptyMap(), TitleLanguage.Romaji, clock).airing.plain()
+            assertEquals(Line2.Premieres(premiereOn(PartialDate.Day(premiere))), row())
+            assertEquals(premiere, page())
+
+            clock.instant = end
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+
+            assertEquals(Line2.Premieres(Premiere.Unannounced), row())
+            assertEquals(Premiere.Unannounced, page())
+        }
+    }
 
     @Test
     fun `SelectTab changes the tab and never the order`() =
@@ -752,7 +844,6 @@ class ListViewModelTest {
         val clockSet = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         test(demo = { Demo(set, it, clock = clock, clockSet = clockSet) }) { s ->
             val before = ListStatus.entries.associateWith { s.page(it).rows }
-            val shown = s.state.now
             assertEquals(
                 Line2.Premieres(premiereOn(PartialDate.Day(premiere))),
                 before
@@ -767,7 +858,7 @@ class ListViewModelTest {
             clockSet.emit(Unit)
             advanceUntilIdle()
 
-            assertEquals(shown, s.state.now)
+            assertEquals(end, s.state.now)
             for (status in ListStatus.entries) {
                 val rows = before.getValue(status).zip(s.page(status).rows)
                 assertEquals(status.name, before.getValue(status).size, rows.size)
