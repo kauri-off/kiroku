@@ -1,0 +1,27 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 62945,
+                    "episodes": 26,
+                    "status": "NOT_YET_RELEASED",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 26,
+                                "airingAt": 1812596400
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

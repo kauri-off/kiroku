@@ -1,0 +1,42 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 51039,
+                    "episodes": 52,
+                    "status": "FINISHED",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 51,
+                                "airingAt": 1688263200
+                            },
+                            {
+                                "episode": 52,
+                                "airingAt": 1688868000
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 51039,
+                    "episodes": 62,
+                    "status": "FINISHED",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": []
+                    }
+                }
+            ]
+        }
+    }
+}

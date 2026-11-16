@@ -1,0 +1,235 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 51039,
+                    "episodes": 52,
+                    "status": "FINISHED",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": true
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1659232800
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1659232800
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1659232801
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1659837600
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1660442400
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1661047200
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1661652000
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1662256800
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1662861600
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1663466400
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1664071200
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1664676000
+                            },
+                            {
+                                "episode": 13,
+                                "airingAt": 1665280800
+                            },
+                            {
+                                "episode": 14,
+                                "airingAt": 1665885600
+                            },
+                            {
+                                "episode": 15,
+                                "airingAt": 1666490400
+                            },
+                            {
+                                "episode": 16,
+                                "airingAt": 1667095200
+                            },
+                            {
+                                "episode": 17,
+                                "airingAt": 1667700000
+                            },
+                            {
+                                "episode": 18,
+                                "airingAt": 1668304800
+                            },
+                            {
+                                "episode": 19,
+                                "airingAt": 1668909600
+                            },
+                            {
+                                "episode": 20,
+                                "airingAt": 1669514400
+                            },
+                            {
+                                "episode": 21,
+                                "airingAt": 1670119200
+                            },
+                            {
+                                "episode": 22,
+                                "airingAt": 1670724000
+                            },
+                            {
+                                "episode": 23,
+                                "airingAt": 1671328800
+                            },
+                            {
+                                "episode": 24,
+                                "airingAt": 1671933600
+                            },
+                            {
+                                "episode": 25,
+                                "airingAt": 1672538400
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 51039,
+                    "episodes": 62,
+                    "status": "FINISHED",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": true
+                        },
+                        "nodes": [
+                            {
+                                "episode": 24,
+                                "airingAt": 1768096800
+                            },
+                            {
+                                "episode": 25,
+                                "airingAt": 1768701600
+                            },
+                            {
+                                "episode": 26,
+                                "airingAt": 1769306400
+                            },
+                            {
+                                "episode": 27,
+                                "airingAt": 1769911200
+                            },
+                            {
+                                "episode": 28,
+                                "airingAt": 1770516000
+                            },
+                            {
+                                "episode": 29,
+                                "airingAt": 1771120800
+                            },
+                            {
+                                "episode": 30,
+                                "airingAt": 1771725600
+                            },
+                            {
+                                "episode": 31,
+                                "airingAt": 1772330400
+                            },
+                            {
+                                "episode": 32,
+                                "airingAt": 1772935200
+                            },
+                            {
+                                "episode": 33,
+                                "airingAt": 1773540000
+                            },
+                            {
+                                "episode": 34,
+                                "airingAt": 1774144800
+                            },
+                            {
+                                "episode": 35,
+                                "airingAt": 1774749600
+                            },
+                            {
+                                "episode": 36,
+                                "airingAt": 1775354400
+                            },
+                            {
+                                "episode": 37,
+                                "airingAt": 1775959200
+                            },
+                            {
+                                "episode": 38,
+                                "airingAt": 1776564000
+                            },
+                            {
+                                "episode": 39,
+                                "airingAt": 1777168800
+                            },
+                            {
+                                "episode": 40,
+                                "airingAt": 1777773600
+                            },
+                            {
+                                "episode": 41,
+                                "airingAt": 1778378400
+                            },
+                            {
+                                "episode": 42,
+                                "airingAt": 1778983200
+                            },
+                            {
+                                "episode": 43,
+                                "airingAt": 1779588000
+                            },
+                            {
+                                "episode": 44,
+                                "airingAt": 1780192800
+                            },
+                            {
+                                "episode": 45,
+                                "airingAt": 1780797600
+                            },
+                            {
+                                "episode": 46,
+                                "airingAt": 1781402400
+                            },
+                            {
+                                "episode": 47,
+                                "airingAt": 1782007200
+                            },
+                            {
+                                "episode": 48,
+                                "airingAt": 1782612000
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

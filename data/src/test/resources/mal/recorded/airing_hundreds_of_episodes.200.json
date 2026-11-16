@@ -1,0 +1,4156 @@
+{
+    "id": 235,
+    "title": "Meitantei Conan",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/7/75199.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/7/75199l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Detective Conan"
+        ],
+        "en": "Case Closed",
+        "ja": "名探偵コナン"
+    },
+    "media_type": "tv",
+    "status": "currently_airing",
+    "num_episodes": 0,
+    "start_date": "1996-01-08",
+    "broadcast": {
+        "day_of_the_week": "saturday",
+        "start_time": "18:00"
+    },
+    "mean": 8.18,
+    "rank": 494,
+    "genres": [
+        {
+            "id": 2,
+            "name": "Adventure"
+        },
+        {
+            "id": 4,
+            "name": "Comedy"
+        },
+        {
+            "id": 39,
+            "name": "Detective"
+        },
+        {
+            "id": 7,
+            "name": "Mystery"
+        },
+        {
+            "id": 27,
+            "name": "Shounen"
+        }
+    ],
+    "average_episode_duration": 1482,
+    "synopsis": "Shinichi Kudou, a high school student of astounding talent…\n\nPerfectly preserving his original intelligence, he hides…\n\nShinichi, as Conan, starts secretly solving the senior…\n\n[Written by MAL Rewrite]",
+    "start_season": {
+        "year": 1996,
+        "season": "winter"
+    },
+    "source": "manga",
+    "studios": [
+        {
+            "id": 73,
+            "name": "TMS Entertainment"
+        }
+    ],
+    "rating": "pg_13",
+    "statistics": {
+        "status": {
+            "watching": "180986",
+            "completed": 0,
+            "on_hold": "78884",
+            "dropped": "51200",
+            "plan_to_watch": "72378"
+        },
+        "num_list_users": 383448
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 779,
+                "title": "Meitantei Conan Movie 01: Tokei Jikake no Matenrou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/77131.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/77131l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 01: The Timed Skyscraper"
+                    ],
+                    "en": "Case Closed Movie 01: The Time Bombed Skyscraper",
+                    "ja": "名探偵コナン 時計じかけの摩天楼"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1997-04-19",
+                "mean": 7.87,
+                "rank": 1024,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5640
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 780,
+                "title": "Meitantei Conan Movie 02: 14-banme no Target",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1900/94316.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1900/94316l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 02: The Fourteenth Target",
+                        "Meitantei Conan Movie 02: Jyuuyonbanme no Target"
+                    ],
+                    "en": "Case Closed Movie 02: The Fourteenth Target",
+                    "ja": "名探偵コナン １４番目の標的"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1998-04-18",
+                "mean": 7.88,
+                "rank": 994,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5940
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 781,
+                "title": "Meitantei Conan Movie 03: Seikimatsu no Majutsushi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1831/94317.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1831/94317l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 03: The Last Wizard of the Century"
+                    ],
+                    "en": "Case Closed Movie 03: The Last Wizard of the Century",
+                    "ja": "名探偵コナン 世紀末の魔術師"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1999-04-17",
+                "mean": 8.04,
+                "rank": 708,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6000
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1363,
+                "title": "Meitantei Conan Movie 04: Hitomi no Naka no Ansatsusha",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1196/94319.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1196/94319l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 04: Captured in Her Eyes"
+                    ],
+                    "en": "Case Closed Movie 04: Captured In Her Eyes",
+                    "ja": "瞳の中の暗殺者"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000-04-22",
+                "mean": 8.03,
+                "rank": 723,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5972
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1364,
+                "title": "Meitantei Conan Movie 05: Tengoku e no Countdown",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1144/92654.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1144/92654l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 05: Countdown to Heaven"
+                    ],
+                    "en": "Case Closed Movie 05: Countdown to Heaven",
+                    "ja": "名探偵コナン 天国へのカウントダウン"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-04-21",
+                "mean": 8.12,
+                "rank": 579,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6000
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1365,
+                "title": "Meitantei Conan Movie 06: Baker Street no Bourei",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1400/94320.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1400/94320l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 06: The Phantom of Baker Street"
+                    ],
+                    "en": "Case Closed Movie 06: The Phantom of Baker Street",
+                    "ja": "名探偵コナン ベイカー街の亡霊"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2002-04-20",
+                "mean": 8.3,
+                "rank": 332,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 79,
+                        "name": "Video Game"
+                    }
+                ],
+                "average_episode_duration": 6445
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1366,
+                "title": "Meitantei Conan Movie 07: Meikyuu no Crossroad",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/20984.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/20984l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 07: Crossroad in the Ancient Capital",
+                    "ja": "名探偵コナン 迷宮の十字路(クロスロード)"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-04-19",
+                "mean": 7.79,
+                "rank": 1215,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6480
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1367,
+                "title": "Meitantei Conan Movie 08: Ginyoku no Magician",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/20982.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/20982l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 08: Magician of the Silver Sky",
+                    "ja": "名探偵コナン 銀翼の奇術師[マジシャン]"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2004-04-17",
+                "mean": 8.06,
+                "rank": 671,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6480
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1368,
+                "title": "Meitantei Conan OVA 06: Kieta Daiya wo Oe! Conan & Heiji VS Kid!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/31137.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/31137l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 06: Follow the Vanished Diamond! Conan & Heiji vs. Kid!",
+                    "ja": "名探偵コナン 消えたダイヤを追え! コナン・平次vsキッド!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2006-03-15",
+                "mean": 7.35,
+                "rank": 2938,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1375
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1369,
+                "title": "Meitantei Conan OVA 01: Conan vs. Kid vs. Yaiba - Houtou Soudatsu Daikessen!!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1699/108610.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1699/108610l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 01: Conan VS KID VS Yaiba",
+                    "ja": "名探偵コナン: コナンvsキッドvsヤイバ 宝刀争奪大決戦!!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000-10-11",
+                "mean": 7.22,
+                "rank": 3687,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1505,
+                "title": "Meitantei Conan Movie 09: Suihei Senjou no Strategy",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/8/20983.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/8/20983l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 09: Strategy Above the Depths",
+                    "ja": "名探偵コナン　水平線上の陰謀"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2005-04-09",
+                "mean": 7.79,
+                "rank": 1216,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6475
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 1506,
+                "title": "Meitantei Conan Movie 10: Tantei-tachi no Requiem",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1919/94322.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1919/94322l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 10: Requiem of the Detectives"
+                    ],
+                    "en": "Detective Conan Movie 10: The Private Eyes' Requiem",
+                    "ja": "名探偵コナン　探偵たちの鎮魂歌[レクイエム]"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2006-04-15",
+                "mean": 8.03,
+                "rank": 724,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6660
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2171,
+                "title": "Meitantei Conan Movie 11: Konpeki no Jolly Roger",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1765/94323.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1765/94323l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Meitantei Conan: Konpeki no Hitsugi [Jolly Roger]"
+                    ],
+                    "en": "Detective Conan Movie 11: Jolly Roger in the Deep Azure",
+                    "ja": "名探偵コナン 紺碧の棺 （ジョリー・ロジャー）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2007-04-21",
+                "mean": 7.43,
+                "rank": 2550,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6300
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2512,
+                "title": "Meitantei Conan OVA 02: 16-nin no Yougisha!?",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/71317.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/71317l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 02: 16 Suspects",
+                    "ja": "名探偵コナン 16人の容疑者!?"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2002-01-16",
+                "mean": 7.31,
+                "rank": 3145,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2513,
+                "title": "Meitantei Conan OVA 03: Conan to Heiji to Kieta Shounen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/72319.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/72319l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 03: Conan and Heiji and the Vanished Boy",
+                    "ja": "名探偵コナン: コナンと平次と消えた少年"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-03-12",
+                "mean": 7.17,
+                "rank": 3999,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2514,
+                "title": "Meitantei Conan OVA 04: Conan to Kid to Crystal Mother",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/31141.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/31141l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 04: Conan and Kid and Crystal Mother",
+                    "ja": "名探偵コナン: コナンとキッドとクリスタルマザー"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2004-03-03",
+                "mean": 7.49,
+                "rank": 2276,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2515,
+                "title": "Meitantei Conan OVA 05: Target wa Kogorou!! Shounen Tanteidan Maruhi Report",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/31143.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/31143l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Meitantei Conan OVA 05: Hyouteki wa Kogorou!! Shounen Tanteidan Maruhi Chousa"
+                    ],
+                    "en": "Detective Conan OVA 05: The Target is Kogoro! The Detective Boys' Secret Investigation",
+                    "ja": "名探偵コナン 標的は小五郎!! 少年探偵団マル秘調査"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2005-03-09",
+                "mean": 7.22,
+                "rank": 3688,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1403
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 2597,
+                "title": "Meitantei Conan OVA 07: Agasa kara no Chousenjou! Agasa vs Conan & Shounen Tanteidan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/31145.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/31145l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 07: A Challenge from Agasa! Agasa vs. Conan and the Detective Boys",
+                    "ja": "名探偵コナン 阿笠からの挑戦状! 阿笠vsコナン&少年探偵団"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2007-03-13",
+                "mean": 7.24,
+                "rank": 3575,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1485
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 4447,
+                "title": "Meitantei Conan Movie 12: Senritsu no Full Score",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/6/22766.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/6/22766l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Meitantei Conan: Senritsu no Gakufu [Full Score]"
+                    ],
+                    "en": "Detective Conan Movie 12: Full Score of Fear",
+                    "ja": "名探偵コナン 戦慄の楽譜（フルスコア）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2008-04-19",
+                "mean": 7.78,
+                "rank": 1248,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6960
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 5348,
+                "title": "Meitantei Conan Magic File 2: Kudou Shinichi Nazo no Kabe to Kuro Lab Jiken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1509/124723.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1509/124723l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 12 Side-Story OVA: Kudou Shinichi - The Case of the Mysterious Wall and the Black Lab"
+                    ],
+                    "en": "Detective Conan Magic File 2: Kudou Shinichi - The Case of the Mysterious Wall and the Black Lab",
+                    "ja": "名探偵コナンMagic File 2 ～工藤新一 謎の壁と黒ラブ事件～"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2008-04-19",
+                "mean": 7.49,
+                "rank": 2275,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1680
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 5460,
+                "title": "Meitantei Conan Movie 13: Shikkoku no Chaser",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/22558.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/22558l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 13: The Raven Chaser",
+                    "ja": "名探偵コナン漆黒の追跡者(チェイサー)"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2009-04-18",
+                "mean": 8.2,
+                "rank": 457,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6660
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 5578,
+                "title": "Aoyama Goushou Tanpenshuu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/28783.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/28783l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Aoyama Goushou Tanpen-shuu"
+                    ],
+                    "en": "Gosho Aoyama's Collection of Short Stories",
+                    "ja": "青山剛昌短編集"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 7,
+                "start_date": "1999-03-17",
+                "mean": 7.26,
+                "rank": 3409,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1230
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 6115,
+                "title": "Lupin III vs. Meitantei Conan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1849/134190.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1849/134190l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Lupin Sansei vs Meitantei Conan"
+                    ],
+                    "en": "Lupin III vs. Detective Conan",
+                    "ja": "ルパン三世 vs 名探偵コナン"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2009-03-27",
+                "mean": 7.76,
+                "rank": 1303,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6258
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 6198,
+                "title": "Meitantei Conan OVA 08: Joshikousei Tantei Suzuki Sonoko no Jikenbo",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1982/111465.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1982/111465l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 08: High School Girl Detective Sonoko Suzuki's Case Files",
+                    "ja": "名探偵コナン 女子高生探偵　鈴木園子の事件簿"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2008-03-26",
+                "mean": 7.19,
+                "rank": 3883,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 6231,
+                "title": "Meitantei Conan Magic File 3: Shinichi to Ran Mahjong Pai to Tanabata no Omoide",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/9/37977.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/9/37977l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 13 Side-Story OVA"
+                    ],
+                    "en": "Detective Conan Magic File 3: Shinichi and Ran - Memories of Mahjong Tiles and Tanabata",
+                    "ja": "名探偵コナン Magic File 3 新一と蘭 麻雀牌と七夕の思い出"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2009-04-18",
+                "mean": 7.4,
+                "rank": 2693,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1203
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 6438,
+                "title": "Meitantei Conan OVA 09: 10-nengo no Stranger",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/14746.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/14746l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 09: The Stranger in 10 Years...",
+                    "ja": "名探偵コナン～10年後の異邦人[ストレンジャー]～"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2009-06-17",
+                "mean": 7.89,
+                "rank": 972,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1320
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 6467,
+                "title": "Meitantei Conan Movie 14: Tenkuu no Lost Ship",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/22312.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/22312l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 14: The Lost Ship in the Sky",
+                    "ja": "名探偵コナン 天空の難破船"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2010-04-17",
+                "mean": 8.11,
+                "rank": 594,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6120
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 7303,
+                "title": "Meitantei Conan: Kuro no Soshiki to Taiketsu no Rekishi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1309/121762.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1309/121762l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Meitantei Conan Episode 490.1",
+                        "Case Closed: Black History"
+                    ],
+                    "en": "Detective Conan: Black History",
+                    "ja": "名探偵コナン ブラック ヒストリー 黒の組織と対決の歴史"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2007-12-17",
+                "mean": 7.54,
+                "rank": 2058,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 8310,
+                "title": "Magic Kaito",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1946/149930.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1946/149930l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Kaito Kid",
+                        "Majikku Kaito",
+                        "Kaitou Kid",
+                        "Magic Kaitou",
+                        "Detective Conan Special: Secret Birth of Kaito Kid",
+                        "Kaitou Kid Tanjou no Himitsu"
+                    ],
+                    "en": "",
+                    "ja": "まじっく快斗"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2010-04-17",
+                "mean": 7.78,
+                "rank": 1247,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1479
+            },
+            "relation_type": "alternative_setting",
+            "relation_type_formatted": "Alternative setting"
+        },
+        {
+            "node": {
+                "id": 8331,
+                "title": "Meitantei Conan Magic File 4: Osaka Okonomiyaki Odyssey",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/21912.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/21912l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Magic File 4: Osaka Okonomiyaki Odyssey",
+                    "ja": "名探偵コナンMAGIC FILE 4 ～大阪お好み焼きオデッセイ～"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2010-04-17",
+                "mean": 7.47,
+                "rank": 2358,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1531
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 8609,
+                "title": "Meitantei Conan OVA 10: Kid in Trap Island",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/23698.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/23698l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 10: Kid in Trap Island",
+                    "ja": "名探偵コナン ～KID in TRAP ISLAND～"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2010-04-14",
+                "mean": 7.74,
+                "rank": 1367,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 9785,
+                "title": "Meitantei Conan: Conan vs. Kid - Shark & Jewel",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1864/138513.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1864/138513l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Conan vs. Kid - Shark & Jewel",
+                    "ja": "名探偵コナン コナンvsキッド SHARK & JEWEL"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2005-07-29",
+                "mean": 7.62,
+                "rank": 1734,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 960
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 9786,
+                "title": "Meitantei Conan: Conan vs. Kid - Shikkoku no Sniper",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/27102.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/27102l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Conan vs. Kid - Jet Black Sniper",
+                    "ja": "名探偵コナン コナンvsキッド 漆黒の狙撃者(スナイパー)"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2006-07-28",
+                "mean": 7.23,
+                "rank": 3638,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 960
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 9963,
+                "title": "Meitantei Conan Movie 15: Chinmoku no Quarter",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/9/32035.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/9/32035l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 15: Quarter of Silence",
+                    "ja": "名探偵コナン 沈黙の15分"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2011-04-16",
+                "mean": 8.01,
+                "rank": 759,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6540
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 10531,
+                "title": "Meitantei Conan Magic File 5: Niigata - Tokyo Omiyage Capriccio",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/6/28938.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/6/28938l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Magic File 5: Niigata - Tokyo Omiyage Capriccio",
+                    "ja": "名探偵コナン MAGIC FILE 2011 ～新潟～東京 おみやげ狂騒曲（カプリチオ）～"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2011-04-16",
+                "mean": 7.3,
+                "rank": 3200,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 10703,
+                "title": "Meitantei Conan OVA 11: London kara no Maru Hi Shirei",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/29489.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/29489l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 11: A Secret Order from London",
+                    "ja": "名探偵コナン ～ロンドンからの㊙指令 (ロンドンからのマル秘指令)"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2011-05-30",
+                "mean": 7.39,
+                "rank": 2744,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 10766,
+                "title": "Meitantei Conan vs. Wooo",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/29671.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/29671l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan vs. Wooo",
+                    "ja": "名探偵コナン vs Wooo"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 2,
+                "start_date": "2011-04-22",
+                "mean": 6.12,
+                "rank": 10442,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 437
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 12117,
+                "title": "Meitantei Conan Movie 16: 11-ninme no Striker",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/8/37511.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/8/37511l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 16: The Eleventh Striker",
+                    "ja": "劇場版　名探偵コナン　11人目のストライカー"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2012-04-14",
+                "mean": 7.7,
+                "rank": 1479,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 6600
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 13837,
+                "title": "Meitantei Conan Bonus File: Fantasista no Hana",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/38385.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/38385l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Magic File 6: Fantasista Flower"
+                    ],
+                    "en": "Detective Conan Bonus File: Fantasista Flower",
+                    "ja": "名探偵コナン BONUS FILE ファンタジスタの花"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2012-04-14",
+                "mean": 7.34,
+                "rank": 2987,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 13839,
+                "title": "Meitantei Conan OVA 12: Excalibur no Kiseki",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/59513.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/59513l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan OVA 12: The Miracle of Excalibur",
+                    "ja": "名探偵コナン　えくすかりばあの奇跡"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2012-05-24",
+                "mean": 7.02,
+                "rank": 4848,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1767
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 14735,
+                "title": "Meitantei Conan Movie 17: Zekkai no Private Eye",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/4/47419.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/4/47419l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 17: Private Eye in the Distant Sea",
+                    "ja": "名探偵コナン 絶海の探偵"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2013-04-20",
+                "mean": 7.66,
+                "rank": 1600,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6625
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 18429,
+                "title": "Lupin III vs. Meitantei Conan: The Movie",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/4/51663.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/4/51663l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Rupan Sansei vs. Meitantei Conan: The Movie",
+                        "Rupan Sansei vs Meitantei Conan (Movie)"
+                    ],
+                    "en": "Lupin III vs. Detective Conan: The Movie",
+                    "ja": "ルパン三世vs.名探偵コナン THE MOVIE"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2013-12-07",
+                "mean": 7.85,
+                "rank": 1061,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6453
+            },
+            "relation_type": "character",
+            "relation_type_formatted": "Character"
+        },
+        {
+            "node": {
+                "id": 21419,
+                "title": "Meitantei Conan Movie 18: Ijigen no Sniper",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/60289.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/60289l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 18: The Sniper from Another Dimension"
+                    ],
+                    "en": "Detective Conan Movie 18: Dimensional Sniper",
+                    "ja": "名探偵コナン　異次元の狙撃手（スナイパー）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2014-04-19",
+                "mean": 8.06,
+                "rank": 672,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6600
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 21867,
+                "title": "Edogawa Conan Shissou Jiken: Shijou Saiaku no Futsukakan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1533/133822.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1533/133822l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "The Disappearance of Conan Edogawa: The Worst Two Days in History",
+                    "ja": "名探偵コナン 江戸川コナン失踪事件～史上最悪の二日間～"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2014-12-26",
+                "mean": 7.75,
+                "rank": 1324,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5493
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 24169,
+                "title": "Meitantei Conan: Toubousha Mouri Kogorou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1183/152900.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1183/152900l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: The Fugitive Kogorou Mouri",
+                    "ja": "逃亡者・毛利小五郎"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2014-04-30",
+                "mean": 6.95,
+                "rank": 5189,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1335
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 25517,
+                "title": "Magic Kaito 1412",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/67807.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/67807l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Magic Kaito 2014"
+                    ],
+                    "en": "",
+                    "ja": "まじっく快斗1412"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2014-10-04",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "17:30"
+                },
+                "mean": 7.87,
+                "rank": 1021,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "relation_type": "alternative_setting",
+            "relation_type_formatted": "Alternative setting"
+        },
+        {
+            "node": {
+                "id": 28479,
+                "title": "Meitantei Conan Movie 19: Gouka no Himawari",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/73618.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/73618l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 19: The Hellfire Sunflowers"
+                    ],
+                    "en": "Detective Conan Movie 19: The Sunflowers of Inferno",
+                    "ja": "映画 名探偵コナン 業火の向日葵"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2015-04-18",
+                "mean": 7.74,
+                "rank": 1366,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6720
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 32005,
+                "title": "Meitantei Conan Movie 20: Junkoku no Nightmare",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/78894.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/78894l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 20: Pitch Black Nightmare"
+                    ],
+                    "en": "Detective Conan Movie 20: The Darkest Nightmare",
+                    "ja": "劇場版　名探偵コナン　純黒の悪夢（ナイトメア）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2016-04-16",
+                "mean": 8.19,
+                "rank": 474,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6720
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 33145,
+                "title": "Meitantei Conan: Nazo no Suisei Kaijuu wo Oe!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/81490.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/81490l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Chase the Mysterious Comet Monster!",
+                    "ja": "名探偵コナン 謎のすい星怪獣を追え!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-11-09",
+                "mean": 6.39,
+                "rank": 8827,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 870
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 33148,
+                "title": "Meitantei Conan: Jomon Taiken Yatte Miyou!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/81492.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/81492l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Let's Experience the Jomon Period!",
+                    "ja": "名探偵コナン 縄文体験やってみよう!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1999-06-25",
+                "mean": 6.3,
+                "rank": 9394,
+                "genres": [
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 900
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 33149,
+                "title": "Meitantei Conan: Internet Nazo no Mail Jiken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/85629.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/85629l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: The Internet - The Mysterious E-mail Case",
+                    "ja": "名探偵コナン インターネット謎のメール事件"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2000-06-23",
+                "mean": 6.4,
+                "rank": 8771,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 842
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 33150,
+                "title": "Meitantei Conan: Pyramid kara no Chousenjou!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1876/152181.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1876/152181l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: A Written Challenge from the Pyramids!",
+                    "ja": "名探偵コナン ピラミッドからの挑戦状!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-06-22",
+                "mean": 6.48,
+                "rank": 8241,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1020
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 33151,
+                "title": "Meitantei Conan: Kodai Kyouryuu no Nazo ni Semare!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/79627.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/79627l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan: Approaching the Mystery of the Ancient Dinosaurs!"
+                    ],
+                    "en": "",
+                    "ja": "名探偵コナン 古代恐竜の謎に迫れ!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2002-06-21",
+                "mean": 6.13,
+                "rank": 10392,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 900
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 33152,
+                "title": "Meitantei Conan: Machi Tanken! Doubutsu Mark wo Get Seyo!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/79628.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/79628l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: City Exploration! Get the Animal Mark!",
+                    "ja": "名探偵コナン 町探検！ 動物マークをゲットせよ！"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-06-20",
+                "mean": 6.35,
+                "rank": 9061,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 900
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 34036,
+                "title": "Meitantei Conan: Episode One - Chiisaku Natta Meitantei",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/81968.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/81968l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Episode One - The Great Detective Turned Small",
+                    "ja": "名探偵コナン エピソードONE 小さくなった名探偵"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2016-12-09",
+                "mean": 8.26,
+                "rank": 377,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5580
+            },
+            "relation_type": "alternative_version",
+            "relation_type_formatted": "Alternative version"
+        },
+        {
+            "node": {
+                "id": 34430,
+                "title": "Meitantei Conan Movie 21: Karakurenai no Love Letter",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/2/83919.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/2/83919l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 21: The Crimson Love Letter",
+                    "ja": "劇場版『名探偵コナン から紅の恋歌』"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2017-04-15",
+                "mean": 7.68,
+                "rank": 1541,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6715
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 35798,
+                "title": "Meitantei Conan Movie 22: Zero no Shikkounin",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/90104.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/90104l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 22: Zero's Executioner"
+                    ],
+                    "en": "Case Closed Movie 22: Zero the Enforcer",
+                    "ja": "劇場版 名探偵コナン ゼロの執行人"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2018-04-13",
+                "mean": 7.86,
+                "rank": 1043,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6600
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 36269,
+                "title": "Meitantei Conan: Bouhan Guide",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/87607.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/87607l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan: Bouhan Guide",
+                        "Case Closed: Anti-Crime Guide"
+                    ],
+                    "en": "Detective Conan: Anti-Crime Guide",
+                    "ja": "名探偵コナン 防犯ガイド"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2006",
+                "mean": 6.76,
+                "rank": 6371,
+                "genres": [
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1560
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 36760,
+                "title": "Meitantei Conan: Hoshikage no Majutsushi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/88889.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/88889l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: The Magician of Starlight",
+                    "ja": "名探偵コナン～星影の魔術師～"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2012",
+                "mean": 6.96,
+                "rank": 5140,
+                "genres": [
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 29,
+                        "name": "Space"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 38770,
+                "title": "Meitantei Conan Movie 23: Konjou no Fist",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1010/98309.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1010/98309l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 23: The Fist of Blue Sapphire"
+                    ],
+                    "en": "Case Closed Movie 23: The Fist of Blue Sapphire",
+                    "ja": "劇場版 名探偵コナン 紺青の拳（フィスト）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2019-04-12",
+                "mean": 7.87,
+                "rank": 1025,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6560
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 39764,
+                "title": "Meitantei Conan Movie 24: Hiiro no Dangan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1306/112616.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1306/112616l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 24: The Scarlet Bullet",
+                    "ja": "名探偵コナン 緋色の弾丸"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2021-04-16",
+                "mean": 7.79,
+                "rank": 1217,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6600
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 40348,
+                "title": "Shounen Sunday CM: Meitantei Conan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1661/102859.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1661/102859l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Shounen Sunday CM: Detective Conan",
+                    "ja": "CM 小学館 少年サンデー「名探偵コナン」編"
+                },
+                "media_type": "cm",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "1995-08",
+                "mean": 5.72,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 28
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 42476,
+                "title": "Meitantei Conan: Shakunetsu no Ginga Tetsudou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1318/108547.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1318/108547l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: The Burning Galactic Railway",
+                    "ja": "名探偵コナン 灼熱の銀河鉄道"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2020-02-01",
+                "mean": 6.83,
+                "rank": 5904,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1800
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 47413,
+                "title": "Meitantei Conan: Hiiro no Fuzai Shoumei",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1234/117118.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1234/117118l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Case Closed: The Scarlet Alibi"
+                    ],
+                    "en": "Detective Conan: The Scarlet Alibi",
+                    "ja": "名探偵コナン 緋色の不在証明"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2021-02-11",
+                "mean": 7.39,
+                "rank": 2745,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5548
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 49320,
+                "title": "Meitantei Conan Movie 25: Halloween no Hanayome",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1744/120789.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1744/120789l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 25: The Bride of Halloween",
+                    "ja": "名探偵コナン ハロウィンの花嫁"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-04-15",
+                "mean": 8.05,
+                "rank": 689,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6600
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 49611,
+                "title": "Meitantei Conan: Necchuushou no Nazo wo Toke!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1761/117190.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1761/117190l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Solve the Mystery of Heatstroke!",
+                    "ja": "名探偵コナン 熱中症の謎を解け！"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-05",
+                "mean": 6.05,
+                "rank": 10866,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 512
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 50010,
+                "title": "Meitantei Conan: Hannin no Hanzawa-san",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1560/125527.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1560/125527l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan: Hannin no Hanzawa-san",
+                        "Detective Conan: Hanzawa the Criminal"
+                    ],
+                    "en": "Detective Conan: The Culprit Hanzawa",
+                    "ja": "名探偵コナン 犯人の犯沢さん"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2022-10-04",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:05"
+                },
+                "mean": 6.89,
+                "rank": 5538,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 540
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 50012,
+                "title": "Meitantei Conan: Zero no Tea Time",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1445/121082.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1445/121082l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan: Zero no Tea Time",
+                        "Meitantei Conan: Zero no Nichijou",
+                        "Zero's Daily Life"
+                    ],
+                    "en": "Detective Conan: Zero's Tea Time",
+                    "ja": "名探偵コナン ゼロの日常（ティータイム）"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 6,
+                "start_date": "2022-04-05",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:20"
+                },
+                "mean": 6.98,
+                "rank": 5049,
+                "genres": [
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 800
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 51782,
+                "title": "Meitantei Conan: Honchou no Keiji Koi Monogatari - Kekkon Zenya",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1774/123682.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1774/123682l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Love Story at Police Headquarters - Wedding Eve",
+                    "ja": "本庁の刑事恋物語～結婚前夜～"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2022-04-15",
+                "mean": 7.11,
+                "rank": 4357,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5674
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 53540,
+                "title": "Meitantei Conan Movie 26: Kurogane no Submarine",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1138/133101.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1138/133101l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 26: Black Iron Submarine",
+                    "ja": "名探偵コナン 黒鉄の魚影 (サブマリン)"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-04-14",
+                "mean": 8.36,
+                "rank": 278,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6540
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 53780,
+                "title": "Meitantei Conan: Haibara Ai Monogatari - Kurogane no Mystery Train",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1285/131672.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1285/131672l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: Ai Haibara's Story - Jet-Black Mystery Train",
+                    "ja": "名探偵コナン 灰原哀物語～黒鉄（くろがね）のミステリートレイン～"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-01-06",
+                "mean": 7.4,
+                "rank": 2694,
+                "genres": [
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5347
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 53976,
+                "title": "Meitantei Conan: Tantei-tachi no Starry Night",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1409/132067.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1409/132067l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "名探偵コナン 探偵たちの星月夜（スターリーナイト）"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2015",
+                "mean": 6.19,
+                "rank": 10023,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 29,
+                        "name": "Space"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 54864,
+                "title": "Meitantei Conan: Keisatsu Gakkou-hen Wild Police Story - Case. Furuya Rei",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1039/140414.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1039/140414l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Meitantei Conan Episode 1076.5"
+                    ],
+                    "en": "Detective Conan: Police Academy Arc Wild Police Story - Case. Furuya Rei",
+                    "ja": "名探偵コナン 警察学校編 Wild Police Story CASE.降谷零"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2023-03-11",
+                "mean": 7.18,
+                "rank": 3937,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1425
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 55134,
+                "title": "Meitantei Conan: TDK Video Head Cleaner",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1241/135597.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1241/135597l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: TDK Video Head Cleaner",
+                    "ja": "TDK 名探偵コナンと解決 ビデオヘッドクリーナーVHS/S-VHS用"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 5,
+                "start_date": "1996",
+                "mean": 5.6,
+                "rank": 13147,
+                "genres": [
+                    {
+                        "id": 56,
+                        "name": "Educational"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 40
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 56785,
+                "title": "Meitantei Conan Movie 27: 100-man Dollar no Michishirube",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1888/141209.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1888/141209l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Meitantei Conan: Hyakuman Doru no Michishirube"
+                    ],
+                    "en": "Detective Conan Movie 27: The Million-Dollar Pentagram",
+                    "ja": "名探偵コナン 100万ドルの五稜星"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-04-12",
+                "mean": 7.91,
+                "rank": 928,
+                "genres": [
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6622
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 57441,
+                "title": "Meitantei Conan vs. Kaitou Kid",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1411/140221.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1411/140221l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan vs. Kid the Phantom Thief",
+                    "ja": "名探偵コナン VS. 怪盗キッド"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-01-05",
+                "mean": 7.04,
+                "rank": 4744,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 4816
+            },
+            "relation_type": "summary",
+            "relation_type_formatted": "Summary"
+        },
+        {
+            "node": {
+                "id": 60445,
+                "title": "Meitantei Conan Movie 28: Sekigan no Flashback",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1036/148145.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1036/148145l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan Movie 28: One-Eyed Flashback",
+                    "ja": "名探偵コナン 隻眼の残像"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-04-18",
+                "mean": 7.65,
+                "rank": 1636,
+                "genres": [
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6535
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 62061,
+                "title": "Meitantei Conan: Senkou no Payload",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1164/151063.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1164/151063l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan: The Shining Payload"
+                    ],
+                    "en": "",
+                    "ja": "名探偵コナン 閃光の宇宙船"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-03-08",
+                "rank": 19075,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 29,
+                        "name": "Space"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "relation_type": "other",
+            "relation_type_formatted": "Other"
+        },
+        {
+            "node": {
+                "id": 62387,
+                "title": "Meitantei Conan Movie 29: Highway no Datenshi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1788/155583.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1788/155583l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan Movie 29: Fallen Angel of the Highway"
+                    ],
+                    "en": "",
+                    "ja": "名探偵コナン ハイウェイの堕天使"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2026-04-10",
+                "mean": 7.25,
+                "rank": 3511,
+                "genres": [
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6540
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 64359,
+                "title": "Meitantei Conan: Hanamaru na Answer",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1677/158377.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1677/158377l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: The Gold-Star Answer",
+                    "ja": "名探偵コナン はなまるな真実(アンサー)"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2026-06-06",
+                "mean": 6.92,
+                "rank": 5349,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1480
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        },
+        {
+            "node": {
+                "id": 64913,
+                "title": "Meitantei Conan: 30-gou Satsujin Jiken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1008/160011.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1008/160011l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Detective Conan: The Counterfeit Case of Ultra 30",
+                    "ja": "名探偵コナン 30号殺人事件"
+                },
+                "media_type": "tv_special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2026-09-25",
+                "mean": 7.33,
+                "rank": 3045,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5599
+            },
+            "relation_type": "side_story",
+            "relation_type_formatted": "Side story"
+        }
+    ],
+    "recommendations": [
+        {
+            "node": {
+                "id": 1535,
+                "title": "Death Note",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1079/138100.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1079/138100l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "DN"
+                    ],
+                    "en": "Death Note",
+                    "ja": "デスノート"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 37,
+                "start_date": "2006-10-04",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:56"
+                },
+                "mean": 8.62,
+                "rank": 103,
+                "genres": [
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 18
+        },
+        {
+            "node": {
+                "id": 31043,
+                "title": "Boku dake ga Inai Machi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/77957.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/77957l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Town Where Only I am Missing",
+                        "BokuMachi"
+                    ],
+                    "en": "Erased",
+                    "ja": "僕だけがいない街"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2016-01-08",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "00:55"
+                },
+                "mean": 8.31,
+                "rank": 321,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    },
+                    {
+                        "id": 78,
+                        "name": "Time Travel"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 14
+        },
+        {
+            "node": {
+                "id": 2076,
+                "title": "Kindaichi Shounen no Jikenbo",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1702/120440.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1702/120440l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Les Enquetes de Kindaichi",
+                        "Young Kindaichi's Casebook",
+                        "Kindaichi Case Files"
+                    ],
+                    "en": "The File of Young Kindaichi",
+                    "ja": "金田一少年の事件簿"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 148,
+                "start_date": "1997-04-07",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "19:00"
+                },
+                "mean": 7.98,
+                "rank": 800,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "num_recommendations": 14
+        },
+        {
+            "node": {
+                "id": 407,
+                "title": "Tantei Gakuen Q",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1/407.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1/407l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Academy Q"
+                    ],
+                    "en": "Detective School Q",
+                    "ja": "探偵学園Q"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 45,
+                "start_date": "2003-04-15",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "18:55"
+                },
+                "mean": 7.76,
+                "rank": 1311,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "num_recommendations": 11
+        },
+        {
+            "node": {
+                "id": 8425,
+                "title": "Gosick",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/27906.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/27906l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "GOSICK -ゴシック-"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2011-01-08",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:23"
+                },
+                "mean": 8.04,
+                "rank": 703,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "num_recommendations": 10
+        },
+        {
+            "node": {
+                "id": 341,
+                "title": "Spiral: Suiri no Kizuna",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1771/92118.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1771/92118l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Spiral: Bond of Reasoning",
+                    "ja": "スパイラル -推理の絆-"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2002-10-01",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "18:00"
+                },
+                "mean": 7.22,
+                "rank": 3706,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 9
+        },
+        {
+            "node": {
+                "id": 12189,
+                "title": "Hyouka",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/50521.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/50521l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hyou-ka",
+                        "Hyouka: You can't escape",
+                        "Hyou-ka: You can't escape",
+                        "Hyoka"
+                    ],
+                    "en": "Hyouka",
+                    "ja": "氷菓"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 22,
+                "start_date": "2012-04-23",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "00:00"
+                },
+                "mean": 8.04,
+                "rank": 704,
+                "genres": [
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 36,
+                        "name": "Slice of Life"
+                    }
+                ],
+                "average_episode_duration": 1539
+            },
+            "num_recommendations": 7
+        },
+        {
+            "node": {
+                "id": 244,
+                "title": "Agatha Christie no Meitantei Poirot to Marple",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/6/3149.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/6/3149l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Agatha Christie's Great Detectives Poirot and Marple",
+                    "ja": "アガサ・クリスティーの名探偵ポワロとマープル"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 39,
+                "start_date": "2004-07-04",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "19:30"
+                },
+                "mean": 6.95,
+                "rank": 5166,
+                "genres": [
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    }
+                ],
+                "average_episode_duration": 1500
+            },
+            "num_recommendations": 5
+        },
+        {
+            "node": {
+                "id": 2985,
+                "title": "Majin Tantei Nougami Neuro",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/20930.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/20930l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Private Evil-Eye Nougami Neuro",
+                        "Demon Detective Nougami Neuro"
+                    ],
+                    "en": "Neuro: Supernatural Detective",
+                    "ja": "魔人探偵 脳噛ネウロ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2007-10-03",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "01:29"
+                },
+                "mean": 7.59,
+                "rank": 1848,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 6,
+                        "name": "Mythology"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "num_recommendations": 4
+        },
+        {
+            "node": {
+                "id": 10568,
+                "title": "Kamisama no Memochou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/75202.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/75202l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "It's the Only NEET Thing to Do",
+                        "Kami-sama no Memo-chou",
+                        "Kami-sama no Memo-chou",
+                        "God's Notebook",
+                        "Notebook of God"
+                    ],
+                    "en": "Heaven's Memo Pad",
+                    "ja": "神様のメモ帳"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2011-07-02",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:30"
+                },
+                "mean": 7.46,
+                "rank": 2392,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    }
+                ],
+                "average_episode_duration": 1560
+            },
+            "num_recommendations": 3
+        }
+    ]
+}

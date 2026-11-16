@@ -1,0 +1,419 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 61469,
+                    "episodes": 11,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1790323200
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1790928000
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1791532800
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1792137600
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1792742400
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1793347200
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1793952000
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1794556800
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1795161600
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1795766400
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1796371200
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 64340,
+                    "episodes": 12,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1790519400
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1791124200
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1791729000
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1792333800
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1792938600
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1793543400
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1794148200
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1794753000
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1795357800
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1795962600
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1796567400
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1797172200
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 64398,
+                    "episodes": 52,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": true
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1781949600
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1782554400
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1783159200
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1783764000
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1784368800
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1784973600
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1785578400
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1786183200
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1786788000
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1787392800
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1787997600
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1788602400
+                            },
+                            {
+                                "episode": 13,
+                                "airingAt": 1789207200
+                            },
+                            {
+                                "episode": 14,
+                                "airingAt": 1789812000
+                            },
+                            {
+                                "episode": 15,
+                                "airingAt": 1790416800
+                            },
+                            {
+                                "episode": 16,
+                                "airingAt": 1791021600
+                            },
+                            {
+                                "episode": 17,
+                                "airingAt": 1791626400
+                            },
+                            {
+                                "episode": 18,
+                                "airingAt": 1792231200
+                            },
+                            {
+                                "episode": 19,
+                                "airingAt": 1792836000
+                            },
+                            {
+                                "episode": 20,
+                                "airingAt": 1793440800
+                            },
+                            {
+                                "episode": 21,
+                                "airingAt": 1794045600
+                            },
+                            {
+                                "episode": 22,
+                                "airingAt": 1794650400
+                            },
+                            {
+                                "episode": 23,
+                                "airingAt": 1795255200
+                            },
+                            {
+                                "episode": 24,
+                                "airingAt": 1795860000
+                            },
+                            {
+                                "episode": 25,
+                                "airingAt": 1796464800
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 64503,
+                    "episodes": null,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1791705600
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1792310400
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1792915200
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1793520000
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1794124800
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1794729600
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1795334400
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1795939200
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1796544000
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1797148800
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1797753600
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1798358400
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 64505,
+                    "episodes": null,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1791707400
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1792312200
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1792917000
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1793521800
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1794126600
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1794731400
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1795336200
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1795941000
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1796545800
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1797150600
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1797755400
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1798360200
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 64534,
+                    "episodes": null,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1790866560
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1791471360
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1792076160
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1792680960
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1793285760
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1793890560
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1794495360
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1795100160
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1795704960
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1796309760
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1796914560
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1797519360
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

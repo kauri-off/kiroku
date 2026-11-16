@@ -1,0 +1,47 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 235,
+                    "episodes": null,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1217,
+                                "airingAt": 1792227600
+                            },
+                            {
+                                "episode": 1218,
+                                "airingAt": 1793437200
+                            },
+                            {
+                                "episode": 1219,
+                                "airingAt": 1794042000
+                            },
+                            {
+                                "episode": 1220,
+                                "airingAt": 1794646800
+                            },
+                            {
+                                "episode": 1221,
+                                "airingAt": 1795251600
+                            },
+                            {
+                                "episode": 1222,
+                                "airingAt": 1795856400
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

@@ -156,28 +156,7 @@ Acceptance: at the start, the aired counts of three airing titles, one of them o
 other than AniList (the broadcaster's or a streaming service's schedule). Over seven days the owner finds no wrong
 "aired" or "to watch" value on a title with an exact count.
 
-- [ ] **M3-01 Recorded answers of AniList.** The requests the app makes of AniList are written once, for the
-  recorder and the client alike, and ask only what the app reads: a title's episodes with their numbers and times,
-  its episode total and its state at AniList. A build task sends them one at a time, far below AniList's limit and
-  never to provoke it, and stores each answer's status and body in `data/src/test/resources/anilist/recorded/`;
-  the limit AniList reports with an ordinary answer goes into a note beside them. The titles come from MAL's
-  public charts, never from a person's list, and the client-id recorder records each title's MAL page on the same
-  day, so a test has both sources' view of one title. Cases, one title each: airing weekly, with episodes aired
-  and to come; releasing at AniList with no episode time at all; on a break, with episodes aired and the next one
-  weeks away or not scheduled; a later season that AniList numbers on from the one before; several hundred
-  episodes and a total MAL does not know; not yet aired with the first episode's time, and not yet aired without
-  it; finished within the last month; totals that differ between the two sources by one, and by more; an episode
-  numbered 0; a MAL id AniList does not know, asked alone and among others; and one request for more ids than
-  AniList answers at once. A case no title was found for is named in the hand-off, and the task that needs it
-  alters a recorded answer in its test. No file holds a header, a cookie, a picture's address, a description or
-  anything about a user of AniList or of MAL. The agent reads AniList's API terms in full; section 2.2 and item 3
-  of section 13 are corrected from the terms and the answers.
-  **Needs:** nothing.
-  **Check:** `tools/gw :data:<the task>` writes the files and is in no build or check; tests: every file is named
-  by the recorder's list, holds no field the requests do not ask for, and has its title's MAL page among MAL's
-  recorded answers. The hand-off says, each with the file that shows it: how many ids one request takes and how
-  the rest is paged, how far back a schedule goes, what a break and a title without a schedule look like, how an
-  unknown id is answered alone and among others, the limit reported, and what the terms ask of a client.
+- [x] **M3-01 Recorded answers of AniList.**
 
 - [ ] **M3-02 [A] Airing calculator.** In `:core` only. From what is stored of a title (MAL's data and AniList's
   schedule) and an instant it gives the aired count with its confidence, the total and the next episode, and with

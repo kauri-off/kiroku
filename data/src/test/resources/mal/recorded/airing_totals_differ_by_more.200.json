@@ -1,0 +1,173 @@
+{
+    "id": 51039,
+    "title": "Doupo Cangqiong: Nian Fan",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/1419/126374.jpg",
+        "large": "https://cdn.myanimelist.net/images/anime/1419/126374l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [
+            "Fights Break Sphere 5th Season",
+            "BTTH",
+            "Battle Through The Heavens 5th Season",
+            "Doupo Cangqiong: Nian Fan 1-4",
+            "斗破苍穹年番1-4"
+        ],
+        "en": "Fights Break Sphere 5",
+        "ja": "斗破苍穹年番"
+    },
+    "media_type": "ona",
+    "status": "finished_airing",
+    "num_episodes": 219,
+    "start_date": "2022-07-31",
+    "mean": 8.54,
+    "rank": 145,
+    "genres": [
+        {
+            "id": 1,
+            "name": "Action"
+        },
+        {
+            "id": 2,
+            "name": "Adventure"
+        },
+        {
+            "id": 10,
+            "name": "Fantasy"
+        },
+        {
+            "id": 13,
+            "name": "Historical"
+        },
+        {
+            "id": 17,
+            "name": "Martial Arts"
+        }
+    ],
+    "average_episode_duration": 1440,
+    "end_date": "2026-11-15",
+    "synopsis": "Fifth season of Doupo Cangqiong.",
+    "start_season": {
+        "year": 2022,
+        "season": "summer"
+    },
+    "source": "web_novel",
+    "studios": [
+        {
+            "id": 1827,
+            "name": "Motion Magic"
+        }
+    ],
+    "rating": "pg_13",
+    "statistics": {
+        "status": {
+            "watching": "8556",
+            "completed": "331",
+            "on_hold": "545",
+            "dropped": "503",
+            "plan_to_watch": "3134"
+        },
+        "num_list_users": 13069
+    },
+    "related_anime": [
+        {
+            "node": {
+                "id": 49701,
+                "title": "Doupo Cangqiong: San Nian Zhi Yue",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1029/118861.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1029/118861l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Fights Break Sphere: Three Year Agreement",
+                        "斗破苍穹 特别篇3",
+                        "Doupo Cangqiong Special 3",
+                        "Battle Through the Heavens Special 3",
+                        "BTTH"
+                    ],
+                    "en": "Fights Break Sphere Special 3: Three Years of Pledge",
+                    "ja": "斗破苍穹 三年之约"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2021-10-31",
+                "mean": 8.51,
+                "rank": 158,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "relation_type": "prequel",
+            "relation_type_formatted": "Prequel"
+        },
+        {
+            "node": {
+                "id": 64448,
+                "title": "Doupo Cangqiong Movie: Shuang Di Zhi Zhan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1507/160878.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1507/160878l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Doupo Cangqiong Juchang Ban: Shuang Di Zhi Zhan, BTTH"
+                    ],
+                    "en": "",
+                    "ja": "斗破苍穹剧场版 双帝之战"
+                },
+                "media_type": "ona",
+                "status": "not_yet_aired",
+                "num_episodes": 1,
+                "start_date": "2026-11-22",
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    }
+                ],
+                "average_episode_duration": 0
+            },
+            "relation_type": "sequel",
+            "relation_type_formatted": "Sequel"
+        }
+    ],
+    "recommendations": []
+}

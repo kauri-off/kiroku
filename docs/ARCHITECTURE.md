@@ -72,13 +72,14 @@ MAL (from its API reference):
   setting "Show adult content in search" is on. Inside a title's page the setting changes only its recommendations:
   the title and its related titles are served either way.
 
-AniList (from live queries):
+AniList (from its API documentation and recorded answers):
 
-- No authentication. A request without a `User-Agent` is refused. It reports a limit of 30 requests per minute;
-  the app limits itself below that, and is conservative towards MAL, which publishes no limit.
-- **Many titles that AniList marks as releasing have no schedule at all**, some MAL ids have no AniList entry, and
-  AniList sometimes numbers episodes differently from MAL (a second season that continues at 13). All three are
-  normal cases for section 4, not errors.
+- No authentication. A request without a `User-Agent` is refused. Its documented limit is 90 requests a minute, 30
+  while its API is degraded; the app limits itself below that, and is conservative towards MAL, which publishes no
+  limit.
+- **Many titles that AniList marks as releasing have no schedule at all**, some MAL ids have no AniList entry and
+  some have two, and AniList sometimes numbers episodes differently from MAL (a second season that continues at
+  13, or one MAL title split into seasons that each start at 1). All are normal cases for section 4, not errors.
 
 ### 2.3 When a source fails
 
@@ -910,8 +911,12 @@ Each of these could change a decision above.
    list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
    (believed to be three characters); what its website changes by itself when an edit completes a title, which W7
    assumes (through the API it changes nothing by itself).
-3. **AniList:** its API terms have not been read in full (assumed: a non-commercial open-source client may use
-   it). How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not measured.
+3. **AniList:** its API terms prohibit its use "within competing, non-complementary services of the same nature",
+   anime list and tracker services included, for all its data. The owner reads Kiroku, which keeps no list at
+   AniList and is open source and non-commercial, as complementary, and the stored schedules of the tracked titles,
+   forgotten at sign-out, as a cache rather than the data storage the terms prohibit; he accepts the risk that
+   AniList reads its terms otherwise. How often its episode numbering differs from MAL's, and so how often A4 and A5
+   apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
 5. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
