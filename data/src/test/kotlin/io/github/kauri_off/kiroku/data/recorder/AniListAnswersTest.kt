@@ -48,8 +48,8 @@ class AniListAnswersTest {
     @Test
     fun `every title of a case has its MAL page among MAL's recorded answers`() {
         val ofMal =
-            RecordedAnswers.files
-                .filter { it.extension == "json" }
+            AiringMalPages
+                .mapNotNull { ask -> RecordedAnswers.files.singleOrNull { it.name.substringBefore('.') == ask.name } }
                 .mapNotNull { (Json.parseToJsonElement(it.readText()) as? JsonObject)?.get("id")?.jsonPrimitive?.intOrNull }
                 .toSet()
 
@@ -81,9 +81,12 @@ class AniListAnswersTest {
         val asked = answerTo(AniListSchedule.QUERY)
         val planted =
             Json.parseToJsonElement(
-                """{"data":{"Page":{"media":[{"idMal":1,"coverImage":{"large":"x"},"status":{}}]}},"errors":[]}""",
+                """{"data":{"Page":{"media":[{"idMal":1,"coverImage":{"large":"x"},"status":{},"airingSchedule":"x"}]}},"errors":[]}""",
             )
 
-        assertEquals(listOf("/data/Page/media/coverImage", "/data/Page/media/status", "/errors"), asked.unasked(planted))
+        assertEquals(
+            listOf("/data/Page/media/coverImage", "/data/Page/media/status", "/data/Page/media/airingSchedule", "/errors"),
+            asked.unasked(planted),
+        )
     }
 }

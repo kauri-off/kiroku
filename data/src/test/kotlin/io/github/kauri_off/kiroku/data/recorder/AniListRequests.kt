@@ -17,7 +17,7 @@ private val TopAiring: List<Int> =
             "54437 53876 63431 60601 36686 63396 9874 59787 63181 49448 51768 60418 48956 58518 62789"
     ).split(' ').map(String::toInt)
 
-// What the build's AniList recorder asks, one case of M3-01 per line; MAL's pages of them are among ClientIdRequests.
+// What the build's AniList recorder asks, one case of M3-01 per line; MAL's pages of them are AiringMalPages.
 internal val AniListRequests: List<AniListAsk> =
     listOf(
         AniListAsk("airing_weekly", listOf(61987)),

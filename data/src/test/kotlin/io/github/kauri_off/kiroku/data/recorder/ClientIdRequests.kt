@@ -6,6 +6,21 @@ import io.github.kauri_off.kiroku.data.network.MalFields.SUMMARY
 
 private const val LIST = "animelist?fields=$LIST_ENTRY&nsfw=true"
 
+// M3-01: MAL's pages of the titles of AniListRequests, recorded on the day their AniList answers are.
+internal val AiringMalPages: List<Ask> =
+    listOf(
+        Ask("airing_weekly", "anime/61987?fields=$DETAILS"),
+        Ask("airing_releasing_without_times", "anime/62734?fields=$DETAILS"),
+        Ask("airing_on_a_break", "anime/21?fields=$DETAILS"),
+        Ask("airing_hundreds_of_episodes", "anime/235?fields=$DETAILS"),
+        Ask("airing_not_yet_aired_with_time", "anime/62945?fields=$DETAILS"),
+        Ask("airing_not_yet_aired_without_time", "anime/62841?fields=$DETAILS"),
+        Ask("airing_finished_last_month", "anime/60636?fields=$DETAILS"),
+        Ask("airing_totals_differ_by_one", "anime/63323?fields=$DETAILS"),
+        Ask("airing_totals_differ_by_more", "anime/51039?fields=$DETAILS"),
+        Ask("airing_unknown_to_anilist", "anime/9874?fields=$DETAILS"),
+    )
+
 // What the build's recorder asks MAL with the client id alone: one request per line, grouped by the task that reads it.
 internal val ClientIdRequests: List<Ask> =
     listOf(
@@ -45,17 +60,6 @@ internal val ClientIdRequests: List<Ask> =
         Ask("codes_alternative_setting", "anime/80?fields=$DETAILS"),
         Ask("codes_parent_story", "anime/5?fields=$DETAILS"),
         Ask("codes_full_story", "anime/4037?fields=$DETAILS"),
-        // M3-01: the titles of AniListRequests, recorded on the day their AniList answers are.
-        Ask("airing_weekly", "anime/61987?fields=$DETAILS"),
-        Ask("airing_releasing_without_times", "anime/62734?fields=$DETAILS"),
-        Ask("airing_on_a_break", "anime/21?fields=$DETAILS"),
-        Ask("airing_hundreds_of_episodes", "anime/235?fields=$DETAILS"),
-        Ask("airing_not_yet_aired_with_time", "anime/62945?fields=$DETAILS"),
-        Ask("airing_not_yet_aired_without_time", "anime/62841?fields=$DETAILS"),
-        Ask("airing_finished_last_month", "anime/60636?fields=$DETAILS"),
-        Ask("airing_totals_differ_by_one", "anime/63323?fields=$DETAILS"),
-        Ask("airing_totals_differ_by_more", "anime/51039?fields=$DETAILS"),
-        Ask("airing_unknown_to_anilist", "anime/9874?fields=$DETAILS"),
         // M2-15 and M6: lists.
         Ask("list_public", "users/${RecordedUser.Public.standIn}/$LIST&sort=anime_title", pages = 3),
         Ask("list_private", "users/${RecordedUser.Private.standIn}/$LIST&limit=10"),
@@ -63,4 +67,4 @@ internal val ClientIdRequests: List<Ask> =
         // M2-11: the session.
         Ask("token_invalid", "users/@me", accessToken = "made-up-access-token"),
         Ask("refresh_invalid", "token", refreshToken = "made-up-refresh-token"),
-    )
+    ) + AiringMalPages

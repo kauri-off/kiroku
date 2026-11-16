@@ -913,9 +913,10 @@ Each of these could change a decision above.
    assumes (through the API it changes nothing by itself).
 3. **AniList:** its API terms prohibit its use "within competing, non-complementary services of the same nature",
    anime list and tracker services included, for all its data. The owner reads Kiroku, which keeps no list at
-   AniList and is open source and non-commercial, as complementary, and accepts the risk that AniList reads its
-   terms otherwise. How often its episode numbering differs from MAL's, and so how often A4 and A5 apply, is not
-   measured.
+   AniList and is open source and non-commercial, as complementary, and the stored schedules of the tracked titles,
+   forgotten at sign-out, as a cache rather than the data storage the terms prohibit; he accepts the risk that
+   AniList reads its terms otherwise. How often its episode numbering differs from MAL's, and so how often A4 and A5
+   apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
 5. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could

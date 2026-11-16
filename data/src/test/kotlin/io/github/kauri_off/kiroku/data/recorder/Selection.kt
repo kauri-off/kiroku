@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -9,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 internal class Selection(
     val fields: Map<String, Selection?>,
 ) {
-    // Where [json] holds a field this selection does not ask for, or an object where it asks for a value.
+    // Where [json] holds a field this selection does not ask for, or an object and a value where the other is asked.
     fun unasked(
         json: JsonElement,
         path: String = "",
@@ -25,7 +26,8 @@ internal class Selection(
                         else -> inner.unasked(value, "$path/$key")
                     }
                 }
-            else -> emptyList()
+            is JsonNull -> emptyList()
+            else -> listOf(path)
         }
 }
 
