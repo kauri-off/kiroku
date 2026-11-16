@@ -10,11 +10,13 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
+import io.github.kauri_off.kiroku.core.model.over
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
@@ -29,10 +31,14 @@ interface SessionRepository {
 sealed interface ListWrite {
     val anime: Anime
 
+    // Sets [only] these values over the entry as it is when sent, or all of them.
     data class Save(
         override val anime: Anime,
         val values: ListValues,
-    ) : ListWrite
+        val only: Set<ListField>? = null,
+    ) : ListWrite {
+        fun over(current: ListValues?): ListValues = if (only == null || current == null) values else values.over(current, only)
+    }
 
     data class Remove(
         override val anime: Anime,
@@ -101,7 +107,7 @@ sealed interface ListWrite {
         today: LocalDate,
     ): ListValues? =
         when (this) {
-            is Save -> values
+            is Save -> over(current?.values)
             is Remove -> null
             is MarkWatched ->
                 current?.let {

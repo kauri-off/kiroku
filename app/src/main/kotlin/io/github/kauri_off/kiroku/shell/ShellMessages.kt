@@ -190,10 +190,10 @@ class ShellMessages(
 
     private fun endWhenMade(posted: Posted): Job? {
         val retry = (posted.message.action as? ShellMessage.Action.Retry)?.write as? ListWrite.Retry ?: return null
-        val values =
+        val writes: (ListValues?) -> ListValues? =
             when (val write = retry.failure.write) {
-                is ListWrite.Save -> write.values
-                is ListWrite.Remove -> null
+                is ListWrite.Save -> write::over
+                is ListWrite.Remove -> { _ -> null }
                 else -> return null
             }
         return scope.launch {
@@ -202,7 +202,7 @@ class ShellMessages(
             try {
                 list.observeEntry(retry.anime.id).map { it?.values }.first { now ->
                     val from = start ?: Start(now).also { start = it }
-                    now != from.values && now == values
+                    now != from.values && now == writes(now)
                 }
             } catch (_: DataException) {
                 return@launch

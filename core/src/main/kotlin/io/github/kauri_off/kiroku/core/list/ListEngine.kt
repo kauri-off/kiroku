@@ -6,9 +6,11 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.changedFrom
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -66,13 +68,18 @@ class ListEngine(
         val list: Int
     }
 
+    // [from] is what the edit was applied to: MAL's confirmed values with the edits before it on their way.
     private class Put(
         val anime: Anime,
         val values: ListValues?,
+        val from: ListValues?,
         val epoch: Int,
         override val list: Int,
     ) : Request {
         override val id: AnimeId get() = anime.id
+
+        // The values this edit changed; null for all of them.
+        val changed: Set<ListField>? get() = if (values == null || from == null) null else values.changedFrom(from)
     }
 
     private class Direct(
@@ -359,10 +366,11 @@ class ListEngine(
         if (values == current?.values && !owed) return null
         val next = values?.let { ListEntry(anime, it, clock.instant()) }
         val entry = StoredEntry(next?.record, stored?.entry?.confirmed, unconfirmed = true)
+        val from = if (id in pending) current?.values else stored?.entry?.confirmed?.values
         touch(id)
         if (stored == null) local.add(anime, entry) else local.write(mapOf(id to entry))
         pending[id] = (pending[id] ?: 0) + 1
-        accept(Put(anime, values, epochs[id] ?: 0, list))
+        accept(Put(anime, values, from, epochs[id] ?: 0, list))
         return ListChange(current, next, write.steps, checkNotNull(settled?.owner))
     }
 
@@ -415,8 +423,19 @@ class ListEngine(
     // W1 and W2: one request at a time; a failure returns the title to the confirmed values and drops its waiting edits.
     private suspend fun send(put: Put) {
         val id = put.id
-        val signedIn = locked { if ((epochs[id] ?: 0) != put.epoch || list != put.list) return else settled is Session.SignedIn }
-        val outcome = if (signedIn) mal.put(put.anime, put.values?.sent) else expired
+        val (signedIn, confirmed) =
+            locked {
+                if ((epochs[id] ?: 0) != put.epoch || list != put.list) return
+                (settled is Session.SignedIn) to local.read(id)?.entry?.confirmed
+            }
+        val sent = put.values?.sentOver(put.from, confirmed?.values)
+        val outcome =
+            when {
+                !signedIn -> expired
+                put.values == null && confirmed == null -> Outcome.Success(null)
+                put.values != null && sent == null -> Outcome.Success(confirmed)
+                else -> mal.put(put.anime, sent).recorded()
+            }
         val failure =
             locked {
                 if (list != put.list) return@locked null
@@ -424,7 +443,7 @@ class ListEngine(
                     is Outcome.Success -> {
                         val waiting = (pending[id] ?: 1) - 1
                         if (waiting > 0) pending[id] = waiting else pending.remove(id)
-                        confirm(put.anime, outcome.value?.record)
+                        confirm(put.anime, outcome.value)
                         null
                     }
                     is Outcome.Failure -> {
@@ -435,7 +454,7 @@ class ListEngine(
                         touch(id)
                         if (outcome.error.unsure) owe(back) else local.write(back)
                         val shown = stored?.shown
-                        val retry = shown?.let { ListWrite.Save(put.anime, it.values) } ?: ListWrite.Remove(put.anime)
+                        val retry = shown?.let { ListWrite.Save(put.anime, it.values, touched(put)) } ?: ListWrite.Remove(put.anime)
                         WriteFailure(outcome.error, retry, settled?.owner)
                     }
                 }
@@ -448,6 +467,12 @@ class ListEngine(
 
     // MAL may have made a write whose answer was lost, could not be read, or was cut off: a download says what it has.
     private val DataError.unsure: Boolean get() = this == DataError.ServerError || this == DataError.NoConnection
+
+    // A Retry sets every value the failed edit and those waiting behind it changed.
+    private fun touched(put: Put): Set<ListField>? {
+        val changes = (accepted.filterIsInstance<Put>().filter { it.id == put.id && it.epoch == put.epoch } + put).map { it.changed }
+        return if (null in changes) null else changes.flatMapTo(mutableSetOf()) { checkNotNull(it) }
+    }
 
     // The list counts as never downloaded until a download begun after now succeeds, also across a process death (W5).
     private suspend fun owe(entries: Map<AnimeId, StoredEntry?>) {
@@ -462,6 +487,7 @@ class ListEngine(
         error: DataError,
     ) {
         val id = put.id
+        var only: Set<ListField>? = null
         val (last, owner) =
             mutex.withLock {
                 try {
@@ -476,9 +502,10 @@ class ListEngine(
                     save(id, confirmed?.let { StoredEntry.settled(it) })
                 } catch (_: StoreFailure) {
                 }
+                only = touched(put)
                 (accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put) to settled?.owner
             }
-        val retry = last.values?.let { ListWrite.Save(last.anime, it) } ?: ListWrite.Remove(last.anime)
+        val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
         failures.tryEmit(WriteFailure(error, retry, owner))
     }
 
@@ -501,12 +528,13 @@ class ListEngine(
                 else -> null
             }
         if (refusal != null) return Outcome.Failure(refusal)
+        val sent = values?.sentOver(confirmed?.values, confirmed?.values)
         val entry =
-            if (values == confirmed?.values) {
+            if (values == confirmed?.values || (values != null && sent == null)) {
                 confirmed
             } else {
                 if (!current(direct)) return expired
-                when (val outcome = mal.put(confirmed?.anime ?: write.anime, values?.sent)) {
+                when (val outcome = mal.put(confirmed?.anime ?: write.anime, sent)) {
                     is Outcome.Failure -> return outcome.also { failedUnseen(direct, it.error) }
                     is Outcome.Success -> outcome.value
                 }
@@ -529,6 +557,12 @@ class ListEngine(
             }
         if (owes) scope.launch { sync() }
     }
+
+    private fun Outcome<ListEntry?>.recorded(): Outcome<ListRecord?> =
+        when (this) {
+            is Outcome.Success -> Outcome.Success(value?.record)
+            is Outcome.Failure -> this
+        }
 
     private suspend fun current(request: Request): Boolean = locked { settled is Session.SignedIn && list == request.list }
 

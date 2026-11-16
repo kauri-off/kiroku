@@ -123,13 +123,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-21 The real list.**
 
-- [ ] **M2-34 A write carries only what the user changed.** The engine hands the client the values MAL last
-  confirmed, and a write sends only the values that differ from them, so neither a value MAL gave that the app could
-  not read nor one changed on the website since the last download is written over. The owner decides first: a
-  website edit of another value then stands, which changes how W1 and W4 read.
-  **Needs:** M2-21 and the owner's decision.
-  **Check:** a write after an unreadable score leaves the score out, replacing the test that it sends `score=0`; a
-  step and an edit-sheet save each send their changed values alone; `ListEngineContract` passes.
+- [x] **M2-34 A write carries only what the user changed.**
 
 - [x] **M2-22 Screens refresh by themselves.**
 

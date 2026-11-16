@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -151,6 +152,21 @@ class EditSheetViewModelTest {
             assertEquals(draft, s.values(anime))
             s.editor.onEvent(EditSheetEvent.Dismissed)
             assertNull(s.editor.sheet)
+        }
+
+    @Test
+    fun `Save sets only the values the sheet changed, over a change made elsewhere while it was open`() =
+        test { s ->
+            s.graph.list.write(ListWrite.MarkNextWatched(anime))
+            advanceUntilIdle()
+            assertEquals(13, s.values(anime)?.watchedEpisodes)
+            assertEquals(12, s.sheet.draft.watchedEpisodes)
+
+            s.editor.onEvent(EditSheetEvent.ScoreChanged(9))
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(13, s.values(anime)?.watchedEpisodes)
+            assertEquals(9, s.values(anime)?.score)
         }
 
     @Test

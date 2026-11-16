@@ -2,13 +2,20 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
+import io.github.kauri_off.kiroku.core.list.ListEngine
+import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
@@ -28,7 +35,14 @@ import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -49,11 +63,14 @@ import org.junit.rules.TemporaryFolder
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.net.URLDecoder
+import java.time.Clock
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.Year
 import java.time.YearMonth
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 // The client of the signed-in user's list against the recorder's stand-in, which keeps a list as requests change it.
 class MalRemoteListTest {
@@ -164,11 +181,15 @@ class MalRemoteListTest {
         }
     }
 
-    // A status the app does not know is never sent: it is left out, and MAL keeps its own (the recordings' rule).
+    // A value a write does not carry is left out, and MAL keeps its own (the recordings' rule).
     @Test
-    fun `a write without a status leaves the status out and carries the other four`() {
-        val form = listForm(null, 3, null, null, PartialDate.Day(LocalDate.of(2021, 4, 5)))
-        assertEquals(mapOf("score" to "0", "num_watched_episodes" to "3", "start_date" to "", "finish_date" to "2021-04-05"), form)
+    fun `a write leaves out every value it does not carry`() {
+        val form =
+            SentValues(
+                values.copy(watchedEpisodes = 3, finishDate = null),
+                setOf(ListField.WatchedEpisodes, ListField.FinishDate),
+            ).form()
+        assertEquals(mapOf("num_watched_episodes" to "3", "finish_date" to ""), form)
     }
 
     @Test
@@ -185,21 +206,22 @@ class MalRemoteListTest {
     }
 
     @Test
-    fun `a write carries the five values the app holds, and nothing else MAL gave the entry`() {
+    fun `a write carries the values it is given alone, and nothing else MAL gave the entry`() {
         val read = (runBlocking { client.fetchEntry(listed) } as Outcome.Success).value!!
         assertTrue(mal.bodies.last().contains("comments"))
 
-        runBlocking { client.put(read.anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1).sent) }
+        val stepped = read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1)
+        runBlocking { client.put(read.anime, SentValues(stepped, setOf(ListField.WatchedEpisodes))) }
 
         val write = requests.last()
         assertEquals("PATCH", write.method)
-        assertEquals(setOf("status", "score", "num_watched_episodes", "start_date", "finish_date"), write.form().keys)
+        assertEquals(mapOf("num_watched_episodes" to "25"), write.form())
         assertEquals("25", mal.onTheList().getValue(listed.value)["num_episodes_watched"])
     }
 
-    // Every value a recorded list gives is sent back in the form MAL gave it: nothing is filled in, no date's precision lost.
+    // Nothing is filled in, no date's precision lost.
     @Test
-    fun `an entry of a recorded list written back unchanged carries each of its values as MAL gave it`() {
+    fun `each value of a recorded list, when a write carries it, is in the form MAL gave it`() {
         for (name in (1..3).map { "list_public_$it" }) assertWrittenAsGiven(name, RecordedAnswers.named(name).body)
     }
 
@@ -372,16 +394,37 @@ class MalRemoteListTest {
         assertTrue(listed.value !in mal.onTheList())
     }
 
-    // Today's rule, which ROADMAP's task "A write carries only what the user changed" is to replace.
+    // The engine over this client: an unreadable score is read as none, and a "+1" leaves it out, so MAL keeps its own.
     @Test
-    fun `a write after a score MAL gave unreadably sends no score, score 0, which clears MAL's`() {
+    fun `a +1 after a score MAL gave unreadably leaves the score out, and the row then shows MAL's`() {
         val page = recordedJson("list_public_1").edited(listOf("data", "0", "list_status", "score"), JsonPrimitive("eight"))
-        val read = page.toListPage(Repairs()).entries[0]
+        val read = page.toListPage(Repairs()).entries[0].let { it.copy(anime = it.anime.copy(id = listed)) }
         assertNull(read.values.score)
+        val owner = SignInId("owner")
+        val store = InMemoryLocalList(listOf(read), owner)
+        val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val unexpected = CopyOnWriteArrayList<Throwable>()
+        try {
+            val engine = ListEngine(client, store, flowOf(Session.SignedIn(owner)), Clock.systemUTC(), scope) { unexpected += it }
+            runBlocking {
+                engine.write(ListWrite.MarkNextWatched(read.anime))
+                withTimeout(10.seconds) { while (store.read(listed)?.entry?.unconfirmed != false) delay(10.milliseconds) }
+            }
+        } finally {
+            scope.cancel()
+        }
 
-        runBlocking { client.put(anime, read.values.copy(watchedEpisodes = read.values.watchedEpisodes + 1).sent) }
-
-        assertEquals("0", requests.single().form()["score"])
+        assertEquals(mapOf("num_watched_episodes" to "${read.values.watchedEpisodes + 1}"), requests.single().form())
+        assertEquals("9", mal.onTheList().getValue(listed.value)["score"])
+        assertEquals(
+            9,
+            runBlocking { store.read(listed) }
+                ?.entry
+                ?.shown
+                ?.values
+                ?.score,
+        )
+        assertEquals(emptyList<Throwable>(), unexpected)
     }
 
     @Test

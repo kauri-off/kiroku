@@ -2,9 +2,11 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
-import io.github.kauri_off.kiroku.core.list.sent
+import io.github.kauri_off.kiroku.core.list.SentValues
+import io.github.kauri_off.kiroku.core.list.sentOver
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -133,11 +135,11 @@ class OwnerWritesTest {
 
     private fun put(
         name: String,
-        values: ListValues?,
+        values: SentValues?,
         asked: Asked,
     ): Outcome<ListEntry?> {
         served(name, asked)
-        return runBlocking { client.put(title, values?.sent) }.also { assertAskedAsRecorded() }
+        return runBlocking { client.put(title, values) }.also { assertAskedAsRecorded() }
     }
 
     // A read-back: the recorder asked fewer fields than the client does, so only the method and the path are compared.
@@ -154,9 +156,7 @@ class OwnerWritesTest {
 
     private fun before(name: String): ListEntry = checkNotNull(readBack(name)) { "$name holds no entry" }
 
-    // The write [name] as the client sends it for the same change: it carries the recorder's [keys] with the recorder's
-    // values, and the entry's other values beside them. Its answer is the entry its read-back gives, values and time
-    // alike, changed after [earlier].
+    // The write [name] as the engine sends the same change, the recorder's [keys] alone; answered as its read-back.
     private fun written(
         name: String,
         earlier: ListEntry?,
@@ -165,8 +165,11 @@ class OwnerWritesTest {
     ): ListValues {
         val form = recorded(name)
         assertTrue("$name: the recorder sent other keys", form.keys == keys.toSet())
-        val outcome = put(name, sent, Asked("PATCH", "$entryPath/my_list_status", form = form))
-        assertTrue("$name: the client sends ${FIVE - form.keys} beside the recorder's keys", sentForms.single().keys == FIVE)
+        val outcome = put(name, sent.sentOver(earlier?.values, earlier?.values), Asked("PATCH", "$entryPath/my_list_status", form = form))
+        assertTrue(
+            "$name: the client sends ${sentForms.single().keys - form.keys} beside the recorder's keys",
+            sentForms.single().keys == form.keys,
+        )
         assertTrue("$name could not be read", outcome is Outcome.Success)
         val entry = (outcome as Outcome.Success).value
         assertTrue("$name holds no entry", entry != null)
@@ -208,7 +211,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `add_planned - a status alone adds the title with no count, score or date, where the client sends all five`() {
+    fun `add_planned - a status alone adds the title with no count, score or date, where the client sends the status alone too`() {
         val values = written("add_planned", null, PLANNED, "status")
         assertTrue("add_planned: status", values.status == ListStatus.Planned)
         assertTrue("add_planned: num_episodes_watched", values.watchedEpisodes == 0)
@@ -219,7 +222,7 @@ class OwnerWritesTest {
 
     // MAL changes no status and no date on its own: a write without a status keeps it.
     @Test
-    fun `count_first - the first episode of a planned title changes the count alone, where the client sends the rest as it was`() {
+    fun `count_first - the first episode of a planned title changes the count alone, the client sending the same keys`() {
         val earlier = before("add_planned_read")
         val values = written("count_first", earlier, earlier.values.copy(watchedEpisodes = 1), "num_watched_episodes")
         assertTrue("count_first: num_episodes_watched", values.watchedEpisodes == 1)
@@ -227,7 +230,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `count_total - a count that reaches the total changes the count alone, where the client sends the rest as it was`() {
+    fun `count_total - a count that reaches the total changes the count alone, the client sending the same keys`() {
         val earlier = before("count_first_read")
         val values = written("count_total", earlier, earlier.values.copy(watchedEpisodes = total), "num_watched_episodes")
         assertTrue("count_total: num_episodes_watched", values.watchedEpisodes == total)
@@ -236,7 +239,7 @@ class OwnerWritesTest {
 
     // W9 differs: the count is not above a known total afterwards. Sent from the total, so capping and ignoring look alike.
     @Test
-    fun `count_above_total - a count above the total is answered as done and is not above it, where the client sends the rest as it was`() {
+    fun `count_above_total - a count above the total is answered as done and is not above it, the client sending the same keys`() {
         val earlier = before("count_total_read")
         val values = written("count_above_total", earlier, earlier.values.copy(watchedEpisodes = total + 1), "num_watched_episodes")
         assertTrue("count_above_total: num_episodes_watched", values.watchedEpisodes == total)
@@ -244,7 +247,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `count_below_total - a count below the total is taken as sent and nothing else changes, the client sending the rest as it was`() {
+    fun `count_below_total - a count below the total is taken as sent and nothing else changes, the client sending the same keys`() {
         val earlier = before("count_above_total_read")
         val values = written("count_below_total", earlier, earlier.values.copy(watchedEpisodes = total - 1), "num_watched_episodes")
         assertTrue("count_below_total: num_episodes_watched", values.watchedEpisodes == total - 1)
@@ -252,7 +255,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `completed - Completed alone brings neither the count to the total nor a finish date, where the client sends the rest as it was`() {
+    fun `completed - Completed alone brings neither the count to the total nor a finish date, the client sending the same keys`() {
         val earlier = before("count_below_total_read")
         val values = written("completed", earlier, earlier.values.copy(status = ListStatus.Completed), "status")
         assertTrue("completed: status", values.status == ListStatus.Completed)
@@ -260,7 +263,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `finish_set - a finish date is set as sent, where the client sends the rest as it was`() {
+    fun `finish_set - a finish date is set as sent, the client sending the same keys`() {
         val earlier = before("completed_read")
         val values = written("finish_set", earlier, earlier.values.copy(finishDate = day(2020, 2, 2)), "finish_date")
         assertTrue("finish_set: finish_date", values.finishDate == day(2020, 2, 2))
@@ -269,7 +272,7 @@ class OwnerWritesTest {
 
     // W3 holds: an empty date clears MAL's.
     @Test
-    fun `finish_cleared - an empty finish date clears it, where the client sends the rest as it was`() {
+    fun `finish_cleared - an empty finish date clears it, the client sending the same keys`() {
         val earlier = before("finish_set_read")
         val values = written("finish_cleared", earlier, earlier.values.copy(finishDate = null), "finish_date")
         assertTrue("finish_cleared: finish_date", values.finishDate == null)
@@ -277,7 +280,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `start_set - a start date is set as sent, where the client sends the rest as it was`() {
+    fun `start_set - a start date is set as sent, the client sending the same keys`() {
         val earlier = before("finish_cleared_read")
         val values = written("start_set", earlier, earlier.values.copy(startDate = day(2020, 1, 1)), "start_date")
         assertTrue("start_set: start_date", values.startDate == day(2020, 1, 1))
@@ -285,7 +288,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `start_cleared - an empty start date clears it, where the client sends the rest as it was`() {
+    fun `start_cleared - an empty start date clears it, the client sending the same keys`() {
         val earlier = before("start_set_read")
         val values = written("start_cleared", earlier, earlier.values.copy(startDate = null), "start_date")
         assertTrue("start_cleared: start_date", values.startDate == null)
@@ -293,7 +296,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `dates_reversed - a finish before the start is kept as sent, where the client sends the rest as it was`() {
+    fun `dates_reversed - a finish before the start is kept as sent, the client sending the same keys`() {
         val earlier = before("start_cleared_read")
         val sent = earlier.values.copy(startDate = day(2020, 3, 3), finishDate = day(2020, 2, 2))
         val values = written("dates_reversed", earlier, sent, "start_date", "finish_date")
@@ -304,7 +307,7 @@ class OwnerWritesTest {
 
     // The recorder sent MAL's zero date; the client sends an empty one for the same change, which clears a date too.
     @Test
-    fun `dates_zeroed - MAL's zero date clears both dates, where the client sends empty dates and the rest as it was`() {
+    fun `dates_zeroed - MAL's zero date clears both dates, where the client sends empty dates for the same keys`() {
         val earlier = before("dates_reversed_read")
         assertTrue("dates_zeroed: the recorder sent no zero date", recorded("dates_zeroed").values.all { it == ZERO_DATE })
         val values = written("dates_zeroed", earlier, earlier.values.copy(startDate = null, finishDate = null), "start_date", "finish_date")
@@ -314,7 +317,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `date_partial - a year and month is kept as a year and month, where the client sends the rest as it was`() {
+    fun `date_partial - a year and month is kept as a year and month, the client sending the same keys`() {
         val earlier = before("dates_zeroed_read")
         val month = PartialDate.Month(YearMonth.of(2020, 5))
         val values = written("date_partial", earlier, earlier.values.copy(startDate = month), "start_date")
@@ -323,7 +326,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `date_future - a finish date in the future is kept as sent, where the client sends the rest as it was`() {
+    fun `date_future - a finish date in the future is kept as sent, the client sending the same keys`() {
         val earlier = before("date_partial_read")
         val values = written("date_future", earlier, earlier.values.copy(finishDate = day(2100, 1, 1)), "finish_date")
         assertTrue("date_future: finish_date", values.finishDate == day(2100, 1, 1))
@@ -331,7 +334,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `score_set - a score is set as sent, where the client sends the rest as it was`() {
+    fun `score_set - a score is set as sent, the client sending the same keys`() {
         val earlier = before("date_future_read")
         val values = written("score_set", earlier, earlier.values.copy(score = 7), "score")
         assertTrue("score_set: score", values.score == 7)
@@ -339,7 +342,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `score_cleared - a score of 0 is no score, where the client sends the rest as it was`() {
+    fun `score_cleared - a score of 0 is no score, the client sending the same keys`() {
         val earlier = before("score_set_read")
         val values = written("score_cleared", earlier, earlier.values.copy(score = null), "score")
         assertTrue("score_cleared: score", values.score == null)
@@ -352,12 +355,15 @@ class OwnerWritesTest {
         name: String,
         earlier: String,
         key: String,
+        field: ListField,
     ) {
         val form = recorded(name)
         assertTrue("$name: the recorder sent other keys", form.keys == setOf(key))
         assertTrue("$name is not an answer of 400", OwnerRecordings.named(name).status == 400)
         val before = before(earlier)
-        val outcome = put(name, before.values, Asked("PATCH", "$entryPath/my_list_status", form = form, keysOnly = true))
+        val sent = SentValues(before.values, setOf(field))
+        val outcome = put(name, sent, Asked("PATCH", "$entryPath/my_list_status", form = form, keysOnly = true))
+        assertTrue("$name: the client sends other keys", sentForms.single().keys == form.keys)
         assertTrue("$name: not a refusal of the request", outcome == Outcome.Failure(DataError.InvalidRequest))
         val after = readBack("${name}_read")
         assertTrue("${name}_read holds no entry", after != null)
@@ -369,13 +375,13 @@ class OwnerWritesTest {
     fun `score_refused - a score above 10, which the client cannot hold, is refused with 400 and the entry is as it was`() {
         val score = recorded("score_refused").getValue("score").toInt()
         assertTrue("score_refused: a score the client can hold", runCatching { PLANNED.copy(score = score) }.isFailure)
-        refused("score_refused", "score_cleared_read", "score")
+        refused("score_refused", "score_cleared_read", "score", ListField.Score)
     }
 
     @Test
     fun `status_refused - a status MAL does not know, which the client cannot send, is refused with 400 and the entry is as it was`() {
         assertTrue("status_refused: a status the client can send", recorded("status_refused").getValue("status") !in listStatuses.values)
-        refused("status_refused", "score_refused_read", "status")
+        refused("status_refused", "score_refused_read", "status", ListField.Status)
     }
 
     @Test
@@ -408,7 +414,7 @@ class OwnerWritesTest {
     }
 
     @Test
-    fun `own_list - every entry of the user's own pages written back unchanged carries each value as MAL gave it`() {
+    fun `own_list - each value of the user's own pages, when a write carries it, is in the form MAL gave it`() {
         for (name in (1..3).map { "own_list_$it" }) assertWrittenAsGiven(name, OwnerRecordings.named(name).body)
     }
 
@@ -416,6 +422,5 @@ class OwnerWritesTest {
         const val ABSENT = "entry_absent"
         const val ZERO_DATE = "0000-00-00"
         val PLANNED = ListValues(ListStatus.Planned, 0, null, null, null)
-        val FIVE = setOf("status", "score", "num_watched_episodes", "start_date", "finish_date")
     }
 }

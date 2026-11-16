@@ -155,9 +155,10 @@ class DemoServer(
         return synchronized(guard) {
             val stored =
                 values?.let { sent ->
-                    // A status left out is the one MAL has; a new entry needs one.
-                    val status = sent.status ?: list[anime.id]?.status ?: return Outcome.Failure(DataError.InvalidRequest)
-                    ListValues(status, sent.watchedEpisodes, sent.score, sent.startDate, sent.finishDate)
+                    // A value left out is the one MAL has; a new entry needs a status.
+                    val known = list[anime.id]?.values
+                    if (known == null && sent.status == null) return Outcome.Failure(DataError.InvalidRequest)
+                    sent.over(known)
                 }
             store(anime, stored)
             Outcome.Success(list[anime.id])

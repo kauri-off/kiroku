@@ -11,8 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertTrue
 
-// Each entry of the list page [name], given as MAL sent it, written back unchanged carries each value in the form MAL gave
-// it. Read and decoded inside [OwnerRecordings.read]: a failure names the page, the entry's place and the field, never a value.
+// Each value of the page [name], carried by a write, is in MAL's form; checked inside [OwnerRecordings.read], naming no value.
 internal fun assertWrittenAsGiven(
     name: String,
     body: String,

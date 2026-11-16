@@ -433,7 +433,7 @@ class ShellMessagesTest {
 
     // A failed save that MAL made after all: once a download shows the title as the Retry would write it, the message goes.
     @Test
-    fun `a failed save's message ends once its title holds what its Retry would write, and stays while it does not`() {
+    fun `a failed save's message ends once its title holds what its Retry writes, a website edit beside, and stays while it does not`() {
         val shell = ShellViewModel(graph.list)
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
@@ -459,7 +459,7 @@ class ShellMessagesTest {
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertExists()
 
-        graph.demo.server.editOnWebsite(anime, values)
+        graph.demo.server.editOnWebsite(anime, values.copy(score = if (values.score == 3) 4 else 3))
         compose.runOnUiThread { scope.launch { graph.list.sync() } }
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertDoesNotExist()

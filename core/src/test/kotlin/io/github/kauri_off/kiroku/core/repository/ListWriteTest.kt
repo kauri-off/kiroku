@@ -1,10 +1,10 @@
 package io.github.kauri_off.kiroku.core.repository
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
-import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
@@ -29,8 +29,22 @@ class ListWriteTest {
     // The owner's rule: a status code the app does not know is never sent to MAL, which keeps it.
     @Test
     fun `values are sent as they are, except a status the app does not know, which is left out`() {
-        for (status in ListStatus.entries) assertEquals(SentValues(status, 9, 8, earlier, day), ListValues(status, 9, 8, earlier, day).sent)
-        assertEquals(SentValues(null, 9, 8, earlier, day), ListValues(EntryStatus.Unrecognized("rewatching"), 9, 8, earlier, day).sent)
+        for (status in ListStatus.entries) {
+            assertEquals(ListField.entries.toSet(), ListValues(status, 9, 8, earlier, day).sent.fields)
+        }
+        val unknown = ListValues(EntryStatus.Unrecognized("rewatching"), 9, 8, earlier, day).sent
+        assertEquals(ListField.entries.toSet() - ListField.Status, unknown.fields)
+        assertNull(unknown.status)
+    }
+
+    @Test
+    fun `a save of some values sets those alone, over the entry as it is when sent`() {
+        val website = watching(9).copy(score = 3, finishDate = day)
+        val values = watching(10).copy(startDate = null)
+        val save = ListWrite.Save(anime, values, setOf(ListField.WatchedEpisodes, ListField.StartDate))
+        assertEquals(website.copy(watchedEpisodes = 10, startDate = null), save.applyTo(entry(website), today))
+        assertEquals(values, save.applyTo(null, today))
+        assertEquals(values, ListWrite.Save(anime, values).applyTo(entry(website), today))
     }
 
     @Test
