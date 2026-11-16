@@ -86,6 +86,10 @@ class ListEngine(
         override val list: Int,
     ) : Request {
         override val id: AnimeId get() = write.anime.id
+
+        // Its write went out to MAL, which may have made it whatever follows.
+        @Volatile
+        var made = false
     }
 
     // A store call that threw; it fails the one call the engine was asked in as a storage error.
@@ -201,7 +205,10 @@ class ListEngine(
                         unexpected(e)
                         when (request) {
                             is Put -> lost(request, DataError.ServerError)
-                            is Direct -> request.result.completeExceptionally(e)
+                            is Direct -> {
+                                if (request.made) madeUnseen(request)
+                                request.result.completeExceptionally(e)
+                            }
                         }
                     }
                     mutex.withLock { accepted.remove(request) }
@@ -238,6 +245,7 @@ class ListEngine(
                     try {
                         send(request)
                     } catch (_: StoreFailure) {
+                        if (request.made) madeUnseen(request)
                         Outcome.Failure(DataError.StorageError)
                     },
                 )
@@ -545,6 +553,7 @@ class ListEngine(
                 confirmed
             } else {
                 if (!current(direct)) return expired
+                direct.made = true
                 when (val outcome = mal.put(confirmed?.anime ?: write.anime, sent)) {
                     is Outcome.Failure -> return outcome.also { failedUnseen(direct, it.error) }
                     is Outcome.Success -> outcome.value
@@ -559,24 +568,35 @@ class ListEngine(
         return Outcome.Success(Unit)
     }
 
-    // N9's write owes a download on the same rule; a store that fails to keep that still gets the download.
+    // N9's write owes a download on the same rule.
     private suspend fun failedUnseen(
         direct: Direct,
         error: DataError,
     ) {
-        if (!error.unsure) return
+        if (error.unsure) madeUnseen(direct)
+    }
+
+    // A write MAL may have made unseen marks its title and owes a download; a store that fails to keep that still gets it.
+    private suspend fun madeUnseen(direct: Direct) {
         val owes =
             try {
                 locked {
                     (list == direct.list).also {
                         if (it) {
-                            owe(emptyMap())
                             touch(direct.id)
                             unsure += direct.id
+                            syncedAt.value = null
+                            owedSince = ++changes
+                            local.restore(emptyMap())
                         }
                     }
                 }
             } catch (_: StoreFailure) {
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                unexpected(e)
                 true
             }
         if (owes) scope.launch { sync() }
