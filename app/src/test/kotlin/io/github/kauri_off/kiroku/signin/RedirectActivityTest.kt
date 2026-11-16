@@ -79,7 +79,7 @@ class RedirectActivityTest {
 
     private fun redirects(): List<String> = (application as SignInGraphApplication).graph.signIn.redirects
 
-    // The redirect activity is gone and the app's own screen is on top of what was there.
+    // The redirect activity is gone and the app's own screen is on top, in the app's task, also from a browser's task.
     private fun assertTheAppCameBack(
         intent: Intent,
         saved: Bundle? = null,
@@ -88,7 +88,7 @@ class RedirectActivityTest {
         assertTrue(activity.isFinishing)
         val started = shadowOf(application).nextStartedActivity
         assertEquals(MainActivity::class.java.name, started.component?.className)
-        val flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         assertEquals(flags, started.flags and flags)
         assertNull(started.data)
         assertNull(started.extras)

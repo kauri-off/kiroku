@@ -9,3 +9,6 @@ build/
 *.jks
 *.keystore
 keystore.properties
+*.db-wal
+*.db-shm
+*.db-journal

@@ -348,3 +348,29 @@ fun collectionProblems(
         if (directCollection.containsMatchIn(line)) "$name:${index + 1}: use collectAsScreenState: ${line.trim()}" else null
     }
 }
+
+// The one scope that shipped code makes rather than derives from another; its handler reports what escapes its work.
+const val APPLICATION_SCOPE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/wiring/ApplicationScope.kt"
+
+// A scope or root job made anew, which would hold no handler: one that is not the application's or made from its context.
+private val madeScope =
+    Regex(
+        """\bGlobalScope\b|\bMainScope\s*\(|\b(Supervisor)?Job\s*\(\s*\)|\bCoroutineScope\s*\((?!\s*\w+\s*\.\s*coroutineContext\b)|""" +
+            """\boverride\s+val\s+coroutineContext\b""",
+    )
+
+fun scopeProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (name == APPLICATION_SCOPE_SOURCE) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (madeScope.containsMatchIn(line)) "$name:${index + 1}: a scope that is not the application's: ${line.trim()}" else null
+    }
+}
+
+// The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
+fun shippedKotlinSources(): List<File> =
+    projectSources().filter { source ->
+        source.extension == "kt" && listOf("test", "testDebug", "androidTest").none { "/src/$it/" in source.path }
+    }

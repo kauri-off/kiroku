@@ -30,10 +30,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.Year
 import java.time.YearMonth
+import java.time.ZoneOffset
 
 // The sandbox on made-up values through the app's client: MAL's recorded rules, and the committed answers' shapes.
 @RunWith(RobolectricTestRunner::class)
@@ -348,8 +351,13 @@ class SandboxMalTest {
     // Made up and obviously so: no value of anyone's, and no picture of MAL's.
     @Test
     fun `the list the sandbox starts with holds the five statuses, made-up values and only the sandbox's own titles`() {
-        val list = SandboxTitles.startingList(sandboxTitles, Instant.parse("2026-11-13T10:00:00Z"))
+        val now = Instant.parse("2026-11-13T10:00:00Z")
+        val list = SandboxTitles.startingList(SandboxAiring(sandboxTitles, Clock.fixed(now, ZoneOffset.UTC)).pages(), now)
         assertEquals(ListStatusCodes, list.values.map { it.status }.toSet())
+        for (date in list.values.flatMap { listOfNotNull(it.startDate, it.finishDate) }) {
+            val read = listOf({ LocalDate.parse(date) }, { YearMonth.parse(date) }, { Year.parse(date) })
+            assertTrue(date, read.any { runCatching(it).isSuccess })
+        }
         assertTrue(list.keys.all { it in sandboxTitles })
         assertTrue(list.values.all { (it.startDate ?: "2001").startsWith("2001") && (it.finishDate ?: "2001").startsWith("2001") })
         for (title in sandboxTitles.values) assertFalse(title.toString().contains("cdn.myanimelist.net"))
