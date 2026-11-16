@@ -384,8 +384,9 @@ was chosen against, and why:
 - A value is stored under MAL's own code, so a code the app learns later needs no migration.
 - A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
   itself cannot be read.
-- Every schema change is a real migration with a migration test. **There is no destructive fallback**: it would
-  erase the record of announced episodes and announce them again (N10).
+- Every schema change is a real migration with a migration test, and a schema version, once on `main`, never
+  changes. **There is no destructive fallback**: it would erase the record of announced episodes and announce
+  them again (N10).
 
 ### 7.2 Errors and offline behaviour
 
