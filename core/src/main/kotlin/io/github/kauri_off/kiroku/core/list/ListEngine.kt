@@ -44,6 +44,7 @@ import java.io.IOException
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import kotlin.random.Random
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
 class ListEngine(
@@ -55,6 +56,8 @@ class ListEngine(
     private val scope: CoroutineScope,
     // How many titles a download missed MAL is asked about in one sync.
     private val checksPerSync: Int = CHECKS_PER_SYNC,
+    // Where a sync's checks start among the titles never left unanswered, so a restart that forgot them moves on.
+    private val random: Random = Random.Default,
     // Hears of what nobody expected: MAL's client's and the engine's own exceptions, and the first of a store's streak.
     private val unexpected: (Throwable) -> Unit,
 ) : ListRepository {
@@ -446,7 +449,7 @@ class ListEngine(
                             if (list != began) return@locked emptySet()
                             local.readAll().keys - fetched.keys - pending.keys - touched.filterValues { it > since }.keys
                         }
-                    val kept = missing - checked(missing, fetched)
+                    val kept = missing - checked(missing, fetched, began)
                     locked {
                         if (settled !is Session.SignedIn || list != began) return@locked expired
                         val stored = local.readAll()
@@ -473,15 +476,20 @@ class ListEngine(
     private suspend fun checked(
         missing: Set<AnimeId>,
         fetched: MutableMap<AnimeId, ListEntry>,
+        began: Int,
     ): Set<AnimeId> {
-        val order =
+        val failed =
             mutex.withLock {
                 unanswered.retainAll(missing)
                 unanswered.toList()
             }
-        val asked = missing.sortedWith(compareBy({ order.indexOf(it) }, { it.value })).take(checksPerSync)
+        val fresh = (missing - failed.toSet()).sortedBy { it.value }
+        val start = if (fresh.isEmpty()) 0 else random.nextInt(fresh.size)
+        val asked = (fresh.drop(start) + fresh.take(start) + failed).take(checksPerSync)
         val answered = mutableSetOf<AnimeId>()
+        var inARow = 0
         for (id in asked) {
+            if (mutex.withLock { list != began }) break
             val entry =
                 try {
                     mal.fetchEntry(id)
@@ -492,11 +500,14 @@ class ListEngine(
             val error = (entry as? Outcome.Failure)?.error
             if (error != null && error != DataError.NotFound) {
                 mutex.withLock {
-                    unanswered.remove(id)
-                    unanswered += id
+                    if (list == began) {
+                        unanswered.remove(id)
+                        unanswered += id
+                    }
                 }
-                if (error in ENDS_CHECKS) break else continue
+                if (error in ENDS_CHECKS || ++inARow == FAILED_IN_A_ROW) break else continue
             }
+            inARow = 0
             (entry as? Outcome.Success)?.value?.let { fetched[id] = it }
             answered += id
             mutex.withLock { unanswered.remove(id) }
@@ -818,6 +829,9 @@ class ListEngine(
         private val expired = Outcome.Failure(DataError.SessionExpired)
         private const val WRONG_TITLE = "MAL's client answered about another title"
         private const val HELD_FAILURES = 16
+
+        // A failing entry endpoint costs this many checks, while one broken title holds back nothing.
+        private const val FAILED_IN_A_ROW = 2
 
         // Answers that say MAL will not answer the next check either.
         private val ENDS_CHECKS = setOf(DataError.Refused, DataError.NoConnection, DataError.SessionExpired)

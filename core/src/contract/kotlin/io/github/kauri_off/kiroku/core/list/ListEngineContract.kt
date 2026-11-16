@@ -57,6 +57,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.CoroutineContext
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -88,6 +89,12 @@ abstract class ListEngineContract {
         session: Session?,
         private val checks: Int = ListEngine.CHECKS_PER_SYNC,
     ) {
+        // Every sync's checks start at the lowest id, so a test knows their order.
+        private val fromFirst =
+            object : Random() {
+                override fun nextBits(bitCount: Int) = 0
+            }
+
         val session = MutableStateFlow(session)
 
         // The session becomes [next] at this many of its reads from now; 0 leaves it alone.
@@ -108,7 +115,10 @@ abstract class ListEngineContract {
         val unexpected = mutableListOf<Throwable>()
         val list = engine(scope)
 
-        fun engine(scope: CoroutineScope): ListRepository = ListEngine(mal, local, sessions, clock, scope, checks) { unexpected += it }
+        fun engine(
+            scope: CoroutineScope,
+            random: Random = fromFirst,
+        ): ListRepository = ListEngine(mal, local, sessions, clock, scope, checks, random) { unexpected += it }
 
         suspend fun syncedAt() = list.observeSyncedAt().first()
 
@@ -1517,6 +1527,120 @@ abstract class ListEngineContract {
                 removed.forEach { assertNull(s.shown(it.id)) }
                 assertEquals(3, s.mal.entryReads)
             }
+        }
+
+    // A failing entry endpoint costs two checks a sync, while one broken title among them holds back nothing.
+    @Test
+    fun `two failed checks in a row end the checks of that sync, and one failed check does not`() =
+        runTest {
+            for (failing in listOf(1, 4)) {
+                val s = subject()
+                val removed =
+                    fixtures.entries
+                        .sortedBy { it.anime.id.value }
+                        .take(4)
+                        .map { it.anime }
+                removed.forEach { s.editOnWebsite(it, null) }
+                s.mal.failingEntries = removed.take(failing).associate { it.id to DataError.ServerError }
+
+                assertEquals(Outcome.Success(Unit), s.list.sync())
+
+                assertEquals(if (failing == 1) 4 else 2, s.mal.entryReads)
+                removed.forEachIndexed { i, anime -> assertEquals(i < failing, s.shown(anime.id) != null) }
+            }
+        }
+
+    // A restart forgets which checks failed; its checks do not always start at the same titles, so broken ones block nothing.
+    @Test
+    fun `after restarts the titles whose check keeps failing do not hold back the others`() =
+        runTest {
+            val s = subject(checks = 2)
+            val removed =
+                fixtures.entries
+                    .sortedBy { it.anime.id.value }
+                    .take(4)
+                    .map { it.anime }
+            removed.forEach { s.editOnWebsite(it, null) }
+            s.mal.failingEntries = removed.take(2).associate { it.id to DataError.ServerError }
+            val random = Random(7)
+
+            repeat(8) {
+                val process = childScope()
+                assertEquals(Outcome.Success(Unit), s.engine(process, random).sync())
+                process.cancel()
+            }
+
+            removed.take(2).forEach { assertEquals(fixtures.entryFor(it.id), s.shown(it.id)) }
+            removed.drop(2).forEach { assertNull(s.shown(it.id)) }
+        }
+
+    // A sign-out and another sign-in while the checks run: no title of the ended list is asked about under the new one.
+    @Test
+    fun `the checks of a sync stop when its list ends`() =
+        runTest {
+            val s = subject()
+            val removed =
+                fixtures.entries
+                    .sortedBy { it.anime.id.value }
+                    .take(2)
+                    .map { it.anime }
+            removed.forEach { s.editOnWebsite(it, null) }
+            val sync = async { s.list.sync() }
+            advanceTimeBy(2500.milliseconds)
+            assertEquals(1, s.mal.entryReads)
+
+            s.session.value = Session.SignedOut
+            runCurrent()
+            s.session.value = b
+            runCurrent()
+            settle()
+
+            assertEquals(Outcome.Failure(DataError.SessionExpired), sync.await())
+            assertEquals(listOf<Session?>(a), s.mal.readsUnder.toList())
+        }
+
+    // W2: a held failure whose Retry would still change what MAL holds is not taken for one MAL already made.
+    @Test
+    fun `a failure nothing collected stays held when a download shows other values than its Retry would set`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.editOnWebsite(anime, 20)
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            assertEquals(20, s.shownWatched(anime))
+
+            val heard = failures(s)
+            settle()
+            assertEquals(listOf(DataError.ServerError), heard.map { it.error })
+        }
+
+    // A title MAL may have changed unseen, whose check then failed, is still sent every value an edit names.
+    @Test
+    fun `a title kept after a failed check stays marked as possibly changed by MAL`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val confirmed = checkNotNull(s.shown(anime.id)).values
+            s.mal.failingEntries = mapOf(anime.id to DataError.ServerError)
+            s.mal.unreadAnswers = 1
+            s.mal.afterPut = { s.server.editOnWebsite(anime, null) }
+            s.list.write(ListWrite.Save(anime, confirmed.copy(score = 3), setOf(ListField.Score)))
+            settle()
+            s.mal.afterPut = {}
+            assertEquals(confirmed, s.shown(anime.id)?.values)
+            assertEquals(1, s.mal.entryReads)
+
+            s.server.editOnWebsite(anime, confirmed)
+            assertTrue(s.list.write(ListWrite.Save(anime, confirmed, setOf(ListField.Score))) != null)
+            settle()
+            assertEquals(
+                confirmed.carrying(ListField.Score),
+                s.server.requests
+                    .last()
+                    .values,
+            )
         }
 
     // A user who removed many titles on the website: each sync asks about a few, and none is asked twice.
