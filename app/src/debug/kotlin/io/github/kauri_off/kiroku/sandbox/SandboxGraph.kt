@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.sandbox
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.repository.SignIn
@@ -18,6 +19,7 @@ import io.github.kauri_off.kiroku.scenario.ScenariosOwner
 import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.wiring.DeviceTime
 import io.github.kauri_off.kiroku.wiring.LiveGraph
 import io.github.kauri_off.kiroku.wiring.LiveParts
 import io.github.kauri_off.kiroku.wiring.LiveSource
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Clock
+import kotlin.time.TimeSource
 
 // The live graph whole over MAL on the device, which keeps a made-up list in the source's own files.
 class SandboxGraph internal constructor(
@@ -93,10 +96,16 @@ class SandboxGraph internal constructor(
                     file = { kind -> File(context.noBackupFilesDir, notShown("$NAME.mal.$kind")) },
                 )
             val sandboxDevice = SandboxDevice(device)
-            return SandboxGraph(parts(LiveSource(NAME, SandboxMal.Hosts, sandbox.mal), sandboxDevice), sandbox, sandboxDevice)
+            val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = aniListTime)
+            return SandboxGraph(parts(source, sandboxDevice), sandbox, sandboxDevice)
         }
 
         private val NAME = notShown("sandbox")
+
+        // What the sandbox's AniList client spaces its requests by: the device's time, which a test may hurry.
+        @VisibleForTesting
+        @Volatile
+        internal var aniListTime: TimeSource.WithComparableMarks = DeviceTime
     }
 }
 

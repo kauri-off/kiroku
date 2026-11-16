@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.sandbox
 
+import android.database.DatabaseUtils
+import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -7,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
 import io.github.kauri_off.kiroku.MainActivity
+import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
@@ -99,6 +103,9 @@ class SandboxAppTest {
     @get:Rule(order = 2)
     val source = StartsOn(DataSource.Sandbox)
 
+    @get:Rule(order = 2)
+    val hurried = HurriedAniList()
+
     // The real account's files, as a sign-in and a sync left them, which the sandbox must never open.
     class AccountFiles : ExternalResource() {
         private val context get() = RuntimeEnvironment.getApplication()
@@ -174,10 +181,21 @@ class SandboxAppTest {
             assertEquals(Session.SignedIn::class, graph.session.observeSession().first()::class)
         }
 
-    private fun shows(text: String) =
-        compose.waitUntil(WAIT) {
-            shadowOf(Looper.getMainLooper()).idle()
-            compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+    private fun shows(
+        text: String,
+        substring: Boolean = false,
+    ) = compose.waitUntil(WAIT) {
+        shadowOf(Looper.getMainLooper()).idle()
+        compose.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty()
+    }
+
+    // The rows of a table of a database file, read as another connection would.
+    private fun rows(
+        database: String,
+        table: String,
+    ): Long =
+        SQLiteDatabase.openDatabase(context.getDatabasePath(database).path, null, SQLiteDatabase.OPEN_READONLY).use {
+            DatabaseUtils.queryNumEntries(it, table)
         }
 
     @Test
@@ -358,6 +376,51 @@ class SandboxAppTest {
         assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
         compose.waitForIdle()
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    // The List on AniList's schedules, asked through the app's own AniList client for the tracked titles alone (S9 at the end).
+    @Test
+    fun `signed in and synced, Watching shows to watch and the next episode from AniList asked for the tracked titles alone`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        val entries = waited { graph.list.observeEntries().first { it.isNotEmpty() } }
+        val onBreak = entries.single { it.anime.id.value == SandboxAiring.ON_A_BREAK }
+        // The List shown asks for the airing data that its first download made stale.
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            onBreak.anime.id in waited { graph.airing.observeSchedules().first() }
+        }
+        val airing =
+            waited { graph.airing.observeAiring().first { it[onBreak.anime.id]?.aired is AiredCount.Exact } }.getValue(onBreak.anime.id)
+        val aired = (airing.aired as AiredCount.Exact).value
+        val next = checkNotNull(airing.nextEpisode)
+        shows("${aired - onBreak.values.watchedEpisodes}\u00A0to\u00A0watch")
+
+        // Caught up, the row shows the next episode in its place.
+        waited { graph.list.write(ListWrite.Save(onBreak.anime, onBreak.values.copy(watchedEpisodes = aired))) }
+        shows("Episode\u00A0${next.number} ·", substring = true)
+
+        val tracked = entries.filter { it.tracked }.map { it.anime.id.value }.toSet()
+        assertTrue(tracked.size > 1)
+        assertEquals(
+            tracked,
+            graph.sandbox.aniList.asked
+                .flatten()
+                .toSet(),
+        )
+        assertTrue(rows("sandbox.db", "airing") >= tracked.size)
+        assertEquals(emptyList<URI>(), connections.asked)
+
+        // S9: the sign-out leaves no airing data, and nothing is asked of AniList after it.
+        waited { graph.session.signOut() }
+        assertEquals(0L, rows("sandbox.db", "airing"))
+        assertEquals(0L, rows("sandbox.db", "airing_episode"))
+        val asked = graph.sandbox.aniList.asked.size
+        assertEquals(Outcome.Success(Unit), waited { graph.airing.refresh() })
+        compose.waitForIdle()
+        assertEquals(asked, graph.sandbox.aniList.asked.size)
+        val files = account.files()
+        for ((file, bytes) in account.seeded) assertTrue(file.name, bytes.contentEquals(files.getValue(file)))
     }
 
     // No user's list values and no title not safe for work reach a debug or preview build.

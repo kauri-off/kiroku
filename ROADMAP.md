@@ -168,14 +168,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-07 Sandbox: AniList on the device.**
 
-- [ ] **M3-08 Live airing.** The live graph's airing is M3-04's repository over M3-05's store and M3-06's client,
-  each source with its own store, built at its first use and off the main thread. The sandbox runs on it against
-  M3-07.
-  **Needs:** M3-04, M3-05, M3-06, M3-07.
-  **Check:** tests: reading the session or the list builds nothing of airing; on the sandbox, signed in and
-  synced, the Watching rows show "to watch" and next episodes, AniList was asked for the tracked titles and no
-  other, and no request left the device; a sign-out leaves no airing data in the database (S9); the sandbox's
-  airing is in the sandbox's own database. The debug APK starts on an emulator without a crash.
+- [x] **M3-08 Live airing.**
 
 - [ ] **M3-09 The List and the title page on live airing.** On the List, the order computed at a first download,
   at a pull-to-refresh and at a start with no airing data stored waits for the airing refresh that follows, however
