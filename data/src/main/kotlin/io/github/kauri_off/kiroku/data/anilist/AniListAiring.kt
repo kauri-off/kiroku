@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.RefusalFile
 import io.github.kauri_off.kiroku.data.network.Sent
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,7 +36,7 @@ class AniListAiring(
     private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) : AiringSource {
     private val url = address.toHttpUrl()
-    private val pace = AniListPace(time, clock, AniListBlock(blockFile, clock, http.unexpected))
+    private val pace = AniListPace(time, RefusalFile(blockFile, clock, http.unexpected) { AniListOddAnswer("block") })
     private val turns = Mutex()
 
     // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking.

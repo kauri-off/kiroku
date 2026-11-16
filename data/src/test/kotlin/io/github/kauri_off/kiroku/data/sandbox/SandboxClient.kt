@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.sandbox
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.TestClock
+import io.github.kauri_off.kiroku.data.network.scratchBackOffFile
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.MalTokenEndpoint
 import io.github.kauri_off.kiroku.data.session.SessionFixture
@@ -43,6 +44,7 @@ internal class SandboxClient(
                     override fun isMainThread() = false
                 },
             clock = clock,
+            backOffFile = scratchBackOffFile(),
             unexpected = unexpected::add,
             log = log::add,
             repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds),
@@ -64,8 +66,7 @@ internal class SandboxClient(
         tokens: SandboxTokens,
     ): SignedIn {
         val sessions = SessionFixture(folder)
-        val endpoint = MalTokenEndpoint(http)
-        sessions.answer = { endpoint.post(it) }
+        sessions.over(MalTokenEndpoint(http))
         val session = sessions.open()
         val (access, refresh) = tokens.granted()
         runBlocking { session.signIn(TokenGrant(access, refresh)) }

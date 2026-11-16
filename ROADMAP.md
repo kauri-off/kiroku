@@ -265,17 +265,7 @@ missing from it; there are no duplicates.
   a `send` or a download changed the count leaves the count they wrote; an Undo of "+1" tapped after a `send` takes
   back its own step alone.
 
-- [ ] **M4-04 [A] One way in to MAL for background work.** In `:data`. MAL's back-off outlives the process, in a
-  file of its source as AniList's refusal does, so that work started in a new process still leaves MAL alone
-  (section 2.3). Work without a screen reaches MAL through one way in, which renews the tokens when they are due
-  (S7), sends nothing while the back-off lasts or while nobody is signed in with usable tokens (S6), and says which
-  of these held it back. What a person asks for on a screen is not held back by the back-off.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: a refusal in one process holds back a call made by a new one over
-  the same files, for no longer than the wait that was set, also with the clock set back; tokens older than the
-  renewal age are renewed before the call, once for calls made together (S5); with the session expired, or with MAL
-  refusing, the local server sees no request; a screen's read during the back-off is still sent; the file is not
-  backed up.
+- [x] **M4-04 [A] One way in to MAL for background work.**
 
 - [ ] **M4-05 Notification settings screen.** The stateless screen on fixture states, with its screenshot registry.
   It serves two needs: choosing (notifications on or off, also for planned titles, the delay), and finding out

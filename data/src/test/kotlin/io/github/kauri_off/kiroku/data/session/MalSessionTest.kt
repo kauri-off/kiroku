@@ -741,6 +741,40 @@ class MalSessionTest {
             assertEquals(id, session.now())
         }
 
+    // Section 2.3: a renewal nobody asked for is background work; the refresh of a token MAL rejected is not.
+    @Test
+    fun tokensThatAreDueAreNotRenewedWhileMalIsRefusing() =
+        test {
+            val session = signedIn()
+            fixture.clock.advance(RENEW_AFTER)
+            fixture.refusing = { true }
+            session.renewIfDue()
+            assertEquals(0, fixture.grants.size)
+
+            fixture.answer = { granted("access-2", "refresh-2") }
+            assertEquals(Outcome.Success("access-2"), session.authorised(FakeMal("access-2").request))
+            assertEquals(listOf(refreshGrant("refresh-1")), fixture.grants)
+        }
+
+    @Test
+    fun oldTokensAreNotRenewedAtTheStartWhileMalIsRefusing() =
+        test {
+            val id = signedIn().now()
+            fixture.clock.advance(RENEW_AFTER)
+            val asked = CompletableDeferred<Unit>()
+            fixture.refusing = {
+                asked.complete(Unit)
+                true
+            }
+            val session = fixture.reopen()
+            assertEquals(id, session.now())
+            withTimeout(5_000) { asked.await() }
+            fixture.sessionScope.coroutineContext.job.children
+                .forEach { it.join() }
+            assertEquals(0, fixture.grants.size)
+            assertEquals(id, session.now())
+        }
+
     @Test
     fun oldTokensThatMalRejectsAtTheStartEndInExpired() =
         test {

@@ -51,7 +51,18 @@ internal class LiveParts(
     val clockSet: Flow<Unit> = deviceClockSet(context),
 ) {
     // The only HTTP client of the source.
-    val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log, standIn = source.standIn)
+    val http =
+        MalHttp(
+            source.hosts,
+            clientId.trim(),
+            BuildConfig.VERSION_NAME,
+            device,
+            clock,
+            file(BACK_OFF),
+            unexpected,
+            log,
+            standIn = source.standIn,
+        )
 
     // The only AniList client, one per process as its graph is: two would each keep under AniList's limit and together exceed it.
     val aniList by lazy {
@@ -68,6 +79,7 @@ internal class LiveParts(
 
     private companion object {
         val ANILIST_BLOCK = notShown("anilist.block")
+        val BACK_OFF = notShown("backoff")
     }
 }
 
