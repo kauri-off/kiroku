@@ -159,8 +159,13 @@ val projectDir: File =
     generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
 
 // The app's Kotlin sources in every source set that is not a test, under both kotlin/ and java/.
-fun appSources(): List<File> =
-    File(projectDir, "app/src")
+fun appSources(): List<File> = shippedSources("app")
+
+// The same of :data, which holds the sources' clients and the stores.
+fun dataSources(): List<File> = shippedSources("data")
+
+private fun shippedSources(module: String): List<File> =
+    File(projectDir, "$module/src")
         .listFiles()
         .orEmpty()
         .filter { it.isDirectory && !it.name.startsWith("test") && !it.name.startsWith("androidTest") }

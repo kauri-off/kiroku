@@ -2,8 +2,10 @@ package io.github.kauri_off.kiroku.list
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.Premiere
-import io.github.kauri_off.kiroku.core.airing.episodeTotal
+import io.github.kauri_off.kiroku.core.airing.airingAt
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -17,11 +19,13 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.plain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Duration
 
 class ListRowTest {
     private val set = Fixtures.reference
@@ -119,8 +123,9 @@ class ListRowTest {
         val entry = set.entryFor(FixtureAnime.exactCaughtUp.id)!!.let { it.copy(values = it.values.copy(watchedEpisodes = 25)) }
         val airing = set.airing.getValue(entry.anime.id)
         val row = listRow(entry, airing, today, TitleLanguage.Romaji)
-        assertEquals(Line2.Progress(25, episodeTotal(entry.anime, airing)), row.line2)
-        assertTrue(25 > episodeTotal(entry.anime, airing)!!)
+        val total = titleAiring(entry.anime, entry.values, airing, today).total
+        assertEquals(Line2.Progress(25, total), row.line2)
+        assertTrue(25 > total!!)
         assertTrue(25 >= airing.nextEpisode!!.number)
         assertEquals(null, row.line3)
         assertTrue(row.plusOne)
@@ -129,13 +134,11 @@ class ListRowTest {
     @Test
     fun `not yet aired shows the premiere by what is known`() {
         assertEquals(
-            Premiere.At(
-                set.airing
-                    .getValue(FixtureAnime.premiereTimeSoon.id)
-                    .nextEpisode!!
-                    .airsAt,
-            ),
-            (row(FixtureAnime.premiereTimeSoon).line2 as Line2.Premieres).premiere,
+            set.airing
+                .getValue(FixtureAnime.premiereTimeSoon.id)
+                .nextEpisode!!
+                .airsAt,
+            (row(FixtureAnime.premiereTimeSoon).line2 as Line2.Premieres).premiere.plain(),
         )
         assertTrue((row(FixtureAnime.premiereDate).line2 as Line2.Premieres).premiere is Premiere.OnDay)
         assertTrue((row(FixtureAnime.premiereMonth).line2 as Line2.Premieres).premiere is Premiere.InMonth)
@@ -173,7 +176,8 @@ class ListRowTest {
     fun `A1 a title MAL still calls not yet aired, with episodes aired, shows its to watch line`() {
         val anime = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.NotYetAired)
         val entry = ListEntry(anime, ListValues(ListStatus.Watching, 0, null, null, null), set.now)
-        val row = listRow(entry, Airing(AiredCount.Estimated(2), 24, null, set.now), today, TitleLanguage.Romaji)
+        val doubted = AiringSchedule(FixtureTime.weekly(1, set.now.minus(Duration.ofDays(8)), 1..2), 25)
+        val row = listRow(entry, airingAt(anime, doubted, set.now), today, TitleLanguage.Romaji)
         assertEquals(Line2.Progress(0, 24), row.line2)
         assertEquals(Line3.ToWatch(AiredCount.Estimated(2)), row.line3)
     }
@@ -209,7 +213,7 @@ class ListRowTest {
     ) {
         val row = listRow(entry, airing, today, TitleLanguage.Romaji)
         (row.line2 as? Line2.Progress)?.let {
-            assertEquals("${entry.anime.titles.romaji} with $airing", episodeTotal(entry.anime, airing), it.total)
+            assertEquals("${entry.anime.titles.romaji} with $airing", titleAiring(entry.anime, entry.values, airing, today).total, it.total)
         }
     }
 

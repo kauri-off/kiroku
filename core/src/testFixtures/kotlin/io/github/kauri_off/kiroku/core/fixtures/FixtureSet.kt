@@ -3,6 +3,9 @@ package io.github.kauri_off.kiroku.core.fixtures
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.airingAt
+import io.github.kauri_off.kiroku.core.airing.effective
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -25,8 +28,6 @@ data class FixtureSet(
     val anime: List<Anime>,
     val entries: List<ListEntry>,
     val schedules: Map<AnimeId, AiringSchedule>,
-    // A snapshot at the set's creation; nothing recomputes it as a clock runs.
-    val airing: Map<AnimeId, Airing>,
     val details: Map<AnimeId, AnimeDetails>,
     val user: UserProfile,
     val userStatistics: UserStatistics,
@@ -37,6 +38,12 @@ data class FixtureSet(
     val largeStatistics: UserStatistics,
 ) {
     val now: Instant get() = clock.instant()
+
+    // The calculator's results for the unfinished titles at the first read; nothing recomputes them as a clock runs.
+    val airing: Map<AnimeId, Airing> by lazy {
+        val at = now
+        anime.filter { it.airingStatus.effective != AiringStatus.Finished }.associate { it.id to airingAt(it, schedules[it.id], at) }
+    }
 
     val session: Session.SignedIn get() = Session.SignedIn(SignInId("demo"))
 
@@ -58,7 +65,6 @@ data class FixtureSet(
             anime = anime,
             entries = entries,
             schedules = schedules.mapValues { shift.schedule(it.value) },
-            airing = airing.mapValues { shift.airing(it.value) },
             details = details.mapValues { (id, value) -> shift.details(value, shiftedById.getValue(id)) },
             user = user.copy(joined = user.joined?.plusWeeks(weeks)),
             userStatistics = userStatistics.copy(years = startYears(entries)),
@@ -109,12 +115,6 @@ private class WeekShift(
     fun episode(value: ScheduledEpisode): ScheduledEpisode = value.copy(airsAt = instant(value.airsAt))
 
     fun schedule(value: AiringSchedule): AiringSchedule = value.copy(episodes = value.episodes.map(::episode))
-
-    fun airing(value: Airing): Airing =
-        value.copy(
-            nextEpisode = value.nextEpisode?.let(::episode),
-            latestAiredAt = value.latestAiredAt?.let(::instant),
-        )
 
     fun details(
         value: AnimeDetails,

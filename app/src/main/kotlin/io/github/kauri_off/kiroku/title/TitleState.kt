@@ -3,8 +3,7 @@ package io.github.kauri_off.kiroku.title
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.airing.Premiere
-import io.github.kauri_off.kiroku.core.airing.airingPhase
-import io.github.kauri_off.kiroku.core.airing.episodeTotal
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
@@ -102,8 +101,9 @@ data class TitlePage private constructor(
         ): TitlePage {
             require(entry == null || entry.anime.id == anime.id)
             val now = ZonedDateTime.now(clock)
-            val total = episodeTotal(anime, airing)
-            val phase = airingPhase(anime, entry?.values, airing, now.toLocalDate())
+            val shown = titleAiring(anime, entry?.values, airing, now.toLocalDate())
+            val total = shown.total
+            val phase = shown.phase
             val related = details?.related.orEmpty()
             val chain =
                 details

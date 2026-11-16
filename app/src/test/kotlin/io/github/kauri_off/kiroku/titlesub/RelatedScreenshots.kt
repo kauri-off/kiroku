@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
 import io.github.kauri_off.kiroku.screenshots.shown
+import java.time.LocalDate
 
 class RelatedScreenshots : ScreenshotRegistry() {
     override val content = contentCase("grouped") { Screen(SubScreenFixtures.related(FixtureAnime.exactToWatch)) }
@@ -47,6 +48,7 @@ object SubScreenFixtures {
             airing = set.airing,
             language = TitleLanguage.Romaji,
             session = session,
+            today = LocalDate.now(set.clock),
         )
 
     fun details(

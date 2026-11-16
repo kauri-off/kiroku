@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.relatedStrip
+import io.github.kauri_off.kiroku.plain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -34,67 +35,67 @@ class TitleStateTest {
     // Each case's airing block, written out: what the page shows, not how it is computed.
     @Test
     fun everyCaseShowsItsAiringBlock() {
-        val expected: Map<String, Pair<TitlePage, AiringPhase?>> =
+        val expected: Map<String, Pair<TitlePage, Any?>> =
             mapOf(
                 "airing-on-list" to
                     (
                         TitleFixtures.page(FixtureAnime.exactToWatch) to
-                            AiringPhase.Aired(AiredCount.Exact(14), AiredCount.Exact(2), ScheduledEpisode(15, japan("2026-01-17T23:30")))
+                            Triple(AiredCount.Exact(14), AiredCount.Exact(2), ScheduledEpisode(15, japan("2026-01-17T23:30")))
                     ),
                 "not-on-list" to
                     (
                         TitleFixtures.page(FixtureAnime.notOnListAiring) to
-                            AiringPhase.Aired(AiredCount.Exact(7), null, ScheduledEpisode(8, japan("2026-01-18T22:00")))
+                            Triple(AiredCount.Exact(7), null, ScheduledEpisode(8, japan("2026-01-18T22:00")))
                     ),
                 "airing-estimated" to
                     (
                         TitleFixtures.page(FixtureAnime.estimatedToWatch) to
-                            AiringPhase.Aired(AiredCount.Estimated(10), AiredCount.Estimated(3), null)
+                            Triple(AiredCount.Estimated(10), AiredCount.Estimated(3), null)
                     ),
                 "airing-estimated-caught-up" to
-                    (TitleFixtures.page(FixtureAnime.estimatedCaughtUp) to AiringPhase.Aired(AiredCount.Estimated(5), null, null)),
+                    (TitleFixtures.page(FixtureAnime.estimatedCaughtUp) to Triple(AiredCount.Estimated(5), null, null)),
                 "airing-unknown" to (TitleFixtures.page(FixtureAnime.airedUnknown) to AiringPhase.CountUnknown),
                 "finished" to (TitleFixtures.page(FixtureAnime.finishedPartWay) to null),
                 "film" to (TitleFixtures.page(FixtureAnime.film) to null),
                 "not-yet-aired" to
                     (
                         TitleFixtures.page(FixtureAnime.premiereTimeSoon) to
-                            AiringPhase.NotYetAired(Premiere.At(japan("2026-01-18T00:30")))
+                            japan("2026-01-18T00:30")
                     ),
                 "not-yet-aired-date" to
-                    (TitleFixtures.page(FixtureAnime.premiereDate) to AiringPhase.NotYetAired(Premiere.OnDay(LocalDate.of(2026, 4, 4)))),
+                    (TitleFixtures.page(FixtureAnime.premiereDate) to LocalDate.of(2026, 4, 4)),
                 "not-yet-aired-month" to
-                    (TitleFixtures.page(FixtureAnime.premiereMonth) to AiringPhase.NotYetAired(Premiere.InMonth(YearMonth.of(2026, 7)))),
+                    (TitleFixtures.page(FixtureAnime.premiereMonth) to YearMonth.of(2026, 7)),
                 "not-yet-aired-year" to
-                    (TitleFixtures.page(FixtureAnime.premiereYear) to AiringPhase.NotYetAired(Premiere.InYear(Year.of(2027)))),
+                    (TitleFixtures.page(FixtureAnime.premiereYear) to Year.of(2027)),
                 "not-yet-aired-nodate" to
-                    (TitleFixtures.page(FixtureAnime.premiereUnannounced) to AiringPhase.NotYetAired(Premiere.Unannounced)),
+                    (TitleFixtures.page(FixtureAnime.premiereUnannounced) to Premiere.Unannounced),
                 "no-related" to
                     (
                         TitleFixtures.page(FixtureAnime.exactCaughtUp) to
-                            AiringPhase.Aired(AiredCount.Exact(8), null, ScheduledEpisode(9, japan("2026-01-15T00:00")))
+                            Triple(AiredCount.Exact(8), null, ScheduledEpisode(9, japan("2026-01-15T00:00")))
                     ),
                 "long-title" to
                     (
                         TitleFixtures.page(FixtureAnime.longTitle) to
-                            AiringPhase.Aired(AiredCount.Exact(3), AiredCount.Exact(2), ScheduledEpisode(4, japan("2026-01-16T01:00")))
+                            Triple(AiredCount.Exact(3), AiredCount.Exact(2), ScheduledEpisode(4, japan("2026-01-16T01:00")))
                     ),
                 "no-score" to
                     (
                         TitleFixtures.page(FixtureAnime.premiereTimeLater) to
-                            AiringPhase.NotYetAired(Premiere.At(japan("2026-01-28T21:00")))
+                            japan("2026-01-28T21:00")
                     ),
                 "first-episode-aired" to
                     (
                         TitleFixtures.firstEpisodeAired.page to
-                            AiringPhase.Aired(
+                            Triple(
                                 AiredCount.Exact(1),
                                 AiredCount.Exact(1),
                                 ScheduledEpisode(2, set.now.plus(Duration.ofDays(7)).minus(Duration.ofHours(1))),
                             )
                     ),
             )
-        for ((case, pair) in expected) assertEquals(case, pair.second, pair.first.airing)
+        for ((case, pair) in expected) assertEquals(case, pair.second, pair.first.airing.plain())
     }
 
     @Test

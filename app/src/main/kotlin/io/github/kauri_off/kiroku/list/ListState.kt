@@ -5,8 +5,7 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
-import io.github.kauri_off.kiroku.core.airing.airingPhase
-import io.github.kauri_off.kiroku.core.airing.episodeTotal
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.defaultDirection
@@ -184,7 +183,7 @@ sealed interface ListEvent {
     data object Back : ListEvent
 }
 
-// One row from :core's airing phase, as on the title page; sorted by score or start date, line 2 also shows that value.
+// One row from :core's result for the title, as on the title page; sorted by score or start date, line 2 also shows that value.
 fun listRow(
     entry: ListEntry,
     airing: Airing?,
@@ -195,12 +194,13 @@ fun listRow(
 ): ListRow {
     val anime = entry.anime
     val values = entry.values
-    val phase = if (readOnly) null else airingPhase(anime, values, airing, today)
+    val shown = titleAiring(anime, values, airing, today)
+    val phase = shown.phase.takeUnless { readOnly }
     val line2 =
         when {
             entry.status == ListStatus.Completed -> Line2.Score(values.score)
             phase is AiringPhase.NotYetAired -> Line2.Premieres(phase.premiere)
-            else -> Line2.Progress(values.watchedEpisodes, episodeTotal(anime, airing))
+            else -> Line2.Progress(values.watchedEpisodes, shown.total)
         }
     val aired = (phase as? AiringPhase.Aired)?.takeIf { line2 is Line2.Progress }
     val line3 = aired?.toWatch?.let(Line3::ToWatch) ?: aired?.next?.let(Line3::NextEpisode)

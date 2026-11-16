@@ -1,7 +1,7 @@
 package io.github.kauri_off.kiroku.titlesub
 
-import io.github.kauri_off.kiroku.core.airing.AiredCount
-import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -19,11 +19,13 @@ import org.junit.Test
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
 class SubScreenStateTest {
     private val set = Fixtures.reference
+    private val today = LocalDate.now(set.clock)
 
     @Test
     fun everyRelatedAnimeIsShownInTheBudgetsGroupOrderAndByStartDateWithinAGroup() {
@@ -63,9 +65,10 @@ class SubScreenStateTest {
             relatedState(
                 related = listOf(RelatedAnime(airing, RelationType.Sequel)),
                 entries = mapOf(airing.id to ListValues(ListStatus.Watching, 5, null, null, null)),
-                airing = mapOf(airing.id to Airing(AiredCount.Exact(6), 12, null, Instant.EPOCH)),
+                airing = mapOf(airing.id to airingAt(airing, AiringSchedule(emptyList(), 12), set.now)),
                 language = TitleLanguage.Romaji,
                 session = set.session,
+                today = today,
             )
         assertEquals(
             12,
@@ -76,7 +79,14 @@ class SubScreenStateTest {
                 .total,
         )
         val unknown =
-            relatedState(listOf(RelatedAnime(airing, RelationType.Sequel)), emptyMap(), emptyMap(), TitleLanguage.Romaji, set.session)
+            relatedState(
+                listOf(RelatedAnime(airing, RelationType.Sequel)),
+                emptyMap(),
+                emptyMap(),
+                TitleLanguage.Romaji,
+                set.session,
+                today,
+            )
         assertEquals(
             null,
             unknown.groups
@@ -91,7 +101,7 @@ class SubScreenStateTest {
     fun aRowUsesTheChosenTitleLanguage() {
         val related = listOf(RelatedAnime(FixtureAnime.prequel, RelationType.Prequel))
         val english =
-            relatedState(related, emptyMap(), emptyMap(), TitleLanguage.English, set.session)
+            relatedState(related, emptyMap(), emptyMap(), TitleLanguage.English, set.session, today)
                 .groups
                 .single()
                 .rows
