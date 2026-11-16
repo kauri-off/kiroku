@@ -288,6 +288,10 @@ Not to forget:
   sync).
 - By hand on Android 13 or later: deny the permission, see "Blocked in system settings", grant it in the system
   settings, return, see the state updated, receive the test notification.
+- Every background entry point (an alarm, periodic work, the "Mark watched" action) renews the tokens when they
+  are due and reads MAL's back-off before it calls MAL, each held by a test: until M4 only an opened app does
+  either (S7, section 2.3).
+- A title a list download left out and a later one brings back is not announced as newly added (N5).
 
 ## M5. Search and browse
 
@@ -348,6 +352,11 @@ Not to forget:
 - The release key exists and its four secrets (`KIROKU_ANDROID_KEYSTORE_B64`, `KIROKU_ANDROID_STORE_PASSWORD`,
   `KIROKU_ANDROID_KEY_ALIAS`, `KIROKU_ANDROID_KEY_PASSWORD`) are in the `release` environment; the release
   workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
+- A changed setting reaches the screens that are open: title language and adult content are read where they are
+  shown, not copied when a view model is made.
+- `CONTRIBUTING.md` tells a fork to set its own application id and sign-in redirect beside its own client id: two
+  installed apps that claim one redirect split the sign-ins.
+- Sign-out clears the image caches with everything else stored about the user (S9).
 
 ---
 
