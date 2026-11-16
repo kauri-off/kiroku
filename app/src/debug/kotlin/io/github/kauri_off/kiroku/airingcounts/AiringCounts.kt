@@ -34,6 +34,9 @@ sealed interface Why {
     data class StoppedAfter(
         val lastAired: Instant,
     ) : Why
+
+    // The calculator gave the title no result: it failed on it, or the title has just joined the list.
+    data object NoResult : Why
 }
 
 data class CountedTitle(
@@ -100,7 +103,8 @@ private fun why(
             if (malTotal == null || total == 0) null else Why.TotalsDiffer(malTotal, total)
         }
         Inexact.ScheduleStopped -> airing.latestAiredAt?.let(Why::StoppedAfter)
-        Inexact.NoSchedule, null -> null
+        Inexact.NoSchedule -> null
+        null -> if (airing == null) Why.NoResult else null
     }
 }
 

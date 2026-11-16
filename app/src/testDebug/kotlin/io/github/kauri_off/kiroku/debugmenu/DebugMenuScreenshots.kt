@@ -109,7 +109,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         val FIXTURES = Fixtures.reference
         val COUNTS = AiringCountsState.Read(airingCounts(FIXTURES.entries, FIXTURES.airing, FIXTURES.schedules, TitleLanguage.Romaji))
 
-        // The fixtures, with one title whose schedule stopped four weeks and a day ago.
+        // The fixtures, with one title whose schedule stopped four weeks and a day ago and one the calculator gave no result.
         val STOPPED: AiringCountsState =
             FIXTURES.now.minus(Duration.ofDays(29)).let { last ->
                 val anime = FixtureAnime.exactOnBreak
@@ -117,7 +117,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 AiringCountsState.Read(
                     airingCounts(
                         FIXTURES.entries,
-                        FIXTURES.airing + (anime.id to airingAt(anime, schedule, FIXTURES.now)),
+                        FIXTURES.airing + (anime.id to airingAt(anime, schedule, FIXTURES.now)) - FixtureAnime.exactToWatch.id,
                         FIXTURES.schedules + (anime.id to schedule),
                         TitleLanguage.Romaji,
                     ),

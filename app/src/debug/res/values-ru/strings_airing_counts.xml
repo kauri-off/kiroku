@@ -13,8 +13,9 @@
     <string name="airing_counts_aired">Вышло\u00A0%d</string>
     <string name="airing_counts_aired_estimated">Вышло\u00A0~%d</string>
     <string name="airing_counts_aired_unknown">Число неизвестно</string>
-    <string name="airing_counts_numbered">AniList нумерует серии\u00A0%1$d–%2$d</string>
+    <string name="airing_counts_numbered">Сохранены серии\u00A0%1$d–%2$d</string>
     <string name="airing_counts_totals">Всего серий: MAL\u00A0%1$d, AniList\u00A0%2$d</string>
     <string name="airing_counts_stopped">Последняя серия в AniList вышла %s</string>
+    <string name="airing_counts_no_result">Нет результата</string>
     <string name="airing_counts_separator">" · "</string>
 </resources>

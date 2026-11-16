@@ -13,8 +13,9 @@
     <string name="airing_counts_aired">%d\u00A0aired</string>
     <string name="airing_counts_aired_estimated">~%d\u00A0aired</string>
     <string name="airing_counts_aired_unknown">Count unknown</string>
-    <string name="airing_counts_numbered">AniList numbers episodes\u00A0%1$d–%2$d</string>
+    <string name="airing_counts_numbered">Stored episodes\u00A0%1$d–%2$d</string>
     <string name="airing_counts_totals">Totals: MAL\u00A0%1$d, AniList\u00A0%2$d</string>
     <string name="airing_counts_stopped">AniList\'s last episode aired %s</string>
+    <string name="airing_counts_no_result">No result</string>
     <string name="airing_counts_separator">" · "</string>
 </resources>

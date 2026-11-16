@@ -60,7 +60,7 @@ class AiringCountsSectionTest {
         shown("Tracked titles")
         shown(FixtureAnime.estimatedCaughtUp.titles.romaji)
         shown("Totals: MAL\u00A012, AniList\u00A013")
-        shown("AniList numbers episodes\u00A013–24")
+        shown("Stored episodes\u00A013–24")
         compose.waitForIdle()
 
         assertEquals(emptyList<Any>(), demo.server.requests)

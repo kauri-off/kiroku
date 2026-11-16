@@ -106,7 +106,8 @@ private fun CountRow(
 private fun TitleLines(title: CountedTitle) {
     Column {
         Text(title.title, color = MaterialTheme.colorScheme.onSurface)
-        Text(listOfNotNull(aired(title.aired), title.why?.let { why(it) }).joinToString(stringResource(R.string.airing_counts_separator)))
+        val count = if (title.why == Why.NoResult) null else aired(title.aired)
+        Text(listOfNotNull(count, title.why?.let { why(it) }).joinToString(stringResource(R.string.airing_counts_separator)))
     }
 }
 
@@ -124,6 +125,7 @@ private fun why(why: Why): String =
         is Why.NumberedFrom -> stringResource(R.string.airing_counts_numbered, why.first, why.last)
         is Why.TotalsDiffer -> stringResource(R.string.airing_counts_totals, why.mal, why.schedule)
         is Why.StoppedAfter -> stringResource(R.string.airing_counts_stopped, dateTime(why.lastAired))
+        Why.NoResult -> stringResource(R.string.airing_counts_no_result)
     }
 
 private val CountKind.label: Int

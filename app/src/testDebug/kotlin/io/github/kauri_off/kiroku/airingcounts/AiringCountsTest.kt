@@ -127,12 +127,29 @@ class AiringCountsTest {
     }
 
     @Test
-    fun `a tracked title without a result is counted unknown, and a title that is not tracked is not counted`() {
+    fun `a tracked title without a result is counted unknown and said to have none, and a title that is not tracked is not counted`() {
         val counts = counts(airing = set.airing - FixtureAnime.exactToWatch.id)
         assertEquals(9, counts.counts[CountKind.Exact])
         assertEquals(2, counts.counts[CountKind.Unknown])
-        assertEquals(CountKind.Unknown, counts.notExact.single { it.id == FixtureAnime.exactToWatch.id }.kind)
+        val missing = counts.notExact.single { it.id == FixtureAnime.exactToWatch.id }
+        assertEquals(CountKind.Unknown, missing.kind)
+        assertEquals(Why.NoResult, missing.why)
+        assertEquals(null, counts.notExact.single { it.id == FixtureAnime.airedUnknown.id }.why)
         assertTrue(counts.notExact.none { it.id == FixtureAnime.droppedEstimated.id })
+    }
+
+    // A5 by the numbers alone: the schedule states no total, and AniList's side is its highest number.
+    @Test
+    fun `a schedule with no stated total numbered past MAL's total shows its highest number as AniList's total`() {
+        val anime = FixtureAnime.estimatedCaughtUp
+        val schedule = set.schedules.getValue(anime.id).copy(totalEpisodes = null)
+        val airing = airingAt(anime, schedule, set.now)
+        val counts =
+            airingCounts(set.entries, set.airing + (anime.id to airing), set.schedules + (anime.id to schedule), TitleLanguage.Romaji)
+
+        val listed = counts.notExact.single { it.id == anime.id }
+        assertEquals(CountKind.Doubt, listed.kind)
+        assertEquals(Why.TotalsDiffer(12, 13), listed.why)
     }
 
     @Test
