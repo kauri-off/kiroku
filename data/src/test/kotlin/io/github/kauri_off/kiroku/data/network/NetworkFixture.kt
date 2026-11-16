@@ -16,12 +16,17 @@ import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import javax.net.ServerSocketFactory
 import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
@@ -62,6 +67,27 @@ internal interface Things {
 // The next request the server received; a test fails, and does not wait, when none arrives.
 internal fun MockWebServer.received(): RecordedRequest = checkNotNull(takeRequest(5, TimeUnit.SECONDS)) { "No request arrived" }
 
+// The server writes an answer's head and body apart; without this the body waits for the client's delayed acknowledgement.
+private object AnswerAtOnce : ServerSocketFactory() {
+    override fun createServerSocket(): ServerSocket =
+        object : ServerSocket() {
+            override fun accept(): Socket = super.accept().apply { tcpNoDelay = true }
+        }
+
+    override fun createServerSocket(port: Int): ServerSocket = createServerSocket(port, 0, null)
+
+    override fun createServerSocket(
+        port: Int,
+        backlog: Int,
+    ): ServerSocket = createServerSocket(port, backlog, null)
+
+    override fun createServerSocket(
+        port: Int,
+        backlog: Int,
+        address: InetAddress?,
+    ): ServerSocket = createServerSocket().apply { bind(InetSocketAddress(address, port), backlog) }
+}
+
 internal class TestClock(
     var now: Instant = Instant.parse("2026-11-13T12:00:00Z"),
 ) : Clock() {
@@ -74,8 +100,8 @@ internal class TestClock(
 
 // Two local servers in place of MAL's hosts and a client over them, on a device whose main thread is the test's.
 internal class NetworkFixture : ExternalResource() {
-    val api = MockWebServer()
-    val signIn = MockWebServer()
+    val api = MockWebServer().apply { serverSocketFactory = AnswerAtOnce }
+    val signIn = MockWebServer().apply { serverSocketFactory = AnswerAtOnce }
     val clock = TestClock()
     val log = CopyOnWriteArrayList<String>()
     val unexpected = CopyOnWriteArrayList<Throwable>()
