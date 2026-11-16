@@ -31,7 +31,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -46,13 +45,10 @@ class ProcessDeathTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { scope.cancel() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
-
-    @After
-    fun stop() = scope.cancel()
 
     private class Owner : ViewModelStoreOwner {
         override val viewModelStore = ViewModelStore()

@@ -28,7 +28,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -46,15 +45,12 @@ class TypedTextTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose))
+    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose) { scope.cancel() })
 
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
     private val kagerou = FixtureAnime.exactToWatch
     private val shiokaze = FixtureAnime.exactCaughtUp
-
-    @After
-    fun stop() = scope.cancel()
 
     // Lets the view models' coroutines run, which every step below holds back.
     private fun settle() =

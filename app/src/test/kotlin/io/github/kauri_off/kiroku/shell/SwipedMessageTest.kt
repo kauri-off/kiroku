@@ -59,7 +59,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -170,12 +169,9 @@ class SwipedMessageTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { harness.scope.cancel() }
 
     private val harness = SwipeHarness(compose)
-
-    @After
-    fun stop() = harness.scope.cancel()
 
     private fun swipesAwayEitherWay() =
         with(harness) {
@@ -325,12 +321,9 @@ class SwipedMessageWideTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { harness.scope.cancel() }
 
     private val harness = SwipeHarness(compose)
-
-    @After
-    fun stop() = harness.scope.cancel()
 
     @Test
     fun `a release held still past half the message's width dismisses it either way, and short of half returns it`() =
@@ -356,12 +349,9 @@ class SwipedMessageExitTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { harness.scope.cancel() }
 
     private val harness = SwipeHarness(compose)
-
-    @After
-    fun stop() = harness.scope.cancel()
 
     // How many pixels of the row [y] of the window differ from [empty].
     private fun drawnOn(
@@ -463,12 +453,9 @@ class SwipedMessageMotionTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { harness.scope.cancel() }
 
     private val harness = SwipeHarness(compose)
-
-    @After
-    fun stop() = harness.scope.cancel()
 
     private fun shown(): Dp =
         with(harness) {
@@ -641,12 +628,9 @@ class SwipedMessageMotionOffTest {
         )
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { harness.scope.cancel() }
 
     private val harness = SwipeHarness(compose)
-
-    @After
-    fun stop() = harness.scope.cancel()
 
     private fun frames(count: Int) = repeat(count) { compose.mainClock.advanceTimeByFrame() }
 

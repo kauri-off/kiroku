@@ -38,7 +38,6 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -63,7 +62,7 @@ class ShellMessagesTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { scope.cancel() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
@@ -81,9 +80,6 @@ class ShellMessagesTest {
         }
     private val messages = ShellMessages(scope, counted)
     private var composed by mutableStateOf(true)
-
-    @After
-    fun stop() = scope.cancel()
 
     // The shell's host, which a recreation makes anew.
     private fun shell() {
