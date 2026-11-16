@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reports_title">Отчёты об ошибках</string>
+    <string name="reports_detail">С чем приложение не справилось, сначала новое, с первыми строками каждого отчёта. Сборка для отладки останавливается на неожиданной ошибке, сборка превью работает дальше</string>
+    <string name="reports_none">Отчётов нет</string>
+</resources>

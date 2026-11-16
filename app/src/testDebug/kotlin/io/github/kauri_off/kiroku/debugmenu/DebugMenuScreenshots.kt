@@ -14,6 +14,8 @@ import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.recorder.RecorderSection
 import io.github.kauri_off.kiroku.recorder.RecorderState
+import io.github.kauri_off.kiroku.reports.Report
+import io.github.kauri_off.kiroku.reports.ReportsSection
 import io.github.kauri_off.kiroku.scenario.EdgeMarker
 import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
@@ -77,6 +79,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case(
                 "recorder-refused",
             ) { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.NotStarted(Halt.OnTheList), "21")) },
+            case("reports") { Menu(ScenarioState.Unavailable, reports = REPORTS) },
             case("tab-on-list") { OverList(Scenario()) },
             case("marker-on-list") { OverList(Scenario(offline = true)) },
             case("marker-several-on-list") { OverList(several) },
@@ -89,6 +92,27 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         val TITLE = RecordedTitle(1, "Cowboy Bebop", 26)
         val RECORDED = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded")
         val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
+        val REPORTS =
+            listOf(
+                Report(
+                    Instant.parse("2026-11-12T09:40:00Z"),
+                    listOf(
+                        "Unexpected: io.github.kauri_off.kiroku.data.network.RepairedAnswer",
+                        "\tat io.github.kauri_off.kiroku.data.list.MalRemoteList.read(MalRemoteList.kt:91)",
+                        "\tat io.github.kauri_off.kiroku.data.list.MalRemoteList.access\$read(MalRemoteList.kt:39)",
+                        "\tat io.github.kauri_off.kiroku.data.list.MalRemoteList\$set\$1.invokeSuspend(Unknown Source:15)",
+                    ),
+                ),
+                Report(
+                    Instant.parse("2026-11-12T08:12:00Z"),
+                    listOf(
+                        "Unexpected: java.lang.IllegalStateException",
+                        "\tat io.github.kauri_off.kiroku.data.db.RoomLocalList.read(RoomLocalList.kt:88)",
+                        "Caused by: java.lang.IllegalArgumentException",
+                        "\tat io.github.kauri_off.kiroku.data.db.TitleRow.toAnime(TitleRow.kt:54)",
+                    ),
+                ),
+            )
     }
 
     // The sections of the running menu, in its order, each with a state given here.
@@ -109,12 +133,14 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         signOut: SignOutState =
             if (scenarios == ScenarioState.Unavailable) SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))) else SignOutState.Demo,
         recorder: RecorderState = RecorderState(if (scenarios == ScenarioState.Unavailable) Recording.Idle else null),
+        reports: List<Report> = emptyList(),
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
             { SourceSection(source, onEvent = {}) },
             { SignOutSection(signOut, onEvent = {}) },
             { RecorderSection(recorder, onEvent = {}) },
+            { ReportsSection(reports) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
         ),

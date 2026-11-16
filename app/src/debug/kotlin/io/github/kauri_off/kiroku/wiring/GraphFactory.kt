@@ -4,12 +4,15 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import coil3.intercept.Interceptor
+import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.reports.ReportLog
+import io.github.kauri_off.kiroku.reports.reportLog
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.scenario.Scenarios
 import io.github.kauri_off.kiroku.scenario.ScenariosOwner
@@ -20,15 +23,23 @@ import kotlinx.coroutines.CoroutineScope
 
 private val UNEXPECTED = notShown("An exception the app did not expect")
 
-// A debug build crashes on an exception nobody expected, on the main thread, so it is never missed.
-internal val reportUnexpected: (Throwable) -> Unit = { e ->
-    // S8: tokens or choices that cannot be read, and MAL's odd answers (section 2.3), never crash the app: they are logged.
-    if (e is TokensNotRead || e is PreferencesFailure || e is OddAnswer) {
-        logTypes(e)
-    } else {
-        Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
+// The debuggable build is the loud one; the preview build reports as a release does, and keeps the report as well.
+internal val reportUnexpected: (Throwable) -> Unit = reporter(loud = BuildConfig.DEBUG, reportLog)
+
+// Keeps each report for the debug menu; a loud build then crashes on the main thread on one nobody expected.
+internal fun reporter(
+    loud: Boolean,
+    log: ReportLog,
+): (Throwable) -> Unit =
+    { e ->
+        log.keep(e)
+        // S8: tokens or choices that cannot be read, and MAL's odd answers (section 2.3), never crash the app: they are logged.
+        if (!loud || e is TokensNotRead || e is PreferencesFailure || e is OddAnswer) {
+            logTypes(e)
+        } else {
+            Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
+        }
     }
-}
 
 // One line per request: no header, value or body.
 internal val requestLog: ((String) -> Unit)? = { Log.d(LOG_TAG, it) }
@@ -63,4 +74,5 @@ class DemoGraph(
     override val user = demo.user
     override val connection = demo.connection
     override val preferences = demo.preferences
+    override val madeUp = true
 }

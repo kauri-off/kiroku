@@ -10,6 +10,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,6 +21,7 @@ import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioTile
@@ -31,6 +34,7 @@ import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.source.runningSource
 import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
+import io.github.kauri_off.kiroku.wiring.reportUnexpected
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -124,6 +128,17 @@ class DebugMenuTest {
             commit.dirty -> compose.onNodeWithText("${commit.hash}, with uncommitted changes").assertExists()
             else -> compose.onNodeWithText(commit.hash).assertExists()
         }
+    }
+
+    // Section 2.3: what the preview build reports and goes on from is seen in its menu.
+    @Test
+    fun `a report of the app's reporter is shown in the open menu`() {
+        reportUnexpected(RepairedAnswer(setOf("start_date")))
+        compose
+            .onAllNodesWithText("Unexpected:\u00A0${RepairedAnswer::class.java.name}", substring = true)
+            .onFirst()
+            .performScrollTo()
+            .assertExists()
     }
 
     @Test

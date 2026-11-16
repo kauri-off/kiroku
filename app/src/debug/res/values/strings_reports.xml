@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reports_title">Error reports</string>
+    <string name="reports_detail">What the app could not handle, newest first, with the first lines of each report. The debug build stops at an error it did not expect; the preview build goes on</string>
+    <string name="reports_none">No reports</string>
+</resources>

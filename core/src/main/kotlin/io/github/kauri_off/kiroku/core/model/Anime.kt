@@ -7,7 +7,14 @@ import java.time.LocalTime
 @JvmInline
 value class AnimeId(
     val value: Long,
-)
+) {
+    // An id MAL never gives: made-up titles, the fixtures', are numbered from [MADE_UP].
+    val madeUp: Boolean get() = value !in 1 until MADE_UP
+
+    companion object {
+        const val MADE_UP = 900_000L
+    }
+}
 
 data class Anime(
     val id: AnimeId,

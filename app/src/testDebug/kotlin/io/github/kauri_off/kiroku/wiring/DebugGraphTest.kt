@@ -7,7 +7,9 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.profile.profileStandIn
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
+import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -99,6 +101,21 @@ class DebugGraphTest {
                     .orEmpty()
                     .any { it.startsWith("sandbox.mal") },
             )
+        }
+
+    // Search and Profile over the real account show what a release shows, so no fixture title is edited there.
+    @Test
+    fun `fixture stand-ins are on the demo and the sandbox, and not on the real account`() =
+        runTest {
+            val graphs =
+                DataSource.entries.associateWith { source ->
+                    assertTrue(SourceChoice(context).choose(source))
+                    started("0123abcd")
+                }
+            val standingIn = graphs.filterValues { searchStandIn(it) != null }.keys
+            assertEquals(setOf(DataSource.Demo, DataSource.Sandbox), standingIn)
+            assertEquals(standingIn, graphs.filterValues { profileStandIn(it) != null }.keys)
+            assertTrue(graphs.getValue(DataSource.Account) is LiveGraph)
         }
 
     @Test

@@ -38,7 +38,7 @@ fun BuildSection(build: BuildInfo) {
 
 // The day and the time of day, in the device's zone and 12/24-hour setting.
 @Composable
-private fun dateTime(instant: Instant): String {
+internal fun dateTime(instant: Instant): String {
     val skeleton = if (DateFormat.is24HourFormat(LocalContext.current)) DAY_TIME_24 else DAY_TIME_12
     return skeletonFormat(currentLocale(), skeleton).format(instant.atZone(ZoneId.systemDefault()))
 }

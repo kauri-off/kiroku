@@ -1,12 +1,16 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.os.Looper
+import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
+import io.github.kauri_off.kiroku.reports.ReportLog
+import io.github.kauri_off.kiroku.rules.KotlinSource
+import io.github.kauri_off.kiroku.rules.projectDir
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import kotlinx.coroutines.Dispatchers
@@ -102,12 +106,43 @@ class DebugReporterTest {
     }
 
     @Test
-    fun `any other report crashes the build on the main thread`() {
+    fun `any other report crashes the debuggable build on the main thread, kept for the debug menu first`() {
+        val log = ReportLog()
         val nobodyExpected = IllegalArgumentException("unexpected")
-        reportUnexpected(nobodyExpected)
+        reporter(loud = true, log)(nobodyExpected)
 
+        assertEquals(listOf("Unexpected: ${IllegalArgumentException::class.java.name}"), log.reports.value.map { it.lines.first() })
         val crash = assertThrows(IllegalStateException::class.java) { mainThread.idle() }
         assertEquals(nobodyExpected, crash.cause)
         assertEquals(emptyList<String>(), ShadowLog.getLogsForTag(LOG_TAG).map { it.msg })
+    }
+
+    // The preview build: the owner's daily app, which a report never stops (section 2.3), whatever its type.
+    @Test
+    fun `a build that is not debuggable logs any report as a release does, keeps it for the debug menu and goes on`() {
+        val log = ReportLog()
+        val nobodyExpected =
+            listOf(
+                IllegalArgumentException("unexpected", IllegalStateException("Sousou no Frieren")),
+                SecurityException("The system's network calls refused"),
+            )
+        nobodyExpected.forEach(reporter(loud = false, log))
+        mainThread.idle()
+
+        assertEquals(nobodyExpected.flatMap(::typesOf), ShadowLog.getLogsForTag(LOG_TAG).map { it.msg })
+        val kept =
+            log.reports.value
+                .reversed()
+                .map { report -> report.lines.filterNot { it.startsWith(FRAME) } }
+        assertEquals(nobodyExpected.map { e -> typesOf(e).filterNot { it.startsWith(FRAME) } }, kept)
+    }
+
+    // The debug build's sources are compiled into the preview build too, where BuildConfig.DEBUG is false.
+    @Test
+    fun `the build's reporter is loud exactly when the build is debuggable`() {
+        val source = File(projectDir, "app/src/debug/kotlin/io/github/kauri_off/kiroku/wiring/GraphFactory.kt")
+        val line = "internal val reportUnexpected: (Throwable) -> Unit = reporter(loud = BuildConfig.DEBUG, reportLog)"
+        assertTrue(line in KotlinSource(source.readText()).code.lines())
+        assertTrue(BuildConfig.DEBUG)
     }
 }
