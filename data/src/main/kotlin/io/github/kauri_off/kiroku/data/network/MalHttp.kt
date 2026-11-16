@@ -54,6 +54,9 @@ class MalHttp(
 ) {
     val backOff = MalBackOff(clock)
 
+    // False when the device answers in MAL's place, as the sandbox does, also for titles MAL does not have.
+    internal val reachesMal: Boolean get() = standIn == null
+
     private val client: OkHttpClient by lazy {
         offMainThread()
         OkHttpClient

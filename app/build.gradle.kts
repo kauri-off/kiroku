@@ -94,7 +94,7 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
-        // The release build's code with the debug menu, profileable: the owner's channel, and the build frames are measured on.
+        // The release build with the debug menu, profileable: the owner's channel, and the build frames are measured on.
         create("preview") {
             initWith(getByName("release"))
             applicationIdSuffix = ".preview"

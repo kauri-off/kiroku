@@ -42,6 +42,8 @@ class SandboxGraph internal constructor(
 
     override val scenarios = Scenarios(SandboxScenarios(), parts.scope)
 
+    override val madeUp = true
+
     suspend fun writeOwed() = live.writeOwed()
 
     private inner class SandboxScenarios : ScenarioSubject {

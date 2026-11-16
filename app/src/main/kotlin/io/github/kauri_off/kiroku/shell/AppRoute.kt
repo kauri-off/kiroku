@@ -103,6 +103,7 @@ fun appEntries(
     messages: ShellMessages,
 ): ShellEntries {
     val standIn = searchStandIn(graph)
+    val profile = profileStandIn(graph)
     return { navigator, snackbars ->
         val signIn = { navigator.open(SignInKey) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
@@ -130,7 +131,6 @@ fun appEntries(
             }
         }
         entry<ProfileRoot> {
-            val profile = profileStandIn
             if (profile == null) {
                 NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             } else {
@@ -138,7 +138,6 @@ fun appEntries(
             }
         }
         entry<OtherProfileKey> { key ->
-            val profile = profileStandIn
             if (profile == null) {
                 NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             } else {

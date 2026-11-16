@@ -46,6 +46,7 @@ class MalRemoteList(
 
     // A title MAL does not know is not found; one it knows gives no list values when it is not on the list.
     override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+        if (notMal(id)) return Outcome.Failure(DataError.NotFound)
         val answer = read { repairs, token -> api.entry(id.value, MalFields.OWN_ENTRY, token).toOwnEntry(repairs) }
         if (answer is Outcome.Success && answer.value.first != id) {
             http.unexpected(AnotherTitleAnswer())
@@ -57,7 +58,12 @@ class MalRemoteList(
     override suspend fun put(
         anime: Anime,
         values: SentValues?,
-    ): Outcome<ListEntry?> = if (values == null) remove(anime.id) else set(anime, values)
+    ): Outcome<ListEntry?> =
+        when {
+            notMal(anime.id) -> if (values == null) Outcome.Success(null) else Outcome.Failure(DataError.NotFound)
+            values == null -> remove(anime.id)
+            else -> set(anime, values)
+        }
 
     // MAL answers a change with the entry's values afterwards, the same as a read of it gives.
     private suspend fun set(
@@ -75,6 +81,9 @@ class MalRemoteList(
             is Outcome.Success -> Outcome.Success(null)
             is Outcome.Failure -> if (answer.error == DataError.NotFound) Outcome.Success(null) else answer
         }
+
+    // MAL is not asked about a made-up title, and its answer is the one for a title it does not know.
+    private fun notMal(id: AnimeId) = id.madeUp && http.reachesMal
 
     // An answer read with values left out or filled in is reported once it is read.
     private suspend fun <T> read(request: suspend (Repairs, authorization: String) -> T): Outcome<T> {

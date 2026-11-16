@@ -6,7 +6,7 @@ import io.github.kauri_off.kiroku.notShown
 private val UNEXPECTED = notShown("Unexpected: ")
 private val STANDS_FOR = notShown("Stands for: ")
 private val CAUSED_BY = notShown("Caused by: ")
-private val FRAME = notShown("\tat ")
+internal val FRAME = notShown("\tat ")
 private const val CAUSES = 8
 
 // An exception without its message, which could quote the list: its type, the type its message names, its frames, its causes.

@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.list
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.list.SentValues
@@ -223,6 +224,21 @@ class MalRemoteListTest {
     @Test
     fun `each value of a recorded list, when a write carries it, is in the form MAL gave it`() {
         for (name in (1..3).map { "list_public_$it" }) assertWrittenAsGiven(name, RecordedAnswers.named(name).body)
+    }
+
+    // A fixture title edited over the real account, in any build: MAL holds real titles under such ids one day.
+    @Test
+    fun `no write for a made-up title is sent to MAL, nor a read of its entry, and each answer is MAL's for one it does not know`() {
+        val film = FixtureAnime.film
+        assertTrue(film.id.madeUp)
+        assertEquals(Outcome.Failure(DataError.NotFound), runBlocking { client.put(film, values.sent) })
+        assertEquals(Outcome.Success(null), runBlocking { client.put(film, null) })
+        assertEquals(Outcome.Failure(DataError.NotFound), runBlocking { client.fetchEntry(film.id) })
+        assertEquals(emptyList<String>(), requests.map { it.url.encodedPath })
+
+        val highest = anime.copy(id = AnimeId(AnimeId.MADE_UP - 1))
+        runBlocking { client.put(highest, values.sent) }
+        assertEquals(listOf("/v2/anime/${highest.id.value}/my_list_status"), requests.map { it.url.encodedPath })
     }
 
     @Test

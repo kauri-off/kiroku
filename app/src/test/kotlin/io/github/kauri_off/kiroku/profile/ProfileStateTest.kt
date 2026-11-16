@@ -125,7 +125,7 @@ class ProfileStateTest {
 
     @Test
     fun theStandInRemembersOnlyNamesThatExist() {
-        val standIn = checkNotNull(profileStandIn)
+        val standIn = fixtureProfile
         val before = standIn.recent
         standIn.opened(fixtures.unknownName)
         assertEquals(before, standIn.recent)
