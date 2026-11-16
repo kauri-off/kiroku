@@ -177,10 +177,11 @@ the background.
   title MAL marks as finished has aired completely. The aired count never exceeds a known total. An airing status
   the app does not know is read as airing by every rule, freshness included.
 - **A4. A schedule numbered differently is not used.** When AniList's episode numbers evidently continue an
-  earlier season (they run past MAL's total, or reach a number that a show with MAL's start date cannot have
-  reached), AniList's data is not used for that title.
-- **A5. Doubt is shown as an estimate.** A count is estimated, not exact, when the two sources disagree on the
-  total by more than the one episode a recap explains, or when AniList appears to have stopped tracking the title.
+  earlier season (they do not begin at episode 1, and run past MAL's total or reach a number that a show with
+  MAL's start date cannot have reached), AniList's data is not used for that title.
+- **A5. Doubt is shown as an estimate.** A count is estimated, not exact, when the two sources' totals differ, or
+  when AniList appears to have stopped tracking the title. The estimate is AniList's own count, which stops at
+  MAL's total.
 - **A6. The weekly estimate is bounded.** It is used only when MAL gives a full start date and a broadcast weekday
   and time, and the result cannot run away (the total is known, or the show started recently). Without it the
   count is 0 for a title that has not started and unknown otherwise. A count of 0 is exact only when a stored
@@ -288,7 +289,7 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 | Module | Contains | Why separate |
 |---|---|---|
 | `:core` (Kotlin/JVM, no Android) | Domain types, the airing model, what is notifiable, the statistics calculator, the rules of list writes and syncs over a store and MAL, repository interfaces, typed errors; in its test fixtures, the fixture set, an in-memory store of the list and demo mode's repositories over them | Its tests are plain JVM tests that run in seconds. Rules that must have one definition live where no screen can re-implement them. |
-| `:data` (Android library) | The MAL and AniList clients (the list's under `:core`'s list engine), sign-in and token storage, the database and the list's store, the other repository implementations | Network and database types stay inside it, so the user interface depends only on `:core` types. |
+| `:data` (Android library) | The MAL and AniList clients (the list's under `:core`'s list engine), sign-in and token storage, the database with the list's store and the store of airing data, the other repository implementations | Network and database types stay inside it, so the user interface depends only on `:core` types. |
 | `:app` (Android application) | Theme and components, screens and view models, navigation, notifications and background work, wiring | The only module that knows Compose. |
 
 - Dependencies point one way: `app → data → core` and `app → core`. The base package is
@@ -383,8 +384,9 @@ was chosen against, and why:
 - A value is stored under MAL's own code, so a code the app learns later needs no migration.
 - A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
   itself cannot be read.
-- Every schema change is a real migration with a migration test. **There is no destructive fallback**: it would
-  erase the record of announced episodes and announce them again (N10).
+- Every schema change is a real migration with a migration test, and a schema version, once on `main`, never
+  changes. **There is no destructive fallback**: it would erase the record of announced episodes and announce
+  them again (N10).
 
 ### 7.2 Errors and offline behaviour
 

@@ -42,6 +42,11 @@ android {
         assets.directories += "schemas"
     }
 
+    // The database the app's version 1 wrote, for the migration on a device's own SQLite.
+    sourceSets.named("androidTest") {
+        assets.directories += "src/test/resources/databases"
+    }
+
     // The app's preview build takes this module with the tools of its debug menu, as its debug build does.
     buildTypes {
         create("preview") {
@@ -64,28 +69,42 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
-// An entity that changed without its schema file fails the build once: the file is then updated, to be committed.
+// A device may hold any exported version, so its file never changes; a new version's file fails the build once, to be committed.
 tasks.named("copyRoomSchemas") {
     val schemas = layout.projectDirectory.dir("schemas").asFile
     val before =
         layout.buildDirectory
-            .file("room/schemas-before")
+            .dir("room/schemas-before")
             .get()
             .asFile
-    val state = { directory: File ->
+    val files = { directory: File ->
         directory
             .walkTopDown()
             .filter { it.isFile }
-            .sortedBy { it.path }
-            .joinToString("\n") { "${it.relativeTo(directory)}\n${it.readText()}" }
+            .associateBy { it.relativeTo(directory).path }
     }
+    val identity = { file: File -> Regex("\"identityHash\": \"(\\w+)\"").find(file.readText())?.groupValues?.get(1) }
     doFirst {
-        before.parentFile.mkdirs()
-        before.writeText(state(schemas))
+        before.deleteRecursively()
+        if (schemas.exists()) schemas.copyRecursively(before)
     }
     doLast {
-        if (before.readText() != state(schemas)) {
-            throw GradleException("The database's entities no longer match data/schemas. The files are updated now: commit them.")
+        val exported = files(before)
+        val now = files(schemas)
+        val changed = exported.filter { (path, file) -> now[path]?.let(identity) != identity(file) }
+        for ((path, file) in changed) file.copyTo(schemas.resolve(path), overwrite = true)
+        if (changed.isNotEmpty()) {
+            throw GradleException(
+                "The database's entities no longer match the exported schema " +
+                    changed.keys.joinToString { "data/schemas/$it" } +
+                    ", which a database on a device may hold. Raise KirokuDatabase.VERSION and add a migration from that " +
+                    "version to the new one; the exported file is kept as it was. A version that is not on main yet: " +
+                    "delete its file and build again.",
+            )
+        }
+        val added = now.keys - exported.keys
+        if (added.isNotEmpty()) {
+            throw GradleException("A new version's schema is exported now: commit ${added.joinToString { "data/schemas/$it" }}.")
         }
     }
 }

@@ -158,21 +158,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-01 Recorded answers of AniList.**
 
-- [ ] **M3-02 [A] Airing calculator.** In `:core` only. From what is stored of a title (MAL's data and AniList's
-  schedule) and an instant it gives the aired count with its confidence, the total and the next episode, and with
-  the user's values "to watch", the premiere and the keys of "Up next": one result that the List, the title page
-  and the order read, so that none of them combines a count from parts (A1). A3 to A8 hold. A next episode beyond
-  MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at the total and there is
-  no next episode beyond it. Why a count is not exact is part of the result: no schedule, a schedule numbered
-  differently (A4), or doubt (A5). The hand-off states, for the owner's approval, the rule on stored data behind
-  each of A4, A5 and A6: when a schedule counts as numbered differently, when AniList counts as having stopped
-  tracking a title and how that differs from a break, and when the weekly estimate may run. The fixtures' counts
-  are the calculator's, none written by hand.
-  **Needs:** nothing.
-  **Check:** `tools/gw :core:test`: a test for each of A3 to A8 that fails without its rule; the clamp; a schedule
-  on a break gives an exact count with no next episode; each reason for a count that is not exact is told from
-  the others. `ListAndTitleAgreeTest` passes over the calculator's results for every fixture and every case of
-  the airing grid, and a rule test fails when a screen's code builds an airing value itself.
+- [x] **M3-02 [A] Airing calculator.**
 
 - [x] **M3-03 [A] Airing refresh.**
 
@@ -188,13 +174,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   as its clock passes an air time, with no request to its server. `./gradlew :app:testDebugUnitTest`
   passes on the demo.
 
-- [ ] **M3-05 Database: the airing store.** M3-03's store port in the database (section 7.1). It is the schema's
-  first change, so a real migration with its test, and M3's only one. An airing refresh, a list write and a
-  title's refresh do not overwrite each other.
-  **Needs:** M3-03.
-  **Check:** `tools/gw :data:testDebugUnitTest`: M3-03's contract passes over the store; the migration test takes a
-  version 1 database that holds a list and titles to the new version and finds every row as it was; a list write
-  made during an airing refresh loses neither.
+- [x] **M3-05 Database: the airing store.**
 
 - [ ] **M3-06 AniList client and mappers.** M3-03's AniList port, through the source's one HTTP client, with
   AniList's host a parameter. A set of ids costs as few requests as M3-01's answers allow, spaced below the limit
@@ -287,6 +267,10 @@ Not to forget:
   sync).
 - By hand on Android 13 or later: deny the permission, see "Blocked in system settings", grant it in the system
   settings, return, see the state updated, receive the test notification.
+- Every background entry point (an alarm, periodic work, the "Mark watched" action) renews the tokens when they
+  are due and reads MAL's back-off before it calls MAL, each held by a test: until M4 only an opened app does
+  either (S7, section 2.3).
+- A title a list download left out and a later one brings back is not announced as newly added (N5).
 
 ## M5. Search and browse
 
@@ -347,6 +331,11 @@ Not to forget:
 - The release key exists and its four secrets (`KIROKU_ANDROID_KEYSTORE_B64`, `KIROKU_ANDROID_STORE_PASSWORD`,
   `KIROKU_ANDROID_KEY_ALIAS`, `KIROKU_ANDROID_KEY_PASSWORD`) are in the `release` environment; the release
   workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
+- A changed setting reaches the screens that are open: title language and adult content are read where they are
+  shown, not copied when a view model is made.
+- `CONTRIBUTING.md` tells a fork to set its own application id and sign-in redirect beside its own client id: two
+  installed apps that claim one redirect split the sign-ins.
+- Sign-out clears the image caches with everything else stored about the user (S9).
 
 ---
 

@@ -4,18 +4,29 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.DatabaseConfiguration
 import androidx.room.RoomDatabase
 import androidx.room.testing.MigrationTestHelper
+import androidx.sqlite.SQLITE_DATA_BLOB
+import androidx.sqlite.SQLITE_DATA_FLOAT
+import androidx.sqlite.SQLITE_DATA_INTEGER
+import androidx.sqlite.SQLITE_DATA_TEXT
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.StoredTitle
 import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -24,6 +35,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.io.File
 
 // The harness of section 7.1: every schema change is a migration that is run here, and nothing erases the database.
 @RunWith(RobolectricTestRunner::class)
@@ -51,12 +63,46 @@ class KirokuDatabaseTest {
 
     private fun stored(name: String): Anime? = KirokuDatabase.open(context, name).use { it.observeAnime(anime.id).first() }
 
+    @Serializable
+    private class Exported(
+        val database: Database,
+    ) {
+        @Serializable
+        class Database(
+            val version: Int,
+            val identityHash: String,
+        )
+    }
+
+    private fun exportedIdentity(version: Int): String {
+        val schema = "${KirokuDatabase::class.java.canonicalName}/$version.json"
+        val text = context.assets.open(schema).use { it.reader().readText() }
+        val database = json.decodeFromString<Exported>(text).database
+        assertEquals(schema, version, database.version)
+        return database.identityHash
+    }
+
     @Test
-    fun `every version has its exported schema, and the migrations are the steps from each to the next`() {
-        for (version in 1..KirokuDatabase.VERSION) {
-            val schema = "${KirokuDatabase::class.java.canonicalName}/$version.json"
-            assertTrue(schema, context.assets.open(schema).use { it.read() } >= 0)
-        }
+    fun `every version up to the current one has its exported schema, with the identity it was exported with`() {
+        assertEquals((1..KirokuDatabase.VERSION).toList(), IDENTITIES.keys.toList())
+        for ((version, identity) in IDENTITIES) assertEquals("$version.json", identity, exportedIdentity(version))
+    }
+
+    @Test
+    fun `the database the app opens has the current version's identity`() {
+        KirokuDatabase.open(context, name).use { it.observeAnime(anime.id).first() }
+        val opened =
+            AndroidSQLiteDriver().open(context.getDatabasePath(name).path).use { connection ->
+                connection.prepare("SELECT identity_hash FROM room_master_table").use {
+                    it.step()
+                    it.getText(0)
+                }
+            }
+        assertEquals(IDENTITIES.getValue(KirokuDatabase.VERSION), opened)
+    }
+
+    @Test
+    fun `the migrations are the steps from each version to the next`() {
         assertEquals(
             (1 until KirokuDatabase.VERSION).map { it to it + 1 },
             KirokuDatabase.migrations.map { it.startVersion to it.endVersion },
@@ -85,6 +131,123 @@ class KirokuDatabaseTest {
             helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).close()
         }
     }
+
+    // The app's version 1 wrote it: the fixtures' list and titles, entries not yet confirmed and a status only MAL knows.
+    private fun writtenByVersionOne(name: String): File {
+        val file = context.getDatabasePath(name)
+        file.parentFile?.mkdirs()
+        checkNotNull(javaClass.getResourceAsStream("/databases/kiroku-1.db")).use { input -> file.outputStream().use { input.copyTo(it) } }
+        return file
+    }
+
+    private fun SQLiteConnection.tables(): List<String> =
+        prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").use {
+            buildList { while (it.step()) add(it.getText(0)) }
+        } - setOf("android_metadata", "room_master_table", "sqlite_sequence")
+
+    // Each value as SQLite holds it: a long, a double, a text, bytes or null.
+    private fun SQLiteConnection.rows(table: String): List<List<Any?>> =
+        prepare("SELECT * FROM $table ORDER BY rowid").use { row ->
+            buildList {
+                while (row.step()) {
+                    add(
+                        (0 until row.getColumnCount()).map {
+                            when (row.getColumnType(it)) {
+                                SQLITE_DATA_INTEGER -> row.getLong(it)
+                                SQLITE_DATA_FLOAT -> row.getDouble(it)
+                                SQLITE_DATA_TEXT -> row.getText(it)
+                                SQLITE_DATA_BLOB -> row.getBlob(it).toList()
+                                else -> null
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
+    private fun SQLiteConnection.insert(
+        table: String,
+        rows: List<List<Any?>>,
+    ) {
+        for (values in rows) {
+            prepare("INSERT INTO $table VALUES (${values.joinToString { "?" }})").use { insert ->
+                values.forEachIndexed { index, value ->
+                    when (value) {
+                        is Long -> insert.bindLong(index + 1, value)
+                        is Double -> insert.bindDouble(index + 1, value)
+                        is String -> insert.bindText(index + 1, value)
+                        is List<*> -> insert.bindBlob(index + 1, value.map { it as Byte }.toByteArray())
+                        else -> insert.bindNull(index + 1)
+                    }
+                }
+                insert.step()
+            }
+        }
+    }
+
+    private fun rowsOf(file: File): Map<String, List<List<Any?>>> =
+        AndroidSQLiteDriver().open(file.path).use { connection -> connection.tables().associateWith { connection.rows(it) } }
+
+    private fun List<List<Any?>>.ids(): List<AnimeId> = map { AnimeId(it.first() as Long) }
+
+    @Test
+    fun `a version 1 database on its exported schema keeps every row of its list and titles through the migrations`() {
+        val written = rowsOf(writtenByVersionOne("written-1.db"))
+        assertTrue(written.keys.containsAll(TABLES))
+        assertTrue(written.values.all { it.isNotEmpty() })
+        helper.createDatabase(1).use { connection ->
+            for ((table, rows) in written.entries.sortedBy { it.key != TitleRow.TABLE }) connection.insert(table, rows)
+        }
+
+        helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
+            for ((table, rows) in written) assertEquals(table, rows, connection.rows(table))
+        }
+    }
+
+    @Test
+    fun `the app opens a version 1 database it wrote, keeps every row and reads its list and titles from it`() =
+        runBlocking {
+            val written = writtenByVersionOne("opened-1.db")
+            val before = rowsOf(written)
+            val database = KirokuDatabase.open(context, written.name)
+            val unexpected = mutableListOf<Throwable>()
+            val scope = CoroutineScope(Dispatchers.IO)
+            val list = RoomLocalList(database, scope, Dispatchers.IO) { unexpected += it }
+            val airing = RoomAiringStore(database, Dispatchers.IO) { unexpected += it }
+            database.use { titles ->
+                assertEquals(SignInId("owner"), list.state().owner)
+                assertNotNull(list.state().syncedAt)
+                val entries = list.readAll()
+                assertEquals(before.getValue("list_entry").size, entries.size)
+                assertEquals(entries.size - 1, list.observeEntries().first().size)
+                val edited = entries.getValue(FixtureAnime.exactToWatch.id)
+                assertEquals(
+                    listOf(true, 13, 12),
+                    listOf(edited.unconfirmed, edited.shown?.values?.watchedEpisodes, edited.confirmed?.values?.watchedEpisodes),
+                )
+                assertEquals(null, entries.getValue(FixtureAnime.film.id).shown)
+                assertEquals(
+                    Fixtures.unknownListStatus,
+                    entries
+                        .getValue(FixtureAnime.completedOna.id)
+                        .shown
+                        ?.values
+                        ?.status,
+                )
+                for (id in before.getValue("title").ids()) assertNotNull(titles.observeAnime(id).first())
+                for (id in before.getValue("title_details").ids()) assertNotNull(titles.observeDetails(id).first())
+
+                assertEquals(emptyMap<AnimeId, StoredAiring>(), airing.read())
+                val stored = Fixtures.reference.schedules.mapValues { StoredAiring(it.value, Fixtures.reference.now) }
+                airing.write(stored)
+                assertEquals(stored, airing.read())
+            }
+            scope.cancel()
+
+            assertEquals(emptyList<Throwable>(), unexpected)
+            val after = rowsOf(written)
+            for ((table, rows) in before) assertEquals(table, rows, after.getValue(table))
+        }
 
     @Test
     fun `a title that has an entry or that a page names cannot be deleted, and a deleted title takes its details along`() {
@@ -161,5 +324,16 @@ class KirokuDatabaseTest {
                 assertEquals(anime.titles.romaji, it.getString(0))
             }
         }
+    }
+
+    private companion object {
+        val json = Json { ignoreUnknownKeys = true }
+
+        // Every version that may be on a device, as exported: a changed entity is a new version, never a new identity here.
+        val IDENTITIES =
+            mapOf(
+                1 to "c908fc01889fca24c50eae1d46661170",
+                2 to "569924a95101271cd2502ea512c63260",
+            )
     }
 }

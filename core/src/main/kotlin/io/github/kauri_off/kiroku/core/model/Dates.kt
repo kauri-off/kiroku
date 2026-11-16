@@ -26,6 +26,22 @@ sealed interface PartialDate {
     }
 }
 
+// The first day of the period the date names.
+fun PartialDate.firstDay(): LocalDate =
+    when (this) {
+        is PartialDate.Day -> date
+        is PartialDate.Month -> yearMonth.atDay(1)
+        is PartialDate.OnlyYear -> value.atDay(1)
+    }
+
+// The last day of the period the date names.
+fun PartialDate.lastDay(): LocalDate =
+    when (this) {
+        is PartialDate.Day -> date
+        is PartialDate.Month -> yearMonth.atEndOfMonth()
+        is PartialDate.OnlyYear -> value.atMonth(12).atEndOfMonth()
+    }
+
 enum class Season { Winter, Spring, Summer, Fall }
 
 data class AnimeSeason(
