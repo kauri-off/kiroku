@@ -201,11 +201,8 @@ class AniListAiringTest {
         runTest {
             val ids = idsOf("more_than_one_page")
             aniList.answer = { asked ->
-                when {
-                    asked.schedulePage > 1 -> laterPageOf(asked)
-                    "more_than_one_page" !in AniListRecordings.byRequest[asked.copy(ids = asked.ids.sorted())].orEmpty() -> unknown(asked)
-                    else -> aniList.recorded(asked)
-                }
+                val file = AniListRecordings.byRequest[asked.copy(ids = asked.ids.sorted())].orEmpty()
+                if ("more_than_one_page" in file) reply(200, endedAfterFirst(json(file)).toString()) else unknown(asked)
             }
             val answers = fetch(ids)
             val known =
@@ -220,9 +217,7 @@ class AniListAiringTest {
             for (id in unknown) assertEquals(Outcome.Success(null), answers.of(id))
             for (id in known) assertTrue("$id ${answers.of(id)}", (answers.of(id) as? Outcome.Success)?.value != null)
             assertEquals(11, (answers.of(61469) as Outcome.Success).value!!.schedule.totalEpisodes)
-            assertEquals(listOf(Asked(ids, 1, 1), Asked(ids, 2, 1), Asked(unknown, 1, 1)), aniList.asked().take(3))
-            assertEquals(4, aniList.requests.size)
-            assertTrue(aniList.asked()[3].let { it.schedulePage == 2 && it.ids.size < 50 })
+            assertEquals(listOf(Asked(ids, 1, 1), Asked(ids, 2, 1), Asked(unknown, 1, 1)), aniList.asked())
         }
 
     @Test
@@ -240,10 +235,9 @@ class AniListAiringTest {
     fun `a failed page of titles settles no id it read, and the ids asked again on their own are answered whole`() =
         runTest {
             val ids = idsOf("more_than_one_page")
-            val recorded = mediaOf(json("more_than_one_page")) + mediaOf(json("more_than_one_page_2"))
+            val recorded = listOf("more_than_one_page", "more_than_one_page_2").flatMap { mediaOf(endedAfterFirst(json(it))) }
             aniList.answer = { asked ->
                 when {
-                    asked.schedulePage > 1 -> laterPageOf(asked)
                     asked.ids == ids -> if (asked.page == 2) reply(500, "") else aniList.recorded(asked)
                     else -> pageOf(asked, recorded.filter { it.jsonObject["idMal"]!!.jsonPrimitive.int in asked.ids })
                 }
@@ -254,7 +248,7 @@ class AniListAiringTest {
             assertEquals(11, (answers.of(61469) as Outcome.Success).value!!.schedule.totalEpisodes)
             for (id in ids - known) assertEquals(Outcome.Success(null), answers.of(id))
             for (id in known) assertTrue("$id ${answers.of(id)}", (answers.of(id) as? Outcome.Success)?.value != null)
-            assertEquals(listOf(Asked(ids.take(50), 1, 1), Asked(ids.drop(50), 1, 1)), aniList.asked().drop(2).take(2))
+            assertEquals(listOf(Asked(ids.take(50), 1, 1), Asked(ids.drop(50), 1, 1)), aniList.asked().drop(2))
         }
 
     @Test
@@ -339,6 +333,30 @@ class AniListAiringTest {
             val shortest = AniListPace.spacingFor(AniListPace.HIGHEST_LIMIT).inWholeMilliseconds
             assertEquals(4, gaps().size)
             assertTrue(gaps().toString(), gaps().all { it in shortest..shortest + 1 })
+        }
+
+    @Test
+    fun `fifty ids whose page fails all fail, without a request more`() =
+        runTest {
+            aniList.answer = { reply(500, "") }
+            val answers = fetch((1..50).toList())
+
+            for (id in 1..50) assertEquals(Outcome.Failure(DataError.ServerError), answers.of(id))
+            assertEquals(1, aniList.requests.size)
+        }
+
+    @Test
+    fun `a page of episodes that comes back empty after one that promised more fails the title and is reported`() =
+        runTest {
+            val ended = mediaOf(json("releasing_without_times"))[0].jsonObject["airingSchedule"]!!
+            aniList.answer = { asked ->
+                val page = json(AniListRecordings.byRequest.getValue(asked))
+                reply(200, (if (asked.schedulePage == 2) page.edited(MEDIA + listOf("0", "airingSchedule"), ended) else page).toString())
+            }
+
+            assertEquals(Outcome.Failure(DataError.ServerError), fetch(listOf(235)).of(235))
+            assertEquals(listOf(1, 2), aniList.asked().map { it.schedulePage })
+            assertEquals(listOf(AniListOddAnswer::class.java), network.unexpected.map { it.javaClass })
         }
 
     @Test
@@ -482,18 +500,9 @@ class AniListAiringTest {
     // What an id unknown to AniList is answered with, alone or with others unknown too.
     private fun unknown(asked: Asked): MockResponse = reply(200, AniListRecordings.body("unknown_alone"))
 
-    // M3-01 did not follow this case's pages of episodes: each recorded entry again, its schedule at an end.
-    private fun laterPageOf(asked: Asked): MockResponse {
-        val page = json("more_than_one_page")
-        val titles =
-            (mediaOf(page) + mediaOf(json("more_than_one_page_2")))
-                .filter { it.jsonObject["idMal"]!!.jsonPrimitive.int in asked.ids }
-                .map {
-                    JsonObject(
-                        it.jsonObject + ("airingSchedule" to json("unknown_among_others").let(::mediaOf)[1].jsonObject["airingSchedule"]!!),
-                    )
-                }
-        val lastPage = json("unknown_alone")["data"]!!.jsonObject["Page"]!!.jsonObject["pageInfo"]
-        return reply(200, page.edited(MEDIA, JsonArray(titles)).edited(listOf("data", "Page", "pageInfo"), lastPage).toString())
-    }
+    // M3-01 did not follow this case's pages of episodes: each recorded entry's schedule says it ends with its first page.
+    private fun endedAfterFirst(page: JsonObject): JsonObject =
+        mediaOf(page).indices.fold(page) { edited, index ->
+            edited.edited(MEDIA + listOf("$index", "airingSchedule", "pageInfo", "hasNextPage"), JsonPrimitive(false))
+        }
 }

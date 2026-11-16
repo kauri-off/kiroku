@@ -18,7 +18,13 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mockwebserver3.MockResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -183,6 +189,11 @@ class AniListPaceTest {
 
             assertTrue(fetch(1).of(1) is Outcome.Success)
             assertEquals(listOf("block"), network.unexpected.map { it.message })
+            assertFalse(aniList.blockFile.exists())
+
+            aniList.newProcess(this)
+            assertTrue(fetch(2).of(2) is Outcome.Success)
+            assertEquals(listOf("block"), network.unexpected.map { it.message })
         }
 
     @Test
@@ -226,16 +237,22 @@ class AniListPaceTest {
     @Test
     fun `a schedule that never ends fails after forty pages, and is not asked again in its cool-down`() =
         runTest {
-            val endless =
-                json(
-                    "releasing_without_times",
-                ).edited(MEDIA + listOf("0", "airingSchedule", "pageInfo", "hasNextPage"), JsonPrimitive(true))
-            aniList.answer = { reply(200, endless.toString()) }
+            // No recording holds more than a thousand episodes: Conan's first page again, numbered on by 25 each page.
+            val first = json("hundreds_of_episodes")
+            val nodes = mediaOf(first)[0].jsonObject["airingSchedule"]!!.jsonObject["nodes"]!!.jsonArray
+            aniList.answer = { asked ->
+                val shifted =
+                    nodes.map { node ->
+                        val episode = node.jsonObject["episode"]!!.jsonPrimitive.int + 25 * (asked.schedulePage - 1)
+                        JsonObject(node.jsonObject + ("episode" to JsonPrimitive(episode)))
+                    }
+                reply(200, first.edited(MEDIA + listOf("0", "airingSchedule", "nodes"), JsonArray(shifted)).toString())
+            }
 
-            assertEquals(Outcome.Failure(DataError.ServerError), fetch(62734).of(62734))
+            assertEquals(Outcome.Failure(DataError.ServerError), fetch(235).of(235))
             assertEquals((1..40).toList(), aniList.asked().map { it.schedulePage })
 
-            assertEquals(Outcome.Failure(DataError.ServerError), fetch(62734).of(62734))
+            assertEquals(Outcome.Failure(DataError.ServerError), fetch(235).of(235))
             assertEquals(40, aniList.requests.size)
         }
 }

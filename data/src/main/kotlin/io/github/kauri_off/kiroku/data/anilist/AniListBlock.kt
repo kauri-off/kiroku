@@ -36,20 +36,22 @@ internal class AniListBlock(
                         .split(' ')
                         .map(String::toLong)
                 } catch (_: IOException) {
-                    report(AniListOddAnswer("block"))
-                    return@withContext null
+                    return@withContext unreadable()
                 } catch (_: NumberFormatException) {
-                    report(AniListOddAnswer("block"))
-                    return@withContext null
+                    return@withContext unreadable()
                 }
-            if (values.size != 3 || values.any { it < 0 }) {
-                report(AniListOddAnswer("block"))
-                return@withContext null
-            }
+            if (values.size != 3 || values.any { it < 0 }) return@withContext unreadable()
             val (setAt, held, wait) = values
             val passed = clock.millis() - setAt
             Held((held - passed).coerceIn(0, held).milliseconds, wait.milliseconds)
         }
+
+    // Reported once: a file that cannot be read is deleted, as if no block had been set.
+    private fun unreadable(): Held? {
+        report(AniListOddAnswer("block"))
+        file.delete()
+        return null
+    }
 
     suspend fun write(
         at: Instant,

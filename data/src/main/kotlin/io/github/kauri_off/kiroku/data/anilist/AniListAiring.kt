@@ -271,13 +271,13 @@ class AniListAiring(
 // How long a title whose fetch failed is answered with that failure without a request; offline and refused excepted.
 internal val FailureCoolDown: Duration = 15.minutes
 
-// A page of a schedule goes on from the one before: its first episode is the next number after the last one read.
+// A page of a schedule goes on from the one before: not empty where more were promised, and from the next number.
 private fun continues(
     before: AniListEntry,
     page: AniListEntry,
 ): Boolean {
+    val first = page.episodes.firstOrNull() ?: return !before.moreEpisodes
     val last = before.episodes.lastOrNull() ?: return true
-    val first = page.episodes.firstOrNull() ?: return true
     return first.number == last.number + 1
 }
 
