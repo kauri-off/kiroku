@@ -53,7 +53,8 @@ interface ScenarioSubject {
 
     suspend fun awaitSaves(): Boolean
 
-    suspend fun reset(): Outcome<Unit>
+    // The data as it started, [off] turning every scenario off where an answer they held must already see that data.
+    suspend fun reset(off: () -> Unit): Outcome<Unit>
 
     // The sandbox's: every access token it granted expires now, and the next request is rejected once.
     fun expireAccess() = Unit
@@ -84,7 +85,8 @@ private class DemoScenarios(
 
     override suspend fun awaitSaves() = demo.awaitSaves()
 
-    override suspend fun reset() = demo.reset()
+    // The demo's reset turns its failures off itself, after its schedules are back.
+    override suspend fun reset(off: () -> Unit): Outcome<Unit> = demo.reset().also { off() }
 }
 
 // The failures of the source the app runs on, switched while it runs; a new process starts with every one off.
@@ -125,9 +127,14 @@ class Scenarios(
                 try {
                     val settled = subject.awaitSaves()
                     resets.value = ResetState.Running
-                    apply(Scenario())
+                    val reset =
+                        try {
+                            subject.reset { apply(Scenario()) }
+                        } finally {
+                            if (current.value != Scenario()) apply(Scenario())
+                        }
                     when {
-                        subject.reset() is Outcome.Failure -> ResetState.Failed
+                        reset is Outcome.Failure -> ResetState.Failed
                         !settled -> ResetState.SaveDropped
                         else -> ResetState.Idle
                     }

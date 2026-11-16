@@ -110,8 +110,8 @@ class Demo(
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
         airingSource.failure = null
-        airingSource.hold(false)
         airingSource.schedules = fixtures.schedules
+        airingSource.hold(false)
         airingStore.write(airingStore.read().mapValues { null } + startingAiring())
         store.reset()
         details.forget()

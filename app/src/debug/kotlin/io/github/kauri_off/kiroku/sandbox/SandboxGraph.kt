@@ -82,8 +82,10 @@ class SandboxGraph internal constructor(
         override suspend fun awaitSaves() = true
 
         // The sandbox's list as it started, which the next sync brings to the app, and its schedules, which a refresh brings.
-        override suspend fun reset(): Outcome<Unit> {
+        // They are laid out before AniList answers again, so that a request the reset releases sees them.
+        override suspend fun reset(off: () -> Unit): Outcome<Unit> {
             withContext(Dispatchers.IO) { this@SandboxGraph.sandbox.reset() }
+            off()
             return list.sync().also { parts.scope.launch { airing.refresh() } }
         }
     }

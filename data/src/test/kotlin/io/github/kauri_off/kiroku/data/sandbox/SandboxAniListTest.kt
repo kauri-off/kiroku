@@ -598,7 +598,33 @@ class SandboxAniListTest {
         assertEquals(listOf(WEEKLY), aniList.asked.last())
     }
 
+    @Test
+    fun `a reset lays the schedules out again before AniList answers again, so a request held until then answers from them`() {
+        val device = OnDevice()
+        device.sandbox.aniList.fault = SandboxAniListFault.NoAnswer
+        var answer: Pair<Int, String>? = null
+        val held = thread { answer = device.post(AniListSchedule.body(listOf(SandboxAiring.SOON.toInt()))) }
+        while ("POST graphql.anilist.co/" !in device.sandbox.mal.asked) Thread.sleep(POLL)
+        clock.now += Duration.ofDays(1)
+
+        device.sandbox.reset()
+        held.join()
+        assertEquals(SandboxAniListFault.None, device.sandbox.aniList.fault)
+        val (status, body) = checkNotNull(answer)
+        assertEquals(200, status)
+        val next =
+            Json
+                .parseToJsonElement(body)
+                .jsonObject.media
+                .single()
+                .nodes
+                .map { it.at }
+                .first { it > clock.now }
+        assertTrue("$next", next <= clock.now + SandboxAiring.SOON_AFTER)
+    }
+
     private companion object {
+        const val POLL = 10L
         val HELD: Duration = Duration.ofMillis(300)
         val START: Instant = Instant.parse("2026-11-16T05:47:00Z")
         val WEEK: Duration = Duration.ofDays(7)
