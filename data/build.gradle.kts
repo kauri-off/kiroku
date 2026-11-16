@@ -205,6 +205,28 @@ tasks.register<JavaExec>("recordMalAnswers") {
     }
 }
 
+// Section 11.1: AniList's answers for M3; no task depends on it, and it runs only as the one task of a build.
+tasks.register<JavaExec>("recordAniListAnswers") {
+    description = "Asks AniList the requests of AniListRequests, one at a time, and stores the answers."
+    val named = gradle.startParameter.taskNames.map { it.substringAfterLast(':') } == listOf(name)
+    val only = providers.gradleProperty("kiroku.recordOnly")
+    classpath(provider { tasks.named<Test>("testDebugUnitTest").get().classpath })
+    mainClass = "io.github.kauri_off.kiroku.data.recorder.RecordAniListKt"
+    args(
+        layout.projectDirectory
+            .dir("src/test/resources/anilist/recorded")
+            .asFile.path,
+        layout.buildDirectory
+            .dir("anilist-run")
+            .get()
+            .asFile.path,
+    )
+    doFirst {
+        check(named) { "recordAniListAnswers calls AniList: it runs only as the one task of a build" }
+        (this as JavaExec).environment("KIROKU_RECORD_ONLY", only.getOrElse(""))
+    }
+}
+
 // Applies the sanitiser again to answers that are stored, by default the recorded ones; it asks MAL nothing.
 tasks.register<JavaExec>("sanitiseMalAnswers") {
     description = "Brings the stored answers of MAL up to the sanitiser's rules."

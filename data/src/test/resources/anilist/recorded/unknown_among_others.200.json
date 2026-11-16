@@ -1,0 +1,82 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 61987,
+                    "episodes": 12,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1790949600
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1791554400
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1792159200
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1792764000
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1793368800
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1793973600
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1794578400
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1795183200
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1795788000
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1796392800
+                            },
+                            {
+                                "episode": 11,
+                                "airingAt": 1796997600
+                            },
+                            {
+                                "episode": 12,
+                                "airingAt": 1797602400
+                            }
+                        ]
+                    }
+                },
+                {
+                    "idMal": 62734,
+                    "episodes": 24,
+                    "status": "RELEASING",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": []
+                    }
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,63 @@
+{
+    "data": {
+        "Page": {
+            "pageInfo": {
+                "hasNextPage": false
+            },
+            "media": [
+                {
+                    "idMal": 60636,
+                    "episodes": 10,
+                    "status": "FINISHED",
+                    "airingSchedule": {
+                        "pageInfo": {
+                            "hasNextPage": false
+                        },
+                        "nodes": [
+                            {
+                                "episode": 1,
+                                "airingAt": 1784988000
+                            },
+                            {
+                                "episode": 2,
+                                "airingAt": 1785592800
+                            },
+                            {
+                                "episode": 3,
+                                "airingAt": 1786197600
+                            },
+                            {
+                                "episode": 4,
+                                "airingAt": 1786802400
+                            },
+                            {
+                                "episode": 5,
+                                "airingAt": 1787407200
+                            },
+                            {
+                                "episode": 6,
+                                "airingAt": 1788012000
+                            },
+                            {
+                                "episode": 7,
+                                "airingAt": 1788616800
+                            },
+                            {
+                                "episode": 8,
+                                "airingAt": 1789221600
+                            },
+                            {
+                                "episode": 9,
+                                "airingAt": 1792422000
+                            },
+                            {
+                                "episode": 10,
+                                "airingAt": 1793026800
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}
