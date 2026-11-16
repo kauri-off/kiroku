@@ -7,9 +7,11 @@ import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.airingAt
+import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -23,12 +25,15 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
+import io.github.kauri_off.kiroku.plain
 import io.github.kauri_off.kiroku.premiereOn
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.title.TitlePage
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -40,11 +45,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -63,6 +71,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -158,7 +167,7 @@ class ListViewModelTest {
             ?.values
 
     private fun upNext(status: ListStatus = ListStatus.Watching) =
-        order(set.entries.filter { it.status == status }, ListSort.UpNext, set.airing::get, today) { it.anime.titles.romaji }
+        order(set.entries.filter { it.status == status }, ListSort.UpNext, set.airing::get) { it.anime.titles.romaji }
             .map { it.anime.id }
 
     @Test
@@ -187,6 +196,94 @@ class ListViewModelTest {
             val row = s.page().rows.single { it.id == FixtureAnime.exactToWatch.id }
             assertEquals(13, (row.line2 as Line2.Progress).watched)
         }
+
+    // The view model holds no list after a failed read, but the store does: only a store read empty waits for its sync.
+    @Test
+    fun `Retry from a list that could not be read shows the stored list while its sync still runs`() =
+        test(unreadable = true) { s ->
+            assertEquals(ListContent.Failed(ListFailure.Other), s.state.content)
+            s.graph.demo.server.latency = 10.seconds
+            s.graph.listUnreadable = false
+
+            s.list.onEvent(ListEvent.Retry)
+            advanceTimeBy(1.seconds)
+
+            assertEquals(set.entries.size, (s.state.content as ListContent.Tabs).pages.values.sumOf { it.rows.size })
+            assertEquals(upNext(), s.ids())
+            advanceUntilIdle()
+        }
+
+    @Test
+    fun `a stale stored list that is read after its sync started is shown while the sync still runs`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph(Demo(set, scope, latency = 10.seconds))
+            graph.readsHeld = true
+            val list =
+                ListViewModel(
+                    graph.list,
+                    graph.anime,
+                    graph.airing,
+                    graph.session,
+                    graph.connection,
+                    graph.preferences,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                    graph.background,
+                )
+            val screen = showing(list.state, list.shown)
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            assertEquals(1, graph.syncs)
+            assertEquals(ListContent.Loading, list.state.value.content)
+
+            graph.readsHeld = false
+            advanceTimeBy(1.seconds)
+            runCurrent()
+
+            assertEquals(set.entries.size, (list.state.value.content as ListContent.Tabs).pages.values.sumOf { it.rows.size })
+            advanceUntilIdle()
+            screen.cancel()
+            list.viewModelScope.cancel()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a row without airing data and its title page judge a premiere by one day, Japan's, which ends before the device's here`() {
+        val anime = FixtureAnime.premiereDate
+        val premiere = (anime.startDate as PartialDate.Day).date
+        val end = premiere.plusDays(1).atStartOfDay(FixtureTime.japan).toInstant()
+        val clock = MovingClock(end.minusSeconds(1), FixtureTime.zone)
+        test(
+            demo = { Demo(set, it, clock = clock) },
+            airing = { inner ->
+                object : AiringRepository by inner {
+                    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flowOf(emptyMap())
+                }
+            },
+        ) { s ->
+            val entry = checkNotNull(set.entryFor(anime.id))
+
+            fun row() =
+                s
+                    .page(ListStatus.Planned)
+                    .rows
+                    .single { it.id == anime.id }
+                    .line2
+
+            fun page() = TitlePage.of(anime, entry, null, null, emptyMap(), TitleLanguage.Romaji, clock).airing.plain()
+            assertEquals(Line2.Premieres(premiereOn(PartialDate.Day(premiere))), row())
+            assertEquals(premiere, page())
+
+            clock.instant = end
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+
+            assertEquals(Line2.Premieres(Premiere.Unannounced), row())
+            assertEquals(Premiere.Unannounced, page())
+        }
+    }
 
     @Test
     fun `SelectTab changes the tab and never the order`() =
@@ -360,7 +457,6 @@ class ListViewModelTest {
                     set.entries.filter { it.status == ListStatus.Completed },
                     ListSort.Score,
                     set.airing::get,
-                    today,
                     SortDirection.Ascending,
                 ) {
                     it.anime.titles.romaji
@@ -465,7 +561,7 @@ class ListViewModelTest {
                     .observeEntries()
                     .first()
                     .filter { it.status == ListStatus.Completed }
-            val expected = order(completed, ListSort.LastUpdated, set.airing::get, today) { it.anime.titles.romaji }.map { it.anime.id }
+            val expected = order(completed, ListSort.LastUpdated, set.airing::get) { it.anime.titles.romaji }.map { it.anime.id }
             assertEquals(expected, s.ids(ListStatus.Completed))
             assertEquals(anime.id, s.ids(ListStatus.Completed).first())
         }
@@ -481,8 +577,15 @@ class ListViewModelTest {
         Demo(set.copy(entries = emptyList()), scope).also { demo -> set.entries.forEach { demo.server.editOnWebsite(it.anime, it.values) } }
 
     @Test
-    fun `the first load into an empty list orders every tab from what the sync brought`() =
-        test(demo = ::firstLoad, lateObservers = true) { s ->
+    fun `the first load into an empty list orders every tab from what the sync brought`() = firstLoadIsOrdered(lateObservers = false)
+
+    @Test
+    fun `the first load into an empty list orders every tab from what the sync brought, with late observers`() =
+        firstLoadIsOrdered(lateObservers = true)
+
+    // "Up next" is by the airing data the titles got as they became tracked, which arrives after the list.
+    private fun firstLoadIsOrdered(lateObservers: Boolean) =
+        test(demo = ::firstLoad, lateObservers = lateObservers) { s ->
             val synced =
                 s.graph.list
                     .observeEntries()
@@ -494,20 +597,19 @@ class ListViewModelTest {
                         synced.filter { it.status == status },
                         sort,
                         set.airing::get,
-                        today,
                     ) { it.anime.titles.romaji }.map { it.anime.id }
                 assertTrue(status.name, expected.isNotEmpty())
                 assertEquals(status.name, expected, s.ids(status))
             }
         }
 
-    // The store's new list is ordered on the lane while the sync still reads it, as on two threads; it is ordered once.
+    // The store's new list reaches the lane while the sync still waits to order it, as on two threads; it is ordered once, by the sync.
     @Test
-    fun `a first load whose list is ordered before the sync's own ordering runs orders every tab once`() {
+    fun `a first load whose list arrives before the sync's own ordering runs orders every tab once`() {
         val lane = SyncLast(dispatcher)
         test(demo = ::firstLoad, background = lane) { s ->
             assertEquals(1, lane.deferred)
-            ListStatus.entries.forEach { assertEquals(it.name, 0, s.page(it).ordering) }
+            assertEquals(ListContent.Loading, s.state.content)
             lane.release()
             advanceUntilIdle()
             ListStatus.entries.forEach { assertEquals(it.name, 0, s.page(it).ordering) }
@@ -543,7 +645,7 @@ class ListViewModelTest {
         test(demo = { Demo(set.copy(entries = withUnknown), it) }, saved = saved, preferences = preferences) { s ->
             assertEquals(ListStatus.entries + unknown, (s.state.content as ListContent.Tabs).statuses)
             val shown = withUnknown.filter { it.status == unknown }
-            val expected = order(shown, ListSort.LastUpdated, set.airing::get, today) { it.anime.titles.romaji }.map { it.anime.id }
+            val expected = order(shown, ListSort.LastUpdated, set.airing::get) { it.anime.titles.romaji }.map { it.anime.id }
             assertEquals(2, expected.size)
             assertEquals(expected, s.ids(unknown))
             assertEquals(ListSort.LastUpdated, s.page(unknown).sort)
@@ -660,6 +762,36 @@ class ListViewModelTest {
             assertEquals(downloads, s.graph.demo.server.listDownloads)
         }
 
+    @Test
+    fun `shown with a list that needs no sync, the List asks for the airing data that went stale, and for nothing while it is fresh`() {
+        val clock = MovingClock(set.now.minus(Duration.ofMinutes(10)), FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock).also { clock.instant = set.now } }) { s ->
+            val requests = { s.graph.demo.airingSource.requests }
+            val downloads = s.graph.demo.server.listDownloads
+            assertEquals(emptyList<Set<AnimeId>>(), requests())
+
+            for ((minutes, asked) in listOf(4L to 0, 6L to 1, 7L to 1)) {
+                s.screen.cancel()
+                runCurrent()
+                advanceTimeBy(ROTATION + STOPPED_AFTER)
+                runCurrent()
+                clock.instant = set.now.plus(Duration.ofMinutes(minutes))
+                s.screen = showing(s.list.state, s.list.shown)
+                runCurrent()
+                advanceUntilIdle()
+                assertEquals("after $minutes minutes", asked, requests().size)
+            }
+            assertEquals(
+                set.entries
+                    .filter { it.tracked }
+                    .map { it.anime.id }
+                    .toSet(),
+                requests().single(),
+            )
+            assertEquals(downloads, s.graph.demo.server.listDownloads)
+        }
+    }
+
     // Nothing asynchronous sits between a keystroke and the field: no dispatch, no frame.
     @Test
     fun `the filter field's text changes with each keystroke before anything runs`() =
@@ -702,26 +834,43 @@ class ListViewModelTest {
         }
     }
 
-    // At the end of a premiere's day only that row changes; every other row is built again to what it showed, and kept.
+    // At the end of a premiere's day in Japan only that row changes; every other row is the same object.
     @Test
-    fun `a row built again to what it already shows stays the same object`() {
+    fun `at the end of a premiere's day in Japan its row alone changes, by the tick`() {
         val anime = FixtureAnime.premiereDate
-        val end =
-            (anime.startDate as PartialDate.Day)
-                .date
-                .plusDays(1)
-                .atStartOfDay(FixtureTime.zone)
-                .toInstant()
+        val premiere = (anime.startDate as PartialDate.Day).date
+        val end = premiere.plusDays(1).atStartOfDay(FixtureTime.japan).toInstant()
         val clock = MovingClock(end.minusSeconds(1), FixtureTime.zone)
-        test(demo = { Demo(set, it, clock = clock) }) { s ->
+        val clockSet = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        test(demo = { Demo(set, it, clock = clock, clockSet = clockSet) }) { s ->
             val before = ListStatus.entries.associateWith { s.page(it).rows }
+            assertEquals(
+                Line2.Premieres(premiereOn(PartialDate.Day(premiere))),
+                before
+                    .getValue(ListStatus.Planned)
+                    .single {
+                        it.id ==
+                            anime.id
+                    }.line2,
+            )
+
             clock.instant = end
-            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
+            clockSet.emit(Unit)
+            advanceUntilIdle()
+
             assertEquals(end, s.state.now)
             for (status in ListStatus.entries) {
                 val rows = before.getValue(status).zip(s.page(status).rows)
                 assertEquals(status.name, before.getValue(status).size, rows.size)
-                rows.forEach { (old, new) -> if (new.id == anime.id) assertNotEquals(old, new) else assertSame(new.title, old, new) }
+                rows.forEach { (old, new) ->
+                    if (new.id ==
+                        anime.id
+                    ) {
+                        assertEquals(Line2.Premieres(Premiere.Unannounced), new.line2)
+                    } else {
+                        assertSame(new.title, old, new)
+                    }
+                }
             }
         }
     }
@@ -747,26 +896,6 @@ class ListViewModelTest {
             for ((old, new) in before.zip(s.page().rows)) {
                 if (new.id == anime.id) assertEquals(Line3.ToWatch(AiredCount.Exact(3)), new.line3) else assertSame(new.title, old, new)
             }
-        }
-    }
-
-    @Test
-    fun `a row is built again when the day it shows passes`() {
-        val anime = FixtureAnime.premiereDate
-        val premiere = (anime.startDate as PartialDate.Day).date
-        val end = premiere.plusDays(1).atStartOfDay(FixtureTime.zone).toInstant()
-        val clock = MovingClock(end.minusSeconds(1), FixtureTime.zone)
-        test(demo = { Demo(set, it, clock = clock) }) { s ->
-            fun line2() =
-                s
-                    .page(ListStatus.Planned)
-                    .rows
-                    .single { it.id == anime.id }
-                    .line2
-            assertEquals(Line2.Premieres(premiereOn(PartialDate.Day(premiere))), line2())
-            clock.instant = end
-            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
-            assertEquals(Line2.Premieres(Premiere.Unannounced), line2())
         }
     }
 
@@ -849,19 +978,59 @@ class ListViewModelTest {
         }
 
     @Test
-    fun `the pages are built again once an air time they show passes`() {
-        val airsAt = nextAirTime
+    fun `an air time that passes moves its row by the tick, with no event, and the moment the pages are written against stays`() {
+        val anime = FixtureAnime.exactToWatch
+        val airsAt = checkNotNull(set.airing.getValue(anime.id).nextEpisode).airsAt
         val clock = MovingClock(airsAt.minusSeconds(1), FixtureTime.zone)
-        test(demo = { Demo(set, it, clock = clock) }) { s ->
+        val clockSet = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        test(demo = { Demo(set, it, clock = clock, clockSet = clockSet) }) { s ->
             val before = s.state
-            s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
-            assertSame(before.content, s.state.content)
+            assertEquals(
+                Line3.ToWatch(AiredCount.Exact(2)),
+                s
+                    .page()
+                    .rows
+                    .single { it.id == anime.id }
+                    .line3,
+            )
+
             clock.instant = airsAt
-            s.list.onEvent(ListEvent.SelectTab(ListStatus.Watching))
-            assertNotSame(before.content, s.state.content)
-            assertEquals(airsAt, s.state.now)
+            clockSet.emit(Unit)
+            advanceUntilIdle()
+
+            assertEquals(
+                Line3.ToWatch(AiredCount.Exact(3)),
+                s
+                    .page()
+                    .rows
+                    .single { it.id == anime.id }
+                    .line3,
+            )
+            assertEquals(before.now, s.state.now)
+            assertEquals(
+                s.ids(),
+                (before.content as ListContent.Tabs)
+                    .pages
+                    .getValue(ListStatus.Watching)
+                    .rows
+                    .map { it.id },
+            )
         }
     }
+
+    @Test
+    fun `a first load orders its tabs though the airing refresh that follows the sync never ends`() =
+        test(
+            demo = ::firstLoad,
+            airing = { inner ->
+                object : AiringRepository by inner {
+                    override suspend fun refreshStale(): Outcome<Unit> = awaitCancellation()
+                }
+            },
+        ) { s ->
+            assertEquals(set.entries.count { it.status == ListStatus.Watching }, s.ids(ListStatus.Watching).size)
+            assertFalse(s.state.refreshing)
+        }
 
     @Test
     fun `the pages are built again when the clock is set back`() {
@@ -1048,7 +1217,6 @@ class ListViewModelTest {
                     set.entries.filter { it.status == ListStatus.Completed },
                     ListSort.Score,
                     set.airing::get,
-                    today,
                     SortDirection.Ascending,
                 ) {
                     it.anime.titles.romaji

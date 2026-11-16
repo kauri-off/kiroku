@@ -188,6 +188,24 @@ class AiringTest {
     }
 
     @Test
+    fun `a result with a next episode holds no longer than until it airs, and its premiere agrees with its count`() {
+        val next = ScheduledEpisode(4, instant)
+        val aired = instant.minusSeconds(1)
+        fails { Airing(AiredCount.Exact(3), 24, next, aired, changesAt = null) }
+        fails { Airing(AiredCount.Exact(3), 24, next, aired, changesAt = instant.plusSeconds(1)) }
+        Airing(AiredCount.Exact(3), 24, next, aired, changesAt = aired)
+        assertEquals(instant, Airing(AiredCount.Exact(3), 24, next, aired).changesAt)
+        val first = ScheduledEpisode(1, instant)
+        assertEquals(Premiere.At(instant), Airing(AiredCount.Exact(0), 12, first, null).premiere)
+        fails { Airing(AiredCount.Exact(0), 12, first, null, premiere = Premiere.Unannounced) }
+        fails { Airing(AiredCount.Exact(0), 12, first, null, premiere = Premiere.At(instant.plusSeconds(1))) }
+        fails { Airing(AiredCount.Estimated(2), 12, null, instant, premiere = Premiere.Unannounced) }
+        fails { Airing(AiredCount.Estimated(0), 12, null, null, premiere = Premiere.At(instant)) }
+        Airing(AiredCount.Estimated(0), 12, null, null, premiere = Premiere.Unannounced)
+        Airing(AiredCount.Unknown, null, null, null, premiere = Premiere.Unannounced)
+    }
+
+    @Test
     fun `a count of 0 is exact only when the schedule puts episode 1 in the future`() {
         fails { Airing(AiredCount.Exact(0), 12, null, null) }
         fails { Airing(AiredCount.Exact(0), 12, ScheduledEpisode(2, instant), null) }
@@ -287,3 +305,11 @@ class AiringTest {
         const val COUNT_LIMIT = 100
     }
 }
+
+// The phase by the day alone, as for a title without a result.
+private fun airingPhase(
+    anime: Anime,
+    values: ListValues?,
+    airing: Airing?,
+    today: LocalDate,
+) = airingPhase(anime, values, airing, premiereOf(anime, airing, today))

@@ -38,7 +38,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
-import java.time.LocalDate
 
 // One title, its details and whether loading them failed, the summary standing in for what is not stored.
 abstract class SubScreenViewModel(
@@ -147,7 +146,7 @@ class RelatedViewModel(
             }) { ids ->
                 combine(
                     list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
-                    airing.airingOf(ids),
+                    airing.airingOf(ids).readAgainOnRetry(retries) { emptyMap() },
                     ::Pair,
                 )
             }.map { (title, around) -> Sources(title, around.first, around.second) }
@@ -191,7 +190,7 @@ class RelatedViewModel(
                     sources.airing,
                     titleLanguage,
                     title.session,
-                    LocalDate.now(clock),
+                    clock.instant(),
                 )
             failure != null -> RelatedState.Failed(failure, title.session)
             else -> RelatedState.Loading(title.session)

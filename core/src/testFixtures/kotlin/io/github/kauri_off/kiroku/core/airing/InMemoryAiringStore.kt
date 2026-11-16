@@ -6,8 +6,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 // A store that lives as long as its process.
-class InMemoryAiringStore : AiringStore {
-    private val stored = MutableStateFlow(emptyMap<AnimeId, StoredAiring>())
+class InMemoryAiringStore(
+    titles: Map<AnimeId, StoredAiring> = emptyMap(),
+) : AiringStore {
+    private val stored = MutableStateFlow(titles)
 
     override fun observe(): Flow<Map<AnimeId, StoredAiring>> = stored
 

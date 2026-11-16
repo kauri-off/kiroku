@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.changedFrom
 import java.time.LocalDate
+import java.time.ZonedDateTime
 
 enum class DateField { Start, Finish }
 
@@ -66,8 +67,14 @@ data class EditSheetState(
             airing: Airing?,
             saved: ListValues?,
             titleLanguage: TitleLanguage,
-            today: LocalDate,
-        ) = of(anime.titles.preferred(titleLanguage), saved, titleAiring(anime, saved, airing, today).total, anime.malEpisodes, today)
+            now: ZonedDateTime,
+        ) = of(
+            anime.titles.preferred(titleLanguage),
+            saved,
+            titleAiring(anime, saved, airing, now.toInstant()).total,
+            anime.malEpisodes,
+            now.toLocalDate(),
+        )
 
         fun of(
             title: String,

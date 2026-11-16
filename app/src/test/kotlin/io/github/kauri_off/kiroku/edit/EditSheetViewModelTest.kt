@@ -2,22 +2,32 @@ package io.github.kauri_off.kiroku.edit
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
+import io.github.kauri_off.kiroku.wiring.MovingClock
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -28,7 +38,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Duration
 import java.time.LocalDate
+import java.time.ZonedDateTime
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditSheetViewModelTest {
@@ -83,6 +95,60 @@ class EditSheetViewModelTest {
     }
 
     @Test
+    fun `opening the sheet asks the source of episode times nothing, however stale the stored data`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
+            val graph = TestGraph(Demo(Fixtures.reference, scope, clock = clock))
+            clock.instant = clock.instant.plus(Duration.ofDays(2))
+            val unlisted = FixtureAnime.notOnListAiring
+            for (opened in listOf(anime, unlisted)) {
+                val editor =
+                    EditSheetViewModel(
+                        graph.list,
+                        graph.anime,
+                        graph.airing,
+                        graph.clock,
+                        graph.titleLanguage,
+                        SavedStateHandle(),
+                        ShellMessages(scope, graph.list),
+                    )
+                editor.open(opened.id, known = opened)
+                advanceUntilIdle()
+                assertEquals(opened.malEpisodes, editor.sheet!!.total)
+            }
+            assertEquals(emptyList<Set<AnimeId>>(), graph.demo.airingSource.requests)
+            scope.cancel()
+        }
+
+    @Test
+    fun `a sheet whose airing data cannot be read opens with MAL's total`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope, false)
+            val unread =
+                object : AiringRepository by graph.airing {
+                    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flow { throw DataException(DataError.StorageError) }
+                }
+            val editor =
+                EditSheetViewModel(
+                    graph.list,
+                    graph.anime,
+                    unread,
+                    graph.clock,
+                    graph.titleLanguage,
+                    SavedStateHandle(),
+                    ShellMessages(scope, graph.list),
+                )
+            editor.open(anime.id)
+            advanceUntilIdle()
+
+            assertEquals(anime.malEpisodes, editor.sheet!!.total)
+            assertEquals(12, editor.sheet!!.draft.watchedEpisodes)
+            scope.cancel()
+        }
+
+    @Test
     fun `open builds the sheet from the stored entry`() =
         test { s ->
             val entry =
@@ -95,7 +161,7 @@ class EditSheetViewModelTest {
                     s.graph.demo.fixtures.airing[anime.id],
                     entry.values,
                     s.graph.titleLanguage,
-                    LocalDate.now(s.graph.clock),
+                    ZonedDateTime.now(s.graph.clock),
                 ),
                 s.sheet,
             )

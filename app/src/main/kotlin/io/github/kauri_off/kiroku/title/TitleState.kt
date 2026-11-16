@@ -101,7 +101,7 @@ data class TitlePage private constructor(
         ): TitlePage {
             require(entry == null || entry.anime.id == anime.id)
             val now = ZonedDateTime.now(clock)
-            val shown = titleAiring(anime, entry?.values, airing, now.toLocalDate())
+            val shown = titleAiring(anime, entry?.values, airing, now.toInstant())
             val total = shown.total
             val phase = shown.phase
             val related = details?.related.orEmpty()

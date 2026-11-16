@@ -37,7 +37,7 @@ class ListRowTest {
         sort: ListSort? = null,
     ): ListRow {
         val entry = set.entryFor(anime.id)!!
-        return listRow(entry, set.airing[anime.id], today, TitleLanguage.Romaji, readOnly, sort)
+        return listRow(entry, set.airing[anime.id], set.now, TitleLanguage.Romaji, readOnly, sort)
     }
 
     @Test
@@ -122,8 +122,8 @@ class ListRowTest {
     fun `W9 a count above the total and the aired count is shown as it is, with plus one and no next episode`() {
         val entry = set.entryFor(FixtureAnime.exactCaughtUp.id)!!.let { it.copy(values = it.values.copy(watchedEpisodes = 25)) }
         val airing = set.airing.getValue(entry.anime.id)
-        val row = listRow(entry, airing, today, TitleLanguage.Romaji)
-        val total = titleAiring(entry.anime, entry.values, airing, today).total
+        val row = listRow(entry, airing, set.now, TitleLanguage.Romaji)
+        val total = titleAiring(entry.anime, entry.values, airing, set.now).total
         assertEquals(Line2.Progress(25, total), row.line2)
         assertTrue(25 > total!!)
         assertTrue(25 >= airing.nextEpisode!!.number)
@@ -177,7 +177,7 @@ class ListRowTest {
         val anime = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.NotYetAired)
         val entry = ListEntry(anime, ListValues(ListStatus.Watching, 0, null, null, null), set.now)
         val doubted = AiringSchedule(FixtureTime.weekly(1, set.now.minus(Duration.ofDays(8)), 1..2), 25)
-        val row = listRow(entry, airingAt(anime, doubted, set.now), today, TitleLanguage.Romaji)
+        val row = listRow(entry, airingAt(anime, doubted, set.now), set.now, TitleLanguage.Romaji)
         assertEquals(Line2.Progress(0, 24), row.line2)
         assertEquals(Line3.ToWatch(AiredCount.Estimated(2)), row.line3)
     }
@@ -186,8 +186,8 @@ class ListRowTest {
     fun `A1 up next puts first exactly the rows with a to watch line`() {
         airings.forEach { airing ->
             val entries = grid().filter { it.status == ListStatus.Watching }
-            val ordered = order(entries, ListSort.UpNext, { airing }, today) { it.anime.titles.romaji }
-            val highlighted = ordered.map { listRow(it, airing, today, TitleLanguage.Romaji).line3 is Line3.ToWatch }
+            val ordered = order(entries, ListSort.UpNext, { airing }) { it.anime.titles.romaji }
+            val highlighted = ordered.map { listRow(it, airing, set.now, TitleLanguage.Romaji).line3 is Line3.ToWatch }
             assertEquals(airing.toString(), highlighted.sortedDescending(), highlighted)
         }
     }
@@ -196,11 +196,11 @@ class ListRowTest {
     fun `plus one is on every watching row and on no other, also at the total`() {
         set.entries.forEach { entry -> assertEquals(entry.status == ListStatus.Watching, row(entry.anime).plusOne) }
         grid().forEach { entry ->
-            assertEquals(entry.status == ListStatus.Watching, listRow(entry, null, today, TitleLanguage.Romaji).plusOne)
+            assertEquals(entry.status == ListStatus.Watching, listRow(entry, null, set.now, TitleLanguage.Romaji).plusOne)
         }
         val atTotal = set.entryFor(FixtureAnime.oneShortOfTotal.id)!!.let { it.copy(values = it.values.copy(watchedEpisodes = 12)) }
-        assertEquals(Line2.Progress(12, 12), listRow(atTotal, null, today, TitleLanguage.Romaji).line2)
-        assertTrue(listRow(atTotal, null, today, TitleLanguage.Romaji).plusOne)
+        assertEquals(Line2.Progress(12, 12), listRow(atTotal, null, set.now, TitleLanguage.Romaji).line2)
+        assertTrue(listRow(atTotal, null, set.now, TitleLanguage.Romaji).plusOne)
     }
 
     private fun grid() = AiringGrid.entries
@@ -211,16 +211,20 @@ class ListRowTest {
         entry: ListEntry,
         airing: Airing?,
     ) {
-        val row = listRow(entry, airing, today, TitleLanguage.Romaji)
+        val row = listRow(entry, airing, set.now, TitleLanguage.Romaji)
         (row.line2 as? Line2.Progress)?.let {
-            assertEquals("${entry.anime.titles.romaji} with $airing", titleAiring(entry.anime, entry.values, airing, today).total, it.total)
+            assertEquals(
+                "${entry.anime.titles.romaji} with $airing",
+                titleAiring(entry.anime, entry.values, airing, set.now).total,
+                it.total,
+            )
         }
     }
 
     @Test
     fun `another user's row has progress or score, no third line and no plus one`() {
         set.otherUserEntries.forEach { entry ->
-            val row = listRow(entry, set.airing[entry.anime.id], today, TitleLanguage.Romaji, readOnly = true)
+            val row = listRow(entry, set.airing[entry.anime.id], set.now, TitleLanguage.Romaji, readOnly = true)
             assertNull(row.line3)
             assertFalse(row.plusOne)
             when (entry.status) {
@@ -233,6 +237,6 @@ class ListRowTest {
     @Test
     fun `the title is in the chosen language`() {
         val entry = set.entryFor(FixtureAnime.exactToWatch.id)!!
-        assertEquals(FixtureAnime.exactToWatch.titles.english, listRow(entry, null, today, TitleLanguage.English).title)
+        assertEquals(FixtureAnime.exactToWatch.titles.english, listRow(entry, null, set.now, TitleLanguage.English).title)
     }
 }

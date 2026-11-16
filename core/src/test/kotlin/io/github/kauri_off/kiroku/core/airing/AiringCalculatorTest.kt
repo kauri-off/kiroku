@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.core.airing
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
-import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -57,7 +56,8 @@ class AiringCalculatorTest {
         next: Int?,
     ) = Airing(AiredCount.Exact(count), total, next?.let(::episode), week(count - 1).takeIf { count > 0 })
 
-    private fun Airing.timeless() = copy(changesAt = null)
+    // The count's part of a result: without the instant it holds until and a premiere's date, beyond what every value must name.
+    private fun Airing.timeless() = copy(changesAt = nextEpisode?.airsAt, premiere = premiere as? Premiere.At)
 
     private fun at(
         anime: Anime,
@@ -283,8 +283,14 @@ class AiringCalculatorTest {
             time: LocalTime,
         ): Instant? {
             val anime = title.copy(broadcast = Broadcast(day, time))
-            val changes = airingAt(anime, null, first.minus(Duration.ofDays(30))).changesAt
-            assertEquals(AiredCount.Estimated(1), airingAt(anime, null, checkNotNull(changes)).aired)
+            var changes = first.minus(Duration.ofDays(30))
+            var steps = 0
+            while (airingAt(anime, null, changes).aired == AiredCount.Estimated(0)) {
+                val next = checkNotNull(airingAt(anime, null, changes).changesAt)
+                assertTrue("$day $time at $changes", next.isAfter(changes) && ++steps <= 3)
+                changes = next
+            }
+            assertEquals(AiredCount.Estimated(1), airingAt(anime, null, changes).aired)
             return changes
         }
 
@@ -300,6 +306,54 @@ class AiringCalculatorTest {
         // Any other weekday is the first one after the start date.
         assertEquals(japan(start.plusDays(5), LocalTime.of(0, 50)), firstEpisode(DayOfWeek.THURSDAY, LocalTime.of(0, 50)))
         assertEquals(japan(start, LocalTime.of(0, 50)), firstEpisode(DayOfWeek.SATURDAY, LocalTime.of(0, 50)))
+    }
+
+    @Test
+    fun `A1 the premiere is in the result, a first episode's time or MAL's date, which stands through its last day in Japan`() {
+        val before = week(-1)
+        assertEquals(Premiere.At(week(0)), airingAt(notYetAired, weekly(1..12), before).premiere)
+        assertEquals(week(0), airingAt(notYetAired, weekly(1..12), before).changesAt)
+        assertNull(airingAt(notYetAired, weekly(1..12), week(0)).premiere)
+        assertNull(airingAt(title, null, week(0)).premiere)
+        assertNull(airingAt(noSlot, null, before).premiere)
+        assertNull(airingAt(finished, null, before).premiere)
+
+        fun japan(date: LocalDate) = date.atStartOfDay(JAPAN).toInstant()
+        val dated =
+            listOf(
+                PartialDate.Day(start) to (Premiere.OnDay(start) to japan(start.plusDays(1))),
+                PartialDate.Month(YearMonth.of(2026, 1)) to (Premiere.InMonth(YearMonth.of(2026, 1)) to japan(LocalDate.of(2026, 2, 1))),
+                PartialDate.OnlyYear(Year.of(2026)) to (Premiere.InYear(Year.of(2026)) to japan(LocalDate.of(2027, 1, 1))),
+            )
+        for ((date, expected) in dated) {
+            val (premiere, over) = expected
+            val anime = notYetAired.copy(startDate = date, broadcast = null)
+            assertEquals("$date", premiere, airingAt(anime, null, before).premiere)
+            assertEquals("$date", over, airingAt(anime, null, before).changesAt)
+            assertEquals("$date", premiere, airingAt(anime, null, over.minusNanos(1)).premiere)
+            val after = airingAt(anime, null, over)
+            assertEquals("$date", Premiere.Unannounced, after.premiere)
+            assertNull("$date", after.changesAt)
+        }
+        // The day's end comes before a first slot later in the week, and the result names the earlier of the two.
+        val thursday = notYetAired.copy(broadcast = Broadcast(DayOfWeek.THURSDAY, slot))
+        assertEquals(japan(start.plusDays(1)), airingAt(thursday, null, before).changesAt)
+        assertEquals(Premiere.Unannounced, airingAt(thursday, null, japan(start.plusDays(1))).premiere)
+        assertEquals(Premiere.Unannounced, airingAt(notYetAired.copy(startDate = null, broadcast = null), null, before).premiere)
+    }
+
+    @Test
+    fun `a title MAL marks finished with no total and a first episode to come has an exact 0 and its time, and shows no airing`() {
+        val early = finished.copy(malEpisodes = null)
+        val schedule = weekly(1..1, total = null)
+        val result = airingAt(early, schedule, week(-1))
+        assertEquals(Airing(AiredCount.Exact(0), null, episode(1), null), result)
+        assertEquals(Premiere.At(week(0)), result.premiere)
+        assertEquals(week(0), result.changesAt)
+        val shown = titleAiring(early, watching(0), schedule, week(-1))
+        assertNull(shown.phase)
+        assertEquals(UpNext.Rest, shown.upNext)
+        assertEquals(AiredCount.Exact(1), airingAt(early, schedule, week(0)).aired)
     }
 
     @Test
@@ -388,7 +442,7 @@ class AiringCalculatorTest {
         values: ListValues?,
         schedule: AiringSchedule?,
         now: Instant,
-    ) = titleAiring(anime, values, schedule, now, FixtureTime.zone)
+    ) = titleAiring(anime, values, schedule, now)
 
     @Test
     fun `A7 an estimate marks the aired count and to watch alike, and an unknown count shows no number`() {
@@ -425,12 +479,11 @@ class AiringCalculatorTest {
     fun `A1 one result holds the count, the total, what is shown and the keys of Up next`() {
         val schedule = weekly(1..12)
         val now = week(3)
-        val today = now.atZone(FixtureTime.zone).toLocalDate()
         val behind = shown(title, watching(2), schedule, now)
         assertEquals(airingAt(title, schedule, now), behind.airing)
         assertEquals(12, behind.total)
         assertEquals(UpNext.ToWatch(week(3)), behind.upNext)
-        assertEquals(behind, titleAiring(title, watching(2), airingAt(title, schedule, now), today))
+        assertEquals(behind, titleAiring(title, watching(2), airingAt(title, schedule, now), now))
         assertEquals(UpNext.Coming(week(4)), shown(title, watching(4), schedule, now).upNext)
         assertEquals(UpNext.Coming(week(0)), shown(notYetAired, watching(0, ListStatus.Planned), schedule, week(-1)).upNext)
         assertEquals(
@@ -441,7 +494,7 @@ class AiringCalculatorTest {
         assertEquals(UpNext.Rest, shown(title, watching(4), null, now).upNext)
         assertEquals(UpNext.ToWatch(week(3)), shown(title, watching(2), null, now).upNext)
         assertEquals(UpNext.Rest, shown(finished, watching(2), schedule, now).upNext)
-        val untracked = titleAiring(title.copy(malEpisodes = null), watching(2), null, today)
+        val untracked = titleAiring(title.copy(malEpisodes = null), watching(2), airing = null, now = now)
         assertEquals(TitleAiring(null, null, AiringPhase.CountUnknown, UpNext.Rest), untracked)
     }
 
@@ -451,9 +504,16 @@ class AiringCalculatorTest {
         val set = Fixtures.reference
         val cases =
             set.anime.map { it to set.schedules[it.id] } +
-                listOf(title, finished, notYetAired, noSlot, title.copy(malEpisodes = null)).flatMap { anime ->
-                    listOf(null, weekly(1..12), weekly(1..6), weekly(1..13, total = 13), weekly(13..24, from = 0), weekly(1..8, total = 24))
-                        .map { anime to it }
+                listOf(title, finished, notYetAired, noSlot).flatMap { listOf(it, it.copy(malEpisodes = null)) }.flatMap { anime ->
+                    listOf(
+                        null,
+                        weekly(1..12),
+                        weekly(1..12, total = null),
+                        weekly(1..6),
+                        weekly(1..13, total = 13),
+                        weekly(13..24, from = 0),
+                        weekly(1..8, total = 24),
+                    ).map { anime to it }
                 } +
                 // A rejected schedule that is read once its first episode has aired.
                 (title.copy(startDate = null, broadcast = null) to weekly(2..12))

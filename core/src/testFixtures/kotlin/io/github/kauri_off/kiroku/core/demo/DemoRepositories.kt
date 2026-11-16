@@ -1,7 +1,7 @@
 package io.github.kauri_off.kiroku.core.demo
 
-import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.AiringSource
+import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -13,7 +13,6 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
-import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -32,6 +31,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 
 internal class DemoSessionRepository(
     private val signIn: MutableStateFlow<SignInId?>,
@@ -94,19 +94,26 @@ internal class DemoConnection(
     override fun observeOnline(): Flow<Boolean> = server.offline.map { !it }
 }
 
-internal class DemoAiringRepository(
+// The demo's source of episode times: the fixtures' schedules, whole, behind the demo server's failures.
+class DemoAiringSource internal constructor(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
-) : AiringRepository {
-    override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flowOf(fixtures.schedules)
+) : AiringSource {
+    private val received = CopyOnWriteArrayList<Set<AnimeId>>()
 
-    // The fixtures' snapshot, taken when the set was made; nothing recomputes it as the clock runs.
-    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flowOf(fixtures.airing)
+    // The titles of each request received, answered or not.
+    val requests: List<Set<AnimeId>> get() = received.toList()
 
-    override suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit> = server.load(needsSignIn = false).toOutcome()
-
-    override suspend fun fetch(id: AnimeId): Outcome<AiringSchedule?> =
-        server.load(needsSignIn = false)?.let { Outcome.Failure(it) } ?: Outcome.Success(fixtures.schedules[id])
+    override suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> {
+        received += titles.mapTo(mutableSetOf()) { it.id }
+        val error = server.load(needsSignIn = false)
+        return titles.associate { anime ->
+            anime.id to (error?.let { Outcome.Failure(it) } ?: Outcome.Success(fixtures.schedules[anime.id]?.let { FetchedAiring(it) }))
+        }
+    }
 }
 
 internal class DemoSearchRepository(

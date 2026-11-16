@@ -31,7 +31,7 @@ data class StoredAiring(
 
 // A store of airing data. Each call is atomic, and only the engine writes.
 interface AiringStore {
-    // Every title stored, after every change; equal maps may repeat.
+    // Every title stored: as it is now for a new observer, then after every change; equal maps may repeat.
     fun observe(): Flow<Map<AnimeId, StoredAiring>>
 
     suspend fun read(): Map<AnimeId, StoredAiring>

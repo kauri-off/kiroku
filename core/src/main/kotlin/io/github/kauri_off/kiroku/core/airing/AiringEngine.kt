@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -93,8 +94,9 @@ class AiringEngine(
     private var stopped = false
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
-    // A12: what was fetched for the pages of titles outside the tracked set, which no store sees.
+    // A12: what was fetched for the pages of titles outside the tracked set, which no store sees, and when each was asked for.
     private val pages = MutableStateFlow(emptyMap<AnimeId, AiringSchedule>())
+    private val pagesAsked = mutableMapOf<AnimeId, Instant>()
 
     private val follows = Any()
     private var following: Job? = null
@@ -126,13 +128,13 @@ class AiringEngine(
 
     // The schedules of the stored titles, after every change to one; a title the source does not know has none.
     fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> =
-        shown {
+        read {
             local.observe().map { stored -> stored.mapNotNull { (id, airing) -> airing.schedule?.let { id to it } }.toMap() }
         }
 
     // For a title's page alone, never for a notification: the stored schedule, else the one fetched for the page (A12).
     fun observePageSchedule(id: AnimeId): Flow<AiringSchedule?> =
-        shown {
+        read {
             val stored = local.observe().map { it[id] }.distinctUntilChanged()
             combine(stored, pages.map { it[id] }.distinctUntilChanged()) { airing, page -> if (airing != null) airing.schedule else page }
         }
@@ -140,29 +142,38 @@ class AiringEngine(
     // Asks for every tracked title, as a person's pull does, and returns once each is answered.
     suspend fun refresh(): Outcome<Unit> = ask { tracking, _ -> tracking.tracked.values }
 
-    // Asks for the tracked titles whose data is stale; a list sync and a new observer do this by themselves.
+    // Asks for the tracked titles whose data is stale, as a shown screen does; the end of a list sync does it by itself.
     suspend fun refreshStale(): Outcome<Unit> =
         ask { tracking, stored ->
             val now = clock.instant()
             tracking.tracked.values.filter { airingStale(stored[it.id]?.fetchedAt, now) }
         }
 
-    // For a title's page: a tracked title is refreshed; any other is fetched and held in memory (A12), unless finished.
-    suspend fun refresh(anime: Anime): Outcome<Unit> =
-        ask { tracking, _ ->
-            val tracked = tracking.tracked[anime.id]
-            when {
-                tracked != null -> listOf(tracked)
-                anime.airingStatus.effective == AiringStatus.Finished -> emptyList()
-                else -> listOf(anime).also { forPages += anime.id }
-            }
+    // A pull on a title's page: a tracked title is refreshed; any other is fetched and held in memory (A12), unless finished.
+    suspend fun refresh(anime: Anime): Outcome<Unit> = ask { tracking, _ -> listOfNotNull(pageTitle(tracking, anime)) }
+
+    // A title's page that is shown: the same, only when what is held of the title is stale.
+    suspend fun refreshStale(anime: Anime): Outcome<Unit> =
+        ask { tracking, stored ->
+            val asked = if (anime.id in tracking.tracked) stored[anime.id]?.fetchedAt else pagesAsked[anime.id]
+            if (airingStale(asked, clock.instant())) listOfNotNull(pageTitle(tracking, anime)) else emptyList()
         }
 
-    // The store's own flow, which a new observer makes fresh.
-    private fun <T> shown(stored: () -> Flow<T>): Flow<T> =
+    // The title a page asks for: as the list has it when tracked, none when finished, else its own, marked as a page's.
+    private fun pageTitle(
+        tracking: Tracking,
+        anime: Anime,
+    ): Anime? {
+        tracking.tracked[anime.id]?.let { return it }
+        if (anime.airingStatus.effective == AiringStatus.Finished) return null
+        forPages += anime.id
+        return anime
+    }
+
+    // The store's own flow. Reading asks the source nothing: only a refresh and a change of the list do.
+    private fun <T> read(stored: () -> Flow<T>): Flow<T> =
         flow {
             follow()
-            scope.launch { guarded { refreshStale() } }
             emitAll(stored().retriedOverStore())
         }.distinctUntilChanged()
 
@@ -175,7 +186,15 @@ class AiringEngine(
                     try {
                         coroutineScope {
                             launch { list.observeEntries().collect { entries -> guarded { settle(tracking(entries)) } } }
-                            launch { list.observeSyncedAt().filterNotNull().collect { guarded { refreshStale() } } }
+                            // A sync that ends while the list is followed; the time of an earlier one says nothing new.
+                            launch {
+                                list
+                                    .observeSyncedAt()
+                                    .distinctUntilChanged()
+                                    .drop(1)
+                                    .filterNotNull()
+                                    .collect { guarded { refreshStale() } }
+                            }
                         }
                     } catch (_: DataException) {
                     }
@@ -204,7 +223,8 @@ class AiringEngine(
 
     // The store holds the tracked titles and A13's finales alone (S9); one new to the set is asked for at once (A11).
     private suspend fun reconcile(tracking: Tracking): Map<AnimeId, StoredAiring> {
-        arrived += tracking.tracked.keys - settled?.tracked?.keys.orEmpty()
+        // The list as first read enters nothing: what is not stored of it is stale, which a refresh asks for.
+        settled?.let { arrived += tracking.tracked.keys - it.tracked.keys }
         arrived.retainAll(tracking.tracked.keys)
         settled = tracking
         owed = true
@@ -327,12 +347,14 @@ class AiringEngine(
             for ((id, airing) in fetched) {
                 if (id in tracked || id !in forPages) continue
                 held = if (airing == null) held - id else held + (id to airing.over(held[id]))
+                pagesAsked[id] = began
             }
             if (stored.isNotEmpty()) {
                 try {
                     val before = local.read()
                     local.write(stored.mapValues { (id, airing) -> StoredAiring(airing?.over(before[id]?.schedule), began) })
                     held -= stored.keys
+                    pagesAsked -= stored.keys
                 } catch (_: StoreFailure) {
                     for (id in stored.keys) errors[id] = DataError.StorageError
                 }

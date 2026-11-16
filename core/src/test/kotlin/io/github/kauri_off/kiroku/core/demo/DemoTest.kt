@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -15,7 +16,9 @@ import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -34,6 +37,7 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toKotlinDuration
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DemoTest {
@@ -98,7 +102,7 @@ class DemoTest {
             val demo = Demo.startingAt(device, backgroundScope)
             val id = FixtureAnime.exactToWatch.id
             val schedules = demo.airing.observeSchedules().first()
-            assertEquals(demo.fixtures.schedules, schedules)
+            assertEquals(demo.fixtures.schedules.filterKeys { id -> demo.fixtures.entryFor(id)?.tracked == true }, schedules)
             val expected =
                 (
                     Fixtures.reference.airing
@@ -127,7 +131,7 @@ class DemoTest {
             assertEquals(Outcome.Failure(DataError.NoConnection), demo.anime.refresh(unvisited))
             assertNull(demo.anime.observeDetails(unvisited).first())
             assertEquals(Outcome.Failure(DataError.NoConnection), demo.search.search("a", 0, false))
-            assertEquals(Outcome.Failure(DataError.NoConnection), demo.airing.refresh(setOf(visited)))
+            assertEquals(Outcome.Failure(DataError.NoConnection), demo.airing.refresh())
         }
 
     @Test
@@ -467,5 +471,73 @@ class DemoTest {
             demo.server.offline.value = false
             demo.anime.refresh(id)
             assertEquals(clock.instant, demo.anime.observeRefreshedAt(id).first())
+        }
+
+    @Test
+    fun `A2 the demo's aired count rises as its clock passes an air time, with no request to its server`() =
+        runTest {
+            val scheduler = testScheduler
+            val clock =
+                object : Clock() {
+                    override fun getZone() = FixtureTime.zone
+
+                    override fun withZone(zone: ZoneId) = this
+
+                    override fun instant(): Instant = FixtureTime.reference.plusMillis(scheduler.currentTime)
+                }
+            val demo = Demo(Fixtures.reference, backgroundScope, clock = clock, clockRuns = true)
+            val id = FixtureAnime.exactToWatch.id
+            val before = Fixtures.reference.airing.getValue(id)
+            val count = (before.aired as AiredCount.Exact).value
+            val airsIn = Duration.between(FixtureTime.reference, before.nextEpisode!!.airsAt).toMillis()
+            val seen = mutableListOf<Pair<Long, AiredCount?>>()
+            backgroundScope.launch {
+                demo.airing
+                    .observeAiring()
+                    .map { it[id]?.aired }
+                    .distinctUntilChanged()
+                    .collect { seen += scheduler.currentTime to it }
+            }
+            runCurrent()
+            assertEquals(Fixtures.reference.airing.filterKeys { demo.fixtures.entryFor(it) != null }, demo.airing.observeAiring().first())
+
+            advanceTimeBy(Duration.ofMillis(airsIn - 1).toKotlinDuration())
+            runCurrent()
+            assertEquals(listOf(0L to AiredCount.Exact(count)), seen)
+            advanceTimeBy(Duration.ofMillis(1).toKotlinDuration())
+            runCurrent()
+
+            assertEquals(listOf(0L to AiredCount.Exact(count), airsIn to AiredCount.Exact(count + 1)), seen)
+            assertEquals(emptyList<Set<AnimeId>>(), demo.airingSource.requests)
+            assertEquals(0, demo.server.listDownloads)
+            assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `the demo's episode times are the fixtures', asked for behind its server's failures and kept in memory`() =
+        runTest {
+            val demo = demo()
+            val tracked = demo.fixtures.schedules.filterKeys { id -> demo.fixtures.entryFor(id)?.tracked == true }
+            val page = FixtureAnime.notOnListAiring
+            demo.server.failingLoads.value = true
+            assertEquals(Outcome.Failure(DataError.ServerError), demo.airing.refresh())
+            assertEquals(Outcome.Failure(DataError.ServerError), demo.airing.refresh(page))
+            assertEquals(tracked, demo.airing.observeSchedules().first())
+
+            demo.server.failingLoads.value = false
+            assertEquals(Outcome.Success(Unit), demo.airing.refresh())
+            assertEquals(Outcome.Success(Unit), demo.airing.refresh(page))
+
+            assertEquals(
+                listOf(tracked.keys, setOf(page.id), tracked.keys, setOf(page.id)),
+                demo.airingSource.requests.map {
+                    it.intersect(
+                        tracked.keys + page.id,
+                    )
+                },
+            )
+            assertEquals(tracked, demo.airing.observeSchedules().first())
+            assertEquals(Fixtures.reference.airing[page.id], demo.airing.observePageAiring(page).first()[page.id])
+            assertNull(demo.airing.observeAiring().first()[page.id])
         }
 }

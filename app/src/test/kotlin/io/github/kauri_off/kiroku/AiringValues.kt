@@ -10,8 +10,6 @@ import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
 
 // Only :core builds an airing value, so a test of a screen takes the calculator's and writes out what it expects as plain values.
 
@@ -22,13 +20,13 @@ private fun premiere(phase: AiringPhase?): Premiere = (phase as AiringPhase.NotY
 // The premiere of a title whose first episode is scheduled at [instant].
 fun premiereAt(instant: Instant): Premiere {
     val schedule = AiringSchedule(listOf(ScheduledEpisode(1, instant)), null)
-    return premiere(titleAiring(unaired, null, schedule, instant.minusSeconds(1), ZoneOffset.UTC).phase)
+    return premiere(titleAiring(unaired, null, schedule, instant.minusSeconds(1)).phase)
 }
 
 // The premiere of a title MAL dates [date], before that date.
 fun premiereOn(date: PartialDate): Premiere {
     val airing: Airing? = null
-    return premiere(titleAiring(unaired.copy(startDate = date), null, airing, LocalDate.EPOCH).phase)
+    return premiere(titleAiring(unaired.copy(startDate = date), null, airing, Instant.EPOCH).phase)
 }
 
 // Aired: the count, "to watch" and the next episode. Not yet aired: the premiere.

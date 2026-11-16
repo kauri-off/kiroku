@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import kotlinx.coroutines.flow.Flow
@@ -15,11 +16,17 @@ internal fun liveAiring(parts: LiveParts): AiringRepository =
     object : AiringRepository {
         private val unavailable = Outcome.Failure(DataError.ServerError)
 
-        override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flowOf(emptyMap())
-
         override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flowOf(emptyMap())
 
-        override suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit> = unavailable
+        override fun observePageAiring(page: Anime): Flow<Map<AnimeId, Airing>> = flowOf(emptyMap())
 
-        override suspend fun fetch(id: AnimeId): Outcome<AiringSchedule?> = unavailable
+        override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flowOf(emptyMap())
+
+        override suspend fun refreshStale(): Outcome<Unit> = unavailable
+
+        override suspend fun refresh(): Outcome<Unit> = unavailable
+
+        override suspend fun refreshStale(page: Anime): Outcome<Unit> = unavailable
+
+        override suspend fun refresh(page: Anime): Outcome<Unit> = unavailable
     }
