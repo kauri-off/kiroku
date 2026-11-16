@@ -292,31 +292,34 @@ class MalAnimeRepositoryTest {
             assertNull(s.titles.observeAnime(id).first())
         }
 
-    // S9: a sign-out's clear ends the list a page was asked in, so the answer that comes after it is not stored.
+    // S9: an answer that comes after a sign-out's clear is not stored, also when the store is another user's by then.
     @Test
-    fun `a page asked before a sign-out is not stored after the sign-out cleared the store`() =
-        runTest {
-            val s = subject()
-            val list = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
-            list.clear(SignInId("a"))
-            val recorded = RecordedAnswers.named("title_airing")
-            val arrived = CountDownLatch(1)
-            val cleared = CountDownLatch(1)
-            network.answers {
-                arrived.countDown()
-                cleared.await(5, TimeUnit.SECONDS)
-                answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+    fun `a page asked before a sign-out is not stored after the sign-out cleared the store`() {
+        for (next in listOf(listOf(null), listOf(null, SignInId("b")))) {
+            runTest {
+                val s = subject()
+                val list = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
+                list.clear(SignInId("a"))
+                val recorded = RecordedAnswers.named("title_airing")
+                val arrived = CountDownLatch(1)
+                val cleared = CountDownLatch(1)
+                network.answers {
+                    arrived.countDown()
+                    cleared.await(5, TimeUnit.SECONDS)
+                    answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+                }
+
+                val refresh = async { s.titles.refresh(id) }
+                runCurrent()
+                assertTrue(arrived.await(5, TimeUnit.SECONDS))
+                next.forEach { list.clear(it) }
+                cleared.countDown()
+
+                assertEquals(Outcome.Failure(DataError.ListEnded), refresh.await())
+                assertEquals(Triple(null, null, null), s.stored())
+                assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+                assertEquals(airing.anime, s.titles.observeAnime(id).first())
             }
-
-            val refresh = async { s.titles.refresh(id) }
-            runCurrent()
-            assertTrue(arrived.await(5, TimeUnit.SECONDS))
-            list.clear(null)
-            cleared.countDown()
-
-            assertEquals(Outcome.Failure(DataError.ListEnded), refresh.await())
-            assertEquals(Triple(null, null, null), s.stored())
-            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
-            assertEquals(airing.anime, s.titles.observeAnime(id).first())
         }
+    }
 }

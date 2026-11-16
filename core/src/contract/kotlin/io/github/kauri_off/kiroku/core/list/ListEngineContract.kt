@@ -86,6 +86,7 @@ abstract class ListEngineContract {
         val store: LocalList,
         scope: CoroutineScope,
         session: Session?,
+        private val checks: Int = ListEngine.CHECKS_PER_SYNC,
     ) {
         val session = MutableStateFlow(session)
 
@@ -107,7 +108,7 @@ abstract class ListEngineContract {
         val unexpected = mutableListOf<Throwable>()
         val list = engine(scope)
 
-        fun engine(scope: CoroutineScope): ListRepository = ListEngine(mal, local, sessions, clock, scope) { unexpected += it }
+        fun engine(scope: CoroutineScope): ListRepository = ListEngine(mal, local, sessions, clock, scope, checks) { unexpected += it }
 
         suspend fun syncedAt() = list.observeSyncedAt().first()
 
@@ -142,6 +143,10 @@ abstract class ListEngineContract {
         @Volatile
         var entryReads = 0
 
+        // The reads of these titles alone fail so.
+        @Volatile
+        var failingEntries: Map<AnimeId, DataError> = emptyMap()
+
         @Volatile
         var answering: (Anime) -> Anime = { it }
 
@@ -162,6 +167,7 @@ abstract class ListEngineContract {
             entryReads++
             readsUnder += session()
             fault()
+            failingEntries[id]?.let { return Outcome.Failure(it) }
             return inner.fetchEntry(id).answered().also { fault() }
         }
 
@@ -358,6 +364,7 @@ abstract class ListEngineContract {
         slowStore: Boolean = false,
         serverClock: Clock = fixtures.clock,
         session: Session? = a,
+        checks: Int = ListEngine.CHECKS_PER_SYNC,
     ): Subject {
         val local = local(this)
         local.clear(a.signIn)
@@ -367,7 +374,7 @@ abstract class ListEngineContract {
             seededAt,
         )
         val store = if (slowStore) SlowLocalList(local) else local
-        return Subject(DemoServer(fixtures.entries, serverClock, latency), store, scope, session).also { runCurrent() }
+        return Subject(DemoServer(fixtures.entries, serverClock, latency), store, scope, session, checks).also { runCurrent() }
     }
 
     // The process dies: its scope ends, and nothing it does while ending reaches the store.
@@ -1196,6 +1203,22 @@ abstract class ListEngineContract {
             assertEquals(emptyList<WriteFailure>(), failures(s).also { settle() })
         }
 
+    // W2: a held failure whose change the download it owes shows MAL made would only offer a Retry that does nothing.
+    @Test
+    fun `a failure nothing collected is dropped once a download shows MAL holds what its Retry would set`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            s.mal.unreadAnswers = 1
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            assertEquals(13, s.shownWatched(anime))
+
+            val heard = failures(s)
+            settle()
+            assertEquals(emptyList<WriteFailure>(), heard)
+        }
+
     // W2: a collector cut off after a failure was handed to it, before it could act on it, as a shell that is closing.
     @Test
     fun `a failure handed to a collector cut off before it heard it waits for the next`() =
@@ -1433,24 +1456,112 @@ abstract class ListEngineContract {
             assertEquals(1, s.mal.entryReads)
         }
 
-    // A download is stored whole or not at all: one title MAL could not be asked about keeps every other title as it was.
+    // A title whose check failed stays as stored and holds back nothing; the next sync asks about it again.
     @Test
-    fun `a download whose missing title MAL cannot be asked about fails and stores nothing`() =
+    fun `a missing title MAL could not be asked about stays as stored, and the rest of the download is stored`() =
         runTest {
             val s = subject()
-            val removed = FixtureAnime.droppedMovie
+            val unanswered = FixtureAnime.droppedMovie
+            val removed = FixtureAnime.plannedFinished
             val raised = FixtureAnime.exactToWatch
+            s.editOnWebsite(unanswered, null)
             s.editOnWebsite(removed, null)
             s.editOnWebsite(raised, 15)
+            s.mal.failingEntries = mapOf(unanswered.id to DataError.ServerError)
             val before = s.syncedAt()
-            s.server.beforePage = { s.server.offline.value = true }
 
-            assertEquals(Outcome.Failure(DataError.NoConnection), s.list.sync())
+            assertEquals(Outcome.Success(Unit), s.list.sync())
 
-            assertEquals(fixtures.entryFor(removed.id), s.shown(removed.id))
-            assertEquals(12, s.shownWatched(raised))
-            assertEquals(before, s.syncedAt())
-            assertEquals(emptyList<DatabaseLike.Download>(), s.local.downloads)
+            assertEquals(fixtures.entryFor(unanswered.id), s.shown(unanswered.id))
+            assertNull(s.shown(removed.id))
+            assertEquals(15, s.shownWatched(raised))
+            assertTrue(checkNotNull(s.syncedAt()) > checkNotNull(before))
+            assertEquals(2, s.mal.entryReads)
+
+            s.mal.failingEntries = emptyMap()
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+
+            assertNull(s.shown(unanswered.id))
+            assertEquals(
+                s.server.entries().toSet(),
+                s.list
+                    .observeEntries()
+                    .first()
+                    .toSet(),
+            )
+            assertEquals(3, s.mal.entryReads)
+        }
+
+    // 2.3: a refusal or a lost connection ends the checks of the sync, and the titles not asked about wait for the next.
+    @Test
+    fun `MAL refusing a check ends the checks of that sync, and the next sync asks again`() =
+        runTest {
+            for (error in listOf(DataError.Refused, DataError.NoConnection)) {
+                val s = subject()
+                val removed =
+                    fixtures.entries
+                        .sortedBy { it.anime.id.value }
+                        .take(2)
+                        .map { it.anime }
+                removed.forEach { s.editOnWebsite(it, null) }
+                s.mal.failingEntries = mapOf(removed[0].id to error)
+
+                assertEquals(Outcome.Success(Unit), s.list.sync())
+
+                assertEquals(1, s.mal.entryReads)
+                removed.forEach { assertEquals(fixtures.entryFor(it.id), s.shown(it.id)) }
+
+                s.mal.failingEntries = emptyMap()
+                assertEquals(Outcome.Success(Unit), s.list.sync())
+
+                removed.forEach { assertNull(s.shown(it.id)) }
+                assertEquals(3, s.mal.entryReads)
+            }
+        }
+
+    // A user who removed many titles on the website: each sync asks about a few, and none is asked twice.
+    @Test
+    fun `many titles removed on the website leave the list over a few syncs, a capped number each`() =
+        runTest {
+            val s = subject(checks = 3)
+            val removed = fixtures.entries.take(7).map { it.anime }
+            removed.forEach { s.editOnWebsite(it, null) }
+
+            val left =
+                (1..3).map {
+                    assertEquals(Outcome.Success(Unit), s.list.sync())
+                    removed.count { s.shown(it.id) != null }
+                }
+
+            assertEquals(listOf(4, 1, 0), left)
+            assertEquals(7, s.mal.entryReads)
+            assertEquals(
+                s.server.entries().toSet(),
+                s.list
+                    .observeEntries()
+                    .first()
+                    .toSet(),
+            )
+        }
+
+    // Titles whose check keeps failing are asked after the others, so they never use up every sync's checks.
+    @Test
+    fun `titles whose check keeps failing hold back no other title`() =
+        runTest {
+            val s = subject(checks = 2)
+            val removed =
+                fixtures.entries
+                    .sortedBy { it.anime.id.value }
+                    .take(4)
+                    .map { it.anime }
+            removed.forEach { s.editOnWebsite(it, null) }
+            s.mal.failingEntries = removed.take(2).associate { it.id to DataError.ServerError }
+
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+
+            removed.take(2).forEach { assertEquals(fixtures.entryFor(it.id), s.shown(it.id)) }
+            removed.drop(2).forEach { assertNull(s.shown(it.id)) }
         }
 
     @Test

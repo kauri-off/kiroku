@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
@@ -63,6 +64,7 @@ class SandboxListEngineTest : ListEngineContract() {
                 listOf(server.listPagesRead, server.writesAnswered, server.entryReadsAnswered),
                 listOf(pages, writes, entries),
             )
+            assertTrue("every download asked for a page", server.listDownloads <= pages)
         }
     }
 }

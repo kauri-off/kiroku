@@ -18,6 +18,7 @@ import androidx.test.core.app.ActivityScenario
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -30,6 +31,7 @@ import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onCompletion
@@ -165,17 +167,18 @@ class ShellMessagesTest {
         compose.onNodeWithText("Retry").assertExists()
     }
 
+    private fun shellIn(activity: ActivityScenario<ComponentActivity>): ShellViewModel {
+        lateinit var shell: ShellViewModel
+        activity.onActivity {
+            shell = ViewModelProvider(it, viewModelFactory { initializer { ShellViewModel(graph.list) } })[ShellViewModel::class.java]
+        }
+        runMainLooper()
+        return shell
+    }
+
     // W2: the shell's view model lives as long as the activity, so a failure made while there is none waits for the next.
     @Test
     fun `a write failure made while the activity is gone is shown once by the next one`() {
-        fun shellIn(activity: ActivityScenario<ComponentActivity>): ShellViewModel {
-            lateinit var shell: ShellViewModel
-            activity.onActivity {
-                shell = ViewModelProvider(it, viewModelFactory { initializer { ShellViewModel(graph.list) } })[ShellViewModel::class.java]
-            }
-            runMainLooper()
-            return shell
-        }
         ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it) }
         graph.demo.server.failingWrites.value = true
         runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
@@ -184,6 +187,31 @@ class ShellMessagesTest {
         val shown = ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it).messages.current.value }
         assertEquals(ShellMessage.Text.CouldNotSave, shown?.message?.text)
         assertTrue(shown?.message?.action is ShellMessage.Action.Retry)
+        assertNull(ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it).messages.current.value })
+    }
+
+    // W2: once a download shows MAL holds what the failed save's Retry would set, there is nothing left to say.
+    @Test
+    fun `a write failure made while the activity is gone is not shown once a download shows MAL holds its values`() {
+        ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it) }
+        graph.demo.server.failingWrites.value = true
+        val before = checkNotNull(watched())
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        runMainLooper()
+        graph.demo.server.failingWrites.value = false
+        graph.demo.server.editOnWebsite(
+            anime,
+            runBlocking { graph.list.observeEntry(anime.id).first()!! }.values.copy(
+                watchedEpisodes =
+                    before + 1,
+            ),
+        )
+        val sync = scope.async { graph.list.sync() }
+        runMainLooper()
+        assertTrue(sync.isCompleted)
+        assertEquals(Outcome.Success(Unit), runBlocking { sync.await() })
+        assertEquals(before + 1, watched())
+
         assertNull(ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it).messages.current.value })
     }
 
