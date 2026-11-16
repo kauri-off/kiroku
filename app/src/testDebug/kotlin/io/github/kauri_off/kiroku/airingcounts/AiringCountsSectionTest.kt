@@ -1,16 +1,22 @@
 package io.github.kauri_off.kiroku.airingcounts
 
+import android.app.Application
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
-import io.github.kauri_off.kiroku.source.DataSource
-import io.github.kauri_off.kiroku.source.StartsOn
-import io.github.kauri_off.kiroku.wiring.DemoGraph
-import io.github.kauri_off.kiroku.wiring.appGraph
+import io.github.kauri_off.kiroku.wiring.AppGraphOwner
+import io.github.kauri_off.kiroku.wiring.MovingClock
+import io.github.kauri_off.kiroku.wiring.TestGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -18,18 +24,31 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.time.Duration
 
-// The section in the open menu, on the demo: what is stored, counted, with nothing asked of a source.
+// The demo, its list and airing data stored an hour ago: stale, so that a refresh or a sync would ask its sources.
+class StaleDemoApplication :
+    Application(),
+    AppGraphOwner {
+    private val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
+
+    val demo = Demo(Fixtures.reference, CoroutineScope(SupervisorJob() + Dispatchers.Main), clock = clock)
+
+    override val graph = TestGraph(demo)
+
+    init {
+        clock.instant += Duration.ofHours(1)
+    }
+}
+
+// The section in the open menu: what is stored, counted, with nothing asked of a source.
 @RunWith(RobolectricTestRunner::class)
-@Config(qualifiers = "en-w411dp-h891dp")
+@Config(qualifiers = "en-w411dp-h891dp", application = StaleDemoApplication::class)
 class AiringCountsSectionTest {
-    @get:Rule(order = 0)
-    val source = StartsOn(DataSource.Demo)
-
-    @get:Rule(order = 1)
+    @get:Rule
     val compose = createAndroidComposeRule<DebugMenuActivity>()
 
-    private val demo get() = (RuntimeEnvironment.getApplication().appGraph as DemoGraph).demo
+    private val demo get() = (RuntimeEnvironment.getApplication() as StaleDemoApplication).demo
 
     private fun shown(text: String) {
         compose.waitUntil(TIMEOUT) { compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }
