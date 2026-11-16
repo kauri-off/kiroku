@@ -19,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -41,6 +42,7 @@ import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
+import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -105,6 +107,7 @@ internal fun PosterSection() {
     Column(Modifier.padding(horizontal = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.l)) {
         for (url in listOf(FixtureAnime.exactToWatch.posterUrl, null)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.l)) {
+                Poster(url, PosterSize.Hero)
                 Poster(url, PosterSize.Header)
                 Poster(url, PosterSize.Strip)
                 Poster(url, PosterSize.Row)
@@ -247,20 +250,28 @@ internal fun StatBarSection() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun StatNumberSection() {
-    FlowRow(
-        Modifier.padding(horizontal = Spacing.l),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(Spacing.l),
-    ) {
-        StatNumber(integer(12_345), stringResource(R.string.gallery_completed))
-        StatNumber(decimal(1_234.5), stringResource(R.string.gallery_days_watched))
-        StatNumber(decimal(7.45), stringResource(R.string.gallery_mean_score))
-        StatNumber(decimal(8.73), stringResource(R.string.gallery_mal_score))
-        StatNumber(
-            stringResource(R.string.gallery_no_value),
-            stringResource(R.string.gallery_mal_score),
-            spokenValue = stringResource(R.string.gallery_no_score),
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.l)) {
+        FlowRow(
+            Modifier.padding(horizontal = Spacing.l),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
+        ) {
+            StatNumber(integer(12_345), stringResource(R.string.gallery_completed))
+            StatNumber(decimal(1_234.5), stringResource(R.string.gallery_days_watched))
+            StatNumber(decimal(7.45), stringResource(R.string.gallery_mean_score))
+            StatNumber(decimal(8.73), stringResource(R.string.gallery_mal_score))
+            StatNumber(
+                stringResource(R.string.gallery_no_value),
+                stringResource(R.string.gallery_mal_score),
+                spokenValue = stringResource(R.string.gallery_no_score),
+            )
+        }
+        val centre = Alignment.CenterHorizontally
+        StatNumbers(Modifier.padding(horizontal = Spacing.l), alignment = centre) {
+            StatNumber(decimal(8.73), stringResource(R.string.gallery_mal_score), horizontalAlignment = centre)
+            StatNumber(integer(12_345), stringResource(R.string.gallery_completed), horizontalAlignment = centre)
+            StatNumber(decimal(1_234.5), stringResource(R.string.gallery_days_watched), horizontalAlignment = centre)
+        }
     }
 }
 

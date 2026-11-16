@@ -103,10 +103,10 @@ class TitleScreenTest {
         show(TitleFixtures.of(FixtureAnime.exactToWatch))
         compose.onNodeWithText("TV\u00A0· 2025").assertIsDisplayed()
         compose.onNodeWithText("episodes", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Episodes watched").assertIsDisplayed()
         show(TitleFixtures.of(FixtureAnime.notOnListAiring))
         compose.onNodeWithText("episodes", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Episodes watched").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Episodes watched").assertDoesNotExist()
     }
 
     // Decision for M2-24: a score not known yet is left out; "—" is said only once the title's page was read.
@@ -116,7 +116,8 @@ class TitleScreenTest {
         compose.onNodeWithText("TV\u00A0· 2024").assertIsDisplayed()
         compose.onNodeWithText("MAL score").assertDoesNotExist()
         compose.onNodeWithContentDescription("No score").assertDoesNotExist()
-        compose.onNodeWithText("Ranked", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Rank").assertDoesNotExist()
+        compose.onNodeWithText("Members").assertDoesNotExist()
         show(TitleFixtures.of(FixtureAnime.premiereTimeLater))
         compose.onNodeWithContentDescription("No score").assertIsDisplayed()
     }
@@ -201,16 +202,16 @@ class TitleScreenTest {
         sends(TitleEvent.OpenRecommendations) { compose.onNodeWithText("Recommendations").performClick() }
     }
 
-    // The page's own title is marked in its place in the order and opens nothing; the others open their pages.
+    // The page's own title is marked in the order and opens nothing; the others open their pages. A place is said only
+    // once the whole chain is known.
     @Test
     fun theWatchOrderMarksThePagesOwnTitleAndShowsTheWalkWhileItRuns() {
         show(TitleFixtures.chainLoading)
-        val spoken = "This title, 2\u00A0of\u00A03\u00A0titles"
-        compose
-            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-            .performScrollToNode(hasContentDescription(spoken))
-        compose.onNode(hasContentDescription(spoken) and hasClickAction()).assertDoesNotExist()
-        compose.onNodeWithContentDescription(spoken).assertIsDisplayed()
+        scrollTo("This title")
+        compose.onNode(hasText("This title") and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithText("This title").assertIsDisplayed()
+        compose.onNodeWithContentDescription("This title", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("1\u00A0· TV", substring = true).assertDoesNotExist()
         compose
             .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .performScrollToNode(hasContentDescription("Loading the watch order"))
@@ -219,9 +220,13 @@ class TitleScreenTest {
         compose.onNodeWithContentDescription("Loading the watch order").assertDoesNotExist()
         val film = TitleFixtures.filmBetweenSeasons
         show(TitleFixtures.chainOfFour)
+        val spoken = "This title, 2\u00A0of\u00A04\u00A0titles"
         compose
             .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-            .performScrollToNode(hasContentDescription("This title, 2\u00A0of\u00A04\u00A0titles"))
+            .performScrollToNode(hasContentDescription(spoken))
+        compose.onNode(hasContentDescription(spoken) and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithText("2\u00A0· TV\u00A0· 2025").assertIsDisplayed()
+        compose.onNode(hasContentDescription("1\u00A0of\u00A04\u00A0titles", substring = true) and hasClickAction()).assertIsDisplayed()
         scrollTo(film.titles.romaji)
         sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(hasText(film.titles.romaji) and hasClickAction()).performClick() }
     }
@@ -271,7 +276,7 @@ class TitleScreenTest {
     @Test
     fun detailsThatCouldNotLoadSayWhyUnderTheSummaryAndOfferRetry() {
         show(TitleFixtures.of(FixtureAnime.exactToWatch, details = null).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)))
-        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Episodes watched").assertIsDisplayed()
         compose.onNodeWithText("No connection").assertIsDisplayed()
         compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
         sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }

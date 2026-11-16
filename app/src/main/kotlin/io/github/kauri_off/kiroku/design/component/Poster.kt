@@ -31,6 +31,7 @@ enum class PosterSize(
     Row(Sizes.posterRow, Sizes.posterRowHeight),
     Strip(Sizes.posterStrip, Sizes.posterStrip * 3 / 2),
     Header(Sizes.posterHeader, Sizes.posterHeader * 3 / 2),
+    Hero(Sizes.posterHero, Sizes.posterHero * 3 / 2),
 }
 
 // A strip poster grows with the font scale, as its card does; a row poster shrinks with it, to leave its text room.
@@ -40,7 +41,7 @@ internal fun PosterSize.scale(): Float {
     return when (this) {
         PosterSize.Strip -> fontScale
         PosterSize.Row -> (1f / fontScale).coerceAtLeast(Sizes.posterRowNarrowest / width)
-        PosterSize.Header -> 1f
+        PosterSize.Header, PosterSize.Hero -> 1f
     }
 }
 
