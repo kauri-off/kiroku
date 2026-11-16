@@ -176,19 +176,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-05 Database: the airing store.**
 
-- [ ] **M3-06 AniList client and mappers.** M3-03's AniList port, through the source's one HTTP client, with
-  AniList's host a parameter. A set of ids costs as few requests as M3-01's answers allow, spaced below the limit
-  AniList reports (section 2.2). After a refusal or a failure the client waits before it asks again, and MAL's
-  back-off does not hear of it. A request carries the MAL ids and the `User-Agent`, and no client id, token or
-  cookie (section 2.1). A title AniList does not know and a title without a schedule are answers, not failures. An
-  episode numbered 0 or below is dropped. A title whose answer cannot be read counts as not fetched (A10) and is
-  reported.
-  **Needs:** M3-01, M3-02, M3-03.
-  **Check:** `./gradlew :data:testDebugUnitTest`: mapper tests on M3-01's answers only, one per case; each recorded
-  pair of AniList's answer and MAL's page gives, through M3-02's calculator at the time of recording, the count
-  and the reason its case names; against a local server: 300 ids are asked in the fewest requests, none sooner
-  than the limit allows; a page that fails leaves its titles not fetched and the others fetched; the request has
-  no header beyond the ones named; a refusal by AniList leaves MAL's back-off at zero.
+- [x] **M3-06 AniList client and mappers.**
 
 - [ ] **M3-07 Sandbox: AniList on the device.** The sandbox answers the requests of M3-01 too, so that no request
   leaves the device. Its schedules follow the device's date, each on its title's own weekly slot, and agree with
