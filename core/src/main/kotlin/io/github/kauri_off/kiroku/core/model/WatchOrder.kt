@@ -10,6 +10,8 @@ data class SequelChain(
     val order: List<Anime>,
     // The order in which the walk reads their pages: the title, then the nearest titles, a sequel before a prequel.
     val walk: List<AnimeId>,
+    // Every title's page is read and none names a sequel or a prequel outside the chain, so each place is final.
+    val whole: Boolean,
 ) {
     // A title with no sequel and no prequel has no chain.
     val shown: Boolean get() = order.size > 1
@@ -23,7 +25,9 @@ fun sequelChain(
     val walk = chainWalk(title.id, pages)
     val named = mutableMapOf(title.id to title)
     for (id in walk) pages[id].orEmpty().forEach { named.putIfAbsent(it.anime.id, it.anime) }
-    return SequelChain(watchOrder(walk.associateWith(named::getValue), pages, walk), walk)
+    val members = walk.toSet()
+    val whole = walk.all { id -> pages[id]?.let { related -> nextInWalk(related).all { it.id in members } } == true }
+    return SequelChain(watchOrder(walk.associateWith(named::getValue), pages, walk), walk, whole)
 }
 
 // The titles of the chain in the order the walk reads their pages. Only sequels and prequels are followed. The walk

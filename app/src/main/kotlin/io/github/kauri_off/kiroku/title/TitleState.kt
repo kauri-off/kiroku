@@ -123,8 +123,14 @@ data class TitlePage private constructor(
                 airing = phase,
                 details = details,
                 chain =
-                    chain?.order.orEmpty().map {
-                        ChainCard(it, it.titles.preferred(language), listStatuses[it.id], current = it.id == anime.id)
+                    chain?.order.orEmpty().mapIndexed { index, it ->
+                        ChainCard(
+                            it,
+                            it.titles.preferred(language),
+                            listStatuses[it.id],
+                            current = it.id == anime.id,
+                            place = (index + 1).takeIf { chain?.whole == true },
+                        )
                     },
                 related = strip.map(::card),
                 moreRelated = related.size > strip.size + related.count { it.anime.id in inChain },
@@ -173,6 +179,8 @@ data class ChainCard(
     // The user's status for that title, when it is on their list.
     val status: EntryStatus?,
     val current: Boolean,
+    // From 1, only once the whole chain is known, so a place shown is never taken back.
+    val place: Int?,
 )
 
 data class RelatedCard(
