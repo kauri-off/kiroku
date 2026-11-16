@@ -253,6 +253,22 @@ fun backGestureProblems(
         if (found) "$name:${index + 1}: the back gesture handled by the app: ${line.trim()}" else null
     }
 
+// A1: an airing value is :core's result. App code reads one; it makes none, by a constructor or by a copy.
+private val airingValue =
+    Regex(
+        """\b(Airing|TitleAiring)\s*\(|\b(AiredCount|AiringPhase|UpNext|Premiere)\.\w+\s*\(|""" +
+            """^import\s+[\w.]+\.(AiredCount|AiringPhase|UpNext|Premiere)\.[\w*]|""" +
+            """(?<!\bval |\bvar )\b(aired|nextEpisode|latestAiredAt|inexact|changesAt)\s*=(?!=)""",
+    )
+
+fun airingValueProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (airingValue.containsMatchIn(line)) "$name:${index + 1}: an airing value made outside :core: ${line.trim()}" else null
+    }
+
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =
     projectDir

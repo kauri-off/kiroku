@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.core.fixtures
 
 import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -23,6 +24,44 @@ class FixtureAiringConsistencyTest(
     }
 
     private val now = set.now
+
+    // What the fixture screens are drawn with: the aired count and the number of the next episode.
+    @Test
+    fun `the calculator gives every fixture title its case's count, at every shift`() {
+        fun exact(
+            aired: Int,
+            next: Int?,
+        ) = AiredCount.Exact(aired) to next
+
+        fun estimated(aired: Int) = AiredCount.Estimated(aired) to null
+        val expected =
+            mapOf(
+                FixtureAnime.exactToWatch to exact(14, next = 15),
+                FixtureAnime.exactCaughtUp to exact(8, next = 9),
+                FixtureAnime.exactCaughtUpLater to exact(3, next = 4),
+                FixtureAnime.exactOnBreak to exact(6, next = null),
+                FixtureAnime.unknownTotal to exact(1121, next = 1122),
+                FixtureAnime.longTitle to exact(3, next = 4),
+                FixtureAnime.premiereTimeSoon to exact(0, next = 1),
+                FixtureAnime.premiereTimeLater to exact(0, next = 1),
+                FixtureAnime.plannedAiring to exact(5, next = 6),
+                FixtureAnime.onHoldAiring to exact(20, next = 21),
+                FixtureAnime.notOnListAiring to exact(7, next = 8),
+                FixtureAnime.estimatedToWatch to estimated(10),
+                FixtureAnime.estimatedCaughtUp to estimated(5),
+                FixtureAnime.droppedEstimated to estimated(9),
+                FixtureAnime.airedUnknown to (AiredCount.Unknown to null),
+                FixtureAnime.premiereDate to estimated(0),
+                FixtureAnime.premiereMonth to estimated(0),
+                FixtureAnime.premiereYear to estimated(0),
+                FixtureAnime.premiereUnannounced to estimated(0),
+            )
+        assertEquals(
+            expected.mapKeys { it.key.id },
+            set.airing.mapValues { it.value.aired to it.value.nextEpisode?.number },
+        )
+        set.airing.forEach { (id, airing) -> assertEquals(airing, airingAt(set.anime(id), set.schedules[id], now)) }
+    }
 
     @Test
     fun `exact counts agree with the stored schedule at the fixture time`() {
@@ -55,7 +94,7 @@ class FixtureAiringConsistencyTest(
 
     @Test
     fun `estimated counts follow the weekly slot from the start date`() {
-        val estimated = set.airing.filterValues { it.aired is AiredCount.Estimated }
+        val estimated = set.airing.filterValues { ((it.aired as? AiredCount.Estimated)?.value ?: 0) > 0 }
         assertTrue(estimated.isNotEmpty())
         estimated.forEach { (id, airing) ->
             val anime = set.anime(id)

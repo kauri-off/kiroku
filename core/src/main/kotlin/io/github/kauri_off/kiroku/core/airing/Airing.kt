@@ -10,6 +10,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Year
 import java.time.YearMonth
+import java.time.ZoneId
 
 data class ScheduledEpisode(
     val number: Int,
@@ -45,14 +46,35 @@ sealed interface AiredCount {
     ) : Known
 }
 
+// Why a count is not exact.
+enum class Inexact {
+    // Nothing is stored of the title's episodes.
+    NoSchedule,
+
+    // A4: the stored schedule numbers its episodes differently from MAL and is not used.
+    NumberedDifferently,
+
+    // A5: the schedule's total and MAL's differ by more than the one episode a recap explains.
+    TotalsDisagree,
+
+    // A5: the title still airs by MAL, and nothing has been scheduled for longer than a break lasts.
+    ScheduleStopped,
+}
+
+// What has aired of a title at an instant. Only [airingAt] gives one from stored data.
 data class Airing(
     val aired: AiredCount,
     val total: Int?,
     val nextEpisode: ScheduledEpisode?,
     val latestAiredAt: Instant?,
+    // Null exactly when the count is exact.
+    val inexact: Inexact? = if (aired is AiredCount.Exact) null else Inexact.NoSchedule,
+    // The same stored data gives this result until then; null when time alone changes nothing.
+    val changesAt: Instant? = null,
 ) {
     init {
         require(total == null || total > 0)
+        require((aired is AiredCount.Exact) == (inexact == null))
         if (aired is AiredCount.Known) {
             require(aired.value >= 0)
             require(total == null || aired.value <= total)
@@ -82,7 +104,7 @@ fun episodeTotal(
     airing: Airing?,
 ): Int? = anime.malEpisodes ?: airing?.total
 
-fun toWatch(
+internal fun toWatch(
     entry: ListEntry,
     airing: Airing?,
 ): AiredCount.Known? = toWatch(entry.anime.airingStatus.effective, entry.values, airing)
@@ -122,7 +144,7 @@ sealed interface Premiere {
     data object Unannounced : Premiere
 }
 
-fun premiereOf(
+internal fun premiereOf(
     anime: Anime,
     airing: Airing?,
     today: LocalDate,
@@ -144,8 +166,7 @@ fun premiereOf(
     }
 }
 
-// What a title's airing block and a list row's airing lines show, the one decision both screens read; null when the
-// title shows none (A1).
+// What a title's airing block and a list row's airing lines show; null in [TitleAiring] when the title shows none.
 sealed interface AiringPhase {
     data class NotYetAired(
         val premiere: Premiere,
@@ -162,7 +183,7 @@ sealed interface AiringPhase {
 }
 
 // Takes the user's values, not their entry, so the airing status is read from [anime] alone.
-fun airingPhase(
+internal fun airingPhase(
     anime: Anime,
     values: ListValues?,
     airing: Airing?,
@@ -179,10 +200,61 @@ fun airingPhase(
 }
 
 // When the next episode airs, as the title shows it: the next episode, or a premiere whose time is known.
-val AiringPhase.nextAirsAt: Instant?
+internal val AiringPhase.nextAirsAt: Instant?
     get() =
         when (this) {
             is AiringPhase.Aired -> next?.airsAt
             is AiringPhase.NotYetAired -> (premiere as? Premiere.At)?.instant
             AiringPhase.CountUnknown -> null
         }
+
+// A title's place in "Up next", by what its row shows.
+sealed interface UpNext {
+    // Episodes to watch: the most recently aired first.
+    data class ToWatch(
+        val latestAiredAt: Instant?,
+    ) : UpNext
+
+    // A known time for the next episode or the premiere: the soonest first.
+    data class Coming(
+        val at: Instant,
+    ) : UpNext
+
+    data object Rest : UpNext
+}
+
+// The one result the List, the title page and the order read (A1). Only [titleAiring] builds it.
+@ConsistentCopyVisibility
+data class TitleAiring internal constructor(
+    val airing: Airing?,
+    val total: Int?,
+    val phase: AiringPhase?,
+    val upNext: UpNext,
+)
+
+// [airing] is null for a title whose airing was not computed, which reads as a count that is not known.
+fun titleAiring(
+    anime: Anime,
+    values: ListValues?,
+    airing: Airing?,
+    today: LocalDate,
+): TitleAiring {
+    val phase = airingPhase(anime, values, airing, today)
+    val coming = phase?.nextAirsAt
+    val upNext =
+        when {
+            (phase as? AiringPhase.Aired)?.toWatch != null -> UpNext.ToWatch(airing?.latestAiredAt)
+            coming != null -> UpNext.Coming(coming)
+            else -> UpNext.Rest
+        }
+    return TitleAiring(airing, episodeTotal(anime, airing), phase, upNext)
+}
+
+// The same from stored data: [values] are the user's, null for a title that is not on their list.
+fun titleAiring(
+    anime: Anime,
+    values: ListValues?,
+    schedule: AiringSchedule?,
+    now: Instant,
+    zone: ZoneId,
+): TitleAiring = titleAiring(anime, values, airingAt(anime, schedule, now), now.atZone(zone).toLocalDate())
