@@ -36,9 +36,9 @@ On such a screen only issues caused by the task's change count. Issues that exis
 
 If an image is missing or `RENDERED_AT` does not match, the reviewer renders again before scoring, all changed
 screens in one command, because a render deletes the images of every screen it does not render:
-`tools/gw :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'`, with one
+`./gradlew :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*<Screen>Screenshots*'`, with one
 `--tests '*<Screen>Screenshots*'` for each changed screen. When every screen is changed (the theme or a shared
-component), the command is `tools/gw --kind check :app:recordRoborazziDebug`. A reviewer never reviews from a
+component), the command is `./gradlew :app:recordRoborazziDebug`. A reviewer never reviews from a
 description or from the code.
 
 ## 2. Definitions

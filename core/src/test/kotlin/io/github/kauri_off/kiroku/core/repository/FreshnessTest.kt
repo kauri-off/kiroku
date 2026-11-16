@@ -63,6 +63,16 @@ class FreshnessTest {
     }
 
     @Test
+    fun `airing data is fresh for as long as the list, and stale when never fetched or fetched after now`() {
+        assertEquals(Freshness.list, Freshness.airing)
+        assertFalse(airingStale(at, at))
+        assertFalse(airingStale(at, after(15.minutes - 1.milliseconds)))
+        assertTrue(airingStale(at, after(15.minutes)))
+        assertTrue(airingStale(null, at))
+        assertTrue(airingStale(after(1.minutes), at))
+    }
+
+    @Test
     fun `a title not known yet has a finished title's time`() {
         assertFalse(detailsStale(null, at, after(24.hours - 1.milliseconds)))
         assertTrue(detailsStale(null, at, after(24.hours)))
