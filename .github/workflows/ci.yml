@@ -86,9 +86,9 @@ jobs:
           key: robolectric-${{ runner.os }}-${{ github.sha }}
           restore-keys: robolectric-${{ runner.os }}-
 
-      # One invocation, so that the release and preview builds run beside the tests; a push's debug build carries the
-      # client id, so it is built on its own. The summary names the runner's memory in use at its peak.
-      - name: Format, Lint, tests, screenshots, and the release and preview builds
+      # A push's debug build carries the client id, so it is built on its own; the release and preview builds run
+      # after the tests, which share the runner's cores with nothing. The summary names the memory in use at its peak.
+      - name: Format, Lint, tests and screenshots
         env:
           DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug' || '' }}
         run: |
@@ -96,7 +96,7 @@ jobs:
           while sleep 2; do awk '/^MemTotal/ { t = $2 } /^MemAvailable/ { a = $2 } END { print int((t - a) / 1024) }' /proc/meminfo; done > "$memory" &
           sampler=$!
           status=0
-          ./gradlew --continue ktlintCheck lint test recordRoborazziDebug $DEBUG_BUILD assembleRelease assemblePreview || status=$?
+          ./gradlew --continue ktlintCheck lint test recordRoborazziDebug $DEBUG_BUILD || status=$?
           kill "$sampler"
           echo "Memory in use at its peak: $(sort -n "$memory" | tail -n 1) of $(awk '/^MemTotal/ { print int($2 / 1024) }' /proc/meminfo) MiB" | tee -a "$GITHUB_STEP_SUMMARY"
           exit "$status"
@@ -152,6 +152,9 @@ jobs:
         env:
           MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
         run: ./gradlew assembleDebug
+
+      - name: Release build with R8 and its guards, and the preview build
+        run: ./gradlew assembleRelease assemblePreview
 
       - name: Name Robolectric's Android jars
         id: jars
