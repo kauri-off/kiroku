@@ -31,11 +31,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # A pull request's checkout is the merge commit, whose first parent is its base.
+      # A pull request's checkout is the merge commit, whose first parent is its base; a push is compared with main
+      # before it, and when that commit is not in the checkout the self-test runs.
       - name: Whether the queue tools changed
         id: tools
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" != pull_request ] || ! git diff --quiet HEAD^1 HEAD -- tools .github/workflows/ci.yml; then
+          base=HEAD^1
+          if [ "$GITHUB_EVENT_NAME" = push ]; then base=$BEFORE; fi
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null || ! git diff --quiet "$base" HEAD -- tools .github/workflows/ci.yml; then
             echo run=true >> "$GITHUB_OUTPUT"
           fi
 
@@ -72,8 +77,29 @@ jobs:
             gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-
             gradle-${{ runner.os }}-
 
-      - name: Format, Lint, tests and screenshots
-        run: ./gradlew --continue ktlintCheck lint test recordRoborazziDebug
+      # Robolectric fetches its Android jars from Maven Central while the tests run; main's newest set is restored.
+      - name: Restore Robolectric's Android jars
+        id: robolectric
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ github.sha }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      # One invocation, so that the release and preview builds run beside the tests; a push's debug build carries the
+      # client id, so it is built on its own. The summary names the runner's memory in use at its peak.
+      - name: Format, Lint, tests, screenshots, and the release and preview builds
+        env:
+          DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug' || '' }}
+        run: |
+          memory="$RUNNER_TEMP/memory"
+          while sleep 2; do awk '/^MemTotal/ { t = $2 } /^MemAvailable/ { a = $2 } END { print int((t - a) / 1024) }' /proc/meminfo; done > "$memory" &
+          sampler=$!
+          status=0
+          ./gradlew --continue ktlintCheck lint test recordRoborazziDebug $DEBUG_BUILD assembleRelease assemblePreview || status=$?
+          kill "$sampler"
+          echo "Memory in use at its peak: $(sort -n "$memory" | tail -n 1) of $(awk '/^MemTotal/ { print int($2 / 1024) }' /proc/meminfo) MiB" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       - name: Name the runner image of the screenshots
         if: success() || failure()
@@ -121,13 +147,27 @@ jobs:
             echo "Main's screenshots are missing or expired, so none were compared." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Debug build
+      - name: Debug build with the client id
+        if: github.event_name == 'push'
         env:
-          MAL_CLIENT_ID: ${{ github.event_name == 'push' && secrets.MAL_CLIENT_ID || '' }}
+          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
         run: ./gradlew assembleDebug
 
-      - name: Release build with R8 and its guards, and the preview build
-        run: ./gradlew assembleRelease assemblePreview
+      - name: Name Robolectric's Android jars
+        id: jars
+        if: github.event_name == 'push'
+        run: |
+          jars=~/.m2/repository/org/robolectric/android-all-instrumented
+          if [ -d "$jars" ]; then
+            echo "key=robolectric-$RUNNER_OS-$(ls "$jars" | sha256sum | cut -c 1-16)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Robolectric's Android jars
+        if: steps.jars.outputs.key != '' && steps.jars.outputs.key != steps.robolectric.outputs.cache-matched-key
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: ${{ steps.jars.outputs.key }}
 
       - name: Save the Gradle home
         if: github.event_name == 'push'

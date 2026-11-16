@@ -28,10 +28,11 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 enum class SandboxWrites { Work, Refused, Fail }
 
-// MAL on the device: the HTTP client's last step, answering every request from [list] and passing none on.
+// MAL on the device: the HTTP client's last step, answering every request from [list], or [aniList]'s, and passing none on.
 class SandboxMal(
     private val list: MalList,
     private val tokens: SandboxTokens,
+    private val aniList: SandboxAniList? = null,
 ) : Interceptor {
     // No request gets an answer, as with no connection.
     @Volatile
@@ -84,14 +85,16 @@ class SandboxMal(
         asked += "${request.method} ${request.url.host}${request.url.encodedPath}"
         if (offline) throw UnknownHostException(request.url.host)
         if (delayMillis > 0) Thread.sleep(delayMillis)
-        val (status, body) = answer(request)
+        val answer =
+            aniList?.takeIf { it.answers(request.url) }?.answer(request) ?: answer(request).let { SandboxAnswer(it.first, it.second) }
         return Response
             .Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
-            .code(status)
+            .code(answer.status)
             .message("")
-            .body(body.toResponseBody(JSON))
+            .apply { answer.headers.forEach { (name, value) -> header(name, value) } }
+            .body(answer.body.toResponseBody(JSON))
             .build()
     }
 

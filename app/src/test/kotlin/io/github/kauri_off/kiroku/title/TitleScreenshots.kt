@@ -7,11 +7,12 @@ import coil3.SingletonImageLoader
 import coil3.asImage
 import coil3.compose.LocalPlatformContext
 import coil3.memory.MemoryCache
-import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -213,14 +214,8 @@ object TitleFixtures {
         get() {
             val anime = FixtureAnime.exactToWatch.copy(airingStatus = AiringStatus.NotYetAired)
             val entry = ListEntry(anime, ListValues(ListStatus.Watching, 0, null, null, null), set.now)
-            val airing =
-                Airing(
-                    aired = AiredCount.Exact(1),
-                    total = anime.malEpisodes,
-                    nextEpisode = ScheduledEpisode(2, set.now.plus(Duration.ofDays(7)).minus(Duration.ofHours(1))),
-                    latestAiredAt = set.now.minus(Duration.ofHours(1)),
-                )
-            return of(anime, entry, airing)
+            val episodes = FixtureTime.weekly(1, set.now.minus(Duration.ofHours(1)), 1..2)
+            return of(anime, entry, airingAt(anime, AiringSchedule(episodes, anime.malEpisodes), set.now))
         }
 
     // Besides the sequel, only relations the strip leaves out: the section is "See all" alone.

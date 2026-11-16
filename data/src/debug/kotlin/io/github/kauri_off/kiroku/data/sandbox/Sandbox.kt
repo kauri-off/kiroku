@@ -4,30 +4,43 @@ import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.time.Clock
 
-// A sandbox keeping its list and tokens in [file]s, its titles read from public answers at its first request.
+// A sandbox keeping its list, tokens and airing in [file]s, its titles read from public answers at its first request.
 class Sandbox(
     read: (String) -> String,
     poster: (Long) -> String,
     clock: Clock,
     file: (String) -> File,
 ) {
-    private val site = lazy { SandboxList(SandboxTitles.read(read, poster), clock, file(LIST)) }
+    private val airing = lazy { SandboxAiring(SandboxTitles.read(read, poster), clock, file(AIRING)) }
 
-    val mal = SandboxMal(OnFirstRequest(site), SandboxTokens(clock, file(TOKENS)))
+    private val site =
+        lazy {
+            SandboxList(airing.value.titles, clock, file(LIST), starting = { SandboxTitles.startingList(airing.value.pages(), it) })
+        }
 
-    // The list the sandbox started with, as of now.
-    fun reset() = site.value.reset()
+    val aniList = SandboxAniList({ airing.value }, clock)
+
+    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList)
+
+    // The list the sandbox started with and its schedules laid out again, as of now.
+    fun reset() {
+        airing.value.reset()
+        site.value.reset()
+    }
 
     private companion object {
         const val LIST = "list"
         const val TOKENS = "tokens"
+        const val AIRING = "airing"
     }
 }
 
+// MAL's titles with the dates and states of the sandbox's airing.
 private class OnFirstRequest(
     private val site: Lazy<SandboxList>,
+    private val airing: Lazy<SandboxAiring>,
 ) : MalList {
-    override fun title(id: Long): JsonObject? = site.value.title(id)
+    override fun title(id: Long): JsonObject? = site.value.title(id)?.let { airing.value.page(id) }
 
     override fun entries(): List<Pair<Long, Listed>> = site.value.entries()
 

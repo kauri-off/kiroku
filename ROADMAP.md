@@ -158,21 +158,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-01 Recorded answers of AniList.**
 
-- [ ] **M3-02 [A] Airing calculator.** In `:core` only. From what is stored of a title (MAL's data and AniList's
-  schedule) and an instant it gives the aired count with its confidence, the total and the next episode, and with
-  the user's values "to watch", the premiere and the keys of "Up next": one result that the List, the title page
-  and the order read, so that none of them combines a count from parts (A1). A3 to A8 hold. A next episode beyond
-  MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at the total and there is
-  no next episode beyond it. Why a count is not exact is part of the result: no schedule, a schedule numbered
-  differently (A4), or doubt (A5). The hand-off states, for the owner's approval, the rule on stored data behind
-  each of A4, A5 and A6: when a schedule counts as numbered differently, when AniList counts as having stopped
-  tracking a title and how that differs from a break, and when the weekly estimate may run. The fixtures' counts
-  are the calculator's, none written by hand.
-  **Needs:** nothing.
-  **Check:** `tools/gw :core:test`: a test for each of A3 to A8 that fails without its rule; the clamp; a schedule
-  on a break gives an exact count with no next episode; each reason for a count that is not exact is told from
-  the others. `ListAndTitleAgreeTest` passes over the calculator's results for every fixture and every case of
-  the airing grid, and a rule test fails when a screen's code builds an airing value itself.
+- [x] **M3-02 [A] Airing calculator.**
 
 - [x] **M3-03 [A] Airing refresh.**
 
@@ -204,14 +190,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   than the limit allows; a page that fails leaves its titles not fetched and the others fetched; the request has
   no header beyond the ones named; a refusal by AniList leaves MAL's back-off at zero.
 
-- [ ] **M3-07 Sandbox: AniList on the device.** The sandbox answers the requests of M3-01 too, so that no request
-  leaves the device. Its schedules follow the device's date, each on its title's own weekly slot, and agree with
-  its MAL pages except where the disagreement is the case: among its titles are one without a schedule, one on a
-  break, one numbered on from an earlier season and one whose next episode airs within minutes of a reset. An id
-  it does not know is answered as AniList answers one.
-  **Needs:** M3-01.
-  **Check:** tests: each of its answers has the fields of the recorded answer of its case, with values of the same
-  kind; on any date its schedules fall on the title's weekday and time; a reset brings the schedules back.
+- [x] **M3-07 Sandbox: AniList on the device.**
 
 - [ ] **M3-08 Live airing.** The live graph's airing is M3-04's repository over M3-05's store and M3-06's client,
   each source with its own store, built at its first use and off the main thread. The sandbox runs on it against
