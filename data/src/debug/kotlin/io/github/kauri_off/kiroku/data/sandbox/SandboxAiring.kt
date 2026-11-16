@@ -118,8 +118,14 @@ class SandboxAiring(
         val slot = title.slot ?: OwnSlots[id]
         val next = slot?.after(since)
         val total = title.episodes
+        val now = clock.instant()
         return when (id) {
-            WEEKLY -> laid(Laid(id, total, weekly(6, next!!, 1..total!!), starts = true, ends = true))
+            WEEKLY -> {
+                // Once the episode before it has aired, AniList puts the next one and every later one a week later.
+                val laid = weekly(MOVED - 1, next!!, 1..total!!)
+                val moved = if (now > laid.first { it.episode == MOVED - 1 }.at) laid.map { it.later(MOVED) } else laid
+                laid(Laid(id, total, moved, starts = true, ends = true))
+            }
             SOON -> {
                 val soon = Slot.of(since.plus(SOON_AFTER).truncatedTo(ChronoUnit.MINUTES))
                 laid(Laid(id, total, weekly(4, soon.after(since), 1..total!!), starts = true, ends = true), slot = soon)
@@ -148,7 +154,12 @@ class SandboxAiring(
                     malFollows = false,
                 )
             }
-            NUMBERED_ON -> laid(Laid(id, 12, weekly(175, next!!, 171..182), starts = true, ends = true))
+            NUMBERED_ON -> {
+                // AniList drops the season's last episode a while after the start, its total with it.
+                val laid = weekly(175, next!!, 171..182)
+                val removed = !now.isBefore(since.plus(REMOVED_AFTER))
+                laid(Laid(id, if (removed) 11 else 12, if (removed) laid.dropLast(1) else laid, starts = true, ends = true))
+            }
             COMING -> laid(Laid(id, total, weekly(1, next!!.plus(WEEK.multipliedBy(2)), 1..total!!), starts = true, ends = true))
             COMING_WITHOUT_TIME ->
                 Plan(
@@ -215,6 +226,12 @@ class SandboxAiring(
         // A reset is followed this soon by an episode of SOON.
         val SOON_AFTER: Duration = Duration.ofMinutes(5)
 
+        // WEEKLY's episode that AniList moves a week later once the one before it has aired, with every later one.
+        const val MOVED = 7
+
+        // NUMBERED_ON's last episode is gone from AniList this long after the start.
+        val REMOVED_AFTER: Duration = Duration.ofDays(10)
+
         val JAPAN: ZoneId = ZoneId.of("Asia/Tokyo")
 
         const val RELEASING = "RELEASING"
@@ -224,7 +241,9 @@ class SandboxAiring(
 
         private val WEEK = Duration.ofDays(7)
         private const val MONTH = "yyyy-MM"
-        private const val BREAK_FIRST = 1140
+
+        // Two pages of AniList's schedule exactly.
+        private const val BREAK_FIRST = 1141
         private const val BREAK_LAST = 1180
         private const val LONG_AIRED = 150
         private const val LONG_COMING = 9
@@ -243,6 +262,8 @@ class SandboxAiring(
             anchorAt: Instant,
             episodes: IntRange,
         ): List<Aired> = episodes.map { Aired(it, anchorAt.plus(WEEK.multipliedBy((it - anchor).toLong()))) }
+
+        private fun Aired.later(from: Int) = if (episode >= from) copy(at = at.plus(WEEK)) else this
 
         fun japanDate(at: Instant): LocalDate = at.atZone(JAPAN).toLocalDate()
 

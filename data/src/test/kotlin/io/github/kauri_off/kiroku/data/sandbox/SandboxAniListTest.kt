@@ -30,6 +30,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -41,6 +42,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.time.Duration
 import java.time.Instant
+import java.time.YearMonth
 
 // M3-07: the sandbox answers AniList's shared query on the device, in the recorded answers' shapes and with AniList's paging,
 // its schedules on each title's weekly slot and agreeing with its MAL pages, laid out again at a reset.
@@ -116,6 +118,54 @@ class SandboxAniListTest {
             }
         }
 
+        // A new sign-in each time, as a token outlives no more than MAL's lifetime of it on the sandbox's clock.
+        private fun access(): String {
+            val address =
+                "${SandboxMal.Hosts.signIn}authorize?response_type=code&client_id=${SandboxMal.CLIENT_ID}&state=s" +
+                    "&redirect_uri=kiroku%3A%2F%2Foauth&code_challenge=$VERIFIER&code_challenge_method=plain"
+            val code = checkNotNull(sandbox.mal.authorize(address)).substringAfter("code=").substringBefore('&')
+            val form =
+                FormBody
+                    .Builder()
+                    .add("grant_type", "authorization_code")
+                    .add("code", code)
+                    .add("redirect_uri", "kiroku://oauth")
+                    .add("client_id", SandboxMal.CLIENT_ID)
+                    .add("code_verifier", VERIFIER)
+                    .build()
+            val granted =
+                body(
+                    Request
+                        .Builder()
+                        .url("${SandboxMal.Hosts.signIn}token")
+                        .post(form)
+                        .build(),
+                )
+            return granted["access_token"]!!.jsonPrimitive.content
+        }
+
+        // The titles of the list the sandbox's MAL serves in Watching, Planned or On hold.
+        fun tracked(): Set<Long> {
+            val request =
+                Request
+                    .Builder()
+                    .url("${SandboxMal.Hosts.api}users/@me/animelist?fields=list_status&limit=1000")
+                    .header("Authorization", "Bearer ${access()}")
+                    .build()
+            return body(request)["data"]!!
+                .jsonArray
+                .map { it.jsonObject }
+                .filter { it["list_status"]!!.jsonObject.text("status") in setOf("watching", "plan_to_watch", "on_hold") }
+                .map { it["node"]!!.jsonObject.id!! }
+                .toSet()
+        }
+
+        private fun body(request: Request): JsonObject =
+            client.http.callFactory
+                .newCall(request)
+                .execute()
+                .use { Json.parseToJsonElement(it.body.string()).jsonObject }
+
         // MAL's page of a title as the sandbox's MAL gives it.
         fun mal(id: Long): JsonObject {
             val request = Request.Builder().url("${SandboxMal.Hosts.api}anime/$id?fields=$MAL_FIELDS").build()
@@ -158,11 +208,23 @@ class SandboxAniListTest {
             )
         assertEquals(AniListRequests.map { it.name }.toSet(), cases.keys)
         val asked = answerTo(AniListSchedule.QUERY)
+        val statuses =
+            cases.keys
+                .flatMap(
+                    ::recordedPages,
+                ).flatMap { it.jsonObject.media }
+                .map { it["status"]!!.jsonPrimitive.content }
+                .toSet()
+        assertEquals(setOf(SandboxAiring.RELEASING, SandboxAiring.FINISHED, SandboxAiring.NOT_YET_RELEASED), statuses)
         for ((case, ids) in cases) {
             val recorded = recordedPages(case).map(::kinds)
             val answered = device.pages(ids)
             for (page in answered) {
                 assertEquals(case, emptyList<String>(), asked.unasked(page))
+                for (media in page.media) {
+                    assertTrue("$case: ${media["status"]}", media["status"]!!.jsonPrimitive.content in statuses)
+                    for (node in media.nodes) assertTrue("$case: ${node.at}", node.at > clock.now - YEARS && node.at < clock.now + YEARS)
+                }
                 assertTrue("$case: ${kinds(page) - recorded.flatten().toSet()}", recorded.flatten().containsAll(kinds(page)))
             }
             assertEquals(case, recorded.flatten().toSet(), answered.flatMap(::kinds).toSet())
@@ -198,6 +260,18 @@ class SandboxAniListTest {
         val beyond = device.ask(listOf(LONG_RUNNING), schedulePage = long.size + 1).media.single()
         assertEquals(emptyList<Aired>(), beyond.nodes)
         assertEquals(false, beyond.scheduleInfo["hasNextPage"]!!.jsonPrimitive.boolean)
+
+        val single = (sandboxTitles.keys - UNKNOWN - TWO_ENTRIES).sorted()
+        val fifty = device.ask(single.take(AniListSchedule.TITLES_PER_PAGE))
+        assertEquals(AniListSchedule.TITLES_PER_PAGE to false, fifty.media.size to fifty.hasNextPage)
+        val fiftyOne = device.ask(single.take(AniListSchedule.TITLES_PER_PAGE + 1))
+        assertEquals(AniListSchedule.TITLES_PER_PAGE to true, fiftyOne.media.size to fiftyOne.hasNextPage)
+        assertEquals(1, device.ask(single.take(AniListSchedule.TITLES_PER_PAGE + 1), page = 2).media.size)
+        val twoPages = device.pages(listOf(ON_A_BREAK)).map { it.media.single() }
+        assertEquals(
+            listOf(AniListSchedule.EPISODES_PER_PAGE to true, AniListSchedule.EPISODES_PER_PAGE to false),
+            twoPages.map { it.nodes.size to it.scheduleInfo["hasNextPage"]!!.jsonPrimitive.boolean },
+        )
 
         val both = device.ask(listOf(WEEKLY, ON_A_BREAK), schedulePage = 2).media.associateBy { it.idMal }
         assertEquals(emptyList<Aired>(), both.getValue(WEEKLY).nodes)
@@ -238,21 +312,36 @@ class SandboxAniListTest {
                     if (entry.status == SandboxAiring.FINISHED && first != null) {
                         assertEquals(at, japanDate(entry.schedule.last().at).toString(), mal.text("end_date"))
                     }
+                    val season = mal["start_season"] as? JsonObject
+                    val start =
+                        mal
+                            .text(
+                                "start_date",
+                            )?.takeIf { it.length >= "yyyy-MM".length }
+                            ?.let { YearMonth.parse(it.take("yyyy-MM".length)) }
+                    if (id in PLANNED && season != null && start != null) {
+                        assertEquals(at, start.year, season["year"]!!.jsonPrimitive.int)
+                        assertEquals(at, listOf("winter", "spring", "summer", "fall")[(start.monthValue - 1) / 3], season.text("season"))
+                    }
                 }
             }
         }
     }
 
     @Test
-    fun `among the titles it starts tracking are the cases the app must handle`() {
+    fun `among the titles it tracks at the start and after a reset weeks later are the cases the app must handle`() {
         val device = OnDevice()
+        tracksEveryCase(device)
+        clock.now += WEEK.multipliedBy(5)
+        device.sandbox.reset()
+        tracksEveryCase(device)
+    }
+
+    // The cases, each met by a title of the list the sandbox's MAL serves in Watching, Planned or On hold.
+    private fun tracksEveryCase(device: OnDevice) {
+        val tracked = device.tracked()
         val now = clock.now
         val entries = device.entries(sandboxTitles.keys.toList())
-        val tracked =
-            SandboxTitles
-                .startingList(SandboxAiring(sandboxTitles, clock).pages(), now)
-                .filterValues { it.status in setOf("watching", "plan_to_watch", "on_hold") }
-                .keys
 
         fun weekly(entry: Entry) =
             entry.schedule.zipWithNext().all { (a, b) ->
@@ -295,9 +384,9 @@ class SandboxAniListTest {
                 "two entries for one MAL id" to { id, _ -> entries.getValue(id).size == 2 },
             )
         for ((case, test) in cases) {
-            assertTrue(case, entries.any { (id, kept) -> id in tracked && kept.any { test(id, it) } })
+            assertTrue("$case at $now", entries.any { (id, kept) -> id in tracked && kept.any { test(id, it) } })
         }
-        assertTrue("unknown to AniList", (tracked - entries.keys).isNotEmpty())
+        assertTrue("unknown to AniList at $now", (tracked - entries.keys).isNotEmpty())
     }
 
     @Test
@@ -330,14 +419,18 @@ class SandboxAniListTest {
 
         clock.now += WEEK.multipliedBy(3) + Duration.ofHours(2)
         val later = OnDevice(first.files).entries(ids)
-        assertEquals(started.mapValues { (_, kept) -> kept.map { it.schedule } }, later.mapValues { (_, kept) -> kept.map { it.schedule } })
+
+        // Every schedule but the two AniList changes as time passes.
+        fun unchanged(entries: Map<Long, List<Entry>>) =
+            (entries - WEEKLY - SandboxAiring.NUMBERED_ON).mapValues { (_, kept) -> kept.map { it.schedule } }
+        assertEquals(unchanged(started), unchanged(later))
         assertEquals(
             started
-                .getValue(WEEKLY)
+                .getValue(LONG_RUNNING)
                 .single()
                 .aired.size + 3,
             later
-                .getValue(WEEKLY)
+                .getValue(LONG_RUNNING)
                 .single()
                 .aired.size,
         )
@@ -362,6 +455,45 @@ class SandboxAniListTest {
                 .first()
                 .at
         assertTrue(next > clock.now && next <= clock.now + SandboxAiring.SOON_AFTER)
+    }
+
+    @Test
+    fun `as time passes AniList moves one title's next episode a week later and removes another's last, and MAL agrees`() {
+        val device = OnDevice()
+        val numbered = SandboxAiring.NUMBERED_ON
+
+        fun entry(id: Long) = device.entries(listOf(id)).getValue(id).single()
+        val weekly = entry(WEEKLY)
+        val season = entry(numbered)
+
+        val before = weekly.schedule.single { it.episode == SandboxAiring.MOVED - 1 }.at
+        clock.now = before - Duration.ofMinutes(1)
+        assertEquals(weekly.schedule, entry(WEEKLY).schedule)
+        clock.now = before + Duration.ofMinutes(1)
+        val moved = entry(WEEKLY)
+        assertEquals(SandboxAiring.MOVED, moved.coming.first().episode)
+        assertEquals(weekly.schedule.map { if (it.episode >= SandboxAiring.MOVED) it.copy(at = it.at + WEEK) else it }, moved.schedule)
+
+        clock.now = START + SandboxAiring.REMOVED_AFTER - Duration.ofHours(1)
+        assertEquals(season.schedule to 12, entry(numbered).let { it.schedule to it.episodes })
+        clock.now = START + SandboxAiring.REMOVED_AFTER + Duration.ofHours(1)
+        val removed = entry(numbered)
+        assertTrue(season.schedule.last().at > clock.now)
+        assertEquals(season.schedule.dropLast(1) to 11, removed.schedule to removed.episodes)
+
+        // Each title finishes at its new last episode on both sources, and not at its old one.
+        for ((id, old, new) in listOf(
+            Triple(WEEKLY, weekly.schedule.last(), moved.schedule.last()),
+            Triple(numbered, season.schedule.last(), removed.schedule.last()),
+        )) {
+            clock.now = minOf(old.at, new.at) + Duration.ofHours(1)
+            val first = if (id == WEEKLY) "currently_airing" else "finished_airing"
+            assertEquals("$id", first, device.mal(id).text("status"))
+            clock.now = maxOf(old.at, new.at) + Duration.ofHours(1)
+            val mal = device.mal(id)
+            assertEquals("$id", "finished_airing" to japanDate(new.at).toString(), mal.text("status") to mal.text("end_date"))
+            assertEquals("$id", SandboxAiring.FINISHED, entry(id).status)
+        }
     }
 
     @Test
@@ -415,6 +547,8 @@ class SandboxAniListTest {
         val START: Instant = Instant.parse("2026-11-16T05:47:00Z")
         val WEEK: Duration = Duration.ofDays(7)
         val MONTH: Duration = Duration.ofDays(31)
+        val YEARS: Duration = Duration.ofDays(3653)
+        const val VERIFIER = "sandbox-verifier-0123456789-0123456789-0123456789"
 
         // A client within AniList's limit asks no more often than this.
         val PACE: Duration = Duration.ofSeconds(60L / SandboxAniList.LIMIT)

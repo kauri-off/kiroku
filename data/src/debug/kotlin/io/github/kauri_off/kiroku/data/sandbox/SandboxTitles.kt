@@ -90,7 +90,7 @@ object SandboxTitles {
                         title.episodes ?: Int.MAX_VALUE,
                     )
                 }
-            put(id, "watching", watched, start = "2001-01-${"${i + 1}".padStart(2, '0')}")
+            put(id, "watching", watched, start = LocalDate.of(2001, 1, 1).plusDays(i.toLong()).toString())
         }
         coming.forEach { (id, _) -> put(id, "plan_to_watch", 0) }
         finished.forEachIndexed { i, (id, title) ->

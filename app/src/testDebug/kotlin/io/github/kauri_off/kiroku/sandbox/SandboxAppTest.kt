@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTitles
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
@@ -287,7 +288,9 @@ class SandboxAppTest {
         signIn()
         assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
         val entries = waited { graph.list.observeEntries().first { it.isNotEmpty() } }
-        val (watching, other) = entries.filter { it.status == ListStatus.Watching }.take(2)
+        // One Piece, the first row of Watching: with no total, two more episodes always stay within it.
+        val watching = entries.single { it.anime.id.value == SandboxAiring.ON_A_BREAK }
+        val other = entries.first { it.status == ListStatus.Watching && it != watching }
         shows(watching.anime.titles.romaji)
 
         val saved = watching.values.copy(score = 9, watchedEpisodes = watching.values.watchedEpisodes + 2)
