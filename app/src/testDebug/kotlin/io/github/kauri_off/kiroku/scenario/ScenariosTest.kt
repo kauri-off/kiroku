@@ -124,9 +124,9 @@ class ScenariosTest {
             scenarios.set(Scenario(slow = true))
             demo.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             runCurrent()
+            // The store fails until the reset turns it back, so the download the failure owes cannot settle the edit either.
             scenarios.set(Scenario(slow = true, store = StoreFault.WritesFail))
             advanceTimeBy(Scenarios.SLOW * 2)
-            scenarios.set(Scenario())
 
             scenarios.reset()
             advanceUntilIdle()
