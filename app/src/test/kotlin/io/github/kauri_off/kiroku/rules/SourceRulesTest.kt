@@ -390,6 +390,42 @@ class SourceRulesTest {
         assertTrue(scanned.none { it.startsWith("app/src/test") })
     }
 
+    @Test
+    fun shippedCodeMakesNoScopeButTheApplications() {
+        val shipped = shippedKotlinSources()
+        assertTrue(shipped.any { relative(it) == APPLICATION_SCOPE_SOURCE })
+        assertTrue(shipped.any { it.path.endsWith("core/src/testFixtures/kotlin/io/github/kauri_off/kiroku/core/demo/Demo.kt") })
+        assertTrue(shipped.any { it.path.endsWith("data/session/MalSession.kt") })
+        assertTrue(shipped.none { "/src/test/" in it.path })
+        assertEquals(emptyList<String>(), shipped.flatMap { scopeProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedScopeFails() {
+        for (planted in listOf(
+            "CoroutineScope(SupervisorJob() + Dispatchers.Default)",
+            "CoroutineScope(Dispatchers.IO)",
+            "CoroutineScope(context)",
+            "scope + Job()",
+            "CoroutineScope(scope.coroutineContext + SupervisorJob())",
+            "MainScope()",
+            "GlobalScope.launch { sync() }",
+            "object : CoroutineScope { override val coroutineContext = Dispatchers.Default }",
+        )) {
+            assertEquals(planted, 1, scopeProblems("A.kt", "val a = $planted\n").size)
+        }
+        for (derived in listOf(
+            "CoroutineScope(scope.coroutineContext + io)",
+            "scope + Dispatchers.IO + SupervisorJob(scope.coroutineContext[Job])",
+            "rememberCoroutineScope()",
+            "viewModelScope.launch { }",
+            "fun a(scope: CoroutineScope) = Unit",
+        )) {
+            assertEquals(derived, emptyList<String>(), scopeProblems("A.kt", "val a = $derived\n"))
+        }
+        assertEquals(emptyList<String>(), scopeProblems(APPLICATION_SCOPE_SOURCE, "val a = CoroutineScope(SupervisorJob())\n"))
+    }
+
     // The screenshot harness renders inside the app's theme and window setup and has none of its own.
     @Test
     fun harnessHasNoThemeOrWindowCode() {

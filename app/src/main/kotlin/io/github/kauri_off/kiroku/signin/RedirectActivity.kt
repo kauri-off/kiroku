@@ -13,7 +13,11 @@ class RedirectActivity : Activity() {
         // Neither the activity made again nor an intent the system replays from the recent tasks is a redirect.
         val arrived = savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
         if (arrived) appGraph.signIn.redirected(intent.dataString.orEmpty())
-        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        // In the app's own task: a browser that starts this activity in its own task would otherwise get a second screen.
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        )
         finish()
     }
 }
