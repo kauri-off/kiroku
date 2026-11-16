@@ -64,14 +64,16 @@ class SentValues(
 val ListValues.sent: SentValues
     get() = SentValues(this, ListField.entries.filterTo(mutableSetOf()) { it != ListField.Status || status is ListStatus })
 
-// Section 7.3: what the edit changed from [from] and [confirmed] lacks; null is no write; a new entry gets its status too.
+// Section 7.3: what the edit changed from [from] and [confirmed] lacks, or all [named] when MAL's values are unknown.
 fun ListValues.sentOver(
     from: ListValues?,
     confirmed: ListValues?,
+    named: Set<ListField>? = null,
 ): SentValues? {
     val unknown = if (status is ListStatus) emptySet() else setOf(ListField.Status)
     if (confirmed == null) return SentValues(this, changedFrom(ListValues(status, 0, null, null, null)) + ListField.Status - unknown)
-    val fields = changedFrom(confirmed).intersect(from?.let { changedFrom(it) } ?: ListField.entries.toSet()) - unknown
+    val changed = named ?: changedFrom(confirmed).intersect(from?.let { changedFrom(it) } ?: ListField.entries.toSet())
+    val fields = changed - unknown
     return if (fields.isEmpty()) null else SentValues(this, fields)
 }
 

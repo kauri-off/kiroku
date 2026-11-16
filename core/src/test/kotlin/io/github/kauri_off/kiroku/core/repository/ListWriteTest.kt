@@ -48,6 +48,11 @@ class ListWriteTest {
     }
 
     @Test
+    fun `a save of no values at all is refused`() {
+        assertTrue(runCatching { ListWrite.Save(anime, watching(9), emptySet()) }.isFailure)
+    }
+
+    @Test
     fun `mark watched applies to the entry as it is when sent`() {
         val write = ListWrite.MarkWatched(anime, 10)
         assertEquals(watching(10), write.applyTo(entry(watching(9)), today))

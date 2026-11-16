@@ -680,6 +680,108 @@ abstract class ListEngineContract {
         }
 
     @Test
+    fun `Retry sets a value the failed edits changed and took back, also before the download it owes has landed`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.mal.unreadAnswers = 1
+            s.mal.afterPut = { s.server.offline.value = true }
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.list.write(ListWrite.StepWatched(anime, -1))
+            settle()
+            s.mal.afterPut = {}
+            s.server.offline.value = false
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+            assertNull(s.syncedAt())
+
+            s.list.write(failures.single().retry)
+            settle()
+            assertEquals(listOf(13, 12), s.server.requests.map { it.values?.watchedEpisodes })
+            assertEquals(12, s.serverWatched(anime))
+            assertEquals(12, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `an edit of a title MAL may have changed unseen sends the value it sets, also one equal to the confirmed`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val confirmed = checkNotNull(s.shown(anime.id)).values
+            s.mal.unreadAnswers = 1
+            s.mal.afterPut = { s.server.offline.value = true }
+            s.list.write(ListWrite.Save(anime, confirmed.copy(score = 3), setOf(ListField.Score)))
+            settle()
+            s.mal.afterPut = {}
+            s.server.offline.value = false
+            assertEquals(
+                3,
+                s.server
+                    .entry(anime.id)
+                    ?.values
+                    ?.score,
+            )
+            assertEquals(confirmed, s.shown(anime.id)?.values)
+
+            assertTrue(s.list.write(ListWrite.Save(anime, confirmed, setOf(ListField.Score))) != null)
+            settle()
+            assertEquals(
+                confirmed.carrying(ListField.Score),
+                s.server.requests
+                    .last()
+                    .values,
+            )
+            assertEquals(confirmed, s.server.entry(anime.id)?.values)
+            assertNull(s.list.write(ListWrite.Save(anime, confirmed, setOf(ListField.Score))))
+        }
+
+    @Test
+    fun `Retry sets each value the failed edit and the dropped ones behind it set`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            val stepped = checkNotNull(s.shown(anime.id)).values
+            s.list.write(ListWrite.Save(anime, stepped.copy(score = 9), setOf(ListField.Score)))
+            settle()
+            s.server.failingWrites.value = false
+
+            s.list.write(failures.single().retry)
+            settle()
+            val retried = stepped.copy(score = 9)
+            assertEquals(
+                retried.carrying(ListField.WatchedEpisodes, ListField.Score),
+                s.server.requests
+                    .last()
+                    .values,
+            )
+            assertEquals(retried, s.server.entry(anime.id)?.values)
+            assertEquals(retried, s.shown(anime.id)?.values)
+        }
+
+    @Test
+    fun `W1 an edit taking back the value of the edit waiting before it is sent, and the server ends where the row is`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val opened = checkNotNull(s.shown(anime.id)).values
+            s.list.write(ListWrite.Save(anime, opened.copy(score = 9), setOf(ListField.Score)))
+            s.list.write(ListWrite.Save(anime, opened, setOf(ListField.Score)))
+            settle()
+            assertEquals(
+                listOf(opened.copy(score = 9).carrying(ListField.Score), opened.carrying(ListField.Score)),
+                s.server.requests.map {
+                    it.values
+                },
+            )
+            assertEquals(opened, s.server.entry(anime.id)?.values)
+            assertEquals(opened, s.shown(anime.id)?.values)
+        }
+
+    @Test
     fun `after a restart a write carries its own change alone, not one that died with the process`() =
         runTest {
             val process = childScope()

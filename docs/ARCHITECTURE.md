@@ -410,12 +410,12 @@ edit changed, so a value changed on the website since the last download, or one 
 MAL has.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
-  last value shown of each value they changed.
+  last value shown for each of the values they changed.
 - **W2. A failure returns to the server's state.** When a write fails, the entry shows what the server last
   confirmed (not "the value before the tap"), no later edit of that entry that was still waiting is sent, and a
   snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
-  Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits changed, as
-  shown just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
+  Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits set, as shown
+  just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
   fails. 14 is not sent, the row shows 12, and Retry sends 14.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only

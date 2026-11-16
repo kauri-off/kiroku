@@ -37,6 +37,10 @@ sealed interface ListWrite {
         val values: ListValues,
         val only: Set<ListField>? = null,
     ) : ListWrite {
+        init {
+            require(only == null || only.isNotEmpty())
+        }
+
         fun over(current: ListValues?): ListValues = if (only == null || current == null) values else values.over(current, only)
     }
 
