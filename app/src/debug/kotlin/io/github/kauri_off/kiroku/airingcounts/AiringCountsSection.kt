@@ -50,7 +50,12 @@ fun AiringCountsSection(
     when (state) {
         AiringCountsState.Reading -> Unit
         AiringCountsState.Unreadable -> {
-            SectionDetail(R.string.airing_counts_unreadable)
+            Text(
+                stringResource(R.string.airing_counts_unreadable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = Spacing.l, top = Spacing.s, end = Spacing.l),
+            )
             OutlinedButton(
                 onClick = { onEvent(AiringCountsEvent.Retry) },
                 modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s),
