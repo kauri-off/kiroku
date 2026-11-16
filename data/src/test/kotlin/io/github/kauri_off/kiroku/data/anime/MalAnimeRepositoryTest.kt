@@ -22,8 +22,10 @@ import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -36,6 +38,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 // The titles of section 7.1 over the store and the client, with recorded pages behind a local server.
 @RunWith(RobolectricTestRunner::class)
@@ -287,4 +291,35 @@ class MalAnimeRepositoryTest {
             assertNull(s.titles.observeAnime(asked).first())
             assertNull(s.titles.observeAnime(id).first())
         }
+
+    // S9: an answer that comes after a sign-out's clear is not stored, also when the store is another user's by then.
+    @Test
+    fun `a page asked before a sign-out is not stored after the sign-out cleared the store`() {
+        for (next in listOf(listOf(null), listOf(null, SignInId("b")))) {
+            runTest {
+                val s = subject()
+                val list = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
+                list.clear(SignInId("a"))
+                val recorded = RecordedAnswers.named("title_airing")
+                val arrived = CountDownLatch(1)
+                val cleared = CountDownLatch(1)
+                network.answers {
+                    arrived.countDown()
+                    cleared.await(5, TimeUnit.SECONDS)
+                    answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+                }
+
+                val refresh = async { s.titles.refresh(id) }
+                runCurrent()
+                assertTrue(arrived.await(5, TimeUnit.SECONDS))
+                next.forEach { list.clear(it) }
+                cleared.countDown()
+
+                assertEquals(Outcome.Failure(DataError.ListEnded), refresh.await())
+                assertEquals(Triple(null, null, null), s.stored())
+                assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+                assertEquals(airing.anime, s.titles.observeAnime(id).first())
+            }
+        }
+    }
 }

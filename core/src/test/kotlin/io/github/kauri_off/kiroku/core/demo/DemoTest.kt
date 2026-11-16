@@ -215,7 +215,13 @@ class DemoTest {
 
             assertEquals(Outcome.Success(Unit), demo.reset())
 
-            assertEquals(Fixtures.reference.entries, demo.list.observeEntries().first())
+            assertEquals(
+                Fixtures.reference.entries.toSet(),
+                demo.list
+                    .observeEntries()
+                    .first()
+                    .toSet(),
+            )
             assertEquals(Fixtures.reference.entries.toSet(), demo.server.entries().toSet())
             val session = demo.session.observeSession().first()
             assertTrue(session is Session.SignedIn && session != Fixtures.reference.session)

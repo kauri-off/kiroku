@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
@@ -51,18 +52,19 @@ class SandboxListEngineTest : ListEngineContract() {
     @After
     fun close() = runBlocking { sessions.forEach { it.close() } }
 
-    // Each download, write and read of one entry the scripted server let through was the client's, answered by the sandbox.
+    // Each page of a list, write and read of one entry the scripted server let through was the client's, answered by the sandbox.
     @After
     fun answeredByTheSandbox() {
         for ((server, mal) in served) {
-            val downloads = mal.asked.count { it == "GET sandbox.invalid/v2/users/@me/animelist" }
+            val pages = mal.asked.count { it == "GET sandbox.invalid/v2/users/@me/animelist" }
             val writes = mal.asked.count { it.startsWith("PATCH ") || it.startsWith("DELETE ") }
             val entries = mal.asked.count { it.startsWith("GET sandbox.invalid/v2/anime/") }
             assertEquals(
-                "downloads, writes and reads of one entry",
-                listOf(server.listDownloads, server.writesAnswered, server.entryReadsAnswered),
-                listOf(downloads, writes, entries),
+                "pages, writes and reads of one entry",
+                listOf(server.listPagesRead, server.writesAnswered, server.entryReadsAnswered),
+                listOf(pages, writes, entries),
             )
+            assertTrue("every download asked for a page", server.listDownloads <= pages)
         }
     }
 }
