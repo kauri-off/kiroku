@@ -16,9 +16,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.time.Clock
 import java.time.Instant
+import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -26,12 +29,17 @@ import kotlin.time.TimeSource
 class AniListAiring(
     private val http: MalHttp,
     private val clock: Clock,
+    // Where AniList's refusal is kept across a process's death; one client, and one file, per process.
+    blockFile: File,
     address: String = AniListSchedule.ADDRESS,
-    time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
+    private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) : AiringSource {
     private val url = address.toHttpUrl()
-    private val pace = AniListPace(time)
+    private val pace = AniListPace(time, clock, AniListBlock(blockFile, clock, http.unexpected))
     private val turns = Mutex()
+
+    // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking.
+    private val failures = mutableMapOf<Int, Pair<ComparableTimeMark, DataError>>()
 
     // Whole schedules: every title's pages of episodes are followed to the last, so nothing is left out.
     override suspend fun fetch(
@@ -53,12 +61,32 @@ class AniListAiring(
 
         init {
             for (id in ids) {
-                if (id.value in 1..Int.MAX_VALUE) asked[id.value.toInt()] = id else results[id] = Outcome.Failure(DataError.InvalidRequest)
+                val malId = id.value.takeIf { it in 1..Int.MAX_VALUE }?.toInt()
+                val failure = malId?.let(failures::get)?.takeIf { (at, _) -> (at + FailureCoolDown).hasNotPassedNow() }
+                when {
+                    malId == null -> results[id] = Outcome.Failure(DataError.InvalidRequest)
+                    failure != null -> results[id] = Outcome.Failure(failure.second)
+                    else -> asked[malId] = id
+                }
             }
         }
 
         suspend fun run(): Map<AnimeId, Outcome<FetchedAiring?>> {
-            firstPages(firstPages(asked.keys.toList(), last = false), last = true)
+            fetched()
+            for ((malId, id) in asked) {
+                val result = results.getValue(id)
+                val error = (result as? Outcome.Failure)?.error
+                if (error == null || error == DataError.NoConnection || error == DataError.Refused) {
+                    failures.remove(malId)
+                } else {
+                    failures[malId] = time.markNow() to error
+                }
+            }
+            return results
+        }
+
+        private suspend fun fetched() {
+            firstPages(asked.keys.toList(), last = false).chunked(AniListSchedule.TITLES_PER_PAGE).forEach { firstPages(it, last = true) }
             for (schedulePage in 2..Int.MAX_VALUE) {
                 val more = gathered.filterValues { entries -> entries.any { it.moreEpisodes } }.keys.toList()
                 if (more.isEmpty()) break
@@ -74,25 +102,27 @@ class AniListAiring(
                 val episodes = entry.episodes.sortedWith(compareBy({ it.number }, { it.airsAt }))
                 results[asked.getValue(malId)] = Outcome.Success(FetchedAiring(AiringSchedule(episodes, entry.total)))
             }
-            return results
         }
 
-        // First pages of episodes; an id missing from several pages of titles may have moved, and is returned to ask again.
+        // First pages of episodes; only one page of titles settles an id, and after a failed page more ids than fill one are asked again.
         private suspend fun firstPages(
             ids: List<Int>,
             last: Boolean,
         ): List<Int> {
             if (ids.isEmpty()) return ids
             val answer = asked(ids, schedulePage = 1)
+            val settled = answer.pages == 1 && answer.failure == null
             val again = mutableListOf<Int>()
             for (id in ids) {
                 val entries = answer.entries[id]
+                val stop = stopped
                 when {
                     id in answer.unreadable -> failed(listOf(id), DataError.ServerError)
-                    entries != null -> gathered[id] = entries
-                    answer.failure != null -> failed(listOf(id), answer.failure)
-                    answer.pages == 1 -> results[asked.getValue(id)] = Outcome.Success(null)
-                    last -> failed(listOf(id), DataError.ServerError)
+                    settled && entries == null -> results[asked.getValue(id)] = Outcome.Success(null)
+                    answer.failure == null && entries != null -> gathered[id] = entries
+                    stop != null -> failed(listOf(id), stop)
+                    last || (answer.failure != null && ids.size <= AniListSchedule.TITLES_PER_PAGE) ->
+                        failed(listOf(id), answer.failure ?: DataError.ServerError)
                     else -> again += id
                 }
             }
@@ -110,8 +140,10 @@ class AniListAiring(
                 val now = answer.entries[id]
                 val same =
                     now != null && now.size == before.size && now.zip(before).all { (n, b) -> n.total == b.total && n.status == b.status }
+                val shifted = same && now.zip(before).any { (n, b) -> !continues(b, n) }
+                if (shifted) http.unexpected(AniListOddAnswer("airingSchedule"))
                 when {
-                    id in answer.unreadable || (now == null && answer.failure == null) || (now != null && !same) ->
+                    id in answer.unreadable || (now == null && answer.failure == null) || (now != null && !same) || shifted ->
                         failed(listOf(id), DataError.ServerError)
                     now == null -> failed(listOf(id), answer.failure!!)
                     else ->
@@ -121,7 +153,7 @@ class AniListAiring(
             }
         }
 
-        // Every page of titles of one request: after a failed page the next is asked while ids remain, and the failure kept.
+        // Every page of titles of one request, the first failure kept; past a later round's failed page the next is still asked.
         private suspend fun asked(
             ids: List<Int>,
             schedulePage: Int,
@@ -139,7 +171,7 @@ class AniListAiring(
                 val read = request(ids, page, schedulePage)
                 if (read is Read.Failed) {
                     failure = failure ?: read.error
-                    if (stopped != null || page * AniListSchedule.TITLES_PER_PAGE >= ids.size) break
+                    if (stopped != null || schedulePage == 1 || page * AniListSchedule.TITLES_PER_PAGE >= ids.size) break
                     continue
                 }
                 read as Read.Page
@@ -179,7 +211,7 @@ class AniListAiring(
             val read = if (sent.status == 200) aniListPage(sent.body, http.unexpected) else null
             if (read == null) {
                 pace.failed()
-                return Read.Failed(if (sent.status in 400..499) DataError.InvalidRequest else DataError.ServerError)
+                return Read.Failed(if (sent.status in 400..499 && sent.status != 408) DataError.InvalidRequest else DataError.ServerError)
             }
             pace.answered(sent.headers[LIMIT]?.trim()?.toIntOrNull())
             return Read.Page(read)
@@ -205,7 +237,7 @@ class AniListAiring(
         val value = headers[RETRY_AFTER]?.trim() ?: return null
         value.toLongOrNull()?.let { return it.seconds }
         val at = headers.getInstant(RETRY_AFTER) ?: return null
-        return (at.epochSecond - clock.instant().epochSecond).seconds
+        return (at.epochSecond - clock.instant().epochSecond).coerceAtLeast(0).seconds
     }
 
     private class Asked(
@@ -236,20 +268,31 @@ class AniListAiring(
     }
 }
 
-// Of entries with one MAL id: the latest aired episode's at [now], else the soonest first episode's, else AniList's first.
+// How long a title whose fetch failed is answered with that failure without a request; offline and refused excepted.
+internal val FailureCoolDown: Duration = 15.minutes
+
+// A page of a schedule goes on from the one before: its first episode is the next number after the last one read.
+private fun continues(
+    before: AniListEntry,
+    page: AniListEntry,
+): Boolean {
+    val last = before.episodes.lastOrNull() ?: return true
+    val first = page.episodes.firstOrNull() ?: return true
+    return first.number == last.number + 1
+}
+
+// Of entries with one MAL id: releasing, then highest aired number at [now], latest aired, soonest first episode, first.
 internal fun chosen(
     entries: List<AniListEntry>,
     now: Instant,
 ): AniListEntry {
-    val aired =
-        entries.mapNotNull { entry ->
-            entry.episodes
-                .filter { it.airsAt <= now }
-                .maxOfOrNull { it.airsAt }
-                ?.let { entry to it }
-        }
-    if (aired.isNotEmpty()) return aired.maxBy { it.second }.first
-    val coming = entries.mapNotNull { entry -> entry.episodes.minOfOrNull { it.airsAt }?.let { entry to it } }
-    if (coming.isNotEmpty()) return coming.minBy { it.second }.first
-    return entries.first()
+    fun AniListEntry.aired() = episodes.filter { it.airsAt <= now }
+    val preference =
+        compareBy<AniListEntry> { it.status == RELEASING }
+            .thenBy { entry -> entry.aired().maxOfOrNull { it.number } ?: 0 }
+            .thenBy { entry -> entry.aired().maxOfOrNull { it.airsAt } ?: Instant.MIN }
+            .thenByDescending { entry -> entry.episodes.minOfOrNull { it.airsAt } ?: Instant.MAX }
+    return entries.reduce { best, entry -> if (preference.compare(entry, best) > 0) entry else best }
 }
+
+private const val RELEASING = "RELEASING"

@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedTitle
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.recorder.AniListRequests
@@ -26,6 +27,7 @@ import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
 import org.junit.rules.ExternalResource
 import java.io.File
+import java.nio.file.Files
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -104,6 +106,32 @@ internal object AniListRecordings {
         }
 }
 
+internal val MEDIA = listOf("data", "Page", "media")
+
+internal fun mediaOf(page: JsonObject): JsonArray = page["data"]!!.jsonObject["Page"]!!.jsonObject["media"]!!.jsonArray
+
+// The page of titles [asked] wants out of [titles], with the recorded mark of a page that has more after it, or of one that has none.
+internal fun pageOf(
+    asked: Asked,
+    titles: List<JsonElement>,
+    limit: Int = AniListRecordings.limit,
+): MockResponse {
+    val more = asked.page * AniListSchedule.TITLES_PER_PAGE < titles.size
+    val page = AniListRecordings.json(if (more) "more_than_one_page" else "airing_weekly")
+    val shown = titles.drop((asked.page - 1) * AniListSchedule.TITLES_PER_PAGE).take(AniListSchedule.TITLES_PER_PAGE)
+    return AniListServer.reply(200, page.edited(MEDIA, JsonArray(shown)).toString(), limit)
+}
+
+// The one title recorded in [file] once for each id asked, under that id: one value altered per title.
+internal fun copiesOf(
+    asked: Asked,
+    file: String = "airing_weekly",
+    limit: Int = AniListRecordings.limit,
+): MockResponse {
+    val title = mediaOf(AniListRecordings.json(file)).single().jsonObject
+    return pageOf(asked, asked.ids.map { JsonObject(title + ("idMal" to JsonPrimitive(it))) }, limit)
+}
+
 // A title MAL's recorded page names, under [id]: the client sends nothing of a title but its id.
 internal fun titleWithId(id: Int): Anime = recordedTitle("airing_weekly").anime.copy(id = AnimeId(id.toLong()))
 
@@ -124,10 +152,17 @@ internal class AniListServer(
 
     private lateinit var scope: TestScope
     private var client: AniListAiring? = null
+    private lateinit var directory: File
+
+    // Where the client keeps AniList's refusal, as an app keeps it among its files.
+    val blockFile: File get() = File(directory, "anilist-block")
 
     // The test's one client, on its virtual time.
-    fun client(test: TestScope): AniListAiring =
-        client ?: AniListAiring(network.http, network.clock, server.url("/").toString(), test.testScheduler.timeSource).also {
+    fun client(test: TestScope): AniListAiring = client ?: newProcess(test)
+
+    // The client a new process makes, over the same file; it is the test's client from then on.
+    fun newProcess(test: TestScope): AniListAiring =
+        AniListAiring(network.http, network.clock, blockFile, server.url("/").toString(), test.testScheduler.timeSource).also {
             scope = test
             client = it
         }
@@ -144,6 +179,7 @@ internal class AniListServer(
     }
 
     override fun before() {
+        directory = Files.createTempDirectory("anilist").toFile()
         network.clock.now = AniListRecordings.RecordedAt
         server.dispatcher =
             object : Dispatcher() {
@@ -155,7 +191,10 @@ internal class AniListServer(
         server.start()
     }
 
-    override fun after() = server.close()
+    override fun after() {
+        server.close()
+        directory.deleteRecursively()
+    }
 
     companion object {
         fun reply(

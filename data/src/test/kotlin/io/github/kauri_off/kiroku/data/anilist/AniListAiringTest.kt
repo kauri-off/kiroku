@@ -1,8 +1,10 @@
 package io.github.kauri_off.kiroku.data.anilist
 
+import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -12,6 +14,7 @@ import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.json
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.pagesOf
 import io.github.kauri_off.kiroku.data.anilist.AniListServer.Companion.reply
 import io.github.kauri_off.kiroku.data.anime.edited
+import io.github.kauri_off.kiroku.data.anime.recordedTitle
 import io.github.kauri_off.kiroku.data.network.MalBackOff
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
@@ -72,6 +75,12 @@ class AniListAiringTest {
                 )
             }
 
+    // The one entry of [id] that M3-01 recorded in [file].
+    private fun recordedEntry(
+        file: String,
+        id: Int,
+    ): AniListEntry = aniListPage(AniListRecordings.body(file)) {}!!.entries.single { it.malId == id }
+
     private fun whole(
         case: String,
         id: Int,
@@ -130,7 +139,7 @@ class AniListAiringTest {
         }
 
     @Test
-    fun `of two entries with one MAL id the one whose latest episode aired last is chosen, its pages followed`() =
+    fun `of two entries with one MAL id the one with the highest aired episode is chosen, every page of both followed`() =
         runTest {
             assertEquals(whole("totals_differ_by_more", 51039, 62, index = 1), fetch(listOf(51039)).of(51039))
             assertEquals(3, aniList.requests.size)
@@ -138,31 +147,53 @@ class AniListAiringTest {
         }
 
     @Test
-    fun `the rule for two entries, on the recorded pair, before either aired and without times`() {
-        val first = aniListPage(AniListRecordings.body("totals_differ_by_more")) {}!!.entries
-        val before = Instant.parse("2022-01-01T00:00:00Z")
-        val untimed =
-            listOf(
-                "releasing_without_times",
-                "not_yet_aired_without_time",
-            ).map { aniListPage(AniListRecordings.body(it)) {}!!.entries.single() }
+    fun `a pair whose first entry ends sooner still has the second followed to its last page`() =
+        runTest {
+            aniList.answer = { asked ->
+                val file = AniListRecordings.byRequest.getValue(asked)
+                val page = json(file)
+                reply(200, page.edited(MEDIA, JsonArray(mediaOf(page).reversed())).toString())
+            }
 
-        assertEquals(62, chosen(first, RecordedAt).total)
-        assertEquals(
-            52,
-            chosen(
-                first,
-                first[1]
-                    .episodes
-                    .first()
-                    .airsAt
-                    .minusSeconds(1),
-            ).total,
-        )
-        assertEquals(52, chosen(first.reversed(), before).total)
-        assertEquals(62, chosen(first.reversed(), first[1].episodes.first().airsAt).total)
-        assertEquals(untimed[0], chosen(untimed, RecordedAt))
-        assertEquals(untimed[1], chosen(untimed.reversed(), RecordedAt))
+            assertEquals(whole("totals_differ_by_more", 51039, 62, index = 1), fetch(listOf(51039)).of(51039))
+            assertEquals(3, aniList.requests.size)
+        }
+
+    @Test
+    fun `the rule for two entries, on the recorded pair, before either aired and without times`() {
+        val pair = aniListPage(AniListRecordings.body("totals_differ_by_more")) {}!!.entries
+        val secondStarts = pair[1].episodes.first().airsAt
+        val untimed =
+            listOf("releasing_without_times", "not_yet_aired_without_time").map {
+                aniListPage(AniListRecordings.body(it)) {}!!.entries.single()
+            }
+
+        assertEquals(62, chosen(pair, RecordedAt).total)
+        assertEquals(62, chosen(pair.reversed(), RecordedAt).total)
+        assertEquals(52, chosen(pair, secondStarts.minusSeconds(1)).total)
+        assertEquals(52, chosen(pair.reversed(), Instant.parse("2022-01-01T00:00:00Z")).total)
+        assertEquals("RELEASING", untimed[0].status)
+        assertEquals(untimed[0], chosen(untimed.reversed(), RecordedAt))
+        val alike = untimed.map { it.copy(status = "FINISHED") }
+        assertEquals(alike[0], chosen(alike, RecordedAt))
+        assertEquals(alike[1], chosen(alike.reversed(), RecordedAt))
+    }
+
+    @Test
+    fun `a special that airs after the series' latest episode does not take the series' place, nor lower its count`() {
+        val special = recordedEntry("more_than_one_page", 61469)
+        val series = recordedEntry("more_than_one_page_2", 61469)
+        val latest = series.episodes.filter { it.airsAt <= RecordedAt }.maxBy { it.airsAt }
+        val later = special.copy(episodes = listOf(ScheduledEpisode(1, latest.airsAt.plusSeconds(3600))))
+        val anime = recordedTitle("airing_on_a_break").anime
+
+        assertEquals("FINISHED", special.status)
+        for (entries in listOf(listOf(later, series), listOf(series, later))) {
+            assertEquals(series, chosen(entries, RecordedAt))
+            assertEquals(series.episodes, chosen(entries.map { it.copy(status = "FINISHED") }, RecordedAt).episodes)
+        }
+        val count = airingAt(anime, AiringSchedule(chosen(listOf(later, series), RecordedAt).episodes, null), RecordedAt).aired
+        assertEquals(AiredCount.Exact(latest.number), count)
     }
 
     @Test
@@ -195,9 +226,94 @@ class AniListAiringTest {
         }
 
     @Test
+    fun `a failed page of titles settles no id it read, the ids are asked again and fail when that fails`() =
+        runTest {
+            val ids = idsOf("more_than_one_page")
+            aniList.answer = { asked -> if (asked.page == 2) reply(500, "") else aniList.recorded(asked) }
+            val answers = fetch(ids)
+
+            for (id in ids) assertEquals("$id", Outcome.Failure(DataError.ServerError), answers.of(id))
+            assertEquals(listOf(Asked(ids, 1, 1), Asked(ids, 2, 1), Asked(ids.take(50), 1, 1), Asked(ids.drop(50), 1, 1)), aniList.asked())
+        }
+
+    @Test
+    fun `a failed page of titles settles no id it read, and the ids asked again on their own are answered whole`() =
+        runTest {
+            val ids = idsOf("more_than_one_page")
+            val recorded = mediaOf(json("more_than_one_page")) + mediaOf(json("more_than_one_page_2"))
+            aniList.answer = { asked ->
+                when {
+                    asked.schedulePage > 1 -> laterPageOf(asked)
+                    asked.ids == ids -> if (asked.page == 2) reply(500, "") else aniList.recorded(asked)
+                    else -> pageOf(asked, recorded.filter { it.jsonObject["idMal"]!!.jsonPrimitive.int in asked.ids })
+                }
+            }
+            val answers = fetch(ids)
+            val known = recorded.map { it.jsonObject["idMal"]!!.jsonPrimitive.int }.toSet()
+
+            assertEquals(11, (answers.of(61469) as Outcome.Success).value!!.schedule.totalEpisodes)
+            for (id in ids - known) assertEquals(Outcome.Success(null), answers.of(id))
+            for (id in known) assertTrue("$id ${answers.of(id)}", (answers.of(id) as? Outcome.Success)?.value != null)
+            assertEquals(listOf(Asked(ids.take(50), 1, 1), Asked(ids.drop(50), 1, 1)), aniList.asked().drop(2).take(2))
+        }
+
+    @Test
+    fun `a failed page of a later round fails the titles it held, never as unknown or cut short`() =
+        runTest {
+            val ids = (1..60).toList()
+            aniList.answer = { asked ->
+                when {
+                    asked.schedulePage == 1 -> copiesOf(asked, "hundreds_of_episodes_6")
+                    asked.page == 2 -> reply(500, "")
+                    else -> copiesOf(asked, "hundreds_of_episodes_7")
+                }
+            }
+            val answers = fetch(ids)
+            val whole = recordedEpisodes("hundreds_of_episodes_6", 235) + recordedEpisodes("hundreds_of_episodes_7", 235)
+
+            for (id in 1..50) assertEquals(Outcome.Success(FetchedAiring(AiringSchedule(whole, null))), answers.of(id))
+            for (id in 51..60) assertEquals(Outcome.Failure(DataError.ServerError), answers.of(id))
+            assertEquals(listOf(Asked(ids, 1, 1), Asked(ids, 2, 1), Asked(ids, 1, 2), Asked(ids, 2, 2)), aniList.asked())
+        }
+
+    @Test
+    fun `a title missing from a later round's complete answer fails, it is not answered with its first page`() =
+        runTest {
+            aniList.answer = { asked ->
+                if (asked.schedulePage == 1) {
+                    copiesOf(asked, "hundreds_of_episodes_6")
+                } else {
+                    copiesOf(asked.copy(ids = asked.ids - 1), "hundreds_of_episodes_7")
+                }
+            }
+            val answers = fetch(listOf(1, 2))
+
+            assertEquals(Outcome.Failure(DataError.ServerError), answers.of(1))
+            assertTrue(answers.of(2) is Outcome.Success)
+        }
+
+    @Test
+    fun `a gap or a repeat in episode numbers where pages meet fails the title and is reported`() =
+        runTest {
+            for (first in listOf(1093, 1091)) {
+                aniList.answer = { asked ->
+                    val page = json(AniListRecordings.byRequest.getValue(asked))
+                    val path = MEDIA + listOf("0", "airingSchedule", "nodes", "0", "episode")
+                    reply(200, (if (asked.schedulePage == 2) page.edited(path, JsonPrimitive(first)) else page).toString())
+                }
+                network.unexpected.clear()
+                advanceTimeBy(FailureCoolDown)
+
+                assertEquals("$first", Outcome.Failure(DataError.ServerError), fetch(listOf(235)).of(235))
+                assertEquals(listOf(AniListOddAnswer::class.java), network.unexpected.map { it.javaClass })
+            }
+            assertEquals(List(2) { listOf(1, 2) }.flatten(), aniList.asked().map { it.schedulePage })
+        }
+
+    @Test
     fun `300 ids are asked in the fewest requests, none sooner than half the limit AniList reports allows`() =
         runTest {
-            aniList.answer = ::weeklyFor
+            aniList.answer = { copiesOf(it) }
             val ids = (1..300).toList()
 
             val answers = fetch(ids)
@@ -215,9 +331,9 @@ class AniListAiringTest {
     @Test
     fun `a higher limit reported shortens the spacing, never below what AniList's usual limit allows`() =
         runTest {
-            aniList.answer = { weeklyFor(it, limit = 90) }
+            aniList.answer = { copiesOf(it, limit = 90) }
             fetch((1..100).toList())
-            aniList.answer = { weeklyFor(it, limit = 1000) }
+            aniList.answer = { copiesOf(it, limit = 1000) }
             fetch((1..150).toList())
 
             val shortest = AniListPace.spacingFor(AniListPace.HIGHEST_LIMIT).inWholeMilliseconds
@@ -226,44 +342,44 @@ class AniListAiringTest {
         }
 
     @Test
-    fun `a page that fails leaves its titles not fetched and the others fetched, after a wait`() =
+    fun `a page that fails leaves its titles not fetched and the others fetched, each request after a failure later`() =
         runTest {
-            aniList.answer = { if (it.page == 1) reply(500, "") else weeklyFor(it) }
+            aniList.answer = { if (it.ids.size == 100 || 1 in it.ids) reply(500, "") else copiesOf(it) }
             val answers = fetch((1..100).toList())
 
             for (id in 1..50) assertEquals(Outcome.Failure(DataError.ServerError), answers.of(id))
             for (id in 51..100) assertTrue(answers.of(id) is Outcome.Success)
-            assertTrue(gaps().single() >= AniListPace.AfterFailure.inWholeMilliseconds)
+            assertEquals(listOf(100, 50, 50), aniList.asked().map { it.ids.size })
+            assertTrue(gaps().toString(), gaps().all { it >= AniListPace.AfterFailure.inWholeMilliseconds })
         }
 
     @Test
-    fun `a request that gets no answer fails its titles, and offline the call stops`() =
+    fun `a request that gets no answer fails its titles after a wait, and offline the call stops`() =
         runTest {
-            aniList.answer = { if (it.page == 1) dropped() else weeklyFor(it) }
+            aniList.answer = { if (1 in it.ids) dropped() else copiesOf(it) }
             val online = fetch((1..100).toList())
 
             assertEquals(Outcome.Failure(DataError.ServerError), online.of(1))
             assertTrue(online.of(51) is Outcome.Success)
-            assertEquals(2, aniList.requests.size)
+            assertEquals(3, aniList.requests.size)
+            assertTrue(gaps().toString(), gaps().all { it >= AniListPace.AfterFailure.inWholeMilliseconds })
 
             network.online = false
             aniList.answer = { dropped() }
-            val offline = fetch((1..100).toList())
+            val offline = fetch((101..200).toList())
 
-            assertEquals(Outcome.Failure(DataError.NoConnection), offline.of(1))
-            assertEquals(Outcome.Failure(DataError.NoConnection), offline.of(51))
-            assertEquals(3, aniList.requests.size)
+            assertEquals(Outcome.Failure(DataError.NoConnection), offline.of(101))
+            assertEquals(Outcome.Failure(DataError.NoConnection), offline.of(151))
+            assertEquals(4, aniList.requests.size)
         }
 
     @Test
     fun `a refusal stops the call, holds every request back for its wait, and leaves MAL's back-off at zero`() =
         runTest {
-            aniList.answer = { if (it.page == 2) reply(429, "", headers = mapOf("Retry-After" to "120")) else weeklyFor(it) }
+            aniList.answer = { if (it.page == 2) reply(429, "", headers = mapOf("Retry-After" to "120")) else copiesOf(it) }
             val answers = fetch((1..150).toList())
 
-            assertTrue(answers.of(1) is Outcome.Success)
-            assertEquals(Outcome.Failure(DataError.Refused), answers.of(51))
-            assertEquals(Outcome.Failure(DataError.Refused), answers.of(101))
+            for (id in listOf(1, 51, 101)) assertEquals(Outcome.Failure(DataError.Refused), answers.of(id))
             assertEquals(2, aniList.requests.size)
             assertEquals(Duration.ZERO, network.http.backOff.remaining())
 
@@ -278,7 +394,7 @@ class AniListAiringTest {
             assertEquals(Duration.ZERO, network.http.backOff.remaining())
 
             advanceTimeBy(AniListPace.FirstRefusal * 2 - 1.milliseconds)
-            aniList.answer = ::weeklyFor
+            aniList.answer = { copiesOf(it) }
             assertEquals(Outcome.Failure(DataError.Refused), fetch(listOf(1)).of(1))
             advanceTimeBy(1.milliseconds)
             assertTrue(fetch(listOf(1)).of(1) is Outcome.Success)
@@ -289,7 +405,7 @@ class AniListAiringTest {
         runTest {
             network.always(answer(429))
             network.http.call { network.things.value.read() }
-            aniList.answer = ::weeklyFor
+            aniList.answer = { copiesOf(it) }
 
             assertTrue(fetch(listOf(1)).of(1) is Outcome.Success)
             assertEquals(MalBackOff.First, network.http.backOff.remaining())
@@ -355,27 +471,13 @@ class AniListAiringTest {
     @Test
     fun `an id no request can carry fails alone`() =
         runTest {
-            aniList.answer = ::weeklyFor
+            aniList.answer = { copiesOf(it) }
             val answers = aniList.client(this).fetch(listOf(titleWithId(1), titleWithId(1).copy(id = AnimeId(1L shl 40))), since)
 
             assertEquals(Outcome.Failure(DataError.InvalidRequest), answers[AnimeId(1L shl 40)])
             assertTrue(answers.of(1) is Outcome.Success)
             assertEquals(listOf(listOf(1)), aniList.asked().map { it.ids })
         }
-
-    // The recorded weekly title once for each id of the page asked, under that id, and the recorded mark of a page that
-    // has more titles after it or none.
-    private fun weeklyFor(
-        asked: Asked,
-        limit: Int = AniListRecordings.limit,
-    ): MockResponse {
-        val title = mediaOf(json("airing_weekly")).single().jsonObject
-        val ids = asked.ids.drop((asked.page - 1) * 50).take(50)
-        val titles = ids.map { JsonObject(title + ("idMal" to JsonPrimitive(it))) }
-        val more = asked.page * 50 < asked.ids.size
-        val page = json(if (more) "more_than_one_page" else "airing_weekly")
-        return reply(200, page.edited(MEDIA, JsonArray(titles)).toString(), limit)
-    }
 
     // What an id unknown to AniList is answered with, alone or with others unknown too.
     private fun unknown(asked: Asked): MockResponse = reply(200, AniListRecordings.body("unknown_alone"))
@@ -393,11 +495,5 @@ class AniListAiringTest {
                 }
         val lastPage = json("unknown_alone")["data"]!!.jsonObject["Page"]!!.jsonObject["pageInfo"]
         return reply(200, page.edited(MEDIA, JsonArray(titles)).edited(listOf("data", "Page", "pageInfo"), lastPage).toString())
-    }
-
-    private companion object {
-        val MEDIA = listOf("data", "Page", "media")
-
-        fun mediaOf(page: JsonObject) = page["data"]!!.jsonObject["Page"]!!.jsonObject["media"]!!.jsonArray
     }
 }
