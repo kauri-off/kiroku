@@ -102,7 +102,7 @@ class ShellMessages(
 
     private var serial = 0L
 
-    // Ends the shown failure once its title comes to hold what its Retry would write, as when a download shows MAL made it.
+    // Ends the shown failure once its Retry would change nothing: MAL made it, or each value it sets changed since.
     private var made: Job? = null
 
     fun post(message: ShellMessage) {
@@ -190,19 +190,15 @@ class ShellMessages(
 
     private fun endWhenMade(posted: Posted): Job? {
         val retry = (posted.message.action as? ShellMessage.Action.Retry)?.write as? ListWrite.Retry ?: return null
-        val writes: (ListValues?) -> ListValues? =
-            when (val write = retry.failure.write) {
-                is ListWrite.Save -> write::over
-                is ListWrite.Remove -> { _ -> null }
-                else -> return null
-            }
+        val failure = retry.failure
+        if (failure.write !is ListWrite.Save && failure.write !is ListWrite.Remove) return null
         return scope.launch {
             // Values the title already held when the message showed say nothing of MAL: they may be the rollback's.
             var start: Start? = null
             try {
                 list.observeEntry(retry.anime.id).map { it?.values }.first { now ->
                     val from = start ?: Start(now).also { start = it }
-                    now != from.values && now == writes(now)
+                    now != from.values && failure.settledBy(now)
                 }
             } catch (_: DataException) {
                 return@launch

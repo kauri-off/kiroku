@@ -84,7 +84,7 @@ sealed interface ListWrite {
         override val anime: Anime get() = change.anime
     }
 
-    // Applies the failed write again as a new edit (W2).
+    // Applies again, as a new edit, what the failed write set that nothing has changed since (W2).
     data class Retry(
         val failure: WriteFailure,
     ) : ListWrite {
@@ -129,7 +129,7 @@ sealed interface ListWrite {
                     it.values.withWatched((it.values.watchedEpisodes + by).coerceAtLeast(0), it.anime.malEpisodes, today)
                 }
             is Undo -> change.revert(current)
-            is Retry -> failure.write.applyTo(current, today)
+            is Retry -> failure.left(current?.values)?.applyTo(current, today) ?: current?.values
         }
 }
 
@@ -175,8 +175,52 @@ data class WriteFailure(
     val error: DataError,
     val write: ListWrite,
     val list: SignInId?,
+    // Null when the failure could not tell; its Retry then sets all it carries.
+    val untouched: Untouched? = null,
 ) {
     val retry: ListWrite get() = ListWrite.Retry(this)
+
+    // W2: what a Retry over [current] still sets, each value changed since the failure left out; null when none is left.
+    fun left(current: ListValues?): ListWrite? {
+        val untouched = untouched ?: return write
+        return when (write) {
+            is ListWrite.Save -> {
+                val named = write.only ?: ListField.entries.toSet()
+                val kept =
+                    when {
+                        current == null -> named.takeIf { null in untouched.values }
+                        else -> named.filterTo(mutableSetOf()) { untouched.holds(it, current) || it.of(write.values) == it.of(current) }
+                    }
+                when {
+                    kept.isNullOrEmpty() -> null
+                    kept == named -> write
+                    else -> write.copy(only = kept)
+                }
+            }
+            is ListWrite.Remove -> write.takeIf { current == null || current in untouched.values }
+            else -> write
+        }
+    }
+
+    // A Retry over [current] would change nothing: what it sets is there, or what was there changed since.
+    fun settledBy(current: ListValues?): Boolean =
+        when (val left = left(current)) {
+            null -> true
+            is ListWrite.Save -> current != null && left.over(current) == current
+            is ListWrite.Remove -> current == null
+            else -> false
+        }
+}
+
+// What a title may hold that nobody changed since a write failed: MAL's confirmed values, and the request's if made.
+data class Untouched(
+    // Null is no entry.
+    val values: Set<ListValues?>,
+) {
+    fun holds(
+        field: ListField,
+        current: ListValues,
+    ): Boolean = values.any { it != null && field.of(it) == field.of(current) }
 }
 
 // The list as a screen sees it: read and synced, never written, so a write can only go through the shell.

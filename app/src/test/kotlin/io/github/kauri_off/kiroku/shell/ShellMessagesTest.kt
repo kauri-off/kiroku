@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -29,6 +30,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -548,5 +550,100 @@ class ShellMessagesTest {
         compose.runOnUiThread { scope.launch { graph.list.sync() } }
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertExists()
+    }
+
+    private fun shellShown(): ShellViewModel {
+        val shell = ShellViewModel(graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val host = remember { SnackbarHostState() }
+                ShownMessages(shell.messages, host)
+                SnackbarHost(host)
+            }
+        }
+        compose.waitForIdle()
+        return shell
+    }
+
+    // "Mark watched" from a notification: its write waits for MAL's answer, so it is started on the engine's thread.
+    private fun markWatchedInBackground(episode: Int) {
+        lateinit var sent: Deferred<Outcome<Unit>>
+        compose.runOnUiThread { sent = scope.async { graph.list.send(ListWrite.MarkWatched(anime, episode)) } }
+        compose.waitForIdle()
+        assertEquals(Outcome.Success(Unit), runBlocking { sent.await() })
+    }
+
+    // W2: a Retry sets only what MAL has not changed since the failure, so the episode the notification marked stays.
+    @Test
+    fun `a failed save's Retry tapped after a send changed the count sets the score it carries and leaves the send's count`() {
+        shellShown()
+        val opened = runBlocking { graph.list.observeEntry(anime.id).first()!! }.values
+        graph.demo.server.failingWrites.value = true
+        val edited = opened.copy(watchedEpisodes = 15, score = 3)
+        runBlocking { graph.list.write(ListWrite.Save(anime, edited, setOf(ListField.WatchedEpisodes, ListField.Score))) }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        compose.onNodeWithText("Could not save").assertExists()
+
+        markWatchedInBackground(13)
+        compose.onNodeWithText("Could not save").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        compose.waitForIdle()
+        val expected = opened.copy(watchedEpisodes = 13, score = 3)
+        assertEquals(
+            expected,
+            graph.demo.server
+                .entry(anime.id)
+                ?.values,
+        )
+        assertEquals(expected, runBlocking { graph.list.observeEntry(anime.id).first()!! }.values)
+    }
+
+    // A download that changed each value the Retry sets leaves it nothing: the message goes, and a tap as it went writes nothing.
+    @Test
+    fun `a failed save's message goes once a download changed the count it would set, and its Retry leaves that count`() {
+        val shell = shellShown()
+        graph.demo.server.failingWrites.value = true
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        val posted = checkNotNull(shell.messages.current.value)
+        val requests = graph.demo.server.requests.size
+
+        graph.demo.server.editOnWebsite(
+            anime,
+            runBlocking { graph.list.observeEntry(anime.id).first()!! }.values.copy(watchedEpisodes = 20),
+        )
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        assertEquals(20, watched())
+        compose.onNodeWithText("Could not save").assertDoesNotExist()
+
+        compose.runOnUiThread { shell.messages.ended(posted, actionPerformed = true) }
+        compose.waitForIdle()
+        assertEquals(20, watched())
+        assertEquals(requests, graph.demo.server.requests.size)
+    }
+
+    // W3: an Undo takes back its own step from the count as it is, so the episode a send marked since stays.
+    @Test
+    fun `an Undo of a +1 tapped after a send takes back its own step alone`() {
+        shell()
+        val change = runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }!!
+        compose.runOnUiThread { messages.post(ShellMessage(ShellMessage.Text.EpisodeWatched(13), ShellMessage.Action.Undo(change.undo!!))) }
+        compose.waitForIdle()
+
+        markWatchedInBackground(14)
+        assertEquals(14, watched())
+        compose.onNodeWithText("Undo").performClick()
+        compose.waitForIdle()
+        assertEquals(13, watched())
+        assertEquals(
+            13,
+            graph.demo.server
+                .entry(anime.id)
+                ?.values
+                ?.watchedEpisodes,
+        )
     }
 }
