@@ -382,38 +382,47 @@ class SourceRulesTest {
     }
 
     @Test
-    fun appCodeMakesNoAiringValue() {
-        val sources = appSources()
-        assertTrue(sources.any { it.name == "ListState.kt" } && sources.any { it.name == "ListFixtureStates.kt" })
+    fun appAndDataCodeMakeNoAiringValue() {
+        val sources = appSources() + dataSources()
+        assertTrue(sources.any { relative(it).endsWith("list/ListState.kt") })
+        assertTrue(sources.any { it.name == "ListFixtureStates.kt" })
+        assertTrue(sources.any { relative(it).startsWith(DATA_SOURCES + "src/main/") })
+        assertTrue(dataSources().none { relative(it).startsWith(DATA_SOURCES + "src/test") })
         assertEquals(emptyList<String>(), sources.flatMap { airingValueProblems(relative(it), it.readText()) })
     }
 
     @Test
     fun aPlantedAiringValueFails() {
-        val planted =
+        val counts =
             listOf(
-                "val a = Airing(count, total, null, null)",
                 "val a = AiredCount.Exact(entry.anime.malEpisodes ?: 0)",
                 "val a = AiredCount.Estimated(aired.value - values.watchedEpisodes)",
-                "val a = AiringPhase.Aired(count, toWatch, next)",
-                "val a = AiringPhase.NotYetAired(premiere)",
-                "val a = Premiere.OnDay(date)",
-                "val a = UpNext.Coming(episode.airsAt)",
                 "import io.github.kauri_off.kiroku.core.airing.AiredCount.Exact",
-                "import io.github.kauri_off.kiroku.core.airing.AiringPhase.*",
-                "val a = airing.copy(aired = count)",
-                "val a = airing.copy(\n    nextEpisode = null,\n)",
-                "val a = airing.copy(latestAiredAt = now)",
-                "val a = airing.copy(inexact = null)",
+                "import io.github.kauri_off.kiroku.core.airing.AiredCount.*",
+                "val a = toWatch.copy(value = 0)",
+                "val a = toWatch.copy(\n    value = 0,\n)",
             )
-        for (source in planted) assertEquals(source, 1, airingValueProblems("A.kt", "$source\n").size)
+        val episodes =
+            listOf(
+                "val a = Line3.NextEpisode(ScheduledEpisode(aired.value + 1, at))",
+                "val a = next.copy(number = next.number + 1)",
+                "val a = next.copy(\n    airsAt = now,\n)",
+            )
+        for (name in listOf("app/src/main/kotlin/A.kt", "data/src/main/kotlin/A.kt")) {
+            for (source in counts) assertEquals("$name: $source", 1, airingValueProblems(name, "$source\n").size)
+        }
+        for (source in episodes) {
+            assertEquals(source, 1, airingValueProblems("app/src/main/kotlin/A.kt", "$source\n").size)
+            assertEquals(source, 0, airingValueProblems("data/src/main/kotlin/A.kt", "$source\n").size)
+        }
         val clean =
             "import io.github.kauri_off.kiroku.core.airing.AiredCount\nimport io.github.kauri_off.kiroku.core.airing.Airing\n" +
                 "val shown = titleAiring(anime, values, airing, today)\nval aired = (shown.phase as? AiringPhase.Aired)?.aired\n" +
-                "val a = airingAt(anime, schedule, now)\nval b = liveAiring(parts)\nval c: (AnimeId) -> Airing? = airing::get\n" +
-                "when (phase) {\n    is AiringPhase.Aired -> AiringBlock(phase, page)\n    AiringPhase.CountUnknown -> Unit\n}\n" +
-                "val d = aired == other\nval e = Line3.NextEpisode(episode)\nval f = TitleSummary(anime, entry, airing = null)\n"
-        assertEquals(emptyList<String>(), airingValueProblems("A.kt", clean))
+                "val a = airingAt(anime, schedule, now)\nval c: (AnimeId) -> Airing? = airing::get\n" +
+                "when (aired) {\n    is AiredCount.Exact -> exact(aired.value)\n" +
+                "    is AiredCount.Estimated -> estimated(aired.value)\n}\n" +
+                "val e = Line3.NextEpisode(episode)\nval f = entry.copy(values = values)\nfun line(episode: ScheduledEpisode): String\n"
+        assertEquals(emptyList<String>(), airingValueProblems("app/src/main/kotlin/A.kt", clean))
     }
 
     @Test

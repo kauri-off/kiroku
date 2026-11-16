@@ -3,13 +3,13 @@ package io.github.kauri_off.kiroku.core.airing
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.PartialDate
-import io.github.kauri_off.kiroku.core.model.firstDay
+import io.github.kauri_off.kiroku.core.model.lastDay
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
-import kotlin.math.abs
 
-// A3, A5: the episodes by which a schedule may count past MAL, which a recap explains.
+// A4: the episodes by which a schedule that begins after episode 1 may count past MAL's total, which a recap explains.
 const val RECAP_EPISODES = 1
 
 // A4: how far ahead of one episode a week from MAL's start date a schedule's first stored episode may be.
@@ -23,6 +23,9 @@ val SCHEDULE_STOPPED_AFTER: Duration = Duration.ofDays(4 * 7)
 
 // A6: the weeks from the first slot for which a title without a total is estimated.
 const val ESTIMATED_WEEKS_WITHOUT_TOTAL = 13L
+
+// A6: a slot before this hour on the eve of MAL's start date is a late-night one, written under the evening's weekday.
+val LATE_NIGHT_UNTIL: LocalTime = LocalTime.of(5, 0)
 
 private val WEEK: Duration = Duration.ofDays(7)
 
@@ -53,20 +56,21 @@ fun airingAt(
     }
 }
 
-// A4: a number past MAL's total, nothing aired of a schedule that begins after episode 1, or a first episode too far ahead.
+// A4, of a schedule that begins after episode 1: a number past MAL's total, nothing aired, or a first episode too far ahead.
 private fun numberedDifferently(
     anime: Anime,
     episodes: List<ScheduledEpisode>,
     now: Instant,
 ): Boolean {
-    val malTotal = anime.malEpisodes
-    if (malTotal != null && episodes.any { it.number > malTotal + RECAP_EPISODES }) return true
     val first = episodes.minBy { it.number }
     if (first.number == 1) return false
+    val malTotal = anime.malEpisodes
+    if (malTotal != null && episodes.any { it.number > malTotal + RECAP_EPISODES }) return true
     if (episodes.none { !it.airsAt.isAfter(now) }) return true
+    // A partial date counts from its last day, the latest the title can have begun.
     val start =
         anime.startDate
-            ?.firstDay()
+            ?.lastDay()
             ?.atStartOfDay(JAPAN)
             ?.toInstant() ?: return false
     val weeks = Duration.between(start, first.airsAt).dividedBy(WEEK).coerceAtLeast(0)
@@ -86,8 +90,9 @@ private fun scheduled(
     val highest = aired.maxOfOrNull { it.number } ?: 0
     val count = if (total == null) highest else minOf(highest, total)
     val next = coming.filter { it.number > count && (total == null || it.number <= total) }.minByOrNull { it.number }
+    // A5: the schedule's total is the one it states, and at least its highest number.
     val malTotal = anime.malEpisodes
-    val totalsDisagree = malTotal != null && scheduleTotal != null && abs(malTotal - scheduleTotal) > RECAP_EPISODES
+    val totalsDisagree = malTotal != null && ((scheduleTotal != null && scheduleTotal != malTotal) || episodes.any { it.number > malTotal })
     val complete = finished || (total != null && count >= total)
     val stopsAt = aired.maxOfOrNull { it.airsAt }?.takeIf { coming.isEmpty() && !complete }?.plus(SCHEDULE_STOPPED_AFTER)
     val stopped = stopsAt != null && !now.isBefore(stopsAt)
@@ -141,11 +146,15 @@ private fun firstSlot(anime: Anime): Instant? {
     val start = (anime.startDate as? PartialDate.Day)?.date ?: return null
     val broadcast = anime.broadcast ?: return null
     val time = broadcast.japanTime ?: return null
-    return start
-        .with(TemporalAdjusters.nextOrSame(broadcast.dayOfWeek))
-        .atTime(time)
-        .atZone(JAPAN)
-        .toInstant()
+    val eve = start.minusDays(1)
+    val day =
+        when {
+            broadcast.dayOfWeek != eve.dayOfWeek -> start.with(TemporalAdjusters.nextOrSame(broadcast.dayOfWeek))
+            // The weekday before the start date: that night's slot, which falls on the start date when it is past midnight.
+            time.isBefore(LATE_NIGHT_UNTIL) -> start
+            else -> eve
+        }
+    return day.atTime(time).atZone(JAPAN).toInstant()
 }
 
 private fun earliest(vararg instants: Instant?): Instant? = instants.filterNotNull().minOrNull()

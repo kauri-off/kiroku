@@ -1,7 +1,7 @@
 package io.github.kauri_off.kiroku.titlesub
 
 import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.episodeTotal
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.relatedGroups
+import java.time.LocalDate
 
 // Every state has the top bar, so every state shows the session banner while the session is expired (S6).
 sealed interface RelatedState {
@@ -69,6 +70,7 @@ fun relatedState(
     airing: Map<AnimeId, Airing>,
     language: TitleLanguage,
     session: Session?,
+    today: LocalDate,
 ): RelatedState.Shown =
     RelatedState.Shown(
         relatedGroups(related).map { (relation, items) ->
@@ -82,7 +84,7 @@ fun relatedState(
                         posterUrl = anime.posterUrl,
                         mediaType = anime.mediaType,
                         year = anime.startDate?.year,
-                        total = episodeTotal(anime, airing[anime.id]),
+                        total = titleAiring(anime, entries[anime.id], airing[anime.id], today).total,
                         entry = entries[anime.id],
                     )
                 },

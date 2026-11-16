@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.plain
 import io.github.kauri_off.kiroku.title.TitlePage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -46,6 +47,7 @@ class ListAndTitleAgreeTest {
                 AiredCount.Unknown,
                 AiredCount.Estimated(0),
                 AiredCount.Estimated(2),
+                AiredCount.Estimated(24),
                 AiredCount.Exact(0),
                 AiredCount.Exact(2),
                 AiredCount.Exact(24),
@@ -78,13 +80,13 @@ class ListAndTitleAgreeTest {
         assertEquals(name, expected, row.line3)
         if (entry.status == ListStatus.Watching) {
             val premiere = (row.line2 as? Line2.Premieres)?.premiere as? Premiere.At
-            val shown =
+            val shown: Any =
                 when (val line3 = row.line3) {
-                    is Line3.ToWatch -> UpNext.ToWatch(airing?.latestAiredAt)
-                    is Line3.NextEpisode -> UpNext.Coming(line3.episode.airsAt)
-                    null -> premiere?.let { UpNext.Coming(it.instant) } ?: UpNext.Rest
+                    is Line3.ToWatch -> listOf(airing?.latestAiredAt)
+                    is Line3.NextEpisode -> line3.episode.airsAt
+                    null -> premiere?.instant ?: UpNext.Rest
                 }
-            assertEquals("Up next, $name", shown, result.upNext)
+            assertEquals("Up next, $name", shown, result.upNext.plain())
         }
     }
 }

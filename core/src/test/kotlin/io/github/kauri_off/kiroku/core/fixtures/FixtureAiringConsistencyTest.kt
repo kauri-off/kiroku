@@ -10,7 +10,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import java.time.Duration
-import kotlin.math.abs
 
 @RunWith(Parameterized::class)
 class FixtureAiringConsistencyTest(
@@ -88,7 +87,7 @@ class FixtureAiringConsistencyTest(
             }
             val malTotal = anime.malEpisodes
             val schedulesTotal = schedule.totalEpisodes
-            if (malTotal != null && schedulesTotal != null) assertTrue(abs(malTotal - schedulesTotal) <= 1)
+            if (malTotal != null && schedulesTotal != null) assertEquals(malTotal, schedulesTotal)
         }
     }
 

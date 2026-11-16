@@ -1,7 +1,7 @@
 package io.github.kauri_off.kiroku.edit
 
 import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.episodeTotal
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -67,7 +67,7 @@ data class EditSheetState(
             saved: ListValues?,
             titleLanguage: TitleLanguage,
             today: LocalDate,
-        ) = of(anime.titles.preferred(titleLanguage), saved, episodeTotal(anime, airing), anime.malEpisodes, today)
+        ) = of(anime.titles.preferred(titleLanguage), saved, titleAiring(anime, saved, airing, today).total, anime.malEpisodes, today)
 
         fun of(
             title: String,

@@ -99,12 +99,18 @@ class AiringCalculatorTest {
 
     @Test
     fun `A3 the clamp, the aired count stops at the total and no next episode lies beyond it`() {
+        // A schedule that counts a recap MAL does not is an estimate (A5), and it stops at MAL's total.
         val recap = weekly(1..13, total = 13)
-        assertEquals(exact(11, 12, next = 12), at(title, recap, week(10)))
-        assertEquals(exact(12, 12, next = null), at(title, recap, week(11)))
-        assertEquals(exact(12, 12, next = null), at(title, recap, week(12)))
-        assertEquals(exact(12, 12, next = null), at(title, recap, week(40)))
+
+        fun doubted(count: Int) = Airing(AiredCount.Estimated(count), 12, null, week(count - 1), Inexact.TotalsDisagree)
+        assertEquals(doubted(11), at(title, recap, week(10)))
+        assertEquals(doubted(12), at(title, recap, week(11)))
+        assertEquals(doubted(12), at(title, recap, week(12)))
+        assertEquals(doubted(12), at(title, recap, week(40)))
+        // A schedule that runs past its own total, the only one known.
         val ownTotal = title.copy(malEpisodes = null)
+        assertEquals(exact(11, 12, next = 12), at(ownTotal, weekly(1..13, total = 12), week(10)))
+        assertEquals(exact(12, 12, next = null), at(ownTotal, weekly(1..13, total = 12), week(11)))
         assertEquals(exact(12, 12, next = null), at(ownTotal, weekly(1..13, total = 12), week(12)))
         assertEquals(AiredCount.Estimated(12), airingAt(title, null, week(40)).aired)
     }
@@ -122,14 +128,17 @@ class AiringCalculatorTest {
     }
 
     @Test
-    fun `A4 a schedule whose numbers run past MAL's total is not used`() {
+    fun `A4 a schedule that begins after episode 1 and runs past MAL's total is not used`() {
         val sequel = weekly(13..24, from = 0, total = 24)
-        val result = at(title, sequel, week(2))
-        assertEquals(Airing(AiredCount.Estimated(3), 12, null, week(2), Inexact.NumberedDifferently), result)
-        assertEquals(result, at(title, AiringSchedule(listOf(episode(1), episode(2), episode(3), episode(14)), 12), week(2)))
+        assertEquals(Airing(AiredCount.Estimated(3), 12, null, week(2), Inexact.NumberedDifferently), at(title, sequel, week(2)))
         assertEquals(Inexact.NumberedDifferently, airingAt(title, weekly(13..24, from = 0), week(-1)).inexact)
         assertEquals(Inexact.NumberedDifferently, airingAt(title, weekly(13..24, from = 0), week(40)).inexact)
-        assertNull(airingAt(title, weekly(1..13), week(2)).inexact)
+        // Stored from episode 8, which a weekly title has reached by then: only the number past the total rejects it.
+        assertEquals(Inexact.NumberedDifferently, airingAt(title, weekly(8..14, total = null), week(9)).inexact)
+        assertNull(airingAt(title, weekly(8..12, total = null), week(9)).inexact)
+        // One past the total may be a recap, and a schedule that begins at episode 1 is read: both are A5's doubt.
+        assertEquals(Inexact.TotalsDisagree, airingAt(title, weekly(8..13, total = null), week(9)).inexact)
+        assertEquals(Inexact.TotalsDisagree, airingAt(title, weekly(1..24, total = 24), week(2)).inexact)
     }
 
     @Test
@@ -155,14 +164,44 @@ class AiringCalculatorTest {
     }
 
     @Test
-    fun `A4 the start of a partial date is the first day it names, and no date tests nothing`() {
+    fun `A4 episodes that air before MAL's start date count as its first week`() {
+        val long = title.copy(malEpisodes = 24)
+        assertNull(airingAt(long, weekly(4..12, from = -2, total = null), week(2)).inexact)
+        assertEquals(Inexact.NumberedDifferently, airingAt(long, weekly(5..12, from = -2, total = null), week(2)).inexact)
+    }
+
+    @Test
+    fun `A4 the weeks are counted from the start date's midnight in Japan`() {
+        val long = title.copy(malEpisodes = 24)
+        // 08:00 in Japan two weeks after the start date is two weeks on, which allows episode 6.
+        val morning =
+            start
+                .plusDays(14)
+                .atTime(LocalTime.of(8, 0))
+                .atZone(JAPAN)
+                .toInstant()
+
+        fun from(number: Int) = AiringSchedule(listOf(ScheduledEpisode(number, morning), ScheduledEpisode(number + 1, week(3))), null)
+        assertNull(airingAt(long, from(6), week(2)).inexact)
+        assertEquals(Inexact.NumberedDifferently, airingAt(long, from(7), week(2)).inexact)
+    }
+
+    @Test
+    fun `A4 the start of a partial date is the last day it names, and no date tests nothing`() {
         val sequel = weekly(13..24, from = 0, total = null)
 
         fun reason(date: PartialDate?) = airingAt(title.copy(malEpisodes = 24, startDate = date), sequel, week(2)).inexact
         assertEquals(Inexact.NumberedDifferently, reason(PartialDate.Month(YearMonth.of(2026, 1))))
         assertEquals(Inexact.NumberedDifferently, reason(PartialDate.OnlyYear(Year.of(2026))))
-        assertNull(reason(PartialDate.OnlyYear(Year.of(2025))))
+        assertEquals(Inexact.NumberedDifferently, reason(PartialDate.OnlyYear(Year.of(2025))))
+        assertNull(reason(PartialDate.OnlyYear(Year.of(2024))))
         assertNull(reason(null))
+        // A sequel numbered on that begins in the middle of the only year MAL names.
+        val undated = title.copy(malEpisodes = null, startDate = PartialDate.OnlyYear(Year.of(2026)))
+        assertEquals(
+            Airing(AiredCount.Unknown, null, null, null, Inexact.NumberedDifferently),
+            at(undated, weekly(13..24, from = 26, total = null), week(28)),
+        )
     }
 
     @Test
@@ -175,16 +214,17 @@ class AiringCalculatorTest {
     }
 
     @Test
-    fun `A5 totals that differ by more than one episode make the schedule's count an estimate`() {
-        for (total in listOf(10, 14, 24)) {
-            assertEquals(
-                Airing(AiredCount.Estimated(4), 12, null, week(3), Inexact.TotalsDisagree),
-                at(title, weekly(1..8, total = total), week(3)),
-            )
-        }
-        for (total in listOf(11, 12, 13, null)) {
-            assertEquals(exact(4, 12, next = 5), at(title, weekly(1..8, total = total), week(3)))
-        }
+    fun `A5 totals that differ at all make the schedule's count an estimate`() {
+        val doubted = Airing(AiredCount.Estimated(4), 12, null, week(3), Inexact.TotalsDisagree)
+        for (total in listOf(10, 11, 13, 14, 24)) assertEquals(doubted, at(title, weekly(1..8, total = total), week(3)))
+        for (total in listOf(12, null)) assertEquals(exact(4, 12, next = 5), at(title, weekly(1..8, total = total), week(3)))
+        // A schedule that states no total has at least its highest number.
+        assertEquals(doubted, at(title, weekly(1..13, total = null), week(3)))
+        // A whole season stored against a smaller total on MAL: the schedule's count, which stops at MAL's total.
+        val twoCours = weekly(1..24, total = 24)
+        assertEquals(doubted, at(title, twoCours, week(3)))
+        assertEquals(doubted, at(noSlot, twoCours, week(3)))
+        assertEquals(Airing(AiredCount.Estimated(12), 12, null, week(11), Inexact.TotalsDisagree), at(title, twoCours, week(14)))
         assertEquals(
             Airing(AiredCount.Estimated(0), 12, null, null, Inexact.TotalsDisagree),
             at(title, weekly(1..8, total = 24), week(-1)),
@@ -234,6 +274,32 @@ class AiringCalculatorTest {
         val wednesday = title.copy(startDate = PartialDate.Day(start.minusDays(3)))
         assertEquals(estimated(1, week(0)), at(wednesday, null, week(0)))
         assertEquals(estimated(0, null), at(wednesday, null, week(0).minusNanos(1)))
+    }
+
+    @Test
+    fun `A6 a slot on the weekday before MAL's start date is that night's, not next week's`() {
+        fun firstEpisode(
+            day: DayOfWeek,
+            time: LocalTime,
+        ): Instant? {
+            val anime = title.copy(broadcast = Broadcast(day, time))
+            val changes = airingAt(anime, null, first.minus(Duration.ofDays(30))).changesAt
+            assertEquals(AiredCount.Estimated(1), airingAt(anime, null, checkNotNull(changes)).aired)
+            return changes
+        }
+
+        fun japan(
+            date: LocalDate,
+            time: LocalTime,
+        ) = date.atTime(time).atZone(JAPAN).toInstant()
+        // Past midnight it is written under the evening's weekday and falls on the start date.
+        assertEquals(japan(start, LocalTime.of(0, 50)), firstEpisode(DayOfWeek.FRIDAY, LocalTime.of(0, 50)))
+        // Before midnight it is the eve of the start date.
+        assertEquals(japan(start.minusDays(1), LocalTime.of(23, 56)), firstEpisode(DayOfWeek.FRIDAY, LocalTime.of(23, 56)))
+        assertEquals(japan(start.minusDays(1), LATE_NIGHT_UNTIL), firstEpisode(DayOfWeek.FRIDAY, LATE_NIGHT_UNTIL))
+        // Any other weekday is the first one after the start date.
+        assertEquals(japan(start.plusDays(5), LocalTime.of(0, 50)), firstEpisode(DayOfWeek.THURSDAY, LocalTime.of(0, 50)))
+        assertEquals(japan(start, LocalTime.of(0, 50)), firstEpisode(DayOfWeek.SATURDAY, LocalTime.of(0, 50)))
     }
 
     @Test
@@ -388,7 +454,9 @@ class AiringCalculatorTest {
                 listOf(title, finished, notYetAired, noSlot, title.copy(malEpisodes = null)).flatMap { anime ->
                     listOf(null, weekly(1..12), weekly(1..6), weekly(1..13, total = 13), weekly(13..24, from = 0), weekly(1..8, total = 24))
                         .map { anime to it }
-                }
+                } +
+                // A rejected schedule that is read once its first episode has aired.
+                (title.copy(startDate = null, broadcast = null) to weekly(2..12))
         val from = week(-2)
         val until = from.plus(Duration.ofDays(365))
         var changed = 0

@@ -12,8 +12,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
-import io.github.kauri_off.kiroku.core.airing.AiredCount
-import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureDetails
@@ -37,7 +37,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.time.Instant
+import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -100,9 +100,10 @@ class SubScreenTest {
             relatedState(
                 related = listOf(RelatedAnime(anime, RelationType.Sequel)),
                 entries = mapOf(anime.id to ListValues(ListStatus.Watching, 5, null, null, null)),
-                airing = mapOf(anime.id to Airing(AiredCount.Exact(6), 12, null, Instant.EPOCH)),
+                airing = mapOf(anime.id to airingAt(anime, AiringSchedule(emptyList(), 12), Fixtures.reference.now)),
                 language = TitleLanguage.Romaji,
                 session = SubScreenFixtures.session,
+                today = LocalDate.now(Fixtures.reference.clock),
             )
         show { RelatedScreen(state, onEvent = {}, snackbars = snackbars) }
         compose.onNodeWithText("Watching\u00A0· 5\u00A0/\u00A012", useUnmergedTree = true).assertIsDisplayed()

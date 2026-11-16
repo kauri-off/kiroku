@@ -61,8 +61,9 @@ enum class Inexact {
     ScheduleStopped,
 }
 
-// What has aired of a title at an instant. Only [airingAt] gives one from stored data.
-data class Airing(
+// What has aired of a title at an instant. Only :core builds one, and [airingAt] is the one way to from stored data.
+@ConsistentCopyVisibility
+data class Airing internal constructor(
     val aired: AiredCount,
     val total: Int?,
     val nextEpisode: ScheduledEpisode?,
@@ -99,7 +100,7 @@ val AiringStatus.effective: AiringStatus
             is AiringStatus.Unrecognized -> AiringStatus.Airing
         }
 
-fun episodeTotal(
+internal fun episodeTotal(
     anime: Anime,
     airing: Airing?,
 ): Int? = anime.malEpisodes ?: airing?.total
@@ -124,20 +125,25 @@ private fun toWatch(
     }
 }
 
+// Only :core builds one, as every part of [TitleAiring].
 sealed interface Premiere {
-    data class At(
+    @ConsistentCopyVisibility
+    data class At internal constructor(
         val instant: Instant,
     ) : Premiere
 
-    data class OnDay(
+    @ConsistentCopyVisibility
+    data class OnDay internal constructor(
         val date: LocalDate,
     ) : Premiere
 
-    data class InMonth(
+    @ConsistentCopyVisibility
+    data class InMonth internal constructor(
         val yearMonth: YearMonth,
     ) : Premiere
 
-    data class InYear(
+    @ConsistentCopyVisibility
+    data class InYear internal constructor(
         val year: Year,
     ) : Premiere
 
@@ -168,11 +174,13 @@ internal fun premiereOf(
 
 // What a title's airing block and a list row's airing lines show; null in [TitleAiring] when the title shows none.
 sealed interface AiringPhase {
-    data class NotYetAired(
+    @ConsistentCopyVisibility
+    data class NotYetAired internal constructor(
         val premiere: Premiere,
     ) : AiringPhase
 
-    data class Aired(
+    @ConsistentCopyVisibility
+    data class Aired internal constructor(
         val aired: AiredCount.Known,
         // Present only when above zero.
         val toWatch: AiredCount.Known?,
@@ -211,12 +219,14 @@ internal val AiringPhase.nextAirsAt: Instant?
 // A title's place in "Up next", by what its row shows.
 sealed interface UpNext {
     // Episodes to watch: the most recently aired first.
-    data class ToWatch(
+    @ConsistentCopyVisibility
+    data class ToWatch internal constructor(
         val latestAiredAt: Instant?,
     ) : UpNext
 
     // A known time for the next episode or the premiere: the soonest first.
-    data class Coming(
+    @ConsistentCopyVisibility
+    data class Coming internal constructor(
         val at: Instant,
     ) : UpNext
 
