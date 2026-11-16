@@ -45,7 +45,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -65,13 +64,10 @@ class SearchRouteTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose))
+    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose) { scope.cancel() })
 
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
-
-    @After
-    fun stop() = scope.cancel()
 
     private fun settle() =
         repeat(SETTLE_ROUNDS) {
@@ -352,14 +348,11 @@ class SearchRouteRestoreTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose))
+    val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose) { scope.cancel() })
 
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
     private val messages = ShellMessages(scope, graph.list)
-
-    @After
-    fun stop() = scope.cancel()
 
     @Test
     fun `the search text and the recent searches are restored`() {

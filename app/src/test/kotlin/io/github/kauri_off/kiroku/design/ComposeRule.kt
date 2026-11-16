@@ -13,7 +13,11 @@ import org.robolectric.Shadows
 // The compose rule's activity is not in the app's manifest, so Robolectric is told about it first.
 fun composeRule() = createAndroidComposeRule<ComponentActivity>()
 
-fun registered(rule: TestRule): TestRule =
+// [ended] runs once the activity is gone, so a scope it ends outlives every screen, as the app's own scope does.
+fun registered(
+    rule: TestRule,
+    ended: () -> Unit = {},
+): TestRule =
     RuleChain
         .outerRule(
             object : TestWatcher() {
@@ -21,5 +25,7 @@ fun registered(rule: TestRule): TestRule =
                     val app = RuntimeEnvironment.getApplication()
                     Shadows.shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, ComponentActivity::class.java))
                 }
+
+                override fun finished(description: Description) = ended()
             },
         ).around(rule)

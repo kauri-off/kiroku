@@ -22,7 +22,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,7 +42,7 @@ class CountAsShownTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { scope.cancel() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val clock = MovingClock(Fixtures.reference.now, FixtureTime.zone)
@@ -54,9 +53,6 @@ class CountAsShownTest {
 
     // Not of the chain of the page beneath, whose walk would read the page beneath.
     private val onTop = FixtureAnime.exactCaughtUp
-
-    @After
-    fun stop() = scope.cancel()
 
     private fun app() {
         compose.setContent {
