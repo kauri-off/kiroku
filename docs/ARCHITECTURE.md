@@ -416,7 +416,8 @@ MAL has.
   snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
   Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits set, as shown
   just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
-  fails. 14 is not sent, the row shows 12, and Retry sends 14.
+  fails. 14 is not sent, the row shows 12, and Retry sends 14. A write MAL may have made (it failed with a server
+  error or without a connection) is followed by a download, and its message goes once the entry shows the change.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
   while it still holds what the edit put there. A change off a status the app does not know offers no Undo, as that
@@ -433,9 +434,10 @@ MAL has.
   planned title sets Watching and an empty start date. Nothing else changes on its own: no date the user has is
   overwritten, and a Completed title stepped below its total stays Completed.
 - **W8.** There is no offline write queue in 1.0, except the notification action (N9).
-- **W9. The watched count has no ceiling.** MAL's API sets none, and a user must be able to record what they
-  watched: every write ("+1", "Mark watched", the stepper, the edit sheet) accepts any count of zero or more, above
-  the aired count and the total included. "To watch" is then zero (A8).
+- **W9. The app sets no ceiling on the watched count.** A user must be able to record what they watched: every
+  write ("+1", "Mark watched", the stepper, the edit sheet) accepts any count of zero or more, above the aired count
+  and the total included. MAL accepts such a write and stores no count above a total it knows, and the entry shows
+  what MAL kept. "To watch" is then zero (A8).
 
 ## 8. Design system
 
