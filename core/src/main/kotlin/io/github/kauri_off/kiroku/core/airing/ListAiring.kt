@@ -146,6 +146,8 @@ class ListAiring(
 
     override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = engine.observeSchedules()
 
+    override fun observeStoredSchedules(): Flow<Map<AnimeId, AiringSchedule>> = engine.observeStored()
+
     override suspend fun refreshStale(): Outcome<Unit> = engine.refreshStale().also { given() }
 
     override suspend fun refresh(): Outcome<Unit> = engine.refresh().also { given() }

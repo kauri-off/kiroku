@@ -251,6 +251,11 @@ class AiringCalculatorTest {
         // MAL's total bounds it, and MAL's finished total stands.
         assertEquals(AiredCount.Estimated(12), airingAt(title, weekly(1..13, from = 20, total = 13).copy(doubtedOver = 20), week(22)).aired)
         assertEquals(AiredCount.Exact(12), airingAt(finished, doubted, week(22)).aired)
+        // The finale's time is not taken from a numbering in doubt.
+        assertEquals(week(31), airingAt(finished, second, week(35)).latestAiredAt)
+        assertEquals(week(31), airingAt(finished, second, week(22)).changesAt)
+        assertEquals(Airing(AiredCount.Exact(12), 12, null, null), airingAt(finished, doubted, week(35)))
+        assertEquals(Airing(AiredCount.Exact(12), 12, null, null), airingAt(finished, doubted, week(22)))
     }
 
     @Test

@@ -309,6 +309,9 @@ internal fun doubtedOver(
         .filter { it != chosen && it.total != 1 }
         .mapNotNull { other ->
             val theirs = other.aired()
+            // A finished entry without a schedule has aired up to its total, at times not known.
+            val untimed = other.total?.takeIf { other.episodes.isEmpty() && other.status == FINISHED }
+            if (untimed != null) return@mapNotNull untimed.takeIf { (chosen.episodes.minOfOrNull { it.number } ?: 0) < it }
             val highest = theirs.maxOfOrNull { it.number } ?: return@mapNotNull null
             highest.takeIf { it > (own.maxOfOrNull { it.number } ?: 0) || restarts(own, theirs) || restarts(theirs, own) }
         }.maxOrNull()
@@ -325,3 +328,4 @@ private fun restarts(
 }
 
 private const val RELEASING = "RELEASING"
+private const val FINISHED = "FINISHED"

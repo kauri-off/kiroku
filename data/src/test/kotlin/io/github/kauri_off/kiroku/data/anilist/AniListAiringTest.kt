@@ -249,6 +249,35 @@ class AniListAiringTest {
     }
 
     @Test
+    fun `a first entry that finished without a schedule is doubted as aired up to its total, from before the second's first episode on`() {
+        val first = recordedEntry("more_than_one_page", 59953).copy(malId = 55809)
+        val second = recordedEntry("more_than_one_page", 55809)
+        val pair = listOf(first, second)
+        val anime = recordedTitle("airing_on_a_break").anime
+        val starts = second.episodes.first().airsAt
+        assertEquals(listOf("FINISHED", "RELEASING"), pair.map { it.status })
+        assertEquals(listOf(26, 180), pair.map { it.total })
+        assertEquals(emptyList<ScheduledEpisode>(), first.episodes)
+
+        for (at in listOf(starts.minusSeconds(1), starts) + second.episodes.drop(2).map { it.airsAt } + RecordedAt) {
+            for (entries in listOf(pair, pair.reversed())) {
+                val entry = chosen(entries, at)
+                val schedule = AiringSchedule(entry.episodes, entry.total, doubtedOver(entry, entries, at))
+                val airing = airingAt(anime, schedule, at)
+
+                assertEquals("$at", second, entry)
+                assertEquals("$at", 26, schedule.doubtedOver)
+                assertEquals("$at", AiredCount.Estimated(26), airing.aired)
+                assertNull("$at", airing.nextEpisode)
+            }
+        }
+        assertEquals(AiredCount.Exact(1), airingAt(anime, AiringSchedule(second.episodes, second.total), starts).aired)
+        // A second entry that numbers on from the first's total is not doubted.
+        val numberedOn = second.copy(episodes = second.episodes.map { it.copy(number = it.number + 26) })
+        assertNull(doubtedOver(numberedOn, listOf(first, numberedOn), starts))
+    }
+
+    @Test
     fun `the recorded split title is doubted from the first episode of its later entry on, whichever entry is chosen`() {
         val pair = listOf(recordedPair(0), recordedPair(1))
         val secondStarts = pair[1].episodes.first().airsAt
