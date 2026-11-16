@@ -49,13 +49,36 @@ internal class LiveAiring(
     list: () -> ListSource,
     build: AiringOf = ::listAiring,
 ) : AiringRepository {
-    private val store = lazy { SignedInStore(RoomAiringStore(parts.database, Dispatchers.IO, parts.unexpected), session) }
+    private val store =
+        lazy {
+            val room = RoomAiringStore(parts.database, Dispatchers.IO, parts.unexpected)
+            SignedInStore(room, session, room::clear)
+        }
     private val built = lazy { build(parts, SignedInSource(parts.aniList, session), store.value, list()) }
+    private val opening = Mutex()
+
+    @Volatile
+    private var opened = false
 
     private suspend fun <T> onFirstUse(part: Lazy<T>): T =
         if (part.isInitialized()) part.value else withContext(Dispatchers.IO) { part.value }
 
-    private suspend fun airing(): AiringRepository = onFirstUse(built)
+    // S9: the store is emptied at its first use while nobody is signed in, for a sign-out the process did not finish.
+    private suspend fun store(): SignedInStore {
+        val store = onFirstUse(store)
+        if (!opened) {
+            opening.withLock {
+                if (!opened) reported { store.forget() }
+                opened = true
+            }
+        }
+        return store
+    }
+
+    private suspend fun airing(): AiringRepository {
+        store()
+        return onFirstUse(built)
+    }
 
     override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flow { emitAll(airing().observeAiring()) }
 
@@ -71,10 +94,12 @@ internal class LiveAiring(
 
     override suspend fun refresh(page: Anime): Outcome<Unit> = airing().refresh(page)
 
-    // S9, once the session is signed out; a store that fails it is emptied by the engine at its next look at the empty list.
-    suspend fun forget() {
+    // S9, after the session is signed out; a store that fails it is emptied at the first use of the next process.
+    suspend fun forget() = reported { store().forget() }
+
+    private suspend fun reported(block: suspend () -> Unit) {
         try {
-            onFirstUse(store).forget()
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -104,6 +129,8 @@ internal class SignedInSource(
 internal class SignedInStore(
     private val store: AiringStore,
     private val session: Flow<Session>,
+    // Forgets every title, also one the store cannot read.
+    private val clear: suspend () -> Unit,
 ) : AiringStore {
     // Held across each write's look at the session, so that nothing a sign-out has forgotten is written after it.
     private val writes = Mutex()
@@ -119,10 +146,8 @@ internal class SignedInStore(
         }
     }
 
+    // Empties the store while nobody is signed in, and only then.
     suspend fun forget() {
-        writes.withLock {
-            val stored = store.read()
-            if (stored.isNotEmpty()) store.write(stored.keys.associateWith { null })
-        }
+        writes.withLock { if (session.first() == Session.SignedOut) clear() }
     }
 }

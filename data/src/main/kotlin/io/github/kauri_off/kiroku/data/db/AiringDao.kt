@@ -20,6 +20,12 @@ internal abstract class AiringDao {
     @Query("DELETE FROM airing WHERE title_id IN (:ids)")
     protected abstract suspend fun delete(ids: List<Long>)
 
+    @Query("DELETE FROM airing_episode")
+    protected abstract suspend fun deleteAllEpisodes()
+
+    @Query("DELETE FROM airing")
+    protected abstract suspend fun deleteAll()
+
     @Insert
     protected abstract suspend fun insert(rows: List<AiringRow>)
 
@@ -35,6 +41,12 @@ internal abstract class AiringDao {
             insert(given.map { it.first })
             insertEpisodes(given.flatMap { it.second })
         }
+    }
+
+    // Every row, readable or not; the caller holds the transaction.
+    suspend fun clear() {
+        deleteAllEpisodes()
+        deleteAll()
     }
 
     private companion object {

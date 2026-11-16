@@ -1,9 +1,12 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.content.Intent
+import android.database.DatabaseUtils
+import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
+import io.github.kauri_off.kiroku.core.airing.AiringStore
 import io.github.kauri_off.kiroku.core.airing.AiringTime
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.airing.InMemoryAiringStore
@@ -30,6 +33,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +45,8 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -101,6 +107,8 @@ class LiveAiringTest {
 
     // An expired sign-in, as the session writes it: a zero byte and the sign-in's id. Its list stays readable.
     private fun expired(parts: LiveParts) = parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
+
+    private suspend fun InMemoryAiringStore.clear() = write(read().keys.associateWith { null })
 
     private fun stored(parts: LiveParts) = RoomAiringStore(parts.database, Dispatchers.IO, unexpected::add)
 
@@ -280,7 +288,7 @@ class LiveAiringTest {
         runTest {
             val session = MutableStateFlow<Session>(Session.SignedIn(SignInId(signIn)))
             val inner = InMemoryAiringStore(mapOf(AnimeId(1) to StoredAiring(schedule, Instant.now())))
-            val store = SignedInStore(inner, session)
+            val store = SignedInStore(inner, session) { inner.clear() }
             val list =
                 object : ListSource {
                     override fun observeEntries() = flowOf(watching(anime))
@@ -317,4 +325,117 @@ class LiveAiringTest {
             store.forget()
             assertEquals(emptyMap<AnimeId, StoredAiring>(), inner.read())
         }
+
+    @Test
+    fun `an expired session still stores, and the store is emptied only once nobody is signed in`() =
+        runTest {
+            val session = MutableStateFlow<Session>(Session.Expired(SignInId(signIn)))
+            val inner = InMemoryAiringStore()
+            val store = SignedInStore(inner, session) { inner.clear() }
+            val held = mapOf(anime.id to StoredAiring(schedule, Instant.now()))
+
+            store.write(held)
+            store.forget()
+            assertEquals(held, inner.read())
+
+            session.value = Session.SignedOut
+            store.forget()
+            assertEquals(emptyMap<AnimeId, StoredAiring>(), inner.read())
+        }
+
+    @Test
+    fun `a write under way when the session signs out is not left behind by the store's emptying`() =
+        runTest {
+            val session = MutableStateFlow<Session>(Session.SignedIn(SignInId(signIn)))
+            val inner = InMemoryAiringStore()
+            val gate = CompletableDeferred<Unit>()
+            val slow =
+                object : AiringStore by inner {
+                    override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
+                        gate.await()
+                        inner.write(titles)
+                    }
+                }
+            val store = SignedInStore(slow, session) { inner.clear() }
+            val writing = launch { store.write(mapOf(anime.id to StoredAiring(null, Instant.now()))) }
+            runCurrent()
+            session.value = Session.SignedOut
+            val forgetting = launch { store.forget() }
+            runCurrent()
+            gate.complete(Unit)
+            writing.join()
+            forgetting.join()
+            assertEquals(emptyMap<AnimeId, StoredAiring>(), inner.read())
+        }
+
+    @Test
+    fun `a sign-out empties the airing tables whole, a row the store cannot read included`() =
+        runTest {
+            val parts = parts(backgroundScope, LiveSource("unreadable", MalHosts.Real, aniList = ServedMal.NO_ANILIST))
+            expired(parts)
+            val database = written(parts)
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+
+            graph.session.signOut()
+            assertEquals(0L, count(database, "airing"))
+            assertEquals(0L, count(database, "airing_episode"))
+        }
+
+    @Test
+    fun `a sign-out the process did not finish is completed at the next process's first read of airing, and only signed out`() =
+        runTest {
+            for (signedOut in listOf(true, false)) {
+                val parts = parts(backgroundScope, LiveSource("left$signedOut", MalHosts.Real, aniList = ServedMal.NO_ANILIST))
+                if (!signedOut) expired(parts)
+                val database = written(parts)
+                val graph = LiveGraph(parts, listStore = { InMemoryLocalList(watching(anime), SignInId(signIn)) })
+                assertEquals(2L, count(database, "airing"))
+
+                graph.airing.observeAiring().first()
+                assertEquals("$signedOut", if (signedOut) 0L else 2L, count(database, "airing"))
+            }
+        }
+
+    @Test
+    fun `the live graph's airing holds the device's receiver for its clock and time zone while it is read, and only then`() =
+        runTest {
+            val parts = LiveParts(context, account, "0123abcd", Clock.systemUTC(), backgroundScope, unexpected::add, device = device)
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+            val receivers = { shadowOf(context).registeredReceivers.count { CLOCK_SET.all(it.intentFilter::hasAction) } }
+            graph.airing.observeSchedules().first()
+            assertEquals(0, receivers())
+
+            val reading = backgroundScope.launch { graph.airing.observeAiring().collect {} }
+            until { receivers() == 1 }
+            reading.cancel()
+            until { receivers() == 0 }
+        }
+
+    // Waits on the threads the graph's parts run on.
+    private suspend fun until(done: () -> Boolean) =
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000) {
+                while (!done()) delay(10)
+            }
+        }
+
+    // One readable title with an episode, and one whose row says it is unknown yet has a total, which no read gives back.
+    private suspend fun written(parts: LiveParts): SQLiteDatabase {
+        stored(parts).write(mapOf(anime.id to StoredAiring(schedule, Instant.now())))
+        val database =
+            SQLiteDatabase.openDatabase(
+                context.getDatabasePath("${parts.source.name}.db").path,
+                null,
+                SQLiteDatabase.OPEN_READWRITE,
+            )
+        withContext(
+            Dispatchers.IO,
+        ) { database.execSQL("INSERT INTO airing (title_id, fetched_at, known, total_episodes) VALUES (5, 0, 0, 12)") }
+        return database
+    }
+
+    private suspend fun count(
+        database: SQLiteDatabase,
+        table: String,
+    ): Long = withContext(Dispatchers.IO) { DatabaseUtils.queryNumEntries(database, table) }
 }
