@@ -47,6 +47,10 @@ class DemoServer(
     @Volatile
     var writeLatency: (ListRequest) -> Duration = { this.latency }
 
+    // A client of MAL in front of this list: what gets past the scripted failures is asked through it, as the engine would.
+    @Volatile
+    var reachedThrough: RemoteList? = null
+
     private val sending = MutableStateFlow(0)
 
     // The writes received and not answered yet.
@@ -59,10 +63,17 @@ class DemoServer(
     private val titles = entries.associateTo(mutableMapOf()) { it.anime.id to it.anime }
     private val received = mutableListOf<ListRequest>()
     private var downloads = 0
+    private var answeredWrites = 0
+    private var answeredEntryReads = 0
 
     val requests: List<ListRequest> get() = synchronized(guard) { received.toList() }
 
     val listDownloads: Int get() = synchronized(guard) { downloads }
+
+    // The writes and the reads of one entry that got past the scripted failures, which MAL itself answered.
+    val writesAnswered: Int get() = synchronized(guard) { answeredWrites }
+
+    val entryReadsAnswered: Int get() = synchronized(guard) { answeredEntryReads }
 
     fun entry(id: AnimeId): ListEntry? = synchronized(guard) { list[id] }
 
@@ -117,12 +128,16 @@ class DemoServer(
                 downloads++
                 list.values.toList()
             }
+        val answer = reachedThrough?.fetch() ?: Outcome.Success(snapshot)
         delay(latency)
-        return Outcome.Success(snapshot)
+        return answer
     }
 
-    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> =
-        load(needsSignIn = true)?.let { Outcome.Failure(it) } ?: Outcome.Success(entry(id))
+    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+        load(needsSignIn = true)?.let { return Outcome.Failure(it) }
+        synchronized(guard) { answeredEntryReads++ }
+        return reachedThrough?.fetchEntry(id) ?: Outcome.Success(entry(id))
+    }
 
     override suspend fun put(
         anime: Anime,
@@ -152,18 +167,32 @@ class DemoServer(
                 else -> null
             }
         if (error != null) return Outcome.Failure(error)
-        return synchronized(guard) {
+        synchronized(guard) {
+            titles.getOrPut(anime.id) { anime }
+            answeredWrites++
+        }
+        return reachedThrough?.put(anime, values) ?: applied(anime.id, values)
+    }
+
+    // A write that reached MAL, for a title it knows. A value left out is the one MAL has; a new entry needs a status.
+    fun applied(
+        id: AnimeId,
+        values: SentValues?,
+    ): Outcome<ListEntry?> =
+        synchronized(guard) {
+            val anime = titles[id] ?: return Outcome.Failure(DataError.NotFound)
             val stored =
                 values?.let { sent ->
-                    // A value left out is the one MAL has; a new entry needs a status.
-                    val known = list[anime.id]?.values
+                    val known = list[id]?.values
                     if (known == null && sent.status == null) return Outcome.Failure(DataError.InvalidRequest)
                     sent.over(known)
                 }
             store(anime, stored)
-            Outcome.Success(list[anime.id])
+            Outcome.Success(list[id])
         }
-    }
+
+    // The titles MAL knows, the ones on the list among them.
+    fun title(id: AnimeId): Anime? = synchronized(guard) { titles[id] }
 
     private fun store(
         anime: Anime,

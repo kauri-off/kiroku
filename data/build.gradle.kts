@@ -103,6 +103,49 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree(ownerRecordings)).withPropertyName("ownerRecordings")
 }
 
+// The public answers whose titles the sandbox reads (SandboxTitles.Answers), copied into the debug and preview builds'
+// assets and nothing else of the recorded ones.
+abstract class SandboxAssets : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val answers: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val recorded = output.get().asFile.resolve("recorded")
+        recorded.deleteRecursively()
+        recorded.mkdirs()
+        answers.files.forEach { it.copyTo(File(recorded, it.name)) }
+    }
+}
+
+val sandboxAnswers =
+    listOf(
+        "title_airing",
+        "title_film",
+        "title_finished",
+        "title_no_related",
+        "title_not_yet_aired",
+        "title_unknown_episode_count",
+        "ranking_airing",
+        "ranking_upcoming",
+    )
+
+val sandboxAssets =
+    tasks.register<SandboxAssets>("sandboxAssets") {
+        val files = sandboxAnswers.map { layout.projectDirectory.file("src/test/resources/mal/recorded/$it.200.json") }
+        answers.from(files)
+        doFirst { check(files.all { it.asFile.isFile }) { "A public answer the sandbox reads is missing" } }
+    }
+
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { it.sources.assets?.addGeneratedSourceDirectory(sandboxAssets, SandboxAssets::output) }
+    onVariants(selector().withBuildType("preview")) { it.sources.assets?.addGeneratedSourceDirectory(sandboxAssets, SandboxAssets::output) }
+}
+
 // A schema exported in the same run reaches the unit tests' assets.
 tasks.named { it.endsWith("UnitTestAssets") }.configureEach { mustRunAfter("copyRoomSchemas") }
 

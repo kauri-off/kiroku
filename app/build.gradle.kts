@@ -290,6 +290,11 @@ abstract class VerifyReleasePackage : DefaultTask() {
     @get:Input
     abstract val debugEntries: SetProperty<String>
 
+    // MAL's recorded answers, which the sandbox of the debug and preview builds holds: no entry may equal one.
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val recordedAnswers: ConfigurableFileCollection
+
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NAME_ONLY)
     abstract val packages: ConfigurableFileCollection
@@ -317,14 +322,33 @@ abstract class VerifyReleasePackage : DefaultTask() {
                         .map { it.name.removePrefix("base/root/") }
                         .toSet()
                 }
+            val recorded = recordedAnswers.files.filter { it.isFile }.associateBy { sha256(it.readBytes()) }
+            check(recorded.isNotEmpty()) { "No recorded answers to check ${file.name} against" }
+            val answers =
+                ZipFile(file).use { zip ->
+                    zip
+                        .entries()
+                        .asSequence()
+                        .filter { !it.isDirectory && sha256(zip.getInputStream(it).readBytes()) in recorded }
+                        .map { it.name }
+                        .toList()
+                }
             val leaked =
-                (debugOnlyResources intersect resources) + (debugOnlyNames intersect manifest) + (debugEntries.get() intersect entries)
+                (debugOnlyResources intersect resources) + (debugOnlyNames intersect manifest) + (debugEntries.get() intersect entries) +
+                    answers
             check(leaked.isEmpty()) { "The release package ${file.name} holds what only the debug build declares: $leaked" }
         }
         report.get().asFile.writeText(
-            "${files.map { it.name }} checked against $debugOnlyResources, $debugOnlyNames and ${debugEntries.get()}\n",
+            "${files.map { it.name }} checked against $debugOnlyResources, $debugOnlyNames, ${debugEntries.get()} and " +
+                "${recordedAnswers.files.size} recorded answers\n",
         )
     }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     // A resource's name, from its file's name or from its element in a values file.
     private fun resourceNames(directories: ConfigurableFileCollection): Set<String> =
@@ -483,6 +507,8 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/design/gallery/",
                 "io/github/kauri_off/kiroku/recorder/",
                 "io/github/kauri_off/kiroku/data/recorder/",
+                "io/github/kauri_off/kiroku/data/sandbox/",
+                "io/github/kauri_off/kiroku/sandbox/",
             ),
         )
         report.set(layout.buildDirectory.file("reports/release-classes.txt"))
@@ -495,6 +521,7 @@ fun VerifyReleasePackage.againstDebugSourceSet(name: String) {
     mainManifest.set(file("src/main/AndroidManifest.xml"))
     namespace.set(android.namespace)
     debugEntries.add(WriteBuildInfo.FILE)
+    recordedAnswers.from(fileTree(rootProject.file("data/src/test/resources/mal")))
     report.set(layout.buildDirectory.file("reports/release-$name.txt"))
 }
 

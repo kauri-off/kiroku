@@ -112,14 +112,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-19 List client: writing.**
 
-- [ ] **M2-20 Sandbox.** A stand-in for MAL in debug and preview builds, behind the real network layer: it keeps
-  a list as the website would and answers in the recorded shapes, sign-in and refresh included, so that
-  behaviour is tried without touching an account. It is the third data source of M2-09 and takes the scenario
-  panel's failures. No release build holds it or a recorded answer.
-  **Needs:** M2-09, M2-16, M2-19.
-  **Check:** `ListEngineContract` passes over the real client, the stand-in and the database; the stand-in,
-  given the state of a recorded answer, gives that answer back; in the sandbox no request leaves the device; the
-  panel's "session expired" ends in the banner through a real rejected refresh.
+- [x] **M2-20 Sandbox.**
 
 - [x] **M2-21 The real list.**
 

@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -78,6 +79,26 @@ class DebugGraphTest {
             val next = started("0123abcd")
             assertTrue(next is DemoGraph)
             assertEquals(Fixtures.at(device).entries, next.list.observeEntries().first())
+        }
+
+    // The sandbox reads its files at its first request: a start reads none, and holds no sign-in of the real account.
+    @Test
+    fun `after the choice a debug build starts on the sandbox, with a client id and without, and nothing is asked before a request`() =
+        runTest {
+            assertTrue(SourceChoice(context).choose(DataSource.Sandbox))
+            for (id in listOf("0123abcd", "")) {
+                val graph = createGraph(context, id, device, backgroundScope, live = { error("The sandbox started the real account") })
+                assertTrue(graph is SandboxGraph)
+                assertEquals(emptyList<String>(), (graph as SandboxGraph).sandbox.mal.asked)
+                assertEquals(Session.SignedOut, graph.session.observeSession().first())
+                assertTrue(graph.signIn.canStart)
+            }
+            assertFalse(
+                context.noBackupFilesDir
+                    .list()
+                    .orEmpty()
+                    .any { it.startsWith("sandbox.mal") },
+            )
         }
 
     @Test

@@ -14,13 +14,15 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
+import okhttp3.Interceptor
 import java.io.File
 import java.time.Clock
 
-// One source of live data: its hosts, and the name that each of its files carries.
+// One source of live data: its hosts, the name that each of its files carries, and what answers in MAL's place, if anything.
 internal class LiveSource(
     val name: String,
     val hosts: MalHosts,
+    val standIn: Interceptor? = null,
 ) {
     companion object {
         val Account = LiveSource(notShown("account"), MalHosts.Real)
@@ -40,7 +42,7 @@ internal class LiveParts(
     val device: Device = AndroidDevice(context),
 ) {
     // The only HTTP client of the source.
-    val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log)
+    val http = MalHttp(source.hosts, clientId.trim(), BuildConfig.VERSION_NAME, device, clock, unexpected, log, standIn = source.standIn)
 
     // A file of this source alone, named after it: tokens open only under the name they were sealed with.
     fun file(kind: String): File = File(context.noBackupFilesDir, notShown("${source.name}.$kind"))
