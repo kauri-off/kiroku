@@ -223,15 +223,28 @@ interface AnimeRepository {
     suspend fun refresh(id: AnimeId): Outcome<Unit>
 }
 
+// Reading asks the source of episode times nothing: only a refresh does, and a change of the list (A11, a sync's end).
 interface AiringRepository {
-    fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
-
-    // Every screen's airing lines; emits again when an air time passes (A2) or the data changes. Provisional until M3.
+    // The result of each title of the list that can still air (A1), given again to every observer when one changes (A2).
     fun observeAiring(): Flow<Map<AnimeId, Airing>>
 
-    suspend fun refresh(ids: Set<AnimeId>): Outcome<Unit>
+    // For the page of [page] alone, never for a notification: the same with [page]'s own result, also from what the page fetched (A12).
+    fun observePageAiring(page: Anime): Flow<Map<AnimeId, Airing>>
 
-    suspend fun fetch(id: AnimeId): Outcome<AiringSchedule?>
+    // The stored schedules, which are all a notification may read.
+    fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
+
+    // Asks for the tracked titles whose data is stale, as a screen does when it is shown.
+    suspend fun refreshStale(): Outcome<Unit>
+
+    // Asks for every tracked title, as a person's pull does.
+    suspend fun refresh(): Outcome<Unit>
+
+    // A page that is shown: asks for [page]'s title when what is held of it is stale; never for a finished one.
+    suspend fun refreshStale(page: Anime): Outcome<Unit>
+
+    // A pull on a page.
+    suspend fun refresh(page: Anime): Outcome<Unit>
 }
 
 enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular }

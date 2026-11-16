@@ -2,7 +2,7 @@ package io.github.kauri_off.kiroku.core.list
 
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.UpNext
-import io.github.kauri_off.kiroku.core.airing.titleAiring
+import io.github.kauri_off.kiroku.core.airing.upNext
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -11,7 +11,6 @@ import io.github.kauri_off.kiroku.core.model.firstDay
 import java.text.CollationKey
 import java.text.Collator
 import java.time.Instant
-import java.time.LocalDate
 import java.util.Locale
 
 enum class ListSort { UpNext, Title, LastUpdated, Score, StartDate }
@@ -58,7 +57,6 @@ fun order(
     entries: List<ListEntry>,
     sort: ListSort,
     airing: (AnimeId) -> Airing?,
-    today: LocalDate,
     direction: SortDirection? = sort.defaultDirection,
     title: (ListEntry) -> String,
 ): List<ListEntry> {
@@ -67,7 +65,7 @@ fun order(
     val ascending = direction != SortDirection.Descending
     val comparator: Comparator<ListEntry> =
         when (sort) {
-            ListSort.UpNext -> upNext(entries, airing, today)
+            ListSort.UpNext -> upNext(entries, airing)
             ListSort.Title -> if (ascending) byTitle else byTitle.reversed()
             ListSort.LastUpdated -> keyed(ascending) { it.updatedAt }
             ListSort.Score -> keyed(ascending) { it.values.score }
@@ -95,9 +93,8 @@ private fun <K : Comparable<K>> keyed(
 private fun upNext(
     entries: List<ListEntry>,
     airing: (AnimeId) -> Airing?,
-    today: LocalDate,
 ): Comparator<ListEntry> {
-    val keys = entries.associate { it.anime.id to titleAiring(it.anime, it.values, airing(it.anime.id), today).upNext }
+    val keys = entries.associate { it.anime.id to upNext(it.anime, it.values, airing(it.anime.id)) }
     return compareBy<ListEntry> { keys.getValue(it.anime.id).group }.then { a, b ->
         val other = keys.getValue(b.anime.id)
         when (val key = keys.getValue(a.anime.id)) {

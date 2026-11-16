@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.shareIn
 fun ListSource.entriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
     if (ids.isEmpty()) flowOf(emptyMap()) else observeEntriesOf(ids).distinctUntilChanged()
 
-// The airing of [ids] alone.
+// The airing of [ids] alone; it ends as the list's read does when the list or the stored airing cannot be read.
 fun AiringRepository.airingOf(ids: Set<AnimeId>): Flow<Map<AnimeId, Airing>> =
     observeAiring().map { airing -> airing.filterKeys(ids::contains) }.distinctUntilChanged()
 

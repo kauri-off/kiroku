@@ -60,10 +60,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.time.Duration.Companion.seconds
 
 // The user's own list, its orders fixed at moments and its state built on [background], one step at a time, in order.
 class ListViewModel(
@@ -113,6 +114,9 @@ class ListViewModel(
 
     @Volatile private var entriesLoaded = false
 
+    // A first download is under way: its order is computed when the airing data it asked for is there, not as the list arrives.
+    @Volatile private var firstDownload = false
+
     // The titles whose page is stored, for the summary a title page opens with; no part of what the List shows.
     @Volatile private var pagesRead: Set<AnimeId> = emptySet()
 
@@ -129,7 +133,7 @@ class ListViewModel(
         val refreshes: Int,
     )
 
-    // Pages written against [now] in [zone]; until a Refresh or [until], pages built again keep [now].
+    // Pages written against [now] in [zone]; until a Refresh or the day's end at [until], pages built again keep [now].
     private class Built(
         val shown: Shown,
         val content: ListContent,
@@ -140,11 +144,11 @@ class ListViewModel(
 
     private var built: Built? = null
 
-    // A row as last built, with what it was built from; a row that shows the same stays the same object.
+    // A row as last built, with what it was built from: [now] counts only for a title without a result. A row that shows the same stays.
     private class BuiltRow(
         val entry: ListEntry,
         val airing: Airing?,
-        val today: LocalDate,
+        val now: Instant,
         val sort: ListSort,
         val row: ListRow,
     )
@@ -197,10 +201,14 @@ class ListViewModel(
         }
     }
 
+    // A sync's end refreshes the stale airing data by itself; a list that needs no sync leaves that to its screen.
     private suspend fun syncIfStale() {
         if (list.stale(clock.instant())) {
             syncUnlessSyncing()
-        } else if (!settled) {
+            return
+        }
+        viewModelScope.launch { airing.refreshStale() }
+        if (!settled) {
             settled = true
             withContext(lane) { model.update { if (it.orders == null && entriesLoaded) it.orderedAll() else it } }
         }
@@ -297,6 +305,7 @@ class ListViewModel(
             val read = model.copy(airing = schedule, entries = list.associateBy { it.anime.id })
             when {
                 read.orders != null -> read.withJoinedAppended()
+                firstDownload -> read
                 list.isNotEmpty() || settled -> read.orderedAll()
                 else -> read
             }
@@ -359,16 +368,10 @@ class ListViewModel(
         now: Instant,
     ): Built {
         val today = now.atZone(clock.zone).toLocalDate()
-        val midnight = today.plusDays(1).atStartOfDay(clock.zone).toInstant()
-        val nextAirTime =
-            model.airing.values
-                .mapNotNull { it.nextEpisode?.airsAt?.takeIf(now::isBefore) }
-                .minOrNull()
-        val until = nextAirTime?.coerceAtMost(midnight) ?: midnight
+        val until = today.plusDays(1).atStartOfDay(clock.zone).toInstant()
         val rowsBefore = rows
         val rowsNow = HashMap<AnimeId, BuiltRow>(rowsBefore.size)
-        val content =
-            content(model, filter, today) { entry, sort -> row(entry, model.airing[entry.anime.id], today, sort, rowsBefore, rowsNow) }
+        val content = content(model, filter) { entry, sort -> row(entry, model.airing[entry.anime.id], now, sort, rowsBefore, rowsNow) }
         rows = rowsNow
         return Built(shown, content.sharing(built?.content), now, until, clock.zone).also { built = it }
     }
@@ -376,20 +379,20 @@ class ListViewModel(
     private fun row(
         entry: ListEntry,
         airing: Airing?,
-        today: LocalDate,
+        now: Instant,
         sort: ListSort,
         before: Map<AnimeId, BuiltRow>,
-        now: MutableMap<AnimeId, BuiltRow>,
+        after: MutableMap<AnimeId, BuiltRow>,
     ): ListRow {
         val id = entry.anime.id
         val last = before[id]
         val built =
-            last?.takeIf { it.entry == entry && it.airing == airing && it.today == today && it.sort == sort }
+            last?.takeIf { it.entry == entry && it.airing == airing && (airing != null || it.now == now) && it.sort == sort }
                 ?: run {
-                    val row = listRow(entry, airing, today, titleLanguage, sort = sort)
-                    BuiltRow(entry, airing, today, sort, last?.row?.takeIf(row::equals) ?: row)
+                    val row = listRow(entry, airing, now, titleLanguage, sort = sort)
+                    BuiltRow(entry, airing, now, sort, last?.row?.takeIf(row::equals) ?: row)
                 }
-        now[id] = built
+        after[id] = built
         return built.row
     }
 
@@ -402,7 +405,6 @@ class ListViewModel(
     private fun content(
         model: Model,
         filter: String?,
-        today: LocalDate,
         row: (ListEntry, ListSort) -> ListRow,
     ): ListContent {
         val orders = model.orders
@@ -431,13 +433,11 @@ class ListViewModel(
         return ListPage(sort.sort, sortsFor(status, withAiring = true), rows, model.orderings[status] ?: 0, sort.direction)
     }
 
-    private fun today(): LocalDate = LocalDate.now(clock)
-
     private fun Model.ordered(
         status: EntryStatus,
         sort: TabSort,
     ): List<AnimeId> =
-        order(entries.values.filter { it.status == status }, sort.sort, airing::get, today(), sort.direction) {
+        order(entries.values.filter { it.status == status }, sort.sort, airing::get, sort.direction) {
             it.anime.titles.preferred(titleLanguage)
         }.map { it.anime.id }
 
@@ -513,26 +513,33 @@ class ListViewModel(
         model.update { it.copy(failure = null, refreshing = it.refreshing || fromUser) }
         loads.started()
         val owners = model.value.owners
+        firstDownload = model.value.let { it.orders == null && it.entries.isEmpty() }
         val result = list.sync()
         loads.ended((result as? Outcome.Failure)?.error)
         if (model.value.owners != owners) {
+            firstDownload = false
             model.update { it.copy(refreshing = false) }
             return
         }
+        // "Up next" is by the airing data the sync's end asked for, however that ended.
+        if (result is Outcome.Success && (fromUser || model.value.orders == null)) {
+            withTimeoutOrNull(AIRING_WAIT) { airing.refreshStale() }
+        }
+        firstDownload = false
         settled = true
         when (result) {
             is Outcome.Success ->
                 if (fromUser || model.value.orders == null) {
-                    val synced =
+                    val read =
                         try {
-                            list.observeEntries().first()
+                            list.observeEntries().first() to airing.observeAiring().first()
                         } catch (e: DataException) {
                             unreadable(e.error)
                             null
                         }
-                    val schedule = airing.observeAiring().first()
                     awaitSorts()
-                    if (synced != null) {
+                    if (read != null) {
+                        val (synced, schedule) = read
                         entriesLoaded = true
                         // Asked on the lane: the list may have arrived there first and been ordered at start.
                         withContext(lane) {
@@ -569,6 +576,9 @@ class ListViewModel(
     }
 
     private companion object {
+        // How long an order waits for the airing data its sync asked for.
+        val AIRING_WAIT = 5.seconds
+
         val TAB = notShown("tab")
         val FILTER = notShown("filter")
         val UNRECOGNIZED = notShown("?")

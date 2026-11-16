@@ -18,7 +18,7 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Clock
-import java.time.LocalDate
+import java.time.ZonedDateTime
 
 // The edit sheet of the screen that opened it: a draft of the user's input, read once from the store.
 class EditSheetViewModel(
@@ -105,8 +105,14 @@ class EditSheetViewModel(
                 return@launch
             }
             anime = found
-            val today = LocalDate.now(clock)
-            val opened = EditSheetState.of(found, airing.observeAiring().first()[id], entry?.values, titleLanguage, today)
+            // One read of what is stored, which asks no source; without it the sheet has MAL's total alone.
+            val known =
+                try {
+                    airing.observeAiring().first()[id]
+                } catch (_: DataException) {
+                    null
+                }
+            val opened = EditSheetState.of(found, known, entry?.values, titleLanguage, ZonedDateTime.now(clock))
             val sheet = restored?.applyTo(opened) ?: opened
             shown.value = sheet
             SavedSheet.save(saved, sheet)

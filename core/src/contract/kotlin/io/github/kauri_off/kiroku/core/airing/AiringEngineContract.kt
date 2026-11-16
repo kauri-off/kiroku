@@ -222,6 +222,7 @@ abstract class AiringEngineContract {
         entries: List<ListEntry> = fixtures.entries,
         schedules: Map<AnimeId, AiringSchedule> = fixtures.schedules,
         seeded: Boolean = true,
+        synced: Boolean = true,
         now: Instant = fixtures.now,
         sourceAhead: Duration = Duration.ZERO,
         scope: CoroutineScope = backgroundScope,
@@ -233,7 +234,8 @@ abstract class AiringEngineContract {
         }
         val subject = Subject(this, scope, entries, schedules, clock, sourceAhead, DatabaseLike(store))
         subject.listStore.clear(a.signIn)
-        subject.listStore.download(entries.map { it.anime }, entries.associate { it.anime.id to StoredEntry.settled(it.record) }, now)
+        val at = now.takeIf { synced }
+        subject.listStore.download(entries.map { it.anime }, entries.associate { it.anime.id to StoredEntry.settled(it.record) }, at)
         runCurrent()
         return subject
     }
@@ -281,9 +283,17 @@ abstract class AiringEngineContract {
         }
 
     @Test
-    fun `a start with nothing stored asks for every tracked title at once, in one call, and for no other`() =
+    fun `a start with nothing stored asks nothing by itself, and a refresh of what is stale asks for every tracked title at once`() =
         runTest {
-            val s = subject(seeded = false)
+            val s = subject(seeded = false, synced = false)
+            advanceTimeBy(1.days)
+            runCurrent()
+            assertEquals("the list as first read", emptyList<Set<AnimeId>>(), s.source.calls.toList())
+            s.engine.observeSchedules().first()
+            runCurrent()
+            assertEquals("a read", emptyList<Set<AnimeId>>(), s.source.calls.toList())
+
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
 
             assertEquals(listOf(tracked), s.source.calls.toList())
             assertEquals(tracked, s.stored().keys)
@@ -296,6 +306,7 @@ abstract class AiringEngineContract {
         runTest {
             val bare = AiringSchedule(emptyList(), 12)
             val s = subject(schedules = fixtures.schedules + (FixtureAnime.estimatedToWatch.id to bare), seeded = false)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
 
             assertEquals(StoredAiring(null, fixtures.now), s.stored(FixtureAnime.airedUnknown))
             assertEquals(StoredAiring(bare, fixtures.now), s.stored(FixtureAnime.estimatedToWatch))
@@ -425,6 +436,7 @@ abstract class AiringEngineContract {
     fun `the source is handed each title as the list has it, a page's as the page has it, and the earliest announceable instant`() =
         runTest {
             val s = subject(seeded = false)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
             assertEquals(
                 fixtures.entries
                     .map { it.anime }
@@ -669,24 +681,40 @@ abstract class AiringEngineContract {
         }
 
     @Test
-    fun `a new observer refreshes the stale titles, and nothing while they are fresh`() =
+    fun `reading asks the source nothing, however stale the data and however many read`() =
         runTest {
             val s = subject()
-            s.clock.advance(Freshness.airing - 1.milliseconds)
-            s.engine.observeSchedules().first()
-            s.engine.observePageSchedule(FixtureAnime.exactToWatch.id).first()
+            s.clock.advance(Freshness.airing + 1.days)
+            repeat(3) {
+                s.engine.observeSchedules().first()
+                s.engine.observePageSchedule(FixtureAnime.exactToWatch.id).first()
+                s.engine.observePageSchedule(FixtureAnime.notOnListAiring.id).first()
+            }
+            backgroundScope.launch { s.engine.observeSchedules().collect {} }
+            advanceTimeBy(1.days)
             runCurrent()
             assertEquals(emptyList<Set<AnimeId>>(), s.source.calls.toList())
 
-            s.clock.advance(1.milliseconds)
-            s.engine.observeSchedules().first()
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+            assertEquals(listOf(tracked), s.source.calls.toList())
+        }
+
+    @Test
+    fun `the time of a sync that ended before the list was followed asks nothing`() =
+        runTest {
+            val s = subject()
+            s.clock.advance(Freshness.airing + 1.minutes)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
             runCurrent()
             assertEquals(listOf(tracked), s.source.calls.toList())
 
-            s.engine.observeSchedules().first()
-            s.engine.observePageSchedule(FixtureAnime.exactToWatch.id).first()
+            s.clock.advance(Freshness.airing + 1.minutes)
+            val late = AiringEngine(source(s.source), s.store, s.shownList, s.clock, backgroundScope) { s.unexpected += it }
+            late.observeSchedules().first()
             runCurrent()
+
             assertEquals(1, s.source.calls.size)
+            assertEquals(emptyList<Throwable>(), s.unexpected)
         }
 
     @Test
@@ -917,7 +945,7 @@ abstract class AiringEngineContract {
             s.clock.advance(20.minutes)
             s.source.schedules += FixtureAnime.exactToWatch.id to s.schedule(FixtureAnime.exactToWatch).moved(15, 1.days)
 
-            s.engine.observeSchedules().first()
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
             runCurrent()
 
             assertEquals(listOf(tracked), s.source.calls.toList())
@@ -961,6 +989,54 @@ abstract class AiringEngineContract {
             assertEquals(listOf(setOf(anime.id)), s.source.calls.toList())
             assertEquals(StoredAiring(s.source.schedules[anime.id], s.clock.now), s.stored(anime))
             assertEquals(s.source.schedules[anime.id], s.engine.observePageSchedule(anime.id).first())
+        }
+
+    @Test
+    fun `A12 a page that is shown asks for its title only when what is held of it is stale, and a pull whatever its age`() =
+        runTest {
+            val page = FixtureAnime.notOnListAiring
+            val listed = FixtureAnime.exactToWatch
+            val s = subject()
+
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(listed))
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(FixtureAnime.prequel))
+            assertEquals(listOf(setOf(page.id)), s.source.calls.toList())
+
+            s.clock.advance(Freshness.airing - 1.milliseconds)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(listed))
+            assertEquals(1, s.source.calls.size)
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
+            assertEquals(listOf(setOf(page.id), setOf(page.id)), s.source.calls.toList())
+
+            s.clock.advance(1.milliseconds)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(listed))
+            assertEquals(listOf(setOf(page.id), setOf(page.id), setOf(listed.id)), s.source.calls.toList())
+            assertEquals(s.clock.now, s.stored(listed)?.fetchedAt)
+
+            s.clock.advance(Freshness.airing)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+            assertEquals(4, s.source.calls.size)
+            assertEquals(tracked, s.stored().keys)
+        }
+
+    @Test
+    fun `A12 a page whose title the source does not know is not asked for again while that answer is fresh, and a failed one is`() =
+        runTest {
+            val page = FixtureAnime.notOnListAiring
+            val s = subject()
+            s.source.failure = DataError.NoConnection
+            assertEquals(Outcome.Failure(DataError.NoConnection), s.engine.refreshStale(page))
+            s.source.failure = null
+            s.source.schedules -= page.id
+
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale(page))
+
+            assertEquals(listOf(setOf(page.id), setOf(page.id)), s.source.calls.toList())
+            assertNull(s.engine.observePageSchedule(page.id).first())
         }
 
     @Test

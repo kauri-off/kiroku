@@ -125,7 +125,7 @@ class TitleViewModel(
         stored.withRead({ shownTitles(id, it.details, it.chain) }) { ids ->
             combine(
                 list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
-                airing.airingOf(ids),
+                airing.airingOf(ids).readAgainOnRetry(retries) { emptyMap() },
                 ::Around,
             )
         }

@@ -10,7 +10,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Year
 import java.time.YearMonth
-import java.time.ZoneId
 
 data class ScheduledEpisode(
     val number: Int,
@@ -71,7 +70,9 @@ data class Airing internal constructor(
     // Null exactly when the count is exact.
     val inexact: Inexact? = if (aired is AiredCount.Exact) null else Inexact.NoSchedule,
     // The same stored data gives this result until then; null when time alone changes nothing.
-    val changesAt: Instant? = null,
+    val changesAt: Instant? = nextEpisode?.airsAt,
+    // What is known of the premiere of a title that has aired nothing; null once an episode has aired.
+    val premiere: Premiere? = if (nextEpisode != null && aired == AiredCount.Exact(0)) Premiere.At(nextEpisode.airsAt) else null,
 ) {
     init {
         require(total == null || total > 0)
@@ -89,6 +90,12 @@ data class Airing internal constructor(
             require(total == null || nextEpisode.number <= total)
         }
         if (aired == AiredCount.Exact(0)) require(nextEpisode?.number == 1)
+        // A wait on the result ends no later than its next episode.
+        if (nextEpisode != null) require(changesAt != null && !changesAt.isAfter(nextEpisode.airsAt))
+        if (premiere != null) require(aired !is AiredCount.Known || aired.value == 0)
+        // An exact 0 is a stored first episode still to come, which is the premiere's time.
+        require((aired == AiredCount.Exact(0)) == (premiere is Premiere.At))
+        if (premiere is Premiere.At) require(premiere.instant == nextEpisode?.airsAt)
     }
 }
 
@@ -150,6 +157,7 @@ sealed interface Premiere {
     data object Unannounced : Premiere
 }
 
+// [today] is Japan's day.
 internal fun premiereOf(
     anime: Anime,
     airing: Airing?,
@@ -195,9 +203,9 @@ internal fun airingPhase(
     anime: Anime,
     values: ListValues?,
     airing: Airing?,
-    today: LocalDate,
+    premiere: Premiere?,
 ): AiringPhase? {
-    premiereOf(anime, airing, today)?.let { return AiringPhase.NotYetAired(it) }
+    premiere?.let { return AiringPhase.NotYetAired(it) }
     val status = anime.airingStatus.effective
     if (status == AiringStatus.Finished) return null
     val aired = airing?.aired as? AiredCount.Known ?: return AiringPhase.CountUnknown
@@ -242,22 +250,16 @@ data class TitleAiring internal constructor(
     val upNext: UpNext,
 )
 
-// [airing] is null for a title whose airing was not computed, which reads as a count that is not known.
+// [airing] is null for a title whose airing was not computed: its count is not known, and its premiere is MAL's date as at [now].
 fun titleAiring(
     anime: Anime,
     values: ListValues?,
     airing: Airing?,
-    today: LocalDate,
+    now: Instant,
 ): TitleAiring {
-    val phase = airingPhase(anime, values, airing, today)
-    val coming = phase?.nextAirsAt
-    val upNext =
-        when {
-            (phase as? AiringPhase.Aired)?.toWatch != null -> UpNext.ToWatch(airing?.latestAiredAt)
-            coming != null -> UpNext.Coming(coming)
-            else -> UpNext.Rest
-        }
-    return TitleAiring(airing, episodeTotal(anime, airing), phase, upNext)
+    val premiere = if (airing != null) airing.premiere else premiereOf(anime, null, japanDay(now))
+    val phase = airingPhase(anime, values, airing, premiere)
+    return TitleAiring(airing, episodeTotal(anime, airing), phase, upNext(phase, airing))
 }
 
 // The same from stored data: [values] are the user's, null for a title that is not on their list.
@@ -266,5 +268,26 @@ fun titleAiring(
     values: ListValues?,
     schedule: AiringSchedule?,
     now: Instant,
-    zone: ZoneId,
-): TitleAiring = titleAiring(anime, values, airingAt(anime, schedule, now), now.atZone(zone).toLocalDate())
+): TitleAiring = titleAiring(anime, values, airingAt(anime, schedule, now), now)
+
+// A title without a result has nothing to watch and no known time, so it is among the rest.
+internal fun upNext(
+    anime: Anime,
+    values: ListValues?,
+    airing: Airing?,
+): UpNext = if (airing == null) UpNext.Rest else upNext(airingPhase(anime, values, airing, airing.premiere), airing)
+
+private fun upNext(
+    phase: AiringPhase?,
+    airing: Airing?,
+): UpNext {
+    val coming = phase?.nextAirsAt
+    return when {
+        (phase as? AiringPhase.Aired)?.toWatch != null -> UpNext.ToWatch(airing?.latestAiredAt)
+        coming != null -> UpNext.Coming(coming)
+        else -> UpNext.Rest
+    }
+}
+
+// MAL's dates are Japan's, so a day is over when it is over there.
+internal fun japanDay(now: Instant): LocalDate = now.atZone(JAPAN).toLocalDate()

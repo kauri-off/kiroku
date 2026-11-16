@@ -15,7 +15,6 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import java.time.Instant
-import java.time.LocalDate
 
 data class ListState(
     val owner: ListOwner,
@@ -187,14 +186,14 @@ sealed interface ListEvent {
 fun listRow(
     entry: ListEntry,
     airing: Airing?,
-    today: LocalDate,
+    now: Instant,
     language: TitleLanguage,
     readOnly: Boolean = false,
     sort: ListSort? = null,
 ): ListRow {
     val anime = entry.anime
     val values = entry.values
-    val shown = titleAiring(anime, values, airing, today)
+    val shown = titleAiring(anime, values, airing, now)
     val phase = shown.phase.takeUnless { readOnly }
     val line2 =
         when {

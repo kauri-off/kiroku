@@ -63,8 +63,8 @@ class ListAndTitleAgreeTest {
         airing: Airing?,
     ) {
         val name = "${entry.anime.titles.romaji} with $airing"
-        val result = titleAiring(entry.anime, entry.values, airing, today)
-        val row = listRow(entry, airing, today, TitleLanguage.Romaji)
+        val result = titleAiring(entry.anime, entry.values, airing, set.now)
+        val row = listRow(entry, airing, set.now, TitleLanguage.Romaji)
         val page = TitlePage.of(entry.anime, entry, airing, null, emptyMap(), TitleLanguage.Romaji, clock)
         assertEquals(name, result.phase, page.airing)
         assertEquals(name, result.total, page.total)

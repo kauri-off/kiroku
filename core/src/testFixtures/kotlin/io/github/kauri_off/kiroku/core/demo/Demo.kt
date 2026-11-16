@@ -1,5 +1,10 @@
 package io.github.kauri_off.kiroku.core.demo
 
+import io.github.kauri_off.kiroku.core.airing.AiringTime
+import io.github.kauri_off.kiroku.core.airing.InMemoryAiringStore
+import io.github.kauri_off.kiroku.core.airing.ListAiring
+import io.github.kauri_off.kiroku.core.airing.StoredAiring
+import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -14,8 +19,12 @@ import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
@@ -30,6 +39,9 @@ class Demo(
     private val latency: Duration = Duration.ZERO,
     val clock: Clock = fixtures.clock,
     unexpected: (Throwable) -> Unit = { throw it },
+    // Whether [clock] runs with the dispatcher's time, so that airing can wait for an air time; if not, [clockSet] moves it.
+    clockRuns: Boolean = false,
+    clockSet: Flow<Unit> = emptyFlow(),
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
@@ -50,7 +62,23 @@ class Demo(
 
     val connection: Connection = DemoConnection(server)
 
-    val airing: AiringRepository = DemoAiringRepository(fixtures, server)
+    val airingSource = DemoAiringSource(fixtures, server)
+
+    // On the real rules over a store in memory, which starts as fetched just now, as a device that was just synced.
+    val airing: AiringRepository =
+        ListAiring(
+            airingSource,
+            InMemoryAiringStore(
+                fixtures.entries.filter { it.tracked }.associate {
+                    it.anime.id to
+                        StoredAiring(fixtures.schedules[it.anime.id], clock.instant())
+                },
+            ),
+            list,
+            AiringTime(clock, clockSet) { if (clockRuns) delay(it) else awaitCancellation() },
+            scope,
+            unexpected,
+        )
 
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
@@ -91,6 +119,6 @@ class Demo(
             clock: Clock,
             scope: CoroutineScope,
             unexpected: (Throwable) -> Unit = { throw it },
-        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected)
+        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected, clockRuns = true)
     }
 }

@@ -37,7 +37,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -103,7 +102,7 @@ class SubScreenTest {
                 airing = mapOf(anime.id to airingAt(anime, AiringSchedule(emptyList(), 12), Fixtures.reference.now)),
                 language = TitleLanguage.Romaji,
                 session = SubScreenFixtures.session,
-                today = LocalDate.now(Fixtures.reference.clock),
+                now = Fixtures.reference.now,
             )
         show { RelatedScreen(state, onEvent = {}, snackbars = snackbars) }
         compose.onNodeWithText("Watching\u00A0· 5\u00A0/\u00A012", useUnmergedTree = true).assertIsDisplayed()

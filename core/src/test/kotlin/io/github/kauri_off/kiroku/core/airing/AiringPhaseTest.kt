@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.airing
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.AiringStatus
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -109,3 +110,11 @@ class AiringPhaseTest {
         )
     }
 }
+
+// The phase by the day alone, as for a title without a result.
+private fun airingPhase(
+    anime: Anime,
+    values: ListValues?,
+    airing: Airing?,
+    today: LocalDate,
+) = airingPhase(anime, values, airing, premiereOf(anime, airing, today))

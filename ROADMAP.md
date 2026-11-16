@@ -162,17 +162,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-03 [A] Airing refresh.**
 
-- [ ] **M3-04 [A] One tick, and demo mode on it.** In `:core` only. `AiringRepository` becomes what M3 leaves: a
-  screen observes M3-02's results over the list and M3-03's stored data, given again at the instant the earliest
-  coming air time passes, from one tick that every observer shares, so that every screen moves to the next episode
-  at the same instant (A2). Nothing wakes between two air times; a clock set back and a new time zone are
-  followed. Demo mode runs on it: its AniList answers with the fixtures' schedules behind the demo server's
-  failures, its store is in memory, and its counts move with its clock.
-  **Needs:** M3-02, M3-03.
-  **Check:** `./gradlew :core:test`, on virtual time: two observers get episode n+1 at the same instant and not
-  before it; nothing is computed between two air times; a clock set back is followed; the demo's aired count rises
-  as its clock passes an air time, with no request to its server. `./gradlew :app:testDebugUnitTest`
-  passes on the demo.
+- [x] **M3-04 [A] One tick, and demo mode on it.**
 
 - [x] **M3-05 Database: the airing store.**
 

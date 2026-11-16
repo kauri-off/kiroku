@@ -65,7 +65,13 @@ object EditFixtures {
     private fun sheet(
         anime: Anime,
         saved: ListValues?,
-    ) = EditSheetState.of(anime, Fixtures.reference.airing[anime.id], saved, TitleLanguage.Romaji, today)
+    ) = EditSheetState.of(
+        anime,
+        Fixtures.reference.airing[anime.id],
+        saved,
+        TitleLanguage.Romaji,
+        FixtureTime.reference.atZone(FixtureTime.zone),
+    )
 
     private fun onList(anime: Anime) =
         sheet(

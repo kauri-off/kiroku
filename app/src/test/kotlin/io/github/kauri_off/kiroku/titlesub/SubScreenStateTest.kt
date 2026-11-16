@@ -68,7 +68,7 @@ class SubScreenStateTest {
                 airing = mapOf(airing.id to airingAt(airing, AiringSchedule(emptyList(), 12), set.now)),
                 language = TitleLanguage.Romaji,
                 session = set.session,
-                today = today,
+                now = set.now,
             )
         assertEquals(
             12,
@@ -85,7 +85,7 @@ class SubScreenStateTest {
                 emptyMap(),
                 TitleLanguage.Romaji,
                 set.session,
-                today,
+                set.now,
             )
         assertEquals(
             null,
@@ -101,7 +101,7 @@ class SubScreenStateTest {
     fun aRowUsesTheChosenTitleLanguage() {
         val related = listOf(RelatedAnime(FixtureAnime.prequel, RelationType.Prequel))
         val english =
-            relatedState(related, emptyMap(), emptyMap(), TitleLanguage.English, set.session, today)
+            relatedState(related, emptyMap(), emptyMap(), TitleLanguage.English, set.session, set.now)
                 .groups
                 .single()
                 .rows

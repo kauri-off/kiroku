@@ -40,9 +40,9 @@ object ListFixtureStates {
     ): List<ListRow> {
         val now = shown.associateBy { it.anime.id }
         val airing = if (readOnly) emptyMap() else schedule
-        return order(ordered.filter { it.status == status }, sort, airing::get, today, direction) { it.anime.titles.romaji }
+        return order(ordered.filter { it.status == status }, sort, airing::get, direction) { it.anime.titles.romaji }
             .mapNotNull { now[it.anime.id]?.takeIf { entry -> entry.status == status } }
-            .map { listRow(it, airing[it.anime.id], today, TitleLanguage.Romaji, readOnly, sort) }
+            .map { listRow(it, airing[it.anime.id], set.now, TitleLanguage.Romaji, readOnly, sort) }
     }
 
     // Every tab's page by its default sort; [override] replaces some of them.

@@ -35,6 +35,24 @@ fun airingAt(
     schedule: AiringSchedule?,
     now: Instant,
 ): Airing {
+    val counted = countedAt(anime, schedule, now)
+    val premiere = premiereOf(anime, counted, japanDay(now))
+    // A date MAL names for the premiere stands until the last day it names is over in Japan.
+    val dateOver =
+        anime.startDate
+            ?.takeIf { premiere is Premiere.OnDay || premiere is Premiere.InMonth || premiere is Premiere.InYear }
+            ?.lastDay()
+            ?.plusDays(1)
+            ?.atStartOfDay(JAPAN)
+            ?.toInstant()
+    return counted.copy(premiere = premiere, changesAt = earliest(counted.changesAt, dateOver))
+}
+
+private fun countedAt(
+    anime: Anime,
+    schedule: AiringSchedule?,
+    now: Instant,
+): Airing {
     val episodes = schedule?.episodes.orEmpty()
     val unread =
         when {
