@@ -158,6 +158,21 @@ class TitleStateTest {
         )
     }
 
+    // A place is given only once every page of the chain is read; a walk still under way numbers nothing.
+    @Test
+    fun theWatchOrderIsNumberedOnlyWhenTheWholeChainIsKnown() {
+        assertEquals(listOf(1, 2, 3), TitleFixtures.page(FixtureAnime.exactToWatch).chain.map { it.place })
+        assertEquals(
+            listOf(1, 2, 3, 4),
+            TitleFixtures.chainOfFour.page.chain
+                .map { it.place },
+        )
+        assertEquals(
+            listOf(null, null, null),
+            TitleFixtures.page(FixtureAnime.exactToWatch, chainPages = emptyMap()).chain.map { it.place },
+        )
+    }
+
     // The total is stated once: by the progress when the title is on the list, by the header otherwise.
     @Test
     fun theHeaderLeavesOutWhatThePageStatesElsewhere() {
