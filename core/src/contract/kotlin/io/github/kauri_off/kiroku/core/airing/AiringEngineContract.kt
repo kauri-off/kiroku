@@ -361,27 +361,20 @@ abstract class AiringEngineContract {
         }
 
     @Test
-    fun `a partial answer with no aired episode leaves the stored latest aired one, whatever the instant it is complete from`() =
+    fun `A9 a postponed title's emptied schedule empties the stored one, an episode that aired a day ago included`() =
         runTest {
             val anime = FixtureAnime.exactToWatch
             val fixture = fixtures.schedules.getValue(anime.id)
+            val recent = fixture.without(*(1..13).toList().toIntArray())
             val now = fixture.episode(14)!!.airsAt.plusSeconds(86_400)
-            val coming = fixture.without(*(1..14).toList().toIntArray())
-            val putOff = coming.copy(episodes = listOf(ScheduledEpisode(14, now.plusSeconds(3600))) + coming.episodes)
-            val cases =
-                listOf(
-                    Triple(coming, null, fixture),
-                    Triple(coming, Instant.EPOCH, fixture.without(*(1..13).toList().toIntArray())),
-                    Triple(putOff, Instant.EPOCH, putOff.copy(episodes = listOf(fixture.episode(13)!!) + putOff.episodes)),
-                )
-            for ((given, from, kept) in cases) {
-                val s = subject(now = now)
-                s.source.answering = { it + (anime.id to Outcome.Success(FetchedAiring(given, from ?: s.source.asked.last()))) }
+            val s = subject(schedules = fixtures.schedules + (anime.id to recent), now = now)
+            assertEquals(recent, s.schedule(anime))
+            s.source.schedules += anime.id to AiringSchedule(emptyList(), 24)
+            s.source.partial = true
 
-                assertEquals(Outcome.Success(Unit), s.engine.refresh())
+            assertEquals(Outcome.Success(Unit), s.engine.refresh())
 
-                assertEquals("complete from ${from ?: "the instant asked for"}", kept, s.schedule(anime))
-            }
+            assertEquals(AiringSchedule(emptyList(), 24), s.schedule(anime))
         }
 
     @Test
@@ -444,12 +437,12 @@ abstract class AiringEngineContract {
 
             val page = FixtureAnime.notOnListAiring.copy(meanScore = 1.5)
             val listed = FixtureAnime.exactToWatch
-            s.clock.advance(1.minutes)
+            s.clock.advance(1.minutes + 999.milliseconds)
             assertEquals(Outcome.Success(Unit), s.engine.refresh(page))
             assertEquals(Outcome.Success(Unit), s.engine.refresh(listed.copy(meanScore = 1.5)))
 
             assertEquals(listOf(page, listed), s.source.handed.takeLast(2))
-            assertEquals(s.clock.now - announceableFor.toJavaDuration(), s.source.asked.last())
+            assertEquals((s.clock.now - announceableFor.toJavaDuration()).minusMillis(999), s.source.asked.last())
         }
 
     @Test

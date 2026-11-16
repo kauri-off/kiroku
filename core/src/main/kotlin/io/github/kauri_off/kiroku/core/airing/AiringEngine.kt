@@ -43,6 +43,7 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.time.Clock
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlin.time.toJavaDuration
 
 // Airing data over a store and a source of episode times: the rules of what is asked and what is kept (section 4).
@@ -270,8 +271,8 @@ class AiringEngine(
         val errors =
             try {
                 val began = clock.instant()
-                // A9: what a notification can still need is asked for, so an episode moved to an earlier time is not lost.
-                val since = began - announceableFor.toJavaDuration()
+                // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
+                val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
                 keep(titles.keys, fetch(titles, since), began, since)
             } catch (e: CancellationException) {
                 throw e
@@ -325,12 +326,12 @@ class AiringEngine(
             var held = pages.value
             for ((id, airing) in fetched) {
                 if (id in tracked || id !in forPages) continue
-                held = if (airing == null) held - id else held + (id to airing.over(held[id], began))
+                held = if (airing == null) held - id else held + (id to airing.over(held[id]))
             }
             if (stored.isNotEmpty()) {
                 try {
                     val before = local.read()
-                    local.write(stored.mapValues { (id, airing) -> StoredAiring(airing?.over(before[id]?.schedule, began), began) })
+                    local.write(stored.mapValues { (id, airing) -> StoredAiring(airing?.over(before[id]?.schedule), began) })
                     held -= stored.keys
                 } catch (_: StoreFailure) {
                     for (id in stored.keys) errors[id] = DataError.StorageError
@@ -342,17 +343,10 @@ class AiringEngine(
     }
 
     // A9: an episode is its number. The answer's episodes, each at its first time, and the earlier ones it left out.
-    private fun FetchedAiring.over(
-        stored: AiringSchedule?,
-        asked: Instant,
-    ): AiringSchedule {
+    private fun FetchedAiring.over(stored: AiringSchedule?): AiringSchedule {
         val given = schedule.episodes.groupBy { it.number }.map { (_, same) -> same.minBy { it.airsAt } }
-        val from = completeFrom ?: return schedule.copy(episodes = given.sortedBy { it.number })
         val numbers = given.mapTo(mutableSetOf()) { it.number }
-        val left = stored?.episodes.orEmpty().filter { it.number !in numbers }
-        // A partial answer that shows no aired episode says nothing of the latest one stored, which the count is read from.
-        val latest = left.filter { it.airsAt <= asked }.maxByOrNull { it.number }.takeIf { given.none { it.airsAt <= asked } }
-        val kept = left.filter { it.airsAt < from || it == latest }
+        val kept = completeFrom?.let { from -> stored?.episodes?.filter { it.airsAt < from && it.number !in numbers } }.orEmpty()
         return schedule.copy(episodes = (kept + given).sortedBy { it.number })
     }
 

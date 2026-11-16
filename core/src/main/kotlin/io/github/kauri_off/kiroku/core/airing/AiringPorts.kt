@@ -18,7 +18,7 @@ interface AiringSource {
 // A title the source knows, with no episode time too; null stands only for a title it has no record of.
 data class FetchedAiring(
     val schedule: AiringSchedule,
-    // Only episodes before this instant are left out, and never the latest that has aired. Null: nothing is left out.
+    // Null: nothing is left out. Else only episodes before it are, never the latest aired, and it is no later than asked.
     val completeFrom: Instant? = null,
 )
 
