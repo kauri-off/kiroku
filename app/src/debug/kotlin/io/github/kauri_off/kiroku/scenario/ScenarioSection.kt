@@ -36,6 +36,8 @@ sealed interface ScenarioState {
     data class Ready(
         val scenario: Scenario,
         val reset: ResetState = ResetState.Idle,
+        // On the sandbox: no store to fail, and its own list to reset.
+        val sandbox: Boolean = false,
     ) : ScenarioState
 }
 
@@ -45,6 +47,8 @@ sealed interface ScenarioEvent {
     ) : ScenarioEvent
 
     data object Reset : ScenarioEvent
+
+    data object ExpireAccess : ScenarioEvent
 }
 
 @Composable
@@ -56,12 +60,13 @@ fun ScenarioRoute() {
         } else {
             val scenario by scenarios.scenario.collectAsScreenState()
             val reset by scenarios.reset.collectAsScreenState()
-            ScenarioState.Ready(scenario, reset)
+            ScenarioState.Ready(scenario, reset, scenarios.sandbox)
         }
     ScenarioSection(state) { event ->
         when (event) {
             is ScenarioEvent.Change -> scenarios?.set(event.scenario)
             ScenarioEvent.Reset -> scenarios?.reset()
+            ScenarioEvent.ExpireAccess -> scenarios?.expireAccess()
         }
     }
 }
@@ -93,6 +98,19 @@ private fun Switches(
     SwitchRow(R.string.design_session_expired, R.string.scenarios_session_detail, scenario.sessionExpired, enabled) {
         change(scenario.copy(sessionExpired = it))
     }
+    if (state.sandbox) {
+        ListItem(
+            supportingContent = { Text(stringResource(R.string.scenarios_access_expired_detail)) },
+            content = { Text(stringResource(R.string.scenarios_access_expired)) },
+        )
+        OutlinedButton(
+            onClick = { onEvent(ScenarioEvent.ExpireAccess) },
+            enabled = enabled,
+            modifier = Modifier.padding(horizontal = Spacing.l),
+        ) {
+            Text(stringResource(R.string.scenarios_access_expire))
+        }
+    }
     SwitchRow(R.string.scenarios_slow, R.string.scenarios_slow_detail, scenario.slow, enabled) { change(scenario.copy(slow = it)) }
     Choice(
         R.string.scenarios_writes,
@@ -101,15 +119,20 @@ private fun Switches(
         scenario.writes.ordinal,
         enabled,
     ) { change(scenario.copy(writes = WriteFault.entries[it])) }
-    Choice(
-        R.string.scenarios_store,
-        R.string.scenarios_store_detail,
-        StoreFault.entries.map { it.label },
-        scenario.store.ordinal,
-        enabled,
-    ) { change(scenario.copy(store = StoreFault.entries[it])) }
-    SectionHeader(stringResource(R.string.scenarios_reset_title), Modifier.padding(top = Spacing.xl))
-    SectionDetail(R.string.scenarios_reset_detail)
+    if (!state.sandbox) {
+        Choice(
+            R.string.scenarios_store,
+            R.string.scenarios_store_detail,
+            StoreFault.entries.map { it.label },
+            scenario.store.ordinal,
+            enabled,
+        ) { change(scenario.copy(store = StoreFault.entries[it])) }
+    }
+    SectionHeader(
+        stringResource(if (state.sandbox) R.string.scenarios_reset_title_sandbox else R.string.scenarios_reset_title),
+        Modifier.padding(top = Spacing.xl),
+    )
+    SectionDetail(if (state.sandbox) R.string.scenarios_reset_detail_sandbox else R.string.scenarios_reset_detail)
     OutlinedButton(
         onClick = { onEvent(ScenarioEvent.Reset) },
         enabled = enabled,

@@ -56,10 +56,11 @@ class ReportsTest {
                 .flatMap { KotlinSource(it.readText()).code.lines() }
                 .filter { making.containsMatchIn(it) && "class LiveParts" !in it }
                 .map { it.trim() }
-        val only =
+        val account =
             "live: () -> AppGraph = " +
                 "{ LiveGraph(LiveParts(context, LiveSource.Account, clientId, clock, scope, reportUnexpected, requestLog)) },"
-        assertEquals(listOf(only), made)
+        val sandbox = "LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reportUnexpected, requestLog, device)"
+        assertEquals(listOf(account, sandbox).sorted(), made.sorted())
     }
 
     @Test

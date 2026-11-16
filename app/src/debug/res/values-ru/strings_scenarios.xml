@@ -5,6 +5,9 @@
     <string name="scenarios_offline">Нет сети</string>
     <string name="scenarios_offline_detail">Любой запрос к MyAnimeList завершается ошибкой «Нет соединения»</string>
     <string name="scenarios_session_detail">На запросы, которым нужен вход, MyAnimeList отвечает, что сессия истекла</string>
+    <string name="scenarios_access_expired">Токен доступа истёк</string>
+    <string name="scenarios_access_expired_detail">Следующий запрос будет отклонён один раз: приложение обновит вход и повторит запрос</string>
+    <string name="scenarios_access_expire">Просрочить сейчас</string>
     <string name="scenarios_slow">Медленно</string>
     <string name="scenarios_slow_detail">Каждый ответ MyAnimeList приходит через несколько секунд</string>
     <string name="scenarios_writes">Сохранение в MyAnimeList</string>
@@ -23,11 +26,13 @@
     <string name="scenarios_name_store_unreadable">Хранилище не читается</string>
     <string name="scenarios_reset_title">Демо-данные</string>
     <string name="scenarios_reset_detail">Список, с которым запустилось приложение, и все сценарии выключены</string>
+    <string name="scenarios_reset_title_sandbox">Список песочницы</string>
+    <string name="scenarios_reset_detail_sandbox">Список, с которым начинала песочница, и все сценарии выключены</string>
     <string name="scenarios_reset">Сбросить</string>
     <string name="scenarios_reset_waiting">Ждём ответа MyAnimeList на сохранение, затем сброс</string>
     <string name="scenarios_reset_running">Список восстанавливается</string>
     <string name="scenarios_reset_dropped">Список восстановлен, сохранение без ответа отброшено</string>
     <string name="scenarios_reset_failed">Список не восстановился. Сбросьте ещё раз</string>
-    <string name="scenarios_unavailable">Сценарии работают только на демо-данных. Выберите «Демо» в разделе «Источник данных»</string>
+    <string name="scenarios_unavailable">Сценарии работают на демо-данных и в песочнице. Выберите одно из них в разделе «Источник данных»</string>
     <string name="scenarios_marker_spoken">Симуляция: %s</string>
 </resources>

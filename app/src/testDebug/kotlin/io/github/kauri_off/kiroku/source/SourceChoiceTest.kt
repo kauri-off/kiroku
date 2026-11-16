@@ -46,8 +46,8 @@ class SourceChoiceTest {
     fun `the file is the source's key alone, as a tool may write it, and one that names no source is no choice`() {
         file.writeText("demo\n")
         assertEquals(DataSource.Demo, SourceChoice(file).chosen())
-        assertEquals(listOf("account", "demo"), DataSource.entries.map { it.key })
-        for (text in listOf("", "Demo", "sandbox", "demo account")) {
+        assertEquals(listOf("account", "demo", "sandbox"), DataSource.entries.map { it.key })
+        for (text in listOf("", "Demo", "Sandbox", "demo account")) {
             file.writeText(text)
             assertNull(text, SourceChoice(file).chosen())
         }

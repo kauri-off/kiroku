@@ -21,7 +21,9 @@ import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
+import io.github.kauri_off.kiroku.rules.KotlinSource
 import io.github.kauri_off.kiroku.rules.appSources
+import io.github.kauri_off.kiroku.rules.projectDir
 import io.github.kauri_off.kiroku.stale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -267,6 +269,24 @@ class LiveGraphTest {
             assertEquals(Outcome.Failure(DataError.NoConnection), liveTitles(parts).refresh(AnimeId(61987)))
             assertTrue(requests.toString(), requests.single().startsWith("GET 127.0.0.1/v2/anime/61987?fields "))
         }
+
+    // Every request goes through MalHttp's one client, so none can miss the sandbox's stand-in or the rules of sending.
+    @Test
+    fun `an HTTP client or a connection is made in MalHttp alone, in the app's code and the data module's`() {
+        val making = Regex("""\bOkHttpClient\s*\(|\bopenConnection\s*\(|\bSocket\s*\(|\bHttpClient\b""")
+        val chained = Regex("""\bOkHttpClient\s*\.\s*Builder\b""")
+        val data =
+            File(projectDir, "data/src")
+                .listFiles()
+                .orEmpty()
+                .filter { it.isDirectory && !it.name.startsWith("test") && !it.name.startsWith("androidTest") }
+                .flatMap { it.walk().filter { file -> file.isFile && file.extension == "kt" }.toList() }
+        val found =
+            (appSources() + data)
+                .filter { file -> KotlinSource(file.readText()).code.let { making.containsMatchIn(it) || chained.containsMatchIn(it) } }
+                .map { it.name }
+        assertEquals(listOf("MalHttp.kt"), found)
+    }
 
     // So a graph that is not a live graph, the demo's, holds no HTTP client.
     @Test

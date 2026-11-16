@@ -7,9 +7,12 @@ import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
+import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.scenario.Scenarios
+import io.github.kauri_off.kiroku.scenario.ScenariosOwner
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.standin.StandInPosters
@@ -30,11 +33,15 @@ internal val reportUnexpected: (Throwable) -> Unit = { e ->
 // One line per request: no header, value or body.
 internal val requestLog: ((String) -> Unit)? = { Log.d(LOG_TAG, it) }
 
-// The demo holds no HTTP client and no file: it reaches no host and keeps nothing.
+// The demo holds no HTTP client and no file: it reaches no host and keeps nothing. The sandbox answers on the device.
 internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
     when (SourceChoice(context).startsOn(clientId)) {
         DataSource.Account -> null
         DataSource.Demo -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected), scope)
+        DataSource.Sandbox ->
+            SandboxGraph.create(context, clock) { source, device ->
+                LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reportUnexpected, requestLog, device)
+            }
     }
 }
 
@@ -43,8 +50,9 @@ internal val standInPosters: Interceptor? = StandInPosters
 class DemoGraph(
     val demo: Demo,
     scope: CoroutineScope,
-) : AppGraph {
-    val scenarios = Scenarios(demo, scope)
+) : AppGraph,
+    ScenariosOwner {
+    override val scenarios = Scenarios(demo, scope)
 
     override val clock = demo.clock
     override val session = demo.session
