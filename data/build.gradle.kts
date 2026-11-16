@@ -42,6 +42,11 @@ android {
         assets.directories += "schemas"
     }
 
+    // The database the app's version 1 wrote, for the migration on a device's own SQLite.
+    sourceSets.named("androidTest") {
+        assets.directories += "src/test/resources/databases"
+    }
+
     // The app's preview build takes this module with the tools of its debug menu, as its debug build does.
     buildTypes {
         create("preview") {
