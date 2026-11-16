@@ -80,6 +80,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 "recorder-refused",
             ) { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.NotStarted(Halt.OnTheList), "21")) },
             case("reports") { Menu(ScenarioState.Unavailable, reports = REPORTS) },
+            case("reports-renamed") { Menu(ScenarioState.Unavailable, reports = RENAMED, renamed = true) },
             case("tab-on-list") { OverList(Scenario()) },
             case("marker-on-list") { OverList(Scenario(offline = true)) },
             case("marker-several-on-list") { OverList(several) },
@@ -92,6 +93,19 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         val TITLE = RecordedTitle(1, "Cowboy Bebop", 26)
         val RECORDED = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded")
         val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
+        val RENAMED =
+            listOf(
+                Report(
+                    Instant.parse("2026-11-12T09:40:00Z"),
+                    listOf(
+                        "Unexpected: o3.k",
+                        "Stands for: q2.c",
+                        "\tat o3.f.c(Unknown Source:41)",
+                        "\tat o3.f.e(Unknown Source:7)",
+                        "\tat o3.e.u(Unknown Source:15)",
+                    ),
+                ),
+            )
         val REPORTS =
             listOf(
                 Report(
@@ -134,15 +148,16 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             if (scenarios == ScenarioState.Unavailable) SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))) else SignOutState.Demo,
         recorder: RecorderState = RecorderState(if (scenarios == ScenarioState.Unavailable) Recording.Idle else null),
         reports: List<Report> = emptyList(),
+        renamed: Boolean = false,
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
             { SourceSection(source, onEvent = {}) },
             { SignOutSection(signOut, onEvent = {}) },
             { RecorderSection(recorder, onEvent = {}) },
-            { ReportsSection(reports) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
+            { ReportsSection(reports, renamed) },
         ),
         onClose = {},
     )

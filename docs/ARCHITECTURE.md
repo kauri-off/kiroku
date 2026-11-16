@@ -363,8 +363,9 @@ was chosen against, and why:
   fixtures, held in memory, writes included; its data follows the device's date, so every weekday and weekly slot in
   it stays what it claims, and every "today" does on a device between UTC−9 and UTC+8, and a new process starts it
   again from the fixtures. Debug builds and the preview build have a debug menu that makes the demo or the sandbox
-  fail and resets it; beyond it, the preview build behaves as the release build, and only a debug build stops at a
-  report nobody expected. A release build holds none of it.
+  fail and resets it; beyond it, the preview build behaves as the release build, except that it logs a line per
+  request and per failed sign-in, keeps its reports in a file for the menu, and at its start removes a title a
+  recording left on the list. Only a debug build stops at a report nobody expected. A release build holds none of it.
 - Every request names Kiroku and its version in its `User-Agent`. Tokens and the client id never appear in logs. A
   write is never retried automatically, except the notification action (N9).
 - From dailyAL come ideas and endpoint knowledge only. No code is ported and no asset is copied.

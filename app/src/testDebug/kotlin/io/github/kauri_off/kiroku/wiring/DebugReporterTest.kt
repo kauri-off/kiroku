@@ -106,12 +106,15 @@ class DebugReporterTest {
     }
 
     @Test
-    fun `any other report crashes the debuggable build on the main thread, kept for the debug menu first`() {
-        val log = ReportLog()
+    fun `any other report crashes the debuggable build on the main thread, once it is in the file`() {
+        val stored = ArrayDeque<Runnable>()
+        val log = ReportLog(files = { stored += it })
         val nobodyExpected = IllegalArgumentException("unexpected")
         reporter(loud = true, log)(nobodyExpected)
 
         assertEquals(listOf("Unexpected: ${IllegalArgumentException::class.java.name}"), log.reports.value.map { it.lines.first() })
+        mainThread.idle()
+        stored.removeFirst().run()
         val crash = assertThrows(IllegalStateException::class.java) { mainThread.idle() }
         assertEquals(nobodyExpected, crash.cause)
         assertEquals(emptyList<String>(), ShadowLog.getLogsForTag(LOG_TAG).map { it.msg })
@@ -120,7 +123,7 @@ class DebugReporterTest {
     // The preview build: the owner's daily app, which a report never stops (section 2.3), whatever its type.
     @Test
     fun `a build that is not debuggable logs any report as a release does, keeps it for the debug menu and goes on`() {
-        val log = ReportLog()
+        val log = ReportLog(files = Runnable::run)
         val nobodyExpected =
             listOf(
                 IllegalArgumentException("unexpected", IllegalStateException("Sousou no Frieren")),

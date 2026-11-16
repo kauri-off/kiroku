@@ -26,18 +26,18 @@ private val UNEXPECTED = notShown("An exception the app did not expect")
 // The debuggable build is the loud one; the preview build reports as a release does, and keeps the report as well.
 internal val reportUnexpected: (Throwable) -> Unit = reporter(loud = BuildConfig.DEBUG, reportLog)
 
-// Keeps each report for the debug menu; a loud build then crashes on the main thread on one nobody expected.
+// Keeps each report for the debug menu; a loud build then crashes on the main thread on one nobody expected, once it is kept.
 internal fun reporter(
     loud: Boolean,
     log: ReportLog,
 ): (Throwable) -> Unit =
     { e ->
-        log.keep(e)
         // S8: tokens or choices that cannot be read, and MAL's odd answers (section 2.3), never crash the app: they are logged.
         if (!loud || e is TokensNotRead || e is PreferencesFailure || e is OddAnswer) {
+            log.keep(e)
             logTypes(e)
         } else {
-            Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) }
+            log.keep(e) { Handler(Looper.getMainLooper()).post { throw IllegalStateException(UNEXPECTED, e) } }
         }
     }
 

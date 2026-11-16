@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
+import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.debugmenu.SectionDetail
@@ -17,14 +18,19 @@ import io.github.kauri_off.kiroku.notShown
 @Composable
 fun ReportsRoute() {
     val reports by reportLog.reports.collectAsScreenState()
-    ReportsSection(reports)
+    // A build that is not debuggable is shrunk, as the release is, so its names are R8's.
+    ReportsSection(reports, renamed = !BuildConfig.DEBUG)
 }
 
 // What the app reported, newest first, as its log says it. Selectable, so a report can be copied.
 @Composable
-fun ReportsSection(reports: List<Report>) {
+fun ReportsSection(
+    reports: List<Report>,
+    renamed: Boolean,
+) {
     SectionHeader(stringResource(R.string.reports_title))
     SectionDetail(if (reports.isEmpty()) R.string.reports_none else R.string.reports_detail)
+    if (renamed) SectionDetail(R.string.reports_renamed)
     SelectionContainer {
         Column {
             reports.forEach { report ->

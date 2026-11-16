@@ -10,17 +10,24 @@ import java.io.File
 import java.io.IOException
 import java.time.DateTimeException
 import java.time.Instant
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 // A report as the debug menu shows it: when it was made, and the types of the log's report with their first frames.
 data class Report(
     val at: Instant,
     val lines: List<String>,
-)
+) {
+    init {
+        require(lines.isNotEmpty())
+    }
+}
 
-// The latest reports, newest first: in memory, and from [keepIn] on in a file too, so they outlive the process.
+// The latest reports, newest first, in memory and from [keepIn] on in a file, which only [files] reads and writes.
 class ReportLog(
     private val limit: Int = LIMIT,
     private val now: () -> Instant = Instant::now,
+    private val files: Executor = Executors.newSingleThreadExecutor { Thread(it, NAME).apply { isDaemon = true } },
 ) {
     private val kept = MutableStateFlow(emptyList<Report>())
     val reports: StateFlow<List<Report>> = kept.asStateFlow()
@@ -28,31 +35,50 @@ class ReportLog(
     private var file: File? = null
 
     fun keepIn(file: File) =
-        synchronized(this) {
-            this.file = file
-            update(kept.value + read(file))
+        files.execute {
+            val stored = read(file)
+            synchronized(this) {
+                this.file = file
+                kept.value = (kept.value + stored).take(limit)
+            }
+            store()
         }
 
-    fun keep(e: Throwable) = synchronized(this) { update(listOf(Report(now(), shortened(typesOf(e)))) + kept.value) }
-
-    private fun update(reports: List<Report>) {
-        kept.value = reports.take(limit)
-        file?.let { write(it, kept.value) }
+    // [then] runs once the report is in the file, or would have been, on the files' thread.
+    fun keep(
+        e: Throwable,
+        then: () -> Unit = {},
+    ) {
+        synchronized(this) { kept.value = (listOf(Report(now(), shortened(typesOf(e)))) + kept.value).take(limit) }
+        files.execute {
+            store()
+            then()
+        }
     }
 
-    // A file that cannot be read or written loses the reports kept there; the log still has each one.
+    private fun store() {
+        val (file, reports) = synchronized(this) { file to kept.value }
+        file?.let { write(it, reports) }
+    }
+
+    // A file or a block that cannot be read gives no report; the log still has each one.
     private fun read(file: File): List<Report> =
         try {
             if (!file.exists()) return emptyList()
-            file.readText().split(BETWEEN).filter { it.isNotBlank() }.map { block ->
-                val lines = block.lines().filter { it.isNotEmpty() }
-                Report(Instant.parse(lines.first()), lines.drop(1))
-            }
+            file.readText().split(BETWEEN).mapNotNull(::report)
         } catch (_: IOException) {
             emptyList()
-        } catch (_: DateTimeException) {
-            emptyList()
         }
+
+    private fun report(block: String): Report? {
+        val lines = block.lines().filter { it.isNotEmpty() }
+        if (lines.size < 2) return null
+        return try {
+            Report(Instant.parse(lines.first()), lines.drop(1))
+        } catch (_: DateTimeException) {
+            null
+        }
+    }
 
     private fun write(
         file: File,
@@ -72,6 +98,7 @@ class ReportLog(
         val LINE = notShown("\n")
         val BETWEEN = LINE + LINE
         val NEXT = notShown(".next")
+        val NAME = notShown("reports")
 
         // Each type with its first frames; the log has every frame.
         fun shortened(lines: List<String>): List<String> {

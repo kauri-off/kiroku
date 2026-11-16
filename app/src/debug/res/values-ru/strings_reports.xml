@@ -3,4 +3,5 @@
     <string name="reports_title">Отчёты об ошибках</string>
     <string name="reports_detail">С чем приложение не справилось, сначала новое, с первыми строками каждого отчёта. Сборка для отладки останавливается на неожиданной ошибке, сборка превью работает дальше</string>
     <string name="reports_none">Отчётов нет</string>
+    <string name="reports_renamed">В этой сборке имена заменены R8: восстановите их по файлу mapping той же сборки</string>
 </resources>

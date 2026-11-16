@@ -14,7 +14,7 @@ val debugMenuSections: List<@Composable () -> Unit> =
         { SourceRoute() },
         { SignOutRoute() },
         { RecorderRoute() },
-        { ReportsRoute() },
         { BuildRoute() },
         { DesignRoute() },
+        { ReportsRoute() },
     )

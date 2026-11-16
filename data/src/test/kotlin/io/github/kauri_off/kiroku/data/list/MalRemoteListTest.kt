@@ -228,7 +228,7 @@ class MalRemoteListTest {
 
     // A fixture title edited over the real account, in any build: MAL holds real titles under such ids one day.
     @Test
-    fun `no request names a made-up title, and each answer is MAL's for a title it does not know`() {
+    fun `no write for a made-up title is sent to MAL, nor a read of its entry, and each answer is MAL's for one it does not know`() {
         val film = FixtureAnime.film
         assertTrue(film.id.madeUp)
         assertEquals(Outcome.Failure(DataError.NotFound), runBlocking { client.put(film, values.sent) })

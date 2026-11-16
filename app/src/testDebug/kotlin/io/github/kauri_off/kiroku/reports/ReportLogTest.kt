@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.time.Instant
+import java.util.concurrent.Executor
 
 class ReportLogTest {
     @get:Rule
@@ -17,7 +18,10 @@ class ReportLogTest {
 
     private var now = Instant.parse("2026-11-16T08:00:00Z")
 
-    private fun log(limit: Int = 20) = ReportLog(limit) { now.also { now = now.plusSeconds(60) } }
+    private fun log(
+        limit: Int = 20,
+        files: Executor = Executor(Runnable::run),
+    ) = ReportLog(limit, { now.also { now = now.plusSeconds(60) } }, files)
 
     private fun thrown(depth: Int = 0): Throwable = if (depth < 5) thrown(depth + 1) else IllegalStateException("Sousou no Frieren")
 
@@ -55,6 +59,53 @@ class ReportLogTest {
         assertEquals(1, earlier.size)
         assertEquals(before + earlier, next.reports.value)
         assertEquals(next.reports.value, log().apply { keepIn(file) }.reports.value)
+    }
+
+    // The reporter can be called on the main thread, which must not wait for the file.
+    @Test
+    fun `the file is read and written on the log's own executor, never by the thread that reports`() {
+        val file = File(folder.root, "reports")
+        log().apply {
+            keepIn(file)
+            keep(thrown())
+        }
+        val stored = ArrayDeque<Runnable>()
+        val log = log(files = { stored += it })
+        log.keepIn(file)
+        log.keep(IllegalArgumentException())
+
+        assertEquals(1, log.reports.value.size)
+        assertEquals(
+            1,
+            log()
+                .apply { keepIn(file) }
+                .reports.value.size,
+        )
+        while (stored.isNotEmpty()) stored.removeFirst().run()
+        assertEquals(2, log.reports.value.size)
+        assertEquals(log.reports.value, log().apply { keepIn(file) }.reports.value)
+    }
+
+    // A file cut short or edited by hand: the debug menu shows what is whole, and never a report without a line.
+    @Test
+    fun `a block without a time or without a line is no report, and the blocks around it are kept`() {
+        val whole = "2026-11-16T08:00:00Z\nUnexpected: java.lang.IllegalStateException\n\tat a.b(Unknown Source:1)"
+        val file =
+            folder.newFile("reports").apply {
+                writeText(
+                    listOf(
+                        whole,
+                        "2026-11-16T07:00:00Z",
+                        "",
+                        "\n\n\n",
+                        "not a time\nUnexpected: x",
+                        whole.replace("08:", "06:"),
+                    ).joinToString("\n\n"),
+                )
+            }
+        val reports = log().apply { keepIn(file) }.reports.value
+        assertEquals(listOf("2026-11-16T08:00:00Z", "2026-11-16T06:00:00Z"), reports.map { it.at.toString() })
+        assertTrue(reports.all { it.lines.size == 2 })
     }
 
     @Test
