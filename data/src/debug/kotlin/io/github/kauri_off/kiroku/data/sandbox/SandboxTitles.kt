@@ -9,7 +9,10 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
+import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 
 // The titles of the sandbox: MAL's own, from the answers the client-id recorder committed, with no picture of MAL's.
@@ -53,15 +56,17 @@ object SandboxTitles {
         return titles
     }
 
-    // The list the sandbox starts with: every value made up, in each of MAL's five statuses.
+    // The list the sandbox starts with, from MAL's [titles] as of [now]: every value made up, in each of MAL's five statuses,
+    // and every title airing or finished within the last month in Watching.
     fun startingList(
         titles: Map<Long, JsonObject>,
         now: Instant,
     ): Map<Long, Listed> {
         val byTitle = titles.entries.sortedBy { it.key }
-        val airing = byTitle.filter { it.value.text("status") == "currently_airing" }.take(AIRING)
+        val recent = byTitle.filter { it.value.endedWithin(now) }
+        val airing = byTitle.filter { it.value.text("status") == "currently_airing" } + recent
         val coming = byTitle.filter { it.value.text("status") == "not_yet_aired" }.take(COMING)
-        val finished = byTitle.filter { it.value.text("status") == "finished_airing" }.take(FINISHED)
+        val finished = byTitle.filter { it.value.text("status") == "finished_airing" && it !in recent }.take(FINISHED)
         val list = mutableMapOf<Long, Listed>()
         var age = 0L
 
@@ -76,7 +81,16 @@ object SandboxTitles {
             list[id] = Listed(status, score, watched, start, finish, now.truncatedTo(ChronoUnit.SECONDS).minus(++age, ChronoUnit.DAYS))
         }
         airing.forEachIndexed { i, (id, title) ->
-            put(id, "watching", minOf(i + 1, title.episodes ?: Int.MAX_VALUE), start = "2001-01-0${i + 1}")
+            val watched =
+                if (recent.any { it.key == id }) {
+                    (title.episodes ?: 1) - 1
+                } else {
+                    minOf(
+                        i % AIRING_KINDS,
+                        title.episodes ?: Int.MAX_VALUE,
+                    )
+                }
+            put(id, "watching", watched, start = LocalDate.of(2001, 1, 1).plusDays(i.toLong()).toString())
         }
         coming.forEach { (id, _) -> put(id, "plan_to_watch", 0) }
         finished.forEachIndexed { i, (id, title) ->
@@ -116,7 +130,7 @@ object SandboxTitles {
         )
     }
 
-    private const val AIRING = 6
+    private const val AIRING_KINDS = 3
     private const val COMING = 3
     private const val FINISHED = 20
     private const val FINISHED_KINDS = 5
@@ -129,3 +143,12 @@ internal val JsonObject.id: Long? get() = (get("id") as? JsonPrimitive)?.longOrN
 internal val JsonObject.episodes: Int? get() = (get("num_episodes") as? JsonPrimitive)?.intOrNull?.takeIf { it > 0 }
 
 internal fun JsonObject.text(key: String): String? = (get(key) as? JsonPrimitive)?.contentOrNull
+
+private val RECENT = Duration.ofDays(31)
+
+// MAL marks the title finished, on a full end date within the month before [now].
+private fun JsonObject.endedWithin(now: Instant): Boolean {
+    if (text("status") != "finished_airing") return false
+    val end = text("end_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return false
+    return !end.atStartOfDay(ZoneOffset.UTC).toInstant().isBefore(now.minus(RECENT))
+}

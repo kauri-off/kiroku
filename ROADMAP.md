@@ -190,14 +190,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   than the limit allows; a page that fails leaves its titles not fetched and the others fetched; the request has
   no header beyond the ones named; a refusal by AniList leaves MAL's back-off at zero.
 
-- [ ] **M3-07 Sandbox: AniList on the device.** The sandbox answers the requests of M3-01 too, so that no request
-  leaves the device. Its schedules follow the device's date, each on its title's own weekly slot, and agree with
-  its MAL pages except where the disagreement is the case: among its titles are one without a schedule, one on a
-  break, one numbered on from an earlier season and one whose next episode airs within minutes of a reset. An id
-  it does not know is answered as AniList answers one.
-  **Needs:** M3-01.
-  **Check:** tests: each of its answers has the fields of the recorded answer of its case, with values of the same
-  kind; on any date its schedules fall on the title's weekday and time; a reset brings the schedules back.
+- [x] **M3-07 Sandbox: AniList on the device.**
 
 - [ ] **M3-08 Live airing.** The live graph's airing is M3-04's repository over M3-05's store and M3-06's client,
   each source with its own store, built at its first use and off the main thread. The sandbox runs on it against
