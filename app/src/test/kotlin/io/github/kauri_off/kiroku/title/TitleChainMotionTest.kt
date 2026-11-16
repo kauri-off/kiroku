@@ -8,11 +8,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -38,8 +43,20 @@ private const val LOADING = "Loading the watch order"
 private const val SYNOPSIS = "Synopsis"
 private const val RELATED = "Related"
 
-// A title the walk finds joins the watch order as the List's rows do: it fades in on the default effects spring and
-// the rows below make room on the fast one; the indicator leaves. The order arriving with the details does not move.
+// A section by its heading, or a watch-order card by the title its spoken sentence starts with.
+private fun ComposeTestRule.on(text: String): SemanticsNodeInteraction =
+    onNode(
+        hasText(text) or
+            SemanticsMatcher("spoken first: $text") { node ->
+                node.config
+                    .getOrNull(SemanticsProperties.ContentDescription)
+                    .orEmpty()
+                    .any { it.startsWith("$text, ") }
+            },
+    )
+
+// A title the walk finds joins the watch order's strip: it fades in on the default effects spring, and the cards after
+// it make room at once; the indicator leaves. The order arriving with the details does not move.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h2000dp")
@@ -51,7 +68,9 @@ class TitleChainMotionTest {
 
     private var state by mutableStateOf<TitleState>(TitleFixtures.chainLoading)
 
-    private fun top(title: String): Dp = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
+    private fun top(title: String): Dp = compose.on(title).getUnclippedBoundsInRoot().top
+
+    private fun left(title: String): Dp = compose.on(title).getUnclippedBoundsInRoot().left
 
     private fun showAndSettle(start: TitleState) {
         state = start
@@ -70,32 +89,32 @@ class TitleChainMotionTest {
         assertTrue(Recomposer.runningRecomposers.value.none { it.hasPendingWork })
     }
 
-    // The found title fades in within the bound of an entrance; the rows and the sections below it, and the indicator
-    // leaving, are in place at once, as no slide can be kept to this change alone.
+    // The found title fades in within the bound of an entrance; the cards after it and the sections below, and the
+    // indicator leaving, are in place at once, as no slide can be kept to this change alone.
     @Test
     fun `a title the walk finds fades in between the seasons within 400 ms, and nothing else moves`() {
         showAndSettle(TitleFixtures.chainLoading)
-        val before = top(third)
+        val before = left(third)
         set(TitleFixtures.chainOfFour)
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()
-        val third2 = top(third)
+        val third2 = left(third)
         val synopsis2 = top(SYNOPSIS)
-        val fading = compose.onNodeWithText(film).captureToImage().toPixelMap()
+        val fading = compose.on(film).captureToImage().toPixelMap()
         assertTrue("the third season made room", third2 > before)
-        assertTrue("the film comes before the third season", top(film) < third2)
+        assertTrue("the film comes before the third season", left(film) < third2)
         compose.onNodeWithContentDescription(LOADING).assertDoesNotExist()
         compose.mainClock.advanceTimeBy(ENTER_MS)
-        val entered = compose.onNodeWithText(film).captureToImage().toPixelMap()
+        val entered = compose.on(film).captureToImage().toPixelMap()
         assertTrue("the film was fading in", !fading.buffer.contentEquals(entered.buffer))
         compose.mainClock.advanceTimeBy(SETTLED)
-        assertEquals(third2, top(third))
+        assertEquals(third2, left(third))
         assertEquals(synopsis2, top(SYNOPSIS))
         assertTrue(
             "the film has faded in",
             entered.buffer.contentEquals(
                 compose
-                    .onNodeWithText(film)
+                    .on(film)
                     .captureToImage()
                     .toPixelMap()
                     .buffer,
@@ -107,14 +126,14 @@ class TitleChainMotionTest {
     @Test
     fun `a walk that goes back in mid-flight ends with every row where the last state puts it`() {
         showAndSettle(TitleFixtures.chainFailed)
-        val before = top(third)
+        val before = left(third)
         val synopsisBefore = top(SYNOPSIS)
         set(TitleFixtures.chainOfFour)
         compose.mainClock.advanceTimeBy(ENTER_MS / 3)
         set(TitleFixtures.chainFailed)
         compose.mainClock.advanceTimeBy(SETTLED)
-        compose.onNodeWithText(film).assertDoesNotExist()
-        assertEquals(before, top(third))
+        compose.on(film).assertDoesNotExist()
+        assertEquals(before, left(third))
         assertEquals(synopsisBefore, top(SYNOPSIS))
         assertIdle()
     }
@@ -126,10 +145,10 @@ class TitleChainMotionTest {
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()
         val first = top(third)
-        val row = compose.onNodeWithText(third).captureToImage().toPixelMap()
+        val row = compose.on(third).captureToImage().toPixelMap()
         compose.mainClock.advanceTimeBy(SETTLED)
         assertEquals(first, top(third))
-        val settled = compose.onNodeWithText(third).captureToImage().toPixelMap()
+        val settled = compose.on(third).captureToImage().toPixelMap()
         assertTrue("the row is drawn in full at once", row.buffer.contentEquals(settled.buffer))
         assertIdle()
     }
@@ -213,7 +232,7 @@ class TitleChainMotionOffTest {
 
     private var state by mutableStateOf<TitleState>(TitleFixtures.chainLoading)
 
-    private fun top(title: String): Dp = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
+    private fun left(title: String): Dp = compose.on(title).getUnclippedBoundsInRoot().left
 
     @Test
     fun `the change is complete at once`() {
@@ -224,16 +243,16 @@ class TitleChainMotionOffTest {
         Snapshot.sendApplyNotifications()
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()
-        val thirdTop = top(third)
-        val row = compose.onNodeWithText(film).captureToImage().toPixelMap()
+        val thirdLeft = left(third)
+        val row = compose.on(film).captureToImage().toPixelMap()
         compose.onNodeWithContentDescription(LOADING).assertDoesNotExist()
         compose.mainClock.advanceTimeBy(SETTLED)
-        assertEquals(thirdTop, top(third))
+        assertEquals(thirdLeft, left(third))
         assertTrue(
             "the found title is drawn in full at once",
             row.buffer.contentEquals(
                 compose
-                    .onNodeWithText(film)
+                    .on(film)
                     .captureToImage()
                     .toPixelMap()
                     .buffer,

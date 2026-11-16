@@ -31,8 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -41,8 +39,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -56,11 +52,11 @@ import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
+import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
-import io.github.kauri_off.kiroku.design.theme.isLargeText
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.currentLocale
 import io.github.kauri_off.kiroku.text.label
@@ -256,78 +252,22 @@ private fun Avatar(url: String?) {
     }
 }
 
-// The three numbers the Profile is opened for: in one row, or one per line with large text (ARCHITECTURE 8.3) and
-// where the row cannot give each caption its longest word.
+// The three numbers the Profile is opened for.
 @Composable
 private fun Numbers(
     statistics: UserStatistics,
     modifier: Modifier = Modifier,
 ) {
     val mean = statistics.meanScore
-    Layout(
-        content = {
-            StatNumber(countText(statistics.statuses.completed), stringResource(R.string.profile_completed))
-            StatNumber(daysText(statistics.daysWatched), stringResource(R.string.profile_days_watched))
-            StatNumber(
-                value = mean?.let { scoreText(it) } ?: stringResource(R.string.profile_no_mean_score_value),
-                caption = stringResource(R.string.profile_mean_score),
-                spokenValue = if (mean == null) stringResource(R.string.profile_no_mean_score) else null,
-            )
-        },
-        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.l),
-        measurePolicy = numbersPolicy(stacked = isLargeText(), gap = Spacing.m, stackedGap = Spacing.m),
-    )
-}
-
-private fun numbersPolicy(
-    stacked: Boolean,
-    gap: Dp,
-    stackedGap: Dp,
-) = MeasurePolicy { measurables, constraints ->
-    val width = constraints.maxWidth
-    val gapPx = gap.roundToPx()
-    val widths =
-        if (stacked) null else rowWidths(measurables.map { it.minIntrinsicWidth(Constraints.Infinity) }, width, gapPx)
-    if (widths == null) {
-        val placeables = measurables.map { it.measure(Constraints(maxWidth = width)) }
-        val between = stackedGap.roundToPx()
-        layout(width, placeables.sumOf { it.height } + between * (placeables.size - 1)) {
-            var y = 0
-            placeables.forEach {
-                it.place(0, y)
-                y += it.height + between
-            }
-        }
-    } else {
-        val placeables = measurables.mapIndexed { i, it -> it.measure(Constraints(maxWidth = widths[i])) }
-        layout(width, placeables.maxOf { it.height }) {
-            var x = 0
-            placeables.forEachIndexed { i, it ->
-                it.place(x, 0)
-                x += widths[i] + gapPx
-            }
-        }
+    StatNumbers(modifier.padding(horizontal = Spacing.l)) {
+        StatNumber(countText(statistics.statuses.completed), stringResource(R.string.profile_completed))
+        StatNumber(daysText(statistics.daysWatched), stringResource(R.string.profile_days_watched))
+        StatNumber(
+            value = mean?.let { scoreText(it) } ?: stringResource(R.string.profile_no_mean_score_value),
+            caption = stringResource(R.string.profile_mean_score),
+            spokenValue = if (mean == null) stringResource(R.string.profile_no_mean_score) else null,
+        )
     }
-}
-
-// Each number's width in one row: equal shares, except that a number whose longest word is wider than its share gets
-// that word's width and the others share the rest. Null when the longest words alone do not fit.
-internal fun rowWidths(
-    words: List<Int>,
-    width: Int,
-    gap: Int,
-): List<Int>? {
-    val space = width - gap * (words.size - 1)
-    if (words.sum() > space) return null
-    val fixed = mutableSetOf<Int>()
-    var share: Int
-    do {
-        val free = words.indices - fixed
-        share = (space - fixed.sumOf { words[it] }) / free.size
-        val wider = free.filter { words[it] > share }
-        fixed += wider
-    } while (wider.isNotEmpty() && fixed.size < words.size)
-    return words.indices.map { if (it in fixed) words[it] else share }
 }
 
 @Composable
