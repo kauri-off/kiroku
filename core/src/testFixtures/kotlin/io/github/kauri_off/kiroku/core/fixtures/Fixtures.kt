@@ -1,7 +1,5 @@
 package io.github.kauri_off.kiroku.core.fixtures
 
-import io.github.kauri_off.kiroku.core.airing.AiredCount
-import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.airedUnknown
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime.completedOna
@@ -63,7 +61,6 @@ object Fixtures {
             anime = FixtureAnime.all,
             entries = entries,
             schedules = schedules,
-            airing = airing,
             details = FixtureDetails.all.associateBy { it.id },
             user = UserProfile(name = "kiroku_demo", pictureUrl = null, joined = LocalDate.of(2019, 3, 2)),
             userStatistics = FixtureUser.statistics,
@@ -138,40 +135,6 @@ object Fixtures {
             onHoldAiring.id to AiringSchedule(weekly(21, japan("2026-01-15T23:00"), 1..24), 24),
             notOnListAiring.id to AiringSchedule(weekly(8, japan("2026-01-18T22:00"), 1..12), 12),
         )
-
-    private val airing: Map<AnimeId, Airing> =
-        mapOf(
-            exactToWatch.id to exact(exactToWatch, aired = 14, next = 15),
-            exactCaughtUp.id to exact(exactCaughtUp, aired = 8, next = 9),
-            exactCaughtUpLater.id to exact(exactCaughtUpLater, aired = 3, next = 4),
-            exactOnBreak.id to exact(exactOnBreak, aired = 6, next = null),
-            unknownTotal.id to exact(unknownTotal, aired = 1121, next = 1122),
-            longTitle.id to exact(longTitle, aired = 3, next = 4),
-            premiereTimeSoon.id to exact(premiereTimeSoon, aired = 0, next = 1),
-            premiereTimeLater.id to exact(premiereTimeLater, aired = 0, next = 1),
-            plannedAiring.id to exact(plannedAiring, aired = 5, next = 6),
-            onHoldAiring.id to exact(onHoldAiring, aired = 20, next = 21),
-            notOnListAiring.id to exact(notOnListAiring, aired = 7, next = 8),
-            estimatedToWatch.id to Airing(AiredCount.Estimated(10), 12, null, japan("2026-01-07T22:00")),
-            estimatedCaughtUp.id to Airing(AiredCount.Estimated(5), 12, null, japan("2026-01-10T01:30")),
-            droppedEstimated.id to Airing(AiredCount.Estimated(9), 12, null, japan("2026-01-09T00:00")),
-            airedUnknown.id to Airing(AiredCount.Unknown, null, null, null),
-        )
-
-    private fun exact(
-        anime: Anime,
-        aired: Int,
-        next: Int?,
-    ): Airing {
-        val schedule = schedules.getValue(anime.id)
-        val episodes = schedule.episodes.associateBy { it.number }
-        return Airing(
-            aired = AiredCount.Exact(aired),
-            total = anime.malEpisodes ?: schedule.totalEpisodes,
-            nextEpisode = next?.let(episodes::getValue),
-            latestAiredAt = episodes[aired]?.airsAt,
-        )
-    }
 
     private fun entry(
         anime: Anime,

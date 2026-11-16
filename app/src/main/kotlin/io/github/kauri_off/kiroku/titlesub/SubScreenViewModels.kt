@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.LocalDate
 
 // One title, its details and whether loading them failed, the summary standing in for what is not stored.
 abstract class SubScreenViewModel(
@@ -117,7 +118,7 @@ class RelatedViewModel(
     airing: AiringRepository,
     session: SessionRepository,
     connection: Connection,
-    clock: Clock,
+    private val clock: Clock,
     private val titleLanguage: TitleLanguage,
     opened: TitleSummary? = null,
 ) : SubScreenViewModel(id, anime, session, connection, clock, opened) {
@@ -190,6 +191,7 @@ class RelatedViewModel(
                     sources.airing,
                     titleLanguage,
                     title.session,
+                    LocalDate.now(clock),
                 )
             failure != null -> RelatedState.Failed(failure, title.session)
             else -> RelatedState.Loading(title.session)

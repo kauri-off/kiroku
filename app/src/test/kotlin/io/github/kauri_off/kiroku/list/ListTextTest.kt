@@ -4,8 +4,11 @@ import android.provider.Settings
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Premiere
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowScore
+import io.github.kauri_off.kiroku.premiereAt
+import io.github.kauri_off.kiroku.premiereOn
 import io.github.kauri_off.kiroku.text.AirTimeText
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -45,10 +48,10 @@ class ListTextTest {
         assertEquals("Просмотрено 25\u00A0из\u00A024", text.line2(Line2.Progress(25, 24)))
         assertEquals("К просмотру:\u00A0~2", text.line3(Line3.ToWatch(AiredCount.Estimated(2))))
         assertEquals("Серия\u00A015 ·\u00A0сб\u00A017:30", text.line3(Line3.NextEpisode(ScheduledEpisode(15, at(17, 17, 30)))))
-        assertEquals("Премьера сб\u00A017:30", text.premiere(Premiere.At(at(17, 17, 30))))
-        assertEquals("Премьера 4 апр.", text.premiere(Premiere.OnDay(LocalDate.of(2026, 4, 4))))
-        assertEquals("Премьера в\u00A0январе\u00A02027\u00A0г.", text.premiere(Premiere.InMonth(YearMonth.of(2027, 1))))
-        assertEquals("Премьера в\u00A02027\u00A0г.", text.premiere(Premiere.InYear(Year.of(2027))))
+        assertEquals("Премьера сб\u00A017:30", text.premiere(premiereAt(at(17, 17, 30))))
+        assertEquals("Премьера 4 апр.", text.premiere(premiereOn(PartialDate.Day(LocalDate.of(2026, 4, 4)))))
+        assertEquals("Премьера в\u00A0январе\u00A02027\u00A0г.", text.premiere(premiereOn(PartialDate.Month(YearMonth.of(2027, 1)))))
+        assertEquals("Премьера в\u00A02027\u00A0г.", text.premiere(premiereOn(PartialDate.OnlyYear(Year.of(2027)))))
         assertEquals("Ещё не вышло", text.premiere(Premiere.Unannounced))
         assertEquals("Оценка:\u00A08", text.line2(Line2.Score(8)))
         assertEquals("Без оценки", text.line2(Line2.Score(null)))
@@ -62,10 +65,10 @@ class ListTextTest {
         assertEquals("Watched 212", text.line2(Line2.Progress(212, null)))
         assertEquals("Watched 25\u00A0of\u00A024", text.line2(Line2.Progress(25, 24)))
         assertEquals("~2\u00A0to\u00A0watch", text.line3(Line3.ToWatch(AiredCount.Estimated(2))))
-        assertEquals("Premieres Sat\u00A017:30", text.premiere(Premiere.At(at(17, 17, 30))))
+        assertEquals("Premieres Sat\u00A017:30", text.premiere(premiereAt(at(17, 17, 30))))
         assertEquals("2\u00A0to\u00A0watch", text.line3(Line3.ToWatch(AiredCount.Exact(2))))
-        assertEquals("Premieres January\u00A02027", text.premiere(Premiere.InMonth(YearMonth.of(2027, 1))))
-        assertEquals("Premieres\u00A02027", text.premiere(Premiere.InYear(Year.of(2027))))
+        assertEquals("Premieres January\u00A02027", text.premiere(premiereOn(PartialDate.Month(YearMonth.of(2027, 1)))))
+        assertEquals("Premieres\u00A02027", text.premiere(premiereOn(PartialDate.OnlyYear(Year.of(2027)))))
         assertEquals("Not scored", text.line2(Line2.Score(null)))
     }
 
@@ -100,7 +103,7 @@ class ListTextTest {
         listOf(at(14, 18), at(15, 0, 30), at(17, 17, 30), at(21, 9)).forEach { instant ->
             val episode = ScheduledEpisode(15, instant)
             assertEquals(times.nextEpisode(episode), text().line3(Line3.NextEpisode(episode)))
-            assertEquals(times.premiere(instant), text().premiere(Premiere.At(instant)))
+            assertEquals(times.premiere(instant), text().premiere(premiereAt(instant)))
         }
     }
 }

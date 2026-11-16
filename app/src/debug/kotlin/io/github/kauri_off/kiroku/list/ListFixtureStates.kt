@@ -1,7 +1,8 @@
 package io.github.kauri_off.kiroku.list
 
-import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
@@ -157,17 +158,14 @@ object ListFixtureStates {
             )
         }
 
+    // The same title airing weekly for years, its next episode at the fixture's time.
     private val longShowAiring =
-        set.airing + (
-            FixtureAnime.exactToWatch.id to
-                set.airing.getValue(FixtureAnime.exactToWatch.id).let {
-                    it.copy(
-                        aired = AiredCount.Exact(LONG_AIRED),
-                        total = LONG_TOTAL,
-                        nextEpisode = it.nextEpisode?.copy(number = LONG_AIRED + 1),
-                    )
-                }
-        )
+        set.airing +
+            longShow.filter { it.anime.id == FixtureAnime.exactToWatch.id }.associate { entry ->
+                val next = checkNotNull(set.airing.getValue(entry.anime.id).nextEpisode)
+                val schedule = AiringSchedule(FixtureTime.weekly(LONG_AIRED + 1, next.airsAt, 1..LONG_TOTAL), LONG_TOTAL)
+                entry.anime.id to airingAt(entry.anime, schedule, set.now)
+            }
 
     // [status] ordered by [sort] in [direction], each row showing the value it is sorted by where it has one.
     fun sorted(

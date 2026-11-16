@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.Premiere
-import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -26,6 +26,7 @@ import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
+import io.github.kauri_off.kiroku.premiereOn
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
@@ -62,7 +63,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -740,15 +740,7 @@ class ListViewModelTest {
             assertEquals(Line3.ToWatch(AiredCount.Exact(2)), before.single { it.id == anime.id }.line3)
             val old = set.airing.getValue(anime.id)
             val aired = old.nextEpisode!!
-            schedule.value =
-                set.airing + (
-                    anime.id to
-                        old.copy(
-                            aired = AiredCount.Exact(aired.number),
-                            nextEpisode = ScheduledEpisode(aired.number + 1, aired.airsAt.plus(Duration.ofDays(7))),
-                            latestAiredAt = aired.airsAt,
-                        )
-                )
+            schedule.value = set.airing + (anime.id to airingAt(anime, set.schedules.getValue(anime.id), aired.airsAt))
             advanceUntilIdle()
             assertEquals(ids, s.ids())
             assertEquals(0, s.page().ordering)
@@ -771,7 +763,7 @@ class ListViewModelTest {
                     .rows
                     .single { it.id == anime.id }
                     .line2
-            assertEquals(Line2.Premieres(Premiere.OnDay(premiere)), line2())
+            assertEquals(Line2.Premieres(premiereOn(PartialDate.Day(premiere))), line2())
             clock.instant = end
             s.list.onEvent(ListEvent.SelectTab(ListStatus.Planned))
             assertEquals(Line2.Premieres(Premiere.Unannounced), line2())

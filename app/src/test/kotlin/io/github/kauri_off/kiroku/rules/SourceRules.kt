@@ -253,6 +253,32 @@ fun backGestureProblems(
         if (found) "$name:${index + 1}: the back gesture handled by the app: ${line.trim()}" else null
     }
 
+// A1: an airing value is :core's result, and the compiler refuses a constructor or a copy of one outside :core. What it
+// leaves open is a count, by its constructor, a nested import or a copy.
+private val airedCount =
+    Regex(
+        """\bAiredCount\.(Exact|Estimated)\s*\(|^import\s+[\w.]+\.AiredCount\.[\w*]|\.copy\s*\(\s*value\s*=""",
+        RegexOption.MULTILINE,
+    )
+
+// An episode with its time is stored data, which :data maps from a source and no screen makes or alters.
+private val episode = Regex("""\bScheduledEpisode\s*\(|\.copy\s*\(\s*(number|airsAt)\s*=""")
+
+const val DATA_SOURCES = "data/"
+
+fun airingValueProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val code = KotlinSource(source).code
+    val lines = code.lines()
+    return listOfNotNull(airedCount, episode.takeUnless { name.startsWith(DATA_SOURCES) })
+        .flatMap { it.findAll(code) }
+        .map { code.substring(0, it.range.first).count { c -> c == '\n' } }
+        .sorted()
+        .map { "$name:${it + 1}: an airing value made outside :core: ${lines[it].trim()}" }
+}
+
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =
     projectDir

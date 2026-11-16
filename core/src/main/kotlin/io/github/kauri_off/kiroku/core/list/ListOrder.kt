@@ -1,14 +1,13 @@
 package io.github.kauri_off.kiroku.core.list
 
 import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.AiringPhase
-import io.github.kauri_off.kiroku.core.airing.airingPhase
-import io.github.kauri_off.kiroku.core.airing.nextAirsAt
+import io.github.kauri_off.kiroku.core.airing.UpNext
+import io.github.kauri_off.kiroku.core.airing.titleAiring
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.firstDay
 import java.text.CollationKey
 import java.text.Collator
 import java.time.Instant
@@ -68,7 +67,7 @@ fun order(
     val ascending = direction != SortDirection.Descending
     val comparator: Comparator<ListEntry> =
         when (sort) {
-            ListSort.UpNext -> upNext(airing, today)
+            ListSort.UpNext -> upNext(entries, airing, today)
             ListSort.Title -> if (ascending) byTitle else byTitle.reversed()
             ListSort.LastUpdated -> keyed(ascending) { it.updatedAt }
             ListSort.Score -> keyed(ascending) { it.values.score }
@@ -91,35 +90,29 @@ private fun <K : Comparable<K>> keyed(
     key: (ListEntry) -> K?,
 ): Comparator<ListEntry> = compareBy(nullsLast(if (ascending) naturalOrder() else reverseOrder())) { key(it) }
 
-// "Up next", grouped by what the row shows, from the same airing phase as the title page: episodes to watch, latest
-// aired first; then a known time for the next episode or the premiere, soonest first; then the rest, last updated first.
-fun upNextGroup(phase: AiringPhase?): Int =
-    when {
-        (phase as? AiringPhase.Aired)?.toWatch != null -> 0
-        phase?.nextAirsAt != null -> 1
-        else -> 2
-    }
-
+// "Up next" by the keys of the result the row shows: episodes to watch, latest aired first; then a known time for the
+// next episode or the premiere, soonest first; then the rest, last updated first.
 private fun upNext(
+    entries: List<ListEntry>,
     airing: (AnimeId) -> Airing?,
     today: LocalDate,
 ): Comparator<ListEntry> {
-    fun phase(entry: ListEntry) = airingPhase(entry.anime, entry.values, airing(entry.anime.id), today)
-    return compareBy<ListEntry> { upNextGroup(phase(it)) }.then { a, b ->
-        val pa = phase(a)
-        when (upNextGroup(pa)) {
-            0 ->
-                nullsLast(reverseOrder<Instant>())
-                    .compare(airing(a.anime.id)?.latestAiredAt, airing(b.anime.id)?.latestAiredAt)
-            1 -> pa!!.nextAirsAt!!.compareTo(phase(b)!!.nextAirsAt!!)
-            else -> b.updatedAt.compareTo(a.updatedAt)
+    val keys = entries.associate { it.anime.id to titleAiring(it.anime, it.values, airing(it.anime.id), today).upNext }
+    return compareBy<ListEntry> { keys.getValue(it.anime.id).group }.then { a, b ->
+        val other = keys.getValue(b.anime.id)
+        when (val key = keys.getValue(a.anime.id)) {
+            is UpNext.ToWatch ->
+                nullsLast(reverseOrder<Instant>()).compare(key.latestAiredAt, (other as UpNext.ToWatch).latestAiredAt)
+            is UpNext.Coming -> key.at.compareTo((other as UpNext.Coming).at)
+            UpNext.Rest -> b.updatedAt.compareTo(a.updatedAt)
         }
     }
 }
 
-private fun PartialDate.firstDay(): LocalDate =
-    when (this) {
-        is PartialDate.Day -> date
-        is PartialDate.Month -> yearMonth.atDay(1)
-        is PartialDate.OnlyYear -> value.atDay(1)
-    }
+private val UpNext.group: Int
+    get() =
+        when (this) {
+            is UpNext.ToWatch -> 0
+            is UpNext.Coming -> 1
+            UpNext.Rest -> 2
+        }
