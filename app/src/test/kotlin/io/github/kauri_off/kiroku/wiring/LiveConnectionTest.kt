@@ -2,17 +2,24 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.net.ConnectivityManager
 import android.net.Network
+import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -27,6 +34,7 @@ import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowConnectivityManager
 import java.time.Clock
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
 
 // Section 2.3: a connection the system will not report on is reported and taken as online, as a request takes it.
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -37,7 +45,7 @@ class LiveConnectionTest {
 
     // Says [first] values, then throws [failure]; each collection is one registration with the system.
     private class FailingDevice(
-        private val failure: Exception,
+        private val failure: Throwable,
         private vararg val first: Boolean,
     ) : Device {
         val registrations = AtomicInteger()
@@ -109,6 +117,78 @@ class LiveConnectionTest {
                 }
             assertEquals(false, connection(backgroundScope, device).observeOnline().first())
             assertEquals(emptyList<Throwable>(), reported)
+        }
+
+    @Test
+    fun `a refusal that repeats is reported once, says only online, and the system is asked again after growing waits`() =
+        runTest {
+            val device = FailingDevice(SecurityException())
+            val seen = mutableListOf<Boolean>()
+            backgroundScope.launch { connection(backgroundScope, device).observeOnline().collect { seen += it } }
+            runCurrent()
+            for ((asked, wait) in listOf(2 to FIRST_WAIT, 3 to FIRST_WAIT * 2, 4 to FIRST_WAIT * 4)) {
+                advanceTimeBy(wait - 1.milliseconds)
+                runCurrent()
+                assertEquals(asked - 1, device.registrations.get())
+                advanceTimeBy(1.milliseconds)
+                runCurrent()
+                assertEquals(asked, device.registrations.get())
+            }
+            assertEquals(listOf(true), seen)
+            assertEquals(1, reported.size)
+            assertEquals(LONGEST_WAIT, waitAfter(Long.MAX_VALUE))
+        }
+
+    // ARCHITECTURE 7.1: a load owed for the connection is repeated once the system, asked again, says it is back.
+    @Test
+    fun `a screen owed a load hears the connection come back after the system refused once`() =
+        runTest {
+            val device =
+                object : Device {
+                    val online = MutableStateFlow(false)
+                    var asked = 0
+
+                    override fun isOnline() = online.value
+
+                    override fun observeOnline(): Flow<Boolean> =
+                        flow {
+                            if (asked++ == 0) throw SecurityException()
+                            emitAll(online)
+                        }
+
+                    override fun isMainThread() = false
+                }
+            var repeated = 0
+            val loads = ShownLoads(backgroundScope, connection(backgroundScope, device), whenShown = {}, again = { repeated++ })
+            loads.owedOffline()
+            backgroundScope.launch { loads.shown.collect {} }
+            runCurrent()
+            advanceTimeBy(FIRST_WAIT)
+            runCurrent()
+            assertEquals("offline, as the system now says", 0, repeated)
+            device.online.value = true
+            runCurrent()
+            assertEquals(1, repeated)
+            assertEquals(1, reported.size)
+        }
+
+    // An Error ends the process as anywhere else: it reaches the scope's handler, unreported and unanswered.
+    @Test
+    fun `an Error from the watcher is not taken for a refusal`() =
+        runTest {
+            val escaped = mutableListOf<Throwable>()
+            val scope =
+                CoroutineScope(
+                    SupervisorJob() + StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, e -> escaped += e },
+                )
+            val error = AssertionError()
+            val seen = mutableListOf<Boolean>()
+            backgroundScope.launch { connection(scope, FailingDevice(error)).observeOnline().collect { seen += it } }
+            runCurrent()
+            assertTrue(escaped.toString(), escaped.single().let { it === error || it.cause === error })
+            assertEquals(emptyList<Throwable>(), reported)
+            assertEquals(emptyList<Boolean>(), seen)
+            scope.cancel()
         }
 
     @Test
