@@ -61,6 +61,37 @@ data class ListValues(
     ): ListValues = if (episode <= watchedEpisodes) this else withWatched(episode, malEpisodes, today)
 }
 
+// A value of an entry, as a write sets it.
+enum class ListField(
+    val of: (ListValues) -> Any?,
+) {
+    Status(ListValues::status),
+    Score(ListValues::score),
+    WatchedEpisodes(ListValues::watchedEpisodes),
+    StartDate(ListValues::startDate),
+    FinishDate(ListValues::finishDate),
+}
+
+fun ListValues.changedFrom(other: ListValues): Set<ListField> = ListField.entries.filterTo(mutableSetOf()) { it.of(this) != it.of(other) }
+
+// These values' [fields], and [base]'s for the rest.
+fun ListValues.over(
+    base: ListValues,
+    fields: Set<ListField>,
+): ListValues {
+    fun <T> pick(
+        field: ListField,
+        value: (ListValues) -> T,
+    ): T = value(if (field in fields) this else base)
+    return ListValues(
+        pick(ListField.Status) { it.status },
+        pick(ListField.WatchedEpisodes) { it.watchedEpisodes },
+        pick(ListField.Score) { it.score },
+        pick(ListField.StartDate) { it.startDate },
+        pick(ListField.FinishDate) { it.finishDate },
+    )
+}
+
 // Whether the episode count follows the status where it is shown; it says nothing for Planned with none watched or
 // for Completed at the total.
 fun ListValues.showsCount(total: Int?): Boolean =

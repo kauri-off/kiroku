@@ -174,7 +174,7 @@ class DemoServer(
         return reachedThrough?.put(anime, values) ?: applied(anime.id, values)
     }
 
-    // A write that reached MAL, for a title it knows. A status left out is the one MAL has; a new entry needs one.
+    // A write that reached MAL, for a title it knows. A value left out is the one MAL has; a new entry needs a status.
     fun applied(
         id: AnimeId,
         values: SentValues?,
@@ -183,8 +183,9 @@ class DemoServer(
             val anime = titles[id] ?: return Outcome.Failure(DataError.NotFound)
             val stored =
                 values?.let { sent ->
-                    val status = sent.status ?: list[id]?.status ?: return Outcome.Failure(DataError.InvalidRequest)
-                    ListValues(status, sent.watchedEpisodes, sent.score, sent.startDate, sent.finishDate)
+                    val known = list[id]?.values
+                    if (known == null && sent.status == null) return Outcome.Failure(DataError.InvalidRequest)
+                    sent.over(known)
                 }
             store(anime, stored)
             Outcome.Success(list[id])

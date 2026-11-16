@@ -24,7 +24,7 @@ class SavedSheetTest {
 
     @Test
     fun `every value of the sheet is rebuilt by EditSheetState of or saved`() {
-        val rebuilt = setOf("title", "total", "malEpisodes", "saved", "today")
+        val rebuilt = setOf("title", "total", "malEpisodes", "today")
         assertEquals(fields(EditSheetState::class.java), rebuilt + fields(SavedSheet::class.java))
     }
 
@@ -55,10 +55,21 @@ class SavedSheetTest {
                 val handle = SavedStateHandle()
                 SavedSheet.save(handle, state)
                 val read = SavedSheet.read(handle)
-                assertEquals(SavedSheet(state.draft, state.beforeAutomatic, "17", 12, dialog, state.closing), read)
-                assertEquals(state.copy(closing = false), read!!.applyTo(opened))
+                assertEquals(SavedSheet(saved, state.draft, state.beforeAutomatic, "17", 12, dialog, state.closing), read)
+                assertEquals(state.copy(closing = false), read!!.applyTo(opened.copy(saved = saved.copy(watchedEpisodes = 15))))
             }
         }
+    }
+
+    @Test
+    fun `a sheet for a title not on the list is read back as one, and a sheet saved without its opening values is not read`() {
+        val opened = EditSheetState.of("Title", null, total = 24, malEpisodes = 24, today)
+        val handle = SavedStateHandle()
+        SavedSheet.save(handle, opened)
+        assertEquals(null, SavedSheet.read(handle)?.saved)
+        assertEquals(opened, SavedSheet.read(handle)?.applyTo(opened.copy(saved = opened.draft)))
+        handle.remove<String>(handle.keys().single { it.endsWith("edit.saved") })
+        assertEquals(null, SavedSheet.read(handle))
     }
 
     @Test

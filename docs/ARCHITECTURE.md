@@ -405,16 +405,18 @@ was chosen against, and why:
 Writes are optimistic: an edit is visible at once and sent in the background. A write from a screen returns once it
 is applied locally, and its failure reaches the user also after the screen that made the edit is gone. The
 notification action instead waits for the server's answer (N9). "+1", the stepper and "Mark watched" are steps,
-applied to the entry's values as they are when sent, not to values read earlier.
+applied to the entry's values as they are when sent, not to values read earlier. A write sends only the values its
+edit changed, so a value changed on the website since the last download, or one the app could not read, keeps what
+MAL has.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
-  last value shown.
+  last value shown for each of the values they changed.
 - **W2. A failure returns to the server's state.** When a write fails, the entry shows what the server last
   confirmed (not "the value before the tap"), no later edit of that entry that was still waiting is sent, and a
   snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
-  Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, the values shown just before the failure.
-  Example: the server has 12; two taps show 13, then 14; the request carrying 13 fails. 14 is not sent, the row
-  shows 12, and Retry sends 14.
+  Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits set, as shown
+  just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
+  fails. 14 is not sent, the row shows 12, and Retry sends 14.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
   while it still holds what the edit put there. A change off a status the app does not know offers no Undo, as that
@@ -714,9 +716,9 @@ edits; the status as a connected group of five single-choice toggle buttons, in 
 status the app does not know, which Save then waits for; an `EpisodeStepper`; a score slider 0 to 10 with the score
 names; start and finish dates; a text button "Remove from list" (asks for confirmation); "Save", on screen without
 scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before "Save", and "Save" writes
-exactly what the sheet shows, an automatic status change (W7) included. The count has no ceiling (W9). Dismissing the
-sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority come
-after 1.0.
+the values changed in the sheet, an automatic status change (W7) included. The count has no ceiling (W9). Dismissing
+the sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority
+come after 1.0.
 
 ### 9.6 Search
 

@@ -2,11 +2,14 @@ package io.github.kauri_off.kiroku.edit
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -54,10 +57,12 @@ class EditSheetViewModelTest {
         saved: SavedStateHandle = SavedStateHandle(),
         open: Anime? = FixtureAnime.exactToWatch,
         slowWrites: Boolean = false,
+        before: suspend (TestGraph) -> Unit = {},
         body: suspend TestScope.(Subject) -> Unit,
     ) = runTest(dispatcher) {
         val scope = foregroundScope()
         val graph = TestGraph.over(scope, slowWrites)
+        before(graph)
         val editor =
             EditSheetViewModel(
                 graph.list,
@@ -154,6 +159,21 @@ class EditSheetViewModelTest {
         }
 
     @Test
+    fun `Save sets only the values the sheet changed, over a change made elsewhere while it was open`() =
+        test { s ->
+            s.graph.list.write(ListWrite.MarkNextWatched(anime))
+            advanceUntilIdle()
+            assertEquals(13, s.values(anime)?.watchedEpisodes)
+            assertEquals(12, s.sheet.draft.watchedEpisodes)
+
+            s.editor.onEvent(EditSheetEvent.ScoreChanged(9))
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(13, s.values(anime)?.watchedEpisodes)
+            assertEquals(9, s.values(anime)?.score)
+        }
+
+    @Test
     fun `Save is written although the sheet's screen is closed before the write is applied`() =
         test(slowWrites = true) { s ->
             s.editor.onEvent(EditSheetEvent.ScoreChanged(9))
@@ -227,6 +247,50 @@ class EditSheetViewModelTest {
             assertEquals(EditDialog.PickDate(DateField.Finish), s.sheet.dialog)
             s.type("")
             assertEquals(12, s.sheet.draft.watchedEpisodes)
+        }
+    }
+
+    // The values the sheet opened with come back with it, so Save sends what the user changed, not what moved since.
+    @Test
+    fun `a sheet restored after process death saves only what the user changed in it, over a website edit synced since`() {
+        val saved = SavedStateHandle()
+        test(saved = saved) { s -> s.editor.onEvent(EditSheetEvent.ScoreChanged(9)) }
+        val restored = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })
+        test(
+            saved = restored,
+            open = null,
+            before = { graph ->
+                val website = checkNotNull(graph.demo.server.entry(anime.id)).values.copy(watchedEpisodes = 15)
+                graph.demo.server.editOnWebsite(anime, website)
+                assertEquals(Outcome.Success(Unit), graph.list.sync())
+            },
+        ) { s ->
+            assertEquals(12, s.sheet.draft.watchedEpisodes)
+            assertEquals(15, s.values(anime)?.watchedEpisodes)
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(
+                setOf(ListField.Score),
+                s.graph.demo.server.requests
+                    .single()
+                    .values
+                    ?.fields,
+            )
+            assertEquals(
+                15,
+                s.graph.demo.server
+                    .entry(anime.id)
+                    ?.values
+                    ?.watchedEpisodes,
+            )
+            assertEquals(
+                9,
+                s.graph.demo.server
+                    .entry(anime.id)
+                    ?.values
+                    ?.score,
+            )
+            assertEquals(15, s.values(anime)?.watchedEpisodes)
         }
     }
 

@@ -3,10 +3,13 @@ package io.github.kauri_off.kiroku.data.sandbox
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.SentValues
+import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.data.list.MalRemoteList
@@ -51,11 +54,15 @@ class SandboxMalTest {
         return entry.anime
     }
 
+    private fun put(values: ListValues?): Outcome<ListEntry?> = put(values?.sent)
+
     private fun put(values: SentValues?): Outcome<ListEntry?> = runBlocking { client.put(finished, values) }
+
+    private fun ListValues.carrying(vararg fields: ListField) = SentValues(this, fields.toSet())
 
     private fun read(): ListEntry? = runBlocking { (client.fetchEntry(finished.id) as Outcome.Success).value }
 
-    private val planned = SentValues(ListStatus.Planned, 0, null, null, null)
+    private val planned = ListValues(ListStatus.Planned, 0, null, null, null)
 
     private fun changed(form: Map<String, String>): Pair<Int, String> = sandbox.ask("PATCH", "anime/$FINISHED/my_list_status", form)
 
@@ -73,11 +80,11 @@ class SandboxMalTest {
     fun `MAL changes nothing on its own, neither at the first episode nor at the total nor at Completed`() {
         put(planned)
         put(planned.copy(watchedEpisodes = 1))
-        assertEquals(planned.copy(watchedEpisodes = 1).asValues(), read()!!.values)
+        assertEquals(planned.copy(watchedEpisodes = 1), read()!!.values)
         put(planned.copy(watchedEpisodes = TOTAL))
-        assertEquals(planned.copy(watchedEpisodes = TOTAL).asValues(), read()!!.values)
+        assertEquals(planned.copy(watchedEpisodes = TOTAL), read()!!.values)
         put(planned.copy(status = ListStatus.Completed, watchedEpisodes = 3))
-        assertEquals(planned.copy(status = ListStatus.Completed, watchedEpisodes = 3).asValues(), read()!!.values)
+        assertEquals(planned.copy(status = ListStatus.Completed, watchedEpisodes = 3), read()!!.values)
     }
 
     @Test
@@ -87,17 +94,21 @@ class SandboxMalTest {
         assertEquals(TOTAL, read()!!.values.watchedEpisodes)
 
         val endless = runBlocking { anime(NO_TOTAL) }
-        val answer = runBlocking { client.put(endless, planned.copy(watchedEpisodes = 5000)) }
+        val answer = runBlocking { client.put(endless, planned.copy(watchedEpisodes = 5000).sent) }
         assertEquals(5000, (answer as Outcome.Success).value!!.values.watchedEpisodes)
     }
 
     @Test
-    fun `a write without a status keeps MAL's, and a new entry without one is refused`() {
-        assertEquals(Outcome.Failure(DataError.InvalidRequest), put(planned.copy(status = null)))
+    fun `a write keeps every value it does not carry, a status too, and a new entry without a status is refused`() {
+        val counted = planned.copy(watchedEpisodes = 4)
+        assertEquals(Outcome.Failure(DataError.InvalidRequest), put(counted.carrying(ListField.WatchedEpisodes)))
         assertNull(read())
-        put(planned.copy(status = ListStatus.OnHold))
-        put(planned.copy(status = null, watchedEpisodes = 4))
-        assertEquals(planned.copy(status = ListStatus.OnHold, watchedEpisodes = 4).asValues(), read()!!.values)
+        val held = planned.copy(status = ListStatus.OnHold, score = 6, startDate = day)
+        put(held)
+        put(counted.carrying(ListField.WatchedEpisodes))
+        assertEquals(held.copy(watchedEpisodes = 4), read()!!.values)
+        put(planned.carrying(ListField.Score, ListField.StartDate))
+        assertEquals(held.copy(watchedEpisodes = 4, score = null, startDate = null), read()!!.values)
     }
 
     @Test
@@ -105,7 +116,7 @@ class SandboxMalTest {
         put(planned.copy(startDate = day, finishDate = day))
         assertEquals(200, changed(mapOf("start_date" to "")).first)
         assertEquals(200, changed(mapOf("finish_date" to "0000-00-00")).first)
-        assertEquals(planned.asValues(), read()!!.values)
+        assertEquals(planned, read()!!.values)
         put(planned.copy(startDate = PartialDate.Month(YearMonth.of(2001, 4)), finishDate = PartialDate.Day(LocalDate.of(2100, 1, 1))))
         val values = read()!!.values
         assertEquals(PartialDate.Month(YearMonth.of(2001, 4)), values.startDate)
@@ -134,7 +145,7 @@ class SandboxMalTest {
         assertEquals(200 to "[]", sandbox.ask("DELETE", "anime/$FINISHED/my_list_status"))
         assertNull(read())
         assertEquals(200 to "[]", sandbox.ask("DELETE", "anime/$FINISHED/my_list_status"))
-        assertEquals(Outcome.Success(null), put(null))
+        assertEquals(Outcome.Success(null), put(null as SentValues?))
         assertEquals(404, sandbox.ask("DELETE", "anime/999999999/my_list_status").first)
     }
 
@@ -300,7 +311,7 @@ class SandboxMalTest {
         sandbox.mal.writes = SandboxWrites.Refused
         assertEquals(Outcome.Failure(DataError.Refused), put(planned.copy(watchedEpisodes = 2)))
         sandbox.mal.writes = SandboxWrites.Fail
-        assertEquals(Outcome.Failure(DataError.ServerError), put(null))
+        assertEquals(Outcome.Failure(DataError.ServerError), put(null as SentValues?))
         assertTrue(runBlocking { client.fetch() } is Outcome.Success)
         sandbox.mal.writes = SandboxWrites.Work
         sandbox.mal.offline = true
@@ -310,7 +321,7 @@ class SandboxMalTest {
         val start = System.nanoTime()
         assertTrue(runBlocking { client.fetch() } is Outcome.Success)
         assertTrue(Duration.ofNanos(System.nanoTime() - start) >= Duration.ofMillis(300))
-        assertEquals(planned.asValues(), read()!!.values)
+        assertEquals(planned, read()!!.values)
     }
 
     @Test
@@ -345,10 +356,6 @@ class SandboxMalTest {
         assertTrue(sandboxTitles.size > 50)
         assertFalse(sandboxTitles.values.any { "list_status" in it || "my_list_status" in it })
     }
-
-    private fun SentValues.asValues() =
-        io.github.kauri_off.kiroku.core.model
-            .ListValues(status!!, watchedEpisodes, score, startDate, finishDate)
 
     private companion object {
         const val FINISHED = 1L

@@ -10,8 +10,9 @@ import java.time.LocalDate
 import java.time.Year
 import java.time.YearMonth
 
-// What an open edit sheet holds beyond the stored entry, written to the saved state after every event.
+// What an open edit sheet holds beyond the title, written to the saved state after every event; [saved] is what it opened with.
 internal data class SavedSheet(
+    val saved: ListValues?,
     val draft: ListValues,
     val beforeAutomatic: ListValues?,
     val typed: String?,
@@ -21,6 +22,7 @@ internal data class SavedSheet(
 ) {
     fun applyTo(opened: EditSheetState): EditSheetState =
         opened.copy(
+            saved = saved,
             draft = draft,
             beforeAutomatic = beforeAutomatic,
             typed = typed,
@@ -29,6 +31,7 @@ internal data class SavedSheet(
         )
 
     companion object {
+        private val SAVED = notShown("edit.saved")
         private val DRAFT = notShown("edit.draft")
         private val BEFORE = notShown("edit.before")
         private val TYPED = notShown("edit.typed")
@@ -39,11 +42,13 @@ internal data class SavedSheet(
         private val REMOVE = notShown("remove")
         private val DISCARD = notShown("discard")
         private val UNRECOGNIZED = notShown("?")
+        private val NEW = notShown("new")
 
         fun save(
             handle: SavedStateHandle,
             state: EditSheetState,
         ) {
+            handle[SAVED] = state.saved?.let(::encode) ?: NEW
             handle[DRAFT] = encode(state.draft)
             handle[BEFORE] = state.beforeAutomatic?.let(::encode)
             handle[TYPED] = state.typed
@@ -54,7 +59,9 @@ internal data class SavedSheet(
 
         fun read(handle: SavedStateHandle): SavedSheet? {
             val draft = handle.get<String>(DRAFT)?.let(::values) ?: return null
+            val saved = handle.get<String>(SAVED) ?: return null
             return SavedSheet(
+                saved = if (saved == NEW) null else values(saved),
                 draft = draft,
                 beforeAutomatic = handle.get<String>(BEFORE)?.let(::values),
                 typed = handle[TYPED],
@@ -65,7 +72,7 @@ internal data class SavedSheet(
         }
 
         fun clear(handle: SavedStateHandle) {
-            listOf(DRAFT, BEFORE, TYPED, TYPING_FROM, DIALOG, CLOSING).forEach { handle.remove<Any>(it) }
+            listOf(SAVED, DRAFT, BEFORE, TYPED, TYPING_FROM, DIALOG, CLOSING).forEach { handle.remove<Any>(it) }
         }
 
         // The status goes last, so that MAL's code of one the app does not know may hold anything.

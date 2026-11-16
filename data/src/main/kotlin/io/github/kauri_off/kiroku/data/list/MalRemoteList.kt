@@ -7,8 +7,7 @@ import io.github.kauri_off.kiroku.core.list.SentValues
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
-import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.data.anime.AnimeNode
 import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.toAnime
@@ -86,24 +85,16 @@ class MalRemoteList(
     }
 }
 
-// A status the app does not know is left out of [SentValues], so MAL keeps it.
-internal fun SentValues.form(): Map<String, String> = listForm(status, watchedEpisodes, score, startDate, finishDate)
-
-// A write carries the values the app holds, each in MAL's own form, and nothing else. MAL keeps a value left out, and an
-// empty date clears its own.
-internal fun listForm(
-    status: ListStatus?,
-    watchedEpisodes: Int,
-    score: Int?,
-    startDate: PartialDate?,
-    finishDate: PartialDate?,
-): Map<String, String> =
-    buildMap {
-        if (status != null) put("status", listStatuses.toColumn(status))
-        put("score", "${score ?: 0}")
-        put("num_watched_episodes", "$watchedEpisodes")
-        put("start_date", startDate?.toColumn().orEmpty())
-        put("finish_date", finishDate?.toColumn().orEmpty())
+// Each value a write carries, in MAL's own form: no score is 0, and an empty date clears MAL's.
+internal fun SentValues.form(): Map<String, String> =
+    fields.associate { field ->
+        when (field) {
+            ListField.Status -> "status" to listStatuses.toColumn(checkNotNull(status))
+            ListField.Score -> "score" to "${values.score ?: 0}"
+            ListField.WatchedEpisodes -> "num_watched_episodes" to "${values.watchedEpisodes}"
+            ListField.StartDate -> "start_date" to values.startDate?.toColumn().orEmpty()
+            ListField.FinishDate -> "finish_date" to values.finishDate?.toColumn().orEmpty()
+        }
     }
 
 // A title's own answer: its id, and its entry when it is on the list, which MAL says by giving its list values.

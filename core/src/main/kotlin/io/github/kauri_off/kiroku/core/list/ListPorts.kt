@@ -3,12 +3,13 @@ package io.github.kauri_off.kiroku.core.list
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
-import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
-import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.changedFrom
+import io.github.kauri_off.kiroku.core.model.over
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
@@ -27,27 +28,54 @@ interface RemoteList {
     ): Outcome<ListEntry?>
 }
 
-// Values as they are sent to MAL. A status the app does not know is never sent: it is left out, and MAL keeps it.
-data class SentValues(
-    val status: ListStatus?,
-    val watchedEpisodes: Int,
-    val score: Int?,
-    val startDate: PartialDate?,
-    val finishDate: PartialDate?,
-)
+// A write's [fields] of [values] alone; MAL keeps a value left out, and never gets a status the app does not know.
+class SentValues(
+    val values: ListValues,
+    fields: Set<ListField>,
+) {
+    val fields: Set<ListField> = ListField.entries.filterTo(LinkedHashSet()) { it in fields }
 
+    init {
+        require(ListField.Status !in fields || values.status is ListStatus)
+    }
+
+    val status: ListStatus? get() = if (ListField.Status in fields) values.status as ListStatus else null
+
+    val watchedEpisodes: Int? get() = if (ListField.WatchedEpisodes in fields) values.watchedEpisodes else null
+
+    // The entry MAL holds after this write over [known], or over no entry of the title.
+    fun over(known: ListValues?): ListValues =
+        values.over(known ?: ListValues(checkNotNull(status) { NO_STATUS }, 0, null, null, null), fields)
+
+    private val sent: Map<ListField, Any?> get() = fields.associateWith { it.of(values) }
+
+    override fun equals(other: Any?): Boolean = other is SentValues && sent == other.sent
+
+    override fun hashCode(): Int = sent.hashCode()
+
+    override fun toString(): String = "SentValues($sent)"
+
+    private companion object {
+        const val NO_STATUS = "A new entry needs a status"
+    }
+}
+
+// Every value, as a write that sets them all.
 val ListValues.sent: SentValues
-    get() =
-        SentValues(
-            when (val status = status) {
-                is ListStatus -> status
-                is EntryStatus.Unrecognized -> null
-            },
-            watchedEpisodes,
-            score,
-            startDate,
-            finishDate,
-        )
+    get() = SentValues(this, ListField.entries.filterTo(mutableSetOf()) { it != ListField.Status || status is ListStatus })
+
+// Section 7.3: what the edit changed from [from] and [confirmed] lacks, or all [named] when MAL's values are unknown.
+fun ListValues.sentOver(
+    from: ListValues?,
+    confirmed: ListValues?,
+    named: Set<ListField>? = null,
+): SentValues? {
+    val unknown = if (status is ListStatus) emptySet() else setOf(ListField.Status)
+    if (confirmed == null) return SentValues(this, changedFrom(ListValues(status, 0, null, null, null)) + ListField.Status - unknown)
+    val changed = named ?: changedFrom(confirmed).intersect(from?.let { changedFrom(it) } ?: ListField.entries.toSet())
+    val fields = changed - unknown
+    return if (fields.isEmpty()) null else SentValues(this, fields)
+}
 
 // An entry without its title: its values and when they last changed.
 data class ListRecord(

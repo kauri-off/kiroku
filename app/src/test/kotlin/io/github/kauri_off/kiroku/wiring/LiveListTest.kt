@@ -339,7 +339,7 @@ class LiveListTest {
         }
 
     @Test
-    fun `a +1 is one write that carries the entry's five values, and the row ends with the count MAL answered`() =
+    fun `a +1 is one write that carries the count alone, and the row ends with the count MAL answered`() =
         runTest(dispatcher, timeout = 30.seconds) {
             val id = 63293L
             val graph = LiveGraph(parts(process()))
@@ -352,7 +352,7 @@ class LiveListTest {
 
             graph.list.write(ListWrite.MarkNextWatched(entry.anime))
             graph.list.observeEntry(AnimeId(id)).first { it?.values?.watchedEpisodes == 6 }
-            val form = "status=watching&score=0&num_watched_episodes=5&start_date=2026-10-14&finish_date="
+            val form = "num_watched_episodes=5"
             assertEquals(listOf("PATCH /v2/anime/$id/my_list_status $form"), mal.writes)
         }
 

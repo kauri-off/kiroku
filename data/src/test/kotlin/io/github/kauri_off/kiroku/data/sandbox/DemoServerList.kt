@@ -3,11 +3,11 @@ package io.github.kauri_off.kiroku.data.sandbox
 import io.github.kauri_off.kiroku.core.demo.DemoServer
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
-import io.github.kauri_off.kiroku.core.list.SentValues
+import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
-import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.data.db.airingStatuses
 import io.github.kauri_off.kiroku.data.db.listStatuses
 import io.github.kauri_off.kiroku.data.db.mediaTypes
@@ -49,13 +49,13 @@ internal class DemoServerList(
         val title = server.title(AnimeId(id)) ?: return Written.Unknown
         val listed = written(entry(id), form, title.malEpisodes, Instant.EPOCH) ?: return Written.Refused
         val sent =
-            SentValues(
-                status = listStatuses.of(listed.status) as? ListStatus,
-                watchedEpisodes = listed.watched,
-                score = listed.score.takeIf { it > 0 },
-                startDate = listed.startDate?.let(::partialDateOf),
-                finishDate = listed.finishDate?.let(::partialDateOf),
-            )
+            ListValues(
+                listStatuses.of(listed.status),
+                listed.watched,
+                listed.score.takeIf { it > 0 },
+                listed.startDate?.let(::partialDateOf),
+                listed.finishDate?.let(::partialDateOf),
+            ).sent
         return when (val outcome = server.applied(AnimeId(id), sent)) {
             is Outcome.Success -> Written.Done(checkNotNull(outcome.value).listed())
             is Outcome.Failure -> if (outcome.error == DataError.NotFound) Written.Unknown else Written.Refused
