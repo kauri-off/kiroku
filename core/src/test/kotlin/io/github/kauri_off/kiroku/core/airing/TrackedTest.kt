@@ -33,7 +33,7 @@ class TrackedTest {
     }
 
     @Test
-    fun `a finale is kept for N2's three days after the longest delay`() = assertEquals(75.hours, finaleKeptFor)
+    fun `an episode can be announced for N2's three days after the longest delay`() = assertEquals(75.hours, announceableFor)
 
     private fun values(status: EntryStatus) = ListValues(status, 0, null, null, null)
 }

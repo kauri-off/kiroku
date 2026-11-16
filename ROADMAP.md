@@ -130,7 +130,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
   whether a baseline profile is worth its module now or with the release.
   **Needs:** nothing.
   **Check:** a test that counts the work of the fling's frames, in the style of `ListFrameWorkTest`; frame times
-  before and after from `tools/emu`, in the hand-off.
+  before and after on an emulator, in the hand-off.
 
 - [x] **M2-31 Changed screenshots in CI.**
 
@@ -204,9 +204,9 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   followed. Demo mode runs on it: its AniList answers with the fixtures' schedules behind the demo server's
   failures, its store is in memory, and its counts move with its clock.
   **Needs:** M3-02, M3-03.
-  **Check:** `tools/gw :core:test`, on virtual time: two observers get episode n+1 at the same instant and not
+  **Check:** `./gradlew :core:test`, on virtual time: two observers get episode n+1 at the same instant and not
   before it; nothing is computed between two air times; a clock set back is followed; the demo's aired count rises
-  as its clock passes an air time, with no request to its server. `tools/gw --kind check :app:testDebugUnitTest`
+  as its clock passes an air time, with no request to its server. `./gradlew :app:testDebugUnitTest`
   passes on the demo.
 
 - [x] **M3-05 Database: the airing store.**
@@ -219,7 +219,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   episode numbered 0 or below is dropped. A title whose answer cannot be read counts as not fetched (A10) and is
   reported.
   **Needs:** M3-01, M3-02, M3-03.
-  **Check:** `tools/gw :data:testDebugUnitTest`: mapper tests on M3-01's answers only, one per case; each recorded
+  **Check:** `./gradlew :data:testDebugUnitTest`: mapper tests on M3-01's answers only, one per case; each recorded
   pair of AniList's answer and MAL's page gives, through M3-02's calculator at the time of recording, the count
   and the reason its case names; against a local server: 300 ids are asked in the fewest requests, none sooner
   than the limit allows; a page that fails leaves its titles not fetched and the others fetched; the request has
@@ -241,7 +241,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   **Check:** tests: reading the session or the list builds nothing of airing; on the sandbox, signed in and
   synced, the Watching rows show "to watch" and next episodes, AniList was asked for the tracked titles and no
   other, and no request left the device; a sign-out leaves no airing data in the database (S9); the sandbox's
-  airing is in the sandbox's own database. `tools/emu smoke` passes on the debug APK.
+  airing is in the sandbox's own database. The debug APK starts on an emulator without a crash.
 
 - [ ] **M3-09 The List and the title page on live airing.** On the List, the order computed at a first download,
   at a pull-to-refresh and at a start with no airing data stored waits for the airing refresh that follows, however
@@ -250,7 +250,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   title's airing with its details, and a title outside the tracked set gets its airing for the page (A12). A
   failure of AniList shows no message: the stored counts stay, or the estimate (section 2.3).
   **Needs:** M3-04.
-  **Check:** `tools/gw --kind check :app:testDebugUnitTest`: under a shown tab, an air time passing, a refresh
+  **Check:** `./gradlew :app:testDebugUnitTest`: under a shown tab, an air time passing, a refresh
   that moves an episode and a title becoming tracked each update rows in place: no row moves, the scroll position
   holds and every other row is the same object; after a sign-in Watching is in the order its rows show; a pull
   orders after the airing refresh, also when AniList fails, and a refresh that outlasts the wait holds no order

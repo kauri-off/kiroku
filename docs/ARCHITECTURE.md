@@ -147,8 +147,7 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
 - In a public client the id can be read out of the APK, so it is not a secret, but it is **never committed**: every
   fork registers its own. Agents never read or print it.
 - The build takes it from the Gradle property `kiroku.malClientId`, else from the environment variable
-  `MAL_CLIENT_ID`; a blank value counts as absent. On the maintainer's machine it comes from
-  `~/.gradle/gradle.properties`.
+  `MAL_CLIENT_ID`; a blank value counts as absent.
 - A build without a client id succeeds. A **debug** or preview build without one starts in demo mode unless
   another source was chosen (section 6.4); a **release** build without one shows the sign-in screen in its
   no-client-id form (section 9.2). Tests never need the id.
