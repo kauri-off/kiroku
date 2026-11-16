@@ -209,13 +209,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
   as its clock passes an air time, with no request to its server. `tools/gw --kind check :app:testDebugUnitTest`
   passes on the demo.
 
-- [ ] **M3-05 Database: the airing store.** M3-03's store port in the database (section 7.1). It is the schema's
-  first change, so a real migration with its test, and M3's only one. An airing refresh, a list write and a
-  title's refresh do not overwrite each other.
-  **Needs:** M3-03.
-  **Check:** `tools/gw :data:testDebugUnitTest`: M3-03's contract passes over the store; the migration test takes a
-  version 1 database that holds a list and titles to the new version and finds every row as it was; a list write
-  made during an airing refresh loses neither.
+- [x] **M3-05 Database: the airing store.**
 
 - [ ] **M3-06 AniList client and mappers.** M3-03's AniList port, through the source's one HTTP client, with
   AniList's host a parameter. A set of ids costs as few requests as M3-01's answers allow, spaced below the limit
