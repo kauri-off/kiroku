@@ -33,6 +33,9 @@ interface MalList {
     // The whole list in MAL's order by title.
     fun entries(): List<Pair<Long, Listed>>
 
+    // The most entries a page of the list holds, whatever is asked.
+    val pageSize: Int get() = Int.MAX_VALUE
+
     fun entry(id: Long): Listed?
 
     // A write's form as MAL reads it: the values it names change, the others stay.

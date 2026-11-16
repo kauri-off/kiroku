@@ -196,7 +196,7 @@ interface ListSource {
 }
 
 interface ListRepository : ListSource {
-    // Hot: dropped with no collector, buffered for a slow one.
+    // Each failure reaches one collector: made while none collects, it waits for the next, until its list ends.
     fun observeWriteFailures(): Flow<WriteFailure>
 
     // Applies the write locally, whole even when its caller is cancelled; null when it changed nothing or was refused.

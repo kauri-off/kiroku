@@ -11,6 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.test.core.app.ActivityScenario
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
@@ -159,6 +163,28 @@ class ShellMessagesTest {
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertExists()
         compose.onNodeWithText("Retry").assertExists()
+    }
+
+    // W2: the shell's view model lives as long as the activity, so a failure made while there is none waits for the next.
+    @Test
+    fun `a write failure made while the activity is gone is shown once by the next one`() {
+        fun shellIn(activity: ActivityScenario<ComponentActivity>): ShellViewModel {
+            lateinit var shell: ShellViewModel
+            activity.onActivity {
+                shell = ViewModelProvider(it, viewModelFactory { initializer { ShellViewModel(graph.list) } })[ShellViewModel::class.java]
+            }
+            runMainLooper()
+            return shell
+        }
+        ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it) }
+        graph.demo.server.failingWrites.value = true
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        runMainLooper()
+
+        val shown = ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it).messages.current.value }
+        assertEquals(ShellMessage.Text.CouldNotSave, shown?.message?.text)
+        assertTrue(shown?.message?.action is ShellMessage.Action.Retry)
+        assertNull(ActivityScenario.launch(ComponentActivity::class.java).use { shellIn(it).messages.current.value })
     }
 
     private val moved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(anime)))

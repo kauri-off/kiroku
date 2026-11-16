@@ -194,7 +194,7 @@ class SandboxMal(
     ): JsonObject {
         val status = url.queryParameter("status")
         val entries = list.entries().filter { status == null || it.second.status == status }
-        val limit = (url.queryParameter("limit")?.toIntOrNull() ?: DEFAULT_PAGE).coerceIn(1, LARGEST_PAGE)
+        val limit = (url.queryParameter("limit")?.toIntOrNull() ?: DEFAULT_PAGE).coerceIn(1, minOf(LARGEST_PAGE, list.pageSize))
         val offset = (url.queryParameter("offset")?.toIntOrNull() ?: 0).coerceAtLeast(0)
         val data =
             entries.drop(offset).take(limit).mapNotNull { (id, entry) ->

@@ -15,7 +15,7 @@ import java.time.Instant
 
 // What MAL does for the user's list. A failure is an outcome, never an exception.
 interface RemoteList {
-    // The whole list, or a failure: a title absent from it leaves the list.
+    // The whole list, or a failure; a list read in pages can miss a title that is still on it.
     suspend fun fetch(): Outcome<List<ListEntry>>
 
     // The title's entry as MAL has it now; null when it is not on the list.

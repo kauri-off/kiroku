@@ -25,19 +25,17 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -175,8 +173,9 @@ class ListEngine(
 
     // One lane: W1's order and N9's read before its write both rely on no other answer coming between.
     private val queue = Channel<Request>(Channel.UNLIMITED)
-    private val failures =
-        MutableSharedFlow<WriteFailure>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    // W2: each failure reaches one collector; made while none collects, it waits for the next, as one cut off unheard does.
+    private val failures: Channel<WriteFailure> = Channel(HELD_FAILURES) { failures.trySend(it) }
 
     init {
         check(scope.isActive) { STOPPED }
@@ -267,7 +266,7 @@ class ListEngine(
                 }.retriedOverStore()
             }.distinctUntilChanged()
 
-    override fun observeWriteFailures(): Flow<WriteFailure> = failures.asSharedFlow()
+    override fun observeWriteFailures(): Flow<WriteFailure> = failures.receiveAsFlow()
 
     // W6: one download at a time; calls made while one runs share the one that follows it.
     override suspend fun sync(): Outcome<Unit> {
@@ -304,7 +303,7 @@ class ListEngine(
     override suspend fun write(write: ListWrite): ListChange? {
         val session = session()
         refused(write, session)?.let {
-            failures.tryEmit(it)
+            failures.trySend(it)
             return null
         }
         return try {
@@ -313,10 +312,10 @@ class ListEngine(
                     locked {
                         check(!stopped) { STOPPED }
                         val refused = refused(write, checkNotNull(settled))
-                        if (refused == null) edit(write) else null.also { failures.tryEmit(refused) }
+                        if (refused == null) edit(write) else null.also { failures.trySend(refused) }
                     }
                 } catch (_: StoreFailure) {
-                    failures.tryEmit(WriteFailure(DataError.StorageError, write.plain, write.list ?: session.owner))
+                    failures.trySend(WriteFailure(DataError.StorageError, write.plain, write.list ?: session.owner))
                     null
                 }
             }
@@ -387,7 +386,18 @@ class ListEngine(
             when (val outcome = mal.fetch()) {
                 is Outcome.Failure -> outcome
                 is Outcome.Success -> {
-                    val fetched = outcome.value.associateBy { it.anime.id }
+                    val fetched = outcome.value.associateByTo(mutableMapOf()) { it.anime.id }
+                    val missing =
+                        locked {
+                            if (list != began) return@locked emptySet()
+                            local.readAll().keys.filterNot { it in fetched || it in pending || (touched[it] ?: 0) > since }
+                        }
+                    for (id in missing) {
+                        when (val entry = missed(id)) {
+                            is Outcome.Failure -> return entry
+                            is Outcome.Success -> entry.value?.let { fetched[id] = it }
+                        }
+                    }
                     locked {
                         if (settled !is Session.SignedIn || list != began) return@locked expired
                         val stored = local.readAll()
@@ -408,6 +418,18 @@ class ListEngine(
         } catch (_: StoreFailure) {
             Outcome.Failure(DataError.StorageError)
         }
+
+    // A paged download misses a title when the list shifts, so only MAL's answer about the title removes it (2.2).
+    private suspend fun missed(id: AnimeId): Outcome<ListEntry?> {
+        val entry =
+            try {
+                mal.fetchEntry(id)
+            } catch (e: IllegalStateException) {
+                unexpected(e)
+                return Outcome.Failure(DataError.ServerError)
+            }
+        return if (entry is Outcome.Failure && entry.error == DataError.NotFound) Outcome.Success(null) else entry
+    }
 
     // W1 and W2: one request at a time; a failure returns the title to the confirmed values and drops its waiting edits.
     private suspend fun send(put: Put) {
@@ -452,7 +474,7 @@ class ListEngine(
                 }
             }
         if (failure != null) {
-            failures.tryEmit(failure)
+            failures.trySend(failure)
             if (failure.error.unsure) scope.launch { sync() }
         }
     }
@@ -502,7 +524,7 @@ class ListEngine(
                 (accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put) to settled?.owner
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
-        failures.tryEmit(WriteFailure(error, retry, owner))
+        failures.trySend(WriteFailure(error, retry, owner))
         scope.launch { sync() }
     }
 
@@ -632,6 +654,7 @@ class ListEngine(
         owedSince = null
         unsure.clear()
         syncedAt.value = null
+        while (failures.tryReceive().isSuccess) Unit
         local.clear(owner)
         restored = true
     }
@@ -716,5 +739,6 @@ class ListEngine(
         const val STOPPED = "The list's scope has ended"
         val expired = Outcome.Failure(DataError.SessionExpired)
         const val WRONG_TITLE = "MAL's client answered about another title"
+        const val HELD_FAILURES = 16
     }
 }

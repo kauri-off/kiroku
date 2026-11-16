@@ -6,7 +6,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import kotlinx.coroutines.launch
 
-// The one view model that works from its creation: write failures (W2) are dropped with no collector.
+// The one view model that works from its creation: it takes the write failures (W2) no shell was there to show.
 class ShellViewModel(
     list: ListRepository,
 ) : ViewModel() {

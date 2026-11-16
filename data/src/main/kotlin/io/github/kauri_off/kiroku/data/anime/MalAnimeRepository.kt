@@ -47,7 +47,13 @@ class MalAnimeRepository(
 
     override fun observePagesRead(): Flow<Set<AnimeId>> = store.observeDetailed().readable()
 
+    // An answer that comes after a sign-out cleared the store is not stored: its list has ended.
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+        val begun =
+            when (val held = stored { store.holder() }) {
+                is Outcome.Failure -> return held
+                is Outcome.Success -> held.value
+            }
         val answer = titles.title(id, adult())
         if (answer !is Outcome.Success) return answer as Outcome.Failure
         val (anime, details, unread) = answer.value
@@ -56,16 +62,21 @@ class MalAnimeRepository(
             unexpected(AnotherTitleAnswer())
             return Outcome.Failure(DataError.ServerError)
         }
-        return try {
-            store.refresh(anime, details, clock.instant(), unread)
-            Outcome.Success(Unit)
+        return when (val stored = stored { store.refresh(anime, details, clock.instant(), unread, begun) }) {
+            is Outcome.Failure -> stored
+            is Outcome.Success -> if (stored.value) Outcome.Success(Unit) else Outcome.Failure(DataError.ListEnded)
+        }
+    }
+
+    private suspend fun <T> stored(call: suspend () -> T): Outcome<T> =
+        try {
+            Outcome.Success(call())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             unexpected(e)
             Outcome.Failure(DataError.StorageError)
         }
-    }
 
     // A store that cannot be read is reported, and ends the flow as section 6.1 says.
     private fun <T> Flow<T>.readable(): Flow<T> =

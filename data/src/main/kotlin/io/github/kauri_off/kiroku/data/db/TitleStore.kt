@@ -20,6 +20,12 @@ data class StoredDetails(
 // A value of MAL's page that the mapper could read only in part: a stored value of it stands.
 enum class Unread { BroadcastTime, Genres, Studios, Related, Recommendations }
 
+// Whose list the database held when a refresh began: its answer is not stored once the list is another's (S9).
+@JvmInline
+value class Holder internal constructor(
+    internal val owner: String?,
+)
+
 // The titles in the database, the cache of their pages; [unexpected] hears of a named title left out as unreadable.
 class TitleStore(
     private val database: KirokuDatabase,
@@ -59,16 +65,20 @@ class TitleStore(
     // Titles known only in part, as a title's page names them: stored only where none is stored.
     suspend fun addUnknown(titles: List<Anime>) = withContext(dispatcher) { dao.insertIfAbsent(titles.map { it.toRow() }) }
 
-    // MAL's whole answer about one title, all or none; the titles it names are known only in part.
+    suspend fun holder(): Holder = withContext(dispatcher) { Holder(database.list().state().owner) }
+
+    // MAL's whole answer about one title, all or none; false, storing nothing, once the list changed hands since [begun].
     suspend fun refresh(
         anime: Anime,
         details: AnimeDetails,
         at: Instant,
         unread: Set<Unread> = emptySet(),
-    ) {
+        begun: Holder? = null,
+    ): Boolean {
         require(details.id == anime.id)
         val id = anime.id.value
-        withContext(dispatcher) {
+        return withContext(dispatcher) {
+            // The titles it names are known only in part.
             val named = details.related.map { it.anime } + details.recommendations
             val related =
                 details.related.mapIndexed { position, it ->
@@ -76,9 +86,11 @@ class TitleStore(
                 }
             val recommended = details.recommendations.mapIndexed { position, it -> TitleRecommendationRow(id, position, it.id.value) }
             database.transaction {
+                if (begun != null && database.list().state().owner != begun.owner) return@transaction false
                 dao.merge(listOf(anime.toRow()), unread)
                 dao.insertIfAbsent(named.map { it.toRow() })
                 dao.mergeDetails(details.toRow(at), related, recommended, unread)
+                true
             }
         }
     }

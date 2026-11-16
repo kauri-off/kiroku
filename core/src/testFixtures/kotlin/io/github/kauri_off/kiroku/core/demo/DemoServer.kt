@@ -47,6 +47,13 @@ class DemoServer(
     @Volatile
     var writeLatency: (ListRequest) -> Duration = { this.latency }
 
+    // A download reads the list in the titles' order, this many entries a page, and runs [beforePage] before each page.
+    @Volatile
+    var pageSize: Int = Int.MAX_VALUE
+
+    @Volatile
+    var beforePage: () -> Unit = {}
+
     // A client of MAL in front of this list: what gets past the scripted failures is asked through it, as the engine would.
     @Volatile
     var reachedThrough: RemoteList? = null
@@ -63,12 +70,15 @@ class DemoServer(
     private val titles = entries.associateTo(mutableMapOf()) { it.anime.id to it.anime }
     private val received = mutableListOf<ListRequest>()
     private var downloads = 0
+    private var pages = 0
     private var answeredWrites = 0
     private var answeredEntryReads = 0
 
     val requests: List<ListRequest> get() = synchronized(guard) { received.toList() }
 
     val listDownloads: Int get() = synchronized(guard) { downloads }
+
+    val listPagesRead: Int get() = synchronized(guard) { pages }
 
     // The writes and the reads of one entry that got past the scripted failures, which MAL itself answered.
     val writesAnswered: Int get() = synchronized(guard) { answeredWrites }
@@ -78,6 +88,24 @@ class DemoServer(
     fun entry(id: AnimeId): ListEntry? = synchronized(guard) { list[id] }
 
     fun entries(): List<ListEntry> = synchronized(guard) { list.values.toList() }
+
+    // The list in MAL's order by title.
+    fun inTitleOrder(): List<ListEntry> =
+        synchronized(guard) {
+            list.values.sortedWith(
+                compareBy({
+                    it.anime.titles.romaji
+                        .lowercase()
+                }, { it.anime.id.value }),
+            )
+        }
+
+    // The list as a page of a download finds it.
+    fun pageRead(): List<ListEntry> {
+        beforePage()
+        synchronized(guard) { pages++ }
+        return inTitleOrder()
+    }
 
     fun editOnWebsite(
         anime: Anime,
@@ -94,6 +122,14 @@ class DemoServer(
         }
     }
 
+    // MAL forgets the title, and so the entry of it.
+    fun withdraw(id: AnimeId) {
+        synchronized(guard) {
+            titles.remove(id)
+            list.remove(id)
+        }
+    }
+
     // Every failure off and the list back to [entries], as a new server would have it.
     fun reset(
         entries: List<ListEntry>,
@@ -102,6 +138,8 @@ class DemoServer(
         listOf(offline, failingLoads, failingWrites, refusing, refusingWrites, sessionExpired).forEach { it.value = false }
         this.latency = latency
         writeLatency = { this.latency }
+        pageSize = Int.MAX_VALUE
+        beforePage = {}
         synchronized(guard) {
             list.clear()
             entries.associateByTo(list) { it.anime.id }
@@ -123,20 +161,28 @@ class DemoServer(
 
     override suspend fun fetch(): Outcome<List<ListEntry>> {
         load(needsSignIn = true)?.let { return Outcome.Failure(it) }
-        val snapshot =
-            synchronized(guard) {
-                downloads++
-                list.values.toList()
-            }
-        val answer = reachedThrough?.fetch() ?: Outcome.Success(snapshot)
+        synchronized(guard) { downloads++ }
+        val answer = reachedThrough?.fetch() ?: Outcome.Success(paged())
         delay(latency)
         return answer
+    }
+
+    // Each page asked by its offset, as MAL's client does, so a change between two pages shifts the later ones.
+    private fun paged(): List<ListEntry> {
+        val entries = mutableListOf<ListEntry>()
+        var offset = 0
+        do {
+            val list = pageRead()
+            entries += list.drop(offset).take(pageSize)
+            offset += pageSize
+        } while (offset < list.size)
+        return entries
     }
 
     override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
         load(needsSignIn = true)?.let { return Outcome.Failure(it) }
         synchronized(guard) { answeredEntryReads++ }
-        return reachedThrough?.fetchEntry(id) ?: Outcome.Success(entry(id))
+        return reachedThrough?.fetchEntry(id) ?: if (title(id) == null) Outcome.Failure(DataError.NotFound) else Outcome.Success(entry(id))
     }
 
     override suspend fun put(

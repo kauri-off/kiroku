@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,6 +56,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -1179,16 +1181,71 @@ abstract class ListEngineContract {
             assertEquals(failed(DataError.NoConnection, ListWrite.Remove(anime)), failures.single())
         }
 
+    // W2: a failure made while nothing collects, as with no shell, waits for the next collector, and reaches one alone.
     @Test
-    fun `a failure with nothing collecting it is dropped`() =
+    fun `a failure with nothing collecting it waits for the next collector, and is heard once`() =
         runTest {
             val s = subject()
             s.server.failingWrites.value = true
             s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
             settle()
-            val failures = failures(s)
+            val first = failures(s)
+            val second = failures(s)
             settle()
-            assertEquals(emptyList<WriteFailure>(), failures)
+            assertEquals(listOf(DataError.ServerError), (first + second).map { it.error })
+            assertEquals(emptyList<WriteFailure>(), failures(s).also { settle() })
+        }
+
+    // W2: a collector cut off after a failure was handed to it, before it could act on it, as a shell that is closing.
+    @Test
+    fun `a failure handed to a collector cut off before it heard it waits for the next`() =
+        runTest {
+            val s = subject()
+            val queued = ArrayDeque<Runnable>()
+            val held =
+                object : CoroutineDispatcher() {
+                    override fun dispatch(
+                        context: CoroutineContext,
+                        block: Runnable,
+                    ) {
+                        queued += block
+                    }
+                }
+
+            fun runHeld() {
+                while (queued.isNotEmpty()) queued.removeFirst().run()
+            }
+            val shell = CoroutineScope(held + Job())
+            val cutOff = mutableListOf<WriteFailure>()
+            shell.launch { s.list.observeWriteFailures().collect { cutOff += it } }
+            runHeld()
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            assertTrue(queued.isNotEmpty())
+            shell.cancel()
+            runHeld()
+
+            val next = failures(s)
+            settle()
+            assertEquals(emptyList<WriteFailure>(), cutOff)
+            assertEquals(listOf(DataError.ServerError), next.map { it.error })
+        }
+
+    @Test
+    fun `a failure nothing collected is dropped when its list ends`() =
+        runTest {
+            val s = subject()
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch))
+            settle()
+            s.session.value = Session.SignedOut
+            settle()
+            s.session.value = b
+            settle()
+            val heard = failures(s)
+            settle()
+            assertEquals(emptyList<WriteFailure>(), heard)
         }
 
     @Test
@@ -1328,6 +1385,72 @@ abstract class ListEngineContract {
                     .first()
                     .toSet(),
             )
+        }
+
+    // Section 2.2: a title removed on the website after the first page shifts the list, so the next page starts one later.
+    @Test
+    fun `a title a download in pages missed while the list shifted stays, and the title removed meanwhile goes next time`() =
+        runTest {
+            val s = subject()
+            val inOrder = s.server.inTitleOrder()
+            val removed = inOrder[0]
+            val missed = inOrder[2]
+            var pages = 0
+            s.server.pageSize = 2
+            s.server.beforePage = { if (++pages == 2) s.server.editOnWebsite(removed.anime, null) }
+
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+
+            assertTrue(pages > 2)
+            assertEquals(missed.values, s.shown(missed.anime.id)?.values)
+            assertEquals(removed.values, s.shown(removed.anime.id)?.values)
+            // MAL is asked about the one title the download did not bring, and about no other.
+            assertEquals(1, s.mal.entryReads)
+
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+
+            assertNull(s.shown(removed.anime.id))
+            assertEquals(
+                s.server.entries().toSet(),
+                s.list
+                    .observeEntries()
+                    .first()
+                    .toSet(),
+            )
+            assertEquals(2, s.mal.entryReads)
+        }
+
+    @Test
+    fun `a title MAL no longer knows leaves the list at a sync`() =
+        runTest {
+            val s = subject()
+            val withdrawn = FixtureAnime.droppedMovie
+            s.server.withdraw(withdrawn.id)
+
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+
+            assertNull(s.shown(withdrawn.id))
+            assertEquals(1, s.mal.entryReads)
+        }
+
+    // A download is stored whole or not at all: one title MAL could not be asked about keeps every other title as it was.
+    @Test
+    fun `a download whose missing title MAL cannot be asked about fails and stores nothing`() =
+        runTest {
+            val s = subject()
+            val removed = FixtureAnime.droppedMovie
+            val raised = FixtureAnime.exactToWatch
+            s.editOnWebsite(removed, null)
+            s.editOnWebsite(raised, 15)
+            val before = s.syncedAt()
+            s.server.beforePage = { s.server.offline.value = true }
+
+            assertEquals(Outcome.Failure(DataError.NoConnection), s.list.sync())
+
+            assertEquals(fixtures.entryFor(removed.id), s.shown(removed.id))
+            assertEquals(12, s.shownWatched(raised))
+            assertEquals(before, s.syncedAt())
+            assertEquals(emptyList<DatabaseLike.Download>(), s.local.downloads)
         }
 
     @Test
