@@ -5,8 +5,8 @@ be is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); this file says in which o
 is accepted.
 
 Only the milestone in progress is broken into tasks. A later milestone has a goal, an acceptance (what the owner
-can do when it is finished) and the things its planner must not forget; it becomes tasks when it starts. A layout
-task of a later milestone may run ahead of it, on fixture states. At the end of each milestone work stops and the
+can do when it is finished) and the things its planner must not forget; it becomes tasks when it starts. A screen
+of a later milestone may be built ahead of it, on fixture states. At the end of each milestone work stops and the
 owner looks at the result.
 
 | Milestone | Result |
@@ -25,8 +25,6 @@ How to read a task:
 
 - `[ ]` becomes `[x]` in the pull request that completes the task, which also cuts the entry down to its name.
 - **[A]** architectural task: done by the stronger model, because later tasks build on its choices.
-- **[L]** layout task: finished only when it passes [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) with both
-  reviewers. The **cases** it names go into the screen's registry file, which holds them from then on.
 - **[O]** a step done by the orchestrator or the owner, not by a coding agent.
 - **Needs** lists what must be merged first. Tasks without a common dependency can run in parallel.
 - **Check** is what a reviewer or the owner runs or looks at, and what it shows. How the task is built, and what
@@ -46,12 +44,12 @@ English, light and dark, on demo data. No MAL client id is needed.
 - [x] **M1-04 CI workflow.**
 - [x] **M1-05 [A] Domain model and fixtures.**
 - [x] **M1-06 [A] Screenshot harness.**
-- [x] **M1-07 [L][A] Theme and components.**
-- [x] **M1-08 [L] App shell.**
-- [x] **M1-09 [L] List screen.**
-- [x] **M1-10 [L] Title page.**
-- [x] **M1-11 [L] Title sub-screens.**
-- [x] **M1-12 [L] Edit sheet.**
+- [x] **M1-07 [A] Theme and components.**
+- [x] **M1-08 App shell.**
+- [x] **M1-09 List screen.**
+- [x] **M1-10 Title page.**
+- [x] **M1-11 Title sub-screens.**
+- [x] **M1-12 Edit sheet.**
 - [x] **M1-13 [A] Wiring and demo mode.**
 - [x] **M1-14 View models, routes and the first APK.**
 
@@ -59,7 +57,7 @@ English, light and dark, on demo data. No MAL client id is needed.
 
 ## M2. Sign-in, the real list, the real title page
 
-Goal: the owner signs in and uses their real list and real title pages (ARCHITECTURE sections 3, 7 and 9.2 to 9.5).
+Goal: the owner signs in and uses their real list and real title pages (ARCHITECTURE sections 3 and 7).
 
 Acceptance: over three days of use, every list change made in the app is on the website and the reverse; no
 sign-out happened that the owner did not cause; three title pages match myanimelist.net for related titles and
@@ -77,7 +75,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-06 [A] List engine for a database.**
 
-- [x] **M2-07 [L] Sign-in screen.**
+- [x] **M2-07 Sign-in screen.**
 
 - [x] **M2-08 [A] Sign-in flow.**
 
@@ -113,13 +111,13 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-23 List state for a real store.**
 
-- [x] **M2-24 [L] Title page for a real store.**
+- [x] **M2-24 Title page for a real store.**
 
 - [x] **M2-25 Posters from the network.**
 
 - [x] **M2-26 The real title page and its link.**
 
-- [x] **M2-27 [L] Watch order on the title page.**
+- [x] **M2-27 Watch order on the title page.**
 
 - [x] **M2-28 Back gesture preview.**
 
@@ -150,7 +148,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 ## M3. Episodes aired and episodes to watch
 
 Goal: the List and the title page show aired counts, "to watch" and next episodes, and Watching is ordered "Up
-next" (ARCHITECTURE section 4; the row and block cases of sections 9.3 and 9.4).
+next" (ARCHITECTURE section 4).
 
 Acceptance: at the start, the aired counts of three airing titles, one of them on a break, agree with a source
 other than AniList (the broadcaster's or a streaming service's schedule). Over seven days the owner finds no wrong
@@ -192,7 +190,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 - [ ] **M3-09 The List and the title page on live airing.** On the List, the order computed at a first download,
   at a pull-to-refresh and at a start with no airing data stored waits for the airing refresh that follows, however
   it ends and no longer than a set wait, so that "Up next" is by the data that refresh brought; at any other time,
-  airing data that arrives or changes updates rows in place (section 9.3). On the title page a pull refreshes the
+  airing data that arrives or changes updates rows in place (section 6.2). On the title page a pull refreshes the
   title's airing with its details, and a title outside the tracked set gets its airing for the page (A12). A
   failure of AniList shows no message: the stored counts stay, or the estimate (section 2.3).
   **Needs:** M3-04.
@@ -236,7 +234,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 ## M4. Reliable episode notifications
 
-Goal: the notifications of ARCHITECTURE section 5 and the notification settings of section 9.8.
+Goal: the notifications of ARCHITECTURE section 5 and their settings.
 
 Acceptance: over seven days with notifications on, every entry of "Recently sent" matches an episode that had aired
 by AniList's schedule for a title the owner was watching; no episode of a watched title with an exact count is
@@ -262,7 +260,7 @@ Not to forget:
 
 ## M5. Search and browse
 
-Goal: search, the four browse lists and the Recommendations sub-screen (ARCHITECTURE sections 9.6 and 9.9).
+Goal: search, the four browse lists and the Recommendations sub-screen.
 
 Acceptance: the owner finds a title by name and opens it; a title on their list shows its status in the results;
 each browse list opens and loads further pages; a query of digits offers "Open title #<id>".
@@ -274,12 +272,11 @@ Not to forget:
 - Typing does not send a request per keystroke.
 - Results that arrive page by page are held as a `StateFlow` of the pages loaded.
 
-- [x] **M5-01 [L] Search screen.**
+- [x] **M5-01 Search screen.**
 
 ## M6. Profiles and statistics
 
-Goal: the owner's profile, another user's profile and list, and the statistics sub-screens (ARCHITECTURE sections
-9.7 and 9.9).
+Goal: the owner's profile, another user's profile and list, and the statistics sub-screens.
 
 Acceptance: the owner's completed count and mean score equal those on their MAL profile page ("Days watched" may
 differ, because MAL counts rewatches); another user's profile opens by name and by a `myanimelist.net/profile/…`
@@ -293,12 +290,12 @@ Not to forget:
   told apart from rate limiting (item 2 of section 13). Without a private user name from the owner, that stays
   open and the task says so.
 
-- [x] **M6-01 [L] Profile screen.**
+- [x] **M6-01 Profile screen.**
 
 ## M7. Settings, polish and release 1.0
 
-Goal: the Settings and About screens (ARCHITECTURE section 9.8), every screen on wide windows and with a screen
-reader, and a signed release.
+Goal: the Settings and About screens, every screen on wide windows and with a screen reader, and a signed
+release.
 
 Acceptance: a tag `v0.9.0` produces a signed APK on a GitHub Release that installs next to the debug build and signs
 in. After two weeks of daily use of `v0.9.x`, "Recently sent" meets the acceptance of M4 and no list change was
@@ -331,15 +328,14 @@ Not to forget:
 
 This section accounts for every other dailyAL feature: it is planned, or it is not built, with the reason. A
 feature the owner wants back moves from "Not built" to a planned milestone. The milestones are built in the order
-P1 to P5; each starts with a budget change (ARCHITECTURE section 9.1). The sources other than MAL are unchecked
-(ARCHITECTURE section 13, item 5).
+P1 to P5. The sources other than MAL are unchecked (ARCHITECTURE section 13, item 5).
 
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|
-| P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics, behind an Anime / Manga switch; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
+| P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
 | P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
-| P3 | Schedule and discovery | A weekly schedule of the user's airing titles as the fourth destination; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
-| P4 | Community, read-only | Forum boards, topics and posts as the fifth destination; a title's discussions; users' reviews of a title | MAL, Jikan |
+| P3 | Schedule and discovery | A weekly schedule of the user's airing titles; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
+| P4 | Community, read-only | Forum boards, topics and posts; a title's discussions; users' reviews of a title | MAL, Jikan |
 | P5 | Reach | F-Droid; community translations, each reviewed by a speaker; Russian titles as a fourth title language; a pure-black theme; a choice of start tab; reference screenshots compared in CI; an "Up next" widget | Shikimori for Russian titles |
 
 ### Not built

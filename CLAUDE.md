@@ -8,8 +8,7 @@ opening and the sections your task and your brief name. Beyond those, by what yo
 
 | You touch | Read |
 |---|---|
-| Any user interface code | ARCHITECTURE sections 6.2 and 8 |
-| A screen's layout | Its budget in ARCHITECTURE section 9, and [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md) |
+| Any user interface code | ARCHITECTURE sections 6.2, 8 and 9 |
 | Any string | ARCHITECTURE section 10 and [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | The list, airing data, writes or notifications | ARCHITECTURE sections 4, 5 and 7 |
 | MAL, AniList or sign-in | ARCHITECTURE sections 2, 3 and 11.1 |
@@ -29,8 +28,11 @@ The rest of the documents is not needed for your task.
 - A change makes a document longer only by adding a decision, a constraint, an invariant, a term or a milestone's
   tasks. Your hand-off names, for each sentence you add, the sentence it replaces, or says that it is new.
 - Decisions and invariants are the owner's. If you need to depart from one, do not do it silently: stop and report.
-  A change to a budget, an invariant or a decision is the owner's too: propose it in the hand-off, do not write it
-  into the document as decided.
+  A change to an invariant or a decision is the owner's too: propose it in the hand-off, do not write it into the
+  document as decided.
+- What a screen shows and how it is arranged is decided by the owner on the running app or its screenshots
+  (ARCHITECTURE section 9), and no tracked text prescribes it. Build one version and show it; make variants only
+  when he asks.
 - Every invariant your task touches gets a test that would fail if it were broken.
 - Tracked files and commit messages describe the current state, never how it was reached: no mention of reviews,
   revisions, earlier versions or questions to the owner.
@@ -84,8 +86,8 @@ place of the commands above. `tools/` holds the maintainer's job queue; the buil
   (status, type, season, genre, relation) are translated too.
 - Screens are stateless: `XScreen(state, onEvent)` with fixture states. Only `XRoute` touches a view model or
   navigation. Each screen has its own screenshot registry file.
-- User interface code uses stock Material 3 Expressive components in the choices of ARCHITECTURE section 8.4, theme
-  colour roles, the `Spacing` tokens and the components listed there. No literal colours or dp values, no custom
+- User interface code uses stock Material 3 Expressive components, the shared components of `design/component`,
+  theme colour roles and the `Spacing` tokens (ARCHITECTURE section 8). No literal colours or dp values, no custom
   controls, no toasts. Experimental Expressive API is opted into only in `design/component/ExpressiveOptIn.kt`.
 - Motion follows ARCHITECTURE section 8.5: from the theme's motion scheme only, with the tests and the frames image
   it asks for.
@@ -95,11 +97,9 @@ place of the commands above. `tools/` holds the maintainer's job queue; the buil
 - Tests of MAL mappers use recorded responses only (ARCHITECTURE section 11.1). Never call the MAL API by hand and
   never write a response from memory. Responses that need the owner's sign-in are recorded by the owner.
 
-## Layout tasks
+## Interface tasks
 
-A task marked **[L]** in the roadmap is finished only when it passes the rubric (its section 4) with both
-reviewers. Before designing, read the screen's budget (ARCHITECTURE section 9): everything under "Must show" has to
-be there, and nothing beyond the limits. After your final commit, the `ROADMAP.md` tick included, render the task's
-screens and check that `app/build/outputs/roborazzi/RENDERED_AT` names that commit and does not say "dirty". A file
-that names another commit means the render did not run, not that you should edit the file. Look at every image
-yourself, including the `__full` ones, and hand over the commit hash and the output directory.
+After your final commit, the `ROADMAP.md` tick included, render the screens you changed and check that
+`app/build/outputs/roborazzi/RENDERED_AT` names that commit and does not say "dirty". A file that names another
+commit means the render did not run, not that you should edit the file. Look at every image yourself, including the
+`__full` ones, and hand over the commit hash and the output directory.

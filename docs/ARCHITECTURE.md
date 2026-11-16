@@ -14,7 +14,7 @@ how things work.
   that tests and reviews can name them.
 
 Sections: 1 Scope · 2 Data sources · 3 Sign-in with MAL · 4 Episodes aired · 5 Notifications · 6 Structure and
-stack · 7 Persistence, errors and writes · 8 Design system · 9 Per-screen information budgets · 10 Localisation ·
+stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interface is decided · 10 Localisation ·
 11 Testing and screenshots · 12 Build, platform and distribution · 13 External facts not yet verified
 
 ## 1. Scope
@@ -33,9 +33,8 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 Per-screen inf
 
 **After 1.0**, `ROADMAP.md` lists what is planned (manga, a deeper title page, a schedule, read-only forums) and
 which dailyAL features are not built, each with its reason. Android only. Later features have to fit without
-redesign: at most five top-level destinations (section 6.3); a new title-page section starts as a row in the page's
-"More" group (section 9.4); a budget grows only by the procedure of section 9.1; a new data source is an optional
-section that can fail without affecting its page (section 2.3).
+redesign: at most five top-level destinations (section 6.3); a new data source is an optional section that can fail
+without affecting its page (section 2.3).
 
 ## 2. Data sources
 
@@ -89,8 +88,8 @@ AniList (from its API documentation and recorded answers):
 | MAL | Refused when reading another user's list | "This list is private". Not treated as rate limiting. |
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
-| AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). |
-| An optional source (after 1.0) | Any failure | Its section collapses to one line, "Unavailable · Retry", and never blocks or delays the rest of the page. |
+| AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
+| An optional source (after 1.0) | Any failure | Its part of the page says so and offers Retry, and never blocks or delays the rest of the page. |
 
 The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the
 internet.
@@ -150,8 +149,8 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
 - The build takes it from the Gradle property `kiroku.malClientId`, else from the environment variable
   `MAL_CLIENT_ID`; a blank value counts as absent.
 - A build without a client id succeeds. A **debug** or preview build without one starts in demo mode unless
-  another source was chosen (section 6.4); a **release** build without one shows the sign-in screen in its
-  no-client-id form (section 9.2). Tests never need the id.
+  another source was chosen (section 6.4); a **release** build without one says so on the sign-in screen and starts
+  no sign-in. Tests never need the id.
 
 ## 4. Episodes aired
 
@@ -169,7 +168,7 @@ Planned or On hold. It is refreshed after a list sync, when the app is opened wi
 the background.
 
 - **A1. One definition.** The aired count, its confidence, the total, the next episode, "to watch" and the keys of
-  the "Up next" order (section 9.3) are computed in one place in `:core`, from stored data and an injected clock.
+  the "Up next" order are computed in one place in `:core`, from stored data and an injected clock.
   Every screen, sort order and notification uses it; the list row and the title page show the same numbers.
 - **A2. Correct between refreshes.** The aired count rises when a stored air time passes, with no network call, and
   a visible screen updates at that moment without polling.
@@ -278,9 +277,9 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   later", "3 hours later".
 - **Limits the app cannot remove.** The system may defer the alarms and background work of an app the user rarely
   opens, and a force-stopped app receives nothing until it is opened. The notification settings say so and show
-  whether exact alarms are granted and whether the app is battery-restricted, each with a link to the system
-  screen. Their status panel (section 9.8) shows which link broke when a notification is missing; it is what the
-  owner checks during acceptance.
+  which link broke when a notification is missing: the permission, exact alarms and the battery restriction, each
+  with a link to the system screen, the last successful sync, the notifications coming next and those recently
+  sent. They post a test notification through the real channel. This is what the owner checks during acceptance.
 
 ## 6. Structure and stack
 
@@ -315,6 +314,12 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   and Retry in place of the content, never a message alone. With older content shown: it stays, the failure is a
   message, and the screen can be refreshed by pulling. A failed action of the person: a message with Retry that is
   not lost (section 7.2). A secondary part (a poster, a strip): a placeholder, loaded with the screen's next refresh.
+- **On the List no row moves under a finger.** A tab's order is computed when the app starts, when its sort or
+  direction is changed and on pull-to-refresh. An edit, a sync, an air time passing, a tab switch, the filter and
+  coming back from a title page keep the order and the scroll position, and update rows in place. A row whose title
+  no longer belongs to the tab leaves at once, and Undo puts it back in the same place; a title that joins the tab
+  appears at the end until the order is next computed. After a row leaves, a "+1" on a row that moved up is not
+  applied until the rows have stood still a moment.
 - Text a person types is state the view model owns and changes inside the event; no flow sits between a keystroke and
   its field.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
@@ -328,14 +333,12 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 ### 6.3 Navigation
 
 - Top-level destinations in 1.0: **List**, **Search**, **Profile**, in a bottom bar on phones and a rail on wide
-  windows. Settings opens from Profile.
-- Reserved for later, in this order: List, **Schedule**, Search, **Community**, Profile. Five is the maximum;
-  anything else becomes a row inside Search.
+  windows. Settings opens from Profile. Five destinations is the maximum.
 - Each destination keeps its own back stack. Tapping the current destination again pops it to its root.
 - Back from the root of Search or Profile goes to List; Back from the root of List leaves the app.
 - A notification or a deep link builds the stack List → Title, so Back never leaves the app unexpectedly.
-- The app opens on List, tab Watching. Signed out, List shows its empty state with one "Sign in" button; "Browse
-  without an account" on the sign-in screen goes to Search.
+- The app opens on List, tab Watching. Signed out, the List offers sign-in, and browsing without an account goes
+  to Search.
 - Predictive back is on.
 - Deep links: a title's page, `https://[www.]myanimelist.net/anime/{id}` with or without its name and a trailing
   slash, from Android 12, once the user has allowed the app's links in the system's settings;
@@ -383,7 +386,8 @@ was chosen against, and why:
   a load that failed for want of a connection is repeated once when the connection returns while it is shown.
 - Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
   the airing data of A12.
-- A value is stored under MAL's own code, so a code the app learns later needs no migration.
+- A value is stored under MAL's own code, so a code the app learns later needs no migration. An entry with a list
+  status the app does not know stays on the List.
 - A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
   itself cannot be read.
 - Every schema change is a real migration with a migration test, and a schema version, once on `main`, never
@@ -392,11 +396,12 @@ was chosen against, and why:
 
 ### 7.2 Errors and offline behaviour
 
-- A screen has four states: content, loading (no content yet), empty, and error (no content and the load failed).
+- A screen has four states: content, loading (no content yet), empty, and error (no content and the load failed);
+  one shared component draws the last three.
   **With cached content, a failed refresh is a snackbar, never a replaced screen.**
 - Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search shows
   the error state with "No connection" and Retry. A title page whose details were never loaded shows that error
-  state where they would be (section 9.4) and, as that may be below the first screen, a snackbar.
+  state where they would be, and a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
   replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
@@ -411,7 +416,9 @@ is applied locally, and its failure reaches the user also after the screen that 
 notification action instead waits for the server's answer (N9). "+1", the stepper and "Mark watched" are steps,
 applied to the entry's values as they are when sent, not to values read earlier. A write sends only the values its
 edit changed, so a value changed on the website since the last download, or one the app could not read, keeps what
-MAL has.
+MAL has. A step is written at once. The edit sheet writes nothing before Save, and is not dismissed with unsaved
+changes without asking. "+1" on a row offers Undo, and so does a change on the title page that completes the title
+(W7).
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown for each of the values they changed.
@@ -445,356 +452,70 @@ MAL has.
 
 ## 8. Design system
 
-The rule behind every choice: stock Material 3 Expressive components with default shapes and behaviour, composed,
-never restyled into something else. Expressive means are spent where they show the user a state or answer an action;
-everything else stays calm, because this is a tool opened many times a day.
+Screens are composed of stock Material 3 Expressive components with their default shapes and behaviour, never
+restyled into something else. This section holds the constraints on user interface code; what a screen shows is
+decided as section 9 says.
 
 ### 8.1 Theme and window
 
-- The Material 3 Expressive theme with its default typography, shapes and motion scheme. Only the colours are
-  Kiroku's.
+- The Material 3 Expressive theme with its default shapes and motion scheme. Only the colours are Kiroku's.
 - Material 3 is pinned ahead of the Compose BOM while the version with Expressive is a release candidate, and its
   experimental API is opted into in one file, so that what may break on an update is in one place.
-- **Dynamic colour** is on by default on Android 12 and later, with a setting to turn it off. Below Android 12 and
-  in screenshot tests the app uses a fixed light and dark scheme from one seed colour, a teal, deliberately not MAL's
+- **Dynamic colour** is on by default on Android 12 and later, and light and dark follow the system; a setting
+  overrides each. Below Android 12 and in screenshot tests the scheme comes from one seed colour, which is not MAL's
   blue. One screenshot variant uses a second, contrasting seed to expose misused colour roles.
-- Light and dark follow the system; a setting overrides (System, Light, Dark).
-- Colours are used only through the theme's colour roles. Emphasis uses `primary`; "to watch" uses `tertiary`;
-  errors use `error`.
+- Colours are used only through the theme's colour roles.
 - **Edge-to-edge.** Content is never hidden under a system bar: the last row of every list can be scrolled clear of
   the gesture bar, and a snackbar never sits under it.
-- **Launcher icon:** original and abstract; no characters, no MAL name or logo.
+- Content has a maximum width and is centred on wider windows.
+- The launcher icon is original: no characters, no MAL name or logo.
 
 ### 8.2 Typography
 
-The default Material 3 type scale with the system font. Screens use only these roles:
+The default Material 3 Expressive type scale with the system font. A component keeps the type role it sets.
 
-- `headlineSmallEmphasized`: the title on the title page. `titleMedium`: section headers and the title in the edit
-  sheet.
-- `titleLargeEmphasized`: the number in `StatNumber` and the user's own score on the title page.
-- Emphasised roles mark only the subject of the title page and the few numbers a screen is opened for.
-- `bodyMedium`: body text and supporting lines. `labelLarge` and `labelMedium`: captions.
-- Top app bar titles, row headlines, buttons and chips keep the role their component sets.
+### 8.3 Spacing and accessibility
 
-### 8.3 Spacing and shape
-
-Layout code uses only the `Spacing` tokens, the theme's named sizes and component defaults: no literal dp value or
-colour outside the theme.
-
-- Horizontal screen padding: `l`. Between sections: `xl`. Between related elements inside a section: `s`.
-- Content has a maximum width and is centred on wider windows.
-- Every tappable element is at least 48 × 48 dp.
-- Posters are cropped to one of three named sizes: the row poster in every `AnimeRow`, the strip poster and the
-  header poster.
-- **A row poster leaves its text room at large text:** it narrows as the font scale grows, so a title beside it keeps
-  a readable line length.
-- **A caption of a strip card is never broken inside a word**, at any font scale. This is a rule of the component,
-  and a screen never passes a width.
-- **Where a title must break, it breaks after a hyphen rather than inside a hyphenated segment**, wherever it is
-  shown, unless the segment alone is wider than the line.
-- **Large text** means a font scale of 1.5 or more. With it the three numbers of the Profile summary are stacked one
-  per line (section 9.7), and a row's MAL score moves from the trailing slot to the end of its first supporting
-  line. Apart from these two and the two poster rules above, nothing depends on the font scale.
+- Layout code uses only the `Spacing` tokens, the theme's named sizes and component defaults: no literal dp value or
+  colour outside the theme.
+- Every tappable element is at least 48 × 48 dp and every control has a label; the render fails otherwise (section
+  11.2). An action behind a long press is offered to screen readers too.
+- **Large text** is a font scale of 1.5 or more. No text or control is clipped at any font scale up to 2.0.
 
 ### 8.4 Components
 
-The complete list. Adding one needs a reason in the pull request, an entry here and a gallery screenshot.
-
-| Component | Built from | Purpose |
-|---|---|---|
-| `Poster` | An image | A 2:3 image with a placeholder in a surface colour role; no text over it, ever |
-| `AnimeRow` | `ListItem` | Poster, headline, up to two supporting lines, one optional trailing element, an optional long press with haptic feedback that screen readers are offered too. "+1" keeps one place and one size on every row, prominent while the row has episodes to watch and quiet once the user has caught up |
-| `PosterCard` | `Poster` and text | For horizontal strips: a poster, a title (line cap two), caption 1 (line cap two) and caption 2 (line cap one). All cards of a strip have one height, whatever their text |
-| `SectionHeader` | Text and `TextButton` | Section title with an optional "See all" |
-| `StatBar` | Text and `LinearProgressIndicator` | One labelled bar of a distribution, static. A screen reader hears it as one sentence |
-| `StatNumber` | Two texts | A number with a caption (the MAL score; the Profile summary) |
-| `FactRow` | `ListItem` | A label and a value |
-| `EpisodeStepper` | `FilledTonalIconButton`, `OutlinedTextField`, `FilledTonalIconButton` | Minus, a numeric field with "/ 24", plus. Typing a number is how a user catches up many episodes. The count has no ceiling (W9) |
-| `ScreenState` | `LoadingIndicator`, text, `Button`, `TextButton` | The loading, empty and error states, identical everywhere |
-| `SessionBanner` | `Surface`, text, `TextButton` | "Session expired · Sign in" |
-| `ConnectedChoice` | `ToggleButton` | One of a few options, all visible, as a connected button group in as few rows as fit |
-| `ListTabs` | `Tab`, `TabRowDefaults.PrimaryIndicator`, `HorizontalDivider` | The List's tab row, which follows the pager between two tabs, as the stock row cannot |
-
-Stock Material 3 components are used directly for everything else. Icons are Material icons. Where Material offers
-several components for one job, these are the choices:
-
-| Job | Choice | Why |
-|---|---|---|
-| A wait of unknown length for a whole screen, and pull-to-refresh | The loading indicator; for a whole screen, once the wait has lasted as long as the title page's (section 9.4) | One sign for "this screen is being fetched" |
-| A wait for part of a screen already shown, and progress of counted work | The wavy linear progress indicator | The wave says that work is running, and stops when it does |
-| A share of a whole that does not change | The flat linear progress indicator | Nothing is running, so nothing waves |
-| One of a few options, all visible | A connected button group of toggle buttons, in as few rows as fit | The chosen one differs in colour and in shape, not in colour alone, and choosing one moves no other |
-| A button with a container, and an icon button | With its stock press shapes | The press is answered where the finger is |
-| The action a page is opened for (the title page's list block) | The medium button size | It is the one large target on the page |
-| A row that opens something | The list item that takes the click itself | Its own press shape, focus ring and semantics |
-| One of a list of options with a radio button | A list item that looks the same chosen or not | The radio button states the choice once |
-| The navigation bar on phones | The short navigation bar | More room for content |
-| Top app bars | The small top app bar | A large or flexible bar spends the first screen on a title the user knows |
-| Lists of content | Plain list items, not segmented ones | A container around every row is a card used as decoration |
-
-At a start the system's splash stays until the List has content, for no longer than the title page's wait.
-
-Expressive means that only decorate are not used: wavy sliders, images clipped to or morphing between shapes, split
-buttons, floating toolbars, the FAB menu, button groups that resize under the finger, vibrant colour variants.
-
-Not allowed anywhere: custom-drawn buttons or pills, cards used as decoration, gradients, shadows beyond component
-defaults, shimmer placeholders, text or badges drawn over images, chips that do nothing when tapped, auto-scrolling
-carousels, more than one floating action button (1.0 uses none), a tab row together with another navigation level
-for the same content, second-by-second countdowns.
+A screen uses stock Material 3 components directly, and the shared components of `design/component`, each built
+from stock ones and rendered in the gallery (section 11.2). No control is drawn by hand. Icons are Material icons.
 
 ### 8.5 Motion
 
-Motion is functional and sparse. Stock components keep their own motion, which in the Expressive theme includes a
-shape that changes while a control is pressed or chosen and springs that overshoot slightly. Anything beyond that
-needs a purpose stated in the pull request: feedback, showing where something came from or went, making a state
-change legible, or preventing a jump. Decoration is not a purpose.
+Stock components keep their own motion. For what the app animates beyond that:
 
-- **Not animated by the app:** row taps, "+1", typing in a filter, a data refresh, re-entering a screen, numbers
-  counting up, anything looping except a progress or loading indicator while work runs. No parallax, no full-screen
-  zoom or rotation, no bounce, no staggered lists, no press effect of the app's own (the component's ripple and
-  shape are the feedback).
-- **Pages that follow the finger** (the List's tabs) are direct manipulation, not decoration. Released, a page
-  settles; a tab chosen by a tap slides its page in the same way; the tab row follows the page, and on a tap moves
-  once, from where it is shown to the tab's place.
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme, and only from its
-  effects springs, because the spatial ones overshoot: fast for a change inside a component and for an exit, default
-  for a component's entrance, slow for a screen. One value is the owner's exception: the List's pages settle and
-  slide with ViewPager2's snap timing, so that the gesture feels as in Droid-ify.
-- **Patterns.** List to title page: the Material forward and backward transition. Destinations of the navigation
-  bar: fade through. Sheets, menus and snackbars enter from their edge and leave the way they came, or the way they
-  were swiped. Lists have stable keys and use the list's item animation for add, remove and move, including a title
-  that joins or leaves a List tab between orderings (section 9.3), even when a data refresh brings the change.
-  Content that finishes loading fades in.
-  One thing moves per change; a container that enters brings its content with it.
-- **Time.** An exit is shorter than the matching entrance, and an animation settles within the bound the motion
-  tests set for its spring.
+  effects springs. One value is the owner's exception: the List's pages settle and slide with ViewPager2's snap
+  timing, so that the gesture feels as in Droid-ify.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
-  reversed mid-flight, ends in the state of the last input, and never blocks a tap. The back gesture shows no preview:
-  a commit plays Back's transition, and a cancel changes nothing. With the system's animations turned off, every
-  screen is complete and correct immediately. An idle screen has no animation running.
+  reversed mid-flight, ends in the state of the last input, and never blocks a tap. With the system's animations
+  turned off, every screen is complete and correct immediately. An idle screen has no animation running, and
+  nothing loops except a progress or loading indicator while work runs.
 
-A task that adds or changes an animation shows with tests that it settles within its time, that re-triggering it
-mid-flight ends in the right state, that the interaction is correct with animations off and that the idle screen has
-nothing pending. It also renders the transition as a frames image next to the screen's screenshots (section 11.2), and
-the hand-over names the transitions that changed. A state change that a stock component answers with motion of its
-own gets the frames image, without the tests. How a transition feels on a device, and predictive back under a finger,
-are judged by the owner from the installed app.
+A task that adds or changes an animation shows with tests that it settles within the bound the motion tests set for
+its spring, that re-triggering it mid-flight ends in the right state, that the interaction is correct with
+animations off and that the idle screen has nothing pending. It also renders the transition as a frames image next
+to the screen's screenshots (section 11.2), and the hand-over names the transitions that changed. A state change
+that a stock component answers with motion of its own gets the frames image, without the tests.
 
-## 9. Per-screen information budgets
+## 9. How the interface is decided
 
-### 9.1 How a budget works
+What a screen shows and how it is arranged is the owner's decision, and he makes it by looking: at the running app,
+or at the screenshots of section 11.2. No tracked text prescribes it: there is no list of what a screen must show,
+no limit on it and no scoring of layouts.
 
-A budget is the owner's decision about what a screen shows before the user taps anything. It has three parts, and the
-layout rubric reviews against all three:
+An agent that builds or changes a screen builds one version, within the constraints of sections 6.2, 7, 8 and 10,
+and shows it. The owner answers with feedback; variants are made only when he asks for them. How a transition
+feels, and the back gesture under a finger, he judges from the installed app.
 
-- **Must show:** elements that have to be present whenever they apply. Leaving one out fails the screen.
-- **Limits:** the most the screen may show, and what it never shows. Exceeding one fails the screen.
-- **Behind a tap:** where everything else lives.
-
-A budget names elements and rules, not wording or arrangement. The strings are in the resources and their recurring
-forms in `docs/GLOSSARY.md`; which case shows what is stated by the screen's tests and screenshot cases. The terms
-**logical line**, **line cap**, **ellipsis**, **base variants** and **content from MAL** are defined in
-`docs/LAYOUT_RUBRIC.md` section 2 and are used here in that sense. **A string that does not fit is budget feedback for
-the owner, never something the author solves with an ellipsis.**
-
-The budget of a screen that is not built yet is a first statement of intent. The owner's look at the built screen
-decides, and the budget then says what was decided.
-
-**Extending a budget** (for features after 1.0) is a pull request that changes this section first: it adds the element
-to Must show or to the limits of one screen, says what it displaces or why the screen can afford it, and is approved
-by the owner before the layout task starts. New content defaults to "behind a tap". The list row never gains a line.
-
-### 9.2 Sign-in
-
-Must show: Back; the app's mark and name; one sentence; a "Sign in with MyAnimeList" button; a "Browse without an
-account" text button; the line "Unofficial. Not affiliated with MyAnimeList." Limit: nothing else. The sentence
-gives way to the state: "This build has no MyAnimeList client id" (section 3.3) and "Signing in…", both with the
-sign-in button disabled, and "Sign-in failed, try again".
-
-### 9.3 List (the start screen)
-
-- Top app bar: the title "My list", a filter-by-text icon, a sort icon.
-- A scrollable tab row: Watching, Planned, Completed, On hold, Dropped, then one per list status the app does not know,
-  named by section 10's fall-back, from when an entry has it until the list is next ordered without one. No counts.
-  The tabs' pages can also be switched by swiping the list sideways; each tab keeps its own scroll position.
-- Rows (`AnimeRow`), at most three logical lines and one action.
-
-**Must show per row:** the title (line cap two, then an ellipsis); line 2; line 3 when it applies; in the Watching
-tab, one "+1" button.
-
-- **Line 2** is one line in the base variants: the user's progress ("Watched 12 of 24"; the total is left out when
-  unknown, and the count is written as it is, also above the total, W9). For a title that has not aired yet it is the
-  premiere, and in the Completed tab the user's score. In a tab sorted by score or start date, a row that has that
-  value and does not show it already adds it after «·»: the score as a star and the number, or the start year.
-- **Line 3** exists only for an airing title: "to watch", in the `tertiary` colour, when there are episodes to watch;
-  otherwise the next episode, when its time is known exactly.
-- A row never shows the aired count: "to watch" carries it, and the title page shows it.
-
-**Limits:** not in a row: MAL score, member count, genres, media type, studio, tags, a countdown, an edit button, a
-progress bar.
-
-**Default order.** Watching is sorted by default as "Up next": titles with episodes to watch first, the most recently
-aired on top; then titles with a known time for the next episode or the premiere, the soonest first; then the rest, by
-last update. "Up next" groups a row only by what the row shows, so the order never contradicts the rows. The other
-tabs default to "Last updated". The sort and direction chosen for each of the five tabs are remembered.
-
-**Rows never move under the user's finger.** The order of a tab is computed when the app starts, when the tab's sort
-or direction is changed, and on pull-to-refresh, and only then does the tab's page start from the top. An edit, a
-sync, an air time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll
-position, and update rows in place. Two things do change the visible rows: a row whose title no longer belongs to the
-tab leaves at once, and Undo puts it back in the same place; a title that joins the tab appears at the end until the
-order is next computed.
-
-**Behind a tap:** the row opens the title page. A long press on a row, in every tab of the user's own list, opens the
-entry's edit sheet. Filter replaces the top app bar title with a text field that filters every tab by title; Back or
-clearing the field ends it. Sort opens a bottom sheet with at most five sorts and, for every sort but "Up next", a
-choice of its direction. A choice applies at once; the sheet stays open until it is dismissed. "+1" answers with a
-snackbar that offers Undo, and works at and above the total (W9). When it completes the title (W7), the row leaves
-Watching and the snackbar says where it went; Undo puts back the count, the status and the dates. After a row leaves its
-tab, a "+1" on a row that moved up is not applied until the rows have stood still a moment, so a tap meant for the row
-that left lands on no other.
-
-**Read-only variant** (another user's list): the top app bar title is "<name>'s list" with Back; line 2 is their
-progress or score; there is no line 3 and no "+1", because no airing data is fetched for someone else's titles.
-
-### 9.4 Title page
-
-One scrolling column in this fixed order. No tabs, no floating buttons. **Each fact is stated once on the page**: the
-episode total, the year, the premiere and a related title each appear in one place only.
-
-1. **Top app bar:** Back, and an overflow menu with "Open on MyAnimeList" and "Share". When the session has expired
-   (S6), the `SessionBanner` under it, in every state.
-2. **Header.** Must show: the poster; the full title with no line cap; the facts line; the MAL score as a `StatNumber`
-   ("—" when the title's page gives none; left out until that page is read); the rank as its own short line, when MAL
-   gives one. Limits: the facts line holds at most three facts (type, year, episode count), and leaves one out when
-   another element of the page states it or when it says nothing, as an episode count of 1 does. The header holds
-   nothing besides these five elements.
-3. **List block.** Not on the list: one filled button "Add to list" across the content width. It adds the title as
-   Planned, and its snackbar offers "Change", which opens the edit sheet. On the list, must show, as one block: the
-   status as a tonal button in the same place, which opens the edit sheet; under it, side by side and each under its
-   own label, the `EpisodeStepper`, whose changes are written at once, and the user's score or a "Rate" button (both
-   open the edit sheet). The stepper has no ceiling (W9). A change that completes the title (W7) shows a snackbar with
-   Undo, as on the List; other changes show none.
-4. **Airing block** (must show for titles that are airing or not yet aired; absent otherwise). Limit: two logical
-   lines. The first is the aired count, with "to watch" beside it, in the `tertiary` colour, when there are episodes
-   to watch; the second is the next episode, when its time is known exactly. A title that has not aired yet shows its
-   premiere alone. The list row and this block show the same numbers for the same title (A1), also for a title outside
-   the tracked set (A12).
-5. **Watch order** (must show when the title has a sequel or a prequel; absent otherwise): a `SectionHeader` over the
-   chain of sequels and prequels in the order to watch it, which `:core` decides: for each other title an `AnimeRow`
-   that opens it, with the user's list status for it when it is on their list, and in this title's place its poster
-   and the words "This title", which open nothing. Limit: six titles, those nearest to this one. A title in it is not
-   repeated in the Related strip.
-6. **Synopsis:** a `SectionHeader` over the text, line cap four, which expands and collapses in place. Under it one
-   line of plain text with the genres, line cap one.
-7. **Related** (must show when the title has related anime other than the watch order's): a `SectionHeader` over a
-   horizontal strip of at most ten `PosterCard`s. A card shows the title, the relation, and the user's list status for
-   that title or else its type and year. Order: prequel, sequel, parent story, full story, side story, spin-off,
-   alternative setting, alternative version, summary; within a type by start date. "See all" is shown whenever a
-   related title is not in the strip; the types "other" and "character" appear only there. Related manga are not shown
-   in 1.0.
-8. **Statistics** (must show): five `StatBar`s (Watching, Completed, On hold, Dropped, Planned) with counts and
-   percentages, and one line with the member count.
-9. **More:** rows that open sub-screens: "Details", and "Recommendations" when MAL gives any.
-
-**Above the fold:** on a 411 × 891 dp screen the header, the list block and the airing block are visible without
-scrolling, for a title of up to two lines.
-
-**Loading.** Opened from a list or search row, the page already has the summary: header, list block and airing block
-render at once, and one wavy linear progress indicator under them stands in for items 5 to 9 once the wait has lasted
-a second, until the details arrive.
-Only a page opened with no data at all (a deep link, or a page restored after the process was killed) uses the
-full-screen loading state.
-
-**Failed.** Details that could not be loaded leave the page as it is and put the error state with Retry where items 5
-to 9 would be (section 7.2). After Retry, the indicator stands there at once.
-
-**Not on the page in 1.0:** reviews, news, forum topics, videos, pictures, characters.
-
-**Adding a section later.** A new section starts as a row in "More" and opens a sub-screen. It is promoted onto the
-page, between Statistics and More, only through the procedure of section 9.1, with its own Must show and limit. The
-order of items 2 to 8 does not change, and the above-the-fold rule stays.
-
-### 9.5 Edit sheet
-
-A modal bottom sheet. Must show: the anime's title (line cap one), so a sheet opened from a list row says what it
-edits; the status as a connected group of five single-choice toggle buttons, in as few rows as fit, none chosen for a
-status the app does not know, which Save then waits for; an `EpisodeStepper`; a score slider 0 to 10 with the score
-names; start and finish dates; a text button "Remove from list" (asks for confirmation); "Save", on screen without
-scrolling whenever the keyboard is closed. Limit: nothing else. Nothing is written before "Save", and "Save" writes
-the values changed in the sheet, an automatic status change (W7) included. The count has no ceiling (W9). Dismissing
-the sheet with unsaved changes, by swipe or Back, asks "Discard changes?". Rewatching, tags, comments and priority
-come after 1.0.
-
-### 9.6 Search
-
-- A Material search bar at the top.
-- Before a query, must show: up to five recent searches, then four rows that open browse lists: "This season", "Top
-  airing", "Top rated", "Most popular", each group under its header. Limit: nothing else; there is no home feed.
-  Later browse entries are added as rows here.
-- Results (`AnimeRow`), must show: the title (line cap two); the facts line of section 9.4, without the episode
-  count when the list status line states the total ("TV · 2024" above "Watching · 12 / 24"); when the title is on
-  the user's list, a second supporting line, the list status line: "Watching · 12 / 24", without the count for
-  Planned with none watched and for Completed at the total (dailyAL issue #67); trailing, the MAL score.
-- A query that is only digits shows one extra row above the results, "Open title #<id>", which opens the title page
-  of that MAL id. Limit: nothing else is added to the results.
-- A browse list uses the same row, with the rank in front of the title for ranked lists.
-- A long press on a result or a browse row opens the title's edit sheet, as on the List; a title not on the list
-  starts from what "Add to list" gives it. Signed out, a row has no long press.
-- No filters in 1.0 (section 2.2).
-
-### 9.7 Profile
-
-**Own profile.** Top app bar: "Profile", a settings icon. Must show: the header (avatar, user name, "Joined 2019");
-three `StatNumber`s ("Completed", "Days watched", "Mean score"); the status breakdown as five `StatBar`s; rows that
-open sub-screens: "Score distribution", "Genres", "Formats and years"; a row "Open another profile", which asks for a
-user name or a profile link and lists the last five profiles found. Limit: nothing else.
-
-Signed out, it offers "Sign in" and "Open another profile".
-
-The three numbers sit in one row; with large text (section 8.3) they are stacked one per line.
-
-**Another user.** There is no header, because MAL's API gives neither avatar nor join date for other users; their
-name is the top app bar title, with Back. Must show: the three numbers, the status breakdown, the three sub-screen
-rows, and "View list" (the read-only variant of section 9.3). A long list loads with a progress line ("Loading
-3 000 of 12 400"). A private list and an unknown name offer "Open another profile", not Retry; for an unknown name it
-opens with that name.
-
-Charts are horizontal bars only.
-
-### 9.8 Settings
-
-A plain list in groups.
-
-**Must show:**
-
-- **General:** Language, Theme, Dynamic colour, Title language (Romaji, English, Japanese), Show adult content in
-  search.
-- **Notifications:** one row that opens the notification settings sub-screen. That sub-screen must show: the
-  switch; "Also for planned titles"; "Notify" (the delay); the status panel (notification permission, exact alarms,
-  battery restriction, the time of the last successful sync, **Upcoming**: the next notifications with title,
-  episode and time, and **Recently sent**: the last ones with the time posted); "Send test notification", which
-  posts one through the real channel.
-- **Account:** the signed-in name, Sign out.
-- **About:** one row that opens the About screen, which must show: version, licence, source code, third-party
-  notices, "Not affiliated with MyAnimeList or AniList", a link to the issue tracker.
-
-**Limits:** each setting is one row with a title and at most one supporting text: its current value (one line) or a
-one-sentence explanation (no line cap); no setting outside these groups; Upcoming shows at most five entries and
-Recently sent at most twenty. Later settings join an existing group or add a group, through the procedure of
-section 9.1.
-
-### 9.9 Sub-screens
-
-Each is a top app bar with Back and one list, with the `SessionBanner` under the bar while the session is expired
-(S6), in every state. Limit for all: nothing but the list and its group headers.
-
-| Sub-screen | Must show | Row limits |
-|---|---|---|
-| Related: see all | Every related anime, grouped under `SectionHeader`s by relation type in the order of section 9.4, then "Other" and "Character" | `AnimeRow` as in search results (section 9.6), without the trailing element |
-| Details | `FactRow`s: alternative titles, dates, source, studios, rating, episode length, and the broadcast time while the title has not finished airing. Alternative titles are every title but the one shown as the main title, one row per kind, so no title is missing from the app. A fact MAL does not give is left out | One label and one value per row; a value has line cap three |
-| Recommendations | The titles MAL recommends | `AnimeRow` exactly as in search results, including the trailing MAL score |
-| Score distribution, Genres, Formats and years | `StatBar`s computed from the list; "Formats and years" has two groups | One `StatBar` per row; scores and years in their own order, everything else the largest first; at most twenty bars per group |
+The code and the screenshots rendered from `main` are the record of what was decided.
 
 ## 10. Localisation
 
@@ -841,8 +562,8 @@ Each is a top app bar with Back and one list, with the `SessionBanner` under the
 ### 11.2 Deterministic screenshots without a device
 
 Screens are rendered on the JVM by Roborazzi on Robolectric, which draws Compose with the real Android rendering code.
-Layout review works from these images. The harness and its tests say how a render works; this section says what a
-render gives a reviewer and what it cannot show.
+The interface is looked at in these images (section 9). The harness and its tests say how a render works; this
+section says what a render gives and what it cannot show.
 
 - **What is rendered.** The stateless screen with fixture states, inside the app's own theme and window setup, with
   the status bar and the gesture bar drawn. No view model, network or database is involved, every clock gives the
@@ -850,8 +571,8 @@ render gives a reviewer and what it cannot show.
   byte-identical.
 - **Cases.** Each screen has one registry file, `<Screen>Screenshots`, which declares its cases: content, loading,
   empty and error, plus the cases its task needs. A screen that has no loading, empty or error state says why, and the
-  render writes the reason to `<screen>/NOT_SHOWN.txt`. A **gallery** case renders every component of section 8.4 in
-  all its states. A case can declare the keyboard open, or its own window size.
+  render writes the reason to `<screen>/NOT_SHOWN.txt`. A **gallery** case renders every shared component in all
+  its states. A case can declare the keyboard open, or its own window size.
 
 **Variants.** Every case is rendered in the five standard variants: `en-light`, `en-dark`, `ru-light` and `ru-dark`
 on a phone-sized screen, and `ru-stress`, Russian on a small screen at a larger font scale. The content case also

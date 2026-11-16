@@ -13,10 +13,8 @@ trademark of its owner. The name Kiroku (記録) is Japanese for "record".
 The project is in early development and has no release yet. These documents say what is being built; the code and
 its tests say how:
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the decisions and their reasons, what must hold, and what each
-  screen shows
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the decisions and their reasons, and what must hold
 - [ROADMAP.md](ROADMAP.md): the milestones, and what comes after the first release
-- [docs/LAYOUT_RUBRIC.md](docs/LAYOUT_RUBRIC.md): how screen layouts are judged
 - [docs/GLOSSARY.md](docs/GLOSSARY.md): the English and Russian terms used in the app
 
 ## What it will be
@@ -33,7 +31,7 @@ and aims to do it more cleanly:
 - a notification when a new episode of a show you watch has aired, and no notification for anything else;
 - Russian and English.
 
-Every screen is designed to an explicit limit on how much it may show, using standard Material 3 components.
+The interface is built from standard Material 3 components.
 
 Data comes from the official MyAnimeList API and, for airing times, from the AniList API. To get airing times, the app
 sends AniList the MyAnimeList ids of the unfinished titles on your list and of an airing title whose page you open,
