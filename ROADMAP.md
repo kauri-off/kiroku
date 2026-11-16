@@ -156,20 +156,158 @@ Acceptance: at the start, the aired counts of three airing titles, one of them o
 other than AniList (the broadcaster's or a streaming service's schedule). Over seven days the owner finds no wrong
 "aired" or "to watch" value on a title with an exact count.
 
-Not to forget:
+- [ ] **M3-01 Recorded answers of AniList.** The requests the app makes of AniList are written once, for the
+  recorder and the client alike, and ask only what the app reads: a title's episodes with their numbers and times,
+  its episode total and its state at AniList. A build task sends them one at a time, far below AniList's limit and
+  never to provoke it, and stores each answer's status and body in `data/src/test/resources/anilist/recorded/`;
+  the limit AniList reports with an ordinary answer goes into a note beside them. The titles come from MAL's
+  public charts, never from a person's list, and the client-id recorder records each title's MAL page on the same
+  day, so a test has both sources' view of one title. Cases, one title each: airing weekly, with episodes aired
+  and to come; releasing at AniList with no episode time at all; on a break, with episodes aired and the next one
+  weeks away or not scheduled; a later season that AniList numbers on from the one before; several hundred
+  episodes and a total MAL does not know; not yet aired with the first episode's time, and not yet aired without
+  it; finished within the last month; totals that differ between the two sources by one, and by more; an episode
+  numbered 0; a MAL id AniList does not know, asked alone and among others; and one request for more ids than
+  AniList answers at once. A case no title was found for is named in the hand-off, and the task that needs it
+  alters a recorded answer in its test. No file holds a header, a cookie, a picture's address, a description or
+  anything about a user of AniList or of MAL. The agent reads AniList's API terms in full; section 2.2 and item 3
+  of section 13 are corrected from the terms and the answers.
+  **Needs:** nothing.
+  **Check:** `tools/gw :data:<the task>` writes the files and is in no build or check; tests: every file is named
+  by the recorder's list, holds no field the requests do not ask for, and has its title's MAL page among MAL's
+  recorded answers. The hand-off says, each with the file that shows it: how many ids one request takes and how
+  the rest is paged, how far back a schedule goes, what a break and a title without a schedule look like, how an
+  unknown id is answered alone and among others, the limit reported, and what the terms ask of a client.
 
-- AniList needs no key: the agent records its responses itself, among them a title without a schedule, a title on a
-  break and a MAL id AniList does not know.
-- During the seven days the app counts, over the owner's list, how many titles get an exact count, how many are
-  rejected for their numbering (A4) and how many are only estimated (A5, A6). The counts settle item 3 of
-  section 13.
-- The rule that rows never move (section 9.3) is tested with airing data changing under a visible tab.
-- The calculator's result also carries "to watch" and the premiere, so no screen combines them on its own (A1).
-- Airing is observed with one clock tick from `:core`, shared by demo mode and `:data`, so every screen moves to the
-  next episode at the same instant (A2); the title page fetches airing for a title outside the tracked set (A12).
-- A next episode beyond MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at
-  the total and there is no next episode beyond it, shown by a calculator test. An AniList episode numbered 0 or
-  below is dropped.
+- [ ] **M3-02 [A] Airing calculator.** In `:core` only. From what is stored of a title (MAL's data and AniList's
+  schedule) and an instant it gives the aired count with its confidence, the total and the next episode, and with
+  the user's values "to watch", the premiere and the keys of "Up next": one result that the List, the title page
+  and the order read, so that none of them combines a count from parts (A1). A3 to A8 hold. A next episode beyond
+  MAL's total (AniList counting a recap MAL does not) is clamped: the aired count stops at the total and there is
+  no next episode beyond it. Why a count is not exact is part of the result: no schedule, a schedule numbered
+  differently (A4), or doubt (A5). The hand-off states, for the owner's approval, the rule on stored data behind
+  each of A4, A5 and A6: when a schedule counts as numbered differently, when AniList counts as having stopped
+  tracking a title and how that differs from a break, and when the weekly estimate may run. The fixtures' counts
+  are the calculator's, none written by hand.
+  **Needs:** nothing.
+  **Check:** `tools/gw :core:test`: a test for each of A3 to A8 that fails without its rule; the clamp; a schedule
+  on a break gives an exact count with no next episode; each reason for a count that is not exact is told from
+  the others. `ListAndTitleAgreeTest` passes over the calculator's results for every fixture and every case of
+  the airing grid, and a rule test fails when a screen's code builds an airing value itself.
+
+- [ ] **M3-03 [A] Airing refresh.** In `:core` only, as the list engine is: what is asked of AniList and what is
+  kept, over a port for AniList and a port for the store, with an in-memory store and a contract suite. The
+  tracked titles are read from the list (section 4). They are refreshed after a list sync and when their data is
+  observed stale, one refresh at a time; a newly tracked title is fetched at once (A11). A title's stored data
+  changes only when all of it arrived (A10), and by A9's rules. A title MAL has marked finished keeps the time of
+  its last episode for as long as N2 could still announce it (A13); any other title that leaves the tracked set is
+  forgotten, and a sign-out forgets them all (S9). The airing of a title outside the tracked set is fetched for
+  its page and held in memory alone (A12). A failure of AniList is an outcome and changes nothing stored (section
+  2.3). The periodic refresh comes with M4's background work. The hand-off states the two ports for the
+  orchestrator's approval before M3-05 and M3-06 start.
+  **Needs:** nothing.
+  **Check:** `tools/gw :core:test`: the contract suite holds a test for each of A9, A10, A11, the keeping of A13
+  and S9, and the in-memory store passes it; a sync that adds one tracked title asks AniList for that title alone,
+  once; of three titles refreshed with one failing, only the other two change; an episode whose time lies between
+  the device's clock and AniList's is neither lost nor counted twice; the airing fetched for a page reaches no
+  store.
+
+- [ ] **M3-04 [A] One tick, and demo mode on it.** In `:core` only. `AiringRepository` becomes what M3 leaves: a
+  screen observes M3-02's results over the list and M3-03's stored data, given again at the instant the earliest
+  coming air time passes, from one tick that every observer shares, so that every screen moves to the next episode
+  at the same instant (A2). Nothing wakes between two air times; a clock set back and a new time zone are
+  followed. Demo mode runs on it: its AniList answers with the fixtures' schedules behind the demo server's
+  failures, its store is in memory, and its counts move with its clock.
+  **Needs:** M3-02, M3-03.
+  **Check:** `tools/gw :core:test`, on virtual time: two observers get episode n+1 at the same instant and not
+  before it; nothing is computed between two air times; a clock set back is followed; the demo's aired count rises
+  as its clock passes an air time, with no request to its server. `tools/gw --kind check :app:testDebugUnitTest`
+  passes on the demo.
+
+- [ ] **M3-05 Database: the airing store.** M3-03's store port in the database (section 7.1). It is the schema's
+  first change, so a real migration with its test, and M3's only one. An airing refresh, a list write and a
+  title's refresh do not overwrite each other.
+  **Needs:** M3-03.
+  **Check:** `tools/gw :data:testDebugUnitTest`: M3-03's contract passes over the store; the migration test takes a
+  version 1 database that holds a list and titles to the new version and finds every row as it was; a list write
+  made during an airing refresh loses neither.
+
+- [ ] **M3-06 AniList client and mappers.** M3-03's AniList port, through the source's one HTTP client, with
+  AniList's host a parameter. A set of ids costs as few requests as M3-01's answers allow, spaced below the limit
+  AniList reports (section 2.2). After a refusal or a failure the client waits before it asks again, and MAL's
+  back-off does not hear of it. A request carries the MAL ids and the `User-Agent`, and no client id, token or
+  cookie (section 2.1). A title AniList does not know and a title without a schedule are answers, not failures. An
+  episode numbered 0 or below is dropped. A title whose answer cannot be read counts as not fetched (A10) and is
+  reported.
+  **Needs:** M3-01, M3-02, M3-03.
+  **Check:** `tools/gw :data:testDebugUnitTest`: mapper tests on M3-01's answers only, one per case; each recorded
+  pair of AniList's answer and MAL's page gives, through M3-02's calculator at the time of recording, the count
+  and the reason its case names; against a local server: 300 ids are asked in the fewest requests, none sooner
+  than the limit allows; a page that fails leaves its titles not fetched and the others fetched; the request has
+  no header beyond the ones named; a refusal by AniList leaves MAL's back-off at zero.
+
+- [ ] **M3-07 Sandbox: AniList on the device.** The sandbox answers the requests of M3-01 too, so that no request
+  leaves the device. Its schedules follow the device's date, each on its title's own weekly slot, and agree with
+  its MAL pages except where the disagreement is the case: among its titles are one without a schedule, one on a
+  break, one numbered on from an earlier season and one whose next episode airs within minutes of a reset. An id
+  it does not know is answered as AniList answers one.
+  **Needs:** M3-01.
+  **Check:** tests: each of its answers has the fields of the recorded answer of its case, with values of the same
+  kind; on any date its schedules fall on the title's weekday and time; a reset brings the schedules back.
+
+- [ ] **M3-08 Live airing.** The live graph's airing is M3-04's repository over M3-05's store and M3-06's client,
+  each source with its own store, built at its first use and off the main thread. The sandbox runs on it against
+  M3-07.
+  **Needs:** M3-04, M3-05, M3-06, M3-07.
+  **Check:** tests: reading the session or the list builds nothing of airing; on the sandbox, signed in and
+  synced, the Watching rows show "to watch" and next episodes, AniList was asked for the tracked titles and no
+  other, and no request left the device; a sign-out leaves no airing data in the database (S9); the sandbox's
+  airing is in the sandbox's own database. `tools/emu smoke` passes on the debug APK.
+
+- [ ] **M3-09 The List and the title page on live airing.** On the List, the order computed at a first download,
+  at a pull-to-refresh and at a start with no airing data stored waits for the airing refresh that follows, however
+  it ends and no longer than a set wait, so that "Up next" is by the data that refresh brought; at any other time,
+  airing data that arrives or changes updates rows in place (section 9.3). On the title page a pull refreshes the
+  title's airing with its details, and a title outside the tracked set gets its airing for the page (A12). A
+  failure of AniList shows no message: the stored counts stay, or the estimate (section 2.3).
+  **Needs:** M3-04.
+  **Check:** `tools/gw --kind check :app:testDebugUnitTest`: under a shown tab, an air time passing, a refresh
+  that moves an episode and a title becoming tracked each update rows in place: no row moves, the scroll position
+  holds and every other row is the same object; after a sign-in Watching is in the order its rows show; a pull
+  orders after the airing refresh, also when AniList fails, and a refresh that outlasts the wait holds no order
+  back; a tracked title's page shows its row's numbers and an airing title that is not tracked shows exact ones on
+  its page (A1, A12); with AniList failing no message is posted.
+
+- [ ] **M3-10 Airing counts in the debug menu.** A section of the debug menu that counts, over the tracked titles
+  as stored, how many have an exact count, how many schedules are rejected for their numbering (A4), how many
+  counts are estimated for doubt (A5), how many from the weekly slot (A6) and how many are unknown, and lists each
+  title that is not exact with its reason. It reads M3-02's results and asks no source.
+  **Needs:** M3-04.
+  **Check:** tests: on the fixtures each count is the number of fixture titles of that kind and the counts add up
+  to the tracked titles; opening the section sends no request; its strings exist in both languages. The debug
+  menu's screenshots are rendered with the section.
+
+- [ ] **M3-11 AniList in the scenario panel.** The panel's "offline" fails AniList as it fails MAL, and one more
+  switch fails AniList alone, on the demo and on the sandbox, so that section 2.3's row for AniList can be seen on
+  a device.
+  **Needs:** M3-08.
+  **Check:** tests on the demo and on the sandbox: with the switch on, a refresh fails, the stored counts stay, a
+  title added then shows the estimate and MAL's requests still work; a reset turns the switch off. The debug
+  menu's screenshots are rendered with the switch.
+
+- [ ] **M3-12 [O] Emulator run.** The orchestrator runs the app once on the emulator against the sandbox: a count
+  rises as an air time passes with the network off; with AniList failing the stored counts stay; the preview
+  build installed over a build of M2 keeps its list.
+  **Needs:** M3-09, M3-10, M3-11.
+  **Check:** the three observations, with the screenshots of each; a difference is filed as a task.
+
+- [ ] **M3-13 [O] The owner's seven days.** At the start the owner compares the aired counts of three airing
+  titles of his list, one of them on a break, with the broadcaster's or a streaming service's schedule. He then
+  uses the preview build for seven days. At their end the counts of M3-10 on his phone settle item 3 of section
+  13.
+  **Needs:** M3-12.
+  **Check:** the acceptance of M3; item 3 of section 13 holds the counts; a wrong value is filed as a task with
+  its reason from M3-10.
 
 ## M4. Reliable episode notifications
 
