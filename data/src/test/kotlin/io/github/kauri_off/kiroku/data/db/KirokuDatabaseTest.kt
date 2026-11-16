@@ -25,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -61,12 +63,46 @@ class KirokuDatabaseTest {
 
     private fun stored(name: String): Anime? = KirokuDatabase.open(context, name).use { it.observeAnime(anime.id).first() }
 
+    @Serializable
+    private class Exported(
+        val database: Database,
+    ) {
+        @Serializable
+        class Database(
+            val version: Int,
+            val identityHash: String,
+        )
+    }
+
+    private fun exportedIdentity(version: Int): String {
+        val schema = "${KirokuDatabase::class.java.canonicalName}/$version.json"
+        val text = context.assets.open(schema).use { it.reader().readText() }
+        val database = json.decodeFromString<Exported>(text).database
+        assertEquals(schema, version, database.version)
+        return database.identityHash
+    }
+
     @Test
-    fun `every version has its exported schema, and the migrations are the steps from each to the next`() {
-        for (version in 1..KirokuDatabase.VERSION) {
-            val schema = "${KirokuDatabase::class.java.canonicalName}/$version.json"
-            assertTrue(schema, context.assets.open(schema).use { it.read() } >= 0)
-        }
+    fun `every version up to the current one has its exported schema, with the identity it was exported with`() {
+        assertEquals((1..KirokuDatabase.VERSION).toList(), IDENTITIES.keys.toList())
+        for ((version, identity) in IDENTITIES) assertEquals("$version.json", identity, exportedIdentity(version))
+    }
+
+    @Test
+    fun `the database the app opens has the current version's identity`() {
+        KirokuDatabase.open(context, name).use { it.observeAnime(anime.id).first() }
+        val opened =
+            AndroidSQLiteDriver().open(context.getDatabasePath(name).path).use { connection ->
+                connection.prepare("SELECT identity_hash FROM room_master_table").use {
+                    it.step()
+                    it.getText(0)
+                }
+            }
+        assertEquals(IDENTITIES.getValue(KirokuDatabase.VERSION), opened)
+    }
+
+    @Test
+    fun `the migrations are the steps from each version to the next`() {
         assertEquals(
             (1 until KirokuDatabase.VERSION).map { it to it + 1 },
             KirokuDatabase.migrations.map { it.startVersion to it.endVersion },
@@ -288,5 +324,16 @@ class KirokuDatabaseTest {
                 assertEquals(anime.titles.romaji, it.getString(0))
             }
         }
+    }
+
+    private companion object {
+        val json = Json { ignoreUnknownKeys = true }
+
+        // Every version that may be on a device, as exported: a changed entity is a new version, never a new identity here.
+        val IDENTITIES =
+            mapOf(
+                1 to "c908fc01889fca24c50eae1d46661170",
+                2 to "569924a95101271cd2502ea512c63260",
+            )
     }
 }
