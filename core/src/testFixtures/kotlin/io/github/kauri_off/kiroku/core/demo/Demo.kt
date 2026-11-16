@@ -125,6 +125,7 @@ class Demo(
             clock: Clock,
             scope: CoroutineScope,
             unexpected: (Throwable) -> Unit = { throw it },
-        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected, clockRuns = true)
+            clockSet: Flow<Unit> = emptyFlow(),
+        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected, clockRuns = true, clockSet = clockSet)
     }
 }

@@ -2,7 +2,7 @@ package io.github.kauri_off.kiroku.wiring
 
 import androidx.lifecycle.SavedStateHandle
 import io.github.kauri_off.kiroku.BuildConfig
-import io.github.kauri_off.kiroku.core.airing.AiringPhase
+import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.StoredList
 import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -26,7 +27,6 @@ import io.github.kauri_off.kiroku.list.ListContent
 import io.github.kauri_off.kiroku.list.ListEvent
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessages
-import io.github.kauri_off.kiroku.title.TitlePage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +43,6 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -97,7 +96,15 @@ class LiveListTest {
     }
 
     private fun parts(scope: CoroutineScope) =
-        LiveParts(context, LiveSource("served", mal.hosts), "0123abcd", Clock.systemUTC(), scope, unexpected::add, device = online)
+        LiveParts(
+            context,
+            LiveSource("served", mal.hosts, aniList = ServedMal.NO_ANILIST),
+            "0123abcd",
+            Clock.systemUTC(),
+            scope,
+            unexpected::add,
+            device = online,
+        )
 
     // A whole sign-in: MAL's page is opened, and the browser comes back with a code for its state.
     private suspend fun SignIn.once() {
@@ -298,44 +305,23 @@ class LiveListTest {
             assertEquals(0L, parts.tokenFile.length())
         }
 
-    // Until M3 the live airing source has nothing: rows and title pages show no aired count, "to watch" or next episode.
+    // Section 2.3: with AniList out of reach, every unfinished title shows MAL's estimate, nothing is stored and the List shows its rows.
     @Test
-    fun `with no airing data no row and no title page shows an airing line, and Watching is ordered by the last update`() =
+    fun `with AniList out of reach every unfinished title has MAL's estimate and nothing is stored`() =
         runTest(dispatcher) {
-            val watching = "status" to "watching"
-            val pages = mal.pages
-            mal.pages =
-                listOf(
-                    ServedMal.altered(pages[0], mapOf(63537L to watching, 41457L to watching, 32998L to watching)),
-                    ServedMal.altered(pages[1], mapOf(62100L to watching)),
-                    pages[2],
-                )
             val graph = LiveGraph(parts(process()))
             graph.signInOnce()
             assertEquals(Outcome.Success(Unit), graph.list.sync())
             val entries = graph.list.observeEntries().first()
-            assertEquals(emptyMap<AnimeId, Any>(), graph.airing.observeAiring().first())
 
-            val tabs = listScreen(graph).showingRows(entries.size)
-
-            val lastUpdated = lastUpdatedFirst(entries, ListStatus.Watching)
-            assertEquals(5, lastUpdated.size)
-            assertEquals(ListSort.UpNext, tabs.pages.getValue(ListStatus.Watching).sort)
-            assertEquals(
-                lastUpdated,
-                tabs.pages
-                    .getValue(ListStatus.Watching)
-                    .rows
-                    .map { it.id },
-            )
-            tabs.pages.values
-                .flatMap { it.rows }
-                .forEach { assertNull(it.title, it.line3) }
-            for (entry in entries) {
-                val anime = checkNotNull(graph.anime.observeAnime(entry.anime.id).first())
-                val page = TitlePage.of(anime, entry, null, null, emptyMap(), graph.titleLanguage, graph.clock)
-                assertFalse(anime.titles.romaji, page.airing is AiringPhase.Aired)
-            }
+            assertTrue(graph.airing.refresh() is Outcome.Failure)
+            val airing = graph.airing.observeAiring().first()
+            val unfinished = entries.filter { it.anime.airingStatus.effective != AiringStatus.Finished }.map { it.anime.id }
+            assertTrue(unfinished.isNotEmpty())
+            assertEquals(unfinished.toSet(), airing.keys)
+            assertTrue(airing.toString(), airing.values.all { it.inexact != null })
+            assertEquals(emptyMap<AnimeId, Any>(), graph.airing.observeSchedules().first())
+            listScreen(graph).showingRows(entries.size)
         }
 
     @Test

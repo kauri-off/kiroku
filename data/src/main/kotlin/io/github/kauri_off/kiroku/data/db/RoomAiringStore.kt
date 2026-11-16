@@ -32,6 +32,11 @@ class RoomAiringStore(
         withContext(dispatcher) { database.transaction { dao.replace(rows) } }
     }
 
+    // Forgets every title at once, also one whose rows cannot be read, which no read gives back to be forgotten.
+    suspend fun clear() {
+        withContext(dispatcher) { database.transaction { dao.clear() } }
+    }
+
     private fun titles(rows: List<AiringEpisodeJoin>): Map<AnimeId, StoredAiring> =
         rows
             .groupBy { it.titleId }
