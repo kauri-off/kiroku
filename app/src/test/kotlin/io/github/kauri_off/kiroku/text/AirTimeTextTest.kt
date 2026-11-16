@@ -48,6 +48,26 @@ class AirTimeTextTest {
 
     @Test
     @Config(qualifiers = "en")
+    fun `a past time is today, yesterday, a weekday within six days, then a date`() {
+        val text = text()
+        assertEquals("today\u00A000:00", text.pastTime(at(14, 0)))
+        assertEquals("yesterday\u00A023:59", text.pastTime(at(13, 23, 59)))
+        assertEquals("yesterday\u00A000:00", text.pastTime(at(13, 0)))
+        assertEquals("Mon\u00A023:59", text.pastTime(at(12, 23, 59)))
+        assertEquals("Thu\u00A000:00", text.pastTime(at(8, 0)))
+        assertEquals("Jan 7, 23:59", text.pastTime(at(7, 23, 59)))
+    }
+
+    @Test
+    @Config(qualifiers = "ru")
+    fun `a russian past time`() {
+        val text = text()
+        assertEquals("вчера\u00A017:30", text.pastTime(at(13, 17, 30)))
+        assertEquals("пн\u00A017:30", text.pastTime(at(12, 17, 30)))
+    }
+
+    @Test
+    @Config(qualifiers = "en")
     fun `an air time follows the twelve hour setting`() {
         val text = text(hours24 = false)
         assertEquals("today\u00A06:00 PM", text.airTime(at(14, 18)))

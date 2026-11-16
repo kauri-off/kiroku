@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_settings_title">Notifications</string>
+    <string name="notify_settings_on">New episodes</string>
+    <string name="notify_settings_on_detail">A notification when an episode of a title you are watching airs</string>
+    <string name="notify_settings_also_planned">Also for planned titles</string>
+    <string name="notify_settings_delay">When to notify</string>
+    <string name="notify_settings_delay_detail">After the episode airs in Japan</string>
+    <string name="notify_settings_delay_none">Right away</string>
+    <string name="notify_settings_delay_half_hour">30\u00A0min later</string>
+    <string name="notify_settings_delay_hour">1\u00A0hour later</string>
+    <string name="notify_settings_delay_three_hours">3\u00A0hours later</string>
+
+    <string name="notify_settings_device">On this device</string>
+    <string name="notify_settings_open_setting">Open in Android settings</string>
+    <string name="notify_settings_notifications">Notifications</string>
+    <string name="notify_settings_notifications_allowed">Allowed</string>
+    <string name="notify_settings_notifications_blocked">Blocked in Android settings</string>
+    <string name="notify_settings_notifications_channel_off">The category “New episodes” is turned off</string>
+    <string name="notify_settings_exact_alarms">Alarms and reminders</string>
+    <string name="notify_settings_exact_alarms_allowed">Allowed: notifications come on time</string>
+    <string name="notify_settings_exact_alarms_not_allowed">Not allowed: notifications may come late</string>
+    <string name="notify_settings_battery">Battery</string>
+    <string name="notify_settings_battery_unrestricted">Not restricted</string>
+    <string name="notify_settings_battery_rarely_used">Kiroku is rarely opened, so Android may delay its notifications</string>
+    <string name="notify_settings_battery_restricted">Restricted: notifications may not come</string>
+    <string name="notify_settings_send_test">Send a test notification</string>
+    <string name="notify_settings_limits">Android may delay the notifications of an app you rarely open. After Force stop, none come until you open Kiroku again.</string>
+
+    <string name="notify_settings_upcoming">Upcoming</string>
+    <string name="notify_settings_list_synced">List synced %1$s</string>
+    <string name="notify_settings_list_not_synced">The list has not been synced yet</string>
+    <string name="notify_settings_schedules_updated">Airing schedules updated %1$s</string>
+    <string name="notify_settings_schedules_not_updated">Airing schedules have not been loaded yet</string>
+    <string name="notify_settings_upcoming_none">No title on your list has a known next episode</string>
+    <string name="notify_settings_off">Notifications are off</string>
+    <string name="notify_settings_signed_out">Sign in to get notifications about new episodes</string>
+    <string name="notify_settings_sign_in">Sign in</string>
+
+    <string name="notify_settings_sent">Recently sent</string>
+    <string name="notify_settings_sent_none">Nothing sent yet</string>
+    <string name="notify_settings_sent_episode">Episode\u00A0%1$d ·\u00A0aired %2$s</string>
+    <string name="notify_settings_sent_at">Sent %1$s</string>
+    <string name="notify_settings_sent_at_checked">Sent %1$s ·\u00A0%2$s</string>
+    <string name="notify_settings_recheck_confirmed">checked with AniList</string>
+    <string name="notify_settings_recheck_failed">not checked: AniList failed</string>
+    <string name="notify_settings_recheck_too_slow">not checked: AniList was too slow</string>
+    <string name="notify_settings_recheck_offline">not checked: offline</string>
+</resources>
