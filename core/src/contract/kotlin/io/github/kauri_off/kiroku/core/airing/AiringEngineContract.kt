@@ -40,6 +40,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -58,8 +59,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-// What the airing engine must do over any store and any source of episode times; a pair of ports passes it by
-// subclassing.
+// What the airing engine must do over any store and any source; a pair of ports passes it by subclassing.
 @OptIn(ExperimentalCoroutinesApi::class)
 abstract class AiringEngineContract {
     // A new, empty store.
@@ -160,9 +160,17 @@ abstract class AiringEngineContract {
     ) : ListSource by inner {
         val unreadable = MutableStateFlow(false)
 
+        // Runs once, when the list was next read and before the reader has it.
+        @Volatile
+        var afterRead: (suspend () -> Unit)? = null
+
         override fun observeEntries(): Flow<List<ListEntry>> =
             combine(inner.observeEntries(), unreadable) { entries, unreadable ->
                 if (unreadable) throw DataException(DataError.StorageError)
+                afterRead?.let {
+                    afterRead = null
+                    it()
+                }
                 entries
             }
     }
@@ -198,8 +206,7 @@ abstract class AiringEngineContract {
         ) = list.write(ListWrite.Save(anime, ListValues(status, 0, null, null, null)))
     }
 
-    // MAL, the list's store and the source start with the fixtures; [seeded], the airing store holds every tracked title
-    // as fetched at the clock's time.
+    // Everything starts with the fixtures; [seeded], the airing store holds every tracked title as fetched just now.
     private suspend fun TestScope.subject(
         entries: List<ListEntry> = fixtures.entries,
         schedules: Map<AnimeId, AiringSchedule> = fixtures.schedules,
@@ -465,6 +472,23 @@ abstract class AiringEngineContract {
             assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
             assertEquals(listOf(setOf(added.id), setOf(added.id)), s.source.calls.toList())
             assertEquals(StoredAiring(fixtures.schedules[added.id], s.clock.now), s.stored(added))
+        }
+
+    @Test
+    fun `a refresh that read the list before a title was added does not undo the addition`() =
+        runTest {
+            val added = FixtureAnime.notOnListAiring
+            val s = subject()
+            s.shownList.afterRead = {
+                s.save(added, ListStatus.Watching)
+                repeat(50) { yield() }
+            }
+
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+            runCurrent()
+
+            assertEquals(StoredAiring(fixtures.schedules[added.id], s.clock.now), s.stored(added))
+            assertEquals(listOf(setOf(added.id)), s.source.calls.toList())
         }
 
     @Test
@@ -767,10 +791,15 @@ abstract class AiringEngineContract {
             assertFalse(page.id in s.engine.observeSchedules().first())
 
             s.source.failure = null
+            s.store.failingWrites = true
+            assertEquals(Outcome.Failure(DataError.StorageError), s.engine.refresh(page))
+            assertEquals(fixtures.schedules[page.id], s.engine.observeSchedule(page.id).first())
+            s.store.failingWrites = false
             s.source.schedules += page.id to fixtures.schedules.getValue(page.id).moved(8, 1.days)
             assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
             assertEquals(s.source.schedules[page.id], s.engine.observeSchedule(page.id).first())
             assertEquals(s.source.schedules[page.id], s.engine.observeSchedules().first()[page.id])
+            assertEquals(1, s.unexpected.size)
         }
 
     @Test

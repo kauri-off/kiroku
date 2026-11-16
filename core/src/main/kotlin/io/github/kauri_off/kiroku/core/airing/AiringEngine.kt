@@ -47,8 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-// Airing data over a store and a source of episode times: the one place with the rules of what is asked and what is
-// kept (section 4). It follows the list from when it is made, and asks the source one call at a time.
+// Airing data over a store and a source of episode times: the rules of what is asked and what is kept (section 4).
 class AiringEngine(
     private val source: AiringSource,
     store: AiringStore,
@@ -208,8 +207,7 @@ class AiringEngine(
         return Tracking(tracked.mapTo(mutableSetOf()) { it.anime.id }, others.mapTo(mutableSetOf()) { it.anime.id })
     }
 
-    // The store holds the tracked titles and the finales A13 keeps, and nothing else (S9); a title that entered the set
-    // with nothing stored is asked for at once (A11). Returns what is stored.
+    // The store holds the tracked titles and A13's finales alone (S9); one new to the set is asked for at once (A11).
     private suspend fun reconcile(tracking: Tracking): Map<AnimeId, StoredAiring> {
         val now = clock.instant()
         val stored = local.read()
@@ -233,8 +231,11 @@ class AiringEngine(
         follow()
         val answers =
             try {
-                val tracking = tracking(list.observeEntries().first())
-                mutex.withLock { want(ids(tracking, reconcile(tracking))) }
+                mutex.withLock {
+                    // Read under the lock, so that no list older than one already settled is settled after it.
+                    val tracking = tracking(list.observeEntries().first())
+                    want(ids(tracking, reconcile(tracking)))
+                }
             } catch (e: DataException) {
                 return Outcome.Failure(e.error)
             } catch (_: StoreFailure) {
@@ -313,20 +314,21 @@ class AiringEngine(
         mutex.withLock {
             val tracked = settled?.tracked.orEmpty()
             val stored = fetched.filterKeys { it in tracked }
-            var held = pages.value - stored.keys
+            var held = pages.value
             for ((id, airing) in fetched) {
                 if (id in tracked || id !in forPages) continue
                 held = if (airing == null) held - id else held + (id to airing.over(held[id]))
             }
-            pages.value = held
             if (stored.isNotEmpty()) {
                 try {
                     val before = local.read()
                     local.write(stored.mapValues { (id, airing) -> StoredAiring(airing?.over(before[id]?.schedule), began) })
+                    held -= stored.keys
                 } catch (_: StoreFailure) {
                     for (id in stored.keys) errors[id] = DataError.StorageError
                 }
             }
+            pages.value = held
         }
         return errors
     }

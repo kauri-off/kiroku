@@ -13,23 +13,21 @@ import kotlin.time.Duration.Companion.hours
 
 // Where the times of a title's episodes come from, asked by MAL id. A failure is an outcome, never an exception.
 interface AiringSource {
-    // Each of [ids] with what the source has of it, in as many requests as that takes: null for a title it does not know,
-    // a failure for one it could not answer whole. A title left out counts as failed, and one not asked is ignored.
+    // Each of [ids] whole or as a failure, null for a title it does not know, in as many requests as that takes.
     suspend fun fetch(ids: Set<AnimeId>): Map<AnimeId, Outcome<FetchedAiring?>>
 }
 
 // What the source has of one title: the episodes it has a time for, which may be none, with the rest of its schedule.
 data class FetchedAiring(
     val schedule: AiringSchedule,
-    // The source has no episode at or after this instant but the ones given, and may have earlier ones it left out;
-    // null when it left out none.
+    // Nothing the source has at or after this instant is left out; earlier episodes may be. Null: nothing is left out.
     val completeFrom: Instant? = null,
 )
 
-// What is stored of one title: its schedule after the last answer, none for a title the source does not know, and when
-// that answer was asked for. An episode number occurs once, and the episodes are in the order of their numbers.
+// A title's schedule after its last answer, none when the source does not know it: each episode number once, in order.
 data class StoredAiring(
     val schedule: AiringSchedule?,
+    // The device's time when that answer was asked for.
     val fetchedAt: Instant,
 )
 
@@ -47,6 +45,5 @@ interface AiringStore {
 // Section 4: the titles airing data is kept for, the unfinished ones of the list in Watching, Planned or On hold.
 val ListEntry.tracked: Boolean get() = status.tracked && anime.airingStatus.effective != AiringStatus.Finished
 
-// A13: how long after its last episode a title MAL has marked finished keeps its data: N2's three days after the
-// longest delay of section 5.3.
+// A13: how long after its last episode a finished title keeps its data, N2's three days after the longest delay.
 val finaleKeptFor: Duration = 3.days + 3.hours
