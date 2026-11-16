@@ -585,8 +585,8 @@ class ListViewModel(
                 model.update { it.copy(refreshing = false) }
                 return
             }
-            // AniList is asked whatever MAL answered: a sync's end asks only after a success, and an expired session never has one.
-            if (result is Outcome.Failure) viewModelScope.launch { airing.refreshStale() }
+            // AniList is asked whatever MAL answered, an expired session included; offline the sync's repeat asks once it is back.
+            if (result is Outcome.Failure && result.error != DataError.NoConnection) viewModelScope.launch { airing.refreshStale() }
             when (result) {
                 is Outcome.Success ->
                     if (fromUser || model.value.orders == null) {

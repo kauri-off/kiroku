@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -802,7 +803,10 @@ class ListViewModelTest {
         }
 
     // Shown again once its list and its airing are stale, the List asks for the tracked titles' airing though MAL fails.
-    private fun staleAiringIsAskedAfterAFailedSync(fail: (Demo) -> Unit) {
+    private fun staleAiringIsAskedAfterAFailedSync(
+        offline: Boolean = false,
+        fail: (Demo) -> Unit,
+    ) {
         val clock = MovingClock(set.now, FixtureTime.zone)
         test(demo = { Demo(set, it, clock = clock) }) { s ->
             val source = s.graph.demo.airingSource
@@ -818,21 +822,50 @@ class ListViewModelTest {
             runCurrent()
             advanceUntilIdle()
             assertEquals(syncs + 1, s.graph.syncs)
-            assertEquals(
-                listOf(
-                    set.entries
-                        .filter { it.tracked }
-                        .map { it.anime.id }
-                        .toSet(),
-                ),
-                source.requests.drop(asked),
-            )
+            val tracked =
+                set.entries
+                    .filter { it.tracked }
+                    .map { it.anime.id }
+                    .toSet()
+            if (offline) {
+                // Nothing is asked offline; the sync repeated once the connection is back asks after its success.
+                assertEquals(emptyList<Set<AnimeId>>(), source.requests.drop(asked))
+                s.graph.demo.server.offline.value = false
+                advanceUntilIdle()
+                assertEquals(syncs + 2, s.graph.syncs)
+            }
+            assertEquals(listOf(tracked), source.requests.drop(asked))
         }
     }
 
     @Test
     fun `with the session expired the List shown asks for its stale airing`() =
         staleAiringIsAskedAfterAFailedSync { it.server.sessionExpired.value = true }
+
+    @Test
+    fun `offline the List shown asks nothing of AniList, and asks for its stale airing once the connection is back`() =
+        staleAiringIsAskedAfterAFailedSync(offline = true) { it.server.offline.value = true }
+
+    // N2's bound: the pull ends as MAL's failure says, whatever AniList does with the ask that follows it.
+    @Test
+    fun `a pull that MAL fails ends and says so without waiting for the airing it asks for`() {
+        val clock = MovingClock(set.now, FixtureTime.zone)
+        test(demo = { Demo(set, it, clock = clock) }) { s ->
+            val source = s.graph.demo.airingSource
+            val asked = source.requests.size
+            val answer = CompletableDeferred<Unit>()
+            source.holding = answer
+            s.graph.demo.server.failingLoads.value = true
+            clock.instant = set.now.plus(Duration.ofMinutes(20))
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertFalse(s.state.refreshing)
+            assertEquals(ShellMessage.Text.RefreshFailed(DataError.ServerError), s.message?.text)
+            assertTrue(source.requests.size > asked)
+            answer.complete(Unit)
+            advanceUntilIdle()
+        }
+    }
 
     @Test
     fun `with MAL failing the List shown asks for its stale airing`() =
@@ -882,8 +915,30 @@ class ListViewModelTest {
             s.graph.airing.refresh()
             advanceUntilIdle()
             assertEquals(Line3.ToWatch(AiredCount.Exact(3)), line3())
+            // A pull whose own order cannot read the airing orders the rows without it.
+            failing.value = true
+            s.list.onEvent(ListEvent.Refresh)
+            advanceUntilIdle()
+            assertNotEquals(Line3.ToWatch(AiredCount.Exact(3)), line3())
+            assertEquals(2, s.page().ordering)
+            assertNull(s.message)
         }
     }
+
+    @Test
+    fun `a start with no airing stored whose airing cannot be read orders its rows without it, and says nothing`() =
+        test(
+            demo = { Demo(set, it, airingStored = false) },
+            airing = { inner ->
+                object : AiringRepository by inner {
+                    override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flow { throw DataException(DataError.StorageError) }
+                }
+            },
+        ) { s ->
+            assertEquals(set.entries.count { it.status == ListStatus.Watching }, s.ids(ListStatus.Watching).size)
+            assertEquals(0, s.page().ordering)
+            assertNull(s.message)
+        }
 
     // The rows of the shown tab after [change], which must leave every row but [changed] the same object, in its place.
     private suspend fun TestScope.inPlace(

@@ -106,6 +106,7 @@ class Demo(
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
         airingSource.failure = null
+        airingSource.holding?.complete(Unit)
         airingSource.holding = null
         airingSource.schedules = fixtures.schedules
         store.reset()
