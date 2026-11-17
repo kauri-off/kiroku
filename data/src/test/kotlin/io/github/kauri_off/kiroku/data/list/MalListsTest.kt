@@ -41,7 +41,7 @@ class MalListsTest {
     internal val network = NetworkFixture()
 
     private val sessions by lazy { SessionFixture(folder.newFolder()) }
-    private val lists by lazy { MalLists(network.http, sessions.open()) }
+    private val lists by lazy { MalLists(network.http) }
     private val asked = CopyOnWriteArrayList<RecordedRequest>()
     private val user = ListUser.Named("public-user")
 
@@ -190,14 +190,14 @@ class MalListsTest {
     @Test
     fun `a list longer than the bound fails at the page that passes it, whatever size the pages are`() {
         serve { offset -> answer(200, pageWithNext("list_public_1", "$link?offset=${offset + 10}")) }
-        val bounded = MalLists(network.http, sessions.open(), maxEntries = 25)
+        val bounded = MalLists(network.http, maxEntries = 25)
 
         assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { bounded.list(user) })
         assertEquals(listOf("0", "10", "20"), asked.map { it.url.queryParameter("offset") })
         assertTrue(network.unexpected.single() is UnusableAnswer)
 
         serve()
-        val exactly = MalLists(network.http, sessions.open(), maxEntries = 30)
+        val exactly = MalLists(network.http, maxEntries = 30)
         assertEquals(recordedEntries(), (runBlocking { exactly.list(user) } as Outcome.Success).value)
     }
 
@@ -241,9 +241,9 @@ class MalListsTest {
         serve()
         val session = sessions.open()
         assertEquals(Outcome.Success(Unit), runBlocking { session.signIn(TokenGrant("access-1", "refresh-1")) })
-        val signedIn = MalLists(network.http, session)
+        val signedIn = MalLists(network.http)
 
-        assertEquals(recordedEntries(), (runBlocking { signedIn.list(ListUser.SignedIn) } as Outcome.Success).value)
+        assertEquals(recordedEntries(), (runBlocking { signedIn.list(ListUser.SignedIn(session)) } as Outcome.Success).value)
         for (request in asked) {
             assertEquals("/v2/users/@me/animelist", request.url.encodedPath)
             assertEquals("Bearer access-1", request.headers[AUTHORIZATION])
