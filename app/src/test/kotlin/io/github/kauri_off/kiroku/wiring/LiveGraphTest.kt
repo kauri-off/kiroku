@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.content.ContextWrapper
 import android.os.Looper
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -40,6 +41,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import okhttp3.Interceptor
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -268,6 +273,48 @@ class LiveGraphTest {
 
             assertEquals(Outcome.Failure(DataError.NoConnection), liveTitles(parts).refresh(AnimeId(61987)))
             assertTrue(requests.toString(), requests.single().startsWith("GET 127.0.0.1/v2/anime/61987?fields "))
+        }
+
+    // The folder is made when it is missing, which is disk work the app's start does not wait for.
+    @Test
+    fun `making the parts of a live graph looks up no folder of its files`() =
+        runTest {
+            val lookups = AtomicInteger()
+            val counting =
+                object : ContextWrapper(context) {
+                    override fun getNoBackupFilesDir(): File {
+                        lookups.incrementAndGet()
+                        return super.getNoBackupFilesDir()
+                    }
+                }
+            val parts =
+                LiveParts(counting, LiveSource.Account, "0123abcd", Clock.systemUTC(), backgroundScope, unexpected::add, device = device)
+            assertEquals(0, lookups.get())
+
+            parts.file("tokens")
+            assertEquals(1, lookups.get())
+        }
+
+    // So that work started in a new process still leaves MAL alone (section 2.3), and no backup carries a refusal to another device.
+    @Test
+    fun `MAL's back-off is kept in the source's own file, which is not backed up`() =
+        runTest {
+            val refusing =
+                Interceptor { chain ->
+                    Response
+                        .Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(429)
+                        .message("")
+                        .body("".toResponseBody())
+                        .build()
+                }
+            val parts = parts(backgroundScope, LiveSource("refused", MalHosts.Real, refusing))
+
+            assertEquals(Outcome.Failure(DataError.Refused), liveTitles(parts).refresh(AnimeId(61987)))
+            assertTrue(File(context.noBackupFilesDir, "refused.backoff").isFile)
+            assertFalse(File(context.noBackupFilesDir, "account.backoff").exists())
         }
 
     // Every request goes through MalHttp's one client, so none can miss the sandbox's stand-in or the rules of sending.

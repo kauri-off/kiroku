@@ -16,10 +16,12 @@ import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
+import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.file.Files
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -98,6 +100,10 @@ internal class TestClock(
     override fun withZone(zone: ZoneId): Clock = this
 }
 
+// A back-off file of a client whose back-off no test reads, gone with the tests' process.
+internal fun scratchBackOffFile(): File =
+    File(Files.createTempDirectory("mal").toFile().apply { deleteOnExit() }, "back-off").apply { deleteOnExit() }
+
 // Two local servers in place of MAL's hosts and a client over them, on a device whose main thread is the test's.
 internal class NetworkFixture : ExternalResource() {
     val api = MockWebServer().apply { serverSocketFactory = AnswerAtOnce }
@@ -108,8 +114,15 @@ internal class NetworkFixture : ExternalResource() {
     var online = true
     var repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds)
     private val mainThread = Thread.currentThread()
+    private val directory by lazy { Files.createTempDirectory("mal").toFile() }
 
-    val http by lazy {
+    // Where the client keeps MAL's back-off, as an app keeps it among its files.
+    val backOffFile: File get() = File(directory, "back-off")
+
+    val http by lazy { newProcess() }
+
+    // The client a new process makes, over the same file.
+    fun newProcess(): MalHttp =
         MalHttp(
             hosts = MalHosts(api = api.url("/v2/").toString(), signIn = signIn.url("/v1/oauth2/").toString()),
             clientId = CLIENT_ID,
@@ -123,11 +136,12 @@ internal class NetworkFixture : ExternalResource() {
                     override fun isMainThread() = Thread.currentThread() === mainThread
                 },
             clock = clock,
+            backOffFile = { backOffFile },
             unexpected = unexpected::add,
             log = log::add,
             repeatReadsAfter = repeatReadsAfter,
         )
-    }
+
     val things by lazy { http.api(Things::class) }
     val signInThings by lazy { http.signIn(Things::class) }
 
@@ -149,6 +163,7 @@ internal class NetworkFixture : ExternalResource() {
     override fun after() {
         api.close()
         signIn.close()
+        directory.deleteRecursively()
     }
 
     companion object {

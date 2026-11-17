@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.bearer
+import io.github.kauri_off.kiroku.data.network.scratchBackOffFile
 import io.github.kauri_off.kiroku.data.session.refreshGrant
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerializationException
@@ -67,6 +68,7 @@ internal fun recorderHttp(
                 override fun isMainThread() = false
             },
         clock = Clock.systemUTC(),
+        backOffFile = ::scratchBackOffFile,
         unexpected = {},
     )
 

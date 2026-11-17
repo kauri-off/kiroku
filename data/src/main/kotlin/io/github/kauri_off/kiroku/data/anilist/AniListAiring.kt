@@ -36,7 +36,7 @@ class AniListAiring(
     private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) : AiringSource {
     private val url = address.toHttpUrl()
-    private val pace = AniListPace(time, clock, AniListBlock(blockFile, clock, http.unexpected))
+    private val pace = AniListPace(time, AniListPace.file(blockFile, clock, http.unexpected))
     private val turns = Mutex()
 
     // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking.

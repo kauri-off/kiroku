@@ -71,6 +71,8 @@ internal class MalTokenEndpoint(
         }
     }
 
+    override suspend fun refusing(): Boolean = !http.refusedFor().isZero
+
     private companion object {
         const val UNAUTHORIZED = 401
     }
