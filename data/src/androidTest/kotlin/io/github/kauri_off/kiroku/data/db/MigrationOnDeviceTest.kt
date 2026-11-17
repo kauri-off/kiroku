@@ -45,12 +45,12 @@ class MigrationOnDeviceTest {
         File(context.filesDir, PREFERENCES).delete()
     }
 
-    private fun written(): File {
+    private fun written(asset: String = "kiroku-1.db"): File {
         context.deleteDatabase(name)
         val file = context.getDatabasePath(name)
         file.parentFile?.mkdirs()
         instrumentation.context.assets
-            .open("kiroku-1.db")
+            .open(asset)
             .use { input -> file.outputStream().use { input.copyTo(it) } }
         return file
     }
@@ -165,7 +165,44 @@ class MigrationOnDeviceTest {
         Log.i(TAG, "Every row of ${before.size} tables kept: ${before.mapValues { it.value.size }}")
     }
 
+    // N10: from the version after the record's on, the device migrates a database the record's version wrote, holding announced episodes.
+    @Test
+    fun every_version_after_the_records_is_reached_from_a_database_holding_announced_episodes() {
+        if (KirokuDatabase.VERSION == RECORD_VERSION) return
+        val asset = "kiroku-$RECORD_VERSION.db"
+        assertTrue(
+            "Version ${KirokuDatabase.VERSION} needs $asset, a database the app's version $RECORD_VERSION wrote with announced episodes",
+            asset in
+                instrumentation.context.assets
+                    .list("")
+                    .orEmpty(),
+        )
+        val file = written(asset)
+        val before =
+            raw(file) { database ->
+                assertEquals(RECORD_VERSION, database.version)
+                database.rawQuery("SELECT COUNT(*) FROM notification_title WHERE announced_episode IS NOT NULL", null).use {
+                    it.moveToFirst()
+                    assertTrue(it.getInt(0) > 0)
+                }
+                database.tables().associateWith { database.rows(it) }
+            }
+
+        val database = KirokuDatabase.open(context, name)
+        try {
+            runBlocking { RoomAiringStore(database, Dispatchers.IO) { throw it }.read() }
+        } finally {
+            database.close()
+        }
+
+        raw(file) { migrated ->
+            assertEquals(KirokuDatabase.VERSION, migrated.version)
+            for ((table, rows) in before) assertEquals(table, rows, migrated.rows(table))
+        }
+    }
+
     private companion object {
+        const val RECORD_VERSION = 5
         const val TAG = "KirokuMigration"
         const val PREFERENCES = "migrated.preferences_pb"
     }

@@ -7,6 +7,8 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
@@ -29,6 +31,8 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.time.Instant
+import kotlin.random.Random
 
 @RunWith(RobolectricTestRunner::class)
 class RoomNotificationStoreTest {
@@ -75,7 +79,7 @@ class RoomNotificationStoreTest {
         val profiles = RoomProfileStore(database, scope.dispatcher) { throw it }
         private val preferences =
             StoredPreferences(
-                File(folder.root, "notify.preferences_pb"),
+                File(folder.newFolder(), "notify.preferences_pb"),
                 scope.backgroundScope,
                 { throw it },
                 scope.dispatcher,
@@ -156,17 +160,95 @@ class RoomNotificationStoreTest {
             }
         }
 
+    // Each half of a pair without the other, and a code nobody wrote.
     @Test
     fun `a row that cannot be read is left out and reported, and the others are read`() =
         runTest {
+            val halves =
+                listOf("followed_since", "followed_status", "announced_aired_at", "announced_episode").map {
+                    "UPDATE notification_title SET $it = NULL WHERE title_id = ${anime.id.value}"
+                }
+            for (half in halves) {
+                unexpected.clear()
+                val device = Device(this)
+                device.signedIn()
+                device.database.execute(half)
+                device.database.execute("UPDATE notification_sent SET recheck = 'asked twice' WHERE episode = 1")
+
+                assertEquals(half, StoredNotifications(owner, record.copy(titles = record.titles - anime.id)), device.store.read())
+                assertEquals(half, listOf(sent(2)), device.store.observeSent().first())
+                assertEquals(half, 2, unexpected.size)
+                assertTrue(half, unexpected.all { it is UnreadableRow })
+            }
+        }
+
+    // A state the record refuses is read as nobody's, so the engine's next run forgets it and starts again, not fails for good.
+    @Test
+    fun `a state the record refuses is reported and read as nobody's record, which a clear heals`() =
+        runTest {
+            val damages =
+                listOf(
+                    listOf("UPDATE notification_state SET since = NULL"),
+                    listOf("DELETE FROM notification_state"),
+                    listOf(
+                        "DELETE FROM notification_title WHERE followed_status IS NOT NULL",
+                        "UPDATE notification_state SET planned_since = since, since = NULL",
+                    ),
+                )
+            for (damage in damages) {
+                unexpected.clear()
+                val device = Device(this)
+                device.signedIn()
+                for (statement in damage) device.database.execute(statement)
+
+                assertEquals("$damage", StoredNotifications(null, NotificationRecord()), device.store.read())
+                assertEquals("$damage", 1, unexpected.size)
+                assertTrue("$damage", unexpected.single() is UnreadableRow)
+
+                device.store.clear(owner)
+                device.store.write(record, emptyList(), fixtures.now)
+                assertEquals("$damage", StoredNotifications(owner, record), device.store.read())
+            }
+        }
+
+    // Every status the list stores, one it does not know among them, every count taken back to from 0, instants to the nanosecond.
+    @Test
+    fun `generated records come back as they were written`() =
+        runTest {
             val device = Device(this)
             device.signedIn()
-            device.database.execute("UPDATE notification_title SET followed_since = NULL WHERE title_id = ${anime.id.value}")
-            device.database.execute("UPDATE notification_sent SET recheck = 'asked twice' WHERE episode = 1")
+            val random = Random(7)
+            val statuses = ListStatus.entries + EntryStatus.Unrecognized("rewatching")
+            val start = Instant.parse("2026-01-03T14:30:00Z")
 
-            assertEquals(StoredNotifications(owner, record.copy(titles = record.titles - anime.id)), device.store.read())
-            assertEquals(listOf(sent(2)), device.store.observeSent().first())
-            assertEquals(2, unexpected.size)
-            assertTrue(unexpected.all { it is UnreadableRow })
+            fun instant() = start.plusSeconds(random.nextLong(-1_000_000, 1_000_000)).plusNanos(random.nextLong(1_000_000_000))
+
+            repeat(ROUNDS) { round ->
+                val titles =
+                    (1..TITLES).associate { index ->
+                        val announced = if (random.nextInt(3) > 0) Announced(random.nextInt(1, 30), instant()) else null
+                        val followed =
+                            if (announced == null ||
+                                random.nextBoolean()
+                            ) {
+                                Followed(statuses[random.nextInt(statuses.size)], instant())
+                            } else {
+                                null
+                            }
+                        val takenBackTo = announced?.takeIf { random.nextBoolean() }?.let { random.nextInt(0, it.episode) }
+                        val record = TitleRecord(followed, announced, takenBackTo)
+                        AnimeId(round * TITLES + index.toLong()) to record.copy(standing = record.standsAt > 0 && random.nextBoolean())
+                    }
+                val since = instant()
+                val written = NotificationRecord(since, since.takeIf { random.nextBoolean() }, titles)
+                device.store.write(written, emptyList(), fixtures.now)
+                assertEquals("$round", StoredNotifications(owner, written), device.store.read())
+            }
+            assertTrue(unexpected.isEmpty())
         }
+
+    private companion object {
+        const val ROUNDS = 4
+        const val TITLES = 100L
+    }
 }

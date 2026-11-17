@@ -31,13 +31,13 @@ class RoomNotificationStore(
     override suspend fun read(): StoredNotifications =
         withContext(dispatcher) {
             val (state, titles) = database.transaction { dao.state() to dao.titles() }
+            val readTitles = titles.mapNotNull { readable(unexpected) { it.toRecord() } }.toMap()
+            // A state the record refuses is nobody's record, which the engine's next run forgets and starts again from (N5).
             val record =
-                NotificationRecord(
-                    since = state?.since?.let(::instantOf),
-                    plannedSince = state?.plannedSince?.let(::instantOf),
-                    titles = titles.mapNotNull { readable(unexpected) { it.toRecord() } }.toMap(),
-                )
-            StoredNotifications(state?.signIn, record)
+                readable(unexpected) {
+                    NotificationRecord(state?.since?.let(::instantOf), state?.plannedSince?.let(::instantOf), readTitles)
+                }
+            if (record == null) StoredNotifications(null, NotificationRecord()) else StoredNotifications(state?.signIn, record)
         }
 
     override fun observeSent(): Flow<List<SentNotification>> =
