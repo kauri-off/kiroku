@@ -664,8 +664,8 @@ Each of these could change a decision above.
    apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-5. **Sources beyond MAL and AniList.** Jikan's public API shut down on 1 October 2026: the score distribution comes
-   from Tenrai, and characters, videos, reviews and other users' avatars have no source. Tenrai is in beta and does
+5. **Sources beyond MAL and AniList.** The score distribution comes from Tenrai; characters, videos, reviews and
+   other users' avatars have no source. Tenrai is in beta and does
    not say who runs it. Like every source of MAL's score distribution it serves what it reads from MAL's website,
    which clause 4(i) of MAL's API agreement rules out for an app's own requests; the owner accepts that risk, and the
    app itself scrapes nothing. AniList's links and characters and Shikimori are unchecked.
