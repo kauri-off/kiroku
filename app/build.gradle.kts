@@ -942,6 +942,91 @@ abstract class VerifyRedirectRule : DefaultTask() {
     }
 }
 
+// How a merged manifest's components and start-up initializers differ from those its build type names; nothing when they agree.
+object ComponentRule {
+    const val STARTUP = "androidx.startup.InitializationProvider"
+    private val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
+
+    fun problems(
+        manifest: org.w3c.dom.Document,
+        components: Set<String>,
+        initializers: Set<String>,
+    ): List<String> {
+        val declared = COMPONENTS.flatMap { manifest.getElementsByTagName(it).elements() }
+        val names = declared.mapTo(mutableSetOf()) { it.name() }
+        val started =
+            declared
+                .filter { it.name() == STARTUP }
+                .flatMap { it.getElementsByTagName("meta-data").elements() }
+                .mapTo(mutableSetOf()) { it.name() }
+        return listOfNotNull(
+            (names - components).takeIf { it.isNotEmpty() }?.let { "Components the build does not name: $it" },
+            (components - names).takeIf { it.isNotEmpty() }?.let { "Components the build names that are not there: $it" },
+            (started - initializers).takeIf { it.isNotEmpty() }?.let { "Start-up initializers the build does not name: $it" },
+            (initializers - started).takeIf { it.isNotEmpty() }?.let { "Start-up initializers the build names that are not there: $it" },
+        )
+    }
+
+    private fun org.w3c.dom.NodeList.elements() = (0 until length).map { item(it) as org.w3c.dom.Element }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(RedirectRule.ANDROID, "name")
+}
+
+// A dependency brings no component or start-up initializer in unseen; the rule is held to manifests a library would make.
+abstract class VerifyComponents : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:Input
+    abstract val components: SetProperty<String>
+
+    @get:Input
+    abstract val initializers: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        fun problems(change: (org.w3c.dom.Document) -> Unit): List<String> =
+            ComponentRule.problems(RedirectRule.parse(manifest.get().asFile).also(change), components.get(), initializers.get())
+        val found = problems {}
+        check(found.isEmpty()) { found.joinToString("\n") }
+        val wrong =
+            mapOf<String, (org.w3c.dom.Document) -> Unit>(
+                "a library adds an activity" to { it.added("activity") },
+                "a library adds a service" to { it.added("service") },
+                "a library adds a receiver" to { it.added("receiver") },
+                "a library adds a provider" to { it.added("provider") },
+                "a library adds a start-up initializer" to { document ->
+                    val all = document.getElementsByTagName("provider")
+                    val startUp =
+                        (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.single {
+                            it.getAttributeNS(RedirectRule.ANDROID, "name") == ComponentRule.STARTUP
+                        }
+                    val initializer = document.createElement("meta-data")
+                    initializer.setAttributeNS(RedirectRule.ANDROID, "android:name", "androidx.emoji2.text.EmojiCompatInitializer")
+                    initializer.setAttributeNS(RedirectRule.ANDROID, "android:value", "androidx.startup")
+                    startUp.appendChild(initializer)
+                },
+            )
+        val passed = wrong.filterValues { problems(it).isEmpty() }.keys
+        check(passed.isEmpty()) { "The component check lets these wrong manifests pass: $passed" }
+        report.get().asFile.writeText(
+            "Components: ${components.get().sorted()}\nStart-up initializers: ${initializers.get().sorted()}\n" +
+                "Fails when ${wrong.keys.joinToString(", ")}\n",
+        )
+    }
+
+    private fun org.w3c.dom.Document.added(kind: String) {
+        val component = createElement(kind)
+        component.setAttributeNS(RedirectRule.ANDROID, "android:name", "io.github.kauri_off.kiroku.Planted")
+        component.setAttributeNS(RedirectRule.ANDROID, "android:exported", "false")
+        getElementsByTagName("application").item(0).appendChild(component)
+    }
+}
+
 // Section 3.1's redirects as MAL has them, and what else each build type lets another app start.
 val registeredRedirects =
     mapOf(
@@ -960,6 +1045,34 @@ val exportedBesidesTheRedirect =
         "preview" to setOf(launcherActivity, profileInstaller, scenarioTile),
     )
 
+// Every component of each build type's merged manifest, and what runs when the process starts: no initializer of the network.
+val releaseComponents =
+    setOf(
+        launcherActivity,
+        RedirectRule.ACTIVITY,
+        RedirectRule.LINK,
+        ComponentRule.STARTUP,
+        profileInstaller,
+        "androidx.room.MultiInstanceInvalidationService",
+    )
+val debugMenu =
+    setOf(
+        "io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity",
+        "io.github.kauri_off.kiroku.debugmenu.GalleryActivity",
+        scenarioTile,
+    )
+val declaredComponents =
+    mapOf(
+        "release" to releaseComponents,
+        "debug" to releaseComponents + debugMenu + composePreview,
+        "preview" to releaseComponents + debugMenu,
+    )
+val startUpInitializers =
+    setOf(
+        "androidx.lifecycle.ProcessLifecycleInitializer",
+        "androidx.profileinstaller.ProfileInstallerInitializer",
+    )
+
 androidComponents {
     onVariants { variant ->
         val name = variant.name.replaceFirstChar { it.uppercase() }
@@ -970,7 +1083,14 @@ androidComponents {
                 alsoExported.set(exportedBesidesTheRedirect.getValue(variant.buildType!!))
                 report.set(layout.buildDirectory.file("reports/redirect-${variant.name}.txt"))
             }
-        tasks.named { it == "assemble$name" || it == "test" }.configureEach { dependsOn(verified) }
+        val declared =
+            tasks.register<VerifyComponents>("verify${name}Components") {
+                manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                components.set(declaredComponents.getValue(variant.buildType!!))
+                initializers.set(startUpInitializers)
+                report.set(layout.buildDirectory.file("reports/components-${variant.name}.txt"))
+            }
+        tasks.named { it == "assemble$name" || it == "test" }.configureEach { dependsOn(verified, declared) }
         if (variant.buildType == "debug") {
             val rule =
                 tasks.register<VerifyRedirectRule>("verifyRedirectRule") {
