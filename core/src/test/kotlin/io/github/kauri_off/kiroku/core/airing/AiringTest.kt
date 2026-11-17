@@ -188,6 +188,17 @@ class AiringTest {
     }
 
     @Test
+    fun `air times come only with an exact count, each number once, in order and within the total`() {
+        val times = listOf(ScheduledEpisode(1, instant), ScheduledEpisode(2, instant))
+        Airing(AiredCount.Exact(2), 24, null, instant, airTimes = times)
+        fails { Airing(AiredCount.Estimated(2), 24, null, instant, airTimes = times) }
+        fails { Airing(AiredCount.Unknown, 24, null, null, airTimes = times) }
+        fails { Airing(AiredCount.Exact(2), 24, null, instant, airTimes = times.reversed()) }
+        fails { Airing(AiredCount.Exact(2), 24, null, instant, airTimes = times + times.last()) }
+        fails { Airing(AiredCount.Exact(1), 1, null, instant, airTimes = times) }
+    }
+
+    @Test
     fun `a result with a next episode holds no longer than until it airs, and its premiere agrees with its count`() {
         val next = ScheduledEpisode(4, instant)
         val aired = instant.minusSeconds(1)
