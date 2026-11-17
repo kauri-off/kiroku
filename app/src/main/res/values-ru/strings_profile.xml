@@ -26,10 +26,10 @@
     </plurals>
     <string name="profile_user_name">Имя пользователя</string>
     <plurals name="profile_name_refused">
-        <item quantity="one">Введите до\u00A0%1$d\u00A0символа (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
-        <item quantity="few">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
-        <item quantity="many">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
-        <item quantity="other">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
+        <item quantity="one">Введите до\u00A0%1$d\u00A0символа (латинские буквы, цифры, _\u00A0и\u00A0-) или ссылку на профиль MyAnimeList</item>
+        <item quantity="few">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _\u00A0и\u00A0-) или ссылку на профиль MyAnimeList</item>
+        <item quantity="many">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _\u00A0и\u00A0-) или ссылку на профиль MyAnimeList</item>
+        <item quantity="other">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _\u00A0и\u00A0-) или ссылку на профиль MyAnimeList</item>
     </plurals>
     <string name="profile_recent">Недавние</string>
     <string name="profile_open">Открыть</string>

@@ -291,6 +291,6 @@ class ProfileScreenTest {
     }
 
     private companion object {
-        const val REFUSED = "Enter up to\u00A064\u00A0characters (Latin letters, digits, _ and -) or a MyAnimeList profile link"
+        const val REFUSED = "Enter up to\u00A064\u00A0characters (Latin letters, digits, _\u00A0and\u00A0-) or a MyAnimeList profile link"
     }
 }
