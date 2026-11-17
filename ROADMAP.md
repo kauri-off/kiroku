@@ -497,21 +497,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   given whole. A rule test fails when a name in the port, the keeper or the surface says MAL, or one of them holds
   an address or a status code.
 
-- [ ] **M6-05 The signed-in user's profile.** In `:data`: what MAL gives of the signed-in user beside the list, as
-  `UserProfile` holds it, read as that user through the session (S5), and kept in the database (section 7.1) by a
-  real migration, in a table of its own that no download, refresh or list write touches. The statistics in MAL's
-  answer are not kept: the app computes its own (section 2.2). What is stored is the last whole answer: a refresh
-  that failed changes nothing, and a value that cannot be read is left out and reported (section 2.3). It stays
-  readable with the session expired (S6) and is forgotten when the list's owner changes and at a sign-out (S9). It
-  is the own-profile part of `UserRepository`, and M6-10 puts it into the graph.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: the migration test takes a database of each earlier version that
-  holds a list, titles and airing data, and announced episodes once a version has them (N10), to the new one and
-  finds every row as it was; the profile read from the sandbox is stored, observed, and read by a new store over
-  the same file; a failed refresh leaves what was stored; a new owner sees nothing of the last one's; a rejected
-  token causes one refresh and one retry; with the session expired the stored profile is read and MAL is not
-  asked. Where the owner's recordings are: the mapper reads his recorded profile, and a failure names no value of
-  it. `./gradlew :data:connectedDebugAndroidTest` passes on an emulator.
+- [x] **M6-05 The signed-in user's profile.**
 
 - [ ] **M6-06 Profile links.** A link to a user's profile on MAL opens that user's profile in the app (section
   6.3). The address is read in one place, with the title's link, into the user it names, the name decoded and

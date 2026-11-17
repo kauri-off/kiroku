@@ -237,6 +237,7 @@ class SandboxMal(
                     put("num_items_$name", entries.count { it.status == status })
                     put("num_days_$name", days(status))
                 }
+                put("num_items_plan_to_watch", entries.count { it.status == "plan_to_watch" })
                 put("num_items", entries.size)
                 put("num_days_watched", episodes * EPISODE_DAYS)
                 put("num_days", (episodes * EPISODE_DAYS).toInt())

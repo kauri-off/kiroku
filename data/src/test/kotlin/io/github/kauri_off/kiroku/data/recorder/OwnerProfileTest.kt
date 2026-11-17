@@ -1,8 +1,11 @@
 package io.github.kauri_off.kiroku.data.recorder
 
+import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.network.MalJson
+import io.github.kauri_off.kiroku.data.profile.toProfile
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,5 +40,16 @@ class OwnerProfileTest {
             val value = statistics[key]
             assertTrue("profile: anime_statistics.$key", value is JsonPrimitive && !value.isString)
         }
+    }
+
+    // A failure names the fields read in part, never a value.
+    @Test
+    fun `profile - the app's mapper reads it whole, the statistics as MAL states them`() {
+        val answer = OwnerRecordings.named("profile")
+        val repairs = Repairs()
+        val profile = OwnerRecordings.read("profile") { MalJson.parseToJsonElement(answer.body).jsonObject.toProfile(repairs) }
+        assertEquals("profile: fields read in part", emptySet<String>(), repairs.fields)
+        assertTrue("profile: joined_at", profile.joined != null)
+        assertTrue("profile: anime_statistics", profile.stated != null)
     }
 }

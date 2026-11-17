@@ -47,6 +47,7 @@ class RoomLocalList(
 
     private val listDao = database.list()
     private val titleDao = database.titles()
+    private val profileDao = database.profile()
 
     // One read of the list at a time, so a later read is of a later list; it guards the three fields below.
     private val reading = Mutex()
@@ -135,12 +136,13 @@ class RoomLocalList(
             listDao.setState { it.copy(syncedAt = null) }
         }
 
-    // With every title, unless the list was nobody's, empty, and stays nobody's: then no title is of a sign-in.
+    // With every title, unless the list was nobody's, empty, and stays nobody's; and every other sign-in's profile (S9).
     override suspend fun clear(owner: SignInId?) {
         transaction {
             val nobodys = owner == null && listDao.state().owner == null && !listDao.hasEntries()
             listDao.deleteAll()
             if (!nobodys) titleDao.deleteAll()
+            profileDao.deleteAllBut(owner?.value)
             listDao.setState { it.copy(owner = owner?.value, syncedAt = null) }
         }
         reading.withLock { entries(emptyList()) }

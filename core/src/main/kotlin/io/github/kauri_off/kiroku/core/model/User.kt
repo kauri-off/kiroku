@@ -25,6 +25,22 @@ data class UserProfile(
     val name: String,
     val pictureUrl: String?,
     val joined: LocalDate?,
+    val stated: StatedFigures? = null,
+)
+
+// What the profile's source states of the user's list, as it states it; the app's own statistics are the calculator's.
+data class StatedFigures(
+    val watching: Int,
+    val completed: Int,
+    val onHold: Int,
+    val dropped: Int,
+    val planned: Int,
+    val entries: Int,
+    val episodes: Int,
+    val rewatched: Int,
+    val daysWatched: Double,
+    // Zero when the source has no score to average.
+    val meanScore: Double,
 )
 
 data class UserStatistics(

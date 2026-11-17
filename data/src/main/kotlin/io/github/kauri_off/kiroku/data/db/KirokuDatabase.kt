@@ -22,6 +22,7 @@ import androidx.sqlite.execSQL
         ListStateRow::class,
         AiringRow::class,
         AiringEpisodeRow::class,
+        ProfileRow::class,
     ],
     version = KirokuDatabase.VERSION,
 )
@@ -32,9 +33,11 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     internal abstract fun airing(): AiringDao
 
+    internal abstract fun profile(): ProfileDao
+
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 3
+        const val VERSION = 4
 
         val migrations: List<Migration> =
             listOf(
@@ -53,6 +56,16 @@ abstract class KirokuDatabase : RoomDatabase() {
                 // A stored schedule whose numbering the source doubts; none was before.
                 migration(2, 3) {
                     execSQL("ALTER TABLE `airing` ADD COLUMN `doubted_over` INTEGER")
+                },
+                // The signed-in user's profile, in a table of its own.
+                migration(3, 4) {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `own_profile` (`owner` TEXT NOT NULL, `name` TEXT NOT NULL, `picture` TEXT, " +
+                            "`joined` TEXT, `fetched_at` INTEGER NOT NULL, `stated_watching` INTEGER, `stated_completed` INTEGER, " +
+                            "`stated_on_hold` INTEGER, `stated_dropped` INTEGER, `stated_planned` INTEGER, `stated_entries` INTEGER, " +
+                            "`stated_episodes` INTEGER, `stated_rewatched` INTEGER, `stated_days_watched` REAL, " +
+                            "`stated_mean_score` REAL, PRIMARY KEY(`owner`))",
+                    )
                 },
             )
 
