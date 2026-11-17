@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
@@ -27,6 +28,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
+import io.github.kauri_off.kiroku.data.sandbox.SandboxTenrai
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTitles
 import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.ResetState
@@ -594,11 +596,28 @@ class SandboxAppTest {
         assertEquals(emptyList<URI>(), connections.asked)
     }
 
+    @Test
+    fun `MAL's score distributions are answered on the device from Tenrai's recordings, signed out too, and offline with the panel`() {
+        val recorded = waited { graph.scores.distribution(AnimeId(1)) }
+        assertTrue(recorded is Outcome.Success && recorded.value!!.total > 0)
+        assertEquals(Outcome.Success(null), waited { graph.scores.distribution(AnimeId(21)) })
+        graph.scenarios.set(Scenario(offline = true))
+        assertEquals(Outcome.Failure(DataError.NoConnection), waited { graph.scores.distribution(AnimeId(59068)) })
+        graph.scenarios.set(Scenario())
+
+        assertTrue(
+            graph.sandbox.mal.asked
+                .any { it == "GET api.tenrai.org/v1/anime/1/statistics" },
+        )
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
     // No user's list values and no title not safe for work reach a debug or preview build.
     @Test
     fun `the build's assets are the public answers the sandbox reads, and nothing else`() {
         assertTrue(runCatching { context.assets.open("authorization/token.json").close() }.isFailure)
         assertEquals(SandboxTitles.Answers.map { "$it.200.json" }.sorted(), context.assets.list("recorded")!!.sorted())
+        assertEquals(SandboxTenrai.Files.sorted(), context.assets.list("tenrai")!!.sorted())
         assertTrue(SandboxTitles.Answers.none { it.startsWith("list_") || "adult" in it })
     }
 

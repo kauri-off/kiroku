@@ -641,27 +641,28 @@ abstract class VerifyShortcuts : DefaultTask() {
     }
 }
 
-// What a merged manifest gets wrong about the addresses it takes, its build type's redirect and MAL's title pages; nothing when right.
+// What a merged manifest gets wrong about the addresses it takes, its build type's redirect and MAL's pages; nothing when right.
 object RedirectRule {
     const val ANDROID = "http://schemas.android.com/apk/res/android"
     const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
     const val LINK = "io.github.kauri_off.kiroku.link.LinkActivity"
 
-    // True from Android 12, whose filters can match a title's page exactly; false before.
+    // True from Android 12, whose filters can match a title's and a profile's page exactly; false before.
     const val LINK_ENABLED = "@bool/links_claimed"
     const val VIEW = "android.intent.action.VIEW"
     const val DEFAULT = "android.intent.category.DEFAULT"
     const val BROWSABLE = "android.intent.category.BROWSABLE"
     private val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
 
-    // A title's page on MAL from a browser: the forms `animeLink` in :core opens, and no other page of MAL's.
+    // A title's or a profile's page on MAL from a browser: the forms `readLink` in :core opens, and no other page of MAL's.
     val linkData =
         listOf(
             mapOf("scheme" to "https"),
             mapOf("host" to "myanimelist.net"),
             mapOf("host" to "www.myanimelist.net"),
         ) +
-            listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") }
+            listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") } +
+            listOf("", "/").map { mapOf("pathAdvancedPattern" to "/profile/[^/]+$it") }
 
     // An intent filter: actions, categories, each data element's attributes, other children, and its own attributes.
     data class Filter(
@@ -717,7 +718,9 @@ object RedirectRule {
             },
             "$ACTIVITY takes $own, not $redirect from a browser and nothing else".takeIf { own != listOf(browser) },
             "$ACTIVITY is disabled or asks for a permission, so no browser reaches it".takeIf { shut },
-            "$LINK takes $linkFilters, not a title's page on MAL from a browser and nothing else".takeIf { linkFilters != listOf(title) },
+            "$LINK takes $linkFilters, not a title's or a profile's page on MAL from a browser and nothing else".takeIf {
+                linkFilters != listOf(title)
+            },
             "$LINK is not enabled by $LINK_ENABLED alone, or asks for a permission".takeIf { !linkOpen },
             "Other apps can start $exported, not ${alsoExported + ACTIVITY + LINK}".takeIf { exported != alsoExported + ACTIVITY + LINK },
         )
@@ -766,7 +769,7 @@ abstract class VerifyRedirect : DefaultTask() {
         val problems = RedirectRule.problems(RedirectRule.parse(manifest.get().asFile), redirect.get(), alsoExported.get())
         check(problems.isEmpty()) { problems.joinToString("\n") }
         report.get().asFile.writeText(
-            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}, ${RedirectRule.LINK} a title's page on MAL; " +
+            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}, ${RedirectRule.LINK} a title's or a profile's page on MAL; " +
                 "exported besides them: ${alsoExported.get()}\n",
         )
     }
@@ -843,11 +846,14 @@ abstract class VerifyRedirectRule : DefaultTask() {
                 "the redirect activity asks for a permission" to
                     { own(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
                 "there is no redirect activity" to { own(it).let { activity -> activity.parentNode.removeChild(activity) } },
-                // The link activity claims more of MAL's site, or claims it where a filter cannot match a title's page exactly.
+                // The link activity claims more of MAL's site, or claims it where a filter cannot match a page exactly.
                 "the link takes a manga's page" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/manga/[1-9][0-9]*")) },
                 "the link takes a title's sub-pages" to
                     { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*/[^/]+/.*")) },
                 "the link takes an id that is no number" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/.*")) },
+                "the link takes a profile's sub-pages" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/profile/[^/]+/.+")) },
+                "the link takes a user's list" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/animelist/[^/]+")) },
+                "the link takes a profile by prefix" to { linkFilter(it).addData(mapOf("pathPrefix" to "/profile/")) },
                 "the link takes a path prefix" to { linkFilter(it).addData(mapOf("pathPrefix" to "/anime/")) },
                 "the link takes every path" to { document -> linkFilter(document).removeData { "pathAdvancedPattern" in it } },
                 "the link takes http" to { linkFilter(it).addData(mapOf("scheme" to "http")) },
@@ -871,7 +877,7 @@ abstract class VerifyRedirectRule : DefaultTask() {
                     { link(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
                 "the link is not exported" to { link(it).setAttributeNS(android, "android:exported", "false") },
                 "there is no link activity" to { link(it).let { activity -> activity.parentNode.removeChild(activity) } },
-                "the launcher takes a title's page" to { main(it).filter(RedirectRule.linkData) },
+                "the launcher takes a title's or a profile's page" to { main(it).filter(RedirectRule.linkData) },
                 // Something else is newly open to other apps.
                 "another activity is exported" to { it.added("activity").setAttributeNS(android, "android:exported", "true") },
                 "another provider is exported" to { it.added("provider").setAttributeNS(android, "android:exported", "true") },

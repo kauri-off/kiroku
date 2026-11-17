@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.core.score.ScoreDistribution
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -37,6 +38,8 @@ data class FixtureSet(
     val privateUserName: String,
     // A statistics layout state, independent of otherUserEntries.
     val largeStatistics: UserStatistics,
+    // MAL's score distributions; a title not here is one the service has no record of.
+    val scores: Map<AnimeId, ScoreDistribution> = emptyMap(),
 ) {
     val now: Instant get() = clock.instant()
 

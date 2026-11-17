@@ -63,6 +63,7 @@ class ServedMal : ExternalResource() {
 
         // AniList's place beside it, where nothing answers: a test of MAL's list reaches no real host for airing.
         const val NO_ANILIST = "http://127.0.0.1:1/"
+        const val NO_TENRAI = "http://127.0.0.1:1/v1/"
 
         fun recorded(name: String): String = resource("recorded/$name")
 

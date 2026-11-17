@@ -259,16 +259,25 @@ class ProfileScreenTest {
     }
 
     @Test
-    fun aLinkThatIsNotAProfileStaysInTheFieldAndSaysSo() {
-        show(fixtures.me().copy(openProfile = OpenProfile("https://anilist.co/user/${fixtures.otherName}/", emptyList())))
-        compose.onNodeWithText("Not a MyAnimeList profile link", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("Open").assertIsNotEnabled()
+    fun aLinkThatIsNotAProfileStaysInTheFieldAndSaysWhatTheFieldTakes() {
+        var text by mutableStateOf("https://anilist.co/user/${fixtures.otherName}/")
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                ProfileScreen(fixtures.me().copy(openProfile = OpenProfile(text, emptyList())), { events += it }, SnackbarHostState())
+            }
+        }
+        for (refused in listOf("myanimelist.net/animelist/${fixtures.otherName}", "a b", text)) {
+            compose.onNodeWithText(REFUSED, useUnmergedTree = true).assertExists()
+            compose.onNodeWithText("Open").assertIsNotEnabled()
+            text = refused
+            compose.waitForIdle()
+        }
     }
 
     @Test
-    fun theDialogOpensTheNameInAPastedListLink() {
-        show(fixtures.me().copy(openProfile = OpenProfile("myanimelist.net/animelist/${fixtures.otherName}", emptyList())))
-        compose.onNodeWithText("Not a MyAnimeList profile link", useUnmergedTree = true).assertDoesNotExist()
+    fun aNameTheAppTakesSaysNothing() {
+        show(fixtures.me().copy(openProfile = OpenProfile(fixtures.otherName, emptyList())))
+        compose.onNodeWithText(REFUSED, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("Open").performClick()
         assertEquals(listOf(ProfileEvent.OpenProfile(fixtures.otherName)), events)
     }
@@ -279,5 +288,9 @@ class ProfileScreenTest {
         compose.onNodeWithText("Recent").assertDoesNotExist()
         compose.onNodeWithText("Open").assertIsEnabled().performClick()
         assertEquals(listOf(ProfileEvent.OpenProfile(fixtures.otherName)), events)
+    }
+
+    private companion object {
+        const val REFUSED = "Enter up to\u00A064\u00A0characters (Latin letters, digits, _\u00A0and\u00A0-) or a MyAnimeList profile link"
     }
 }

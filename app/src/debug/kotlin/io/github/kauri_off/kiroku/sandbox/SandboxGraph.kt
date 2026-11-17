@@ -108,6 +108,7 @@ class SandboxGraph internal constructor(
             val sandbox =
                 Sandbox(
                     read = { name -> context.assets.open(notShown("recorded/$name.200.json")).use { it.readBytes().decodeToString() } },
+                    readTenrai = { file -> context.assets.open(notShown("tenrai/$file")).use { it.readBytes().decodeToString() } },
                     poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
                     clock = clock,
                     file = { kind -> File(context.noBackupFilesDir, notShown("$NAME.mal.$kind")) },

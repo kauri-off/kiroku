@@ -25,6 +25,8 @@ import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.core.user.UserListKeeper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
@@ -98,7 +100,7 @@ class Demo(
             unexpected,
         )
 
-    // On the real rules over a record in memory; it follows the list from its first use, as the live one does.
+    // On the real rules over a record in memory; built at its first use and following the list from its first run.
     val notifications: NotificationEngine by lazy {
         NotificationEngine(
             InMemoryNotificationStore(),
@@ -114,6 +116,11 @@ class Demo(
             unexpected = unexpected,
         )
     }
+
+    val scoreSource = DemoScoreDistributions(fixtures, server)
+
+    // Kept for the process as the app keeps them.
+    val scores: ScoreDistributionRepository = KeptScoreDistributions(scoreSource)
 
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
@@ -146,6 +153,7 @@ class Demo(
         airingSource.failure = null
         airingSource.schedules = fixtures.schedules
         airingSource.hold(false)
+        scoreSource.failure = null
         airingStore.write(airingStore.read().mapValues { null } + startingAiring())
         store.reset()
         details.forget()
