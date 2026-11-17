@@ -22,9 +22,12 @@ import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.score.ScoreDistribution
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionSource
 import io.github.kauri_off.kiroku.core.user.RemoteUserLists
 import io.github.kauri_off.kiroku.core.user.UserListPart
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -250,5 +253,33 @@ class DemoUserLists internal constructor(
 
     companion object {
         const val PART_SIZE = 300
+    }
+}
+
+// The demo's score distributions: the fixtures', answered after the demo's latency, and not while it is offline.
+class DemoScoreDistributions internal constructor(
+    private val fixtures: FixtureSet,
+    private val server: DemoServer,
+) : ScoreDistributionSource {
+    private val received = CopyOnWriteArrayList<AnimeId>()
+
+    // The title of each request received, answered or not.
+    val requests: List<AnimeId> get() = received.toList()
+
+    // Every request fails so, as the service alone failing.
+    @Volatile
+    var failure: DataError? = null
+
+    // While set, a request is answered only once it completes, as the service answering late.
+    @Volatile
+    var holding: CompletableDeferred<Unit>? = null
+
+    override suspend fun distribution(id: AnimeId): Outcome<ScoreDistribution?> {
+        received += id
+        holding?.await()
+        delay(server.latency)
+        if (server.offline.value) return Outcome.Failure(DataError.NoConnection)
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(fixtures.scores[id])
     }
 }

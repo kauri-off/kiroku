@@ -119,6 +119,8 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-27 Watch order on the title page.**
 
+- [x] **M2-35 MAL scores of a title.**
+
 - [x] **M2-28 Back gesture preview.**
 
 - [x] **M2-29 Messages that are the only way back.**
@@ -463,33 +465,9 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   asked. Where the owner's recordings are: the mapper reads his recorded profile, and a failure names no value of
   it. `./gradlew :data:connectedDebugAndroidTest` passes on an emulator.
 
-- [ ] **M6-06 Profile links.** A link to a user's profile on MAL opens that user's profile in the app (section
-  6.3). The address is read in one place, with the title's link, into the user it names, the name decoded and
-  otherwise as the link spelled it; the same reader takes an address the person pastes where the app asks for a
-  name, there also without its scheme. The manifest claims a profile's page as it claims a title's, and an address
-  the filter matched that the app does not open goes on to the browser. A link opens its profile signed out too,
-  when the app was not running, and whatever screen was shown; Back from it reaches the List and does not leave the
-  app. Which destination's stack holds the profile is built once and shown to the owner (section 9).
-  **Needs:** nothing.
-  **Check:** tests: the reader takes a profile's page on either host, with or without a trailing slash, and
-  refuses another scheme, another host, a port, user info, a sub-page, an encoded slash and an empty name; the
-  manifest's filter and the reader agree on a table of addresses; a profile's link reaches the app once, a link
-  the system replays from the recent tasks does not, and any other address goes to the browser; the stack a link
-  builds ends at the List; a title's link opens its title as before. On an emulator of the current Android, with
-  the debug build's links allowed and the app stopped: a link to the demo's public user opens that profile, Back
-  reaches the List, and a link to its private user says the list is private.
+- [x] **M6-06 Profile links.**
 
-- [ ] **M6-07 Sandbox: other users.** The sandbox's MAL answers for other users' lists in the recorded shapes: a
-  public user whose list has several thousand entries, made from the sandbox's titles and given in pages of the
-  size asked; a user whose list is private; and nobody else. It answers them to the client id alone, signed in or
-  not, and its failures (offline, slow) apply to them. Its profile of the signed-in user is held to the owner's
-  recording.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: given the entries of the recorded public pages, the sandbox's
-  pages hold the same titles in the same order, values and offsets; its answers for the private user and for an
-  unknown name are the recorded ones; `MalLists` reads the list of several thousand whole, each entry once; a
-  request for another user's list that carries a token is answered as one without. Where the owner's recordings
-  are: the sandbox's profile has the fields of his recorded one, each of the same kind.
+- [x] **M6-07 Sandbox: other users.**
 
 - [ ] **M6-08 Another user's list from MAL.** In `:data`: M6-04's port over MAL's list of a named user. A part is
   a page, asked one at a time, and the entries so far follow each. The name goes to MAL as one segment of the
@@ -640,9 +618,9 @@ P1 to P5. The sources other than MAL are unchecked (ARCHITECTURE section 13, ite
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|
 | P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
-| P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
+| P2 | A deeper title page | Characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | AniList, MAL, one not chosen yet |
 | P3 | Schedule and discovery | A weekly schedule of the user's airing titles; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
-| P4 | Community, read-only | Forum boards, topics and posts; a title's discussions; users' reviews of a title | MAL, Jikan |
+| P4 | Community, read-only | Forum boards, topics and posts; a title's discussions; users' reviews of a title | MAL, one not chosen yet |
 | P5 | Reach | F-Droid; community translations, each reviewed by a speaker; Russian titles as a fourth title language; a pure-black theme; a choice of start tab; reference screenshots compared in CI; an "Up next" widget | Shikimori for Russian titles |
 
 ### Not built

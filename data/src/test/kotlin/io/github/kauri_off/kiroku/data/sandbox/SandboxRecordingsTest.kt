@@ -217,6 +217,30 @@ class SandboxRecordingsTest {
         assertTrue("$TOKEN_GRANTED: refresh", SandboxTokens.ACCESS_LIFETIME < SandboxTokens.REFRESH_LIFETIME)
     }
 
+    // His profile names no value here: only the keys and their kinds are compared.
+    @Test
+    fun `profile - the sandbox's profile has the fields of the recorded one, each of the same kind, and no other`() {
+        val recorded = answer(PROFILE)
+        val given = ask(PROFILE, "GET", "users/@me?fields=${MalFields.PROFILE}")
+        assertTrue("$PROFILE: status", recorded.status == given.status)
+        val his = kinds(recorded.json)
+        val mine = kinds(given.json)
+        // MAL may print a whole number without its decimals: a recorded integer matches a sandbox decimal.
+        for ((key, kind) in his) assertTrue("$PROFILE: $key", mine[key] == kind || (kind == "integer" && mine[key] == "number"))
+        for (key in mine.keys) assertTrue("$PROFILE: $key is not in the recorded answer", key in his)
+    }
+
+    // Each value by its keys' path, as "a.b", and its kind.
+    private fun kinds(
+        element: JsonElement,
+        at: String = "",
+    ): Map<String, String> =
+        if (element is JsonObject) {
+            element.entries.fold(emptyMap()) { all, (key, value) -> all + kinds(value, if (at.isEmpty()) key else "$at.$key") }
+        } else {
+            mapOf(at to shape(element))
+        }
+
     private fun offsetIn(link: JsonElement?): String? =
         (link as? JsonPrimitive)?.contentOrNull?.substringAfter("offset=", "")?.substringBefore('&')
 
@@ -225,6 +249,7 @@ class SandboxRecordingsTest {
         const val OWN = "my_list_status"
         const val LAST_READ = "status_refused_read"
         const val TOKEN_GRANTED = "token_granted"
+        const val PROFILE = "profile"
         val READ_BACK = "id,num_episodes,my_list_status{${MalFields.LIST_VALUES}}"
         val VALUES = listOf("status", "score", "num_episodes_watched", "start_date", "finish_date")
 

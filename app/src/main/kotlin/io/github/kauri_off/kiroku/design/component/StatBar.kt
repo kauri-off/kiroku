@@ -27,6 +27,8 @@ fun StatBar(
     count: Int,
     total: Int,
     modifier: Modifier = Modifier,
+    // The label as a screen reader says it, where the shown one is a bare number.
+    spokenLabel: String = label,
 ) {
     val fraction = if (total > 0) count.toFloat() / total else 0f
     val percent = (fraction * PERCENT).roundToInt()
@@ -43,9 +45,9 @@ fun StatBar(
         }
     val sentence =
         if (underOne) {
-            stringResource(R.string.design_stat_bar_description_under_one, label, countText)
+            stringResource(R.string.design_stat_bar_description_under_one, spokenLabel, countText)
         } else {
-            pluralStringResource(R.plurals.design_stat_bar_description, percent, label, countText, percent)
+            pluralStringResource(R.plurals.design_stat_bar_description, percent, spokenLabel, countText, percent)
         }
     Column(
         modifier

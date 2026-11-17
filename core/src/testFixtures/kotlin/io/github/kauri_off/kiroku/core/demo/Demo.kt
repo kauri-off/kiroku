@@ -18,6 +18,8 @@ import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.core.user.UserListKeeper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
@@ -87,6 +89,11 @@ class Demo(
             unexpected,
         )
 
+    val scoreSource = DemoScoreDistributions(fixtures, server)
+
+    // Kept for the process as the app keeps them.
+    val scores: ScoreDistributionRepository = KeptScoreDistributions(scoreSource)
+
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
     val userLists = DemoUserLists(fixtures, server)
@@ -118,6 +125,7 @@ class Demo(
         airingSource.failure = null
         airingSource.schedules = fixtures.schedules
         airingSource.hold(false)
+        scoreSource.failure = null
         airingStore.write(airingStore.read().mapValues { null } + startingAiring())
         store.reset()
         details.forget()

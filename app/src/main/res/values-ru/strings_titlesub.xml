@@ -67,4 +67,14 @@
     <string name="titlesub_rating_violence_17">R (17+, насилие и ненормативная лексика)</string>
     <string name="titlesub_rating_mild_nudity">R+ (частичная обнажённость)</string>
     <string name="titlesub_rating_hentai">Rx (хентай)</string>
+    <string name="titlesub_scores_spoken">Оценка\u00A0%1$d</string>
+    <plurals name="titlesub_scores_votes">
+        <item quantity="one">%1$s\u00A0голос</item>
+        <item quantity="few">%1$s\u00A0голоса</item>
+        <item quantity="many">%1$s\u00A0голосов</item>
+        <item quantity="other">%1$s\u00A0голоса</item>
+    </plurals>
+    <string name="titlesub_scores_none">Этот тайтл ещё никто не оценил</string>
+    <string name="titlesub_scores_not_known">Оценки этого тайтла пока неизвестны</string>
+    <string name="titlesub_scores_failed">Не удалось загрузить оценки</string>
 </resources>

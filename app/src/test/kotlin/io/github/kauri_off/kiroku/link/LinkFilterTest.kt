@@ -2,7 +2,7 @@ package io.github.kauri_off.kiroku.link
 
 import android.content.Intent
 import android.net.Uri
-import io.github.kauri_off.kiroku.core.fixtures.AnimeLinks
+import io.github.kauri_off.kiroku.core.fixtures.Links
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,15 +27,15 @@ class LinkFilterTest {
         }
 
     @Test
-    fun `from Android 12 the app is given a title's page and nothing else of MAL's site`() {
-        assertEquals(AnimeLinks.opened.keys.toList(), taken(AnimeLinks.opened.keys))
-        assertEquals(emptyList<String>(), taken(AnimeLinks.refused))
-        assertEquals(AnimeLinks.handedOn, taken(AnimeLinks.handedOn))
+    fun `from Android 12 the app is given a title's and a profile's page and nothing else of MAL's site`() {
+        assertEquals(Links.opened.keys.toList(), taken(Links.opened.keys))
+        assertEquals(emptyList<String>(), taken(Links.refused))
+        assertEquals(Links.handedOn, taken(Links.handedOn))
     }
 
     @Test
     @Config(sdk = [30])
-    fun `before Android 12 no address is claimed, since a filter cannot tell a title's page from its sub-pages`() {
-        assertEquals(emptyList<String>(), taken(AnimeLinks.opened.keys + AnimeLinks.handedOn + AnimeLinks.refused))
+    fun `before Android 12 no address is claimed, since a filter cannot tell a page from its sub-pages`() {
+        assertEquals(emptyList<String>(), taken(Links.opened.keys + Links.handedOn + Links.refused))
     }
 }

@@ -37,6 +37,8 @@
     <string name="title_loading_watch_order">Загрузка порядка просмотра</string>
     <string name="title_related">Связанное</string>
     <string name="title_statistics">Статистика</string>
+    <string name="title_scores">Оценки MAL</string>
+    <string name="title_scores_row">Голоса за каждую оценку</string>
     <string name="title_details">Подробности</string>
     <string name="title_recommendations">Рекомендации</string>
     <plurals name="title_titles">

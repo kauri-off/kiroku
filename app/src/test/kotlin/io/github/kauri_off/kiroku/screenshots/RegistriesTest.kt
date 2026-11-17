@@ -16,6 +16,17 @@ class RegistriesTest {
     }
 
     @Test
+    fun aCaseDeclaringLargeTextGetsRuLargeAsWellAndNotTheSecondSeed() {
+        val standard = Variant.forCase(isContent = false)
+
+        assertTrue(Variant.RuLarge !in standard)
+        assertEquals((standard + Variant.RuLarge).toSet(), Variant.forCase(isContent = false, largeText = true).toSet())
+        assertTrue(Variant.EnAlt !in Variant.forCase(isContent = false, largeText = true))
+        assertEquals(Variant.entries.toList(), Variant.forCase(isContent = true))
+        assertTrue(case("x", largeText = true) {}.largeText)
+    }
+
+    @Test
     fun noTwoRegistriesShareAScreen() {
         val screens = registries.groupBy { screenName(it) }.filterValues { it.size > 1 }
         assertEquals(emptyMap<String, List<Class<*>>>(), screens)

@@ -70,6 +70,7 @@ class DemoGraph(
     override val list = demo.list
     override val anime = demo.anime
     override val airing = demo.airing
+    override val scores = demo.scores
     override val search = demo.search
     override val user = demo.user
     override val connection = demo.connection

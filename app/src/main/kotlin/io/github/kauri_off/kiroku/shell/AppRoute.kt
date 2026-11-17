@@ -7,8 +7,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
@@ -38,6 +38,8 @@ import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.titlesub.DetailsRoute
 import io.github.kauri_off.kiroku.titlesub.RelatedKey
 import io.github.kauri_off.kiroku.titlesub.RelatedRoute
+import io.github.kauri_off.kiroku.titlesub.ScoresKey
+import io.github.kauri_off.kiroku.titlesub.ScoresRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // The app: the shell over the screens built so far, with the messages that outlive the screen that posted them.
@@ -66,7 +68,7 @@ fun AppRoute(
 private fun ShellNavigator.showEditorOf(id: AnimeId) {
     val stack = stackOf(visible.last())
     val page = TitleKey(id.value)
-    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) }
+    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) || it == ScoresKey(id.value) }
     when {
         stack.last() is ListRoot || stack.last() == page -> Unit
         subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
@@ -83,20 +85,26 @@ private fun LinkTurns(
     val link by links.link.collectAsScreenState()
     LaunchedEffect(link) {
         link?.let {
-            navigator.openLink(it.id)
+            navigator.openLink(it.link)
             links.taken(it)
         }
     }
 }
 
-// A link opens its title over the List alone (section 6.3), whatever was shown.
-fun ShellNavigator.openLink(id: AnimeId) {
+// A link opens its page over its destination's root with the List alone beneath (section 6.3), whatever was shown.
+fun ShellNavigator.openLink(link: Link) {
+    val page = linkedPage(link)
     home(Destination.List)
-    open(linkedTitle(id))
+    home(page.destination)
+    open(page.key)
 }
 
-// The List's stack a link builds over its root.
-fun linkedTitle(id: AnimeId): NavKey = TitleKey(id.value)
+// A title over the List; a profile over the own Profile.
+fun linkedPage(link: Link): OpenedPage =
+    when (link) {
+        is Link.Title -> OpenedPage(Destination.List, TitleKey(link.id.value))
+        is Link.Profile -> OpenedPage(Destination.Profile, OtherProfileKey(link.name))
+    }
 
 fun appEntries(
     graph: AppGraph,
@@ -156,6 +164,7 @@ fun appEntries(
                     openTitle = openTitle,
                     seeAllRelated = { id, opened -> navigator.open(RelatedKey(id.value, opened)) },
                     details = { id, opened -> navigator.open(DetailsKey(id.value, opened)) },
+                    scores = { navigator.open(ScoresKey(it.value)) },
                     recommendations = { navigator.open(NotBuiltKey(NotBuilt.Recommendations)) },
                     signIn = signIn,
                 ),
@@ -163,6 +172,7 @@ fun appEntries(
         }
         entry<RelatedKey> { key -> RelatedRoute(key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
+        entry<ScoresKey> { key -> ScoresRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
         entry<SignInKey> {
             SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })

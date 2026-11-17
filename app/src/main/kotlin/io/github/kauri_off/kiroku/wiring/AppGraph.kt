@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +24,9 @@ interface AppGraph {
     val list: ListRepository
     val anime: AnimeRepository
     val airing: AiringRepository
+
+    // A title's score distribution, from a service apart from MAL's pages.
+    val scores: ScoreDistributionRepository
     val search: SearchRepository
     val user: UserRepository
     val connection: Connection
