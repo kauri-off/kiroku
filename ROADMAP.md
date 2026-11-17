@@ -243,15 +243,15 @@ missing from it; there are no duplicates.
   it.
 
 - [ ] **M4-07 Database: the record and the settings.** M4-02's store of the record in the database, as a real
-  migration (section 7.1), M4's only one; its settings in the source's preferences file. The record is in tables of
-  its own, which no download, refresh or list write touches, and from now on every migration test starts from a
-  database that holds announced episodes (N10).
+  migration (section 7.1) to the version after M6-05's, M4's only one; its settings in the source's preferences file.
+  The record is in tables of its own, which no download, refresh or list write touches, and from now on every
+  migration test starts from a database that holds announced episodes (N10).
   **Needs:** M4-02.
-  **Check:** `./gradlew :data:testDebugUnitTest`: M4-02's contract passes over the store; the migration test takes
-  a version 2 database that holds a list, titles and airing data to the new version and finds every row as it was;
-  a test fails for a schema version whose migration is not run over announced episodes; a list download, an airing
-  refresh and a record write made together lose nothing; a setting written is read by a new store over the same
-  file, and one that cannot be read counts as never made and is reported. `./gradlew
+  **Check:** `./gradlew :data:testDebugUnitTest`: M4-02's contract passes over the store; the migration test takes a
+  database of each earlier version that holds a list, titles and airing data to the new version and finds every row
+  as it was; a test fails for a schema version whose migration is not run over announced episodes; a list download,
+  an airing refresh and a record write made together lose nothing; a setting written is read by a new store over the
+  same file, and one that cannot be read counts as never made and is reported. `./gradlew
   :data:connectedDebugAndroidTest` passes on an emulator.
 
 - [ ] **M4-08 The notification on the device.** M4-02's port for the notifications shown, on Android's own: an
@@ -449,21 +449,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-04 [A] Other users' lists.**
 
-- [ ] **M6-05 The signed-in user's profile.** In `:data`: what MAL gives of the signed-in user beside the list, as
-  `UserProfile` holds it, read as that user through the session (S5), and kept in the database (section 7.1) by a
-  real migration, in a table of its own that no download, refresh or list write touches. The statistics in MAL's
-  answer are not kept: the app computes its own (section 2.2). What is stored is the last whole answer: a refresh
-  that failed changes nothing, and a value that cannot be read is left out and reported (section 2.3). It stays
-  readable with the session expired (S6) and is forgotten when the list's owner changes and at a sign-out (S9). It
-  is the own-profile part of `UserRepository`, and M6-10 puts it into the graph.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: the migration test takes a database of each earlier version that
-  holds a list, titles and airing data, and announced episodes once a version has them (N10), to the new one and
-  finds every row as it was; the profile read from the sandbox is stored, observed, and read by a new store over
-  the same file; a failed refresh leaves what was stored; a new owner sees nothing of the last one's; a rejected
-  token causes one refresh and one retry; with the session expired the stored profile is read and MAL is not
-  asked. Where the owner's recordings are: the mapper reads his recorded profile, and a failure names no value of
-  it. `./gradlew :data:connectedDebugAndroidTest` passes on an emulator.
+- [x] **M6-05 The signed-in user's profile.**
 
 - [x] **M6-06 Profile links.**
 
