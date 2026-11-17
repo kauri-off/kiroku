@@ -478,7 +478,7 @@ class SourceRulesTest {
         assertTrue(shipped.any { relative(it) == APPLICATION_SCOPE_SOURCE })
         assertTrue(shipped.any { it.path.endsWith("core/src/testFixtures/kotlin/io/github/kauri_off/kiroku/core/demo/Demo.kt") })
         assertTrue(shipped.any { it.path.endsWith("data/session/MalSession.kt") })
-        assertTrue(shipped.none { "/src/test/" in it.path })
+        assertTrue(shipped.none { "/src/test/" in it.path || "/src/contract/" in it.path })
         assertEquals(emptyList<String>(), shipped.flatMap { scopeProblems(relative(it), it.readText()) })
     }
 
@@ -512,7 +512,7 @@ class SourceRulesTest {
     fun everyTestThatStartsTheAppEndsIt() {
         val sources = appTestSources()
         val starting = sources.flatMap { classesStartingTheApp(it.readText()) }
-        assertTrue(starting.containsAll(listOf("DebugMenuTest", "SandboxAppTest", "MainActivityTest", "ImageLoaderTest")))
+        assertTrue(starting.containsAll(listOf("DebugMenuTest", "SandboxAppTest", "MainActivityTest", "ImageLoaderTest", "DebugGraphTest")))
         assertTrue("SignInRouteTest" !in starting && "PosterFadeTest" !in starting)
         assertEquals(emptyList<String>(), sources.flatMap { appEndingProblems(relative(it), it.readText()) })
     }
@@ -534,6 +534,8 @@ class SourceRulesTest {
             "    @get:Rule\n    val c = createAndroidComposeRule<DebugMenuActivity>()\n",
             "    val a = Robolectric.buildActivity(RedirectActivity::class.java)\n",
             "    val a = ActivityScenario.launch(MainActivity::class.java)\n",
+            "    val g = createGraph(context, \"\", clock, scope)\n",
+            "    val g = SandboxGraph.create(context, clock) { _, _, _ -> parts }\n",
         )) {
             assertEquals(start, 1, appEndingProblems("ATest.kt", test(start)).size)
             assertEquals(start, emptyList<String>(), appEndingProblems("ATest.kt", test(ends + start)))
@@ -544,6 +546,8 @@ class SourceRulesTest {
         val named = "    val n = MainActivity::class.java.name\n    // context.appGraph\n"
         assertEquals(emptyList<String>(), appEndingProblems("ATest.kt", test(named)))
         assertEquals(emptyList<String>(), appEndingProblems("ATest.kt", "class ATest {\n    val g = context.appGraph\n}\n"))
+        val apostrophe = "    @Test\n    fun `the screen's form`() = Unit\n    val g = context.appGraph\n"
+        assertEquals(1, appEndingProblems("ATest.kt", test(apostrophe)).size)
         val second = "class Other\n\n" + test("    val g = context.appGraph\n")
         assertEquals(
             listOf("ATest.kt:5: ATest starts the app without @get:Rule(order = AppEnds.OUTERMOST) val … = AppEnds()"),

@@ -399,10 +399,10 @@ fun scopeProblems(
 // The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
 fun shippedKotlinSources(): List<File> =
     projectSources().filter { source ->
-        source.extension == "kt" && listOf("test", "testDebug", "androidTest").none { "/src/$it/" in source.path }
+        source.extension == "kt" && listOf("test", "testDebug", "androidTest", "contract").none { "/src/$it/" in source.path }
     }
 
-// A test class on the app's own application that reaches its graph, or an activity or the image loader that does.
+// A test class on the app's own application that reaches its graph, builds one, or starts what does.
 private val topLevelClass = Regex("""^((data|open|abstract|internal|private)\s+)*class\s+(\w+)""")
 private val robolectricTest = Regex("""@RunWith\s*\(\s*RobolectricTestRunner::class\s*\)""")
 private val ownApplication = Regex("""@Config\s*\([^)]*\bapplication\s*=""")
@@ -410,6 +410,7 @@ private val appActivity = """(MainActivity|DebugMenuActivity|RedirectActivity)\b
 private val startsTheApp =
     Regex(
         """\bappGraph\b|\.scenarios\b|\brunningSource\b|\bSingletonImageLoader\s*\.\s*get\s*\(|""" +
+            """\bcreateGraph\s*\(|\bSandboxGraph\s*\.\s*create\s*\(|""" +
             """\b(createAndroidComposeRule|ActivityScenarioRule)\s*<\s*$appActivity|""" +
             """\b(buildActivity|setupActivity|launch)\s*\(\s*$appActivity""",
     )

@@ -36,6 +36,12 @@ class KotlinSource(
             s.startsWith("\"\"\"", i) -> string(raw = true)
             c == '"' -> string(raw = false)
             c == '\'' -> charLiteral()
+            // A name in backticks is code, whatever it holds: a test's name may have an apostrophe.
+            c == '`' -> {
+                emit(c)
+                while (i < s.length && s[i] != '`' && s[i] != '\n') emit(s[i])
+                if (i < s.length && s[i] == '`') emit(s[i])
+            }
             stopAtBrace && c == '}' -> return true
             c == '{' && stopAtBrace -> {
                 emit(c)
