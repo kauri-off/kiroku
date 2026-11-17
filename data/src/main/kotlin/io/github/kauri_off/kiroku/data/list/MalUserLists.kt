@@ -6,10 +6,10 @@ import io.github.kauri_off.kiroku.core.user.UserListPart
 import io.github.kauri_off.kiroku.data.network.MalHttp
 
 // Other users' lists on MAL, a page a part, read with the client id alone; making it builds nothing of the client.
-class MalUserLists internal constructor(
-    private val lists: MalLists,
+class MalUserLists(
+    http: MalHttp,
 ) : RemoteUserLists {
-    constructor(http: MalHttp) : this(MalLists(http))
+    private val lists = MalLists(http)
 
     // MAL gives no total and nothing of the user with a list.
     override suspend fun read(

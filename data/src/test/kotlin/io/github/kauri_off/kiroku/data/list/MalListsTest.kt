@@ -62,6 +62,13 @@ class MalListsTest {
 
     private fun download(of: ListUser = user) = runBlocking { lists.list(of) }
 
+    // A named user's list, and the signed-in user's, whose pages the server answers alike.
+    private val bothUsers: List<ListUser> by lazy {
+        val session = sessions.open()
+        assertEquals(Outcome.Success(Unit), runBlocking { session.signIn(TokenGrant("access-1", "refresh-1")) })
+        listOf(user, ListUser.SignedIn(session))
+    }
+
     @Test
     fun `three pages give every entry once, in their order, each page asked with adult titles and in the titles' order`() {
         serve()
@@ -117,15 +124,20 @@ class MalListsTest {
             }
         }
 
-        repeat(2) { download() as Outcome.Success }
+        for (of in bothUsers) {
+            network.unexpected.clear()
+            repeat(2) { download(of) as Outcome.Success }
 
-        val reported = network.unexpected.map { (it as RepairedAnswer).fields }
-        assertEquals(List(2) { listOf(setOf("node.mean"), setOf("list_status.score")) }.flatten(), reported)
+            val reported = network.unexpected.map { (it as RepairedAnswer).fields }
+            assertEquals("$of", List(2) { listOf(setOf("node.mean"), setOf("list_status.score")) }.flatten(), reported)
+        }
 
-        network.unexpected.clear()
         serve()
-        download() as Outcome.Success
-        assertTrue(network.unexpected.isEmpty())
+        for (of in bothUsers) {
+            network.unexpected.clear()
+            download(of) as Outcome.Success
+            assertTrue("$of", network.unexpected.isEmpty())
+        }
     }
 
     @Test
@@ -152,8 +164,10 @@ class MalListsTest {
             }
         }
 
-        assertEquals(Outcome.Failure(DataError.ServerError), download())
-        assertTrue(network.unexpected.isEmpty())
+        for (of in bothUsers) {
+            assertEquals("$of", Outcome.Failure(DataError.ServerError), download(of))
+            assertTrue("$of", network.unexpected.isEmpty())
+        }
     }
 
     // A recorded page whose next link is [link].
