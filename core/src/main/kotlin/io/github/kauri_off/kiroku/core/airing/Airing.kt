@@ -79,10 +79,15 @@ data class Airing internal constructor(
     val changesAt: Instant? = nextEpisode?.airsAt,
     // What is known of the premiere of a title that has aired nothing; null once an episode has aired.
     val premiere: Premiere? = if (nextEpisode != null && aired == AiredCount.Exact(0)) Premiere.At(nextEpisode.airsAt) else null,
+    // The air times an exact count rests on, aired and to come, each number once and in order: all a notification tells of.
+    val airTimes: List<ScheduledEpisode> = emptyList(),
 ) {
     init {
         require(total == null || total > 0)
         require((aired is AiredCount.Exact) == (inexact == null))
+        require(airTimes.isEmpty() || aired is AiredCount.Exact)
+        require(airTimes.zipWithNext().all { (earlier, later) -> earlier.number < later.number })
+        require(total == null || airTimes.all { it.number <= total })
         if (aired is AiredCount.Known) {
             require(aired.value >= 0)
             require(total == null || aired.value <= total)
