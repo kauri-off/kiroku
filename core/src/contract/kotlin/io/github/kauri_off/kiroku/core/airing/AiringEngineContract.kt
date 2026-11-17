@@ -579,6 +579,45 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `N3 a refresh of named titles asks for the tracked ones among them and for no other, and stores what it is answered`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            val before = s.stored()
+            val moved =
+                fixtures.schedules.getValue(due.id).let {
+                    it.copy(
+                        episodes =
+                            it.episodes.map { e ->
+                                e.copy(airsAt = e.airsAt.plusSeconds(60))
+                            },
+                    )
+                }
+            s.source.schedules = fixtures.schedules + (due.id to moved)
+            s.clock.advance(1.minutes)
+            val named =
+                setOf(
+                    due,
+                    FixtureAnime.droppedEstimated,
+                    FixtureAnime.completedUnscored,
+                    FixtureAnime.notOnListAiring,
+                ).map { it.id }
+
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(named.toSet()))
+
+            assertEquals(listOf(setOf(due.id)), s.source.calls.toList())
+            assertEquals(StoredAiring(moved, s.clock.now), s.stored(due))
+            assertEquals(before - due.id, s.stored() - due.id)
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(named.toSet() - due.id))
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(emptySet<AnimeId>()))
+            assertEquals(1, s.source.calls.size)
+            s.source.failure = DataError.NoConnection
+            assertEquals(Outcome.Failure(DataError.NoConnection), s.engine.refresh(setOf(due.id)))
+            assertEquals(StoredAiring(moved, s.clock.now), s.stored(due))
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
+    @Test
     fun `A11 a new title whose fetch failed is asked for again at the next refresh, and not before`() =
         runTest {
             val added = FixtureAnime.notOnListAiring

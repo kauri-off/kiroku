@@ -17,6 +17,9 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
+import io.github.kauri_off.kiroku.core.notify.Coming
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -297,6 +300,23 @@ interface AiringRepository {
 
     // A pull on a page.
     suspend fun refresh(page: Anime): Outcome<Unit>
+
+    // N3: asks for those of [titles] that are tracked and for no other, and returns once the store holds each answer.
+    suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit>
+}
+
+// Notifications as a screen sees them: the person's choices, what comes next and what was sent.
+interface NotificationsRepository {
+    fun observeSettings(): Flow<NotificationSettings>
+
+    // Stores the change at once, whatever run is under way, and returns once the run that follows it has ended (N5, N8).
+    suspend fun changeSettings(change: (NotificationSettings) -> NotificationSettings): Outcome<Unit>
+
+    // Each title's next notification as the last run found it, the soonest first; null while no run has ended, so no reader waits.
+    fun observeComing(): Flow<List<Coming>?>
+
+    // What was posted, the latest first.
+    fun observeSent(): Flow<List<SentNotification>>
 }
 
 enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular }

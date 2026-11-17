@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.changedFrom
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -793,14 +794,6 @@ class ListEngine(
         if (session != settled) follow()
         return session
     }
-
-    private val Session.owner: SignInId?
-        get() =
-            when (this) {
-                Session.SignedOut -> null
-                is Session.SignedIn -> signIn
-                is Session.Expired -> signIn
-            }
 
     // A Retry is what is left of its failed write over [current]; null when nothing is.
     private fun ListWrite.left(current: ListValues?): ListWrite? = if (this is ListWrite.Retry) failure.left(current) else this
