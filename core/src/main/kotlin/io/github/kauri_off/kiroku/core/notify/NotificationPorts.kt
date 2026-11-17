@@ -1,0 +1,68 @@
+package io.github.kauri_off.kiroku.core.notify
+
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
+import kotlinx.coroutines.flow.Flow
+import java.time.Instant
+
+// What the store remembers of the list of one sign-in.
+data class StoredNotifications(
+    // Whose list the record is of: none before the first sign-in and after a sign-out.
+    val owner: SignInId?,
+    val record: NotificationRecord,
+)
+
+// What notifications remember and the person's choices for them. Each call is atomic and throws when it fails; only the engine writes.
+interface NotificationStore {
+    // The settings as they are for a new observer, then after every change; the defaults while none is stored. Equal values may repeat.
+    fun observeSettings(): Flow<NotificationSettings>
+
+    suspend fun writeSettings(settings: NotificationSettings)
+
+    suspend fun read(): StoredNotifications
+
+    // What was posted and is not forgotten, in the order written, after every change. A title is given as the device knows it.
+    fun observeSent(): Flow<List<SentNotification>>
+
+    // N1: stores the record, adds [sent] and forgets what was posted before [keptFrom], all or none.
+    suspend fun write(
+        record: NotificationRecord,
+        sent: List<SentNotification>,
+        keptFrom: Instant,
+    )
+
+    // S9: forgets the record and all that was posted; what is stored from now on is [owner]'s. The settings stay.
+    suspend fun clear(owner: SignInId?)
+}
+
+// The one alarm (section 5.1): when its time comes it starts a run, in a process started for it too.
+interface NotificationAlarm {
+    // Leaves the alarm at [at] in place of the one before, or none.
+    suspend fun set(at: Instant?)
+}
+
+// What a notification says beside its title, with the airing it tells of.
+data class Shown(
+    val episode: Int,
+    val toWatch: Int?,
+    val marks: Int,
+    val airedAt: Instant,
+    val notifyAt: Instant,
+)
+
+// The episode notifications the device shows, one a title, each under a tag made from its title's id.
+interface ShownNotifications {
+    // Each title whose notification is shown now, as it was posted; one the person dismissed is not among them.
+    suspend fun shown(): Map<AnimeId, Shown>
+
+    // Shows it in place of the title's earlier one and alerts only when [alert]; false when the device shows none of the app's now.
+    suspend fun post(
+        anime: Anime,
+        notification: Shown,
+        alert: Boolean,
+    ): Boolean
+
+    // Removes the notifications of [titles]; a title that has none is left alone.
+    suspend fun withdraw(titles: Set<AnimeId>)
+}

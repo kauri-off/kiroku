@@ -198,28 +198,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-01 [A] What is notifiable.**
 
-- [ ] **M4-02 [A] Notification engine.** In `:core` only, over ports as the list's and the airing's engines are: a
-  store of M4-01's record and of the settings, the one alarm, and the notifications shown; with stores in memory
-  and a contract suite. One run serves every trigger: it reads what is stored, applies M4-01's rule, posts what is
-  due and records it, withdraws what no longer stands (N7) and leaves the alarm at the earliest coming notification
-  time, or none (N8). Runs at the same time announce an episode once (N1), and a run cut off by the death of its
-  process neither loses its episode nor announces it twice; the hand-off states how. A run started by the alarm
-  with the device online first asks AniList again for the due titles alone, for a bounded few seconds: a postponed
-  episode is planned again instead of announced, and an answer that fails or is late leaves the stored data in use
-  (N3). While the process lives, a change of the list, of the airing data or of a setting, the delay alone
-  included, is followed by a run (N8). Signed out, nothing is posted, what is posted is withdrawn, no alarm is left
-  and the record is forgotten (S9); an expired session changes none of it (S6). For the screens the engine gives
-  the settings and takes their changes, what comes next, and what was sent: each announcement with its title and
-  episode, its air time, its notification time, when it was posted and how the re-check ended. Every run is
-  reported with its trigger and what it did, for M4-15. Demo mode can run on it. The hand-off states the ports and
-  the screens' surface for the orchestrator's approval before M4-07, M4-08 and M4-09 start.
-  **Needs:** M4-01.
-  **Check:** `./gradlew :core:test`, on virtual time: the contract suite holds a test for each of N1 (several runs
-  at once; a refresh that lands between an air time and its notification; the delay changed; an alarm that never
-  fired; a new engine over the same store, as after a restart or an update; a run cut off after each of its steps),
-  N2 (each trigger announces what is overdue, and nothing three days late), N3 (postponed, failed, slower than the
-  bound, offline), N7, N8 and S9, and the stores in memory pass it; a schedule fetched for a page reaches no run;
-  the re-check asks AniList for the due titles and no other.
+- [x] **M4-02 [A] Notification engine.**
 
 - [x] **M4-03 Background writes and the edits a screen holds.**
 
