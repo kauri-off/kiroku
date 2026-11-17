@@ -224,8 +224,13 @@ abstract class NotificationEngineContract {
         @Volatile
         var beforePost: (suspend () -> Unit)? = null
 
+        // The device does not list what was posted yet.
+        @Volatile
+        var lagging = false
+
         override suspend fun shown(): Map<AnimeId, Shown> {
             yield()
+            if (lagging) return emptyMap()
             return inner.shown()
         }
 
@@ -796,6 +801,129 @@ abstract class NotificationEngineContract {
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(1, w.shown.posts.size)
             assertEquals(listOf(1), w.sent().map { it.episode })
+        }
+
+    @Test
+    fun `N7 a notification of a cut-off run goes while the clock is behind it, once its episode is watched or its title is gone`() =
+        runTest {
+            for (change in listOf(ListWrite.MarkNextWatched(title), ListWrite.Remove(title))) {
+                val w = world()
+                w.clock.now = week(0)
+                w.alarm.gone()
+                w.process.steps = 0
+                w.process.diesAfter = 2
+                assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
+                w.clock.now = week(0).minus(hour.multipliedBy(2))
+                w.start()
+                w.engine.run(RunTrigger.AppOpened)
+                assertEquals("$change", setOf(title.id), w.showing.keys)
+
+                w.write(change)
+
+                assertEquals("$change", emptyMap<AnimeId, Says>(), w.showing)
+                // It alerted, so it is told as sent where its title is still there to tell it with.
+                assertEquals("$change", if (change is ListWrite.Remove) emptyList() else listOf(1), w.sent().map { it.episode })
+                w.pass(week(0).plus(hour))
+                assertEquals("$change", listOf(title.id to 1), w.alerts)
+                assertEquals("$change", emptyMap<AnimeId, Says>(), w.showing)
+            }
+        }
+
+    @Test
+    fun `N1 a delay lengthened after a cut-off post keeps its notification, which alerts no second time at its new time`() =
+        runTest {
+            val w = world()
+            w.clock.now = week(0)
+            w.alarm.gone()
+            w.process.steps = 0
+            w.process.diesAfter = 2
+            assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
+            val later = week(0).plus(hour.multipliedBy(3))
+
+            w.start()
+            assertEquals(Outcome.Success(Unit), w.engine.changeSettings { it.copy(delay = NotificationDelay.ThreeHours) })
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(emptyList<SentNotification>(), w.sent())
+            assertEquals(later, w.alarm.at.value)
+
+            w.pass(later.plus(hour))
+            assertEquals(listOf(title.id to 1), w.alerts)
+            assertEquals(listOf(later), w.sent().map { it.notifyAt })
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals("replaced in silence with its new time", listOf(true, false), w.shown.posts.map { it.alert })
+            assertEquals(
+                later,
+                w.shown.posts
+                    .last()
+                    .notification.notifyAt,
+            )
+        }
+
+    @Test
+    fun `an unrecorded post is matched to what was sent by its air time too, so an episode announced again is told as sent again`() =
+        runTest {
+            val w = world()
+            w.pass(week(0))
+            val postponed = week(0).plus(day.multipliedBy(2))
+            w.refreshed(NotifyCases.schedules.moved(title, 1, day.multipliedBy(2)))
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
+
+            // The run at its new time posts it again and dies before its record; then the person watches it.
+            w.clock.now = postponed
+            w.alarm.gone()
+            w.process.steps = 0
+            w.process.diesAfter = 2
+            assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
+            assertEquals(listOf(title.id to 1, title.id to 1), w.alerts)
+            w.write(ListWrite.MarkNextWatched(title))
+            w.start()
+            w.engine.run(RunTrigger.AppOpened)
+
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
+            assertEquals(listOf(week(0), postponed), w.sent().map { it.airedAt })
+        }
+
+    @Test
+    fun `S9 a post that slipped through as the owner changed is withdrawn by that run, also while the device does not list it yet`() =
+        runTest {
+            val w = world()
+            w.clock.now = week(0)
+            w.shows.beforePost = {
+                w.session.value = Session.SignedOut
+                w.shows.lagging = true
+            }
+
+            val report = w.engine.run(RunTrigger.AppOpened)
+
+            assertEquals(RunEnd.SignedOut, report.end)
+            assertEquals(1, w.shown.posts.size)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
+            assertEquals(setOf(title.id), report.withdrawn)
+        }
+
+    @Test
+    fun `N2 the alarm's run that fails with nothing known to be due waits longer after each failure in a row, up to a bound`() =
+        runTest {
+            val w = world()
+            w.store.unreadable = true
+            w.pass(week(0))
+            var at = week(0)
+            for (minutes in listOf(15L, 30L, 60L, 120L, 240L, 360L, 360L)) {
+                assertEquals("after $at", at.plus(Duration.ofMinutes(minutes)), w.alarm.at.value)
+                assertEquals(RunEnd.Failed to w.alarm.at.value, w.reports.last().let { it.end to it.alarm })
+                at = at.plus(Duration.ofMinutes(minutes))
+                w.pass(at)
+            }
+            assertEquals(emptyList<Pair<AnimeId, Int>>(), w.alerts)
+
+            // A run that ends as it should ends the waiting, and the next failure starts from the shortest wait.
+            w.store.unreadable = false
+            w.pass(at.plus(Duration.ofMinutes(360)))
+            assertEquals(listOf(title.id to 1), w.alerts)
+            assertEquals(week(1), w.alarm.at.value)
+            w.store.unreadable = true
+            w.pass(week(1))
+            assertEquals(week(1).plus(nearAlarm), w.alarm.at.value)
         }
 
     @Test

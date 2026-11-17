@@ -41,6 +41,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
@@ -86,6 +87,9 @@ class NotificationEngine(
         val withdrawn = mutableSetOf<AnimeId>()
         var alarm: Instant? = null
         var alarmFailed = false
+
+        // An episode is known to be due, so while it is not recorded the near alarm stands.
+        var due = false
     }
 
     private class OwnerChanged : Exception()
@@ -131,6 +135,9 @@ class NotificationEngine(
 
     @Volatile
     private var seen: Seen? = null
+
+    // The runs in a row that failed with no episode known to be due, as when the store or the list cannot be read.
+    private var failures = 0
 
     // The store was cleared for nobody in this process, and nobody has signed in since.
     private var forgotten = false
@@ -267,6 +274,13 @@ class NotificationEngine(
         } catch (e: Exception) {
             unexpected(e)
         }
+        if (end == RunEnd.Failed && !did.due) {
+            // With nothing known to be due, the alarm's next try waits longer after each failure in a row.
+            failures++
+            if (trigger == RunTrigger.Alarm) setAlarm(clock.instant() + backOff().toJavaDuration(), did)
+        } else {
+            failures = 0
+        }
         val report =
             RunReport(
                 trigger,
@@ -297,6 +311,8 @@ class NotificationEngine(
             try {
                 return carryOutOnce(trigger, did)
             } catch (_: OwnerChanged) {
+                // What this run posted for the owner that left goes with it, also where the device does not list it yet.
+                withdraw(did.posted.mapTo(mutableSetOf()) { it.anime.id }, did)
                 did.posted.clear()
             }
         }
@@ -321,6 +337,7 @@ class NotificationEngine(
                 result = notificationsAt(read.entries, read.schedules, read.settings, read.record, clock.instant())
             }
         }
+        did.due = result.due.isNotEmpty()
         val posted = shown.shown()
         val kept = mutableSetOf<AnimeId>()
         // N2: while a due episode is not recorded a near alarm stands, so a run cut off or failed here is made again soon.
@@ -364,8 +381,12 @@ class NotificationEngine(
         if (others.isNotEmpty()) {
             val now = clock.instant()
             val unrecorded = unrecorded(others, now)
-            // A notification time ahead of the clock means the clock went back: the run at that time records it, in silence.
-            val left = unrecorded.filterValues { it.notifyAt.isAfter(now) }.keys
+            // The same airing still to come, as when the clock went back or the delay grew: the run at its time records it.
+            val left =
+                unrecorded
+                    .filter { (id, was) ->
+                        result.coming.any { it.anime.id == id && it.episode == was.episode && it.airsAt == was.airedAt }
+                    }.keys
             for ((id, was) in unrecorded - left) {
                 val anime = read.entries.firstOrNull { it.anime.id == id }?.anime ?: continue
                 did.posted += SentNotification(anime, was.episode, was.airedAt, was.notifyAt, now, Recheck.NotAsked)
@@ -395,6 +416,13 @@ class NotificationEngine(
         return notifications.filter { (id, was) ->
             !was.notifyAt.isBefore(keptFrom) && sent.none { it.anime.id == id && it.episode == was.episode && it.airedAt == was.airedAt }
         }
+    }
+
+    // How long the alarm waits after this failure: twice as long after each in a row, up to a bound.
+    private fun backOff(): Duration {
+        var wait = retryAfter
+        repeat(minOf(failures - 1, MOST_DOUBLINGS)) { wait = minOf(wait * 2, BACK_OFF_BOUND) }
+        return wait
     }
 
     // N2: no later than a short while from now.
@@ -493,6 +521,8 @@ class NotificationEngine(
     companion object {
         val RECHECK_WITHIN: Duration = 5.seconds
         val RETRY_AFTER: Duration = 15.minutes
+        val BACK_OFF_BOUND: Duration = 6.hours
+        private const val MOST_DOUBLINGS = 16
         private val FOLLOWED_AGAIN_AFTER: Duration = 1.minutes
 
         private const val STOPPED = "The notification engine's scope has ended"
