@@ -637,10 +637,11 @@ Each of these could change a decision above.
 
 1. **A sign-in with the app killed while the browser is open has not been run on a phone.** A sign-in has: MAL
    granted a token with a lifetime.
-2. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
-   list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
-   (believed to be three characters); what its website changes by itself when an edit completes a title, which W7
-   assumes (through the API it changes nothing by itself).
+2. **MAL's behaviour at its edges:** its rate limits, and what it answers when it limits requests: a private list
+   is told by the answer recorded for one, a refusal with its own error code, and a limit answered in the same words
+   would read as a private list; the shortest search query it accepts (believed to be three characters); what its
+   website changes by itself when an edit completes a title, which W7 assumes (through the API it changes nothing by
+   itself).
 3. **AniList:** its API terms prohibit its use "within competing, non-complementary services of the same nature",
    anime list and tracker services included, for all its data. The owner reads Kiroku, which keeps no list at
    AniList and is open source and non-commercial, as complementary, and the stored schedules of the tracked titles,

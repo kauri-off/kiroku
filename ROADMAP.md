@@ -485,20 +485,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   his recorded profile; a failure names the value that differs and not what it is; the test is skipped where the
   recordings are absent or do not hold the whole list.
 
-- [ ] **M6-03 Recorded answers of another user's list.** The recorder that needs the client id alone (section 11.1)
-  also asks for the public user's list under their name in another letter case, and for the list of a name no
-  account can have. From these and from the answers recorded earlier (a public list's pages, a private list, an
-  unknown name), `:data` gives the app's own outcomes: a private list is told by the answer recorded for one, so
-  that any other refusal of that request is a refusal like any other and backs off (section 2.3); an unknown name
-  by its answer; a name no account can have reads as an unknown name when its answer allows it. The hand-off says
-  whether MAL takes a name in any letter case, for M6-08. What MAL answers when it limits requests is not recorded
-  and is not provoked: item 2 of section 13 is rewritten to hold what is now known of a private list and what is
-  still not known. The hand-off proposes the row of section 2.3 that this changes.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: the tests of the recorded answers pass with the new files, which
-  hold no user's name; on the recorded answers, a private list is a private list and nothing backs off, an unknown
-  name is an unknown name, and the name no account can have is what the hand-off states; a refusal of that request
-  that is not the recorded one, and too many requests, are a refusal after which background work backs off.
+- [x] **M6-03 Recorded answers of another user's list.**
 
 - [ ] **M6-04 [A] Other users' lists.** In `:core` only, over a port, as the list's and the airing's engines are.
   The port reads the list of a user the person named, part by part, and ends in one of the app's own outcomes: the
