@@ -2,8 +2,7 @@ package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.fixtures.FixtureUser
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
-import io.github.kauri_off.kiroku.core.model.StatusCounts
-import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 
 // The Profile's states over the fixture set, for previews, screenshots and the stand-in of debug builds.
 object ProfileFixtureStates {
@@ -15,16 +14,7 @@ object ProfileFixtureStates {
     val other = ProfileContent.Shown(null, set.largeStatistics)
 
     // A list with nothing on it: every count zero and no mean score.
-    val nothing =
-        UserStatistics(
-            statuses = StatusCounts(watching = 0, completed = 0, onHold = 0, dropped = 0, planned = 0),
-            daysWatched = 0.0,
-            meanScore = null,
-            scores = emptyMap(),
-            genres = emptyList(),
-            mediaTypes = emptyList(),
-            years = emptyMap(),
-        )
+    val nothing = statisticsOf(emptyList())
 
     val otherName: String get() = set.otherUserName
     val privateName: String get() = set.privateUserName
