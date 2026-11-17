@@ -6,11 +6,13 @@ import android.util.Log
 import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notify.SystemAlarm
 import io.github.kauri_off.kiroku.reports.ReportLog
 import io.github.kauri_off.kiroku.reports.reportLog
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
@@ -20,6 +22,9 @@ import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import kotlinx.coroutines.CoroutineScope
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 
 private val UNEXPECTED = notShown("An exception the app did not expect")
 
@@ -48,7 +53,10 @@ internal val requestLog: ((String) -> Unit)? = { Log.d(LOG_TAG, it) }
 internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
     when (SourceChoice(context).startsOn(clientId)) {
         DataSource.Account -> null
-        DataSource.Demo -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context)), scope)
+        DataSource.Demo -> {
+            val alarm = DemoAlarm(clock, SystemAlarm(context))
+            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm).also { alarm.demo = it.clock }, scope)
+        }
         DataSource.Sandbox ->
             SandboxGraph.create(context, clock) { source, device, sandboxClock ->
                 LiveParts(context, source, SandboxMal.CLIENT_ID, sandboxClock, scope, reportUnexpected, requestLog, device)
@@ -57,6 +65,16 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
 }
 
 internal val standInPosters: Interceptor? = StandInPosters
+
+// The demo keeps a time of its own: the system's alarm is set as far ahead of the device's clock as the demo's is of its own.
+private class DemoAlarm(
+    private val device: Clock,
+    private val system: NotificationAlarm,
+) : NotificationAlarm {
+    lateinit var demo: Clock
+
+    override suspend fun set(at: Instant?) = system.set(at?.plus(Duration.between(demo.instant(), device.instant())))
+}
 
 class DemoGraph(
     val demo: Demo,
@@ -75,5 +93,6 @@ class DemoGraph(
     override val user = demo.user
     override val connection = demo.connection
     override val preferences = demo.preferences
+    override val notificationRuns get() = demo.notifications
     override val madeUp = true
 }

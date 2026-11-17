@@ -221,33 +221,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-08 The notification on the device.**
 
-- [ ] **M4-09 [A] The alarm and the moments the app runs.** In `:app`: M4-02's alarm port on the system's alarm
-  service, and everything that starts a run without a screen. The alarm is one-shot and is set so that it may fire
-  while the device idles; it is exact when the system lets the app set exact alarms and inexact otherwise; the
-  manifest declares `SCHEDULE_EXACT_ALARM` and not `USE_EXACT_ALARM` (section 5.1). A run is started by the alarm,
-  by a restart of the device, by an update of the app, by a change of the exact-alarm access, and by the app being
-  opened, which is also the first moment after a force-stop (N2, N8). Each keeps the process alive until its run
-  has ended, within the time the system gives it. The task settles, for M4-11 and M4-12 too, how work without a
-  screen is run and held, and brings into the build what that needs, with the reason in the pull request; nothing
-  of it uses the network or the database when the process starts. No code opens a system settings screen or asks
-  for a battery exemption. Where the system delays or drops an alarm (Doze, an app the user rarely opens, a
-  force-stop), nothing works around it: the hand-off says, from the documentation and from the emulator, what is
-  delayed and by how much, for M4-13 to tell the user. Read first, on developer.android.com:
-  `develop/background-work/services/alarms`, `training/monitoring-device-state/doze-standby`,
-  `topic/performance/appstandby` and `topic/performance/power/power-details`,
-  `develop/background-work/background-tasks/broadcasts` and its `…/broadcast-exceptions`,
-  `about/versions/14/changes/schedule-exact-alarms`, and the stopped state in
-  `about/versions/15/behavior-changes-all`.
-  **Needs:** M4-02, M4-06.
-  **Check:** tests: each trigger starts one run and is held until it ends; the alarm set is the one the engine
-  asked for, replacing the one before, and exact only with the access; a time-zone change sets no other alarm; the
-  build's check of what the manifest lets another app start names every new component, and none is exported that
-  the system's own broadcasts do not need. On an emulator of the current Android, each observation written down in
-  the hand-off: with the device forced idle as the Doze page's testing section says, an alarm set by the app's own
-  code fires and its run ends, after the delay measured; after a restart of the device the alarm is set again
-  before the app is opened; after a force-stop nothing fires, and opening the app sets it again; the exact-alarm
-  access taken away and given back changes the kind of alarm set, without the app being opened; the clock set past
-  the alarm's time starts the run. On M4-06's emulator the alarm is set and fires.
+- [x] **M4-09 [A] The alarm and the moments the app runs.**
 
 - [ ] **M4-10 Live notifications.** The live graph's notifications are M4-02's engine over M4-07's store, M4-08's
   notifications and M4-09's alarm and triggers, each source with its own record, built at its first use and off the
