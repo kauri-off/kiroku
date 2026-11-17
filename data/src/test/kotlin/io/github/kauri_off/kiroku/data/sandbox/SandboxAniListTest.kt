@@ -60,7 +60,14 @@ class SandboxAniListTest {
     private inner class OnDevice(
         val files: File = folder.newFolder(),
     ) {
-        val sandbox = Sandbox(read = { recorded("$it.200.json") }, poster = ::poster, clock = clock, file = { File(files, it) })
+        val sandbox =
+            Sandbox(
+                read = { recorded("$it.200.json") },
+                readTenrai = ::recordedTenrai,
+                poster = ::poster,
+                clock = clock,
+                file = { File(files, it) },
+            )
         val client = SandboxClient(sandbox.mal, clock = clock)
 
         // AniList's answer to the shared query, asked through the app's client by a client that keeps AniList's limit.

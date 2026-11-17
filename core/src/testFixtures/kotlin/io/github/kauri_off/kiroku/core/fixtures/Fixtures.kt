@@ -68,6 +68,7 @@ object Fixtures {
             otherUserEntries = FixtureUser.otherUserEntries,
             privateUserName = "quiet_viewer",
             largeStatistics = FixtureUser.largeStatistics,
+            scores = FixtureScores.of(FixtureAnime.all, FixtureDetails.all.associateBy { it.id }),
         )
     }
 

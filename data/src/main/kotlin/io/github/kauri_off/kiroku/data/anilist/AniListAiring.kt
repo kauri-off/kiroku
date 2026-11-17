@@ -10,9 +10,9 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.Sent
+import io.github.kauri_off.kiroku.data.network.retryAfter
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -23,7 +23,6 @@ import java.time.Instant
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 // AniList's episode times of titles by MAL id (section 2.2), asked over the one HTTP client with the MAL ids alone.
@@ -207,7 +206,7 @@ class AniListAiring(
             }
             sent as Sent.Answered
             if (sent.status == 403 || sent.status == 429) {
-                pace.refused(retryAfter(sent.headers))
+                pace.refused(retryAfter(sent.headers, clock))
                 return stop(DataError.Refused)
             }
             val read = if (sent.status == 200) aniListPage(sent.body, http.unexpected) else null
@@ -235,13 +234,6 @@ class AniListAiring(
         }
     }
 
-    private fun retryAfter(headers: Headers): Duration? {
-        val value = headers[RETRY_AFTER]?.trim() ?: return null
-        value.toLongOrNull()?.let { return it.seconds }
-        val at = headers.getInstant(RETRY_AFTER) ?: return null
-        return (at.epochSecond - clock.instant().epochSecond).coerceAtLeast(0).seconds
-    }
-
     private class Asked(
         val entries: Map<Int, List<AniListEntry>>,
         val unreadable: Set<Int>,
@@ -262,7 +254,6 @@ class AniListAiring(
     private companion object {
         val JsonType = "application/json".toMediaType()
         const val LIMIT = "X-RateLimit-Limit"
-        const val RETRY_AFTER = "Retry-After"
 
         // More pages than these fail the titles concerned: a thousand episodes, or more pages of titles than their ids fill.
         const val MOST_SCHEDULE_PAGES = 40

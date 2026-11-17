@@ -1,0 +1,62 @@
+{
+    "data": {
+        "watching": 12,
+        "completed": 200,
+        "on_hold": 8,
+        "dropped": 6,
+        "plan_to_watch": 28,
+        "total": 254,
+        "scores": [
+            {
+                "score": 1,
+                "votes": 1,
+                "percentage": 0.7
+            },
+            {
+                "score": 2,
+                "votes": 11,
+                "percentage": 7.9
+            },
+            {
+                "score": 3,
+                "votes": 1,
+                "percentage": 0.7
+            },
+            {
+                "score": 4,
+                "votes": 5,
+                "percentage": 3.6
+            },
+            {
+                "score": 5,
+                "votes": 12,
+                "percentage": 8.6
+            },
+            {
+                "score": 6,
+                "votes": 42,
+                "percentage": 30.2
+            },
+            {
+                "score": 7,
+                "votes": 38,
+                "percentage": 27.3
+            },
+            {
+                "score": 8,
+                "votes": 11,
+                "percentage": 7.9
+            },
+            {
+                "score": 9,
+                "votes": 8,
+                "percentage": 5.8
+            },
+            {
+                "score": 10,
+                "votes": 10,
+                "percentage": 7.2
+            }
+        ]
+    }
+}

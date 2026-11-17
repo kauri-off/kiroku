@@ -17,6 +17,8 @@ class ScreenshotCase internal constructor(
     val isContent: Boolean,
     val keyboard: Boolean,
     val window: WindowSize?,
+    // Also rendered at the large text of ru-large, as the content case always is.
+    val largeText: Boolean,
     val content: @Composable () -> Unit,
 )
 
@@ -31,14 +33,15 @@ fun contentCase(
     keyboard: Boolean = false,
     window: WindowSize? = null,
     content: @Composable () -> Unit,
-) = ScreenshotCase(name, isContent = true, keyboard, window, content)
+) = ScreenshotCase(name, isContent = true, keyboard, window, largeText = true, content)
 
 fun case(
     name: String,
     keyboard: Boolean = false,
     window: WindowSize? = null,
+    largeText: Boolean = false,
     content: @Composable () -> Unit,
-) = ScreenshotCase(name, isContent = false, keyboard, window, content)
+) = ScreenshotCase(name, isContent = false, keyboard, window, largeText, content)
 
 sealed interface StateCase
 
@@ -163,7 +166,7 @@ internal fun renderScreen(
     screen: String,
     cases: List<ScreenshotCase>,
     dir: File,
-    variantsOf: (ScreenshotCase) -> List<Variant> = { Variant.forCase(it.isContent) },
+    variantsOf: (ScreenshotCase) -> List<Variant> = { Variant.forCase(it.isContent, it.largeText) },
     notShown: List<Pair<String, String>> = emptyList(),
     write: (Bitmap, File) -> Unit = Shot::write,
 ): List<String> {

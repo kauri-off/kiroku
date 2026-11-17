@@ -55,6 +55,9 @@ internal class DemoServerList(
     }
 
     override fun remove(id: Long): Boolean = server.applied(AnimeId(id), null) is Outcome.Success
+
+    // The server has one user, who is signed in.
+    override fun usersList(name: String): UsersList? = null
 }
 
 private fun ListEntry.listed() =

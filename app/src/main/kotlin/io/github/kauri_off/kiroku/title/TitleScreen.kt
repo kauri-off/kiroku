@@ -744,6 +744,8 @@ private fun More(
                 details.studios.takeIf { it.isNotEmpty() }?.joinToString(stringResource(R.string.common_list_separator)),
                 details.source?.named { stringResource(it) },
             ).joinToString(stringResource(R.string.common_separator))
+        // Under the statistics it continues; it asks nothing until it is opened.
+        MoreRow(stringResource(R.string.title_scores), stringResource(R.string.title_scores_row)) { onEvent(TitleEvent.OpenScores) }
         MoreRow(stringResource(R.string.title_details), facts.takeIf { it.isNotEmpty() }) { onEvent(TitleEvent.OpenDetails) }
         val recommended = details.recommendations.size
         if (recommended > 0) {

@@ -88,7 +88,7 @@ class MalOwnProfileTest {
     private val sandboxUser =
         UserProfile(
             name = SandboxMal.USER_NAME,
-            pictureUrl = null,
+            pictureUrl = "https://sandbox.invalid/images/userimages/1.jpg",
             joined = LocalDate.of(2001, 1, 1),
             stated =
                 StatedFigures(

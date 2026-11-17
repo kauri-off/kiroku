@@ -25,7 +25,18 @@ sealed interface Written {
     data object Unknown : Written
 }
 
-// What the sandbox's answers are made from: the titles MAL knows and the list of its one user, with MAL's rules for a write.
+// A list MAL gives anyone who asks for it by its user's name.
+sealed interface UsersList {
+    // In MAL's order by title.
+    data class Public(
+        val entries: List<Pair<Long, Listed>>,
+    ) : UsersList
+
+    data object Private : UsersList
+}
+
+// What the sandbox's answers are made from: the titles MAL knows, the list of its signed-in user with MAL's rules for a
+// write, and the lists of its other users.
 interface MalList {
     // A title as MAL's own page gives it, every field it has; null for a title MAL does not know.
     fun title(id: Long): JsonObject?
@@ -46,4 +57,7 @@ interface MalList {
 
     // False for a title MAL does not know; a title not on the list is removed all the same.
     fun remove(id: Long): Boolean
+
+    // The list of the user [name] names in any letter case, the signed-in user's included; null for a name no user has.
+    fun usersList(name: String): UsersList?
 }

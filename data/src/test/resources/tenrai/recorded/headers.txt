@@ -1,0 +1,2 @@
+Limit and cache headers Tenrai sent with its answers of 2026-11-17:
+cache-control: public, max-age=600, s-maxage=10800
