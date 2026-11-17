@@ -62,7 +62,8 @@ MAL (from its API reference):
 - The only user endpoint is `users/@me`, but anyone's public list can be read with the client id alone. Kiroku
   downloads another user's list and computes their statistics itself, with the same code as for the signed-in
   user. Their avatar, join date and "about" are not available and are not shown in 1.0.
-- There is no user search: another user is opened by exact user name or by a `myanimelist.net/profile/…` link.
+- There is no user search: another user is opened by user name, in any letter case, or by a
+  `myanimelist.net/profile/…` link.
 - Title statistics are the status distribution and the member count; MAL's API has no per-score histogram.
 - Search has no filter parameters, so 1.0 has no search filters.
 - Dates may be partial ("2017-10-23", "2017-10", "2017").
@@ -85,8 +86,8 @@ AniList (from its API documentation and recorded answers):
 | Source | Failure | What the user gets |
 |---|---|---|
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
-| MAL | Refused when reading another user's list, other than for too many requests | "This list is private". Not treated as rate limiting. |
-| MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
+| MAL | Answered as a private list when reading another user's list | "This list is private". Not treated as rate limiting. |
+| MAL | Refused otherwise | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
 | An optional source (after 1.0) | Any failure | Its part of the page says so and offers Retry, and never blocks or delays the rest of the page. |
