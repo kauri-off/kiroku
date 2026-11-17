@@ -445,29 +445,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-03 Recorded answers of another user's list.**
 
-- [ ] **M6-04 [A] Other users' lists.** In `:core` only, over a port, as the list's and the airing's engines are.
-  The port reads the list of a user the person named, part by part, and ends in one of the app's own outcomes: the
-  list, a private list, an unknown name, or a failure of section 2.3. Nothing of it names MAL, an address, a status
-  code or a field of an answer; those stay in `:data`. What a source knows of a user besides the list (a name as it
-  spells it, a picture, a join date) is whatever it gave, which may be nothing, and whether two names are one user
-  is the port's answer, not a rule of `:core`. Over the port one keeper serves every screen: a user's list is read
-  once however many screens show it, and its progress is given as it comes (the entries so far, and the total where
-  the source names one); it is held in memory while the process lives (section 7.1), for a bounded number of users,
-  and forgotten at a sign-out; it is read again only when the person asks, the earlier list staying until the new
-  one is whole and after a read that failed (section 6.2); one part is asked at a time, and none once no screen
-  waits. The surface the screens read is `UserRepository`, reshaped as this needs. Demo mode runs on the keeper,
-  with a public user whose list has several thousand entries, a private one and nobody else. The hand-off states
-  the port and the surface for the orchestrator's approval before M6-08 and M6-09 start, and for the owner's the
-  number of users held.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`, on virtual time: a contract suite for the port (the parts give every entry
-  once, in order; each outcome), which the demo's passes; the keeper's tests: two screens of one user cause one
-  read; progress follows each part; a private list and an unknown name are each their own outcome and neither is
-  asked again by itself; a read that fails half-way leaves the earlier whole list and reports the failure; a list
-  read again replaces the earlier one only when it is whole; past the bound the user shown longest ago is forgotten;
-  a sign-out forgets all; with no screen waiting no further part is asked; a list of several thousand entries is
-  given whole. A rule test fails when a name in the port, the keeper or the surface says MAL, or one of them holds
-  an address or a status code.
+- [x] **M6-04 [A] Other users' lists.**
 
 - [ ] **M6-05 The signed-in user's profile.** In `:data`: what MAL gives of the signed-in user beside the list, as
   `UserProfile` holds it, read as that user through the session (S5), and kept in the database (section 7.1) by a
