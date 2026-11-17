@@ -23,6 +23,9 @@ class ScoresScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
+            case("error-large-text", largeText = true) {
+                Screen(ScoresState.Failed(DataError.ServerError, SubScreenFixtures.session))
+            },
             case("offline") { Screen(ScoresState.Failed(DataError.NoConnection, SubScreenFixtures.session)) },
             case("not-known") { Screen(ScoresState.NotKnown(SubScreenFixtures.session)) },
             case("many-votes") { Screen(ScoresState.Shown(ScoresFixtures.manyVotes, SubScreenFixtures.session)) },

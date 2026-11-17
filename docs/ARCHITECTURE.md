@@ -586,7 +586,7 @@ section says what a render gives and what it cannot show.
 - **Cases.** Each screen has one registry file, `<Screen>Screenshots`, which declares its cases: content, loading,
   empty and error, plus the cases its task needs. A screen that has no loading, empty or error state says why, and the
   render writes the reason to `<screen>/NOT_SHOWN.txt`. A **gallery** case renders every shared component in all
-  its states. A case can declare the keyboard open, or its own window size.
+  its states. A case can declare the keyboard open, its own window size, or `ru-large` as well.
 
 **Variants.** Every case is rendered in the five standard variants: `en-light`, `en-dark`, `ru-light` and `ru-dark`
 on a phone-sized screen, and `ru-stress`, Russian on a small screen at a larger font scale. The content case also
