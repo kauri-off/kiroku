@@ -55,7 +55,7 @@ without affecting its page (section 2.3).
   weekday and a Japan-time slot) knows none of that and only feeds the estimate of section 4.
 - **Privacy.** AniList receives the MAL ids of the unfinished titles on the user's list and of an airing title whose
   page is open, and nothing else about the user. Tenrai receives the device's IP address and the MAL id of each title
-  whose statistics are looked at. There is no analytics and no crash reporting.
+  whose MAL scores are opened. There is no analytics and no crash reporting.
 
 ### 2.2 External constraints and their consequences
 
@@ -98,7 +98,7 @@ Tenrai (from its documentation and recorded answers):
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
-| Tenrai | Any failure, refusal or rate limit | The title page's part for the score distribution says it could not load and offers its own Retry; nothing else of the page waits for it or shows a message. |
+| Tenrai | Any failure, refusal or rate limit | The screen of a title's MAL scores says it could not load them and offers Retry. The title page never asks Tenrai, so nothing there waits for it or shows a message. |
 | An optional source (after 1.0) | Any failure | Its part of the page says so and offers Retry, and never blocks or delays the rest of the page. |
 
 The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the

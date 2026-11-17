@@ -9,9 +9,12 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -36,6 +39,7 @@ import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.design.composeRule
@@ -130,8 +134,11 @@ class AppRouteTest {
     // The scrolling list of the screen on top; the one with [text] among its items.
     private fun scrollTo(text: String) =
         compose
-            .onNode(hasTestTag(TitleTags.page))
+            .onAllNodes(hasScrollAction() and hasScrollToNode())
+            .filter(hasAnyDescendant(hasContentDescription("Episodes watched")) or hasAnyDescendant(hasText("Related")))[0]
             .performScrollToNode(hasText(text))
+
+    private fun hasScrollToNode() = SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)
 
     private fun openKagerou() {
         compose.onNodeWithText(kagerou.titles.romaji).performClick()
@@ -334,6 +341,22 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Save")
         assertEquals(ListStatus.Planned, values(FixtureAnime.notOnListAiring)?.status)
+    }
+
+    @Test
+    fun `the title page asks the scores of nobody, and its row opens them, asked then and gone back from`() {
+        app()
+        openKagerou()
+        scrollTo("Details")
+        compose.waitForIdle()
+        assertEquals(emptyList<AnimeId>(), graph.demo.scoreSource.requests)
+
+        click("MAL scores")
+        compose.waitForIdle()
+        showsSubstring("\u00A0votes")
+        assertEquals(listOf(kagerou.id), graph.demo.scoreSource.requests)
+        back()
+        shows("Details")
     }
 
     @Test

@@ -106,76 +106,6 @@ class TitleViewModelTest {
     }
 
     @Test
-    fun `the scores are asked only once they come into view, once for the page, and show the title's distribution`() =
-        test { s ->
-            val source = s.graph.demo.scoreSource
-            assertEquals(ScoresBlock.NotAsked, s.shown.scores)
-            assertEquals(emptyList<AnimeId>(), source.requests)
-
-            repeat(3) {
-                s.title.onEvent(TitleEvent.ScoresInView)
-                advanceUntilIdle()
-            }
-
-            assertEquals(ScoresBlock.Shown(Fixtures.reference.scores.getValue(FixtureAnime.exactToWatch.id)), s.shown.scores)
-            assertEquals(listOf(FixtureAnime.exactToWatch.id), source.requests)
-            s.title.onEvent(TitleEvent.Refresh)
-            s.title.onEvent(TitleEvent.RetryScores)
-            advanceUntilIdle()
-            assertEquals(1, s.graph.scoreAsks)
-        }
-
-    @Test
-    fun `a title the service has no record of says so in its block`() =
-        test(id = FixtureAnime.premiereUnannounced.id) { s ->
-            s.title.onEvent(TitleEvent.ScoresInView)
-            advanceUntilIdle()
-
-            assertEquals(ScoresBlock.NotKnown, s.shown.scores)
-        }
-
-    @Test
-    fun `a failure of the scores is their block's alone, and its Retry or a pull asks again`() =
-        test { s ->
-            val source = s.graph.demo.scoreSource
-            source.failure = DataError.Refused
-            s.title.onEvent(TitleEvent.ScoresInView)
-            advanceUntilIdle()
-
-            assertEquals(ScoresBlock.Failed(DataError.Refused), s.shown.scores)
-            assertEquals(null, s.message)
-            assertEquals(FixtureDetails.full, s.shown.page.details)
-            assertEquals(DetailsWait.Brief, s.shown.detailsWait)
-
-            s.title.onEvent(TitleEvent.RetryScores)
-            advanceUntilIdle()
-            assertEquals(ScoresBlock.Failed(DataError.Refused), s.shown.scores)
-            source.failure = null
-            s.title.onEvent(TitleEvent.Refresh)
-            advanceUntilIdle()
-
-            assertTrue(s.shown.scores is ScoresBlock.Shown)
-            assertEquals(3, source.requests.size)
-            assertEquals(null, s.message)
-        }
-
-    @Test
-    fun `scores that do not answer hold nothing else of the page`() =
-        test(settle = false) { s ->
-            s.graph.demo.scoreSource.holding = CompletableDeferred()
-            s.title.onEvent(TitleEvent.ScoresInView)
-            advanceUntilIdle()
-
-            assertEquals(FixtureDetails.full, s.shown.page.details)
-            assertEquals(false, s.shown.refreshing)
-            assertEquals(ScoresBlock.Loading, s.shown.scores)
-            s.graph.demo.scoreSource.holding!!
-                .complete(Unit)
-            advanceUntilIdle()
-            assertTrue(s.shown.scores is ScoresBlock.Shown)
-        }
-
-    @Test
     fun `the page shows the stored title at once and the details when they arrive`() =
         test(settle = false) { s ->
             runCurrent()
@@ -556,7 +486,6 @@ class TitleViewModelTest {
                     graph.anime,
                     graph.list,
                     airing,
-                    graph.scores,
                     graph.session,
                     graph.connection,
                     clock,
@@ -799,7 +728,6 @@ class TitleViewModelTest {
                     graph.anime,
                     graph.list,
                     airing,
-                    graph.scores,
                     graph.session,
                     graph.connection,
                     graph.clock,
@@ -953,7 +881,6 @@ class TitleViewModelTest {
                     graph.anime,
                     graph.list,
                     airing,
-                    graph.scores,
                     graph.session,
                     graph.connection,
                     graph.clock,
@@ -1490,7 +1417,6 @@ class TitleViewModelTest {
         graph.anime,
         graph.list,
         graph.airing,
-        graph.scores,
         graph.session,
         graph.connection,
         graph.clock,
