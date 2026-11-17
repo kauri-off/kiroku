@@ -225,7 +225,8 @@ class SandboxRecordingsTest {
         assertTrue("$PROFILE: status", recorded.status == given.status)
         val his = kinds(recorded.json)
         val mine = kinds(given.json)
-        for ((key, kind) in his) assertTrue("$PROFILE: $key", mine[key] == kind)
+        // MAL may print a whole number without its decimals: a recorded integer matches a sandbox decimal.
+        for ((key, kind) in his) assertTrue("$PROFILE: $key", mine[key] == kind || (kind == "integer" && mine[key] == "number"))
         for (key in mine.keys) assertTrue("$PROFILE: $key is not in the recorded answer", key in his)
     }
 

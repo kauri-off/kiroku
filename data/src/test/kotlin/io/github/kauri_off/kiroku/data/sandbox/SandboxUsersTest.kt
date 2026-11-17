@@ -53,8 +53,9 @@ class SandboxUsersTest {
         val pages = (1..3).map { parse(recorded("list_public_$it.200.json")).jsonObject }
         val items = pages.flatMap { it.getValue("data").jsonArray }.map { it.jsonObject }
         titles.clear()
+        // Reversed, so that the order of the pages is the sandbox's own.
         public =
-            items.associate { item ->
+            items.reversed().associate { item ->
                 val node = item.getValue("node").jsonObject
                 titles[node.id!!] = node
                 node.id!! to listed(item.getValue("list_status").jsonObject)
@@ -111,8 +112,10 @@ class SandboxUsersTest {
     fun `the public list is made of the sandbox's titles and their copies, each a title the sandbox answers and can list`() {
         val entries = (sandbox.list.usersList(SandboxUsers.PUBLIC) as UsersList.Public).entries
         val pictures = sandboxTitles.values.map { it["main_picture"] }.toSet()
+        val names = mutableSetOf<String?>()
         for ((id, listed) in entries) {
             val title = checkNotNull(sandbox.list.title(id)) { "$id" }
+            assertTrue("$id: a title of another entry", names.add(title.text("title")))
             assertTrue("$id", title["main_picture"] in pictures)
             title.episodes?.let { assertTrue("$id", listed.watched <= it) }
         }
