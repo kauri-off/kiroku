@@ -41,9 +41,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.registered
@@ -108,7 +110,11 @@ private class SwipeHarness(
                 ?.watchedEpisodes
         }
 
-    fun failed(episode: Int) = ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(ListWrite.SetWatched(anime, episode)))
+    fun failed(episode: Int) =
+        ShellMessage(
+            ShellMessage.Text.CouldNotSave,
+            ShellMessage.Action.Retry(WriteFailure(DataError.ServerError, ListWrite.SetWatched(anime, episode), list = null).retry),
+        )
 
     val moved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(anime)))
 

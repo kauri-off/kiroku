@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -47,7 +48,7 @@ data class ShellMessage(
         ) : Action
 
         data class Retry(
-            val write: ListWrite,
+            val write: ListWrite.Retry,
         ) : Action
 
         // Opens the title's edit sheet on the screen on top.
@@ -102,7 +103,7 @@ class ShellMessages(
 
     private var serial = 0L
 
-    // Ends the shown failure once its title comes to hold what its Retry would write, as when a download shows MAL made it.
+    // Ends the shown failure once its Retry would change nothing: MAL made it, or each value it sets changed since.
     private var made: Job? = null
 
     fun post(message: ShellMessage) {
@@ -123,23 +124,20 @@ class ShellMessages(
         scope.launch { list.write(write)?.let(message)?.let(::post) }
     }
 
-    // A waiting Undo or Retry of a title the shell writes would act on values it did not see.
+    // A waiting Undo of a title the shell writes would act on values it did not see; a Retry judges what is left itself.
     private fun forget(id: AnimeId) {
-        val stale = waiting.filter { it.posted.message.title == id }
+        val stale = waiting.filter { it.posted.message.title == id && it.posted.message.action !is ShellMessage.Action.Retry }
         stale.forEach { it.watch?.cancel() }
         waiting -= stale.toSet()
     }
 
-    // A message whose action could overwrite a newer edit still tells what happened, as one without Retry does.
-    private fun withoutAction(posted: Posted) {
-        val at = waiting.indexOfFirst { it.posted == posted }
-        if (at >= 0) waiting[at] = Waiting(posted.copy(message = posted.message.copy(action = null)), watch = null)
-    }
-
-    // A waiting Undo or Retry is dropped once its title's values differ from those it would write over.
+    // A waiting Undo is dropped once its title's values differ from those it would write over, a Retry as a shown one is.
     private fun watch(posted: Posted): Job? {
         val id = posted.message.title ?: return null
-        val undone = ((posted.message.action as? ShellMessage.Action.Undo)?.write as? ListWrite.Undo)?.change
+        val action = posted.message.action
+        val failure = (action as? ShellMessage.Action.Retry)?.write?.failure
+        if (failure != null && !failure.judged) return null
+        val undone = ((action as? ShellMessage.Action.Undo)?.write as? ListWrite.Undo)?.change
         return scope.launch {
             var start = undone?.let { Start(it.after?.values) }
             var failures = 0
@@ -147,18 +145,25 @@ class ShellMessages(
                 try {
                     list.observeEntry(id).map { it?.values }.first { values ->
                         val from = start ?: Start(values).also { start = it }
-                        values != from.values
+                        failure?.ends(from, values) ?: (values != from.values)
                     }
                     break
                 } catch (_: DataException) {
-                    // A Retry's failure has no values: a read after the store returns may hold a newer edit.
-                    if (start == null) return@launch withoutAction(posted)
                     delay(minOf(REREAD * 2.0.pow(failures++), REREAD_LONGEST))
                 }
             }
             waiting.removeAll { it.posted == posted }
         }
     }
+
+    // A failed save or removal can be judged against the title; a step or a typed count applies to whatever it holds.
+    private val WriteFailure.judged: Boolean get() = write is ListWrite.Save || write is ListWrite.Remove
+
+    // W2: nothing is left to set, or the title changed to what it sets; the values first seen may be the rollback's.
+    private fun WriteFailure.ends(
+        start: Start,
+        now: ListValues?,
+    ): Boolean = left(now) == null || now != start.values && settledBy(now)
 
     // The snackbar ended by itself, by a swipe or by its action; not when a newer message or a recreation cut it short.
     fun ended(
@@ -189,20 +194,14 @@ class ShellMessages(
     }
 
     private fun endWhenMade(posted: Posted): Job? {
-        val retry = (posted.message.action as? ShellMessage.Action.Retry)?.write as? ListWrite.Retry ?: return null
-        val writes: (ListValues?) -> ListValues? =
-            when (val write = retry.failure.write) {
-                is ListWrite.Save -> write::over
-                is ListWrite.Remove -> { _ -> null }
-                else -> return null
-            }
+        val retry = (posted.message.action as? ShellMessage.Action.Retry)?.write ?: return null
+        val failure = retry.failure
+        if (!failure.judged) return null
         return scope.launch {
-            // Values the title already held when the message showed say nothing of MAL: they may be the rollback's.
             var start: Start? = null
             try {
                 list.observeEntry(retry.anime.id).map { it?.values }.first { now ->
-                    val from = start ?: Start(now).also { start = it }
-                    now != from.values && now == writes(now)
+                    failure.ends(start ?: Start(now).also { start = it }, now)
                 }
             } catch (_: DataException) {
                 return@launch

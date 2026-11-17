@@ -70,6 +70,12 @@ enum class ListField(
     WatchedEpisodes(ListValues::watchedEpisodes),
     StartDate(ListValues::startDate),
     FinishDate(ListValues::finishDate),
+    ;
+
+    companion object {
+        // Values that only mean something together: W7 moves the status, the count and the dates as one.
+        val units: List<Set<ListField>> = listOf(setOf(Status, WatchedEpisodes, StartDate, FinishDate), setOf(Score))
+    }
 }
 
 fun ListValues.changedFrom(other: ListValues): Set<ListField> = ListField.entries.filterTo(mutableSetOf()) { it.of(this) != it.of(other) }

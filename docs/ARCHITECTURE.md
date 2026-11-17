@@ -407,9 +407,9 @@ was chosen against, and why:
   state where they would be, and a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
-  replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
-  while the user can see and tap it; a finger holding any message stops its time, which starts again in full when
-  let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
+  replaced, and another of its kind waits behind it: an Undo while its title's values are unchanged, a Retry while
+  it has something left to set (W2). Its time runs only while the user can see and tap it; a finger holding any
+  message stops its time, which starts again in full when let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
   runs no action. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
@@ -429,9 +429,11 @@ changes without asking. "+1" on a row offers Undo, and so does a change on the t
   confirmed (not "the value before the tap"), no later edit of that entry that was still waiting is sent, and a
   snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
   Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits set, as shown
-  just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
-  fails. 14 is not sent, the row shows 12, and Retry sends 14. A write MAL may have made (it failed with a server
-  error or without a connection) is followed by a download, and its message goes once the entry shows the change.
+  just before the failure, that nothing has changed since; of the status, the count and the two dates it sets none
+  once one it sets, or the status, has changed. A removal, once applied, is retried only while the entry is as it
+  was. Its message goes once none is left. Example: the server has 12; two taps show 13, then 14; the request
+  carrying 13 fails. 14 is not sent, the row shows 12, and Retry sends 14. A write MAL may have made (it failed with
+  a server error or without a connection) is followed by a download.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
   while it still holds what the edit put there. A change off a status the app does not know offers no Undo, as that

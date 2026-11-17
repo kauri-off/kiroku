@@ -246,18 +246,7 @@ missing from it; there are no duplicates.
   bound, offline), N7, N8 and S9, and the stores in memory pass it; a schedule fetched for a page reaches no run;
   the re-check asks AniList for the due titles and no other.
 
-- [ ] **M4-03 Background writes and the edits a screen holds.** A "Mark watched" from a notification, or a sync,
-  can change an entry while a screen holds an older view of it. An edit sheet opened before it and saved after it
-  sends the values its user changed and no other (section 7.3): the action's episode stays unless the sheet changed
-  the count, and then the count shown last wins (W1). A Retry or an Undo held in a message is applied to the entry
-  as it is when tapped, and never puts back a value that the action or a sync has written since. The hand-off
-  states, for the owner's approval, what a held Retry does then.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test` in the list's contract suite, and tests of the edit sheet and of the shell's
-  messages: with a sheet opened at 13 episodes and a `send` that marks the fourteenth, a save that changed the
-  score alone leaves MAL with 14 and the score, and a save that set the count to 15 leaves 15; a Retry tapped after
-  a `send` or a download changed the count leaves the count they wrote; an Undo of "+1" tapped after a `send` takes
-  back its own step alone.
+- [x] **M4-03 Background writes and the edits a screen holds.**
 
 - [x] **M4-04 [A] One way in to MAL for background work.**
 
