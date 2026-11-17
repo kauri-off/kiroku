@@ -5,12 +5,14 @@ import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
 import io.github.kauri_off.kiroku.data.anilist.AniListAiring
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +32,8 @@ internal class LiveSource(
     val aniList: String? = null,
     // What AniList's requests are spaced by.
     val aniListTime: TimeSource.WithComparableMarks = DeviceTime,
+    // Where Tenrai is asked for score distributions, when not at its own address.
+    val tenrai: String? = null,
 ) {
     companion object {
         val Account = LiveSource(notShown("account"), MalHosts.Real)
@@ -71,6 +75,14 @@ internal class LiveParts(
             ?: AniListAiring(http, clock, block, time = source.aniListTime)
     }
 
+    // The only Tenrai client, one per process as its graph is, with every answer kept for the process.
+    val scores by lazy {
+        val block = file(TENRAI_BLOCK)
+        KeptScoreDistributions(
+            source.tenrai?.let { TenraiScores(http, clock, block, it, DeviceTime) } ?: TenraiScores(http, clock, block, time = DeviceTime),
+        )
+    }
+
     // A file of this source alone, named after it: tokens open only under the name they were sealed with.
     fun file(kind: String): File = File(context.noBackupFilesDir, notShown("${source.name}.$kind"))
 
@@ -79,6 +91,7 @@ internal class LiveParts(
 
     private companion object {
         val ANILIST_BLOCK = notShown("anilist.block")
+        val TENRAI_BLOCK = notShown("tenrai.block")
         val BACK_OFF = notShown("backoff")
     }
 }
@@ -97,6 +110,7 @@ internal class LiveGraph(
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetListSorts() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
+    override val scores by lazy { parts.scores }
     override val search by lazy { liveSearch(parts) }
     override val user by lazy { liveUser(parts, account) }
     override val connection by lazy { liveConnection(parts) }

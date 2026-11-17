@@ -19,6 +19,9 @@ import java.time.Instant
 internal fun recorded(name: String): String =
     checkNotNull(SandboxFixture::class.java.getResource("/mal/recorded/$name")) { name }.readText()
 
+internal fun recordedTenrai(name: String): String =
+    checkNotNull(SandboxFixture::class.java.getResource("/tenrai/recorded/$name")) { name }.readText()
+
 internal fun printed(name: String): String =
     checkNotNull(SandboxFixture::class.java.getResource("/mal/authorization/$name")) { name }.readText()
 

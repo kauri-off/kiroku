@@ -1,0 +1,7 @@
+{
+    "status": 404,
+    "type": "ResourceNotFoundException",
+    "message": "Anime with ID 2 not found.",
+    "error": "The requested resource does not exist in our database or the ID is invalid.",
+    "path": "/v1/anime/2/statistics"
+}

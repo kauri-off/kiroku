@@ -62,6 +62,7 @@ fun TitleRoute(
                 graph.anime,
                 graph.list,
                 graph.airing,
+                graph.scores,
                 graph.session,
                 graph.connection,
                 graph.clock,

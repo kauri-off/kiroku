@@ -98,7 +98,7 @@ class LiveListTest {
     private fun parts(scope: CoroutineScope) =
         LiveParts(
             context,
-            LiveSource("served", mal.hosts, aniList = ServedMal.NO_ANILIST),
+            LiveSource("served", mal.hosts, aniList = ServedMal.NO_ANILIST, tenrai = ServedMal.NO_TENRAI),
             "0123abcd",
             Clock.systemUTC(),
             scope,

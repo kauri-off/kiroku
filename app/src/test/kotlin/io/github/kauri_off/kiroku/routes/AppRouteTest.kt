@@ -9,12 +9,9 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -133,11 +130,8 @@ class AppRouteTest {
     // The scrolling list of the screen on top; the one with [text] among its items.
     private fun scrollTo(text: String) =
         compose
-            .onAllNodes(hasScrollAction() and hasScrollToNode())
-            .filter(hasAnyDescendant(hasContentDescription("Episodes watched")) or hasAnyDescendant(hasText("Related")))[0]
+            .onNode(hasTestTag(TitleTags.page))
             .performScrollToNode(hasText(text))
-
-    private fun hasScrollToNode() = SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)
 
     private fun openKagerou() {
         compose.onNodeWithText(kagerou.titles.romaji).performClick()

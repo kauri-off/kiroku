@@ -46,14 +46,16 @@ without affecting its page (section 2.3).
 | The signed-in user's list (read and write), own profile | MAL API v2 | Yes |
 | Another user's public list | MAL API v2 | No (client id only) |
 | Airing times of episodes | AniList GraphQL, keyed by MAL id | No |
-| Score histogram, characters, videos, reviews, other users' avatar and "about" | Jikan v4; not in 1.0 | No |
+| A title's score distribution (MAL's votes per score) | Tenrai, keyed by MAL id | No |
+| Characters, videos, reviews, other users' avatar and "about" | None chosen (section 13); not in 1.0 | |
 
 - Kiroku has no server of its own, scrapes no HTML and loads no remote configuration.
 - AniList is chosen for airing times because it is a documented public API that knows real episode times, breaks
   and delays, and covers long-running shows regardless of season (dailyAL issue #8). MAL's own `broadcast` field (a
   weekday and a Japan-time slot) knows none of that and only feeds the estimate of section 4.
 - **Privacy.** AniList receives the MAL ids of the unfinished titles on the user's list and of an airing title whose
-  page is open, and nothing else about the user. There is no analytics and no crash reporting.
+  page is open, and nothing else about the user. Tenrai receives the device's IP address and the MAL id of each title
+  whose statistics are looked at. There is no analytics and no crash reporting.
 
 ### 2.2 External constraints and their consequences
 
@@ -80,6 +82,13 @@ AniList (from its API documentation and recorded answers):
   some have two, and AniList sometimes numbers episodes differently from MAL (a second season that continues at
   13, or one MAL title split into seasons that each start at 1). All are normal cases for section 4, not errors.
 
+Tenrai (from its documentation and recorded answers):
+
+- Its public limit is 4 requests a second and 120 a minute per IP address; a refusal is a 429 with `Retry-After`, or a
+  403 from its anti-abuse system. The app asks one title at a time, well below that.
+- It refreshes scores daily and caches answers up to 12 hours, so a distribution can be a day and a half old; an
+  answer does not say how old it is.
+
 ### 2.3 When a source fails
 
 | Source | Failure | What the user gets |
@@ -89,6 +98,7 @@ AniList (from its API documentation and recorded answers):
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
+| Tenrai | Any failure, refusal or rate limit | The title page's part for the score distribution says it could not load and offers its own Retry; nothing else of the page waits for it or shows a message. |
 | An optional source (after 1.0) | Any failure | Its part of the page says so and offers Retry, and never blocks or delays the rest of the page. |
 
 The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the
@@ -559,8 +569,8 @@ The code and the screenshots rendered from `main` are the record of what was dec
   or check; those needing the user's sign-in, by the owner with a debug tool, as sent less token and client id.
 - **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
   reads recorded files before they are committed. The owner's stay outside all checkouts; tests skip without them.
-- Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
-  itself.
+- Nobody calls the MAL API by hand with the client id. AniList and Tenrai need no key, so an agent records their
+  responses itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another
   app on the device.
 
@@ -649,5 +659,9 @@ Each of these could change a decision above.
    apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-5. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
-   not be reached from the maintainer's machine.
+5. **Sources beyond MAL and AniList.** Jikan's public API, once named here for the score distribution, characters,
+   videos, reviews and other users' avatars, shut down on 1 October 2026; the score distribution comes from Tenrai,
+   and the rest has no source. Tenrai is in beta and does not say who runs it. Like every source of MAL's score
+   distribution it serves what it reads from MAL's website, which clause 4(i) of MAL's API agreement rules out for
+   an app's own requests; the owner accepts that risk, and the app itself scrapes nothing. AniList's links and
+   characters and Shikimori are unchecked.

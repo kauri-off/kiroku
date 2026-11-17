@@ -23,6 +23,7 @@ import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.edit.EditSheetState
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.readAgainOnRetry
@@ -51,6 +52,7 @@ class TitleViewModel(
     private val anime: AnimeRepository,
     list: ListSource,
     private val airing: AiringRepository,
+    private val scores: ScoreDistributionRepository,
     session: SessionRepository,
     connection: Connection,
     private val clock: Clock,
@@ -105,6 +107,9 @@ class TitleViewModel(
     private val waitShown = MutableStateFlow(false)
     private val refreshing = MutableStateFlow(false)
     private val chainWaitShown = MutableStateFlow(false)
+    private val scoresBlock = MutableStateFlow<ScoresBlock>(ScoresBlock.NotAsked)
+    private var scoresAsked = false
+    private var scoresAsk: Job? = null
 
     // The chain was walked since the page opened, or since a pull asked for it again.
     private var walked = false
@@ -142,18 +147,18 @@ class TitleViewModel(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<TitleState> =
-        combine(sources.filterNotNull(), moment, failure, combine(waitShown, chainWaitShown, ::Pair), refreshing) {
-            sources,
+        combine(
+            sources.filterNotNull(),
             moment,
             failure,
-            (waitShown, chainWaitShown),
-            refreshing,
-            ->
-            build(sources, moment, failure, waitShown, refreshing, chainWaitShown)
+            combine(waitShown, chainWaitShown, ::Pair),
+            combine(refreshing, scoresBlock, ::Pair),
+        ) { sources, moment, failure, (waitShown, chainWaitShown), (refreshing, scores) ->
+            build(sources, moment, failure, waitShown, refreshing, chainWaitShown, scores)
         }.stateIn(
             viewModelScope,
             WhileShown,
-            sources.value?.let { build(it, moment.value, null, false, false, false) } ?: TitleState.Loading(null),
+            sources.value?.let { build(it, moment.value, null, false, false, false, scoresBlock.value) } ?: TitleState.Loading(null),
         )
 
     // A failure shown in place is tried again as a Retry would be; any other load runs as on opening.
@@ -214,7 +219,14 @@ class TitleViewModel(
             TitleEvent.Refresh -> {
                 airingReads.update { it + 1 }
                 refresh(Asked.Pull)
+                if (scoresBlock.value is ScoresBlock.Failed) askScores()
             }
+            TitleEvent.ScoresInView ->
+                if (!scoresAsked) {
+                    scoresAsked = true
+                    askScores()
+                }
+            TitleEvent.RetryScores -> if (scoresBlock.value is ScoresBlock.Failed) askScores()
             else -> Unit
         }
         val next = moment.value.after(event)
@@ -229,6 +241,7 @@ class TitleViewModel(
         waitShown: Boolean,
         refreshing: Boolean,
         chainWaitShown: Boolean,
+        scores: ScoresBlock,
     ): TitleState {
         val entry = sources.list.entries[id]
         val anime = animeOf(sources)
@@ -260,8 +273,23 @@ class TitleViewModel(
                     },
                     refreshing,
                     chainLoading = chainWaitShown && details != null,
+                    scores = scores,
                 )
         }
+    }
+
+    // Apart from the page's load and its pace: what comes of it is the block's alone, never a message (section 2.3).
+    private fun askScores() {
+        if (scoresAsk?.isActive == true) return
+        scoresBlock.value = ScoresBlock.Loading
+        scoresAsk =
+            viewModelScope.launch {
+                scoresBlock.value =
+                    when (val answer = scores.distribution(id)) {
+                        is Outcome.Success -> answer.value?.let(ScoresBlock::Shown) ?: ScoresBlock.NotKnown
+                        is Outcome.Failure -> ScoresBlock.Failed(answer.error)
+                    }
+            }
     }
 
     private fun shownPage(): TitlePage? = (state.value as? TitleState.Shown)?.page

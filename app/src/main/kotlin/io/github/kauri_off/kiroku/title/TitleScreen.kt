@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -47,15 +48,19 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -82,6 +87,7 @@ import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
+import io.github.kauri_off.kiroku.core.score.ScoreDistribution
 import io.github.kauri_off.kiroku.design.component.EpisodeStepper
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterCard
@@ -105,6 +111,8 @@ import io.github.kauri_off.kiroku.text.genreName
 import io.github.kauri_off.kiroku.text.label
 import io.github.kauri_off.kiroku.text.named
 import io.github.kauri_off.kiroku.text.statusName
+import kotlinx.coroutines.flow.first
+import java.text.NumberFormat
 
 // The title page: one column in a fixed order, drawn from [state] alone. Its snackbars go to [snackbars], the host
 // the caller draws.
@@ -209,8 +217,11 @@ private fun TitleContent(
                 ),
         contentAlignment = Alignment.TopCenter,
     ) {
+        val list = rememberLazyListState()
+        ScoresInView(list, onEvent)
         LazyColumn(
-            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
+            state = list,
+            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize().testTag(TitleTags.page),
             contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
             item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(page) } }
@@ -547,6 +558,9 @@ private fun LazyListScope.details(
         val space = next(heading, StatBarEnd)
         item(key = Section.Statistics) { Spaced(space) { Statistics(statistics) } }
     }
+    val scores = state.scores
+    val scoresSpace = next(heading, if (scores is ScoresBlock.Shown && scores.distribution.total > 0) StatBarEnd else Dp.Hairline)
+    item(key = Section.Scores) { Spaced(scoresSpace) { Scores(scores, onEvent) } }
     val space = next(RowLead, Dp.Hairline)
     item(key = Section.More) { Spaced(space) { More(details, onEvent) } }
 }
@@ -732,6 +746,72 @@ private fun Statistics(statistics: TitleStatistics) {
     }
 }
 
+// Asks for the scores once the statistics or the scores themselves are on screen, not when the list only lays them out ahead.
+@Composable
+private fun ScoresInView(
+    list: LazyListState,
+    onEvent: (TitleEvent) -> Unit,
+) {
+    val event by rememberUpdatedState(onEvent)
+    LaunchedEffect(list) {
+        snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.key == Section.Statistics || it.key == Section.Scores } }
+            .first { it }
+        event(TitleEvent.ScoresInView)
+    }
+}
+
+// MAL's votes per score, 10 first, as bars like the statistics'; or why there are none, or its own Retry.
+@Composable
+private fun Scores(
+    block: ScoresBlock,
+    onEvent: (TitleEvent) -> Unit,
+) {
+    Column(Modifier.testTag(TitleTags.scores)) {
+        SectionHeader(stringResource(R.string.title_scores))
+        when (block) {
+            // On screen for a frame at most: coming into view asks for them.
+            ScoresBlock.NotAsked -> Unit
+            ScoresBlock.Loading -> {
+                val loading = stringResource(R.string.title_loading_scores)
+                LinearWavyProgressIndicator(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.l, vertical = Spacing.s)
+                        .testTag(WAVY_INDICATOR)
+                        .semantics { contentDescription = loading },
+                )
+            }
+            is ScoresBlock.Shown -> {
+                val distribution = block.distribution
+                if (distribution.total == 0) {
+                    SupportingText(stringResource(R.string.title_scores_none), Modifier.padding(horizontal = Spacing.l))
+                } else {
+                    val numbers = NumberFormat.getIntegerInstance(LocalConfiguration.current.locales[0])
+                    Column(Modifier.trimTop(StatBarEnd)) {
+                        for (score in ScoreDistribution.SCORES.reversed()) {
+                            StatBar(
+                                numbers.format(score),
+                                distribution[score],
+                                distribution.total,
+                                spokenLabel = stringResource(R.string.title_scores_spoken, score),
+                            )
+                        }
+                    }
+                }
+            }
+            ScoresBlock.NotKnown ->
+                SupportingText(stringResource(R.string.title_scores_not_known), Modifier.padding(horizontal = Spacing.l))
+            is ScoresBlock.Failed -> {
+                val message = if (block.error == DataError.NoConnection) R.string.common_no_connection else R.string.title_scores_failed
+                SupportingText(stringResource(message), Modifier.padding(horizontal = Spacing.l))
+                Box(Modifier.padding(start = ButtonEdge)) {
+                    LabelButton(stringResource(R.string.design_retry)) { onEvent(TitleEvent.RetryScores) }
+                }
+            }
+        }
+    }
+}
+
 // Rows that open sub-screens, each with what it holds under its name.
 @Composable
 private fun More(
@@ -806,12 +886,14 @@ private val STATISTICS_ORDER = listOf(ListStatus.Watching, ListStatus.Completed,
 
 // Tags for tests.
 internal object TitleTags {
+    val page = notShown("title-page")
     val header = notShown("title-header")
     val poster = notShown("title-poster")
     val list = notShown("title-list-block")
     val airing = notShown("title-airing-block")
     val detailsFailed = notShown("title-details-failed")
     val chainCard = notShown("title-chain-card")
+    val scores = notShown("title-scores")
 }
 
-private enum class Section { Header, List, Loading, Failed, WatchOrder, ChainLoading, Synopsis, Related, Statistics, More }
+private enum class Section { Header, List, Loading, Failed, WatchOrder, ChainLoading, Synopsis, Related, Statistics, Scores, More }

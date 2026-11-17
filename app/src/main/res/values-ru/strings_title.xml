@@ -37,6 +37,12 @@
     <string name="title_loading_watch_order">Загрузка порядка просмотра</string>
     <string name="title_related">Связанное</string>
     <string name="title_statistics">Статистика</string>
+    <string name="title_scores">Оценки MAL</string>
+    <string name="title_loading_scores">Загрузка оценок MAL</string>
+    <string name="title_scores_spoken">Оценка\u00A0%1$d</string>
+    <string name="title_scores_none">Этот тайтл ещё никто не оценил</string>
+    <string name="title_scores_not_known">Оценки этого тайтла пока неизвестны</string>
+    <string name="title_scores_failed">Не удалось загрузить оценки</string>
     <string name="title_details">Подробности</string>
     <string name="title_recommendations">Рекомендации</string>
     <plurals name="title_titles">

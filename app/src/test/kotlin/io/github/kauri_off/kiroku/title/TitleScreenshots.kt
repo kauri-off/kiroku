@@ -79,6 +79,13 @@ class TitleScreenshots : ScreenshotRegistry() {
                         ).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)),
                 )
             },
+            case("scores-loading") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch, scores = ScoresBlock.Loading)) },
+            case("scores-failed") {
+                Screen(TitleFixtures.of(FixtureAnime.exactToWatch, scores = ScoresBlock.Failed(DataError.ServerError)))
+            },
+            case("scores-offline") {
+                Screen(TitleFixtures.of(FixtureAnime.exactToWatch, scores = ScoresBlock.Failed(DataError.NoConnection)))
+            },
             case("refreshing") { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(refreshing = true)) },
             case("no-score") { Screen(TitleFixtures.of(FixtureAnime.premiereTimeLater)) },
             case("planned-scored") { Screen(TitleFixtures.plannedScored) },
@@ -191,7 +198,8 @@ object TitleFixtures {
         details: AnimeDetails? = set.details[anime.id],
         session: Session = set.session,
         moment: TitleMoment = TitleMoment(),
-    ): TitleState.Shown = TitleState.Shown(page(anime, entry, airing, details), session, moment)
+        scores: ScoresBlock = set.scores[anime.id]?.let(ScoresBlock::Shown) ?: ScoresBlock.NotKnown,
+    ): TitleState.Shown = TitleState.Shown(page(anime, entry, airing, details), session, moment, scores = scores)
 
     // The longest status name beside the longest score text.
     val plannedScored: TitleState.Shown

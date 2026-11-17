@@ -34,6 +34,12 @@
     <string name="title_loading_watch_order">Loading the watch order</string>
     <string name="title_related">Related</string>
     <string name="title_statistics">Statistics</string>
+    <string name="title_scores">MAL scores</string>
+    <string name="title_loading_scores">Loading MAL scores</string>
+    <string name="title_scores_spoken">Score\u00A0%1$d</string>
+    <string name="title_scores_none">Nobody has scored this title yet</string>
+    <string name="title_scores_not_known">The scores of this title are not known yet</string>
+    <string name="title_scores_failed">Could not load the scores</string>
     <string name="title_details">Details</string>
     <string name="title_recommendations">Recommendations</string>
     <plurals name="title_titles">

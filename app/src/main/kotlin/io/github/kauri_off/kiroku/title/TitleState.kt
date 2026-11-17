@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.relatedStrip
 import io.github.kauri_off.kiroku.core.model.sequelChain
+import io.github.kauri_off.kiroku.core.score.ScoreDistribution
 import java.time.Clock
 import java.time.ZonedDateTime
 
@@ -46,7 +47,28 @@ sealed interface TitleState {
         val refreshing: Boolean = false,
         // The walk along the chain of sequels has run for a second and goes on.
         val chainLoading: Boolean = false,
+        val scores: ScoresBlock = ScoresBlock.NotAsked,
     ) : TitleState
+}
+
+// MAL's score distribution of the title, asked of a service apart from the page's own: how that went is its block's
+// alone, never the page's (section 2.3).
+sealed interface ScoresBlock {
+    // Not in view yet, so not asked.
+    data object NotAsked : ScoresBlock
+
+    data object Loading : ScoresBlock
+
+    data class Shown(
+        val distribution: ScoreDistribution,
+    ) : ScoresBlock
+
+    // The service has no record of the title.
+    data object NotKnown : ScoresBlock
+
+    data class Failed(
+        val error: DataError,
+    ) : ScoresBlock
 }
 
 sealed interface DetailsWait {
@@ -226,6 +248,11 @@ sealed interface TitleEvent {
     data object OpenRecommendations : TitleEvent
 
     data object Retry : TitleEvent
+
+    // The statistics or the scores came into view: the scores are asked once for the page.
+    data object ScoresInView : TitleEvent
+
+    data object RetryScores : TitleEvent
 
     data object Refresh : TitleEvent
 

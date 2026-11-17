@@ -32,6 +32,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -94,6 +95,52 @@ class TitleScreenTest {
         action()
         compose.waitForIdle()
         assertEquals(listOf(event), events)
+    }
+
+    @Test
+    fun theScoresAreAskedForOnlyOnceTheStatisticsComeIntoViewAndOnlyOnce() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch, scores = ScoresBlock.NotAsked))
+        assertEquals(emptyList<TitleEvent>(), events.filter { it == TitleEvent.ScoresInView })
+
+        scrollTo("Statistics")
+        compose.waitForIdle()
+        scrollTo("MAL scores")
+        compose.waitForIdle()
+
+        assertEquals(listOf(TitleEvent.ScoresInView), events.filter { it == TitleEvent.ScoresInView })
+    }
+
+    @Test
+    fun theScoresShowEveryScoreFromTenDownAsABarSpokenAsThatScore() {
+        val distribution = Fixtures.reference.scores.getValue(FixtureAnime.exactToWatch.id)
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        scrollTo("MAL scores")
+
+        val spoken =
+            compose
+                .onAllNodes(hasContentDescription("Score\u00A0", substring = true))
+                .fetchSemanticsNodes()
+                .map { it.config[SemanticsProperties.ContentDescription].single() }
+        assertEquals((10 downTo 1).map { "Score\u00A0$it" }, spoken.map { it.substringBefore(", ") })
+        assertTrue(spoken.first(), spoken.first().contains("%,d".format(java.util.Locale.US, distribution[10])))
+    }
+
+    @Test
+    fun aFailureOfTheScoresOffersTheirOwnRetryAndNoOther() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch, scores = ScoresBlock.Failed(DataError.Refused)))
+        scrollTo("Could not load the scores")
+
+        compose.onNodeWithText("Could not load the scores").assertIsDisplayed()
+        sends(TitleEvent.RetryScores) { compose.onNodeWithText("Retry").performClick() }
+    }
+
+    @Test
+    fun aTitleNobodyScoredOrNotKnownSaysSoWithoutBars() {
+        show(TitleFixtures.of(FixtureAnime.premiereTimeSoon))
+        scrollTo("Nobody has scored this title yet")
+        assertEquals(0, compose.onAllNodes(hasContentDescription("Score\u00A0", substring = true)).fetchSemanticsNodes().size)
+        show(TitleFixtures.of(FixtureAnime.premiereUnannounced))
+        scrollTo("The scores of this title are not known yet")
     }
 
     @Test

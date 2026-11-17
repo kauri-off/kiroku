@@ -122,12 +122,16 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree(ownerRecordings)).withPropertyName("ownerRecordings")
 }
 
-// The public answers whose titles the sandbox reads (SandboxTitles.Answers), copied into the debug and preview builds'
-// assets and nothing else of the recorded ones.
+// The public answers whose titles the sandbox reads (SandboxTitles.Answers) and Tenrai's answers it gives
+// (SandboxTenrai.Files), copied into the debug and preview builds' assets and nothing else of the recorded ones.
 abstract class SandboxAssets : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NAME_ONLY)
     abstract val answers: ConfigurableFileCollection
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val tenrai: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val output: DirectoryProperty
@@ -138,6 +142,10 @@ abstract class SandboxAssets : DefaultTask() {
         recorded.deleteRecursively()
         recorded.mkdirs()
         answers.files.forEach { it.copyTo(File(recorded, it.name)) }
+        val scores = output.get().asFile.resolve("tenrai")
+        scores.deleteRecursively()
+        scores.mkdirs()
+        tenrai.files.forEach { it.copyTo(File(scores, it.name)) }
     }
 }
 
@@ -153,11 +161,22 @@ val sandboxAnswers =
         "ranking_upcoming",
     )
 
+val sandboxTenrai =
+    listOf(
+        "airing.200.json",
+        "few_votes.200.json",
+        "not_yet_aired.200.json",
+        "popular.200.json",
+        "unknown.404.json",
+    )
+
 val sandboxAssets =
     tasks.register<SandboxAssets>("sandboxAssets") {
         val files = sandboxAnswers.map { layout.projectDirectory.file("src/test/resources/mal/recorded/$it.200.json") }
+        val scores = sandboxTenrai.map { layout.projectDirectory.file("src/test/resources/tenrai/recorded/$it") }
         answers.from(files)
-        doFirst { check(files.all { it.asFile.isFile }) { "A public answer the sandbox reads is missing" } }
+        tenrai.from(scores)
+        doFirst { check((files + scores).all { it.asFile.isFile }) { "A public answer the sandbox reads is missing" } }
     }
 
 androidComponents {
@@ -242,6 +261,28 @@ tasks.register<JavaExec>("recordAniListAnswers") {
     )
     doFirst {
         check(named) { "recordAniListAnswers calls AniList: it runs only as the one task of a build" }
+        (this as JavaExec).environment("KIROKU_RECORD_ONLY", only.getOrElse(""))
+    }
+}
+
+// Section 11.1: Tenrai's answers of a title's votes per score; no task depends on it, and it runs only as the one task of a build.
+tasks.register<JavaExec>("recordTenraiAnswers") {
+    description = "Asks Tenrai the requests of TenraiRequests, one at a time, and stores the answers."
+    val named = gradle.startParameter.taskNames.map { it.substringAfterLast(':') } == listOf(name)
+    val only = providers.gradleProperty("kiroku.recordOnly")
+    classpath(provider { tasks.named<Test>("testDebugUnitTest").get().classpath })
+    mainClass = "io.github.kauri_off.kiroku.data.recorder.RecordTenraiKt"
+    args(
+        layout.projectDirectory
+            .dir("src/test/resources/tenrai/recorded")
+            .asFile.path,
+        layout.buildDirectory
+            .dir("tenrai-run")
+            .get()
+            .asFile.path,
+    )
+    doFirst {
+        check(named) { "recordTenraiAnswers calls Tenrai: it runs only as the one task of a build" }
         (this as JavaExec).environment("KIROKU_RECORD_ONLY", only.getOrElse(""))
     }
 }
