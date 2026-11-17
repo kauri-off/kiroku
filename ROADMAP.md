@@ -176,11 +176,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-11 AniList in the scenario panel.**
 
-- [ ] **M3-12 [O] Emulator run.** The orchestrator runs the app once on the emulator against the sandbox: a count
-  rises as an air time passes with the network off; with AniList failing the stored counts stay; the preview
-  build installed over a build of M2 keeps its list.
-  **Needs:** M3-09, M3-10, M3-11.
-  **Check:** the three observations, with the screenshots of each; a difference is filed as a task.
+- [x] **M3-12 [O] Emulator run.**
 
 - [ ] **M3-13 [O] The owner's seven days.** At the start the owner compares the aired counts of three airing
   titles of his list, one of them on a break, with the broadcaster's or a streaming service's schedule. He then
@@ -198,30 +194,7 @@ Acceptance: over seven days with notifications on, every entry of "Recently sent
 by AniList's schedule for a title the owner was watching; no episode of a watched title with an exact count is
 missing from it; there are no duplicates.
 
-- [ ] **M4-01 [A] What is notifiable.** In `:core` only, as values and rules without a store. From the stored list,
-  the stored schedules (what `AiringRepository.observeSchedules()` gives, and nothing fetched for a page, A12), the
-  notification settings, the record of what was announced and an instant, one rule gives: the announcements that
-  are due, one per title for its highest due episode (N6), each with the count still to watch and the episode "Mark
-  watched" would mark (N9); the earlier announcements that no longer stand (N7); and the earliest notification time
-  still to come (N8). Whether a count is exact and when an episode aired is the airing calculator's answer and is
-  computed nowhere else (A1). N4 and N5 hold, a finale is still due after MAL has marked its show finished (A13),
-  nothing is due more than three days after its notification time (N2), and no result depends on the time zone. The
-  settings (on or off, also for planned titles, the delay) and the record are defined here: the episodes announced,
-  and for N5 the moment from which each title is followed, with the rule that sets it at a sign-in, when
-  notifications or planned titles are turned on, and when a title is added or changes status, also when a sync
-  brings the change. The first run of a build with notifications over a list an earlier build stored counts as
-  turning them on. A title that a list download left out and a later one brings back is the title it was: its
-  moment and its announced episodes stay. The hand-off states, for the owner's approval, what that moment is for
-  each event N5 names.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`: a test for each of N4, N5 (one per event it names, and the delay's case), N6,
-  N7, A13 and the three days that fails without its rule; one test, named after it, for each failure of dailyAL
-  that section 5.1 lists: a dropped, a completed, an on-hold and a removed title, an episode postponed after it was
-  planned, an episode moved to another weekday, a show that has run for years and belongs to no season; applying
-  the rule and recording its result at any sequence of instants announces each episode at most once (N1); a title
-  left out by a download and brought back is announced neither twice nor late; a changed time zone changes no
-  result; a rule test fails when code outside the calculator derives an aired count or an air time for a
-  notification.
+- [x] **M4-01 [A] What is notifiable.**
 
 - [ ] **M4-02 [A] Notification engine.** In `:core` only, over ports as the list's and the airing's engines are: a
   store of M4-01's record and of the settings, the one alarm, and the notifications shown; with stores in memory
@@ -468,37 +441,9 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-01 Profile screen.**
 
-- [ ] **M6-02 Statistics calculator.** In `:core` only: one function from the entries of a list to its statistics,
-  the same for the signed-in user and for anyone else. It reads the app's own list model and nothing of where the
-  list came from, whose it is or how it was read. It gives every value `UserStatistics` holds; a value a screen
-  later needs is added here, and no code outside `:core` and its fixtures makes a statistic. Each of these has a
-  stated result: an empty list, an entry without a score, a title without an episode length, a start date, a media
-  type or genres, a status the app does not know, a count above the total. The fixtures' hand-written statistics
-  stay, as what a test expects of the calculator. The hand-off states, for the owner's approval, how each value is
-  counted where it could be counted in more than one way.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`: a test over a small list whose every value is worked out in the test's own
-  text; a test for each case named above; the fixtures' statistics equal the calculator's over the fixtures' list.
-  `./gradlew :app:testDebugUnitTest --tests '*SourceRulesTest'`: a rule test fails when code that ships outside
-  `:core` builds a statistics value. `./gradlew :data:testDebugUnitTest`, where the owner's recordings are (section
-  11.1): the calculator over his recorded list gives the completed count and, to two decimals, the mean score of
-  his recorded profile; a failure names the value that differs and not what it is; the test is skipped where the
-  recordings are absent or do not hold the whole list.
+- [x] **M6-02 Statistics calculator.**
 
-- [ ] **M6-03 Recorded answers of another user's list.** The recorder that needs the client id alone (section 11.1)
-  also asks for the public user's list under their name in another letter case, and for the list of a name no
-  account can have. From these and from the answers recorded earlier (a public list's pages, a private list, an
-  unknown name), `:data` gives the app's own outcomes: a private list is told by the answer recorded for one, so
-  that any other refusal of that request is a refusal like any other and backs off (section 2.3); an unknown name
-  by its answer; a name no account can have reads as an unknown name when its answer allows it. The hand-off says
-  whether MAL takes a name in any letter case, for M6-08. What MAL answers when it limits requests is not recorded
-  and is not provoked: item 2 of section 13 is rewritten to hold what is now known of a private list and what is
-  still not known. The hand-off proposes the row of section 2.3 that this changes.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: the tests of the recorded answers pass with the new files, which
-  hold no user's name; on the recorded answers, a private list is a private list and nothing backs off, an unknown
-  name is an unknown name, and the name no account can have is what the hand-off states; a refusal of that request
-  that is not the recorded one, and too many requests, are a refusal after which background work backs off.
+- [x] **M6-03 Recorded answers of another user's list.**
 
 - [x] **M6-04 [A] Other users' lists.**
 
