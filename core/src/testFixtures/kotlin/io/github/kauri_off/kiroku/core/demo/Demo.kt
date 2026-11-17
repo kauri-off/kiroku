@@ -10,6 +10,13 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
+import io.github.kauri_off.kiroku.core.notify.InMemoryShownNotifications
+import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.NotificationEngine
+import io.github.kauri_off.kiroku.core.notify.RunReport
+import io.github.kauri_off.kiroku.core.notify.ShownNotifications
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -44,6 +51,10 @@ class Demo(
     clockSet: Flow<Unit> = emptyFlow(),
     // Whether the airing store starts as fetched just now; if not, it starts empty, as after an install.
     airingStored: Boolean = true,
+    // The alarm and the notifications of the demo's device; in memory when none is given.
+    alarm: NotificationAlarm = InMemoryNotificationAlarm(),
+    shown: ShownNotifications = InMemoryShownNotifications(),
+    runs: (RunReport) -> Unit = {},
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
@@ -85,6 +96,23 @@ class Demo(
             scope,
             unexpected,
         )
+
+    // On the real rules over a record in memory; it follows the list from its first use, as the live one does.
+    val notifications: NotificationEngine by lazy {
+        NotificationEngine(
+            InMemoryNotificationStore(),
+            alarm,
+            shown,
+            list,
+            airing,
+            session.observeSession(),
+            connection,
+            clock,
+            scope,
+            reports = runs,
+            unexpected = unexpected,
+        )
+    }
 
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
@@ -130,6 +158,20 @@ class Demo(
             scope: CoroutineScope,
             unexpected: (Throwable) -> Unit = { throw it },
             clockSet: Flow<Unit> = emptyFlow(),
-        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected, clockRuns = true, clockSet = clockSet)
+            alarm: NotificationAlarm = InMemoryNotificationAlarm(),
+            shown: ShownNotifications = InMemoryShownNotifications(),
+            runs: (RunReport) -> Unit = {},
+        ): Demo =
+            Demo(
+                Fixtures.at(clock),
+                scope,
+                latency,
+                unexpected = unexpected,
+                clockRuns = true,
+                clockSet = clockSet,
+                alarm = alarm,
+                shown = shown,
+                runs = runs,
+            )
     }
 }

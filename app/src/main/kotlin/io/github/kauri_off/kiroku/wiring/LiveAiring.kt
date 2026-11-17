@@ -96,6 +96,8 @@ internal class LiveAiring(
 
     override suspend fun refresh(page: Anime): Outcome<Unit> = airing().refresh(page)
 
+    override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = airing().refresh(titles)
+
     // S9, after the session is signed out; a store that fails it is emptied at the first use of the next process.
     suspend fun forget() = reported { store().forget() }
 

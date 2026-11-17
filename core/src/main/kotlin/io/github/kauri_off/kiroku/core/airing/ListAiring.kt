@@ -156,6 +156,9 @@ class ListAiring(
 
     override suspend fun refresh(page: Anime): Outcome<Unit> = engine.refresh(page).also { given() }
 
+    // A notification reads the store, so this waits for no observer of the results.
+    override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = engine.refresh(titles)
+
     // A refresh returns once the observers are given the list and the data as they are after it, so a read that follows holds them.
     private suspend fun given() {
         try {

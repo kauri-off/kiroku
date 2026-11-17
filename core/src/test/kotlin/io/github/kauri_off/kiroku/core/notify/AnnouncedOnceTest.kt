@@ -11,7 +11,6 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.notify.NotifyCases.day
 import io.github.kauri_off.kiroku.core.notify.NotifyCases.entry
-import io.github.kauri_off.kiroku.core.notify.NotifyCases.followed
 import io.github.kauri_off.kiroku.core.notify.NotifyCases.hour
 import io.github.kauri_off.kiroku.core.notify.NotifyCases.title
 import io.github.kauri_off.kiroku.core.notify.NotifyCases.week
