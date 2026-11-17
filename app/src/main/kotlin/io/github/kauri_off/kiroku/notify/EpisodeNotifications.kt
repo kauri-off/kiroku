@@ -129,7 +129,11 @@ class EpisodeNotifications(
         val current = system.activeNotifications.firstOrNull { it.id == SUMMARY_ID && it.tag == SUMMARY_TAG }
         when {
             !shown -> system.cancel(SUMMARY_TAG, SUMMARY_ID)
-            current?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() == title -> Unit
+            current
+                ?.notification
+                ?.extras
+                ?.getCharSequence(Notification.EXTRA_TITLE)
+                ?.toString() == title -> Unit
             else -> {
                 val summary =
                     NotificationCompat
