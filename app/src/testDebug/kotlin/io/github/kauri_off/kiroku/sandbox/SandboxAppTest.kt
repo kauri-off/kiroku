@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.sandbox
 
+import android.content.Intent
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
@@ -39,8 +40,10 @@ import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -145,6 +148,24 @@ class SandboxAppTest {
 
     @get:Rule(order = 3)
     val account = AccountFiles()
+
+    // The app's work ends with the test's activity, as with the process on a device: none of it reaches the next test's app.
+    @get:Rule(order = 3)
+    val ended =
+        object : ExternalResource() {
+            override fun after() {
+                val app = RuntimeEnvironment.getApplication()
+                val graph = app.appGraph as? SandboxGraph ?: return
+                runBlocking {
+                    withTimeout(WAIT) {
+                        graph.scope.coroutineContext.job
+                            .cancelAndJoin()
+                    }
+                }
+                val clockSet = shadowOf(app).registeredReceivers.filter { it.intentFilter.hasAction(Intent.ACTION_TIME_CHANGED) }
+                assertEquals(emptyList<Any>(), clockSet)
+            }
+        }
 
     @get:Rule(order = 4)
     val compose = createAndroidComposeRule<MainActivity>()
