@@ -154,7 +154,12 @@ class MalSession internal constructor(
     }
 
     private fun renewAtStart(stored: Stored) {
-        if (stored is Stored.SignedIn && due(stored.tokens)) scope.launch { renew(stored.tokens) }
+        if (stored is Stored.SignedIn && due(stored.tokens)) scope.launch { renewUnasked(stored.tokens) }
+    }
+
+    // A renewal nobody asked for is background work: it is not sent while MAL's back-off lasts (section 2.3).
+    private suspend fun renewUnasked(tokens: Tokens) {
+        if (!guarded(false) { endpoint.refusing() }) renew(tokens)
     }
 
     override fun observeSession(): Flow<Session> =
@@ -210,13 +215,16 @@ class MalSession internal constructor(
             }
         }
 
-    // S7: for whatever starts work without a screen; the session itself does it when it is first read.
-    suspend fun renewIfDue() {
+    // S7: for work without a screen, through its way in; the session itself does it when it is first read.
+    internal suspend fun renewIfDue() {
         guarded(Unit) {
             val tokens = (stored() as? Stored.SignedIn)?.tokens ?: return
-            if (due(tokens)) renew(tokens)
+            if (due(tokens)) renewUnasked(tokens)
         }
     }
+
+    // The session as it is, with nothing sent for it; null when the file could not be read.
+    internal suspend fun current(): Session? = guarded(null) { stored()?.session }
 
     // The seconds MAL gave the access token in use; null when nobody is signed in or MAL did not say.
     internal suspend fun accessTokenLifetime(): Long? = guarded(null) { (stored() as? Stored.SignedIn)?.tokens?.lifetime }

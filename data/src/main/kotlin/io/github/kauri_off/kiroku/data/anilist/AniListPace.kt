@@ -1,6 +1,10 @@
 package io.github.kauri_off.kiroku.data.anilist
 
+import io.github.kauri_off.kiroku.data.network.RefusalFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.Clock
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
@@ -12,8 +16,8 @@ import kotlin.time.TimeSource
 // When the client may ask AniList next: at half the rate AniList reports, later after a failure, not at all while refused.
 internal class AniListPace(
     private val time: TimeSource.WithComparableMarks,
-    private val clock: Clock,
-    private val block: AniListBlock,
+    // AniList's refusal for a new process, which reads it at its first turn.
+    private val block: RefusalFile,
 ) {
     private var spacing = spacingFor(ASSUMED_LIMIT)
     private var next: ComparableTimeMark? = null
@@ -26,7 +30,7 @@ internal class AniListPace(
     suspend fun turn(): Boolean {
         if (!loaded) {
             loaded = true
-            block.read()?.let { held ->
+            withContext(Dispatchers.IO) { block.read() }?.let { held ->
                 refusedUntil = time.markNow() + held.remaining
                 lastRefusal = held.wait
                 stored = true
@@ -46,7 +50,7 @@ internal class AniListPace(
         lastRefusal = null
         next = time.markNow() + spacing
         if (stored) {
-            block.clear()
+            withContext(Dispatchers.IO) { block.clear() }
             stored = false
         }
     }
@@ -62,7 +66,7 @@ internal class AniListPace(
         val held = maxOf(wait, (retryAfter ?: Duration.ZERO).coerceIn(Duration.ZERO, LongestRetryAfter))
         refusedUntil = time.markNow() + held
         next = refusedUntil
-        block.write(clock.instant(), held, wait)
+        withContext(Dispatchers.IO) { block.write(held, wait) }
         stored = true
     }
 
@@ -79,5 +83,11 @@ internal class AniListPace(
         val LongestRetryAfter = 24.hours
 
         fun spacingFor(limit: Int): Duration = 2.minutes / limit.coerceAtMost(HIGHEST_LIMIT)
+
+        fun file(
+            file: File,
+            clock: Clock,
+            report: (Throwable) -> Unit,
+        ) = RefusalFile(file, clock, maxOf(LongestRefusal, LongestRetryAfter), report) { AniListOddAnswer("block") }
     }
 }

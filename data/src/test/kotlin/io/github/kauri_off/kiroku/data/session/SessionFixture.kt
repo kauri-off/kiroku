@@ -137,6 +137,7 @@ internal class SessionFixture(
     val reported: List<String> get() = unexpected.map { it.message.orEmpty() }
     val grants = CopyOnWriteArrayList<Map<String, String>>()
     var answer: suspend (Map<String, String>) -> TokenReply = { error("No token request was expected") }
+    var refusing: suspend () -> Boolean = { false }
     private val scopes = mutableListOf<CoroutineScope>()
 
     // The scope of the session opened last. A plain job: an exception that leaves a coroutine of the session ends it.
@@ -144,6 +145,12 @@ internal class SessionFixture(
         private set
 
     private fun scope(context: CoroutineContext): CoroutineScope = CoroutineScope(context).also { scopes += it }
+
+    // The sessions opened from now on ask [endpoint], and still count the grants.
+    fun over(endpoint: TokenEndpoint) {
+        answer = endpoint::post
+        refusing = endpoint::refusing
+    }
 
     fun format(
         cipher: TokenCipher = this.cipher,
@@ -160,9 +167,13 @@ internal class SessionFixture(
     ): MalSession {
         sessionScope = scope(Job() + dispatcher)
         val endpoint =
-            TokenEndpoint { grant ->
-                grants += grant
-                answer(grant)
+            object : TokenEndpoint {
+                override suspend fun post(grant: Map<String, String>): TokenReply {
+                    grants += grant
+                    return answer(grant)
+                }
+
+                override suspend fun refusing(): Boolean = this@SessionFixture.refusing()
             }
         return MalSession(store(format), endpoint, clock, sessionScope, { unexpected += it }, retryAfter)
     }

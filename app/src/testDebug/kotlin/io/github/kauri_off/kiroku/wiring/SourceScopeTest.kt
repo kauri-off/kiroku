@@ -66,7 +66,7 @@ class SourceScopeTest {
             SandboxGraph.create(
                 context,
                 clock,
-            ) { source, device -> LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reported::add, device = device) },
+            ) { source, device, clock -> LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reported::add, device = device) },
             refused = true,
         )
 

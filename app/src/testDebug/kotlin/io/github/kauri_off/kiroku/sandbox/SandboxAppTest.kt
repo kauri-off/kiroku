@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.sandbox
 
+import android.content.Intent
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
@@ -8,8 +9,10 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
+import androidx.lifecycle.Lifecycle
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -19,10 +22,14 @@ import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTitles
+import io.github.kauri_off.kiroku.scenario.AniListFault
+import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.source.DataSource
@@ -30,9 +37,13 @@ import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.source.runningSource
 import io.github.kauri_off.kiroku.wiring.KeysInMemory
 import io.github.kauri_off.kiroku.wiring.appGraph
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -56,8 +67,10 @@ import java.net.Proxy
 import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import kotlin.time.toJavaDuration
 
 // The app on the sandbox, signed in, synced and written through MAL's real client, and asking AniList, with no request leaving the device.
 @RunWith(RobolectricTestRunner::class)
@@ -106,6 +119,9 @@ class SandboxAppTest {
     @get:Rule(order = 2)
     val hurried = HurriedAniList()
 
+    @get:Rule(order = 2)
+    val time = MovedClock()
+
     // The real account's files, as a sign-in and a sync left them, which the sandbox must never open.
     class AccountFiles : ExternalResource() {
         private val context get() = RuntimeEnvironment.getApplication()
@@ -132,6 +148,24 @@ class SandboxAppTest {
 
     @get:Rule(order = 3)
     val account = AccountFiles()
+
+    // The app's work ends with the test's activity, as with the process on a device: none of it reaches the next test's app.
+    @get:Rule(order = 3)
+    val ended =
+        object : ExternalResource() {
+            override fun after() {
+                val app = RuntimeEnvironment.getApplication()
+                val graph = app.appGraph as? SandboxGraph ?: return
+                runBlocking {
+                    withTimeout(WAIT) {
+                        graph.scope.coroutineContext.job
+                            .cancelAndJoin()
+                    }
+                }
+                val clockSet = shadowOf(app).registeredReceivers.filter { it.intentFilter.hasAction(Intent.ACTION_TIME_CHANGED) }
+                assertEquals(emptyList<Any>(), clockSet)
+            }
+        }
 
     @get:Rule(order = 4)
     val compose = createAndroidComposeRule<MainActivity>()
@@ -423,6 +457,143 @@ class SandboxAppTest {
         for ((file, bytes) in account.seeded) assertTrue(file.name, bytes.contentEquals(files.getValue(file)))
     }
 
+    // A condition met while the main thread runs what is posted to it, as the List's own work needs.
+    private fun meanwhile(done: () -> Boolean) =
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            done()
+        }
+
+    private fun airing() = waited { graph.airing.observeAiring().first() }
+
+    private fun tracked(entries: List<ListEntry>): Set<Long> = entries.filter { it.tracked }.map { it.anime.id.value }.toSet()
+
+    // Whether AniList has been asked, since its [since]th query, for each of [ids].
+    private fun aniListAsked(
+        ids: Set<Long>,
+        since: Int,
+    ): Boolean =
+        graph.sandbox.aniList.asked
+            .drop(since)
+            .flatten()
+            .containsAll(ids)
+
+    // AniList's data of [weekly] forgotten while AniList works, then the title added again while it fails: MAL's estimate.
+    private fun addedWhileAniListFails(weekly: ListEntry): Airing {
+        meanwhile { weekly.anime.id in waited { graph.airing.observeSchedules().first() } }
+        waited { graph.list.write(ListWrite.Remove(weekly.anime)) }
+        meanwhile { asked("DELETE sandbox.invalid/v2/anime/${weekly.anime.id.value}/my_list_status") }
+        meanwhile { weekly.anime.id !in airing() }
+        graph.scenarios.set(Scenario(aniList = AniListFault.Fails))
+        val since = graph.sandbox.aniList.asked.size
+        waited { graph.list.write(ListWrite.Save(weekly.anime, weekly.values)) }
+        meanwhile { aniListAsked(setOf(weekly.anime.id.value), since) }
+        meanwhile { weekly.anime.id in airing() }
+        return airing().getValue(weekly.anime.id)
+    }
+
+    // Section 2.3's row for AniList, by the panel's switches; offline fails AniList as it fails MAL.
+    @Test
+    fun `with AniList failing alone a refresh fails, the counts stay, a title added has the estimate, MAL answers, and a reset ends it`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        val entries = waited { graph.list.observeEntries().first { it.isNotEmpty() } }
+        val weekly = entries.single { it.anime.id.value == SandboxAiring.WEEKLY }
+        val onBreak = entries.single { it.anime.id.value == SandboxAiring.ON_A_BREAK }
+        meanwhile { onBreak.anime.id in waited { graph.airing.observeSchedules().first() } }
+        graph.scenarios.set(Scenario(offline = true))
+        assertEquals(Outcome.Failure(DataError.NoConnection), waited { graph.airing.refresh() })
+        graph.scenarios.set(Scenario())
+
+        val added = addedWhileAniListFails(weekly)
+        assertTrue("$added", added.aired is AiredCount.Estimated)
+        val stored = airing()
+        assertTrue(stored[onBreak.anime.id]?.aired is AiredCount.Exact)
+        assertEquals(Outcome.Failure(DataError.ServerError), waited { graph.airing.refresh() })
+        assertEquals(stored, airing())
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        assertEquals(Outcome.Success(Unit), waited { graph.anime.refresh(weekly.anime.id) })
+        assertTrue(asked("PATCH sandbox.invalid/v2/anime/${weekly.anime.id.value}/my_list_status"))
+        compose.waitForIdle()
+        assertTrue(compose.onAllNodesWithText("Could not refresh").fetchSemanticsNodes().isEmpty())
+
+        // A reset lays the schedules out again, and the refresh after it asks for every tracked title.
+        val since = graph.sandbox.aniList.asked.size
+        graph.scenarios.reset()
+        meanwhile { !graph.scenarios.reset.value.busy }
+        assertEquals(ResetState.Idle, graph.scenarios.reset.value)
+        assertEquals(Scenario(), graph.scenarios.scenario.value)
+        assertEquals(SandboxAniListFault.None, graph.sandbox.aniList.fault)
+        meanwhile { aniListAsked(tracked(entries), since) }
+        meanwhile { airing()[weekly.anime.id]?.aired is AiredCount.Exact }
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
+    @Test
+    fun `with AniList not answering a refresh waits while MAL answers, until the switch is turned back or the sandbox reset`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        val requests = {
+            graph.sandbox.mal.asked
+                .count { it == "POST graphql.anilist.co/" }
+        }
+        val background = CoroutineScope(Dispatchers.IO)
+        for (reset in listOf(false, true)) {
+            graph.scenarios.set(Scenario(aniList = AniListFault.NoAnswer))
+            val before = requests()
+            val held = background.async { graph.airing.refresh() }
+            meanwhile { requests() > before }
+            assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+            assertTrue(!held.isCompleted)
+            if (reset) graph.scenarios.reset() else graph.scenarios.set(Scenario())
+            meanwhile { held.isCompleted }
+            assertEquals(Outcome.Success(Unit), waited { held.await() })
+            assertEquals(SandboxAniListFault.None, graph.sandbox.aniList.fault)
+        }
+        meanwhile { !graph.scenarios.reset.value.busy }
+        assertEquals(ResetState.Idle, graph.scenarios.reset.value)
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
+    // The app below another for longer than a screen's stop timeout, then shown again.
+    private fun away() {
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(AWAY.toMillis())
+        shadowOf(Looper.getMainLooper()).idleFor(AWAY)
+        compose.waitForIdle()
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+    }
+
+    // M3's decision: airing is refreshed while the session is expired, also when the List's sync fails for it.
+    @Test
+    fun `with the session expired and the airing stale, the List shown again asks AniList for the tracked titles, and the rows update`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        val entries = waited { graph.list.observeEntries().first { it.isNotEmpty() } }
+        val weekly = entries.single { it.anime.id.value == SandboxAiring.WEEKLY }
+        shows(
+            entries
+                .single { it.anime.id.value == SandboxAiring.ON_A_BREAK }
+                .anime.titles.romaji,
+        )
+        assertTrue(addedWhileAniListFails(weekly).aired is AiredCount.Estimated)
+
+        graph.scenarios.set(Scenario(sessionExpired = true))
+        assertEquals(Outcome.Failure(DataError.SessionExpired), waited { graph.list.sync() })
+        assertTrue(waited { graph.session.observeSession().first() } is Session.Expired)
+        time.ahead = Freshness.airing.toJavaDuration().plusMinutes(1)
+        val since = graph.sandbox.aniList.asked.size
+        away()
+
+        meanwhile { aniListAsked(tracked(entries), since) }
+        meanwhile { airing()[weekly.anime.id]?.aired is AiredCount.Exact }
+        shows("Session expired")
+        assertTrue(waited { graph.session.observeSession().first() } is Session.Expired)
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
     // No user's list values and no title not safe for work reach a debug or preview build.
     @Test
     fun `the build's assets are the public answers the sandbox reads, and nothing else`() {
@@ -434,5 +605,8 @@ class SandboxAppTest {
     private companion object {
         const val WAIT = 20_000L
         const val POLL = 20L
+
+        // Longer than a screen's stop timeout, so the List's next show is a new one.
+        val AWAY: Duration = Duration.ofSeconds(10)
     }
 }

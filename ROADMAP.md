@@ -174,13 +174,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-10 Airing counts in the debug menu.**
 
-- [ ] **M3-11 AniList in the scenario panel.** The panel's "offline" fails AniList as it fails MAL, and one more
-  switch fails AniList alone, on the demo and on the sandbox, so that section 2.3's row for AniList can be seen on
-  a device.
-  **Needs:** M3-08.
-  **Check:** tests on the demo and on the sandbox: with the switch on, a refresh fails, the stored counts stay, a
-  title added then shows the estimate and MAL's requests still work; a reset turns the switch off. The debug
-  menu's screenshots are rendered with the switch.
+- [x] **M3-11 AniList in the scenario panel.**
 
 - [ ] **M3-12 [O] Emulator run.** The orchestrator runs the app once on the emulator against the sandbox: a count
   rises as an air time passes with the network off; with AniList failing the stored counts stay; the preview
@@ -242,17 +236,7 @@ missing from it; there are no duplicates.
   a `send` or a download changed the count leaves the count they wrote; an Undo of "+1" tapped after a `send` takes
   back its own step alone.
 
-- [ ] **M4-04 [A] One way in to MAL for background work.** In `:data`. MAL's back-off outlives the process, in a
-  file of its source as AniList's refusal does, so that work started in a new process still leaves MAL alone
-  (section 2.3). Work without a screen reaches MAL through one way in, which renews the tokens when they are due
-  (S7), sends nothing while the back-off lasts or while nobody is signed in with usable tokens (S6), and says which
-  of these held it back. What a person asks for on a screen is not held back by the back-off.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: a refusal in one process holds back a call made by a new one over
-  the same files, for no longer than the wait that was set, also with the clock set back; tokens older than the
-  renewal age are renewed before the call, once for calls made together (S5); with the session expired, or with MAL
-  refusing, the local server sees no request; a screen's read during the back-off is still sent; the file is not
-  backed up.
+- [x] **M4-04 [A] One way in to MAL for background work.**
 
 - [ ] **M4-05 Notification settings screen.** The stateless screen on fixture states, with its screenshot registry.
   It serves two needs: choosing (notifications on or off, also for planned titles, the delay), and finding out

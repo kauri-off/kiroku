@@ -54,10 +54,10 @@ data class StringResource(
     val plural: Boolean,
 )
 
-// Every string and plural item of the app's resources, as the app reads it.
+// Every string and plural item of the app's resources and of the debug source set's, as the app reads it.
 fun stringResources(): List<StringResource> =
-    File(projectDir, "app/src/main/res")
-        .walk()
+    listOf("main", "debug")
+        .flatMap { File(projectDir, "app/src/$it/res").walk() }
         .filter { it.isFile && it.parentFile.name.startsWith("values") && it.name.startsWith("strings") }
         .sorted()
         .flatMap { file ->

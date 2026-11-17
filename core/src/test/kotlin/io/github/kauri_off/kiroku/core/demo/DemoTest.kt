@@ -238,6 +238,29 @@ class DemoTest {
         }
 
     @Test
+    fun `reset brings back the airing data the demo started with, a schedule AniList moved and a title it forgot included`() =
+        runTest {
+            val demo = demo()
+            val started = demo.airing.observeSchedules().first()
+            val id = FixtureAnime.exactToWatch.id
+            val moved =
+                started.getValue(id).let { schedule ->
+                    schedule.copy(episodes = schedule.episodes.map { it.copy(airsAt = it.airsAt.plus(Duration.ofDays(7))) })
+                }
+            demo.airingSource.schedules = demo.fixtures.schedules + (id to moved)
+            assertEquals(Outcome.Success(Unit), demo.airing.refresh())
+            demo.list.write(ListWrite.Remove(FixtureAnime.exactCaughtUp))
+            settle()
+            assertEquals(started - FixtureAnime.exactCaughtUp.id + (id to moved), demo.airing.observeSchedules().first())
+
+            val asked = demo.airingSource.requests.size
+            assertEquals(Outcome.Success(Unit), demo.reset())
+            settle()
+            assertEquals(started, demo.airing.observeSchedules().first())
+            assertEquals(emptyList<Set<AnimeId>>(), demo.airingSource.requests.drop(asked))
+        }
+
+    @Test
     fun `an Undo from before a sign-out is refused once the demo is signed in again`() =
         runTest {
             val demo = demo()

@@ -3,6 +3,9 @@ package io.github.kauri_off.kiroku.scenario
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
@@ -43,6 +46,26 @@ class ScenarioSectionTest {
         compose.onNodeWithText("Expire now").performScrollTo().performClick()
         assertEquals(listOf<ScenarioEvent>(ScenarioEvent.ExpireAccess), events)
         compose.onAllNodesWithText("The store on the device").assertCountEquals(0)
+    }
+
+    @Test
+    fun `on the sandbox and on the demo, AniList can be made to fail or not answer`() {
+        var sandbox by mutableStateOf(true)
+        compose.setContent {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                ScenarioSection(ScenarioState.Ready(Scenario(), sandbox = sandbox), events::add)
+            }
+        }
+        compose.onNodeWithText("No answer").performScrollTo().performClick()
+        sandbox = false
+        compose.onNodeWithText("Fails").performScrollTo().performClick()
+        assertEquals(
+            listOf(
+                ScenarioEvent.Change(Scenario(aniList = AniListFault.NoAnswer)),
+                ScenarioEvent.Change(Scenario(aniList = AniListFault.Fails)),
+            ),
+            events,
+        )
     }
 
     @Test

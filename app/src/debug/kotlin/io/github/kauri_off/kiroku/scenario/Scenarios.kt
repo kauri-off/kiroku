@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.scenario
 
 import android.content.Context
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CancellationException
@@ -16,12 +17,16 @@ enum class WriteFault { None, Refused, ServerError }
 
 enum class StoreFault { None, WritesFail, Unreadable }
 
+// AniList alone: MAL goes on answering. Offline and slow apply to AniList as well.
+enum class AniListFault { None, Fails, NoAnswer }
+
 data class Scenario(
     val offline: Boolean = false,
     val sessionExpired: Boolean = false,
     val slow: Boolean = false,
     val writes: WriteFault = WriteFault.None,
     val store: StoreFault = StoreFault.None,
+    val aniList: AniListFault = AniListFault.None,
 ) {
     val active: Boolean get() = this != Scenario()
 }
@@ -37,7 +42,7 @@ enum class ResetState {
     val busy: Boolean get() = this == WaitingForSave || this == Running
 }
 
-// What the panel's switches act on: the demo's MAL and store, or the sandbox's MAL.
+// What the panel's switches act on: the demo's MAL, AniList and store, or the sandbox's MAL and AniList.
 interface ScenarioSubject {
     // The sandbox's: it has no store of its own to fail.
     val sandbox: Boolean
@@ -48,7 +53,8 @@ interface ScenarioSubject {
 
     suspend fun awaitSaves(): Boolean
 
-    suspend fun reset(): Outcome<Unit>
+    // The data as it started, [off] turning every scenario off where an answer they held must already see that data.
+    suspend fun reset(off: () -> Unit): Outcome<Unit>
 
     // The sandbox's: every access token it granted expires now, and the next request is rejected once.
     fun expireAccess() = Unit
@@ -71,13 +77,16 @@ private class DemoScenarios(
         }
         demo.store.unreadable.value = scenario.store == StoreFault.Unreadable
         demo.store.failingWrites.value = scenario.store == StoreFault.WritesFail
+        demo.airingSource.failure = DataError.ServerError.takeIf { scenario.aniList == AniListFault.Fails }
+        demo.airingSource.hold(scenario.aniList == AniListFault.NoAnswer)
     }
 
     override val saving get() = demo.saving
 
     override suspend fun awaitSaves() = demo.awaitSaves()
 
-    override suspend fun reset() = demo.reset()
+    // The demo's reset turns its failures off itself, after its schedules are back.
+    override suspend fun reset(off: () -> Unit): Outcome<Unit> = demo.reset().also { off() }
 }
 
 // The failures of the source the app runs on, switched while it runs; a new process starts with every one off.
@@ -118,9 +127,14 @@ class Scenarios(
                 try {
                     val settled = subject.awaitSaves()
                     resets.value = ResetState.Running
-                    apply(Scenario())
+                    val reset =
+                        try {
+                            subject.reset { apply(Scenario()) }
+                        } finally {
+                            if (current.value != Scenario()) apply(Scenario())
+                        }
                     when {
-                        subject.reset() is Outcome.Failure -> ResetState.Failed
+                        reset is Outcome.Failure -> ResetState.Failed
                         !settled -> ResetState.SaveDropped
                         else -> ResetState.Idle
                     }
