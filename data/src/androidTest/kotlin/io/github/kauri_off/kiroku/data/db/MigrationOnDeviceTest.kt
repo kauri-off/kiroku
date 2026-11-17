@@ -8,8 +8,19 @@ import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
+import io.github.kauri_off.kiroku.core.notify.Announced
+import io.github.kauri_off.kiroku.core.notify.Followed
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationRecord
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.Recheck
+import io.github.kauri_off.kiroku.core.notify.SentNotification
+import io.github.kauri_off.kiroku.core.notify.StoredNotifications
+import io.github.kauri_off.kiroku.core.notify.TitleRecord
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -22,7 +33,7 @@ import org.junit.Test
 import java.io.File
 import java.time.Instant
 
-// Section 7.1 on the device's own SQLite: the database the app's version 1 wrote becomes the current one, keeps every row, and stores a profile.
+// Section 7.1 on the device's own SQLite: the database the app's version 1 wrote becomes the current one, keeps every row, and stores a profile and a record.
 class MigrationOnDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
@@ -31,6 +42,7 @@ class MigrationOnDeviceTest {
     @After
     fun delete() {
         context.deleteDatabase(name)
+        File(context.filesDir, PREFERENCES).delete()
     }
 
     private fun written(): File {
@@ -115,6 +127,30 @@ class MigrationOnDeviceTest {
                 val profile = StoredProfile(SignInId("owner"), UserProfile("someone", null, null), Instant.EPOCH)
                 assertTrue(profiles.replace(profile) { true })
                 assertEquals(profile, profiles.observe().first())
+
+                val preferences = StoredPreferences(File(context.filesDir, PREFERENCES), scope) { unexpected += it }
+                val notifications = RoomNotificationStore(database, preferences, Dispatchers.IO) { unexpected += it }
+                assertEquals(StoredNotifications(null, NotificationRecord()), notifications.read())
+                val id = list.readAll().keys.first()
+                val anime = checkNotNull(list.read(id)).anime
+                val record =
+                    NotificationRecord(
+                        since = Instant.EPOCH,
+                        titles =
+                            mapOf(
+                                id to
+                                    TitleRecord(Followed(ListStatus.Watching, Instant.EPOCH), Announced(2, Instant.EPOCH), standing = true),
+                            ),
+                    )
+                val sent =
+                    SentNotification(anime, 2, Instant.EPOCH, Instant.EPOCH, Instant.parse("2026-01-17T14:30:00.000000001Z"), Recheck.Late)
+                notifications.clear(SignInId("owner"))
+                notifications.write(record, listOf(sent), Instant.EPOCH)
+                assertEquals(StoredNotifications(SignInId("owner"), record), notifications.read())
+                assertEquals(listOf(sent), notifications.observeSent().first())
+                val settings = NotificationSettings(on = false, alsoPlanned = true, delay = NotificationDelay.HalfHour)
+                notifications.writeSettings(settings)
+                assertEquals(settings, notifications.observeSettings().first())
             }
         } finally {
             scope.cancel()
@@ -131,5 +167,6 @@ class MigrationOnDeviceTest {
 
     private companion object {
         const val TAG = "KirokuMigration"
+        const val PREFERENCES = "migrated.preferences_pb"
     }
 }
