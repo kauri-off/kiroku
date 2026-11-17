@@ -70,13 +70,23 @@ class ProfileViewModel(
         val reading: UserListProgress? = null,
     )
 
+    // Whose profile another user's is: the own one, someone else's, or not known until the own profile is read.
+    private enum class Whose { Own, Other, Unknown }
+
+    // What the ask for the own profile left stored, once it ended.
+    private class Fetched(
+        val profile: UserProfile?,
+    )
+
     private val sessions = session.observeSession()
     private val typed = mutableStateOf(saved.get<String>(TYPED))
     private val retries = MutableStateFlow(0)
     private val pulling = MutableStateFlow(false)
     private val shownOnce = MutableStateFlow(false)
     private val isOwn = MutableStateFlow(owner == ProfileOwner.Me)
+    private val fetchedOwn = MutableStateFlow<Fetched?>(null)
     private var load: Job? = null
+    private var learning: Job? = null
 
     // The signed-in user's name as last read, to tell the own name from another.
     @Volatile private var ownName: String? = null
@@ -89,22 +99,35 @@ class ProfileViewModel(
         user
             .observeOwnProfile()
             .catch { if (it is DataException) emit(null) else throw it }
-            .onEach { ownName = it?.name }
+
+    // The own profile as the session has it: none signed out, whatever the store still holds.
+    private val signedInProfile: Flow<Pair<Session, UserProfile?>> =
+        combine(sessions, ownProfile) { session, profile -> session to profile.takeUnless { session == Session.SignedOut } }
+            .onEach { ownName = it.second?.name }
 
     private val built: Flow<Built> =
         when (owner) {
             ProfileOwner.Me ->
-                sessions
-                    .map { it == Session.SignedOut }
+                signedInProfile
+                    .map { it.first == Session.SignedOut }
                     .distinctUntilChanged()
                     .flatMapLatest { signedOut -> if (signedOut) flowOf(Built(ProfileContent.SignedOut)) else ownContent() }
             is ProfileOwner.Other ->
-                combine(sessions, ownProfile) { session, profile ->
-                    session != Session.SignedOut && profile != null && user.sameUser(profile.name, owner.name)
+                combine(signedInProfile, fetchedOwn) { (session, stored), fetched ->
+                    val profile = stored ?: fetched?.profile
+                    when {
+                        profile != null -> if (user.sameUser(profile.name, owner.name)) Whose.Own else Whose.Other
+                        session == Session.SignedOut || fetched != null -> Whose.Other
+                        else -> Whose.Unknown
+                    }
                 }.distinctUntilChanged()
-                    .flatMapLatest { own ->
-                        isOwn.value = own
-                        if (own) ownContent() else otherContent(owner.name)
+                    .flatMapLatest { whose ->
+                        isOwn.value = whose == Whose.Own
+                        when (whose) {
+                            Whose.Own -> ownContent()
+                            Whose.Other -> otherContent(owner.name)
+                            Whose.Unknown -> flowOf(Built(ProfileContent.Loading))
+                        }
                     }
         }
 
@@ -129,7 +152,7 @@ class ProfileViewModel(
             connection,
             whenShown = {
                 shownOnce.value = true
-                if (isOwn.value) refresh(Asked.Shown)
+                if (isOwn.value) refresh(Asked.Shown) else learnOwn()
             },
             again = { refresh(Asked.Shown) },
         )
@@ -168,18 +191,37 @@ class ProfileViewModel(
             Built(ProfileContent.Shown(profile, statistics(entries)))
         }.readAgainOnRetry(retries) { Built(ProfileContent.Failed(it)) }
 
+    // Signed in with no own profile stored, the own profile is read before another user's list, so the own name is
+    // never read as someone else's.
+    private fun learnOwn() {
+        if (owner !is ProfileOwner.Other || fetchedOwn.value != null || learning?.isActive == true) return
+        learning =
+            viewModelScope.launch {
+                if (sessions.first() == Session.SignedOut) {
+                    fetchedOwn.value = Fetched(null)
+                    return@launch
+                }
+                val stored = storedProfile()
+                if (stored == null) user.refreshOwnProfile()
+                fetchedOwn.value = Fetched(stored ?: storedProfile())
+            }
+    }
+
     // Asks for the list only once the screen was shown; a list not read whole yet shows how far it is, never statistics.
+    // The end of a read again is the refresh's to report, so a failed pull stays owed whatever arrives first.
     private fun otherContent(name: String): Flow<Built> =
         flow {
             emit(Built(ProfileContent.Loading))
             shownOnce.first { it }
+            var readAgain = false
             user.observeList(name).collect { list ->
                 if (list.isOfUser()) opened.opened(name, user::sameUser)
                 when (list) {
                     is UserListState.None -> loads.ended(list.error)
-                    is UserListState.Whole -> if (list.again == null) loads.ended(null)
+                    is UserListState.Whole -> if (list.again == null && !readAgain) loads.ended(null)
                     is UserListState.Reading -> Unit
                 }
+                readAgain = list is UserListState.Whole && list.again != null
                 emit(built(list))
             }
         }

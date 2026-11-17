@@ -402,6 +402,25 @@ class AppRouteTest {
         shows("My list")
     }
 
+    // Which profiles were opened is the signed-in user's: the next user to sign in does not see them.
+    @Test
+    fun `a sign-out forgets the names opened earlier`() {
+        app()
+        click("Profile")
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
+        click("Open")
+        shows("Completed")
+        back()
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        shows("Recent")
+        click("Cancel")
+        runBlocking { graph.session.signOut() }
+        compose.waitForIdle()
+        click("Open another profile")
+        compose.onNodeWithText("Recent").assertDoesNotExist()
+    }
+
     // The own name, typed in any letter case or opened as another user's page, is the own Profile at its root.
     @Test
     fun `opening the own name shows the own profile`() {

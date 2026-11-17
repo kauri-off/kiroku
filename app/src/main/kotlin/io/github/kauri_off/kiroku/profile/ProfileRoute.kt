@@ -1,7 +1,9 @@
 package io.github.kauri_off.kiroku.profile
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
@@ -60,6 +62,11 @@ fun ProfileRoute(
         }
     val state by profile.state.collectAsScreenState()
     CountAsShown(profile.shown)
+    // The dialog is modal, so only a link leaves it open on a screen that goes; it is not there when Back returns.
+    val activity = LocalActivity.current
+    DisposableEffect(profile) {
+        onDispose { if (activity?.isChangingConfigurations != true) profile.onEvent(ProfileEvent.DismissOpenProfile) }
+    }
     if (key != null) {
         val own by profile.own.collectAsScreenState()
         LaunchedEffect(own) { if (own) navigator.remove(key) }

@@ -18,4 +18,8 @@ class OpenedProfiles : ViewModel() {
         if (names.firstOrNull() == name) return
         held.value = (listOf(name) + names.filterNot { sameUser(it, name) }).take(RECENT_PROFILES)
     }
+
+    fun forget() {
+        held.value = emptyList()
+    }
 }

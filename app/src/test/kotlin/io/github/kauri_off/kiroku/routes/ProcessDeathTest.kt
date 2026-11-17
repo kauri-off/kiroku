@@ -14,6 +14,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModelStore
@@ -96,5 +97,31 @@ class ProcessDeathTest {
         compose.waitForIdle()
         compose.onNode(hasSetTextAction() and hasText("17")).assertExists()
         compose.onNode(hasText("Completed") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)).assertIsSelected()
+    }
+
+    @Test
+    fun `another user's profile comes back after process death`() {
+        var owner = Owner()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) }
+            }
+        }
+        val other = Fixtures.reference.otherUserName
+        compose.onNode(hasText("Profile") and hasClickAction()).performClick()
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement(other)
+        compose.onNode(hasText("Open") and hasClickAction()).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("View list").performScrollTo()
+        compose.onNodeWithText(other).assertExists()
+        owner.viewModelStore.clear()
+        owner = Owner()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        compose.onNodeWithText(other).assertExists()
+        compose.onNodeWithText("View list").performScrollTo()
+        compose.onNodeWithText("Completed").assertExists()
     }
 }

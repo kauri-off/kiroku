@@ -5,11 +5,17 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoUserLists
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureUser
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
+import io.github.kauri_off.kiroku.core.user.ScriptedUserLists
+import io.github.kauri_off.kiroku.core.user.UserListKeeper
+import io.github.kauri_off.kiroku.core.user.UserListPart
 import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -20,6 +26,9 @@ import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -34,6 +43,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -65,11 +75,12 @@ class ProfileViewModelTest {
     private fun Opened.profile(
         owner: ProfileOwner,
         saved: SavedStateHandle = SavedStateHandle(),
+        user: UserRepository = graph.user,
     ) = ProfileViewModel(
         owner,
         graph.session,
         graph.list,
-        graph.user,
+        user,
         graph.connection,
         graph.clock,
         graph.background,
@@ -79,6 +90,27 @@ class ProfileViewModelTest {
     )
 
     private val Opened.requests get() = graph.demo.userLists.requests
+
+    // The signed-in user's profile as a store holds it: [stored] until a refresh stores the fixture user, kept after a
+    // sign-out until something forgets it.
+    private class OwnStore(
+        inner: UserRepository,
+        stored: UserProfile?,
+        private val answer: Outcome<Unit> = Outcome.Success(Unit),
+        private val latency: Duration = Duration.ZERO,
+    ) : UserRepository by inner {
+        val held = MutableStateFlow(stored)
+        var refreshes = 0
+
+        override fun observeOwnProfile(): Flow<UserProfile?> = held
+
+        override suspend fun refreshOwnProfile(): Outcome<Unit> {
+            refreshes++
+            delay(latency)
+            if (answer is Outcome.Success) held.value = Fixtures.reference.user
+            return answer
+        }
+    }
 
     private suspend fun Opened.ownStatistics() = statisticsOf(graph.list.observeEntries().first())
 
@@ -358,6 +390,164 @@ class ProfileViewModelTest {
             val me = app.profile(ProfileOwner.Me)
             me.onEvent(ProfileEvent.StartOpenProfile())
             assertEquals(OpenProfile("", listOf(otherName.uppercase(), privateName)), me.openProfile)
+        }
+
+    // A rotation is shorter than the stop timeout, so the read goes on and its progress does not start again.
+    @Test
+    fun `a rotation during a read neither restarts it nor takes its progress back`() =
+        runTest(dispatcher) {
+            val app = opened()
+            app.graph.demo.server.latency = 10.milliseconds
+            val other = app.profile(ProfileOwner.Other(otherName))
+            val screen = showing(other.state, other.shown)
+            runCurrent()
+            advanceTimeBy(25.milliseconds)
+            runCurrent()
+            val before =
+                other.state.value.reading!!
+                    .loaded
+            assertTrue(before > 0)
+            screen.cancel()
+            advanceTimeBy(ROTATION)
+            showing(other.state, other.shown)
+            runCurrent()
+            assertTrue(
+                other.state.value.content is ProfileContent.Shown ||
+                    other.state.value.reading!!
+                        .loaded >= before,
+            )
+            advanceUntilIdle()
+            assertEquals(wholeRead, app.requests.size)
+            assertEquals(statisticsOf(fixtures.otherUserList), other.shownContent().statistics)
+        }
+
+    @Test
+    fun `a profile left for good during a read asks for no further part`() =
+        runTest(dispatcher) {
+            val app = opened()
+            app.graph.demo.server.latency = 10.milliseconds
+            val other = app.profile(ProfileOwner.Other(otherName))
+            showing(other.state, other.shown)
+            runCurrent()
+            advanceTimeBy(25.milliseconds)
+            runCurrent()
+            val asked = app.requests.size
+            assertTrue(asked in 1 until wholeRead)
+            other.viewModelScope.cancel()
+            advanceUntilIdle()
+            assertEquals(asked, app.requests.size)
+        }
+
+    @Test
+    fun `with no own profile stored, the own name asks for the own profile and reads no list and records no name`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val user = OwnStore(app.graph.user, stored = null, latency = 10.milliseconds)
+            val other = app.profile(ProfileOwner.Other(ownName.uppercase()), user = user)
+            showing(other.state, other.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
+            assertTrue(other.own.value)
+            assertEquals(ProfileContent.Shown(fixtures.user, app.ownStatistics()), other.state.value.content)
+            assertTrue(app.requests.isEmpty())
+            assertTrue(app.opened.names.isEmpty())
+        }
+
+    @Test
+    fun `with no own profile stored, another name waits for the own profile's one ask and then reads the list`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val user = OwnStore(app.graph.user, stored = null, answer = Outcome.Failure(DataError.NoConnection), latency = 10.milliseconds)
+            val other = app.profile(ProfileOwner.Other(otherName), user = user)
+            showing(other.state, other.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
+            assertFalse(other.own.value)
+            assertEquals(statisticsOf(fixtures.otherUserList), other.shownContent().statistics)
+            assertEquals(wholeRead, app.requests.size)
+        }
+
+    // A pull that ends in the user's own answer shows it as the state, never also as a message.
+    @Test
+    fun `a pull that finds the list private or the name gone is the state, and no message`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val part = UserListPart(fixtures.otherUserList.take(3))
+            for (answer in listOf(DataError.PrivateList, DataError.UnknownUser)) {
+                val source = ScriptedUserLists(latency = 10.milliseconds).apply { has(otherName, listOf(part)) }
+                val user = UserListKeeper(source, foregroundScope(), unexpected = { throw it }).beside(app.graph.user)
+                val other = app.profile(ProfileOwner.Other(otherName), user = user)
+                val screen = showing(other.state, other.shown)
+                runCurrent()
+                advanceUntilIdle()
+                assertTrue(other.state.value.content is ProfileContent.Shown)
+                source.has(otherName, emptyList(), answer)
+                other.onEvent(ProfileEvent.Refresh)
+                advanceUntilIdle()
+                assertEquals(ProfileContent.Failed(answer), other.state.value.content)
+                assertNull(app.messages.current.value)
+                screen.cancel()
+                other.viewModelScope.cancel()
+                advanceUntilIdle()
+            }
+        }
+
+    @Test
+    fun `the own Profile shown again with a fresh list and a stored profile asks for nothing`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val user = OwnStore(app.graph.user, stored = fixtures.user)
+            val me = app.profile(ProfileOwner.Me, user = user)
+            var screen = showing(me.state, me.shown)
+            runCurrent()
+            advanceUntilIdle()
+            val syncs = app.graph.syncs
+            val refreshes = user.refreshes
+            screen.cancel()
+            advanceTimeBy(STOPPED_AFTER)
+            runCurrent()
+            screen = showing(me.state, me.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(syncs, app.graph.syncs)
+            assertEquals(refreshes, user.refreshes)
+        }
+
+    @Test
+    fun `the own name is dropped at a sign-out, though the store forgets the profile later`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val user = OwnStore(app.graph.user, stored = fixtures.user)
+            val me = app.profile(ProfileOwner.Me, user = user)
+            showing(me.state, me.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertTrue(me.isOwnName(ownName))
+            app.graph.session.signOut()
+            advanceUntilIdle()
+            assertEquals(fixtures.user, user.held.value)
+            assertFalse(me.isOwnName(ownName))
+        }
+
+    @Test
+    fun `a pull that failed offline over a held list is repeated once when the connection returns`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val other = app.profile(ProfileOwner.Other(otherName))
+            showing(other.state, other.shown)
+            runCurrent()
+            advanceUntilIdle()
+            app.graph.demo.server.offline.value = true
+            advanceUntilIdle()
+            other.onEvent(ProfileEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(wholeRead + 1, app.requests.size)
+            assertTrue(other.state.value.content is ProfileContent.Shown)
+            app.graph.demo.server.offline.value = false
+            advanceUntilIdle()
+            assertEquals(2 * wholeRead + 1, app.requests.size)
         }
 
     private companion object {
