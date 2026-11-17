@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.bearer
+import io.github.kauri_off.kiroku.data.network.isPrivateList
 import io.github.kauri_off.kiroku.data.network.scratchBackOffFile
 import io.github.kauri_off.kiroku.data.session.refreshGrant
 import kotlinx.coroutines.flow.flowOf
@@ -42,7 +43,16 @@ internal enum class RecordedUser(
 ) {
     Public("public-user", "kiroku.recordPublicUser"),
     Private("private-user", "kiroku.recordPrivateUser"),
+    ;
+
+    // Stands for the name with every letter in the other case.
+    val inAnotherCase: String get() = standIn.uppercase()
+
+    fun namedIn(path: String): Boolean = standIn in path || inAnotherCase in path
 }
+
+internal fun swappedCase(name: String): String =
+    name.map { if (it.isUpperCase()) it.lowercaseChar() else it.uppercaseChar() }.joinToString("")
 
 internal const val NO_CLIENT_ID = "no client id"
 
@@ -102,9 +112,15 @@ internal class Recorder(
     }
 
     private fun ask(ask: Ask) {
-        val missing = RecordedUser.entries.firstOrNull { it.standIn in ask.path && users[it].isNullOrBlank() }
+        val missing = RecordedUser.entries.firstOrNull { it.namedIn(ask.path) && users[it].isNullOrBlank() }
+        val caseless =
+            RecordedUser.entries.firstOrNull {
+                it.inAnotherCase in ask.path &&
+                    users[it]?.let { name -> name == swappedCase(name) } == true
+            }
         when {
             missing != null -> say("${ask.name}: skipped, ${missing.property} is not set")
+            caseless != null -> say("${ask.name}: skipped, ${caseless.property} has no letter whose case can change")
             ask.pages > 1 -> pages(ask)
             else -> store(ask, ask.name, request(ask, address(ask)))
         }
@@ -112,7 +128,11 @@ internal class Recorder(
 
     private fun address(ask: Ask): HttpUrl {
         val host = if (ask.refreshToken == null) http.hosts.api else http.hosts.signIn
-        return (host + users.entries.fold(ask.path) { path, (user, name) -> path.replace(user.standIn, name) }).toHttpUrl()
+        val path =
+            users.entries.fold(ask.path) { path, (user, name) ->
+                path.replace(user.inAnotherCase, swappedCase(name)).replace(user.standIn, name)
+            }
+        return (host + path).toHttpUrl()
     }
 
     private fun request(
@@ -152,7 +172,7 @@ internal class Recorder(
             val page = (if (answer.status == 200) json(answer.body)?.get("data") else null) as? JsonArray
             if (page == null) {
                 say("${ask.name}: not recorded, the list could not be counted (${answer.status})")
-                refused(ask, ask.name, answer.status)
+                refused(ask, ask.name, answer)
                 return null
             }
             entries += page.size
@@ -182,17 +202,18 @@ internal class Recorder(
         val kept = sanitiser.kept(file, answer.status, answer.type, sanitiser.json(answer.body))
         File(staging, kept.file).writeText(kept.text)
         say("$file: ${answer.status}, $kind, ${answer.body.length} characters")
-        refused(ask, file, answer.status)
+        refused(ask, file, answer)
     }
 
-    // A refusal is rate limiting, except for the list of a user of the build's, which may be private.
+    // A refusal is rate limiting, except MAL's answer for a private list where the list of a user of the build's is asked.
     private fun refused(
         ask: Ask,
         file: String,
-        status: Int,
+        answer: Answer,
     ) {
-        val mayBePrivate = RecordedUser.entries.any { it.standIn in ask.path }
-        if (status == 429 || (status == 403 && !mayBePrivate)) throw RecorderStop("$file: MAL refuses requests ($status), stopped")
+        val status = answer.status
+        val private = RecordedUser.entries.any { it.namedIn(ask.path) } && isPrivateList(status, answer.body)
+        if (status == 429 || (status == 403 && !private)) throw RecorderStop("$file: MAL refuses requests ($status), stopped")
     }
 
     private class Answer(

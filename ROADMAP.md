@@ -420,61 +420,11 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-01 Profile screen.**
 
-- [ ] **M6-02 Statistics calculator.** In `:core` only: one function from the entries of a list to its statistics,
-  the same for the signed-in user and for anyone else. It reads the app's own list model and nothing of where the
-  list came from, whose it is or how it was read. It gives every value `UserStatistics` holds; a value a screen
-  later needs is added here, and no code outside `:core` and its fixtures makes a statistic. Each of these has a
-  stated result: an empty list, an entry without a score, a title without an episode length, a start date, a media
-  type or genres, a status the app does not know, a count above the total. The fixtures' hand-written statistics
-  stay, as what a test expects of the calculator. The hand-off states, for the owner's approval, how each value is
-  counted where it could be counted in more than one way.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`: a test over a small list whose every value is worked out in the test's own
-  text; a test for each case named above; the fixtures' statistics equal the calculator's over the fixtures' list.
-  `./gradlew :app:testDebugUnitTest --tests '*SourceRulesTest'`: a rule test fails when code that ships outside
-  `:core` builds a statistics value. `./gradlew :data:testDebugUnitTest`, where the owner's recordings are (section
-  11.1): the calculator over his recorded list gives the completed count and, to two decimals, the mean score of
-  his recorded profile; a failure names the value that differs and not what it is; the test is skipped where the
-  recordings are absent or do not hold the whole list.
+- [x] **M6-02 Statistics calculator.**
 
-- [ ] **M6-03 Recorded answers of another user's list.** The recorder that needs the client id alone (section 11.1)
-  also asks for the public user's list under their name in another letter case, and for the list of a name no
-  account can have. From these and from the answers recorded earlier (a public list's pages, a private list, an
-  unknown name), `:data` gives the app's own outcomes: a private list is told by the answer recorded for one, so
-  that any other refusal of that request is a refusal like any other and backs off (section 2.3); an unknown name
-  by its answer; a name no account can have reads as an unknown name when its answer allows it. The hand-off says
-  whether MAL takes a name in any letter case, for M6-08. What MAL answers when it limits requests is not recorded
-  and is not provoked: item 2 of section 13 is rewritten to hold what is now known of a private list and what is
-  still not known. The hand-off proposes the row of section 2.3 that this changes.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: the tests of the recorded answers pass with the new files, which
-  hold no user's name; on the recorded answers, a private list is a private list and nothing backs off, an unknown
-  name is an unknown name, and the name no account can have is what the hand-off states; a refusal of that request
-  that is not the recorded one, and too many requests, are a refusal after which background work backs off.
+- [x] **M6-03 Recorded answers of another user's list.**
 
-- [ ] **M6-04 [A] Other users' lists.** In `:core` only, over a port, as the list's and the airing's engines are.
-  The port reads the list of a user the person named, part by part, and ends in one of the app's own outcomes: the
-  list, a private list, an unknown name, or a failure of section 2.3. Nothing of it names MAL, an address, a status
-  code or a field of an answer; those stay in `:data`. What a source knows of a user besides the list (a name as it
-  spells it, a picture, a join date) is whatever it gave, which may be nothing, and whether two names are one user
-  is the port's answer, not a rule of `:core`. Over the port one keeper serves every screen: a user's list is read
-  once however many screens show it, and its progress is given as it comes (the entries so far, and the total where
-  the source names one); it is held in memory while the process lives (section 7.1), for a bounded number of users,
-  and forgotten at a sign-out; it is read again only when the person asks, the earlier list staying until the new
-  one is whole and after a read that failed (section 6.2); one part is asked at a time, and none once no screen
-  waits. The surface the screens read is `UserRepository`, reshaped as this needs. Demo mode runs on the keeper,
-  with a public user whose list has several thousand entries, a private one and nobody else. The hand-off states
-  the port and the surface for the orchestrator's approval before M6-08 and M6-09 start, and for the owner's the
-  number of users held.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`, on virtual time: a contract suite for the port (the parts give every entry
-  once, in order; each outcome), which the demo's passes; the keeper's tests: two screens of one user cause one
-  read; progress follows each part; a private list and an unknown name are each their own outcome and neither is
-  asked again by itself; a read that fails half-way leaves the earlier whole list and reports the failure; a list
-  read again replaces the earlier one only when it is whole; past the bound the user shown longest ago is forgotten;
-  a sign-out forgets all; with no screen waiting no further part is asked; a list of several thousand entries is
-  given whole. A rule test fails when a name in the port, the keeper or the surface says MAL, or one of them holds
-  an address or a status code.
+- [x] **M6-04 [A] Other users' lists.**
 
 - [ ] **M6-05 The signed-in user's profile.** In `:data`: what MAL gives of the signed-in user beside the list, as
   `UserProfile` holds it, read as that user through the session (S5), and kept in the database (section 7.1) by a
