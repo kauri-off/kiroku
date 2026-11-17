@@ -215,15 +215,14 @@ abstract class NotificationEngineContract {
         override suspend fun post(
             announcement: Announcement,
             alert: Boolean,
-        ) {
+        ): Boolean {
             yield()
             throwing?.let { throw it }
             beforePost?.let {
                 beforePost = null
                 it()
             }
-            inner.post(announcement, alert)
-            step()
+            return inner.post(announcement, alert).also { step() }
         }
 
         override suspend fun withdraw(titles: Set<AnimeId>) {
@@ -350,7 +349,7 @@ abstract class NotificationEngineContract {
         }
     }
 
-    // A device signed in as [a] with its list downloaded and its airing data stored; [started], its first run has ended.
+    // A device signed in as [a], its list downloaded and its airing data stored; [started], the app was opened and its run has ended.
     private suspend fun TestScope.world(
         entries: List<ListEntry> = listOf(entry()),
         schedules: Map<AnimeId, AiringSchedule> = NotifyCases.schedules,
@@ -371,7 +370,9 @@ abstract class NotificationEngineContract {
         world.listStore.clear(a.signIn)
         world.listStore.download(entries.map { it.anime }, entries.associate { it.anime.id to StoredEntry.settled(it.record) }, now)
         if (started) {
+            // The app is opened.
             world.start()
+            world.engine.run(RunTrigger.AppOpened)
             runCurrent()
         }
         return world
@@ -418,7 +419,8 @@ abstract class NotificationEngineContract {
             val sent =
                 Recheck.entries.mapIndexed { index, recheck ->
                     val anime = if (index % 2 == 0) title else other
-                    SentNotification(anime, index + 1, week(index), week(index).plus(halfHour), week(index).plus(hour), recheck)
+                    val notifyAt = week(index).plus(halfHour)
+                    SentNotification(anime, index + 1, week(index), notifyAt, week(index).plus(hour), recheck, shown = index % 2 == 0)
                 }
             store.write(record, sent.take(2), Instant.EPOCH)
             runCurrent()
@@ -720,6 +722,105 @@ abstract class NotificationEngineContract {
             assertEquals(listOf(week(0).plus(day.multipliedBy(2))), w.sent().map { it.airedAt })
             assertEquals(listOf(Recheck.Answered), w.sent().map { it.recheck })
             assertEquals(emptyList<Throwable>(), w.unexpected)
+        }
+
+    @Test
+    fun `N3 a process the alarm starts runs nothing before the alarm's run, so a postponed episode is planned again there too`() =
+        runTest {
+            val w = world()
+            val reports = w.reports.size
+            w.source.schedules = NotifyCases.schedules.moved(title, 1, day)
+            w.clock.now = week(0)
+            w.alarm.gone()
+
+            // The engine is built and given time, and the list changes, before the receiver asks for its run.
+            w.start()
+            runCurrent()
+            w.write(ListWrite.Save(title, watching.copy(score = 5)))
+            advanceTimeBy(10.minutes)
+            runCurrent()
+            assertEquals("no run of its own", reports, w.reports.size)
+            assertNull("not known yet", w.engine.observeComing().first())
+            assertEquals(NotificationSettings(), w.engine.observeSettings().first())
+            assertEquals(emptyList<SentNotification>(), w.engine.observeSent().first())
+
+            val report = w.engine.run(RunTrigger.Alarm)
+            runCurrent()
+
+            assertEquals(Recheck.Answered, report.recheck)
+            assertEquals(emptyList<Pair<AnimeId, Int>>(), w.alerts)
+            assertEquals(week(0).plus(day), w.alarm.at.value)
+            assertEquals(listOf(Coming(title, 1, week(0).plus(day), week(0).plus(day))), w.engine.observeComing().first())
+            assertEquals("the run has followed what it read", reports + 1, w.reports.size)
+
+            // From its first run on, the engine follows the list by itself.
+            w.write(ListWrite.Save(title, watching.copy(status = ListStatus.Dropped)))
+            assertNull(w.alarm.at.value)
+            assertEquals(RunTrigger.Changed, w.reports.last().trigger)
+        }
+
+    @Test
+    fun `a post the device does not show is recorded as sent and not shown, and its episode is not announced again later`() =
+        runTest {
+            val w = world()
+            w.shown.blocked = true
+            w.pass(week(0))
+
+            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(listOf(SentNotification(title, 1, week(0), week(0), week(0), Recheck.Answered, shown = false)), w.sent())
+            assertEquals(
+                listOf(false),
+                w.reports
+                    .last()
+                    .posted
+                    .map { it.shown },
+            )
+            assertEquals(1, w.shown.posts.size)
+
+            // The permission is granted days later: nothing old is announced, and the next episode is shown.
+            w.shown.blocked = false
+            w.clock.now = week(0).plus(day.multipliedBy(2))
+            w.engine.run(RunTrigger.AppOpened)
+            assertEquals(1, w.shown.posts.size)
+            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            w.pass(week(1))
+            assertEquals(mapOf(title.id to Shown(2, toWatch = 2, marks = 1)), w.showing)
+            assertEquals(listOf(false, true), w.sent().map { it.shown })
+        }
+
+    @Test
+    fun `a changed setting is stored and given at once while a run is under way, and is followed when that run has ended`() =
+        runTest {
+            val w = world()
+            val reports = w.reports.size
+            w.source.latency = 30.seconds
+            w.clock.now = week(0)
+            w.alarm.gone()
+            val run = async { w.engine.run(RunTrigger.Alarm) }
+            runCurrent()
+
+            val change = async { w.engine.changeSettings { it.copy(delay = NotificationDelay.Hour) } }
+            runCurrent()
+            assertFalse(run.isCompleted)
+            assertFalse(change.isCompleted)
+            assertEquals(
+                NotificationDelay.Hour,
+                w.engine
+                    .observeSettings()
+                    .first()
+                    .delay,
+            )
+
+            // The run under way reads the settings again after its re-check, so the episode waits for its new time.
+            assertEquals(Recheck.Late, run.await().recheck)
+            assertEquals(Outcome.Success(Unit), change.await())
+            assertEquals(emptyList<Pair<AnimeId, Int>>(), w.alerts)
+            assertEquals(week(0).plus(hour), w.alarm.at.value)
+            runCurrent()
+            assertEquals("the run under way has followed the change, so no other starts", reports + 1, w.reports.size)
+            w.source.latency = kotlin.time.Duration.ZERO
+            w.pass(week(0).plus(hour))
+            assertEquals(listOf(title.id to 1), w.alerts)
         }
 
     @Test
@@ -1028,6 +1129,7 @@ abstract class NotificationEngineContract {
         runTest {
             val w = left(b.signIn)
             w.start()
+            w.engine.run(RunTrigger.AppOpened)
             runCurrent()
 
             assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
@@ -1156,7 +1258,7 @@ abstract class NotificationEngineContract {
                 w.engine
                     .observeComing()
                     .first()
-                    .map { it.anime.id },
+                    ?.map { it.anime.id },
             )
 
             // Once it is stored for the list, the episode is announced.
@@ -1170,7 +1272,7 @@ abstract class NotificationEngineContract {
         runTest {
             val w = world(settings = NotificationSettings(delay = NotificationDelay.HalfHour))
             val settings = mutableListOf<NotificationSettings>()
-            val coming = mutableListOf<List<Coming>>()
+            val coming = mutableListOf<List<Coming>?>()
             val sent = mutableListOf<List<SentNotification>>()
             backgroundScope.launch { w.engine.observeSettings().collect { settings += it } }
             backgroundScope.launch { w.engine.observeComing().collect { coming += it } }
@@ -1196,6 +1298,13 @@ abstract class NotificationEngineContract {
             runCurrent()
             assertEquals(NotificationSettings(alsoPlanned = true), settings.last())
             assertEquals(NotificationSettings(alsoPlanned = true), w.inner.observeSettings().first())
+
+            // What was posted longer ago than is kept is not given, also before the store has forgotten it.
+            w.clock.now = second.postedAt.plus(day.multipliedBy(30))
+            assertEquals(listOf(second), w.engine.observeSent().first())
+            w.clock.now = second.postedAt.plus(day.multipliedBy(30)).plusSeconds(1)
+            assertEquals(emptyList<SentNotification>(), w.engine.observeSent().first())
+            assertEquals(2, w.sent().size)
             assertEquals(emptyList<Throwable>(), w.unexpected)
         }
 
@@ -1224,7 +1333,7 @@ abstract class NotificationEngineContract {
     fun `every run is reported with its trigger and what it did, and its caller is given the same`() =
         runTest {
             val w = world()
-            assertEquals(listOf(RunReport(RunTrigger.Changed, start, start, RunEnd.Done, alarm = week(0))), w.reports.toList())
+            assertEquals(listOf(RunReport(RunTrigger.AppOpened, start, start, RunEnd.Done, alarm = week(0))), w.reports.toList())
 
             w.clock.now = week(0)
             w.alarm.gone()
@@ -1328,6 +1437,8 @@ abstract class NotificationEngineContract {
             w.alarms.throwing = broken
             val report = w.engine.run(RunTrigger.AppOpened)
             assertEquals(RunEnd.Failed, report.end)
+            assertTrue(report.alarmFailed)
+            assertNull(report.alarm)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(listOf(1), w.sent().map { it.episode })
             assertEquals(listOf<Throwable>(broken, broken), w.unexpected.toList())

@@ -575,11 +575,7 @@ class DemoTest {
 
             assertEquals(RunEnd.Done, demo.notifications.run(RunTrigger.AppOpened).end)
             assertEquals("nothing from before", emptyMap<AnimeId, Announcement>(), shown.notifications.value)
-            val next =
-                demo.notifications
-                    .observeComing()
-                    .first()
-                    .first()
+            val next = checkNotNull(demo.notifications.observeComing().first()).first()
             assertEquals(next.notifyAt, alarm.at.value)
             assertEquals(ListStatus.Watching, demo.fixtures.entryFor(next.anime.id)?.status)
 

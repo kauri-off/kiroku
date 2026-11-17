@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -115,8 +114,15 @@ class NotificationEngine(
             override suspend fun clear(owner: SignInId?) = stores.writing { store.clear(owner) }
         }
 
-    // N1: held for the whole of a run and of a change of the settings, so no two overlap.
+    // N1: held for the whole of a run, so no two overlap.
     private val mutex = Mutex()
+
+    // Held while a setting is read, changed and stored; never while a run is waited for.
+    private val settingsLock = Mutex()
+
+    // N3: a run has ended. Until one that was asked for has, none starts by itself: the alarm's run is the first of its process.
+    @Volatile
+    private var started = false
 
     @Volatile
     private var seen: Seen? = null
@@ -132,7 +138,6 @@ class NotificationEngine(
 
     init {
         check(scope.isActive) { STOPPED }
-        follow()
     }
 
     override suspend fun run(trigger: RunTrigger): RunReport = inScope { mutex.withLock { attempt(trigger) } }
@@ -145,39 +150,43 @@ class NotificationEngine(
 
     override suspend fun changeSettings(change: (NotificationSettings) -> NotificationSettings): Outcome<Unit> =
         inScope {
-            mutex.withLock {
+            val changed =
                 try {
-                    val before = local.observeSettings().first()
-                    val after = change(before)
-                    if (after == before) return@withLock Outcome.Success(Unit)
-                    local.writeSettings(after)
+                    settingsLock.withLock {
+                        val before = local.observeSettings().first()
+                        change(before).takeIf { it != before }?.also { local.writeSettings(it) }
+                    }
                 } catch (_: StoreFailure) {
-                    return@withLock Outcome.Failure(DataError.StorageError)
+                    return@inScope Outcome.Failure(DataError.StorageError)
                 }
-                attempt(RunTrigger.Changed)
-                Outcome.Success(Unit)
-            }
+            // A run that has read the new settings meanwhile has followed them.
+            if (changed != null) mutex.withLock { if (seen?.settings != changed) attempt(RunTrigger.Changed) }
+            Outcome.Success(Unit)
         }
 
-    override fun observeComing(): Flow<List<Coming>> =
+    override fun observeComing(): Flow<List<Coming>?> =
         flow {
             follow()
-            emitAll(coming.filterNotNull())
+            emitAll(coming)
         }
 
     override fun observeSent(): Flow<List<SentNotification>> =
         flow {
             follow()
-            emitAll(local.observeSent().retriedOverStore().map { it.asReversed() })
+            emitAll(
+                local.observeSent().retriedOverStore().map { sent ->
+                    val keptFrom = clock.instant() - sentKeptFor.toJavaDuration()
+                    sent.filter { !it.postedAt.isBefore(keptFrom) }.asReversed()
+                },
+            )
         }.distinctUntilChanged()
 
     // The work goes on in the engine's scope when its caller is cancelled, and what it throws is the caller's alone.
     private suspend fun <T> inScope(work: suspend () -> T): T {
-        follow()
         val result =
             scope.async {
                 try {
-                    Result.success(work())
+                    Result.success(work()).also { follow() }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -195,7 +204,7 @@ class NotificationEngine(
     // N8: while the process lives, a change of the session, the list, the airing data or a setting is followed by a run.
     private fun follow() {
         synchronized(follows) {
-            if (following?.isActive == true) return
+            if (!started || following?.isActive == true) return
             following =
                 scope.launch {
                     try {
@@ -259,12 +268,14 @@ class NotificationEngine(
                 did.posted.toList(),
                 did.withdrawn.toSet(),
                 did.alarm,
+                did.alarmFailed,
             )
         try {
             reports(report)
         } catch (e: Exception) {
             unexpected(e)
         }
+        started = true
         return report
     }
 
@@ -301,7 +312,8 @@ class NotificationEngine(
             val announcement = due.announcement
             val was = posted[announcement.anime.id]
             // N1: a run cut off before it recorded finds its notification shown, and does not alert for the episode again.
-            if (was != announcement.shown) shown.post(announcement, alert = was?.episode != announcement.episode)
+            val showing = was == announcement.shown || shown.post(announcement, alert = was?.episode != announcement.episode)
+            // Recorded as sent also when the device shows nothing, so that a later grant announces no old episode.
             did.posted +=
                 SentNotification(
                     announcement.anime,
@@ -310,6 +322,7 @@ class NotificationEngine(
                     due.notifyAt,
                     clock.instant(),
                     did.recheck ?: Recheck.NotAsked,
+                    showing,
                 )
         }
         for (announcement in result.standing) {

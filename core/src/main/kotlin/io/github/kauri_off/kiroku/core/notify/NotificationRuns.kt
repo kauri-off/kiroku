@@ -15,6 +15,9 @@ enum class RunTrigger {
     AppOpened,
     Periodic,
 
+    // The notification's action wrote to the list.
+    MarkedWatched,
+
     // The list, the airing data, a setting or the session changed.
     Changed,
 }
@@ -35,8 +38,11 @@ data class SentNotification(
     val episode: Int,
     val airedAt: Instant,
     val notifyAt: Instant,
+    // When its run recorded it, which is after the post itself where an earlier run died between the two.
     val postedAt: Instant,
     val recheck: Recheck,
+    // False when the device showed none of the app's notifications then; the episode counts as announced all the same.
+    val shown: Boolean = true,
 )
 
 // How long what was posted is kept for the screens.
@@ -64,9 +70,11 @@ data class RunReport(
     val withdrawn: Set<AnimeId> = emptySet(),
     // The alarm it left; none also when it failed before setting one.
     val alarm: Instant? = null,
+    // The alarm could not be set, which fails the run and keeps nothing back.
+    val alarmFailed: Boolean = false,
 )
 
-// Where the app starts a run: at the alarm, at the moments the system starts the app, and at its opening.
+// Where the app starts a run: at the alarm, at the moments the system starts the app, at its opening and after the action's write.
 interface NotificationRuns {
     // Returns when the run has ended. A run goes on to its end when its caller is cancelled, and runs never overlap (N1).
     suspend fun run(trigger: RunTrigger): RunReport

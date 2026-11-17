@@ -12,7 +12,7 @@ data class StoredNotifications(
     val record: NotificationRecord,
 )
 
-// A store of what notifications remember and of the person's choices for them. Each call is atomic, and only the engine writes.
+// What notifications remember and the person's choices for them. Each call is atomic and throws when it fails; only the engine writes.
 interface NotificationStore {
     // The settings as they are for a new observer, then after every change; the defaults while none is stored. Equal values may repeat.
     fun observeSettings(): Flow<NotificationSettings>
@@ -55,11 +55,11 @@ interface ShownNotifications {
     // Each title whose notification is shown now; one the person dismissed is not among them.
     suspend fun shown(): Map<AnimeId, Shown>
 
-    // Shows the title's notification in place of the one before. It alerts only when [alert], however the one before read.
+    // Shows it in place of the title's earlier one and alerts only when [alert]; false when the device shows none of the app's now.
     suspend fun post(
         announcement: Announcement,
         alert: Boolean,
-    )
+    ): Boolean
 
     // Removes the notifications of [titles]; a title that has none is left alone.
     suspend fun withdraw(titles: Set<AnimeId>)

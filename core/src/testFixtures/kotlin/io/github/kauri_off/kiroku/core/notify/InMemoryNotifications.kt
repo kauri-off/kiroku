@@ -81,14 +81,20 @@ class InMemoryShownNotifications : ShownNotifications {
     val posts = CopyOnWriteArrayList<Post>()
     val withdrawals = CopyOnWriteArrayList<Set<AnimeId>>()
 
+    // The device shows none of the app's notifications, as with the permission denied: a post is taken and nothing appears.
+    @Volatile
+    var blocked = false
+
     override suspend fun shown(): Map<AnimeId, Shown> = showing.value.mapValues { it.value.shown }
 
     override suspend fun post(
         announcement: Announcement,
         alert: Boolean,
-    ) {
+    ): Boolean {
         posts += Post(announcement, alert)
+        if (blocked) return false
         showing.update { it + (announcement.anime.id to announcement) }
+        return true
     }
 
     override suspend fun withdraw(titles: Set<AnimeId>) {

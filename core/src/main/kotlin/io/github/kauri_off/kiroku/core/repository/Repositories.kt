@@ -309,11 +309,11 @@ interface AiringRepository {
 interface NotificationsRepository {
     fun observeSettings(): Flow<NotificationSettings>
 
-    // Changes the settings as they are when it is applied, and returns once the run that follows has ended (N5, N8).
+    // Stores the change at once, whatever run is under way, and returns once the run that follows it has ended (N5, N8).
     suspend fun changeSettings(change: (NotificationSettings) -> NotificationSettings): Outcome<Unit>
 
-    // Each title's next notification as the last run found it, the soonest first; none while nobody is signed in.
-    fun observeComing(): Flow<List<Coming>>
+    // Each title's next notification as the last run found it, the soonest first; null while no run has ended, so no reader waits.
+    fun observeComing(): Flow<List<Coming>?>
 
     // What was posted, the latest first.
     fun observeSent(): Flow<List<SentNotification>>
