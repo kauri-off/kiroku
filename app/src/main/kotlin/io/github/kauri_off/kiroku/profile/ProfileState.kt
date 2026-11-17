@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.profile
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.notShown
 
 data class ProfileState(
@@ -10,14 +11,15 @@ data class ProfileState(
     val content: ProfileContent,
     val sessionExpired: Boolean = false,
     val refreshing: Boolean = false,
+    // How far the read of another user's list is, the first one or one again; null while none is under way.
+    val reading: UserListProgress? = null,
     // The "Open another profile" dialog; null while it is closed.
     val openProfile: OpenProfile? = null,
 ) {
     init {
         require(content !is ProfileContent.SignedOut || owner == ProfileOwner.Me)
-        require(content !is ProfileContent.ListLoading || owner is ProfileOwner.Other)
-        // MAL's API gives the header only for the signed-in user.
-        require(content !is ProfileContent.Shown || (content.header != null) == (owner == ProfileOwner.Me))
+        require(content !is ProfileContent.ListLoading || (owner is ProfileOwner.Other && reading != null))
+        require(reading == null || owner is ProfileOwner.Other)
     }
 }
 
@@ -34,15 +36,8 @@ sealed interface ProfileContent {
 
     data object SignedOut : ProfileContent
 
-    // Another user's list, read page by page before their statistics can be computed.
-    data class ListLoading(
-        val loaded: Int,
-        val total: Int?,
-    ) : ProfileContent {
-        init {
-            require(loaded >= 0 && (total == null || total >= 0))
-        }
-    }
+    // Another user's list, read part by part before their statistics can be computed; how far is the state's reading.
+    data object ListLoading : ProfileContent
 
     data class Failed(
         val error: DataError,
@@ -100,10 +95,6 @@ sealed interface ProfileEvent {
 }
 
 const val RECENT_PROFILES = 5
-
-// The names opened last, newest first, each once whatever its case, as MAL's names ignore case.
-fun List<String>.withOpened(name: String): List<String> =
-    (listOf(name) + filterNot { it.equals(name, ignoreCase = true) }).take(RECENT_PROFILES)
 
 // What the dialog opens: the name typed or taken from a pasted profile link; null when there is none.
 fun OpenProfile.nameToOpen(): String? = (profileInput(name) as? ProfileInput.Name)?.name

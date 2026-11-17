@@ -20,6 +20,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.TextLayoutResult
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -196,7 +198,7 @@ class ProfileScreenTest {
 
     @Test
     fun aLongListLoadsWithItsProgressLine() {
-        show(fixtures.of(fixtures.otherName, ProfileContent.ListLoading(3_000, 12_400)))
+        show(fixtures.reading(fixtures.otherName, 3_000, 12_400))
         val line = "Loading 3,000\u00A0of\u00A012,400"
         compose.onNodeWithText(line).assertExists()
         assertEquals(1, compose.onAllNodes(hasText(line) or hasContentDescription(line)).fetchSemanticsNodes().size)
@@ -205,12 +207,12 @@ class ProfileScreenTest {
     @Test
     @Config(qualifiers = "ru-w360dp-h640dp-xhdpi", fontScale = 2f)
     fun bothProgressLinesWrapAfterTheVerbWithLargeText() {
-        val lines = listOf(ProfileContent.ListLoading(3_000, 12_400), ProfileContent.ListLoading(1_200, null))
-        var state by mutableStateOf(fixtures.of(fixtures.otherName, lines[0]))
+        val lines = listOf(fixtures.reading(fixtures.otherName, 3_000, 12_400), fixtures.reading(fixtures.otherName, 1_200, null))
+        var state by mutableStateOf(lines[0])
         compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { ProfileScreen(state, {}, SnackbarHostState()) } }
         val verb = "Загружено "
-        for (content in lines) {
-            state = fixtures.of(fixtures.otherName, content)
+        for (line in lines) {
+            state = line
             val results = mutableListOf<TextLayoutResult>()
             compose
                 .onNodeWithText(verb, substring = true, useUnmergedTree = true)
@@ -279,5 +281,19 @@ class ProfileScreenTest {
         compose.onNodeWithText("Recent").assertDoesNotExist()
         compose.onNodeWithText("Open").assertIsEnabled().performClick()
         assertEquals(listOf(ProfileEvent.OpenProfile(fixtures.otherName)), events)
+    }
+
+    // 57 / 8 is 7.125 exactly, which rounding half to even would show as 7.12.
+    @Test
+    fun theMeanAndTheDaysRoundHalfUpAsMalDoes() {
+        val scores = listOf(8, 8, 8, 8, 8, 7, 5, 5)
+        val entries =
+            Fixtures.reference.entries
+                .take(scores.size)
+                .zip(scores) { entry, score -> entry.copy(values = entry.values.copy(score = score)) }
+        show(fixtures.me(ProfileContent.Shown(fixtures.set.user, statisticsOf(entries))))
+        compose.onNodeWithText("7.13").assertExists()
+        assertEquals(7.12, roundedHalfUp(7.115, 2), 0.0)
+        assertEquals(0.3, roundedHalfUp(0.25, 1), 0.0)
     }
 }

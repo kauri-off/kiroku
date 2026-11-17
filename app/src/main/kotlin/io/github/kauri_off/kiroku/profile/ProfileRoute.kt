@@ -2,32 +2,21 @@ package io.github.kauri_off.kiroku.profile
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
-import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.NotBuiltScreen
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
-
-// What the Profile shows until its data layer exists: fixture states in debug and preview builds, none in release.
-internal interface ProfileStandIn {
-    val own: ProfileContent
-
-    fun other(name: String): ProfileContent
-
-    // The names opened last that turned out to exist, newest first.
-    val recent: List<String>
-
-    fun opened(name: String)
-}
 
 @Serializable
 data class OtherProfileKey(
@@ -43,52 +32,50 @@ data class ProfileNotBuiltKey(
     val name: String? = null,
 ) : NavKey
 
-// The Profile on its stand-in, with the session of the app; replaced by a view model's route with the data layer.
+// The Profile of the signed-in user, or of the user [key] names; the own name opened as another's is the own Profile.
 @Composable
-internal fun ProfileStandInRoute(
-    standIn: ProfileStandIn,
-    owner: ProfileOwner,
+fun ProfileRoute(
+    key: OtherProfileKey?,
     graph: AppGraph,
+    messages: ShellMessages,
+    opened: OpenedProfiles,
     navigator: ShellNavigator,
     onSignIn: () -> Unit,
     snackbars: SnackbarHostState,
 ) {
-    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
-    var typed by rememberSaveable { mutableStateOf<String?>(null) }
-    val content =
-        when (owner) {
-            ProfileOwner.Me ->
-                when (session) {
-                    null -> ProfileContent.Loading
-                    Session.SignedOut -> ProfileContent.SignedOut
-                    else -> standIn.own
-                }
-            is ProfileOwner.Other -> standIn.other(owner.name)
+    val profile =
+        viewModel {
+            ProfileViewModel(
+                key?.let { ProfileOwner.Other(it.name) } ?: ProfileOwner.Me,
+                graph.session,
+                graph.list,
+                graph.user,
+                graph.connection,
+                graph.clock,
+                graph.background,
+                createSavedStateHandle(),
+                messages,
+                opened,
+            )
         }
-    val name = (owner as? ProfileOwner.Other)?.name
-    val state =
-        ProfileState(
-            owner = owner,
-            content = content,
-            sessionExpired = session is Session.Expired,
-            openProfile = typed?.let { OpenProfile(it, standIn.recent) },
-        )
-    ProfileScreen(state, snackbars = snackbars, onEvent = { event ->
+    val state by profile.state.collectAsScreenState()
+    CountAsShown(profile.shown)
+    if (key != null) {
+        val own by profile.own.collectAsScreenState()
+        LaunchedEffect(own) { if (own) navigator.remove(key) }
+    }
+    val name = key?.name
+    ProfileScreen(state.copy(openProfile = profile.openProfile), snackbars = snackbars, onEvent = { event ->
+        profile.onEvent(event)
         when (event) {
             ProfileEvent.Back -> navigator.back()
             ProfileEvent.OpenSettings -> navigator.open(ProfileNotBuiltKey(ProfileNotBuilt.Settings))
             ProfileEvent.SignIn -> onSignIn()
-            ProfileEvent.Retry, ProfileEvent.Refresh -> Unit
             is ProfileEvent.OpenStatistics -> navigator.open(ProfileNotBuiltKey(event.screen.notBuilt(), name))
             ProfileEvent.ViewList -> navigator.open(ProfileNotBuiltKey(ProfileNotBuilt.UserList, name))
-            is ProfileEvent.StartOpenProfile -> typed = event.name
-            is ProfileEvent.TypeName -> typed = event.text
-            is ProfileEvent.OpenProfile -> {
-                typed = null
-                standIn.opened(event.name)
-                navigator.open(OtherProfileKey(event.name))
-            }
-            ProfileEvent.DismissOpenProfile -> typed = null
+            is ProfileEvent.OpenProfile ->
+                if (profile.isOwnName(event.name)) navigator.home(Destination.Profile) else navigator.open(OtherProfileKey(event.name))
+            else -> Unit
         }
     })
 }

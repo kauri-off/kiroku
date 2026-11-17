@@ -22,6 +22,8 @@ class SourceRulesTest {
             setOf(
                 "EditSheetViewModel.kt",
                 "ListViewModel.kt",
+                "OpenedProfiles.kt",
+                "ProfileViewModel.kt",
                 "ShellViewModel.kt",
                 "SignInViewModel.kt",
                 "SubScreenViewModels.kt",

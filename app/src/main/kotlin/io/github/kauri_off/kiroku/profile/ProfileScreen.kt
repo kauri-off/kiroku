@@ -45,6 +45,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
@@ -62,6 +63,8 @@ import io.github.kauri_off.kiroku.text.currentLocale
 import io.github.kauri_off.kiroku.text.label
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.scoreText
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.NumberFormat
 
 // The Profile of ARCHITECTURE section 9.7, the user's own or another user's, drawn from [state] alone. Its snackbars
@@ -124,7 +127,7 @@ fun ProfileScreen(
                     ),
                     body,
                 )
-            is ProfileContent.ListLoading -> ListProgress(content, body)
+            ProfileContent.ListLoading -> state.reading?.let { ListProgress(it, body) }
             is ProfileContent.Failed -> ScreenState(failedState(content.error, state.owner, onEvent), body)
             is ProfileContent.Shown -> Shown(content, state, onEvent, padding)
         }
@@ -156,7 +159,7 @@ private fun failedState(
 // state would stand.
 @Composable
 private fun ListProgress(
-    progress: ProfileContent.ListLoading,
+    progress: UserListProgress,
     modifier: Modifier,
 ) {
     val loaded = countText(progress.loaded)
@@ -263,7 +266,7 @@ private fun Numbers(
         StatNumber(countText(statistics.statuses.completed), stringResource(R.string.profile_completed))
         StatNumber(daysText(statistics.daysWatched), stringResource(R.string.profile_days_watched))
         StatNumber(
-            value = mean?.let { scoreText(it) } ?: stringResource(R.string.profile_no_mean_score_value),
+            value = mean?.let { scoreText(roundedHalfUp(it, 2)) } ?: stringResource(R.string.profile_no_mean_score_value),
             caption = stringResource(R.string.profile_mean_score),
             spokenValue = if (mean == null) stringResource(R.string.profile_no_mean_score) else null,
         )
@@ -280,8 +283,14 @@ private fun daysText(days: Double): String =
             .apply {
                 minimumFractionDigits = 1
                 maximumFractionDigits = 1
-            }.format(days)
+            }.format(roundedHalfUp(days, 1))
     }
+
+// Half up from the value as written in decimals, as MAL rounds its profile's numbers.
+internal fun roundedHalfUp(
+    value: Double,
+    digits: Int,
+): Double = BigDecimal.valueOf(value).setScale(digits, RoundingMode.HALF_UP).toDouble()
 
 @Composable
 private fun Statuses(
