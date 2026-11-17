@@ -451,6 +451,10 @@ class SourceRulesTest {
                 "val a = statistics.copy(\n    daysWatched = 0.0,\n)",
                 "val a = statistics.statuses.copy(completed = done)",
                 "val a = TitleStatistics(counts, members).also { StatusCounts(1, 2, 3, 4, 5) }",
+                "val a = statistics.copy(episodesWatched = 0)",
+                "val a = statistics.copy(\n    titleCount = 3,\n)",
+                "private val UserStatistics.scored: Int get() = scores.values.sum()",
+                "val a = statistics.scores.values.sumOf { it }",
             )
         for (source in planted) {
             assertEquals(source, 1, statisticsValueProblems("app/src/main/kotlin/A.kt", "$source\n").size)
@@ -461,7 +465,7 @@ class SourceRulesTest {
                 "val b = statisticsOf(entries)\nval c = statistics.statuses[ListStatus.Completed]\n" +
                 "val d = TitleStatistics(StatusCounts(w, c, h, d, p), members)\n" +
                 "val e = TitleStatistics(\n    StatusCounts(\n        watching = w,\n    ),\n    members,\n)\n" +
-                "val f = entry.copy(values = values)\n"
+                "val f = entry.copy(values = values)\nval g = statistics.scored + statistics.titleCount\n"
         assertEquals(emptyList<String>(), statisticsValueProblems("app/src/main/kotlin/A.kt", clean))
     }
 

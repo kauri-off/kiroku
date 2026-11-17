@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.core.user.ScriptedUserLists
@@ -394,6 +395,33 @@ class ProfileViewModelTest {
             me.onEvent(ProfileEvent.StartOpenProfile())
             assertEquals(OpenProfile("", listOf(otherName.uppercase(), privateName)), me.openProfile(app.recent()))
         }
+
+    @Test
+    fun `a long read records its name once, not at every part`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val counted = CountedPreferences(app.graph.preferences)
+            val recording = Opened(app.graph, app.messages, OpenedProfiles(counted))
+            val other = recording.profile(ProfileOwner.Other(otherName))
+            showing(other.state, other.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertTrue(wholeRead > 2)
+            assertEquals(wholeRead, app.requests.size)
+            assertEquals(1, counted.updates)
+            assertEquals(listOf(otherName), app.recent())
+        }
+
+    private class CountedPreferences(
+        private val inner: PreferencesRepository,
+    ) : PreferencesRepository by inner {
+        var updates = 0
+
+        override suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>) {
+            updates++
+            inner.updateOpenedProfiles(change)
+        }
+    }
 
     // A rotation is shorter than the stop timeout, so the read goes on and its progress does not start again.
     @Test

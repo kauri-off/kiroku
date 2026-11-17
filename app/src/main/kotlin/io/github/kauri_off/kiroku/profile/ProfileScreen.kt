@@ -262,8 +262,11 @@ private fun blocks(
                 },
             )
         }
+        // A list of statuses the app does not know alone has no bars to show, and still its rows.
         if (statistics.statuses.total > 0) {
             add(PageBlock(Section.Statuses, Spacing.xl, lead = heading, trail = StatBarEnd) { Statuses(statistics, heading) })
+        }
+        if (statistics.titleCount > 0) {
             add(PageBlock(Section.Rows, Spacing.xl, lead = RowEnd, trail = RowEnd) { Rows(statistics, onEvent) })
         } else {
             add(PageBlock(Section.Nothing, Spacing.xl) { NothingOnList() })
@@ -341,7 +344,7 @@ private fun Numbers(
             )
         }
         StatNumbers(alignment = alignment) {
-            StatNumber(countText(statistics.statuses.total), stringResource(R.string.profile_titles), horizontalAlignment = alignment)
+            StatNumber(countText(statistics.titleCount), stringResource(R.string.profile_titles), horizontalAlignment = alignment)
             StatNumber(countText(statistics.episodesWatched), stringResource(R.string.profile_episodes), horizontalAlignment = alignment)
             StatNumber(countText(statistics.scored), stringResource(R.string.profile_scored), horizontalAlignment = alignment)
         }
@@ -366,9 +369,6 @@ internal fun roundedHalfUp(
     value: Double,
     digits: Int,
 ): Double = BigDecimal.valueOf(value).setScale(digits, RoundingMode.HALF_UP).toDouble()
-
-// How many titles have a score.
-private val UserStatistics.scored: Int get() = scores.values.sum()
 
 // The list by status, each a share of the whole list.
 @Composable
@@ -410,7 +410,7 @@ private fun Rows(
         mapOf(
             ProfileStatistics.ScoreDistribution to
                 if (scored > 0) {
-                    stringResource(R.string.profile_scored_of, countText(scored), countText(statistics.statuses.total))
+                    stringResource(R.string.profile_scored_of, countText(scored), countText(statistics.titleCount))
                 } else {
                     stringResource(R.string.profile_nothing_scored)
                 },

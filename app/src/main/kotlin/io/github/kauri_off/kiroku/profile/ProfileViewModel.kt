@@ -214,8 +214,13 @@ class ProfileViewModel(
             emit(Built(ProfileContent.Loading))
             shownOnce.first { it }
             var readAgain = false
+            // Recorded once, not at every part of a long read.
+            var recorded = false
             user.observeList(name).collect { list ->
-                if (list.isOfUser()) opened.opened(name, user::sameUser)
+                if (!recorded && list.isOfUser()) {
+                    recorded = true
+                    opened.opened(name, user::sameUser)
+                }
                 when (list) {
                     is UserListState.None -> loads.ended(list.error)
                     is UserListState.Whole -> if (list.again == null && !readAgain) loads.ended(null)
