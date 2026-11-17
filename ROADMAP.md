@@ -236,11 +236,7 @@ missing from it; there are no duplicates.
   in, for nothing sent yet and for a long record; the render's accessibility check passes; `StringRulesTest`
   passes.
 
-- [ ] **M4-06 [O] An emulator of Android 8 to 11.** The orchestrator gives the machine's emulator wrapper a second
-  system image, of an Android version before 12, chosen for a run; the current image stays the default.
-  **Needs:** nothing.
-  **Check:** a debug build is installed and started on it and reports its API level; `:data`'s device tests pass on
-  it.
+- [x] **M4-06 [O] An emulator of Android 8 to 11.**
 
 - [ ] **M4-07 Database: the record and the settings.** M4-02's store of the record in the database, as a real
   migration (section 7.1), M4's only one; its settings in the source's preferences file. The record is in tables of
