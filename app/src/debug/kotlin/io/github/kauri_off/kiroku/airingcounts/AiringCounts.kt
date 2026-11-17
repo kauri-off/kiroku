@@ -35,6 +35,10 @@ sealed interface Why {
         val lastAired: Instant,
     ) : Why
 
+    data class DoubtedOver(
+        val otherAired: Int,
+    ) : Why
+
     // The calculator gave the title no result: it failed on it, or the title has just joined the list.
     data object NoResult : Why
 }
@@ -86,7 +90,7 @@ private fun kindOf(airing: Airing?): CountKind =
     when (airing?.inexact) {
         null -> if (airing == null) CountKind.Unknown else CountKind.Exact
         Inexact.NumberedDifferently -> CountKind.NumberedDifferently
-        Inexact.TotalsDisagree, Inexact.ScheduleStopped -> CountKind.Doubt
+        Inexact.TotalsDisagree, Inexact.ScheduleStopped, Inexact.NumberingDoubted -> CountKind.Doubt
         Inexact.NoSchedule -> if (airing.aired is AiredCount.Known) CountKind.NoSchedule else CountKind.Unknown
     }
 
@@ -103,6 +107,7 @@ private fun why(
             if (malTotal == null || total == 0) null else Why.TotalsDiffer(malTotal, total)
         }
         Inexact.ScheduleStopped -> airing.latestAiredAt?.let(Why::StoppedAfter)
+        Inexact.NumberingDoubted -> schedule?.doubtedOver?.let(Why::DoubtedOver)
         Inexact.NoSchedule -> null
         null -> if (airing == null) Why.NoResult else null
     }
@@ -122,12 +127,12 @@ sealed interface AiringCountsEvent {
     data object Retry : AiringCountsEvent
 }
 
-// Reads what is stored and asks no source; a list or a store that cannot be read ends it as unreadable.
+// Reads what is stored, doubted schedules too, and asks no source; a list or a store that cannot be read ends it as unreadable.
 fun airingCountsState(
     list: ListSource,
     airing: AiringRepository,
     language: TitleLanguage,
 ): Flow<AiringCountsState> =
-    combine(list.observeEntries(), airing.observeAiring(), airing.observeSchedules()) { entries, results, schedules ->
+    combine(list.observeEntries(), airing.observeAiring(), airing.observeStoredSchedules()) { entries, results, schedules ->
         AiringCountsState.Read(airingCounts(entries, results, schedules, language)) as AiringCountsState
     }.catch { if (it is DataException) emit(AiringCountsState.Unreadable) else throw it }

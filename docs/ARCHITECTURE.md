@@ -172,15 +172,17 @@ the background.
   Every screen, sort order and notification uses it; the list row and the title page show the same numbers.
 - **A2. Correct between refreshes.** The aired count rises when a stored air time passes, with no network call, and
   a visible screen updates at that moment without polling.
-- **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's, otherwise unknown. A
-  title MAL marks as finished has aired completely. The aired count never exceeds a known total. An airing status
-  the app does not know is read as airing by every rule, freshness included.
+- **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's unless its schedule is not
+  used or its numbering is doubted, otherwise unknown. A title MAL marks as finished has aired completely. The aired
+  count never exceeds a known total. An airing status the app does not know is read as airing by every rule,
+  freshness included.
 - **A4. A schedule numbered differently is not used.** When AniList's episode numbers evidently continue an
   earlier season (they do not begin at episode 1, and run past MAL's total or reach a number that a show with
   MAL's start date cannot have reached), AniList's data is not used for that title.
-- **A5. Doubt is shown as an estimate.** A count is estimated, not exact, when the two sources' totals differ, or
-  when AniList appears to have stopped tracking the title. The estimate is AniList's own count, which stops at
-  MAL's total.
+- **A5. Doubt is shown as an estimate.** A count is estimated, not exact, when the two sources' totals differ, when
+  AniList appears to have stopped tracking the title, or when AniList has two entries for the title whose
+  numberings cannot be told apart; the estimate is then at least the other entry's highest aired episode. The
+  estimate is AniList's own count, or more where its numbering is doubted, and stops at MAL's total.
 - **A6. The weekly estimate is bounded.** It is used only when MAL gives a full start date and a broadcast weekday
   and time, and the result cannot run away (the total is known, or the show started recently). Without it the
   count is 0 for a title that has not started and unknown otherwise. A count of 0 is exact only when a stored

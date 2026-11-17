@@ -56,7 +56,7 @@ object AiringGrid {
         total: Int? = 24,
     ) = AiringSchedule(FixtureTime.weekly(numbers.first, FixtureTime.japan(firstAt), numbers), total)
 
-    // Nothing; a premiere to come; two aired and more to come; a break; stopped; numbered on; totals that disagree; a recap.
+    // Nothing; a premiere to come; two aired and more to come; a break; stopped; numbered on; totals that disagree; a recap; in doubt.
     val schedules: List<AiringSchedule?> =
         listOf(
             null,
@@ -67,6 +67,7 @@ object AiringGrid {
             weekly(25..48, "2026-01-03T23:30"),
             weekly(1..2, "2026-01-03T23:30", total = 48),
             weekly(1..25, "2025-07-26T23:30"),
+            weekly(1..1, "2026-01-03T23:30").copy(doubtedOver = 2),
         )
 
     // The title; without MAL's weekly slot, so with no estimate; the same before it airs; and finished.

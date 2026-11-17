@@ -318,6 +318,24 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `a schedule whose numbering the source doubts is stored with its doubt, and is not among the schedules a notification reads`() =
+        runTest {
+            val anime = FixtureAnime.exactToWatch
+            val plain = fixtures.schedules.getValue(anime.id)
+            val doubted = plain.copy(doubtedOver = 20)
+            val s = subject(schedules = fixtures.schedules + (anime.id to doubted), seeded = false)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+
+            assertEquals(StoredAiring(doubted, fixtures.now), s.stored(anime))
+            assertEquals(doubted, s.engine.observeStored().first()[anime.id])
+            assertEquals(fixtures.schedules.filterKeys { it in tracked && it != anime.id }, s.engine.observeSchedules().first())
+
+            s.source.schedules += anime.id to plain
+            assertEquals(Outcome.Success(Unit), s.engine.refresh())
+            assertEquals(plain, s.engine.observeSchedules().first()[anime.id])
+        }
+
+    @Test
     fun `A9 an episode aired on time keeps its time, a moved one has its new time, a removed one is gone, in the past too`() =
         runTest {
             val s = subject()

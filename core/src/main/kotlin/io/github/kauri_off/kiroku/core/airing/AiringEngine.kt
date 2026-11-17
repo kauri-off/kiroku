@@ -127,10 +127,14 @@ class AiringEngine(
     }
 
     // The schedules of the stored titles, after every change to one; a title the source does not know has none.
-    fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> =
+    fun observeStored(): Flow<Map<AnimeId, AiringSchedule>> =
         read {
             local.observe().map { stored -> stored.mapNotNull { (id, airing) -> airing.schedule?.let { id to it } }.toMap() }
         }
+
+    // The same without a schedule whose numbering the source doubts: all that a notification may read.
+    fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> =
+        observeStored().map { stored -> stored.filterValues { it.doubtedOver == null } }.distinctUntilChanged()
 
     // For a title's page alone, never for a notification: the stored schedule, else the one fetched for the page (A12).
     fun observePageSchedule(id: AnimeId): Flow<AiringSchedule?> =

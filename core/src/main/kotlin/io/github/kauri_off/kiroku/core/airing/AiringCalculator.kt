@@ -60,18 +60,27 @@ private fun countedAt(
             numberedDifferently(anime, episodes, now) -> Inexact.NumberedDifferently
             else -> null
         }
-    val total = anime.malEpisodes ?: schedule?.totalEpisodes?.takeIf { unread != Inexact.NumberedDifferently }
+    val doubtedOver = schedule?.doubtedOver
+    val total = anime.malEpisodes ?: schedule?.totalEpisodes?.takeIf { unread != Inexact.NumberedDifferently && doubtedOver == null }
     val finished = anime.airingStatus.effective == AiringStatus.Finished
     val coming = episodes.filter { it.airsAt.isAfter(now) }
     return when {
         finished && total != null -> {
-            val finale = episodes.firstOrNull { it.number == total }?.airsAt.takeIf { unread == null }
+            val finale = episodes.firstOrNull { it.number == total }?.airsAt.takeIf { unread == null && doubtedOver == null }
             val aired = finale?.takeIf { !it.isAfter(now) }
             Airing(AiredCount.Exact(total), total, null, aired, changesAt = finale.takeIf { aired == null })
         }
-        unread != null -> estimated(anime, total, now, unread, wake = coming.minOfOrNull { it.airsAt })
-        else -> scheduled(anime, episodes, schedule?.totalEpisodes, total, finished, now)
+        unread != null -> estimated(anime, total, now, unread, wake = coming.minOfOrNull { it.airsAt }).atLeast(doubtedOver)
+        else -> scheduled(anime, episodes, schedule?.totalEpisodes, total, finished, doubtedOver, now)
     }
+}
+
+// A doubted numbering never counts below the other's highest aired episode, nor exactly.
+private fun Airing.atLeast(doubtedOver: Int?): Airing {
+    val floor = doubtedOver?.let { minOf(it, total ?: it) } ?: return this
+    val known = aired as? AiredCount.Known
+    if (known != null && known.value >= floor) return this
+    return copy(aired = AiredCount.Estimated(floor), latestAiredAt = latestAiredAt.takeIf { known != null })
 }
 
 // A4, of a schedule that begins after episode 1: a number past MAL's total, nothing aired, or a first episode too far ahead.
@@ -101,11 +110,12 @@ private fun scheduled(
     scheduleTotal: Int?,
     total: Int?,
     finished: Boolean,
+    doubtedOver: Int?,
     now: Instant,
 ): Airing {
     val aired = episodes.filter { !it.airsAt.isAfter(now) }
     val coming = episodes.filter { it.airsAt.isAfter(now) }
-    val highest = aired.maxOfOrNull { it.number } ?: 0
+    val highest = maxOf(aired.maxOfOrNull { it.number } ?: 0, doubtedOver ?: 0)
     val count = if (total == null) highest else minOf(highest, total)
     val next = coming.filter { it.number > count && (total == null || it.number <= total) }.minByOrNull { it.number }
     // A5: the schedule's total is the one it states, and at least its highest number.
@@ -118,6 +128,7 @@ private fun scheduled(
         when {
             totalsDisagree -> Inexact.TotalsDisagree
             stopped -> Inexact.ScheduleStopped
+            doubtedOver != null -> Inexact.NumberingDoubted
             else -> null
         }
     return Airing(
