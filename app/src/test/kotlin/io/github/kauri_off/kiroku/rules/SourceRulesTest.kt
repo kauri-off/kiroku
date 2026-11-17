@@ -426,6 +426,44 @@ class SourceRulesTest {
     }
 
     @Test
+    fun appAndDataCodeMakeNoStatistic() {
+        val sources = appSources() + dataSources()
+        assertTrue(sources.any { it.name == "ProfileFixtureStates.kt" })
+        assertTrue(sources.any { relative(it).endsWith("data/anime/MalAnime.kt") })
+        assertEquals(emptyList<String>(), sources.flatMap { statisticsValueProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedStatisticFails() {
+        val planted =
+            listOf(
+                "val a = UserStatistics(counts, 0.0, null, emptyMap(), emptyList(), emptyList(), emptyMap())",
+                "val a = io.github.kauri_off.kiroku.core.model.UserStatistics(\n    statuses = counts,\n)",
+                "val a = Counted(genre, 3)",
+                "val a = Counted<MediaType>(MediaType.Tv, 3)",
+                "val a = StatusCounts(1, 2, 3, 4, 5)",
+                "val a = StatusCounts.of(entries.map { it.status })",
+                "val a = entries.map { it.status }.let(StatusCounts::of)",
+                "val a = StatusCounts.Companion.of(statuses)",
+                "val a = statistics.copy(meanScore = 7.0)",
+                "val a = statistics.copy(\n    daysWatched = 0.0,\n)",
+                "val a = statistics.statuses.copy(completed = done)",
+                "val a = TitleStatistics(counts, members).also { StatusCounts(1, 2, 3, 4, 5) }",
+            )
+        for (source in planted) {
+            assertEquals(source, 1, statisticsValueProblems("app/src/main/kotlin/A.kt", "$source\n").size)
+            assertEquals(source, 1, statisticsValueProblems("data/src/main/kotlin/A.kt", "$source\n").size)
+        }
+        val clean =
+            "fun a(statistics: UserStatistics): List<Counted<Genre>> = statistics.genres\n" +
+                "val b = statisticsOf(entries)\nval c = statistics.statuses[ListStatus.Completed]\n" +
+                "val d = TitleStatistics(StatusCounts(w, c, h, d, p), members)\n" +
+                "val e = TitleStatistics(\n    StatusCounts(\n        watching = w,\n    ),\n    members,\n)\n" +
+                "val f = entry.copy(values = values)\n"
+        assertEquals(emptyList<String>(), statisticsValueProblems("app/src/main/kotlin/A.kt", clean))
+    }
+
+    @Test
     fun everySourceSetThatShipsIsScanned() {
         val scanned = appSources().map { relative(it) }
         assertTrue(scanned.any { it.startsWith("app/src/main/") })

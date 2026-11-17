@@ -14,8 +14,10 @@ object FixtureUser {
     val statistics: UserStatistics =
         UserStatistics(
             statuses = StatusCounts(watching = 11, completed = 6, onHold = 3, dropped = 3, planned = 8),
-            daysWatched = 24.4,
-            meanScore = 7.43,
+            // 35 152 minutes of episodes, a day being 1440
+            daysWatched = 35_152.0 / 1440,
+            // (4 + 6 + 7 + 8 + 8 + 9 + 10) / 7
+            meanScore = 52.0 / 7,
             scores = mapOf(4 to 1, 6 to 1, 7 to 1, 8 to 2, 9 to 1, 10 to 1),
             genres =
                 listOf(
@@ -23,8 +25,8 @@ object FixtureUser {
                     Counted(G.comedy, 10),
                     Counted(G.drama, 10),
                     Counted(G.romance, 8),
-                    Counted(G.sliceOfLife, 6),
                     Counted(G.mystery, 6),
+                    Counted(G.sliceOfLife, 6),
                     Counted(G.action, 5),
                     Counted(G.adventure, 4),
                     Counted(G.supernatural, 4),
@@ -47,8 +49,8 @@ object FixtureUser {
                 listOf(
                     Counted(MediaType.Tv, 23),
                     Counted(MediaType.Movie, 2),
-                    Counted(MediaType.Ona, 2),
                     Counted(MediaType.Ova, 2),
+                    Counted(MediaType.Ona, 2),
                     Counted(MediaType.Special, 1),
                 ),
             years =

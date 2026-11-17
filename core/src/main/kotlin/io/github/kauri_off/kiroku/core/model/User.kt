@@ -27,7 +27,9 @@ data class UserProfile(
     val joined: LocalDate?,
 )
 
-data class UserStatistics(
+// Made only by the statistics calculator, and by the fixtures as what a test expects of it.
+@ConsistentCopyVisibility
+data class UserStatistics internal constructor(
     val statuses: StatusCounts,
     val daysWatched: Double,
     val meanScore: Double?,
@@ -43,7 +45,8 @@ data class UserStatistics(
     }
 }
 
-data class Counted<out T>(
+@ConsistentCopyVisibility
+data class Counted<out T> internal constructor(
     val value: T,
     val count: Int,
 )

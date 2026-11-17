@@ -1,68 +1,39 @@
 package io.github.kauri_off.kiroku.core.fixtures
 
-import io.github.kauri_off.kiroku.core.model.Counted
-import io.github.kauri_off.kiroku.core.model.ListEntry
-import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.model.StatusCounts
-import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
-import kotlin.math.roundToLong
 
 class FixtureStatisticsTest {
-    private fun rounded(
-        value: Double,
-        decimals: Int,
-    ): Double {
-        val factor = Math.pow(10.0, decimals.toDouble())
-        return (value * factor).roundToLong() / factor
-    }
-
-    private fun computed(entries: List<ListEntry>): UserStatistics {
-        val scores = entries.mapNotNull { it.values.score }
-        return UserStatistics(
-            statuses =
-                StatusCounts(
-                    watching = entries.count { it.status == ListStatus.Watching },
-                    completed = entries.count { it.status == ListStatus.Completed },
-                    onHold = entries.count { it.status == ListStatus.OnHold },
-                    dropped = entries.count { it.status == ListStatus.Dropped },
-                    planned = entries.count { it.status == ListStatus.Planned },
-                ),
-            daysWatched =
-                rounded(
-                    entries.sumOf { entry ->
-                        entry.values.watchedEpisodes * (entry.anime.averageEpisodeDuration?.seconds ?: 0L)
-                    } / 86_400.0,
-                    1,
-                ),
-            meanScore = if (scores.isEmpty()) null else rounded(scores.average(), 2),
-            scores = scores.groupingBy { it }.eachCount().toSortedMap(),
-            genres =
-                entries
-                    .flatMap { it.anime.genres.orEmpty() }
-                    .groupingBy { it }
-                    .eachCount()
-                    .map { (genre, count) -> Counted(genre, count) }
-                    .sortedWith(compareByDescending<Counted<*>> { it.count }.thenBy { it.value.toString() }),
-            mediaTypes =
-                entries
-                    .mapNotNull { it.anime.mediaType }
-                    .groupingBy { it }
-                    .eachCount()
-                    .map { (type, count) -> Counted(type, count) }
-                    .sortedWith(compareByDescending<Counted<*>> { it.count }.thenBy { it.value.toString() }),
-            years = FixtureSet.startYears(entries),
-        )
+    @Test
+    fun `the demo user's hand-written statistics are the calculator's over the demo list`() {
+        FixtureSets.all.forEach { (name, set) ->
+            assertEquals(name, set.userStatistics, statisticsOf(set.entries))
+        }
     }
 
     @Test
-    fun `the demo user's statistics agree with the demo list`() {
-        FixtureSets.all.forEach { (name, set) ->
-            assertEquals(name, computed(set.entries), set.userStatistics)
-        }
+    fun `three weeks earlier, a title that started in a year's first three weeks counts in the year before`() {
+        val set = FixtureSets.all.toMap().getValue("3 weeks earlier")
+
+        // The reference's years, with 2026-01-18, 2025-01-01, 2024-01-10, 2020-01-11 and the year 2027 each a year earlier.
+        assertEquals(
+            mapOf(
+                2004 to 1,
+                2017 to 1,
+                2018 to 1,
+                2019 to 3,
+                2021 to 1,
+                2022 to 2,
+                2023 to 3,
+                2024 to 2,
+                2025 to 12,
+                2026 to 4,
+            ),
+            statisticsOf(set.entries).years,
+        )
     }
 
     @Test

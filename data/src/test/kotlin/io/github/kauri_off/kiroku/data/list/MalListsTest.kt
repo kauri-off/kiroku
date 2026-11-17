@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
+import io.github.kauri_off.kiroku.data.network.MalBackOff
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
@@ -28,6 +29,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 
 // The list download over the recorded public pages behind a local server, which answers by the page's offset.
@@ -250,11 +252,43 @@ class MalListsTest {
     }
 
     @Test
-    fun `another user's private list and an unknown user are told apart`() {
-        network.always(answer(403, body("list_private")))
-        assertEquals(Outcome.Failure(DataError.PrivateList), download())
-        network.always(answer(404, body("list_unknown_user")))
+    fun `on the recorded answers a private list and an unknown name are told apart, and nothing backs off`() {
+        serve { answer(403, body("list_private")) }
+        assertEquals(Outcome.Failure(DataError.PrivateList), download(ListUser.Named("private-user")))
+        serve { answer(404, body("list_unknown_user")) }
         assertEquals(Outcome.Failure(DataError.UnknownUser), download(ListUser.Named("kiroku-no-user-0")))
+        serve { answer(404, body("list_impossible_name")) }
+        assertEquals(Outcome.Failure(DataError.UnknownUser), download(ListUser.Named("kiroku no user")))
+
+        assertEquals(
+            listOf("private-user", "kiroku-no-user-0", "kiroku%20no%20user").map {
+                "/v2/users/$it/animelist"
+            },
+            asked.map { it.url.encodedPath },
+        )
+        assertEquals(Duration.ZERO, network.http.backOff.remaining())
         assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `a refusal of another user's list that is not MAL's answer for a private list, or too many requests, backs off`() {
+        for (refusal in listOf(answer(403, """{"error":"forbidden"}"""), answer(429, ""))) {
+            serve { offset -> if (offset == 10) refusal else null }
+            assertEquals(Outcome.Failure(DataError.Refused), download())
+            assertEquals(MalBackOff.First, network.http.backOff.remaining())
+            network.http.backOff.answered(network.http.backOff.mark())
+        }
+        assertEquals(listOf("0", "10", "0", "10"), asked.map { it.url.queryParameter("offset") })
+    }
+
+    @Test
+    fun `MAL gives a public list asked by its owner's name in another letter case as asked by the name itself`() {
+        val ownCase = recordedJson("list_public_1").toListPage(Repairs())
+        val anotherCase = recordedJson("list_public_another_case").toListPage(Repairs())
+
+        assertEquals(ownCase.entries.size, anotherCase.entries.size)
+        assertEquals(ownCase.entries.map { it.anime.id to it.values }, anotherCase.entries.map { it.anime.id to it.values })
+        assertEquals(ownCase.entries.map { it.updatedAt }, anotherCase.entries.map { it.updatedAt })
+        assertEquals(ownCase.next, anotherCase.next)
     }
 }
