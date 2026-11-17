@@ -108,6 +108,8 @@ class SandboxMal(
         if (bearer != null && !signedIn) return INVALID_TOKEN
         val parts = path.split('/')
         val fields = fieldsOf(url.queryParameter("fields"))
+        // Read as MAL reads an address: a name is one segment, decoded.
+        val listUser = url.pathSegments.takeIf { it.size == 4 && it[1] == "users" && it[3] == "animelist" }?.get(2)
         return when {
             parts.size == 3 && parts[0] == "anime" && parts[2] == "my_list_status" -> {
                 if (!signedIn) return INVALID_TOKEN
@@ -122,7 +124,14 @@ class SandboxMal(
             // The client id goes on in the network's step, after the sandbox: a page without a token is the client id's.
             parts.size == 2 && parts[0] == "anime" -> titlePage(parts[1].toLongOrNull() ?: return NOT_FOUND, fields, signedIn)
             path == "users/@me" -> if (signedIn) 200 to profile(fields).toString() else INVALID_TOKEN
-            path == "users/@me/animelist" -> if (signedIn) 200 to page(url, fields).toString() else INVALID_TOKEN
+            listUser == ME -> if (signedIn) 200 to page(url, fields, list.entries()).toString() else INVALID_TOKEN
+            // Another user's list is the same to anyone, signed in or not.
+            listUser != null ->
+                when (val users = list.usersList(listUser)) {
+                    null -> NOT_FOUND
+                    UsersList.Private -> PRIVATE_LIST
+                    is UsersList.Public -> 200 to page(url, fields, users.entries).toString()
+                }
             else -> NOT_FOUND
         }
     }
@@ -194,9 +203,10 @@ class SandboxMal(
     private fun page(
         url: HttpUrl,
         fields: Map<String, Set<String>?>,
+        listed: List<Pair<Long, Listed>>,
     ): JsonObject {
         val status = url.queryParameter("status")
-        val entries = list.entries().filter { status == null || it.second.status == status }
+        val entries = listed.filter { status == null || it.second.status == status }
         val limit = (url.queryParameter("limit")?.toIntOrNull() ?: DEFAULT_PAGE).coerceIn(1, minOf(LARGEST_PAGE, list.pageSize))
         val offset = (url.queryParameter("offset")?.toIntOrNull() ?: 0).coerceAtLeast(0)
         val data =
@@ -224,7 +234,7 @@ class SandboxMal(
         return JsonObject(mapOf("data" to JsonArray(data), "paging" to JsonObject(paging)))
     }
 
-    // The sandbox's own user, made up, with statistics counted from the list.
+    // The sandbox's own user, made up, with statistics counted from the list, in the fields and kinds of MAL's answer.
     private fun profile(fields: Map<String, Set<String>?>): JsonObject {
         val entries = list.entries().map { it.second }
         val episodes = entries.sumOf { it.watched }
@@ -233,10 +243,8 @@ class SandboxMal(
         fun days(status: String) = entries.filter { it.status == status }.sumOf { it.watched } * EPISODE_DAYS
         val statistics =
             buildJsonObject {
-                for ((name, status) in STATISTIC_STATUSES) {
-                    put("num_items_$name", entries.count { it.status == status })
-                    put("num_days_$name", days(status))
-                }
+                for (status in ListStatusCodes) put("num_items_$status", entries.count { it.status == status })
+                for (status in ListStatusCodes - "plan_to_watch") put("num_days_$status", days(status))
                 put("num_items", entries.size)
                 put("num_days_watched", episodes * EPISODE_DAYS)
                 put("num_days", (episodes * EPISODE_DAYS).toInt())
@@ -248,6 +256,9 @@ class SandboxMal(
             mapOf(
                 "id" to JsonPrimitive(USER_ID),
                 "name" to JsonPrimitive(USER_NAME),
+                "picture" to JsonPrimitive(PICTURE),
+                "location" to JsonPrimitive(""),
+                "birthday" to JsonPrimitive(BIRTHDAY),
                 "joined_at" to JsonPrimitive(JOINED_AT),
                 "anime_statistics" to statistics,
             )
@@ -264,6 +275,11 @@ class SandboxMal(
         const val USER_NAME = "Sandbox_User"
         private const val USER_ID = 1L
         private const val JOINED_AT = "2001-01-01T00:00:00+00:00"
+        private const val BIRTHDAY = "2001-01-01"
+
+        // On no host, as no picture of MAL's is the sandbox's.
+        private const val PICTURE = "https://sandbox.invalid/images/userimages/1.jpg"
+        private const val ME = "@me"
         private const val API_PATH = "/v2/"
         private const val SIGN_IN_PATH = "/v1/oauth2/"
         private const val OWN_ENTRY = "my_list_status"
@@ -272,14 +288,13 @@ class SandboxMal(
         private const val LARGEST_PAGE = 1000
         private const val EPISODE_DAYS = 24.0 / (24 * 60)
         private val JSON = "application/json; charset=UTF-8".toMediaType()
-        private val DEFAULT_PROFILE = setOf("id", "name", "joined_at")
+        private val DEFAULT_PROFILE = setOf("id", "name", "location", "birthday", "joined_at")
         private val ALWAYS = setOf("id", "title", "main_picture")
-        private val STATISTIC_STATUSES =
-            listOf("watching" to "watching", "completed" to "completed", "on_hold" to "on_hold", "dropped" to "dropped")
         private val UPDATED_AT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx")
 
         // The shapes of MAL's own answers, committed by the client-id recorder or printed in MAL's reference.
         private val NOT_FOUND = 404 to """{"message":"","error":"not_found"}"""
+        private val PRIVATE_LIST = 403 to """{"message":"Access to this list has been restricted by the owner.","error":"not_permitted"}"""
         private val INVALID_TOKEN = 401 to """{"error":"invalid_token"}"""
         private val INVALID_REFRESH =
             401 to """{"error":"invalid_request","message":"The refresh token is invalid.","hint":"Cannot decrypt the refresh token"}"""

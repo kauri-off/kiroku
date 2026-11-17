@@ -27,15 +27,19 @@ internal fun poster(id: Long) = "https://example.invalid/kiroku/poster/$id.jpg"
 // The sandbox's titles, as the app reads them from its assets.
 internal val sandboxTitles: Map<Long, JsonObject> by lazy { SandboxTitles.read({ recorded("$it.200.json") }, ::poster) }
 
-// A sandbox over [titles], by default the committed ones, starting with [starting], and the app's client and a signed-in session over it.
+// A sandbox over [titles], by default the committed ones, starting with [starting], its public user's list [public] or
+// its own, and the app's client and a signed-in session over it.
 internal class SandboxFixture(
     private val titles: Map<Long, JsonObject>? = null,
     private val starting: () -> Map<Long, Listed> = { emptyMap() },
+    private val public: () -> Map<Long, Listed>? = { null },
 ) : ExternalResource() {
     val folder = TemporaryFolder()
     val clock = TestClock(Instant.parse("2026-11-13T10:00:00Z"))
     val tokens by lazy { SandboxTokens(clock) }
-    val list by lazy { SandboxList(titles ?: sandboxTitles, clock, starting = { starting() }) }
+    val list by lazy {
+        SandboxList(titles ?: sandboxTitles, clock, starting = { starting() }, public = { public() ?: SandboxUsers.publicList(it) })
+    }
     val mal by lazy { SandboxMal(list, tokens) }
     val client by lazy { SandboxClient(mal, clock = clock) }
     lateinit var signedIn: SandboxClient.SignedIn

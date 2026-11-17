@@ -501,17 +501,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   the debug build's links allowed and the app stopped: a link to the demo's public user opens that profile, Back
   reaches the List, and a link to its private user says the list is private.
 
-- [ ] **M6-07 Sandbox: other users.** The sandbox's MAL answers for other users' lists in the recorded shapes: a
-  public user whose list has several thousand entries, made from the sandbox's titles and given in pages of the
-  size asked; a user whose list is private; and nobody else. It answers them to the client id alone, signed in or
-  not, and its failures (offline, slow) apply to them. Its profile of the signed-in user is held to the owner's
-  recording.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: given the entries of the recorded public pages, the sandbox's
-  pages hold the same titles in the same order, values and offsets; its answers for the private user and for an
-  unknown name are the recorded ones; `MalLists` reads the list of several thousand whole, each entry once; a
-  request for another user's list that carries a token is answered as one without. Where the owner's recordings
-  are: the sandbox's profile has the fields of his recorded one, each of the same kind.
+- [x] **M6-07 Sandbox: other users.**
 
 - [ ] **M6-08 Another user's list from MAL.** In `:data`: M6-04's port over MAL's list of a named user. A part is
   a page, asked one at a time, and the entries so far follow each. The name goes to MAL as one segment of the
