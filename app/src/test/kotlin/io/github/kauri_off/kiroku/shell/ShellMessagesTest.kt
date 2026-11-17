@@ -23,6 +23,8 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListField
+import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -53,6 +55,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -221,7 +224,23 @@ class ShellMessagesTest {
         ShellMessage(ShellMessage.Text.EpisodeWatched(episode), ShellMessage.Action.Undo(ListWrite.Remove(anime)))
 
     private fun failed(episode: Int) =
-        ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(ListWrite.SetWatched(anime, episode)))
+        ShellMessage(
+            ShellMessage.Text.CouldNotSave,
+            ShellMessage.Action.Retry(WriteFailure(DataError.ServerError, ListWrite.SetWatched(anime, episode), list = null).retry),
+        )
+
+    // A failed save of the count, which MAL last confirmed at 12; its Retry is judged against the title.
+    private fun failedSave(episode: Int): ShellMessage {
+        val confirmed = runBlocking { graph.list.observeEntry(anime.id).first()!! }.values
+        val failure =
+            WriteFailure(
+                DataError.ServerError,
+                ListWrite.Save(anime, confirmed.copy(watchedEpisodes = episode), setOf(ListField.WatchedEpisodes)),
+                list = (runBlocking { graph.session.observeSession().first() } as Session.SignedIn).signIn,
+                untouched = Untouched(setOf(confirmed)),
+            )
+        return ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(failure.retry))
+    }
 
     // Posts [posted] in order, then lets each shown message time out; returns what was shown, in order.
     private fun shownAfter(vararg posted: ShellMessage): List<ShellMessage> {
@@ -250,16 +269,44 @@ class ShellMessagesTest {
         assertEquals(listOf(failed(1), moved, failed(2)), shownAfter(failed(1), watched(3), moved, failed(2), watched(4)))
     }
 
-    // B3's m1: a stale Undo would take back a step the user had already taken back; a stale Retry would overwrite.
+    // B3's m1: a stale Undo would take back a step the user had already taken back.
     @Test
-    fun `a waiting Undo or Retry is dropped once its title has been written, and one whose title has not is shown`() {
+    fun `a waiting Undo is dropped once its title has been written, and one whose title has not is shown`() {
         val other = FixtureAnime.oneShortOfTotal
         val otherMoved = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(other)))
-        compose.runOnUiThread { listOf(moved, failed(1), otherMoved, moved).forEach(messages::post) }
+        compose.runOnUiThread { listOf(moved, otherMoved, moved).forEach(messages::post) }
         runMainLooper()
         runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
         runMainLooper()
         assertEquals(listOf(moved, otherMoved), shownInTurn())
+    }
+
+    // W2, 7.2: a waiting Retry goes by the rule of a shown one, once nothing is left to set, and not before.
+    @Test
+    fun `a waiting Retry stays while its title changes and it still has something to set, and goes once nothing is left`() {
+        compose.runOnUiThread { listOf(moved, failedSave(15)).forEach(messages::post) }
+        runMainLooper()
+        runBlocking {
+            graph.list.write(
+                ListWrite.Save(
+                    anime,
+                    graph.demo.server
+                        .entry(anime.id)!!
+                        .values
+                        .copy(score = 3),
+                    setOf(ListField.Score),
+                ),
+            )
+        }
+        runMainLooper()
+        val kept = failedSave(15)
+        assertEquals(listOf(moved, kept).map { it.text }, shownInTurn().map { it.text })
+
+        compose.runOnUiThread { listOf(moved, failedSave(15)).forEach(messages::post) }
+        runMainLooper()
+        runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) }
+        runMainLooper()
+        assertEquals(listOf(moved), shownInTurn())
     }
 
     // Lets each shown message time out; returns what was shown, in order.
@@ -299,7 +346,11 @@ class ShellMessagesTest {
 
     private val other = FixtureAnime.oneShortOfTotal
 
-    private val otherFailed = ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(ListWrite.SetWatched(other, 1)))
+    private val otherFailed =
+        ShellMessage(
+            ShellMessage.Text.CouldNotSave,
+            ShellMessage.Action.Retry(WriteFailure(DataError.ServerError, ListWrite.SetWatched(other, 1), list = null).retry),
+        )
 
     private fun undoOf(change: ListChange) = ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(change.undo!!))
 
@@ -332,11 +383,19 @@ class ShellMessagesTest {
         assertEquals(listOf(otherFailed, undoOf(change)), shownInTurn())
     }
 
-    // A failure carries what Retry writes, not what it writes over; read first after the store returns, it may be newer.
+    // A failure carries what it found untouched, so a Retry read first after the store returns is judged all the same.
     @Test
-    fun `a waiting Retry posted while the list cannot be read is shown without its Retry, as nothing knows what it would write over`() {
-        waitingThroughFailure(failed(1)) { runBlocking { graph.list.write(ListWrite.MarkNextWatched(anime)) } }
-        assertEquals(listOf(otherFailed, ShellMessage(ShellMessage.Text.CouldNotSave)), shownInTurn())
+    fun `a waiting Retry posted while the list cannot be read is judged once it can be, and keeps its Retry while something is left`() {
+        val retry = failedSave(15)
+        waitingThroughFailure(retry)
+        assertEquals(listOf(otherFailed, retry), shownInTurn())
+        waitingThroughFailure(failedSave(15)) {
+            runBlocking {
+                graph.list.write(ListWrite.MarkNextWatched(anime))
+                graph.list.write(ListWrite.MarkNextWatched(anime))
+            }
+        }
+        assertEquals(listOf(otherFailed), shownInTurn())
     }
 
     // Each failed read of the store is logged by the list, so a store that stays broken is read seldom, yet still read.
@@ -354,15 +413,16 @@ class ShellMessagesTest {
         assertTrue("$reads reads", reads in 20..40)
     }
 
-    // The action's write changes its title, so a waiting message of that title would be shown with values it did not see.
+    // The action's write changes the count the waiting one would set, so it has nothing left to set.
     @Test
-    fun `tapping a Retry drops a waiting one of the same title before it could be shown`() {
-        compose.runOnUiThread { listOf(failed(1), failed(2)).forEach(messages::post) }
+    fun `tapping a Retry drops a waiting one of the same title that it leaves nothing to set`() {
+        compose.runOnUiThread { listOf(failedSave(13), failedSave(15)).forEach(messages::post) }
         runMainLooper()
         compose.runOnUiThread { messages.ended(messages.current.value!!, actionPerformed = true) }
         runMainLooper()
+        assertEquals(13, watched())
+        runMainLooper()
         assertNull(messages.current.value)
-        assertEquals(1, watched())
     }
 
     @Test
@@ -694,5 +754,37 @@ class ShellMessagesTest {
         compose.waitForIdle()
         assertNull(shell.messages.current.value)
         compose.onNodeWithText("Could not save").assertDoesNotExist()
+    }
+
+    // 7.2 and W2: a failed date waiting behind another message survives a "+1", which leaves the status and the date alone.
+    @Test
+    fun `a failed start date waiting behind another message is still offered after a +1, and its Retry sets the date`() {
+        val shell = shellShown()
+        val other = FixtureAnime.oneShortOfTotal
+        compose.runOnUiThread {
+            shell.messages.post(ShellMessage(ShellMessage.Text.MovedToCompleted, ShellMessage.Action.Undo(ListWrite.Remove(other))))
+        }
+        val opened = runBlocking { graph.list.observeEntry(anime.id).first()!! }.values
+        val dated = opened.copy(startDate = PartialDate.Day(LocalDate.of(2025, 10, 5)))
+        graph.demo.server.offline.value = true
+        runBlocking { graph.list.write(ListWrite.Save(anime, dated, setOf(ListField.StartDate))) }
+        compose.waitForIdle()
+        graph.demo.server.offline.value = false
+        assertEquals(opened, runBlocking { graph.list.observeEntry(anime.id).first()!! }.values)
+
+        compose.runOnUiThread { shell.messages.write(ListWrite.MarkNextWatched(anime)) }
+        compose.waitForIdle()
+        assertEquals(13, watched())
+        compose.runOnUiThread { shell.messages.ended(shell.messages.current.value!!, actionPerformed = false) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Could not save").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        compose.waitForIdle()
+        assertEquals(
+            dated.copy(watchedEpisodes = 13),
+            graph.demo.server
+                .entry(anime.id)
+                ?.values,
+        )
     }
 }

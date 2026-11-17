@@ -178,7 +178,7 @@ data class WriteFailure(
     // Null for a write that was never applied; its Retry then sets all it carries.
     val untouched: Untouched? = null,
 ) {
-    val retry: ListWrite get() = ListWrite.Retry(this)
+    val retry: ListWrite.Retry get() = ListWrite.Retry(this)
 
     // W2: what a Retry over [current] still sets, each unit changed since the failure left out; null when none is left.
     fun left(current: ListValues?): ListWrite? {

@@ -405,9 +405,9 @@ was chosen against, and why:
   state where they would be, and a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
-  replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
-  while the user can see and tap it; a finger holding any message stops its time, which starts again in full when
-  let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
+  replaced, and another of its kind waits behind it: an Undo while its title's values are unchanged, a Retry while
+  it has something left to set (W2). Its time runs only while the user can see and tap it; a finger holding any
+  message stops its time, which starts again in full when let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
   runs no action. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
