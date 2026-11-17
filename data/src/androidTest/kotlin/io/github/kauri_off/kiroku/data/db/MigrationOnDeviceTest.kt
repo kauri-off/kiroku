@@ -8,9 +8,12 @@ import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -19,7 +22,7 @@ import org.junit.Test
 import java.io.File
 import java.time.Instant
 
-// Section 7.1 on the device's own SQLite: the database the app's version 1 wrote becomes the current one and keeps every row.
+// Section 7.1 on the device's own SQLite: the database the app's version 1 wrote becomes the current one, keeps every row, and stores a profile.
 class MigrationOnDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
@@ -107,6 +110,11 @@ class MigrationOnDeviceTest {
                     )
                 airing.write(stored)
                 assertEquals(stored, airing.read())
+                val profiles = RoomProfileStore(database, Dispatchers.IO) { unexpected += it }
+                assertEquals(null, profiles.observe().first())
+                val profile = StoredProfile(SignInId("owner"), UserProfile("someone", null, null), Instant.EPOCH)
+                assertTrue(profiles.replace(profile) { true })
+                assertEquals(profile, profiles.observe().first())
             }
         } finally {
             scope.cancel()
