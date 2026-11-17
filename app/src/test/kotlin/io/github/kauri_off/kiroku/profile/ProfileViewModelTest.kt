@@ -400,13 +400,21 @@ class ProfileViewModelTest {
     fun `a long read records its name once, not at every part`() =
         runTest(dispatcher) {
             val app = opened()
+            // Each part arrives on its own, so the read is seen part by part.
+            app.graph.demo.server.latency = 10.milliseconds
             val counted = CountedPreferences(app.graph.preferences)
             val recording = Opened(app.graph, app.messages, OpenedProfiles(counted))
             val other = recording.profile(ProfileOwner.Other(otherName))
             showing(other.state, other.shown)
             runCurrent()
+            var parts = 0
+            while (other.state.value.content !is ProfileContent.Shown) {
+                if (other.state.value.content == ProfileContent.ListLoading) parts++
+                advanceTimeBy(10.milliseconds)
+                runCurrent()
+            }
             advanceUntilIdle()
-            assertTrue(wholeRead > 2)
+            assertTrue(parts > 2)
             assertEquals(wholeRead, app.requests.size)
             assertEquals(1, counted.updates)
             assertEquals(listOf(otherName), app.recent())
