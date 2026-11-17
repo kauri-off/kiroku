@@ -7,8 +7,8 @@ import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
-import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
@@ -17,7 +17,8 @@ import io.github.kauri_off.kiroku.wiring.AppGraph
 fun UserListRoute(
     name: String,
     graph: AppGraph,
-    post: (ShellMessage) -> Unit,
+    // Says that a refresh of a list shown failed; the only thing the page tells the shell.
+    onRefreshFailed: (DataError) -> Unit,
     snackbars: SnackbarHostState,
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onBack: () -> Unit,
@@ -28,13 +29,13 @@ fun UserListRoute(
             UserListViewModel(
                 name,
                 graph.user,
-                graph.list,
+                graph.list.observeEntries(),
                 graph.session,
                 graph.connection,
                 graph.clock,
                 graph.titleLanguage,
                 createSavedStateHandle(),
-                post,
+                onRefreshFailed,
                 graph.background,
             )
         }

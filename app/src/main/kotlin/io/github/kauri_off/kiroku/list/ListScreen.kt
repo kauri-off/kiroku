@@ -48,6 +48,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -63,6 +64,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.offset
@@ -71,7 +73,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
-import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.design.component.AnimeRow
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.CoversMessages
@@ -112,7 +113,7 @@ fun ListScreen(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
             Column {
-                TopBar(state.filterText, state.owner, state.reading, state.readingAgain, showActions = tabs != null, onEvent = onEvent)
+                TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
                 if (tabs != null) ListTabs(motion, tabs.statuses, onEvent)
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
@@ -322,33 +323,42 @@ private fun failedState(
     }
 }
 
-// How far a read is, the only sign of it: "Loading 1,200 of 4,306", or "1,200 titles loaded" where the source names
-// no total. A first read has none before its first title, as the loading state stands for it; a read again says so
-// from its start, over the list it will replace.
+// Under another user's name while the rows show, the only sign of a read: how far it is ("Loading 1,200 of 4,306",
+// "1,200 titles loaded"; a read again says so from its start, apart from the list it will replace), else the list's
+// size. None on the own List, before the rows and while filtering.
 @Composable
-private fun readingText(
-    reading: UserListProgress,
-    again: Boolean,
-): String? {
+private fun subtitleOf(state: ListState): String? {
+    if (state.owner !is ListOwner.Other || state.content !is ListContent.Tabs || state.filterText != null) return null
+    val reading = state.reading ?: return state.listSize?.let { pluralStringResource(R.plurals.list_size, it, countText(it)) }.orEmpty()
     val loaded = countText(reading.loaded)
     val total = reading.total?.takeIf { it > 0 }
     return when {
-        again && reading.loaded == 0 -> stringResource(R.string.list_reading_again)
-        again && total != null -> stringResource(R.string.list_reading_again_count, loaded, countText(total))
-        again -> pluralStringResource(R.plurals.list_reading_again_unknown_total, reading.loaded, loaded)
-        reading.loaded == 0 -> null
+        state.readingAgain && reading.loaded == 0 -> stringResource(R.string.list_reading_again)
+        state.readingAgain && total != null -> stringResource(R.string.list_reading_again_count, loaded, countText(total))
+        state.readingAgain -> stringResource(R.string.list_reading_again_so_far, loaded)
         total != null -> stringResource(R.string.list_reading, loaded, countText(total))
         else -> pluralStringResource(R.plurals.list_reading_unknown_total, reading.loaded, loaded)
     }
 }
+
+// The subtitle keeps the room of its longest form, so the rows never move when a read starts or ends.
+@Composable
+private fun Subtitle(text: String) {
+    val longest = stringResource(R.string.list_reading_again_count, countText(LONGEST_COUNT), countText(LONGEST_COUNT))
+    Box {
+        Text(longest, Modifier.alpha(0f).clearAndSetSemantics {})
+        Text(text)
+    }
+}
+
+private const val LONGEST_COUNT = 99_999
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(
     filter: String?,
     owner: ListOwner,
-    reading: UserListProgress?,
-    readingAgain: Boolean,
+    subtitle: String?,
     showActions: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
@@ -375,9 +385,8 @@ private fun TopBar(
             }
         }
     }
-    val subtitle = reading?.takeIf { filter == null }?.let { readingText(it, readingAgain) }
     if (subtitle != null) {
-        TopAppBar(title = title, subtitle = { Text(subtitle) }, navigationIcon = navigationIcon, actions = actions)
+        TopAppBar(title = title, subtitle = { Subtitle(subtitle) }, navigationIcon = navigationIcon, actions = actions)
     } else {
         TopAppBar(title = title, navigationIcon = navigationIcon, actions = actions)
     }

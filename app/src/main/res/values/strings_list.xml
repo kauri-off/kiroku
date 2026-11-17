@@ -35,10 +35,11 @@
     <string name="list_unknown_user">MyAnimeList has no user with this name</string>
     <string name="list_reading">Loading %1$s\u00A0of\u00A0%2$s</string>
     <string name="list_reading_again">Loading the list again</string>
-    <string name="list_reading_again_count">Loading again:\u00A0%1$s\u00A0of\u00A0%2$s</string>
-    <plurals name="list_reading_again_unknown_total">
-        <item quantity="one">Loading again:\u00A0%1$s\u00A0title</item>
-        <item quantity="other">Loading again:\u00A0%1$s\u00A0titles</item>
+    <string name="list_reading_again_count">Loading the list again:\u00A0%1$s\u00A0of\u00A0%2$s</string>
+    <string name="list_reading_again_so_far">Loading the list again:\u00A0%1$s\u00A0so far</string>
+    <plurals name="list_size">
+        <item quantity="one">%1$s\u00A0title</item>
+        <item quantity="other">%1$s\u00A0titles</item>
     </plurals>
     <plurals name="list_reading_unknown_total">
         <item quantity="one">%1$s\u00A0title loaded</item>

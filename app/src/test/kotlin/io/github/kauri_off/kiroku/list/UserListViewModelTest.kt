@@ -18,7 +18,6 @@ import io.github.kauri_off.kiroku.core.user.ScriptedUserLists
 import io.github.kauri_off.kiroku.core.user.UserListKeeper
 import io.github.kauri_off.kiroku.core.user.UserListPart
 import io.github.kauri_off.kiroku.core.user.UserListProgress
-import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
@@ -57,7 +56,7 @@ class UserListViewModelTest {
 
     private class App(
         val graph: TestGraph,
-        val posted: MutableList<ShellMessage> = mutableListOf(),
+        val failed: MutableList<DataError> = mutableListOf(),
     ) {
         val requests get() = graph.demo.userLists.requests
     }
@@ -71,13 +70,13 @@ class UserListViewModelTest {
     ) = UserListViewModel(
         name,
         user,
-        graph.list,
+        graph.list.observeEntries(),
         graph.session,
         graph.connection,
         graph.clock,
         TitleLanguage.Romaji,
         saved,
-        { posted += it },
+        { failed += it },
         graph.background,
     )
 
@@ -111,7 +110,7 @@ class UserListViewModelTest {
         }
 
     @Test
-    fun `while the list is read its rows grow in part after part, with how far it is, in one ordering, and nothing is asked of AniList`() =
+    fun `while the list is read each part goes at its tabs' ends, and the order is computed when the read ends`() =
         runTest(dispatcher) {
             val app = app()
             app.graph.demo.server.latency = 10.milliseconds
@@ -136,11 +135,95 @@ class UserListViewModelTest {
             assertEquals(shown.sorted(), shown)
             assertTrue(seen.mapNotNull { (it.content as? ListContent.Tabs)?.pages?.values }.flatten().all { it.ordering == 0 })
             val completed = fixtures.otherUserList.filter { it.status == ListStatus.Completed }
+            // No row moves while the list is read: each tab only grows at its end, in the order the titles came.
+            val during =
+                seen
+                    .filter { it.reading != null }
+                    .mapNotNull {
+                        (it.content as? ListContent.Tabs)
+                            ?.pages
+                            ?.get(ListStatus.Completed)
+                            ?.rows
+                            ?.map { row -> row.id }
+                    }
+            assertTrue(during.size > 1)
+            during.zipWithNext().forEach { (before, after) -> assertEquals(before, after.take(before.size)) }
+            assertEquals(completed.map { it.anime.id }.take(during.last().size), during.last())
             assertEquals(
                 order(completed, ListSort.LastUpdated, { null }) { it.anime.titles.romaji }.map { it.anime.id },
                 list.ids(ListStatus.Completed),
             )
             assertEquals(airingAsked, app.graph.demo.airingSource.requests.size)
+        }
+
+    // Five seconds under a title page stop the page's state, not its read: coming back, the rows are as they were.
+    @Test
+    fun `a title page opened during a read keeps the read and the rows`() =
+        runTest(dispatcher) {
+            val app = app()
+            app.graph.demo.server.latency = PART_TIME
+            val list = app.list()
+            val screen = showing(list.state, list.shown)
+            runCurrent()
+            advanceTimeBy(PART_TIME * 2 + 1.milliseconds)
+            runCurrent()
+            val before = list.ids(ListStatus.Completed)
+            assertTrue(before.isNotEmpty())
+            screen.cancel()
+            advanceTimeBy(UNDER_A_TITLE)
+            runCurrent()
+            showing(list.state, list.shown)
+            runCurrent()
+            assertEquals(before, list.ids(ListStatus.Completed).take(before.size))
+            advanceUntilIdle()
+            assertEquals(wholeRead, app.requests.size)
+            assertEquals(
+                fixtures.otherUserList.size,
+                list.tabs.pages.values
+                    .sumOf { it.rows.size },
+            )
+        }
+
+    @Test
+    fun `until the person's own entries are read a row opens its title with nothing known`() =
+        runTest(dispatcher) {
+            val app = app()
+            val list =
+                UserListViewModel(
+                    otherName,
+                    app.graph.user,
+                    kotlinx.coroutines.flow.flow { kotlinx.coroutines.awaitCancellation() },
+                    app.graph.session,
+                    app.graph.connection,
+                    app.graph.clock,
+                    TitleLanguage.Romaji,
+                    SavedStateHandle(),
+                    {},
+                    app.graph.background,
+                )
+            showing(list.state, list.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertTrue(
+                list.tabs.pages.values
+                    .sumOf { it.rows.size } > 0,
+            )
+            assertNull(list.summaryOf(FixtureAnime.exactToWatch.id))
+        }
+
+    @Test
+    fun `a tab of a status the app does not know is not kept for a new process`() =
+        runTest(dispatcher) {
+            val app = app()
+            val saved = SavedStateHandle()
+            val list = app.list(saved = saved)
+            list.onEvent(ListEvent.SelectTab(Fixtures.unknownListStatus))
+            list.onEvent(ListEvent.SelectTab(ListStatus.Dropped))
+            val again = app.list(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) }))
+            assertEquals(ListStatus.Dropped, again.state.value.tab)
+            list.onEvent(ListEvent.SelectTab(Fixtures.unknownListStatus))
+            val third = app.list(saved = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) }))
+            assertEquals(ListStatus.Watching, third.state.value.tab)
         }
 
     @Test
@@ -152,6 +235,7 @@ class UserListViewModelTest {
             runCurrent()
             advanceUntilIdle()
             val writes = app.graph.demo.server.requests
+            val downloads = app.graph.demo.server.listDownloads
             val id = FixtureAnime.exactToWatch.id
             listOf(
                 ListEvent.PlusOne(id),
@@ -173,13 +257,14 @@ class UserListViewModelTest {
             ).forEach(list::onEvent)
             advanceUntilIdle()
             assertEquals(writes, app.graph.demo.server.requests)
+            assertEquals(downloads, app.graph.demo.server.listDownloads)
             assertEquals(
                 fixtures.entries,
                 app.graph.list
                     .observeEntries()
                     .first(),
             )
-            assertTrue(app.posted.isEmpty())
+            assertTrue(app.failed.isEmpty())
         }
 
     @Test
@@ -295,7 +380,7 @@ class UserListViewModelTest {
                 list.tabs.pages.values
                     .sumOf { it.rows.size },
             )
-            assertEquals(listOf(ShellMessage(ShellMessage.Text.RefreshFailed(DataError.ServerError))), app.posted)
+            assertEquals(listOf(DataError.ServerError), app.failed)
         }
 
     @Test
@@ -402,5 +487,9 @@ class UserListViewModelTest {
 
     private companion object {
         val ROTATION = 1_000.milliseconds
+        val UNDER_A_TITLE = 6_000.milliseconds
+
+        // Longer than a title page is looked at here, so the read is still going when the page is shown again.
+        val PART_TIME = 4_000.milliseconds
     }
 }

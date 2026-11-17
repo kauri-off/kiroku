@@ -35,9 +35,12 @@ data class ListState(
     val reading: UserListProgress? = null,
     // The read is one again, under a list read before that stays shown.
     val readingAgain: Boolean = false,
+    // How many titles another user's whole list has, when one is held.
+    val listSize: Int? = null,
 ) {
     init {
         require(reading == null || owner is ListOwner.Other)
+        require(listSize == null || owner is ListOwner.Other)
         require(!readingAgain || reading != null)
     }
 

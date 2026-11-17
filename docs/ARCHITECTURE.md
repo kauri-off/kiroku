@@ -336,7 +336,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position,
   and update rows in place. A row whose title no longer belongs to the tab leaves at once, and Undo puts it back in
   the same place; a title that joins the tab appears at the end until the order is next computed. After a row leaves,
-  a "+1" on a row that moved up is not applied until the rows have stood still a moment.
+  a "+1" on a row that moved up is not applied until the rows have stood still a moment. Another user's list, while
+  it is read, adds each part's titles at the end of their tabs; its order is computed when the read ends.
 - Text a person types is state the view model owns and changes inside the event; no flow sits between a keystroke and
   its field.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the

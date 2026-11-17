@@ -161,7 +161,15 @@ fun appEntries(
         entry<ProfileNotBuiltKey> { key ->
             val name = key.name
             if (key.screen == ProfileNotBuilt.UserList && name != null) {
-                UserListRoute(name, graph, messages::post, snackbars, openTitle, onBack = { back() }, onSignIn = signIn)
+                UserListRoute(
+                    name,
+                    graph,
+                    onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                    snackbars,
+                    openTitle,
+                    onBack = { back() },
+                    onSignIn = signIn,
+                )
             } else {
                 ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
             }

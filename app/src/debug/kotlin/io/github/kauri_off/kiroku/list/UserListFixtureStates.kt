@@ -29,6 +29,7 @@ object UserListFixtureStates {
         tab = tab,
         now = set.now,
         reading = reading,
+        listSize = entries?.size?.takeIf { reading == null },
     )
 
     private fun failed(
@@ -54,7 +55,7 @@ object UserListFixtureStates {
             Fixtures.longUnknownListStatus,
         )
 
-    val byScore = ListFixtureStates.sorted(ListStatus.Watching, ListSort.Score, readOnly = true)
+    val byScore = ListFixtureStates.sorted(ListStatus.Watching, ListSort.Score, readOnly = true).copy(listSize = set.otherUserEntries.size)
 
     // The first titles of the list, as MAL answers: no total.
     private val readSoFar = large.take(READ_SO_FAR)
