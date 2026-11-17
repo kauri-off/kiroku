@@ -17,21 +17,21 @@ import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.core.repository.OwnProfile
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
-import io.github.kauri_off.kiroku.core.repository.UserListLoad
-import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.score.ScoreDistribution
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionSource
+import io.github.kauri_off.kiroku.core.user.RemoteUserLists
+import io.github.kauri_off.kiroku.core.user.UserListPart
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Clock
@@ -41,6 +41,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 internal class DemoSessionRepository(
     private val signIn: MutableStateFlow<SignInId?>,
     private val server: DemoServer,
+    // What a sign-out takes with it beyond the list (S9).
+    private val forget: () -> Unit,
 ) : SessionRepository {
     override fun observeSession(): Flow<Session> =
         combine(signIn, server.sessionExpired) { signIn, expired ->
@@ -53,6 +55,7 @@ internal class DemoSessionRepository(
 
     override suspend fun signOut() {
         signIn.value = null
+        forget()
     }
 }
 
@@ -202,42 +205,54 @@ internal class DemoSearchRepository(
     }
 }
 
-internal class DemoUserRepository(
+internal class DemoOwnProfile(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
     private val signIn: MutableStateFlow<SignInId?>,
-) : UserRepository {
+) : OwnProfile {
     override fun observeOwnProfile(): Flow<UserProfile?> = signIn.map { if (it != null) fixtures.user else null }
 
     override suspend fun refreshOwnProfile(): Outcome<Unit> = server.load(needsSignIn = true).toOutcome()
+}
 
-    override fun loadList(userName: String): Flow<UserListLoad> =
-        flow {
-            val private = userName.equals(fixtures.privateUserName, ignoreCase = true)
-            val entries =
-                when {
-                    userName.equals(fixtures.otherUserName, ignoreCase = true) -> fixtures.otherUserEntries
-                    userName.equals(fixtures.user.name, ignoreCase = true) -> server.entries()
-                    else -> null
-                }
-            emit(UserListLoad.Loading(0, entries?.size))
+// The demo's other users: one whose public list has several thousand entries, one whose list is private, and nobody else.
+class DemoUserLists internal constructor(
+    private val fixtures: FixtureSet,
+    private val server: DemoServer,
+) : RemoteUserLists {
+    private val received = CopyOnWriteArrayList<String>()
+
+    // The name of each request received, answered or not: one a part.
+    val requests: List<String> get() = received.toList()
+
+    // As MAL's answer: it names no total and says nothing of the user.
+    override suspend fun read(
+        name: String,
+        part: suspend (UserListPart) -> Unit,
+    ): Outcome<Unit> {
+        var from = 0
+        while (true) {
+            received += name
             val error =
                 server.load(needsSignIn = false)
-                    ?: DataError.PrivateList.takeIf { private }
-                    ?: DataError.UnknownUser.takeIf { entries == null }
-            if (error != null || entries == null) {
-                emit(UserListLoad.Failed(error ?: DataError.UnknownUser))
-                return@flow
-            }
-            for ((index, page) in entries.chunked(PAGE_SIZE).withIndex()) {
-                if (index > 0) server.load(needsSignIn = false)?.let { return@flow emit(UserListLoad.Failed(it)) }
-                emit(UserListLoad.Loading(index * PAGE_SIZE + page.size, entries.size))
-            }
-            emit(UserListLoad.Loaded(entries))
+                    ?: DataError.PrivateList.takeIf { sameUser(name, fixtures.privateUserName) }
+                    ?: DataError.UnknownUser.takeIf { !sameUser(name, fixtures.otherUserName) }
+            if (error != null) return Outcome.Failure(error)
+            val list = fixtures.otherUserList
+            val to = minOf(from + PART_SIZE, list.size)
+            part(UserListPart(list.subList(from, to)))
+            if (to == list.size) return Outcome.Success(Unit)
+            from = to
         }
+    }
 
-    private companion object {
-        const val PAGE_SIZE = 10
+    override fun sameUser(
+        a: String,
+        b: String,
+    ): Boolean = a.equals(b, ignoreCase = true)
+
+    companion object {
+        const val PART_SIZE = 300
     }
 }
 

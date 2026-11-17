@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
+import io.github.kauri_off.kiroku.core.user.UserListKeeper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -55,7 +56,7 @@ class Demo(
     private val signIn = MutableStateFlow<SignInId?>(fixtures.session.signIn)
     private var signIns = 1
 
-    val session: SessionRepository = DemoSessionRepository(signIn, server)
+    val session: SessionRepository = DemoSessionRepository(signIn, server) { otherUsers.forget() }
 
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
@@ -95,7 +96,12 @@ class Demo(
 
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
-    val user: UserRepository = DemoUserRepository(fixtures, server, signIn)
+    val userLists = DemoUserLists(fixtures, server)
+
+    // On the real keeper over the demo's users.
+    private val otherUsers = UserListKeeper(userLists, scope, unexpected)
+
+    val user: UserRepository = otherUsers.beside(DemoOwnProfile(fixtures, server, signIn))
 
     val preferences: PreferencesRepository = DemoPreferences()
 
@@ -113,7 +119,7 @@ class Demo(
         }
     }
 
-    // The demo as it started: every failure off, signed in, no details fetched, the list and the airing data back to the fixtures.
+    // As it started: every failure off, signed in, no details fetched, nobody's list held, the list and the airing data the fixtures'.
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
         airingSource.failure = null
@@ -123,6 +129,7 @@ class Demo(
         airingStore.write(airingStore.read().mapValues { null } + startingAiring())
         store.reset()
         details.forget()
+        otherUsers.forget()
         if (signIn.value == null) signIn.value = SignInId("demo-${++signIns}")
         return list.sync()
     }

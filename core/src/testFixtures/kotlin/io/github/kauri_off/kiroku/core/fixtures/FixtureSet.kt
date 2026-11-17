@@ -33,6 +33,7 @@ data class FixtureSet(
     val user: UserProfile,
     val userStatistics: UserStatistics,
     val otherUserName: String,
+    // A few rows of the public user's list, for layout states.
     val otherUserEntries: List<ListEntry>,
     val privateUserName: String,
     // A statistics layout state, independent of otherUserEntries.
@@ -46,6 +47,11 @@ data class FixtureSet(
     val airing: Map<AnimeId, Airing> by lazy {
         val at = now
         anime.filter { it.airingStatus.effective != AiringStatus.Finished }.associate { it.id to airingAt(it, schedules[it.id], at) }
+    }
+
+    // The public user's whole list: several thousand entries, each title once, made at the first read.
+    val otherUserList: List<ListEntry> by lazy {
+        otherUserEntries + FixtureUser.generatedEntries(now.atZone(FixtureTime.zone).toLocalDate())
     }
 
     val session: Session.SignedIn get() = Session.SignedIn(SignInId("demo"))

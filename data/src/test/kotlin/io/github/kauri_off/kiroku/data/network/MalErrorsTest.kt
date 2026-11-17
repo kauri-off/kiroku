@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.dropped
+import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
@@ -39,10 +40,13 @@ class MalErrorsTest {
     private fun readAnswered(
         code: Int,
         anotherUsersList: Boolean = false,
+        body: String = NetworkFixture.THING,
     ): MalAnswer<Thing> {
-        network.always(answer(code))
+        network.always(answer(code, body))
         return read(anotherUsersList)
     }
+
+    private fun recorded(name: String) = RecordedAnswers.named(name).body
 
     private fun failed(error: DataError) = MalAnswer.Failed(error)
 
@@ -81,9 +85,33 @@ class MalErrorsTest {
     }
 
     @Test
-    fun `a refusal of another user's list is a private list and nothing backs off`() {
-        assertEquals(failed(DataError.PrivateList), readAnswered(403, anotherUsersList = true))
+    fun `MAL's answer for a private list is a private list and nothing backs off`() {
+        assertEquals(403, RecordedAnswers.named("list_private").status)
+        assertEquals(failed(DataError.PrivateList), readAnswered(403, anotherUsersList = true, body = recorded("list_private")))
         assertEquals(Duration.ZERO, network.http.backOff.remaining())
+    }
+
+    @Test
+    fun `any other refusal of another user's list is a refusal and background work backs off`() {
+        val private = recorded("list_private")
+        val others =
+            listOf(
+                "",
+                NetworkFixture.THING,
+                """{"error":"forbidden"}""",
+                """{"error":"NOT_PERMITTED"}""",
+                """{"error":{"code":"not_permitted"}}""",
+                private.replace("not_permitted", "not_found"),
+                "<html>$private</html>",
+            )
+        for (body in others) {
+            network.http.backOff.answered(network.http.backOff.mark())
+            assertEquals(body, failed(DataError.Refused), readAnswered(403, anotherUsersList = true, body = body))
+            assertEquals(body, MalBackOff.First, network.http.backOff.remaining())
+        }
+        network.http.backOff.answered(network.http.backOff.mark())
+        assertEquals(failed(DataError.Refused), readAnswered(403, body = private))
+        assertEquals(MalBackOff.First, network.http.backOff.remaining())
     }
 
     @Test
@@ -143,9 +171,15 @@ class MalErrorsTest {
     }
 
     @Test
-    fun `what is not there is not found, and an unknown user for another user's list`() {
+    fun `what is not there is not found, and MAL's answer for a name nobody has is an unknown user`() {
         assertEquals(failed(DataError.NotFound), readAnswered(404))
-        assertEquals(failed(DataError.UnknownUser), readAnswered(404, anotherUsersList = true))
+        assertEquals(failed(DataError.NotFound), readAnswered(404, anotherUsersList = true))
+        assertEquals(failed(DataError.NotFound), readAnswered(404, body = recorded("list_unknown_user")))
+        for (name in listOf("list_unknown_user", "list_impossible_name")) {
+            assertEquals(name, 404, RecordedAnswers.named(name).status)
+            assertEquals(name, failed(DataError.UnknownUser), readAnswered(404, anotherUsersList = true, body = recorded(name)))
+        }
+        assertEquals(Duration.ZERO, network.http.backOff.remaining())
     }
 
     @Test
