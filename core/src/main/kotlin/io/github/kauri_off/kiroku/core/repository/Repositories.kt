@@ -175,24 +175,24 @@ data class WriteFailure(
     val error: DataError,
     val write: ListWrite,
     val list: SignInId?,
-    // Null when the failure could not tell; its Retry then sets all it carries.
+    // Null for a write that was never applied; its Retry then sets all it carries.
     val untouched: Untouched? = null,
 ) {
     val retry: ListWrite get() = ListWrite.Retry(this)
 
-    // W2: what a Retry over [current] still sets, each value changed since the failure left out; null when none is left.
+    // W2: what a Retry over [current] still sets, each unit changed since the failure left out; null when none is left.
     fun left(current: ListValues?): ListWrite? {
         val untouched = untouched ?: return write
         return when (write) {
             is ListWrite.Save -> {
                 val named = write.only ?: ListField.entries.toSet()
+                val held = untouched.values + write.values
                 val kept =
-                    when {
-                        current == null -> named.takeIf { null in untouched.values }
-                        else -> named.filterTo(mutableSetOf()) { untouched.holds(it, current) || it.of(write.values) == it.of(current) }
-                    }
+                    ListField.units
+                        .filter { unit -> held.any { it.agrees(current, unit) } }
+                        .flatMapTo(mutableSetOf()) { unit -> unit.filter { it in named } }
                 when {
-                    kept.isNullOrEmpty() -> null
+                    kept.isEmpty() -> null
                     kept == named -> write
                     else -> write.copy(only = kept)
                 }
@@ -212,16 +212,17 @@ data class WriteFailure(
         }
 }
 
+// Both are no entry, or both hold the same value in each field of [unit].
+private fun ListValues?.agrees(
+    other: ListValues?,
+    unit: Set<ListField>,
+): Boolean = if (this == null || other == null) this == other else unit.all { it.of(this) == it.of(other) }
+
 // What a title may hold that nobody changed since a write failed: MAL's confirmed values, and the request's if made.
 data class Untouched(
     // Null is no entry.
     val values: Set<ListValues?>,
-) {
-    fun holds(
-        field: ListField,
-        current: ListValues,
-    ): Boolean = values.any { it != null && field.of(it) == field.of(current) }
-}
+)
 
 // The list as a screen sees it: read and synced, never written, so a write can only go through the shell.
 interface ListSource {

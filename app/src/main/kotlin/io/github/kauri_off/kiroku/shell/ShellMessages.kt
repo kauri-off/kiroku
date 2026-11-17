@@ -193,12 +193,12 @@ class ShellMessages(
         val failure = retry.failure
         if (failure.write !is ListWrite.Save && failure.write !is ListWrite.Remove) return null
         return scope.launch {
-            // Values the title already held when the message showed say nothing of MAL: they may be the rollback's.
+            // Values the title already held when the message showed say nothing of MAL, unless nothing is left to set.
             var start: Start? = null
             try {
                 list.observeEntry(retry.anime.id).map { it?.values }.first { now ->
                     val from = start ?: Start(now).also { start = it }
-                    now != from.values && failure.settledBy(now)
+                    failure.left(now) == null || now != from.values && failure.settledBy(now)
                 }
             } catch (_: DataException) {
                 return@launch

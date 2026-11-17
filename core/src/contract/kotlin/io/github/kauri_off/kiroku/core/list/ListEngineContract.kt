@@ -889,6 +889,74 @@ abstract class ListEngineContract {
             assertEquals(20, s.shownWatched(anime))
         }
 
+    // The status, the count and the dates mean something together, so a Retry sets none of them once one has changed.
+    @Test
+    fun `a Retry of a failed completion tapped after a send marked an episode leaves the title watching at that episode`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            val opened = checkNotNull(s.shown(anime.id)).values
+            val completed = opened.copy(status = ListStatus.Completed, watchedEpisodes = 24, finishDate = today)
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.Save(anime, completed, setOf(ListField.Status, ListField.WatchedEpisodes, ListField.FinishDate)))
+            settle()
+            s.server.failingWrites.value = false
+            assertEquals(opened, s.shown(anime.id)?.values)
+            assertEquals(Outcome.Success(Unit), s.list.send(ListWrite.MarkWatched(anime, 13)))
+            val requests = s.server.requests.size
+
+            assertNull(s.list.write(failures.single().retry))
+            settle()
+            assertEquals(requests, s.server.requests.size)
+            assertEquals(opened.copy(watchedEpisodes = 13), s.server.entry(anime.id)?.values)
+            assertEquals(opened.copy(watchedEpisodes = 13), s.shown(anime.id)?.values)
+        }
+
+    // A removal destroys every value, so it is retried only while the entry is exactly as it was at the failure.
+    @Test
+    fun `a Retry of a failed removal tapped after a send marked an episode removes nothing`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.server.offline.value = true
+            s.list.write(ListWrite.Remove(anime))
+            settle()
+            s.server.offline.value = false
+            assertEquals(12, s.shownWatched(anime))
+            assertEquals(Outcome.Success(Unit), s.list.send(ListWrite.MarkWatched(anime, 13)))
+            val requests = s.server.requests.size
+
+            assertNull(s.list.write(failures.single().retry))
+            settle()
+            assertEquals(requests, s.server.requests.size)
+            assertEquals(13, s.serverWatched(anime))
+            assertEquals(13, s.shownWatched(anime))
+        }
+
+    @Test
+    fun `a Retry tapped after the title was deleted on the website does not bring it back`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            settle()
+            s.server.failingWrites.value = false
+            s.editOnWebsite(anime, null)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertNull(s.shown(anime.id))
+            val requests = s.server.requests.size
+
+            assertNull(s.list.write(failures.single().retry))
+            settle()
+            assertEquals(requests, s.server.requests.size)
+            assertNull(s.server.entry(anime.id))
+            assertNull(s.shown(anime.id))
+        }
+
     // W3: a step is taken back by the opposite step, so the episode a send marked since stays.
     @Test
     fun `an Undo of a +1 tapped after a send takes back its own step alone`() =
@@ -2643,9 +2711,41 @@ abstract class ListEngineContract {
             settle()
 
             assertEquals(listOf(13), s.server.requests.map { it.values?.watchedEpisodes })
-            assertEquals(listOf(failed(DataError.StorageError, ListWrite.Save(anime, shown, setOf(ListField.WatchedEpisodes)))), failures)
+            val untouched = setOf(fixtureValues(anime), shown.copy(watchedEpisodes = 13))
+            assertEquals(
+                listOf(
+                    failed(DataError.StorageError, ListWrite.Save(anime, shown, setOf(ListField.WatchedEpisodes)), untouched = untouched),
+                ),
+                failures,
+            )
             assertEquals(Outcome.Success(Unit), s.list.sync())
             assertEquals(13, s.shownWatched(anime))
+        }
+
+    // Without the store, the values the lost request found and sent stand in for what MAL confirmed.
+    @Test
+    fun `a Retry of a request lost while the store could not be read leaves a count a send wrote since`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.list.write(ListWrite.MarkNextWatched(anime))
+            s.local.throwing = true
+            advanceTimeBy(1500.milliseconds)
+            s.local.throwing = false
+            settle()
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            // Whether MAL made the lost request depends on the store, so the sends go on from what it holds.
+            while (checkNotNull(s.serverWatched(anime)) < 15) {
+                assertEquals(Outcome.Success(Unit), s.list.send(ListWrite.MarkWatched(anime, checkNotNull(s.serverWatched(anime)) + 1)))
+            }
+            val requests = s.server.requests.size
+
+            assertNull(s.list.write(failures.single().retry))
+            settle()
+            assertEquals(requests, s.server.requests.size)
+            assertEquals(15, s.serverWatched(anime))
         }
 
     @Test

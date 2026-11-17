@@ -26,6 +26,8 @@ import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.Untouched
+import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -645,5 +647,52 @@ class ShellMessagesTest {
                 ?.values
                 ?.watchedEpisodes,
         )
+    }
+
+    // A removal is retried only while the entry is as it was, so a send that marks an episode leaves it nothing to do.
+    @Test
+    fun `a failed removal's message goes once a send marked an episode, and its Retry removes nothing`() {
+        val shell = shellShown()
+        graph.demo.server.failingWrites.value = true
+        runBlocking { graph.list.write(ListWrite.Remove(anime)) }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        compose.onNodeWithText("Could not save").assertExists()
+        val posted = checkNotNull(shell.messages.current.value)
+
+        markWatchedInBackground(13)
+        compose.onNodeWithText("Could not save").assertDoesNotExist()
+        compose.runOnUiThread { shell.messages.ended(posted, actionPerformed = true) }
+        compose.waitForIdle()
+        assertEquals(13, watched())
+        assertEquals(
+            13,
+            graph.demo.server
+                .entry(anime.id)
+                ?.values
+                ?.watchedEpisodes,
+        )
+    }
+
+    // A message never offers a Retry that would do nothing, also when that was so before it showed.
+    @Test
+    fun `a failure whose Retry has nothing left to set is not shown`() {
+        val shell = shellShown()
+        val values = runBlocking { graph.list.observeEntry(anime.id).first()!! }.values
+        val failure =
+            WriteFailure(
+                DataError.ServerError,
+                ListWrite.Save(anime, values.copy(watchedEpisodes = 20), setOf(ListField.WatchedEpisodes)),
+                list = null,
+                untouched = Untouched(setOf(values.copy(watchedEpisodes = 5))),
+            )
+        compose.runOnUiThread {
+            shell.messages.post(
+                ShellMessage(ShellMessage.Text.CouldNotSave, ShellMessage.Action.Retry(failure.retry)),
+            )
+        }
+        compose.waitForIdle()
+        assertNull(shell.messages.current.value)
+        compose.onNodeWithText("Could not save").assertDoesNotExist()
     }
 }

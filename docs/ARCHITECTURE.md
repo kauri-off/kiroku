@@ -427,9 +427,11 @@ changes without asking. "+1" on a row offers Undo, and so does a change on the t
   confirmed (not "the value before the tap"), no later edit of that entry that was still waiting is sent, and a
   snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
   Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits set, as shown
-  just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
-  fails. 14 is not sent, the row shows 12, and Retry sends 14. A write MAL may have made (it failed with a server
-  error or without a connection) is followed by a download, and its message goes once the entry shows the change.
+  just before the failure, that nothing has changed since; the status, the count and the two dates are one value
+  here, and a removal is retried only while the entry is as it was. Its message goes once none is left. Example:
+  the server has 12; two taps show 13, then 14; the request carrying 13 fails. 14 is not sent, the row shows 12,
+  and Retry sends 14. A write MAL may have made (it failed with a server error or without a connection) is
+  followed by a download.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
   while it still holds what the edit put there. A change off a status the app does not know offers no Undo, as that

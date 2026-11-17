@@ -590,7 +590,8 @@ class ListEngine(
     ) {
         val id = put.id
         var only: Set<ListField>? = null
-        var untouched: Untouched? = null
+        // Without the store, what the edit found and what it sent stand in for what MAL confirmed.
+        var untouched = Untouched(setOf(put.from, put.values))
         val (last, owner) =
             mutex.withLock {
                 try {
