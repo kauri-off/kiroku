@@ -62,22 +62,27 @@ class NotifyRulesTest {
 
     @Test
     fun `the rules of notifications derive no aired count and no air time, and read no clock and no zone`() {
-        val sources = notifySources()
+        val sources = sources("notify")
         assertEquals(setOf("Notifiable.kt", "NotificationRecord.kt", "NotificationSettings.kt"), sources.map { it.name }.toSet())
         assertEquals(emptyList<String>(), sources.flatMap { notifyProblems(it.name, it.readText()) })
-        // The calculator is named once, as the one the rule asks.
-        val named = sources.flatMap { code(it.readText()).lines() }.filter { "airingAt" in it && !it.startsWith("import ") }
-        assertEquals(listOf("::airingAt"), named.map { Regex("""\S*airingAt""").find(it)?.value })
+        // The schedules reach the calculator, and the calculator is named once, as the one the rule asks.
+        val code = sources.flatMap { code(it.readText()).lines() }.map { it.trim() }
+        assertTrue(SCHEDULES_TO_THE_CALCULATOR in code)
+        assertEquals(listOf(THE_RULE_ASKS_THE_CALCULATOR), code.filter { "airingAt" in it && !it.startsWith("import ") })
     }
 
     @Test
     fun `a planted derivation fails`() {
         val planted =
             listOf(
-                "val aired = schedules[id]?.episodes.orEmpty().filter { !it.airsAt.isAfter(now) }",
+                "val aired = stored[id]?.episodes.orEmpty().filter { !it.airsAt.isAfter(now) }",
                 "val count = schedule.episodes.count { it.airsAt <= now }",
                 "val total = schedule.totalEpisodes",
                 "if (schedule.doubtedOver != null) return",
+                "val (episodes, total) = schedules.getValue(anime.id)",
+                "val episodes = with(schedules[anime.id]) { this?.component1() }",
+                "private fun peek(s: AiringSchedule) = s.let { (e, _) -> e }",
+                "val airing = calculate(anime, schedules[anime.id]?.copy(doubtedOver = null), now)",
                 "val next = entry.anime.broadcast?.nextStart(now)",
                 "val started = entry.anime.startDate",
                 "if (anime.malEpisodes == watched) return",
@@ -98,9 +103,43 @@ class NotifyRulesTest {
         for (source in planted) assertEquals(source, 1, notifyProblems("A.kt", source).size)
         val clean =
             "// The schedule's episodes are read by the calculator.\n" +
-                "val airing = calculate(anime, schedules[anime.id], now)\n" +
+                "import io.github.kauri_off.kiroku.core.airing.AiringSchedule\n" +
+                "    schedules: Map<AnimeId, AiringSchedule>,\n" +
+                "    calculate: (Anime, AiringSchedule?, Instant) -> Airing,\n" +
+                "$THE_RULE_ASKS_THE_CALCULATOR\n" +
+                "        $SCHEDULES_TO_THE_CALCULATOR\n" +
                 "val open = airing.airTimes.filter { it.number > watched }.map { it.airsAt.plus(delay) }\n"
         assertEquals(emptyList<String>(), notifyProblems("A.kt", clean))
+    }
+
+    @Test
+    fun `the airing calculator reads no time zone but Japan's`() {
+        val sources = sources("airing")
+        assertTrue(sources.any { it.name == "AiringCalculator.kt" })
+        assertEquals(emptyList<String>(), sources.flatMap { zoneProblems(it.name, it.readText()) })
+        assertEquals(1, sources.sumOf { source -> code(source.readText()).lines().count { it.trim() == JAPAN_IS } })
+        val planted =
+            listOf(
+                "?.atStartOfDay(ZoneId.systemDefault())",
+                "?.atStartOfDay(zone)",
+                "internal fun japanDay(now: Instant): LocalDate = now.atZone(clock.zone).toLocalDate()",
+                "val japanNow = now.atZone(ZoneOffset.UTC)",
+                "val HERE: ZoneId = ZoneId.of(\"Europe/Moscow\")",
+                "val today = LocalDate.now()",
+                "val today = LocalDate.ofInstant(now, zone)",
+                "val zone = TimeZone.getDefault().toZoneId()",
+                "val start = date.atStartOfDay().atOffset(offset)",
+            )
+        for (source in planted) assertTrue(source, zoneProblems("A.kt", source).isNotEmpty())
+        val clean =
+            listOf(
+                "import java.time.ZoneId",
+                JAPAN_IS,
+                "val japanNow = now.atZone(JAPAN)",
+                "?.atStartOfDay(JAPAN)",
+                "val now = clock.instant()",
+            )
+        assertEquals(emptyList<String>(), zoneProblems("A.kt", clean.joinToString("\n")))
     }
 }
 
@@ -108,15 +147,28 @@ class NotifyRulesTest {
 private val coreDir: File =
     generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }.resolve("core")
 
-internal fun notifySources(): List<File> =
-    File(coreDir, "src/main/kotlin/io/github/kauri_off/kiroku/core/notify")
-        .listFiles()
-        .orEmpty()
-        .filter { it.extension == "kt" }
-        .sorted()
+private fun sources(packageName: String): List<File> =
+    File(
+        coreDir,
+        "src/main/kotlin/io/github/kauri_off/kiroku/core/$packageName",
+    ).listFiles().orEmpty().filter { it.extension == "kt" }.sorted()
 
 // The source without its line comments.
 private fun code(source: String): String = source.lines().joinToString("\n") { it.substringBefore("//") }
+
+private const val SCHEDULES_TO_THE_CALCULATOR = "val airing = calculate(anime, schedules[anime.id], now)"
+private const val THE_RULE_ASKS_THE_CALCULATOR = "): Notifications = notificationsAt(entries, schedules, settings, record, now, ::airingAt)"
+private const val JAPAN_IS = "val JAPAN: ZoneId = ZoneId.of(\"Asia/Tokyo\")"
+
+// The only lines of the notification rules that name the schedules or their type: they are handed on, never opened.
+private val handedOn =
+    setOf(
+        "import io.github.kauri_off.kiroku.core.airing.AiringSchedule",
+        "schedules: Map<AnimeId, AiringSchedule>,",
+        "calculate: (Anime, AiringSchedule?, Instant) -> Airing,",
+        THE_RULE_ASKS_THE_CALCULATOR,
+        SCHEDULES_TO_THE_CALCULATOR,
+    )
 
 private val forbidden =
     mapOf(
@@ -126,7 +178,8 @@ private val forbidden =
         "reads the calculator's result for a screen" to Regex("""\.(latestAiredAt|nextEpisode|changesAt|premiere)\b"""),
         "reads a clock or a zone" to
             Regex(
-                """\b(Clock|ZoneId|ZoneOffset|ZonedDateTime|OffsetDateTime|LocalDate|LocalDateTime|LocalTime|TimeZone)\b|\.now\(\)|\.instant\(\)|currentTimeMillis""",
+                """\b(Clock|ZoneId|ZoneOffset|ZonedDateTime|OffsetDateTime|LocalDate|LocalDateTime|LocalTime|TimeZone)\b""" +
+                    """|\.now\(\)|\.instant\(\)|currentTimeMillis""",
             ),
     )
 
@@ -136,5 +189,25 @@ internal fun notifyProblems(
     source: String,
 ): List<String> =
     code(source).lines().flatMapIndexed { index, line ->
-        forbidden.filterValues { it.containsMatchIn(line) }.keys.map { "$name:${index + 1} $it: ${line.trim()}" }
+        val opened = Regex("""\b(schedules|AiringSchedule)\b""").containsMatchIn(line) && line.trim() !in handedOn
+        val problems = forbidden.filterValues { it.containsMatchIn(line) }.keys + listOfNotNull("opens the schedules".takeIf { opened })
+        problems.map { "$name:${index + 1} $it: ${line.trim()}" }
+    }
+
+private val zoneRead =
+    Regex(
+        """systemDefault|\bTimeZone\b|\bZoneOffset\b|\bOffsetDateTime\b|\.zone\b|getZone|withZone|atOffset""" +
+            """|\b(LocalDate|LocalDateTime|LocalTime|ZonedDateTime|Year|YearMonth)\.now\(""" +
+            """|\b(atZone|atStartOfDay|ofInstant)\((?!JAPAN\))""",
+    )
+
+// A line of the airing package that reads a zone other than through [JAPAN_IS].
+internal fun zoneProblems(
+    name: String,
+    source: String,
+): List<String> =
+    code(source).lines().flatMapIndexed { index, line ->
+        val text = line.trim()
+        val defined = text == JAPAN_IS || text == "import java.time.ZoneId"
+        if (zoneRead.containsMatchIn(line) || ("ZoneId" in line && !defined)) listOf("$name:${index + 1} ${line.trim()}") else emptyList()
     }

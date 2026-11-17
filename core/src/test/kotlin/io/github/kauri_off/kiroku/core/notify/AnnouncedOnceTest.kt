@@ -1,7 +1,11 @@
 package io.github.kauri_off.kiroku.core.notify
 
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.Inexact
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
+import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.notify.NotifyCases.day
@@ -60,15 +64,52 @@ class AnnouncedOnceTest {
         )
     }
 
+    // N2, N6: the highest episode that is owed at [now] is the one announced. [before] is the record the run read.
+    private fun owed(
+        device: Device,
+        before: NotificationRecord,
+        result: Notifications,
+        now: Instant,
+    ): Int {
+        var owed = 0
+        val delay =
+            device.settings.delay.duration
+                .toJavaDuration()
+        for (entry in device.entries) {
+            val id = entry.anime.id
+            val since =
+                result.record.titles[id]
+                    ?.followed
+                    ?.since ?: continue
+            val floor = maxOf(entry.values.watchedEpisodes, before.titles[id]?.announced ?: 0)
+            val highest =
+                airingAt(entry.anime, device.schedules[id], now)
+                    .airTimes
+                    .filter {
+                        val at = it.airsAt.plus(delay)
+                        it.number > floor &&
+                            at.isAfter(since) &&
+                            !at.isAfter(now) &&
+                            !now.isAfter(at.plus(announcedNoLaterThan.toJavaDuration()))
+                    }.maxOfOrNull { it.number } ?: continue
+            assertEquals("${entry.anime.titles.romaji} at $now", listOf(id to highest), result.announced.filter { it.first == id })
+            owed++
+        }
+        return owed
+    }
+
     @Test
-    fun `N1 the rule applied and recorded at any sequence of instants announces each episode at most once`() {
+    fun `N1, N2 at any sequence of instants each episode is announced at most once and none that is due is left out`() {
         val set = Fixtures.reference
         val statuses = ListStatus.entries + Fixtures.unknownListStatus
         var announced = 0
         var changes = 0
+        var owed = 0
+        var again = 0
         repeat(60) { round ->
             val random = Random(round)
             val device = Device(set.entries, set.schedules, NotificationSettings(alsoPlanned = random.nextBoolean()))
+            val posted = mutableSetOf<Pair<AnimeId, Int>>()
             var now = set.now.minus(day.multipliedBy(14))
             repeat(500) {
                 // The clock moves on by up to a day and a half, stands still, or is set back.
@@ -79,6 +120,13 @@ class AnnouncedOnceTest {
                         else -> now.plusSeconds(random.nextLong(36 * 3600))
                     }
                 val id = set.entries[random.nextInt(set.entries.size)].anime.id
+                // A change of the list is made in the app now, was made on the website up to two days ago, or has a time ahead of the clock.
+                val changedAt =
+                    when (random.nextInt(4)) {
+                        0 -> now.minusSeconds(random.nextLong(48 * 3600))
+                        1 -> now.plusSeconds(3600)
+                        else -> now
+                    }
                 val event = random.nextInt(16)
                 if (event < 10) changes++
                 when (event) {
@@ -92,18 +140,37 @@ class AnnouncedOnceTest {
                             device.schedules += id to shifted(schedule, Duration.ofMinutes(random.nextLong(-240, 240)), from)
                         }
                     5 -> device.schedules = if (random.nextBoolean()) device.schedules - id else set.schedules
-                    6 -> device.status(statuses.random(random), id)
-                    7 -> device.change(id) { it.copy(watchedEpisodes = (it.watchedEpisodes + random.nextInt(-2, 3)).coerceAtLeast(0)) }
-                    // A download that leaves the title out, or one that brings back what was left out.
-                    8 -> device.entries = device.entries.filter { it.anime.id != id }
-                    9 -> device.entries = set.entries
+                    6 -> device.status(statuses.random(random), changedAt, id)
+                    7 -> {
+                        val watched =
+                            device.entries
+                                .firstOrNull { it.anime.id == id }
+                                ?.values
+                                ?.watchedEpisodes ?: 0
+                        device.watched((watched + random.nextInt(-2, 3)).coerceAtLeast(0), id)
+                    }
+                    // A title removed, and one added again as it was or anew.
+                    8 -> device.remove(id)
+                    9 ->
+                        if (device.entries.none { it.anime.id == id }) {
+                            val entry = set.entryFor(id)!!
+                            device.entries += if (random.nextBoolean()) entry else entry.copy(updatedAt = changedAt)
+                        }
                 }
-                assertSound(device.run(now), now)
+                // One run in eight is cut off after it posted: it records nothing, and the next run posts the same again.
+                val before = device.record
+                val cutOff = random.nextInt(8) == 0
+                val result = device.run(now, cutOff)
+                assertSound(result, now)
+                owed += owed(device, before, result, now)
+                if (cutOff) again += result.announced.count { !posted.add(it) } else posted += result.announced
             }
             assertEquals("round $round", device.announced.size, device.announced.toSet().size)
             announced += device.announced.size
         }
         assertTrue("$announced", announced > 1000)
+        assertTrue("$owed", owed > 1000)
+        assertTrue("$again", again > 20)
         assertTrue("$changes", changes > 10000)
     }
 
@@ -161,7 +228,7 @@ class AnnouncedOnceTest {
     }
 
     @Test
-    fun `no result depends on the time zone`() {
+    fun `no result of the rule or of the calculator depends on the time zone`() {
         val set = Fixtures.reference
         val zones = listOf("UTC", "Asia/Tokyo", "America/Los_Angeles", "Pacific/Kiritimati", "Europe/Moscow")
         val original = TimeZone.getDefault()
@@ -179,6 +246,32 @@ class AnnouncedOnceTest {
             assertTrue(expected.announced.size > 30)
             for (zone in zones) assertEquals(zone, expected, results { zone })
             assertEquals(expected, results { zones[it % zones.size] })
+
+            // The calculator where a day's start decides: MAL's dates are Japan's, wherever the device is.
+            val dayStart = week(0).minus(Duration.ofMinutes(23 * 60 + 30))
+            // Episode 7 half an hour into the fourth week from the start date is as far ahead as A4 lets a first stored episode be.
+            val first = dayStart.plus(day.multipliedBy(21)).plus(hour.dividedBy(2))
+            val stored = AiringSchedule((7..12).map { ScheduledEpisode(it, first.plus(day.multipliedBy(7L * (it - 7)))) }, 12)
+            val earlier = stored.copy(episodes = stored.episodes.map { it.copy(airsAt = it.airsAt.minus(hour)) })
+            val notYetAired = title.copy(airingStatus = AiringStatus.NotYetAired)
+
+            fun calculated() =
+                List(120) { step ->
+                    val now = week(-1).plus(hour.multipliedBy(6L * step))
+                    listOf(
+                        airingAt(notYetAired, null, now),
+                        airingAt(notYetAired.copy(broadcast = null), null, now),
+                        airingAt(title, stored, now),
+                    )
+                }
+            TimeZone.setDefault(TimeZone.getTimeZone(zones.first()))
+            val counted = calculated()
+            for (zone in zones) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone))
+                assertEquals(zone, null, airingAt(title, stored, first.plus(day)).inexact)
+                assertEquals(zone, Inexact.NumberedDifferently, airingAt(title, earlier, first.plus(day)).inexact)
+                assertEquals(zone, counted, calculated())
+            }
         } finally {
             TimeZone.setDefault(original)
         }

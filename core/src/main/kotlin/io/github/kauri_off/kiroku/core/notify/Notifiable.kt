@@ -14,7 +14,7 @@ import kotlin.time.toJavaDuration
 data class Announcement(
     val anime: Anime,
     val episode: Int,
-    // The aired episodes not watched, by the title's exact count; null for one that stands while no exact count reaches its episode.
+    // The aired episodes not watched, by the title's exact count; null for one that stands while its title has no exact count.
     val toWatch: Int?,
     // N9: the episode "Mark watched" marks, the next one not watched.
     val marks: Int,
@@ -40,7 +40,7 @@ data class Notifications(
     val due: List<Due>,
     // The announcements posted earlier that still stand, as they read now.
     val standing: List<Announcement>,
-    // N7: the titles whose posted announcement no longer stands.
+    // N7: the titles whose posted announcement no longer stands: not notified, watched, or of an episode that has not aired.
     val withdrawn: Set<AnimeId>,
     // Each title's next, the soonest first.
     val coming: List<Coming>,
@@ -71,7 +71,8 @@ internal fun notificationsAt(
 ): Notifications {
     val delay = settings.delay.duration.toJavaDuration()
     val limit = announcedNoLaterThan.toJavaDuration()
-    val titles = record.following(entries, settings, now).titles.toMutableMap()
+    val followed = record.following(entries, settings, now)
+    val titles = followed.titles.toMutableMap()
     val due = mutableListOf<Due>()
     val standing = mutableListOf<Announcement>()
     val coming = mutableListOf<Coming>()
@@ -90,22 +91,22 @@ internal fun notificationsAt(
                 .filter { it.number > maxOf(watched, announced) }
                 .map { Timed(it.number, it.airsAt, it.airsAt.plus(delay)) }
                 .filter { it.notifyAt.isAfter(since) }
-        // N6: the highest episode whose notification time has come; N2: unless that was too long ago.
-        val passed = open.filter { !it.notifyAt.isAfter(now) }.maxByOrNull { it.episode }
-        val announce = passed?.takeIf { !now.isAfter(it.notifyAt.plus(limit)) }
+        // N2, N6: the highest episode whose notification time has come, no longer ago than the limit.
+        val announce = open.filter { !it.notifyAt.isAfter(now) && !now.isAfter(it.notifyAt.plus(limit)) }.maxByOrNull { it.episode }
         if (announce != null && count != null) {
             due += Due(Announcement(anime, announce.episode, count - watched, watched + 1), announce.airsAt, announce.notifyAt)
             titles[anime.id] = title.copy(announced = announce.episode, standing = true)
-        } else if (title.standing && watched < announced) {
-            standing += Announcement(anime, announced, count?.takeIf { it >= announced }?.minus(watched), watched + 1)
+        } else if (title.standing && watched < announced && (count == null || count >= announced)) {
+            // N7: it stands without an exact count, and not once an exact count says its episode has not aired.
+            standing += Announcement(anime, announced, count?.minus(watched), watched + 1)
         }
         // N8: the soonest time still to come, which announces the highest episode it is the time of.
         open
-            .filter { it.notifyAt.isAfter(now) && it.episode > (passed?.episode ?: 0) }
+            .filter { it.notifyAt.isAfter(now) && it.episode > (announce?.episode ?: 0) }
             .minWithOrNull(compareBy<Timed> { it.notifyAt }.thenByDescending { it.episode })
             ?.let { coming += Coming(anime, it.episode, it.airsAt, it.notifyAt) }
     }
-    // N7: a posted announcement stands while its title is one notifications are for and its episode is not watched.
+    // N7: any other posted announcement is withdrawn, and stays recorded as announced.
     val kept = due.mapTo(mutableSetOf()) { it.announcement.anime.id } + standing.map { it.anime.id }
     val withdrawn = titles.filter { (id, title) -> title.standing && id !in kept }.keys
     for (id in withdrawn) titles[id] = titles.getValue(id).copy(standing = false)
@@ -114,7 +115,7 @@ internal fun notificationsAt(
         standing = standing.sortedBy { it.anime.id.value },
         withdrawn = withdrawn,
         coming = coming.sortedWith(compareBy({ it.notifyAt }, { it.anime.id.value })),
-        record = NotificationRecord(titles),
+        record = followed.copy(titles = titles),
     )
 }
 

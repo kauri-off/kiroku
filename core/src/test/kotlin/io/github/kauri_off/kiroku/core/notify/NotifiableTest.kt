@@ -184,12 +184,12 @@ class NotifiableTest {
     fun `N7 an announcement is withdrawn once its title is not one notifications are for`() {
         val changes: Map<String, (Device) -> Unit> =
             mapOf(
-                "dropped" to { it.status(ListStatus.Dropped) },
-                "completed" to { it.status(ListStatus.Completed) },
-                "on hold" to { it.status(ListStatus.OnHold) },
-                "planned" to { it.status(ListStatus.Planned) },
-                "a status the app does not know" to { it.status(Fixtures.unknownListStatus) },
-                "removed" to { it.entries = emptyList() },
+                "dropped" to { it.status(ListStatus.Dropped, at = week(0).plus(hour)) },
+                "completed" to { it.status(ListStatus.Completed, at = week(0).plus(hour)) },
+                "on hold" to { it.status(ListStatus.OnHold, at = week(0).plus(hour)) },
+                "planned" to { it.status(ListStatus.Planned, at = week(0).plus(hour)) },
+                "a status the app does not know" to { it.status(Fixtures.unknownListStatus, at = week(0).plus(hour)) },
+                "removed" to { it.remove() },
                 "notifications off" to { it.settings = it.settings.copy(on = false) },
             )
         for ((name, change) in changes) {
@@ -233,23 +233,8 @@ class NotifiableTest {
     }
 
     @Test
-    fun `an announcement stands whatever becomes of its schedule, and is not made again`() {
-        val postponed =
-            weekly().let {
-                it.copy(
-                    episodes =
-                        it.episodes.map { e ->
-                            if (e.number <
-                                3
-                            ) {
-                                e
-                            } else {
-                                e.copy(airsAt = e.airsAt.plus(day.multipliedBy(7)))
-                            }
-                        },
-                )
-            }
-        for (schedule in listOf(null, weekly(1..13, total = 13), postponed)) {
+    fun `N7 an announcement stands while its schedule is lost or its count is an estimate, and is not made again`() {
+        for (schedule in listOf(null, weekly(1..13, total = 13), weekly().copy(doubtedOver = 2))) {
             val device = followed(entry())
             device.run(week(2))
             device.schedules = only(schedule)
@@ -257,8 +242,51 @@ class NotifiableTest {
             assertEquals(emptySet<AnimeId>(), after.withdrawn)
             assertEquals(listOf(Announcement(title, 3, toWatch = null, marks = 1)), after.standing)
             assertEquals(emptyList<Due>(), after.due)
-            device.walk(week(2).plus(hour), week(3).plus(day))
-            assertEquals(listOf(3), device.episodes().filter { it <= 3 })
+            // The schedule is back, as it was or with a later episode aired: the announcement reads by it again.
+            device.schedules = only(weekly())
+            assertEquals(listOf(Announcement(title, 3, toWatch = 3, marks = 1)), device.run(week(2).plus(hour.multipliedBy(2))).standing)
+            assertEquals(listOf(3, 4), device.also { it.walk(week(2).plus(hour.multipliedBy(2)), week(3)) }.episodes())
+        }
+    }
+
+    @Test
+    fun `N7 an announcement of an episode AniList has since postponed is withdrawn, and the episode is never announced again`() {
+        for (by in listOf(hour, day.multipliedBy(7))) {
+            val postponed =
+                weekly().let {
+                    it.copy(
+                        episodes =
+                            it.episodes.map { e ->
+                                if (e.number <
+                                    3
+                                ) {
+                                    e
+                                } else {
+                                    e.copy(airsAt = e.airsAt.plus(by))
+                                }
+                            },
+                    )
+                }
+            val device = followed(entry())
+            device.run(week(2))
+            device.schedules = only(postponed)
+            // The exact count is 2 again: nothing says episode 3 has aired, and "Mark watched" would mark it.
+            val after = device.run(week(2).plus(hour.dividedBy(2)))
+            assertEquals("$by", setOf(title.id), after.withdrawn)
+            assertEquals("$by", emptyList<Announcement>(), after.standing)
+            assertEquals(
+                "$by",
+                TitleRecord(Followed(ListStatus.Watching, week(0).minus(day)), announced = 3),
+                device.record.titles[title.id],
+            )
+            // It airs at its new time: it is neither announced nor posted again, and the next episode is announced as ever.
+            val later = device.walk(week(2).plus(hour.dividedBy(2)), week(3).plus(by).minus(hour))
+            assertTrue("$by", later.all { it.due.isEmpty() && it.standing.isEmpty() && it.withdrawn.isEmpty() })
+            assertEquals(
+                "$by",
+                listOf(Due(Announcement(title, 4, toWatch = 4, marks = 1), week(3).plus(by), week(3).plus(by))),
+                device.run(week(3).plus(by)).due,
+            )
         }
     }
 
@@ -319,6 +347,11 @@ class NotifiableTest {
             assertEquals(delay.name, emptyList<Pair<AnimeId, Int>>(), late.walk(limit.plus(hour), week(1).minus(hour)).announced)
             assertEquals(delay.name, listOf(title.id to 2), late.run(week(1).plus(delay.duration.toJavaDuration())).announced)
         }
+        // An episode that is too late does not hold back a lower one that is not.
+        val swapped = AiringSchedule(listOf(ScheduledEpisode(1, week(0)), ScheduledEpisode(2, week(0).minus(day.multipliedBy(4)))), 12)
+        val device = Device(listOf(entry()), only(swapped)).also { it.run(week(0).minus(day.multipliedBy(5))) }
+        assertEquals(listOf(Due(Announcement(title, 1, toWatch = 2, marks = 1), week(0), week(0))), device.run(week(0)).due)
+        assertTrue(device.walk(week(0), week(1)).all { it.silent })
     }
 
     @Test

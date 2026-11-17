@@ -48,16 +48,16 @@ class DailyAlFailuresTest {
         )
 
     @Test
-    fun `a dropped title is not announced`() = assertNoLongerAnnounced { it.status(ListStatus.Dropped) }
+    fun `a dropped title is not announced`() = assertNoLongerAnnounced { it.status(ListStatus.Dropped, at = week(2).plus(hour)) }
 
     @Test
-    fun `a completed title is not announced`() = assertNoLongerAnnounced { it.status(ListStatus.Completed) }
+    fun `a completed title is not announced`() = assertNoLongerAnnounced { it.status(ListStatus.Completed, at = week(2).plus(hour)) }
 
     @Test
-    fun `an on-hold title is not announced`() = assertNoLongerAnnounced { it.status(ListStatus.OnHold) }
+    fun `an on-hold title is not announced`() = assertNoLongerAnnounced { it.status(ListStatus.OnHold, at = week(2).plus(hour)) }
 
     @Test
-    fun `a removed title is not announced`() = assertNoLongerAnnounced { it.entries = emptyList() }
+    fun `a removed title is not announced`() = assertNoLongerAnnounced { it.remove() }
 
     @Test
     fun `an episode postponed after it was planned is announced when it airs, and not when it was planned`() {

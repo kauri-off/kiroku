@@ -60,11 +60,13 @@ internal object NotifyCases {
         total: Int? = 12,
     ) = AiringSchedule(numbers.mapIndexed { index, number -> ScheduledEpisode(number, week(from + index)) }, total)
 
+    // [updatedAt] is MAL's time of the entry's last change, or the app's own when the change was made in it.
     fun entry(
         anime: Anime = title,
         status: EntryStatus = ListStatus.Watching,
         watched: Int = 0,
-    ) = ListEntry(anime, ListValues(status, watched, null, null, null), Instant.EPOCH)
+        updatedAt: Instant = Instant.EPOCH,
+    ) = ListEntry(anime, ListValues(status, watched, null, null, null), updatedAt)
 
     // A device whose record was first written a day before episode 1, so every episode is from after it.
     fun followed(
@@ -84,9 +86,13 @@ internal class Device(
     // Every episode announced, in order.
     val announced = mutableListOf<Pair<AnimeId, Int>>()
 
-    // One run: the rule applied at [now] and its result recorded.
-    fun run(now: Instant): Notifications {
+    // One run: the rule applied at [now] and its result recorded; a run cut off after it posted records nothing.
+    fun run(
+        now: Instant,
+        cutOff: Boolean = false,
+    ): Notifications {
         val result = notificationsAt(entries, schedules, settings, record, now)
+        if (cutOff) return result
         record = result.record
         announced += result.announced
         return result
@@ -96,26 +102,32 @@ internal class Device(
     fun walk(
         from: Instant,
         until: Instant,
-    ): List<Notifications> = generateSequence(from) { it.plus(Duration.ofMinutes(30)) }.takeWhile { !it.isAfter(until) }.map(::run).toList()
+    ): List<Notifications> =
+        generateSequence(from) {
+            it.plus(Duration.ofMinutes(30))
+        }.takeWhile { !it.isAfter(until) }.map { run(it) }.toList()
 
     fun episodes(id: AnimeId = NotifyCases.title.id): List<Int> = announced.filter { it.first == id }.map { it.second }
 
-    fun change(
-        id: AnimeId = NotifyCases.title.id,
-        to: (ListValues) -> ListValues,
-    ) {
-        entries = entries.map { if (it.anime.id == id) it.copy(values = to(it.values)) else it }
-    }
-
+    // The status as changed at [at], in the app or on the website.
     fun status(
         status: EntryStatus,
+        at: Instant,
         id: AnimeId = NotifyCases.title.id,
-    ) = change(id) { it.copy(status = status) }
+    ) {
+        entries = entries.map { if (it.anime.id == id) it.copy(values = it.values.copy(status = status), updatedAt = at) else it }
+    }
 
     fun watched(
         count: Int,
         id: AnimeId = NotifyCases.title.id,
-    ) = change(id) { it.copy(watchedEpisodes = count) }
+    ) {
+        entries = entries.map { if (it.anime.id == id) it.copy(values = it.values.copy(watchedEpisodes = count)) else it }
+    }
+
+    fun remove(id: AnimeId = NotifyCases.title.id) {
+        entries = entries.filter { it.anime.id != id }
+    }
 }
 
 internal val Notifications.announced: List<Pair<AnimeId, Int>> get() = due.map { it.announcement.anime.id to it.announcement.episode }
