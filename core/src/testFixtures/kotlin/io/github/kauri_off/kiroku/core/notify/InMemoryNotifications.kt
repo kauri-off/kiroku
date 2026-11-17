@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.notify
 
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.flow.Flow
@@ -70,13 +71,17 @@ class InMemoryNotificationAlarm : NotificationAlarm {
 // The notifications as a device shows them, with every post and withdrawal it was asked for.
 class InMemoryShownNotifications : ShownNotifications {
     data class Post(
-        val announcement: Announcement,
+        val anime: Anime,
+        val notification: Shown,
         val alert: Boolean,
-    )
+    ) {
+        val announcement: Announcement get() = Announcement(anime, notification.episode, notification.toWatch, notification.marks)
+    }
 
-    private val showing = MutableStateFlow(emptyMap<AnimeId, Announcement>())
+    private val showing = MutableStateFlow(emptyMap<AnimeId, Post>())
 
-    val notifications: StateFlow<Map<AnimeId, Announcement>> = showing.asStateFlow()
+    // What is shown now, each as it was last posted.
+    val notifications: StateFlow<Map<AnimeId, Post>> = showing.asStateFlow()
 
     val posts = CopyOnWriteArrayList<Post>()
     val withdrawals = CopyOnWriteArrayList<Set<AnimeId>>()
@@ -85,15 +90,17 @@ class InMemoryShownNotifications : ShownNotifications {
     @Volatile
     var blocked = false
 
-    override suspend fun shown(): Map<AnimeId, Shown> = showing.value.mapValues { it.value.shown }
+    override suspend fun shown(): Map<AnimeId, Shown> = showing.value.mapValues { it.value.notification }
 
     override suspend fun post(
-        announcement: Announcement,
+        anime: Anime,
+        notification: Shown,
         alert: Boolean,
     ): Boolean {
-        posts += Post(announcement, alert)
+        val post = Post(anime, notification, alert)
+        posts += post
         if (blocked) return false
-        showing.update { it + (announcement.anime.id to announcement) }
+        showing.update { it + (anime.id to post) }
         return true
     }
 

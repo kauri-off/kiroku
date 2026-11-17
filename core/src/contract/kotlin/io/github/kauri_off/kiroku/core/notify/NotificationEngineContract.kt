@@ -88,6 +88,15 @@ abstract class NotificationEngineContract {
     private val halfHour: Duration = Duration.ofMinutes(30)
     private val watching = ListValues(ListStatus.Watching, 0, null, null, null)
 
+    // What a notification says beside its title.
+    private data class Says(
+        val episode: Int,
+        val toWatch: Int?,
+        val marks: Int,
+    )
+
+    private val nearAlarm: Duration = Duration.ofMinutes(15)
+
     private class MovingClock(
         @Volatile var now: Instant,
     ) : Clock() {
@@ -188,8 +197,16 @@ abstract class NotificationEngineContract {
         @Volatile
         var throwing: Exception? = null
 
+        // Runs once, when the alarm is next set and before it is.
+        @Volatile
+        var beforeSet: (suspend () -> Unit)? = null
+
         override suspend fun set(at: Instant?) {
             yield()
+            beforeSet?.let {
+                beforeSet = null
+                it()
+            }
             throwing?.let { throw it }
             inner.set(at)
             step()
@@ -213,7 +230,8 @@ abstract class NotificationEngineContract {
         }
 
         override suspend fun post(
-            announcement: Announcement,
+            anime: Anime,
+            notification: Shown,
             alert: Boolean,
         ): Boolean {
             yield()
@@ -222,7 +240,7 @@ abstract class NotificationEngineContract {
                 beforePost = null
                 it()
             }
-            return inner.post(announcement, alert).also { step() }
+            return inner.post(anime, notification, alert).also { step() }
         }
 
         override suspend fun withdraw(titles: Set<AnimeId>) {
@@ -313,7 +331,8 @@ abstract class NotificationEngineContract {
         val alerts: List<Pair<AnimeId, Int>>
             get() = shown.posts.filter { it.alert }.map { it.announcement.anime.id to it.announcement.episode }
 
-        val showing: Map<AnimeId, Shown> get() = shown.notifications.value.mapValues { it.value.shown }
+        val showing: Map<AnimeId, Says>
+            get() = shown.notifications.value.mapValues { (_, post) -> post.notification.let { Says(it.episode, it.toWatch, it.marks) } }
 
         suspend fun record(): NotificationRecord = inner.read().record
 
@@ -342,7 +361,9 @@ abstract class NotificationEngineContract {
                 }
                 clock.now = maxOf(clock.now, at)
                 alarm.gone()
-                engine.run(RunTrigger.Alarm)
+                // The alarm starts the app's process when it is dead.
+                if (process.scope?.isActive != true) start()
+                runCatching { engine.run(RunTrigger.Alarm) }
                 test.runCurrent()
             }
             throw AssertionError("The alarm keeps firing")
@@ -484,7 +505,7 @@ abstract class NotificationEngineContract {
             assertEquals(1, w.shown.posts.size)
             assertEquals(listOf(1), reports.flatMap { it.posted }.map { it.episode })
             assertEquals(listOf(1), w.sent().map { it.episode })
-            assertEquals(mapOf(title.id to Shown(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
             assertEquals(emptyList<Throwable>(), w.unexpected)
         }
 
@@ -571,7 +592,7 @@ abstract class NotificationEngineContract {
             assertEquals(1, w.shown.posts.size)
             assertEquals(1, w.sent().size)
             assertEquals(record, w.record())
-            assertEquals(mapOf(title.id to Shown(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
             assertEquals(week(1), w.alarm.at.value)
         }
 
@@ -599,7 +620,7 @@ abstract class NotificationEngineContract {
             // The alarm, the post, the withdrawal and the record.
             assertTrue("$steps steps", steps >= 4)
             assertEquals(listOf(title.id to 1, other.id to 1, title.id to 2), whole.alerts)
-            assertEquals(mapOf(title.id to Shown(2, toWatch = 2, marks = 1)), whole.showing)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 2, marks = 1)), whole.showing)
             assertEquals(week(1).plus(otherAfter), whole.alarm.at.value)
 
             for (step in 1..steps) {
@@ -609,6 +630,15 @@ abstract class NotificationEngineContract {
                 w.start()
                 assertEquals("step $step", RunEnd.Done, w.engine.run(RunTrigger.AppOpened).end)
                 runCurrent()
+
+                // N2: or nothing but the alarm comes, which a run cut off before its record has left near.
+                val alone = cutOff(diesAfter = step)
+                alone.pass(week(1).plus(hour))
+                assertEquals("step $step, the alarm alone", whole.alerts, alone.alerts)
+                assertEquals("step $step, the alarm alone", whole.showing, alone.showing)
+                assertEquals("step $step, the alarm alone", sentOf(whole.sent()), sentOf(alone.sent()))
+                assertEquals("step $step, the alarm alone", whole.record(), alone.record())
+                assertEquals("step $step, the alarm alone", whole.alarm.at.value, alone.alarm.at.value)
 
                 assertEquals("step $step", whole.alerts, w.alerts)
                 assertEquals("step $step", whole.showing, w.showing)
@@ -629,7 +659,7 @@ abstract class NotificationEngineContract {
             assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(emptyList<SentNotification>(), w.sent())
-            assertEquals("the alarm is at what comes next before anything is posted", week(1), w.alarm.at.value)
+            assertEquals("a near alarm stands while the episode is not recorded", week(0).plus(nearAlarm), w.alarm.at.value)
 
             w.shown.dismiss(title.id)
             w.start()
@@ -650,7 +680,7 @@ abstract class NotificationEngineContract {
             w.process.steps = 0
             w.process.diesAfter = 2
             assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
-            assertEquals(mapOf(title.id to Shown(2, toWatch = 2, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 2, marks = 1)), w.showing)
 
             w.write(ListWrite.MarkNextWatched(title))
             w.start()
@@ -658,8 +688,186 @@ abstract class NotificationEngineContract {
             runCurrent()
 
             assertEquals(listOf(title.id to 1, title.id to 2), w.alerts)
-            assertEquals(mapOf(title.id to Shown(2, toWatch = 1, marks = 2)), w.showing)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 1, marks = 2)), w.showing)
             assertEquals(listOf(1, 2), w.sent().map { it.episode })
+        }
+
+    @Test
+    fun `N2 the alarm's run cut off at its first step, or refused its post, is made again by the near alarm it left`() =
+        runTest {
+            val cut = world()
+            cut.clock.now = week(0)
+            cut.alarm.gone()
+            cut.process.steps = 0
+            cut.process.diesAfter = 1
+            assertTrue(runCatching { cut.engine.run(RunTrigger.Alarm) }.isFailure)
+            assertEquals(emptyList<Pair<AnimeId, Int>>(), cut.alerts)
+            assertEquals("its own alarm is spent, so another stands at once", week(0).plus(nearAlarm), cut.alarm.at.value)
+            cut.pass(week(0).plus(hour))
+            assertEquals(listOf(title.id to 1), cut.alerts)
+            assertEquals(listOf(week(0).plus(nearAlarm)), cut.sent().map { it.postedAt })
+            assertEquals(week(1), cut.alarm.at.value)
+
+            val refused = world()
+            refused.clock.now = week(0)
+            refused.alarm.gone()
+            refused.shows.throwing = IllegalStateException("The device refused")
+            assertEquals(RunEnd.Failed, refused.engine.run(RunTrigger.Alarm).end)
+            assertEquals(week(0).plus(nearAlarm), refused.alarm.at.value)
+            refused.shows.throwing = null
+            refused.pass(week(0).plus(hour))
+            assertEquals(listOf(title.id to 1), refused.alerts)
+            assertEquals(week(1), refused.alarm.at.value)
+        }
+
+    @Test
+    fun `N2 with the alarm refusing too, a later trigger announces the episode within its three days and not after them`() =
+        runTest {
+            val broken = IllegalStateException("The device refused")
+            for (late in listOf(false, true)) {
+                val w = world()
+                w.clock.now = week(0)
+                w.alarm.gone()
+                w.alarms.throwing = broken
+                w.shows.throwing = broken
+                val failed = w.engine.run(RunTrigger.Alarm)
+                assertEquals(RunEnd.Failed, failed.end)
+                assertTrue(failed.alarmFailed)
+                assertNull("no alarm is left", w.alarm.at.value)
+
+                // Nothing brings the app back but the periodic work.
+                w.alarms.throwing = null
+                w.shows.throwing = null
+                w.clock.now = week(0).plus(day.multipliedBy(3)).plusSeconds(if (late) 1 else 0)
+                assertEquals(RunEnd.Done, w.engine.run(RunTrigger.Periodic).end)
+                assertEquals("late $late", if (late) emptyList() else listOf(title.id to 1), w.alerts)
+                assertEquals(week(1), w.alarm.at.value)
+            }
+        }
+
+    @Test
+    fun `N7 a newer notification of a cut-off run is not replaced by the older one that stands, and is told as sent`() =
+        runTest {
+            val w = world()
+            w.pass(week(0))
+            w.shown.dismiss(title.id)
+            w.clock.now = week(1)
+            w.alarm.gone()
+            w.process.steps = 0
+            w.process.diesAfter = 2
+            assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 2, marks = 1)), w.showing)
+            assertEquals(listOf(1), w.sent().map { it.episode })
+            val posts = w.shown.posts.size
+
+            // No run ends for more than three days: episode 2 is due no longer, and the record says episode 1 stands.
+            w.clock.now = week(1).plus(day.multipliedBy(3)).plus(hour)
+            w.start()
+            assertEquals(RunEnd.Done, w.engine.run(RunTrigger.AppOpened).end)
+            runCurrent()
+
+            assertEquals("nothing is posted in its place", posts, w.shown.posts.size)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
+            assertEquals(listOf(1 to week(0), 2 to week(1)), w.sent().map { it.episode to it.airedAt })
+            assertEquals(listOf(title.id to 1, title.id to 2), w.alerts)
+            w.engine.run(RunTrigger.Periodic)
+            assertEquals(2, w.sent().size)
+        }
+
+    @Test
+    fun `N1 a notification of a cut-off run stays while the clock is set back behind it, and alerts no second time`() =
+        runTest {
+            val w = world()
+            w.clock.now = week(0)
+            w.alarm.gone()
+            w.process.steps = 0
+            w.process.diesAfter = 2
+            assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
+            assertEquals(listOf(title.id to 1), w.alerts)
+
+            w.clock.now = week(0).minus(hour.multipliedBy(2))
+            w.start()
+            assertEquals(RunEnd.Done, w.engine.run(RunTrigger.AppOpened).end)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(emptyList<SentNotification>(), w.sent())
+            assertEquals(week(0), w.alarm.at.value)
+
+            w.pass(week(0).plus(hour))
+            assertEquals(listOf(title.id to 1), w.alerts)
+            assertEquals(1, w.shown.posts.size)
+            assertEquals(listOf(1), w.sent().map { it.episode })
+        }
+
+    @Test
+    fun `S9 a run posts nothing more once the session's owner has changed under it`() =
+        runTest {
+            for (next in listOf<Session>(Session.SignedOut, b)) {
+                // Before its first step: nothing of the run reaches the device.
+                val early = world()
+                early.clock.now = week(0)
+                early.alarms.beforeSet = { early.session.value = next }
+                early.engine.run(RunTrigger.AppOpened)
+                runCurrent()
+                assertEquals("$next", emptyList<InMemoryShownNotifications.Post>(), early.shown.posts.toList())
+                assertEquals("$next", emptyList<SentNotification>(), early.sent())
+
+                // Between two posts of one run: the second is not made.
+                val w = world(entries = listOf(entry(), entry(other)))
+                w.pass(week(0).plus(day))
+                w.alarm.gone()
+                w.clock.now = week(1)
+                val posts = w.shown.posts.size
+                w.shows.beforePost = { w.session.value = next }
+                w.engine.run(RunTrigger.AppOpened)
+                runCurrent()
+                assertEquals("$next", posts + 1, w.shown.posts.size)
+                assertEquals("$next", emptyMap<AnimeId, Says>(), w.showing)
+                assertEquals("$next", emptyList<SentNotification>(), w.sent())
+                assertEquals("$next", (next as? Session.SignedIn)?.signIn, w.inner.read().owner)
+                assertTrue(
+                    "$next",
+                    w.inner
+                        .read()
+                        .record.titles.values
+                        .none { it.announced != null },
+                )
+            }
+        }
+
+    @Test
+    fun `N8 a list that could not be read once is read again, and a later change is followed by a run`() =
+        runTest {
+            val w = world()
+            w.pass(week(0))
+            w.list.unreadable.value = true
+            runCurrent()
+            w.list.unreadable.value = false
+            runCurrent()
+            val reports = w.reports.size
+
+            w.write(ListWrite.MarkNextWatched(title))
+            advanceTimeBy(2.minutes)
+            runCurrent()
+
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
+            assertEquals(reports + 1, w.reports.size)
+            assertEquals(emptyList<Throwable>(), w.unexpected)
+        }
+
+    @Test
+    fun `S9 another sign-in is not given what was coming for the one before, also while its own list cannot be read`() =
+        runTest {
+            val w = world()
+            assertEquals(listOf(Coming(title, 1, week(0), week(0))), w.engine.observeComing().first())
+            w.list.unreadable.value = true
+            w.session.value = b
+            runCurrent()
+
+            assertEquals(RunEnd.Failed, w.engine.run(RunTrigger.AppOpened).end)
+
+            assertNull(w.engine.observeComing().first())
+            assertEquals(emptyList<SentNotification>(), w.engine.observeSent().first())
+            assertEquals(b.signIn, w.inner.read().owner)
         }
 
     @Test
@@ -766,7 +974,7 @@ abstract class NotificationEngineContract {
             w.shown.blocked = true
             w.pass(week(0))
 
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertEquals(listOf(SentNotification(title, 1, week(0), week(0), week(0), Recheck.Answered, shown = false)), w.sent())
             assertEquals(
                 listOf(false),
@@ -782,9 +990,9 @@ abstract class NotificationEngineContract {
             w.clock.now = week(0).plus(day.multipliedBy(2))
             w.engine.run(RunTrigger.AppOpened)
             assertEquals(1, w.shown.posts.size)
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             w.pass(week(1))
-            assertEquals(mapOf(title.id to Shown(2, toWatch = 2, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 2, marks = 1)), w.showing)
             assertEquals(listOf(false, true), w.sent().map { it.shown })
         }
 
@@ -858,7 +1066,7 @@ abstract class NotificationEngineContract {
             // The answer arrives: the episode has not aired, so its notification goes and it is announced when it has.
             advanceTimeBy(30.seconds)
             runCurrent()
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertEquals(week(0).plus(day), w.alarm.at.value)
             w.source.latency = kotlin.time.Duration.ZERO
             w.pass(week(0).plus(day))
@@ -921,7 +1129,7 @@ abstract class NotificationEngineContract {
 
                 w.write(change)
 
-                assertEquals("$change", emptyMap<AnimeId, Shown>(), w.showing)
+                assertEquals("$change", emptyMap<AnimeId, Says>(), w.showing)
                 assertEquals("$change", listOf(setOf(title.id)), w.shown.withdrawals.toList())
                 assertEquals("$change", setOf(title.id), w.reports.last().withdrawn)
                 assertEquals("$change", RunTrigger.Changed, w.reports.last().trigger)
@@ -935,13 +1143,22 @@ abstract class NotificationEngineContract {
             val w = world()
             w.pass(week(1))
             assertEquals(listOf(title.id to 1, title.id to 2), w.alerts)
-            assertEquals(mapOf(title.id to Shown(2, toWatch = 2, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 2, marks = 1)), w.showing)
 
             w.write(ListWrite.MarkNextWatched(title))
-            assertEquals(mapOf(title.id to Shown(2, toWatch = 1, marks = 2)), w.showing)
+            assertEquals(mapOf(title.id to Says(2, toWatch = 1, marks = 2)), w.showing)
             assertEquals(
-                InMemoryShownNotifications.Post(Announcement(title, 2, toWatch = 1, marks = 2), alert = false),
-                w.shown.posts.last(),
+                Announcement(title, 2, toWatch = 1, marks = 2) to false,
+                w.shown.posts
+                    .last()
+                    .let { it.announcement to it.alert },
+            )
+            assertEquals(
+                "the airing it tells of stays",
+                week(1),
+                w.shown.posts
+                    .last()
+                    .notification.airedAt,
             )
             assertEquals(3, w.shown.posts.size)
 
@@ -952,16 +1169,16 @@ abstract class NotificationEngineContract {
             w.shown.dismiss(title.id)
             w.engine.run(RunTrigger.AppOpened)
             w.write(ListWrite.Save(title, watching.copy(score = 7, watchedEpisodes = 1)))
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertEquals(3, w.shown.posts.size)
 
             w.pass(week(2))
             assertEquals(listOf(title.id to 1, title.id to 2, title.id to 3), w.alerts)
-            assertEquals(mapOf(title.id to Shown(3, toWatch = 2, marks = 2)), w.showing)
+            assertEquals(mapOf(title.id to Says(3, toWatch = 2, marks = 2)), w.showing)
         }
 
     @Test
-    fun `N7 a notification that a cut-off run posted and never recorded goes when its episode is watched`() =
+    fun `N7 a notification that a cut-off run posted and never recorded goes when its episode is watched, and is told as sent`() =
         runTest {
             val w = world()
             w.clock.now = week(0)
@@ -982,8 +1199,9 @@ abstract class NotificationEngineContract {
             w.engine.run(RunTrigger.AppOpened)
             runCurrent()
 
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
-            assertEquals(emptyList<SentNotification>(), w.sent())
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
+            // It alerted, so it is told as sent.
+            assertEquals(listOf(SentNotification(title, 1, week(0), week(0), week(0), Recheck.NotAsked)), w.sent())
         }
 
     @Test
@@ -1033,7 +1251,7 @@ abstract class NotificationEngineContract {
             w.session.value = Session.SignedOut
             runCurrent()
 
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertNull(w.alarm.at.value)
             assertEquals(StoredNotifications(null, NotificationRecord()), w.inner.read())
             assertEquals(emptyList<SentNotification>(), w.sent())
@@ -1082,7 +1300,7 @@ abstract class NotificationEngineContract {
             assertEquals(RunEnd.SignedOut, report.end)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(StoredNotifications(null, NotificationRecord()), w.inner.read())
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertNull(w.alarm.at.value)
         }
 
@@ -1096,7 +1314,7 @@ abstract class NotificationEngineContract {
             w.engine.run(RunTrigger.AppOpened)
             runCurrent()
 
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertNull(w.alarm.at.value)
             assertEquals(StoredNotifications(null, NotificationRecord()), w.inner.read())
             assertEquals(emptyList<SentNotification>(), w.sent())
@@ -1119,7 +1337,7 @@ abstract class NotificationEngineContract {
             listOf(SentNotification(title, 2, week(1), week(1), week(1), Recheck.NotAsked)),
             Instant.EPOCH,
         )
-        w.shown.post(Announcement(title, 2, toWatch = 2, marks = 1), alert = true)
+        w.shown.post(title, Shown(2, toWatch = 2, marks = 1, week(1), week(1)), alert = true)
         w.alarm.set(week(2))
         return w
     }
@@ -1132,7 +1350,7 @@ abstract class NotificationEngineContract {
             w.engine.run(RunTrigger.AppOpened)
             runCurrent()
 
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertEquals(a.signIn, w.inner.read().owner)
             assertEquals(week(2).plus(hour), w.record().since)
             assertNull(
@@ -1156,7 +1374,7 @@ abstract class NotificationEngineContract {
 
             assertEquals(RunEnd.SignedOut, w.engine.run(RunTrigger.AppOpened).end)
 
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertNull(w.alarm.at.value)
             assertEquals(StoredNotifications(null, NotificationRecord()), w.inner.read())
             assertEquals(emptyList<SentNotification>(), w.sent())
@@ -1171,7 +1389,7 @@ abstract class NotificationEngineContract {
 
             w.session.value = Session.Expired(a.signIn)
             runCurrent()
-            assertEquals(mapOf(title.id to Shown(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
             assertEquals(record, w.record())
             assertEquals(week(1), w.alarm.at.value)
             assertEquals(1, w.sent().size)
@@ -1198,13 +1416,13 @@ abstract class NotificationEngineContract {
 
             assertFalse(run.isCompleted)
             assertEquals(reports, w.reports.size)
-            assertEquals(mapOf(title.id to Shown(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
             assertEquals(record, w.record())
 
             w.list.beingRead.value = false
             assertEquals(RunEnd.Done, run.await().end)
             runCurrent()
-            assertEquals(mapOf(title.id to Shown(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
             assertEquals(record, w.record())
             assertEquals(emptyList<Set<AnimeId>>(), w.shown.withdrawals.toList())
             assertEquals(week(1), w.alarm.at.value)
@@ -1222,7 +1440,7 @@ abstract class NotificationEngineContract {
             val failed = w.engine.run(RunTrigger.AppOpened)
 
             assertEquals(RunEnd.Failed, failed.end)
-            assertEquals(mapOf(title.id to Shown(1, toWatch = 1, marks = 1)), w.showing)
+            assertEquals(mapOf(title.id to Says(1, toWatch = 1, marks = 1)), w.showing)
             assertEquals(record, w.record())
             assertEquals(week(1), w.alarm.at.value)
             assertEquals(emptyList<Throwable>(), w.unexpected)
@@ -1316,7 +1534,7 @@ abstract class NotificationEngineContract {
             assertEquals(setOf(title.id), w.showing.keys)
 
             w.engine.changeSettings { it.copy(on = false) }
-            assertEquals(emptyMap<AnimeId, Shown>(), w.showing)
+            assertEquals(emptyMap<AnimeId, Says>(), w.showing)
             assertNull(w.alarm.at.value)
             w.pass(week(2).plus(hour))
             w.engine.run(RunTrigger.Periodic)
@@ -1402,7 +1620,7 @@ abstract class NotificationEngineContract {
 
             assertEquals(RunEnd.Failed, failed.end)
             assertEquals(listOf(1), failed.posted.map { it.episode })
-            assertEquals(week(1), failed.alarm)
+            assertEquals("the near alarm stands", week(0).plus(nearAlarm), failed.alarm)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(record, w.record())
             assertEquals(emptyList<SentNotification>(), w.sent())
@@ -1441,7 +1659,7 @@ abstract class NotificationEngineContract {
             assertNull(report.alarm)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(listOf(1), w.sent().map { it.episode })
-            assertEquals(listOf<Throwable>(broken, broken), w.unexpected.toList())
+            assertEquals(listOf<Throwable>(broken, broken, broken), w.unexpected.toList())
 
             w.alarms.throwing = null
             assertEquals(RunEnd.Done, w.engine.run(RunTrigger.AppOpened).end)

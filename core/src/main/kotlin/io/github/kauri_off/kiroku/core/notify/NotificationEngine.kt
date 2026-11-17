@@ -41,6 +41,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
@@ -60,6 +61,8 @@ class NotificationEngine(
     private val scope: CoroutineScope,
     // N3: how long the alarm's run waits for the airing source.
     private val recheckWithin: Duration = RECHECK_WITHIN,
+    // N2: how soon the alarm comes again while a due episode is not recorded.
+    private val retryAfter: Duration = RETRY_AFTER,
     // Hears of every run as it ends.
     private val reports: (RunReport) -> Unit = {},
     // Hears of what nobody expected: a port's and the engine's own exceptions, and the first of a store's streak.
@@ -84,6 +87,8 @@ class NotificationEngine(
         var alarm: Instant? = null
         var alarmFailed = false
     }
+
+    private class OwnerChanged : Exception()
 
     // What the last run that ended read, by which a change is told from what a run has already followed.
     private data class Seen(
@@ -207,21 +212,25 @@ class NotificationEngine(
             if (!started || following?.isActive == true) return
             following =
                 scope.launch {
-                    try {
-                        combine(
-                            sessions,
-                            list.observeEntries(),
-                            airing.observeSchedules(),
-                            local.observeSettings().retriedOverStore(),
-                        ) { session, entries, schedules, settings -> seen(session.owner, entries, schedules, settings) }
-                            .conflate()
-                            .collect { now -> if (now != seen) mutex.withLock { if (now != seen) attempt(RunTrigger.Changed) } }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: DataException) {
-                        // A list or a store that cannot be read is followed again at the engine's next use.
-                    } catch (e: Exception) {
-                        unexpected(e)
+                    while (true) {
+                        try {
+                            combine(
+                                sessions,
+                                list.observeEntries(),
+                                airing.observeSchedules(),
+                                local.observeSettings().retriedOverStore(),
+                            ) { session, entries, schedules, settings -> seen(session.owner, entries, schedules, settings) }
+                                .conflate()
+                                .collect { now -> if (now != seen) mutex.withLock { if (now != seen) attempt(RunTrigger.Changed) } }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: DataException) {
+                            // A list or a store that cannot be read once is read again, so later changes are still followed.
+                        } catch (e: Exception) {
+                            unexpected(e)
+                            return@launch
+                        }
+                        delay(FOLLOWED_AGAIN_AFTER)
                     }
                 }
         }
@@ -279,10 +288,26 @@ class NotificationEngine(
         return report
     }
 
+    // A run starts again from its reading when the session's owner changes under it (S9).
     private suspend fun carryOut(
         trigger: RunTrigger,
         did: Did,
     ): RunEnd {
+        while (true) {
+            try {
+                return carryOutOnce(trigger, did)
+            } catch (_: OwnerChanged) {
+                did.posted.clear()
+            }
+        }
+    }
+
+    private suspend fun carryOutOnce(
+        trigger: RunTrigger,
+        did: Did,
+    ): RunEnd {
+        // N2: the alarm that started this run is spent, so another stands before anything else is done.
+        if (trigger == RunTrigger.Alarm) setAlarm(near(null), did)
         var read = read(did) ?: return forget(did)
         var result = notificationsAt(read.entries, read.schedules, read.settings, read.record, clock.instant())
         if (trigger == RunTrigger.Alarm && did.recheck == null) {
@@ -297,22 +322,21 @@ class NotificationEngine(
             }
         }
         val posted = shown.shown()
-        // N8, before anything is posted: a run cut off later has left the alarm at what comes next.
-        try {
-            alarm.set(result.nextAt)
-            did.alarm = result.nextAt
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // An alarm that cannot be set keeps no announcement back.
-            unexpected(e)
-            did.alarmFailed = true
+        val kept = mutableSetOf<AnimeId>()
+        // N2: while a due episode is not recorded a near alarm stands, so a run cut off or failed here is made again soon.
+        if (result.due.isNotEmpty()) {
+            mine(read.owner)
+            setAlarm(near(result.nextAt), did)
         }
         for (due in result.due) {
             val announcement = due.announcement
+            val notification = Shown(announcement.episode, announcement.toWatch, announcement.marks, due.airedAt, due.notifyAt)
             val was = posted[announcement.anime.id]
-            // N1: a run cut off before it recorded finds its notification shown, and does not alert for the episode again.
-            val showing = was == announcement.shown || shown.post(announcement, alert = was?.episode != announcement.episode)
+            kept += announcement.anime.id
+            mine(read.owner)
+            // N1: a run cut off before it recorded finds its notification shown, and does not alert for that airing again.
+            val alert = was?.episode != notification.episode || was.airedAt != notification.airedAt
+            val showing = was == notification || shown.post(announcement.anime, notification, alert)
             // Recorded as sent also when the device shows nothing, so that a later grant announces no old episode.
             did.posted +=
                 SentNotification(
@@ -326,20 +350,79 @@ class NotificationEngine(
                 )
         }
         for (announcement in result.standing) {
-            // One the person dismissed is not shown again; one that reads otherwise now is replaced in silence.
-            val was = posted[announcement.anime.id] ?: continue
-            if (was != announcement.shown) shown.post(announcement, alert = false)
+            // N7: only the notification of the episode that stands is its own; one the person dismissed is not shown again.
+            val was = posted[announcement.anime.id]?.takeIf { it.episode == announcement.episode } ?: continue
+            kept += announcement.anime.id
+            val notification = was.copy(toWatch = announcement.toWatch, marks = announcement.marks)
+            if (was != notification) {
+                mine(read.owner)
+                shown.post(announcement.anime, notification, alert = false)
+            }
         }
-        // N7: nothing else stays shown, one that a cut-off run posted and never recorded included.
-        val kept = (result.due.map { it.announcement } + result.standing).mapTo(mutableSetOf()) { it.anime.id }
-        withdraw(posted.keys - kept, did)
+        // N7: nothing else stays shown. What a cut-off run posted and never recorded alerted, so it is told as sent first.
+        val others = posted - kept
+        if (others.isNotEmpty()) {
+            val now = clock.instant()
+            val unrecorded = unrecorded(others, now)
+            // A notification time ahead of the clock means the clock went back: the run at that time records it, in silence.
+            val left = unrecorded.filterValues { it.notifyAt.isAfter(now) }.keys
+            for ((id, was) in unrecorded - left) {
+                val anime = read.entries.firstOrNull { it.anime.id == id }?.anime ?: continue
+                did.posted += SentNotification(anime, was.episode, was.airedAt, was.notifyAt, now, Recheck.NotAsked)
+            }
+            mine(read.owner)
+            withdraw(others.keys - left, did)
+        }
+        mine(read.owner)
         // N1: recorded only now, so a run cut off before this announces again rather than loses its episode.
         if (result.record != read.record || did.posted.isNotEmpty()) {
             local.write(result.record, did.posted.toList(), clock.instant() - sentKeptFor.toJavaDuration())
         }
+        // N8: the earliest coming time, in place of the near alarm.
+        setAlarm(result.nextAt, did)
         coming.value = result.coming
         seen = seen(read.owner, read.entries, read.schedules, read.settings)
         return if (did.alarmFailed) RunEnd.Failed else RunEnd.Done
+    }
+
+    // The notifications that no sent entry tells of, among those recent enough to have one.
+    private suspend fun unrecorded(
+        notifications: Map<AnimeId, Shown>,
+        now: Instant,
+    ): Map<AnimeId, Shown> {
+        val keptFrom = now - sentKeptFor.toJavaDuration()
+        val sent = local.observeSent().first()
+        return notifications.filter { (id, was) ->
+            !was.notifyAt.isBefore(keptFrom) && sent.none { it.anime.id == id && it.episode == was.episode && it.airedAt == was.airedAt }
+        }
+    }
+
+    // N2: no later than a short while from now.
+    private fun near(next: Instant?): Instant {
+        val soon = clock.instant() + retryAfter.toJavaDuration()
+        return if (next != null && next.isBefore(soon)) next else soon
+    }
+
+    // An alarm that cannot be set keeps no announcement back; the run ends as failed unless a later one is set.
+    private suspend fun setAlarm(
+        at: Instant?,
+        did: Did,
+    ) {
+        try {
+            alarm.set(at)
+            did.alarm = at
+            did.alarmFailed = false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            unexpected(e)
+            did.alarmFailed = true
+        }
+    }
+
+    // S9: nothing is posted, withdrawn or recorded for an owner the session has left.
+    private suspend fun mine(owner: SignInId) {
+        if (sessions.first().owner != owner) throw OwnerChanged()
     }
 
     // The stored state of the session's list, once that list has been read; null when nobody is signed in.
@@ -351,6 +434,7 @@ class NotificationEngine(
                 // S9: what is stored and shown is of another sign-in's list, or of a sign-out its process did not finish.
                 withdraw(shown.shown().keys, did)
                 local.clear(owner)
+                coming.value = null
                 stored = StoredNotifications(owner, NotificationRecord())
             }
             forgotten = false
@@ -368,6 +452,7 @@ class NotificationEngine(
         withdraw(shown.shown().keys, did)
         alarm.set(null)
         did.alarm = null
+        did.alarmFailed = false
         if (!forgotten) {
             local.clear(null)
             forgotten = true
@@ -407,6 +492,8 @@ class NotificationEngine(
 
     companion object {
         val RECHECK_WITHIN: Duration = 5.seconds
+        val RETRY_AFTER: Duration = 15.minutes
+        private val FOLLOWED_AGAIN_AFTER: Duration = 1.minutes
 
         private const val STOPPED = "The notification engine's scope has ended"
     }

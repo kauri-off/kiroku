@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.notify
 
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.flow.Flow
@@ -41,23 +42,24 @@ interface NotificationAlarm {
     suspend fun set(at: Instant?)
 }
 
-// What a notification says beside its title.
+// What a notification says beside its title, with the airing it tells of.
 data class Shown(
     val episode: Int,
     val toWatch: Int?,
     val marks: Int,
+    val airedAt: Instant,
+    val notifyAt: Instant,
 )
-
-val Announcement.shown: Shown get() = Shown(episode, toWatch, marks)
 
 // The episode notifications the device shows, one a title, each under a tag made from its title's id.
 interface ShownNotifications {
-    // Each title whose notification is shown now; one the person dismissed is not among them.
+    // Each title whose notification is shown now, as it was posted; one the person dismissed is not among them.
     suspend fun shown(): Map<AnimeId, Shown>
 
     // Shows it in place of the title's earlier one and alerts only when [alert]; false when the device shows none of the app's now.
     suspend fun post(
-        announcement: Announcement,
+        anime: Anime,
+        notification: Shown,
         alert: Boolean,
     ): Boolean
 
