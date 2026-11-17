@@ -25,7 +25,6 @@ import io.github.kauri_off.kiroku.wiring.DeviceTime
 import io.github.kauri_off.kiroku.wiring.LiveGraph
 import io.github.kauri_off.kiroku.wiring.LiveParts
 import io.github.kauri_off.kiroku.wiring.LiveSource
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,10 +51,6 @@ class SandboxGraph internal constructor(
     override val madeUp = true
 
     suspend fun writeOwed() = live.writeOwed()
-
-    // The app's scope, which only the process's death ends on a device; a test ends it with its activity.
-    @VisibleForTesting
-    internal val scope: CoroutineScope get() = parts.scope
 
     private inner class SandboxScenarios : ScenarioSubject {
         override val sandbox = true

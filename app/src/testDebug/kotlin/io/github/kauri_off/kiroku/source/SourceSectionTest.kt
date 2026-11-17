@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
+import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.LiveGraph
@@ -58,6 +59,9 @@ class QuietAccountApplication :
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class SourceSectionTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val compose = composeRule()
 
     @get:Rule

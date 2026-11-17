@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
+import io.github.kauri_off.kiroku.reports.reportLog
 import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioTile
@@ -32,6 +33,7 @@ import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.source.runningSource
+import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import io.github.kauri_off.kiroku.wiring.reportUnexpected
@@ -47,11 +49,15 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.xmlpull.v1.XmlPullParser
+import java.io.File
 
 // The menu switches the demo's scenarios by touch, keeps them across a rotation, resets the demo, chooses the source, names the build and opens the gallery.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class DebugMenuTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     @get:Rule(order = 0)
     val source = StartsOn(DataSource.Demo)
 
@@ -139,6 +145,19 @@ class DebugMenuTest {
             .onFirst()
             .performScrollTo()
             .assertExists()
+    }
+
+    // A reports file cut short or edited by hand: the open menu shows what is whole, and goes on.
+    @Test
+    fun `a malformed reports file never stops the menu`() {
+        val file =
+            File(context.cacheDir, "reports").apply {
+                writeText("2026-11-16T07:00:00Z\n\nnot a time\nUnexpected: x\n\n2026-11-16T08:00:00Z\nUnexpected: a.Whole\n\n2026-11")
+            }
+        reportLog.keepIn(file)
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Unexpected:\u00A0a.Whole").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Unexpected:\u00A0a.Whole").performScrollTo().assertExists()
+        compose.onNodeWithText("Error reports").assertExists()
     }
 
     @Test
