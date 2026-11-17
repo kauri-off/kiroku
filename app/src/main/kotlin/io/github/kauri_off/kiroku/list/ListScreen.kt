@@ -25,7 +25,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +60,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -75,7 +73,6 @@ import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.design.component.AnimeRow
-import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.CoversMessages
 import io.github.kauri_off.kiroku.design.component.RefreshBox
@@ -86,7 +83,6 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
-import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -116,9 +112,8 @@ fun ListScreen(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
             Column {
-                TopBar(state.filterText, state.owner, state.reading, showActions = tabs != null, onEvent = onEvent)
+                TopBar(state.filterText, state.owner, state.reading, state.readingAgain, showActions = tabs != null, onEvent = onEvent)
                 if (tabs != null) ListTabs(motion, tabs.statuses, onEvent)
-                if (tabs != null) state.reading?.let { ReadingIndicator(it) }
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
         },
@@ -327,28 +322,23 @@ private fun failedState(
     }
 }
 
-// How far a read is: "Loading 1,200 of 4,306", or "1,200 titles loaded" where the source names no total; none before
-// the first title.
+// How far a read is, the only sign of it: "Loading 1,200 of 4,306", or "1,200 titles loaded" where the source names
+// no total. A first read has none before its first title, as the loading state stands for it; a read again says so
+// from its start, over the list it will replace.
 @Composable
-private fun readingText(reading: UserListProgress): String? {
-    if (reading.loaded == 0) return null
+private fun readingText(
+    reading: UserListProgress,
+    again: Boolean,
+): String? {
     val loaded = countText(reading.loaded)
-    return reading.total?.takeIf { it > 0 }?.let { stringResource(R.string.list_reading, loaded, countText(it)) }
-        ?: pluralStringResource(R.plurals.list_reading_unknown_total, reading.loaded, loaded)
-}
-
-// Under the tabs while a read goes on: the share read where the total is known.
-@Composable
-private fun ReadingIndicator(reading: UserListProgress) {
     val total = reading.total?.takeIf { it > 0 }
-    val modifier = Modifier.fillMaxWidth()
-    if (total != null) {
-        LinearWavyProgressIndicator(
-            progress = { (reading.loaded.toFloat() / total).coerceIn(0f, 1f) },
-            modifier = modifier.testTag(COUNTED_WAVY_INDICATOR),
-        )
-    } else {
-        LinearWavyProgressIndicator(modifier.testTag(WAVY_INDICATOR))
+    return when {
+        again && reading.loaded == 0 -> stringResource(R.string.list_reading_again)
+        again && total != null -> stringResource(R.string.list_reading_again_count, loaded, countText(total))
+        again -> pluralStringResource(R.plurals.list_reading_again_unknown_total, reading.loaded, loaded)
+        reading.loaded == 0 -> null
+        total != null -> stringResource(R.string.list_reading, loaded, countText(total))
+        else -> pluralStringResource(R.plurals.list_reading_unknown_total, reading.loaded, loaded)
     }
 }
 
@@ -358,6 +348,7 @@ private fun TopBar(
     filter: String?,
     owner: ListOwner,
     reading: UserListProgress?,
+    readingAgain: Boolean,
     showActions: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
@@ -384,7 +375,7 @@ private fun TopBar(
             }
         }
     }
-    val subtitle = reading?.takeIf { filter == null }?.let { readingText(it) }
+    val subtitle = reading?.takeIf { filter == null }?.let { readingText(it, readingAgain) }
     if (subtitle != null) {
         TopAppBar(title = title, subtitle = { Text(subtitle) }, navigationIcon = navigationIcon, actions = actions)
     } else {

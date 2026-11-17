@@ -33,9 +33,12 @@ data class ListState(
     val typed: Typed? = null,
     // How far the read of another user's list is, the first one or one again; null while none is under way.
     val reading: UserListProgress? = null,
+    // The read is one again, under a list read before that stays shown.
+    val readingAgain: Boolean = false,
 ) {
     init {
         require(reading == null || owner is ListOwner.Other)
+        require(!readingAgain || reading != null)
     }
 
     val page: ListPage? get() = (content as? ListContent.Tabs)?.pages?.get(tab)

@@ -64,8 +64,10 @@ object UserListFixtureStates {
     // The same where the source names the list's size.
     val readingWithTotal = state(readSoFar, reading = UserListProgress(readSoFar.size, NAMED_TOTAL))
 
-    // A pull reads the list again under the one shown.
-    val readAgain = watching.copy(reading = UserListProgress(READ_SO_FAR, null))
+    // A pull reads the list again under the one shown: at its start, and some titles in.
+    val readAgain = watching.copy(reading = UserListProgress(0, null), readingAgain = true)
+
+    val readAgainPart = watching.copy(reading = UserListProgress(READ_SO_FAR, null), readingAgain = true)
 
     // Its own last tab, named by MAL's code.
     val unknownStatus =

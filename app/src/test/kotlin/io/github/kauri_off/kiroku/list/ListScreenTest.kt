@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertAll
@@ -33,6 +34,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -40,7 +42,6 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -57,8 +58,6 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
-import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
-import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -125,18 +124,34 @@ class ListScreenTest {
         compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
     }
 
+    // The bar's subtitle alone says a read goes on: no indicator over the tabs or the rows, and the tabs stay put.
     @Test
-    fun `another user's list read in parts shows how far it is over the rows so far`() {
-        show(UserListFixtureStates.reading)
-        compose.onNodeWithText("40\u00A0titles loaded").assertIsDisplayed()
-        compose.onNodeWithTag(WAVY_INDICATOR).assertIsDisplayed()
-        show(UserListFixtureStates.readingWithTotal)
-        compose.onNodeWithText("Loading 40\u00A0of\u00A0100").assertIsDisplayed()
-        compose.onNodeWithTag(COUNTED_WAVY_INDICATOR).assertIsDisplayed()
+    fun `another user's list being read says how far it is in the bar alone, and the page does not move`() {
         show(UserListFixtureStates.watching)
-        compose.onNodeWithTag(COUNTED_WAVY_INDICATOR).assertDoesNotExist()
-        compose.onNodeWithTag(WAVY_INDICATOR).assertDoesNotExist()
+        val tabs = tabTop()
+        val indicators = progressIndicators()
+        val said =
+            listOf(
+                UserListFixtureStates.reading to "40\u00A0titles loaded",
+                UserListFixtureStates.readingWithTotal to "Loading 40\u00A0of\u00A0100",
+                UserListFixtureStates.readAgain to "Loading the list again",
+                UserListFixtureStates.readAgainPart to "Loading again:\u00A040\u00A0titles",
+            )
+        for ((state, text) in said) {
+            show(state)
+            compose.onNodeWithText(text).assertIsDisplayed()
+            assertEquals(text, indicators, progressIndicators())
+            assertEquals(text, tabs, tabTop())
+        }
+        show(UserListFixtureStates.watching)
+        compose.onNodeWithText("Loading", substring = true).assertDoesNotExist()
     }
+
+    // Those the page always has, the pull's at rest among them.
+    private fun progressIndicators() =
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().size
+
+    private fun tabTop() = compose.onNode(hasText("Watching") and isSelectable()).getUnclippedBoundsInRoot().top
 
     @Test
     fun `another user's private list and an unknown name each say so, with nothing to retry`() {

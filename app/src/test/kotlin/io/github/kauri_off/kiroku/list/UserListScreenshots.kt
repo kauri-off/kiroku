@@ -32,6 +32,7 @@ class UserListScreenshots : ScreenshotRegistry() {
             case("reading", content = screen(states.reading)),
             case("reading-with-total", content = screen(states.readingWithTotal)),
             case("read-again", content = screen(states.readAgain)),
+            case("read-again-part", content = screen(states.readAgainPart)),
             case(
                 "read-again-failed",
                 content = screen(states.watching, ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection))),

@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.user.ScriptedUserLists
 import io.github.kauri_off.kiroku.core.user.UserListKeeper
 import io.github.kauri_off.kiroku.core.user.UserListPart
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -34,6 +35,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -245,6 +247,36 @@ class UserListViewModelTest {
                 list.tabs.pages.values
                     .sumOf { it.rows.size },
             )
+        }
+
+    @Test
+    fun `a pull reads the list again under the one shown, and the state says so from the read's start`() =
+        runTest(dispatcher) {
+            val app = app()
+            val list = app.list()
+            showing(list.state, list.shown)
+            runCurrent()
+            advanceUntilIdle()
+            app.graph.demo.server.latency = 10.milliseconds
+            list.onEvent(ListEvent.Refresh)
+            runCurrent()
+            assertTrue(list.state.value.readingAgain)
+            assertEquals(UserListProgress(0, null), list.state.value.reading)
+            assertEquals(
+                fixtures.otherUserList.size,
+                list.tabs.pages.values
+                    .sumOf { it.rows.size },
+            )
+            advanceTimeBy(15.milliseconds)
+            runCurrent()
+            assertTrue(list.state.value.readingAgain)
+            assertTrue(
+                list.state.value.reading!!
+                    .loaded > 0,
+            )
+            advanceUntilIdle()
+            assertFalse(list.state.value.readingAgain)
+            assertNull(list.state.value.reading)
         }
 
     @Test

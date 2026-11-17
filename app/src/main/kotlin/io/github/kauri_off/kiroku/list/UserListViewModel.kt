@@ -216,6 +216,7 @@ class UserListViewModel(
                     is UserListState.Whole -> read.again
                     else -> null
                 },
+            readingAgain = read is UserListState.Whole && read.again != null,
         )
     }
 
