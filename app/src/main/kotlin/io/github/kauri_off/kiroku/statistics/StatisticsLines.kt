@@ -121,9 +121,9 @@ internal fun Group.lines(
         if (bars.isEmpty()) {
             nothing?.let { add(Line(first, Dp.Hairline, Dp.Hairline) { NothingLine(it) }) }
         } else {
-            val full = bars.maxOf { it.count }
+            val lengths = barLengths(bars.map { it.count })
             bars.forEachIndexed { index, bar ->
-                add(Line(if (index == 0) first else null, columns.inset, columns.inset) { BarLine(bar, full, columns) })
+                add(Line(if (index == 0) first else null, columns.inset, columns.inset) { BarLine(bar, lengths[index], columns) })
             }
         }
     }
@@ -145,12 +145,11 @@ internal fun LazyListScope.lines(lines: List<Line>) {
 @Composable
 private fun BarLine(
     bar: Bar,
-    full: Int,
+    fraction: Float,
     columns: BarColumns,
 ) {
     val count = countText(bar.count)
     val spoken = pluralStringResource(R.plurals.statistics_bar_spoken, bar.count, bar.spokenLabel, count)
-    val fraction = if (full > 0) bar.count.toFloat() / full else 0f
     val style = MaterialTheme.typography.bodyMedium
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val semantics = Modifier.clearAndSetSemantics { contentDescription = spoken }
@@ -176,6 +175,12 @@ private fun BarLine(
             Text(count, style = style, color = muted, textAlign = TextAlign.End, modifier = Modifier.width(columns.count))
         }
     }
+}
+
+// Each bar's length in a distribution: the largest value fills its bar, 0 leaves it empty.
+internal fun barLengths(counts: List<Int>): List<Float> {
+    val full = counts.maxOrNull() ?: 0
+    return counts.map { if (full > 0) it.toFloat() / full else 0f }
 }
 
 // A static share has no end of progress to mark, and a stop dot would read as a small share.

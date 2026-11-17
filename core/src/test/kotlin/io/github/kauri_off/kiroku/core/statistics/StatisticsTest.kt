@@ -92,8 +92,8 @@ class StatisticsTest {
         assertEquals(mapOf(2015 to 1, 2019 to 1, 2020 to 3, 2021 to 1), statistics.years)
         assertEquals(listOf(Counted(2020, 4), Counted(2010, 2)), statistics.decades)
         assertEquals(6, statistics.titleCount)
-        assertEquals(5, statistics.rated)
-        assertEquals(1, statistics.unrated)
+        assertEquals(5, statistics.scored)
+        assertEquals(1, statistics.unscored)
     }
 
     @Test
@@ -109,8 +109,8 @@ class StatisticsTest {
         assertEquals(emptyMap<Int, Int>(), statistics.years)
         assertEquals(emptyList<Counted<Int>>(), statistics.decades)
         assertEquals(0, statistics.titleCount)
-        assertEquals(0, statistics.rated)
-        assertEquals(0, statistics.unrated)
+        assertEquals(0, statistics.scored)
+        assertEquals(0, statistics.unscored)
     }
 
     @Test
@@ -121,14 +121,14 @@ class StatisticsTest {
         assertEquals(2, scored.statuses.completed)
         assertEquals(12.0 * 24 / 1440, scored.daysWatched, 0.0)
 
-        assertEquals(1, scored.rated)
-        assertEquals(1, scored.unrated)
+        assertEquals(1, scored.scored)
+        assertEquals(1, scored.unscored)
 
         val unscored = statisticsOf(listOf(entry(anime(), watched = 12)))
         assertNull(unscored.meanScore)
         assertEquals(emptyMap<Int, Int>(), unscored.scores)
-        assertEquals(0, unscored.rated)
-        assertEquals(1, unscored.unrated)
+        assertEquals(0, unscored.scored)
+        assertEquals(1, unscored.unscored)
     }
 
     @Test
@@ -226,8 +226,8 @@ class StatisticsTest {
         assertEquals(listOf(Counted(MediaType.Tv, 1), Counted(MediaType.Movie, 1)), statistics.mediaTypes)
         assertEquals(mapOf(1999 to 1, 2020 to 1), statistics.years)
         assertEquals(2, statistics.titleCount)
-        assertEquals(2, statistics.rated)
-        assertEquals(0, statistics.unrated)
+        assertEquals(2, statistics.scored)
+        assertEquals(0, statistics.unscored)
     }
 
     @Test
@@ -258,7 +258,7 @@ class StatisticsTest {
 
         assertEquals(5_000, statistics.statuses.completed)
         assertEquals(5_000, statistics.titleCount)
-        assertEquals(5_000, statistics.rated)
+        assertEquals(5_000, statistics.scored)
         assertEquals(5_000.0 / 1440, statistics.daysWatched, 0.0)
         assertEquals((1..10).associateWith { 500 }, statistics.scores)
         assertEquals(5.5, statistics.meanScore!!, 0.0)

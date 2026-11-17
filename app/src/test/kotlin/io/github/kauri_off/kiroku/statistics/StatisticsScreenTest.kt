@@ -70,9 +70,9 @@ class StatisticsScreenTest {
         val statistics = statisticsOf(fixtures.set.entries)
         show(fixtures.shown(StatisticsPage.Scores, statistics))
         compose.onNode(hasText(String.format(Locale.ENGLISH, "%.2f", statistics.meanScore)) and hasText("Mean score")).assertExists()
-        compose.onNode(hasText(statistics.rated.toString()) and hasText("Rated")).assertExists()
-        compose.onNode(hasText(statistics.unrated.toString()) and hasText("Not rated")).assertExists()
-        assertEquals(fixtures.set.entries.size, statistics.rated + statistics.unrated)
+        compose.onNode(hasText(statistics.scored.toString()) and hasText("Scored")).assertExists()
+        compose.onNode(hasText(statistics.unscored.toString()) and hasText("Not scored")).assertExists()
+        assertEquals(fixtures.set.entries.size, statistics.scored + statistics.unscored)
         for (score in 10 downTo 1) assertLine(bar("Score\u00A0$score", statistics.scores[score] ?: 0))
     }
 
@@ -112,7 +112,7 @@ class StatisticsScreenTest {
     fun nothingScoredHasNoMeanScoreAndSaysSoInPlaceOfTheBars() {
         show(fixtures.shown(StatisticsPage.Scores, fixtures.nothingScored))
         compose.onNodeWithContentDescription("No mean score", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("No title on the list is rated").assertExists()
+        compose.onNodeWithText("Nothing scored").assertExists()
         compose.onNodeWithContentDescription(bar("Score\u00A010", 0)).assertDoesNotExist()
     }
 

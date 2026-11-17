@@ -70,13 +70,13 @@ data class UserStatistics internal constructor(
         require(daysWatched >= 0.0)
         require(meanScore == null || meanScore in 1.0..10.0)
         require(scores.keys.all { it in 1..10 })
-        require(rated <= titleCount)
+        require(scored <= titleCount)
     }
 
     // The titles that have the user's score, and those that do not.
-    val rated: Int get() = scores.values.sum()
+    val scored: Int get() = scores.values.sum()
 
-    val unrated: Int get() = titleCount - rated
+    val unscored: Int get() = titleCount - scored
 
     // The start years by decade, as the decade's first year, newest first.
     val decades: List<Counted<Int>>

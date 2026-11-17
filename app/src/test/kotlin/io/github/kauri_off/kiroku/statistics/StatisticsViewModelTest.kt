@@ -4,8 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoUserLists
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.core.user.UserListProgress
@@ -20,7 +24,11 @@ import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -32,6 +40,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Instant
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -145,7 +154,7 @@ class StatisticsViewModelTest {
             advanceUntilIdle()
             val shown = own.state.value.content as StatisticsContent.Shown
             assertEquals(statisticsOf(graph.list.observeEntries().first()), shown.statistics)
-            assertEquals(fixtures.userStatistics.rated + 1, shown.statistics.rated)
+            assertEquals(fixtures.userStatistics.scored + 1, shown.statistics.scored)
             assertTrue(graph.requests.isEmpty())
 
             graph.session.signOut()
@@ -174,5 +183,61 @@ class StatisticsViewModelTest {
             runCurrent()
             advanceUntilIdle()
             assertEquals(StatisticsContent.Failed(DataError.PrivateList), private.state.value.content)
+        }
+
+    // A signed-in user's list before its first download: an empty store, never synced, until [sync] stores the fixtures'.
+    private class NeverSynced(
+        var answer: Outcome<Unit>,
+    ) : ListSource {
+        val entries = MutableStateFlow<List<ListEntry>>(emptyList())
+        val syncedAt = MutableStateFlow<Instant?>(null)
+        var syncs = 0
+
+        override fun observeEntries(): Flow<List<ListEntry>> = entries
+
+        override fun observeEntry(id: AnimeId): Flow<ListEntry?> = entries.map { all -> all.firstOrNull { it.anime.id == id } }
+
+        override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
+            entries.map { all -> all.filter { it.anime.id in ids }.associateBy { it.anime.id } }
+
+        override fun observeSyncedAt(): Flow<Instant?> = syncedAt
+
+        override suspend fun sync(): Outcome<Unit> {
+            syncs++
+            delay(10.milliseconds)
+            if (answer is Outcome.Success) {
+                entries.value = Fixtures.reference.entries
+                syncedAt.value = Fixtures.reference.now
+            }
+            return answer
+        }
+    }
+
+    @Test
+    fun `before the first download the own page waits for it, and a download that fails is the error with Retry`() =
+        runTest(dispatcher) {
+            val graph = graph()
+            val list = NeverSynced(Outcome.Failure(DataError.ServerError))
+            val own = StatisticsViewModel(StatisticsPage.Genres, null, graph.session, list, graph.user, graph.connection, graph.background)
+            showing(own.state)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(StatisticsContent.Loading, own.state.value.content)
+            assertEquals(0, list.syncs)
+
+            showing(own.shown)
+            runCurrent()
+            advanceTimeBy(5.milliseconds)
+            runCurrent()
+            assertEquals(StatisticsContent.Loading, own.state.value.content)
+            advanceUntilIdle()
+            assertEquals(StatisticsContent.Failed(DataError.ServerError), own.state.value.content)
+            assertEquals(1, list.syncs)
+
+            list.answer = Outcome.Success(Unit)
+            own.onEvent(StatisticsEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(StatisticsContent.Shown(statisticsOf(fixtures.entries)), own.state.value.content)
+            assertEquals(2, list.syncs)
         }
 }

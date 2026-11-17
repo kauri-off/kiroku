@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.WhileShown
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
@@ -51,6 +53,9 @@ class StatisticsViewModel(
     private val shownOnce = MutableStateFlow(false)
     private var load: Job? = null
 
+    // How the first download of the own list failed, while no list was ever downloaded.
+    private val firstSync = MutableStateFlow<DataError?>(null)
+
     // The list the statistics shown were computed over: a list held is the same object in every state that holds it.
     private var counted: Pair<List<ListEntry>, UserStatistics>? = null
 
@@ -58,7 +63,10 @@ class StatisticsViewModel(
         ShownLoads(
             viewModelScope,
             connection,
-            whenShown = { shownOnce.value = true },
+            whenShown = {
+                shownOnce.value = true
+                if (name == null) refresh()
+            },
             again = { refresh() },
         )
 
@@ -77,7 +85,8 @@ class StatisticsViewModel(
         refresh()
     }
 
-    // The stored list, so an edit changes the statistics at once and they show offline.
+    // The stored list, so an edit changes the statistics at once and they show offline; before its first download, an
+    // empty store is no empty list.
     private fun ownContent(): Flow<StatisticsContent> =
         sessions
             .map { it == Session.SignedOut }
@@ -86,10 +95,13 @@ class StatisticsViewModel(
                 if (signedOut) {
                     flowOf(StatisticsContent.SignedOut)
                 } else {
-                    list
-                        .observeEntries()
-                        .map<List<ListEntry>, StatisticsContent> { StatisticsContent.Shown(statistics(it)) }
-                        .readAgainOnRetry(retries) { StatisticsContent.Failed(it) }
+                    combine(list.observeEntries(), list.observeSyncedAt(), firstSync) { entries, syncedAt, failed ->
+                        when {
+                            entries.isNotEmpty() || syncedAt != null -> StatisticsContent.Shown(statistics(entries))
+                            failed != null -> StatisticsContent.Failed(failed)
+                            else -> StatisticsContent.Loading
+                        }
+                    }.readAgainOnRetry(retries) { StatisticsContent.Failed(it) }
                 }
             }
 
@@ -118,14 +130,25 @@ class StatisticsViewModel(
     private fun statistics(entries: List<ListEntry>): UserStatistics =
         counted?.takeIf { it.first === entries }?.second ?: statisticsOf(entries).also { counted = entries to it }
 
-    // Retry, or the connection back after a read failed for want of it: the list is read again, or the read joined.
+    // Retry, or the connection back after a read failed for want of it: another user's list is read again, or the read
+    // joined; the own list is downloaded only when it never was.
     private fun refresh() {
-        val name = name ?: return
         if (load?.isActive == true) return
         load =
             viewModelScope.launch {
+                if (name == null && !neverSynced()) return@launch
                 loads.started()
-                loads.ended((users.refreshList(name) as? Outcome.Failure)?.error)
+                if (name == null) firstSync.value = null
+                val error = (name?.let { users.refreshList(it) } ?: list.sync()) as? Outcome.Failure
+                if (name == null) firstSync.value = error?.error
+                loads.ended(error?.error)
             }
     }
+
+    private suspend fun neverSynced(): Boolean =
+        try {
+            sessions.first() != Session.SignedOut && list.observeSyncedAt().first() == null && list.observeEntries().first().isEmpty()
+        } catch (_: DataException) {
+            false
+        }
 }

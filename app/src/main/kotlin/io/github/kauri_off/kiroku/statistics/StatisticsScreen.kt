@@ -203,8 +203,8 @@ internal fun groups(
                 Group(GroupKey.Numbers, numbers = { ScoreNumbers(statistics) }),
                 Group(
                     GroupKey.Scores,
-                    bars = if (statistics.rated == 0) emptyList() else scoreBars(statistics),
-                    nothing = stringResource(R.string.statistics_nothing_rated),
+                    bars = if (statistics.scored == 0) emptyList() else scoreBars(statistics),
+                    nothing = stringResource(R.string.statistics_nothing_scored),
                 ),
             )
         StatisticsPage.Genres ->
@@ -250,8 +250,8 @@ private fun ScoreNumbers(statistics: UserStatistics) {
             spokenValue = if (mean == null) stringResource(R.string.statistics_no_mean_score) else null,
             horizontalAlignment = centre,
         )
-        StatNumber(countText(statistics.rated), stringResource(R.string.statistics_rated), horizontalAlignment = centre)
-        StatNumber(countText(statistics.unrated), stringResource(R.string.statistics_unrated), horizontalAlignment = centre)
+        StatNumber(countText(statistics.scored), stringResource(R.string.statistics_scored), horizontalAlignment = centre)
+        StatNumber(countText(statistics.unscored), stringResource(R.string.statistics_unscored), horizontalAlignment = centre)
     }
 }
 
