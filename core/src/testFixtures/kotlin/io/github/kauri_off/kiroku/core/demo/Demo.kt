@@ -66,16 +66,20 @@ class Demo(
 
     val airingSource = DemoAiringSource(fixtures, server)
 
-    // On the real rules over a store in memory, which starts as fetched just now, as a device that was just synced.
+    // As fetched just now, as a device that was just synced, or empty.
+    private val startingAiring = {
+        fixtures.entries.filter { airingStored && it.tracked }.associate {
+            it.anime.id to StoredAiring(fixtures.schedules[it.anime.id], clock.instant())
+        }
+    }
+
+    private val airingStore = InMemoryAiringStore(startingAiring())
+
+    // On the real rules over a store in memory.
     val airing: AiringRepository =
         ListAiring(
             airingSource,
-            InMemoryAiringStore(
-                fixtures.entries.filter { airingStored && it.tracked }.associate {
-                    it.anime.id to
-                        StoredAiring(fixtures.schedules[it.anime.id], clock.instant())
-                },
-            ),
+            airingStore,
             list,
             AiringTime(clock, clockSet) { if (clockRuns) delay(it) else awaitCancellation() },
             scope,
@@ -102,13 +106,13 @@ class Demo(
         }
     }
 
-    // The demo as it started: every failure off, signed in, no details fetched, and the list synced back to the fixtures.
+    // The demo as it started: every failure off, signed in, no details fetched, the list and the airing data back to the fixtures.
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
         airingSource.failure = null
-        airingSource.holding?.complete(Unit)
-        airingSource.holding = null
         airingSource.schedules = fixtures.schedules
+        airingSource.hold(false)
+        airingStore.write(airingStore.read().mapValues { null } + startingAiring())
         store.reset()
         details.forget()
         if (signIn.value == null) signIn.value = SignInId("demo-${++signIns}")

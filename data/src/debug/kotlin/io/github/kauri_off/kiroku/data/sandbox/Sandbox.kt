@@ -22,9 +22,10 @@ class Sandbox(
 
     val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList)
 
-    // The list the sandbox started with and its schedules laid out again, as of now.
+    // The list the sandbox started with and its schedules laid out again, as of now; then AniList answers again, from them.
     fun reset() {
         airing.value.reset()
+        aniList.fault = SandboxAniListFault.None
         site.value.reset()
     }
 

@@ -174,13 +174,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-10 Airing counts in the debug menu.**
 
-- [ ] **M3-11 AniList in the scenario panel.** The panel's "offline" fails AniList as it fails MAL, and one more
-  switch fails AniList alone, on the demo and on the sandbox, so that section 2.3's row for AniList can be seen on
-  a device.
-  **Needs:** M3-08.
-  **Check:** tests on the demo and on the sandbox: with the switch on, a refresh fails, the stored counts stay, a
-  title added then shows the estimate and MAL's requests still work; a reset turns the switch off. The debug
-  menu's screenshots are rendered with the switch.
+- [x] **M3-11 AniList in the scenario panel.**
 
 - [ ] **M3-12 [O] Emulator run.** The orchestrator runs the app once on the emulator against the sandbox: a count
   rises as an air time passes with the network off; with AniList failing the stored counts stay; the preview

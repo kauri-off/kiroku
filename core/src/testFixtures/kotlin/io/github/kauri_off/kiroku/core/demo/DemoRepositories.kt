@@ -118,6 +118,18 @@ class DemoAiringSource internal constructor(
     @Volatile
     var holding: CompletableDeferred<Unit>? = null
 
+    // Holds every request from now on, or answers the ones held.
+    @Synchronized
+    fun hold(held: Boolean) {
+        val was = holding
+        if (held) {
+            if (was == null) holding = CompletableDeferred()
+        } else if (was != null) {
+            holding = null
+            was.complete(Unit)
+        }
+    }
+
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
