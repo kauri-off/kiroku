@@ -6,7 +6,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
-// How many of MAL's members gave a title each score; a title nobody scored has none in every score.
+// How many users gave a title each score; a title nobody scored has none in every score.
 class ScoreDistribution(
     votes: Map<Int, Int>,
 ) {

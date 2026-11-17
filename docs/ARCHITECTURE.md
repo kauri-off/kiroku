@@ -54,8 +54,8 @@ without affecting its page (section 2.3).
   and delays, and covers long-running shows regardless of season (dailyAL issue #8). MAL's own `broadcast` field (a
   weekday and a Japan-time slot) knows none of that and only feeds the estimate of section 4.
 - **Privacy.** AniList receives the MAL ids of the unfinished titles on the user's list and of an airing title whose
-  page is open, and nothing else about the user. Tenrai receives the device's IP address and the MAL id of each title
-  whose MAL scores are opened. There is no analytics and no crash reporting.
+  page is open, and nothing else about the user. Tenrai receives the device's IP address, the app's name and version, and
+  the MAL id of each title whose MAL scores are opened. There is no analytics and no crash reporting.
 
 ### 2.2 External constraints and their consequences
 
@@ -98,8 +98,7 @@ Tenrai (from its documentation and recorded answers):
 | MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
-| Tenrai | Any failure, refusal or rate limit | The screen of a title's MAL scores says it could not load them and offers Retry. The title page never asks Tenrai, so nothing there waits for it or shows a message. |
-| An optional source (after 1.0) | Any failure | Its part of the page says so and offers Retry, and never blocks or delays the rest of the page. |
+| An optional source (Tenrai's score distribution; others after 1.0) | Any failure, refusal or rate limit | Its part of the app says so and offers Retry, and never blocks or delays the page it belongs to. |
 
 The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the
 internet.
@@ -659,9 +658,8 @@ Each of these could change a decision above.
    apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-5. **Sources beyond MAL and AniList.** Jikan's public API, once named here for the score distribution, characters,
-   videos, reviews and other users' avatars, shut down on 1 October 2026; the score distribution comes from Tenrai,
-   and the rest has no source. Tenrai is in beta and does not say who runs it. Like every source of MAL's score
+5. **Sources beyond MAL and AniList.** Jikan's public API shut down on 1 October 2026: the score distribution comes
+   from Tenrai, and characters, videos, reviews and other users' avatars have no source. Tenrai is in beta and does not say who runs it. Like every source of MAL's score
    distribution it serves what it reads from MAL's website, which clause 4(i) of MAL's API agreement rules out for
    an app's own requests; the owner accepts that risk, and the app itself scrapes nothing. AniList's links and
    characters and Shikimori are unchecked.

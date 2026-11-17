@@ -119,6 +119,8 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-27 Watch order on the title page.**
 
+- [x] **M2-35 MAL scores of a title.**
+
 - [x] **M2-28 Back gesture preview.**
 
 - [x] **M2-29 Messages that are the only way back.**

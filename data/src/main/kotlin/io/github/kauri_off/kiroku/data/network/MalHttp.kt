@@ -173,7 +173,7 @@ class MalHttp(
                 status >= 400 -> DataError.InvalidRequest
                 else -> DataError.ServerError
             }
-        if (error == DataError.Refused) backOff.refused(headers?.let(::retryAfter))
+        if (error == DataError.Refused) backOff.refused(headers?.let { retryAfter(it, clock) }?.toJavaDuration())
         return Tried(MalAnswer.Failed(error), again = status >= 500)
     }
 
@@ -228,12 +228,6 @@ class MalHttp(
             }
         }
 
-    private fun retryAfter(headers: Headers): JavaDuration? {
-        val seconds = headers[RETRY_AFTER]?.trim()?.toLongOrNull()
-        if (seconds != null) return JavaDuration.ofSeconds(seconds)
-        return headers.getInstant(RETRY_AFTER)?.let { JavaDuration.between(clock.instant(), it) }
-    }
-
     private fun offline(): Boolean =
         try {
             !device.isOnline()
@@ -258,7 +252,6 @@ class MalHttp(
         val RepeatReadsAfter = listOf(500.milliseconds, 1500.milliseconds)
         private val ConnectTimeout = 10.seconds
         private val TransferTimeout = 20.seconds
-        private const val RETRY_AFTER = "Retry-After"
     }
 }
 

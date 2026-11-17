@@ -22,9 +22,14 @@ class SandboxTenrai(
         val path = request.url.encodedPath.removePrefix(address.encodedPath)
         val parts = path.split('/')
         val id = parts.takeIf { it.size == 3 && it[0] == "anime" && it[2] == "statistics" }?.get(1)?.toLongOrNull()
-        if (request.method != "GET" || id == null) return SandboxAnswer(404, NO_ROUTE)
-        Recorded[id]?.let { return SandboxAnswer(200, read(it)) }
         val unknown = Json.parseToJsonElement(read(NO_RECORD)).jsonObject
+        // An address that is not the API's: the recorded "no record" with its type altered, as no such answer was recorded.
+        if (request.method != "GET" ||
+            id == null
+        ) {
+            return SandboxAnswer(404, JsonObject(unknown + ("type" to JsonPrimitive(NO_ROUTE))).toString())
+        }
+        Recorded[id]?.let { return SandboxAnswer(200, read(it)) }
         val named =
             unknown.mapValues { (key, value) ->
                 when (key) {
@@ -50,6 +55,6 @@ class SandboxTenrai(
         // Every recorded answer the sandbox reads, which the debug and preview builds hold as assets.
         val Files: List<String> = Recorded.values.sorted() + NO_RECORD
 
-        private const val NO_ROUTE = """{"status":404,"type":"NotFoundException","message":"","error":"","path":""}"""
+        private const val NO_ROUTE = "NotFoundException"
     }
 }

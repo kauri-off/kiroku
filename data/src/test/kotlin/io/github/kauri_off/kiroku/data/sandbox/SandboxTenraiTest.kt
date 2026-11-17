@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.data.recorder.TenraiRequests
 import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.data.tenrai.tenraiDistribution
+import io.github.kauri_off.kiroku.data.tenrai.tenraiHasNoRecord
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -55,6 +56,23 @@ class SandboxTenraiTest {
             assertTrue(sandbox.mal.asked.all { it.startsWith("GET api.tenrai.org/v1/anime/") })
             assertEquals(emptyList<Throwable>(), client.unexpected)
         }
+
+    @Test
+    fun `an address that is not the API's is a 404 the client does not read as no record`() {
+        val (status, body) =
+            client.http.callFactory
+                .newCall(
+                    okhttp3.Request
+                        .Builder()
+                        .url("https://api.tenrai.org/v1/anime/1")
+                        .build(),
+                ).execute()
+                .use { it.code to it.body.string() }
+
+        assertEquals(404, status)
+        assertTrue(!tenraiHasNoRecord(body))
+        assertTrue(tenraiHasNoRecord(recordedTenrai(SandboxTenrai.NO_RECORD)))
+    }
 
     private companion object {
         val TestClockAt =

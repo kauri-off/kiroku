@@ -4,6 +4,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.score.ScoreDistribution
+import io.github.kauri_off.kiroku.data.anilist.AniListAiring
+import io.github.kauri_off.kiroku.data.anilist.titleWithId
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.dropped
@@ -36,7 +38,6 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 // The client against a local Tenrai that answers the recordings: what the port obliges, the pace, a refusal.
@@ -169,10 +170,12 @@ class TenraiScoresTest {
         }
 
     @Test
-    fun `a 404 that is not Tenrai's no record, a failure of the server and no answer are failures, never null`() =
+    fun `a 404 other than no record (the recorded one, type altered), a server failure and no answer are failures, never null`() =
         runTest {
             val client = client()
-            answer = { answer(404, """{"status":404,"type":"NotFoundException","message":"","error":"","path":""}""") }
+            val foreign = recordedBody("unknown").replace("\"ResourceNotFoundException\"", "\"NotFoundException\"")
+            assertTrue(foreign != recordedBody("unknown"))
+            answer = { answer(404, foreign) }
             assertEquals(Outcome.Failure(DataError.ServerError), client.distribution(AnimeId(1)))
             assertTrue(network.unexpected.single() is TenraiOddAnswer)
 
@@ -187,7 +190,7 @@ class TenraiScoresTest {
         }
 
     @Test
-    fun `a request carries the title's MAL id and the app's User-Agent, nothing of an account`() =
+    fun `a request carries the title's MAL id and AniList's User-Agent, nothing of an account`() =
         runTest {
             client().distribution(AnimeId(61987))
             val request = requests.single().first
@@ -203,6 +206,16 @@ class TenraiScoresTest {
                     .toSet(),
             )
             assertEquals("Kiroku/1.2.3", request.headers["User-Agent"])
+
+            // The User-Agent AniList's client sends, whatever it is.
+            AniListAiring(
+                network.http,
+                network.clock,
+                File(folder.root, "anilist.block"),
+                server.url("/").toString(),
+                testScheduler.timeSource,
+            ).fetch(listOf(titleWithId(61987)), network.clock.instant())
+            assertEquals(requests.last().first.headers["User-Agent"], request.headers["User-Agent"])
         }
 
     @Test
@@ -237,7 +250,12 @@ class TenraiScoresTest {
             assertEquals(1, requests.size)
             assertTrue(blockFile.exists())
 
-            advanceTimeBy(2.minutes + 1.milliseconds)
+            // Past the minute a refusal holds at least, still inside the 120 s Tenrai asked for.
+            advanceTimeBy(90.seconds)
+            assertEquals(Outcome.Failure(DataError.Refused), client.distribution(AnimeId(1)))
+            assertEquals(1, requests.size)
+
+            advanceTimeBy(30.seconds + 1.milliseconds)
             network.clock.now = network.clock.now.plusSeconds(121)
             assertTrue(client.distribution(AnimeId(1)) is Outcome.Success)
             assertTrue(!blockFile.exists())
