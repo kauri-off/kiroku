@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="statistics_score_distribution">Распределение оценок</string>
+    <string name="statistics_genres">Жанры</string>
+    <string name="statistics_formats_and_years">Форматы и годы</string>
+    <string name="statistics_formats">Форматы</string>
+    <string name="statistics_years">Годы</string>
+    <string name="statistics_decade">%1$d\u2011е</string>
+    <string name="statistics_mean_score">Средняя оценка</string>
+    <string name="statistics_no_mean_score">Нет средней оценки</string>
+    <string name="statistics_rated">Оценено</string>
+    <string name="statistics_unrated">Без оценки</string>
+    <string name="statistics_score_spoken">Оценка\u00A0%1$d</string>
+    <plurals name="statistics_bar_spoken">
+        <item quantity="one">%1$s:\u00A0%2$s\u00A0тайтл</item>
+        <item quantity="few">%1$s:\u00A0%2$s\u00A0тайтла</item>
+        <item quantity="many">%1$s:\u00A0%2$s\u00A0тайтлов</item>
+        <item quantity="other">%1$s:\u00A0%2$s\u00A0тайтла</item>
+    </plurals>
+    <string name="statistics_nothing_rated">В списке нет оценённых тайтлов</string>
+    <string name="statistics_none_known">Неизвестно ни для одного тайтла списка</string>
+    <string name="statistics_nothing_on_list">В списке пока ничего нет</string>
+    <string name="statistics_signed_out">Войдите через MyAnimeList, чтобы видеть здесь свою статистику</string>
+    <string name="statistics_sign_in">Войти</string>
+    <string name="statistics_could_not_load">Не удалось загрузить статистику</string>
+    <string name="statistics_private_list">Этот список скрыт</string>
+    <string name="statistics_unknown_user">На MyAnimeList нет пользователя с таким именем</string>
+    <string name="statistics_loading_list">Загружено %1$s\u00A0из\u00A0%2$s</string>
+    <plurals name="statistics_loading_list_unknown_total">
+        <item quantity="one">Загружен %1$s\u00A0тайтл</item>
+        <item quantity="few">Загружено %1$s\u00A0тайтла</item>
+        <item quantity="many">Загружено %1$s\u00A0тайтлов</item>
+        <item quantity="other">Загружено %1$s\u00A0тайтла</item>
+    </plurals>
+</resources>

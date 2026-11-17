@@ -55,6 +55,8 @@ data class StatedFigures(
 // Made only by the statistics calculator, and by the fixtures as what a test expects of it.
 @ConsistentCopyVisibility
 data class UserStatistics internal constructor(
+    // Every title on the list, of a status the app does not know too.
+    val titleCount: Int,
     val statuses: StatusCounts,
     val daysWatched: Double,
     val meanScore: Double?,
@@ -64,9 +66,28 @@ data class UserStatistics internal constructor(
     val years: Map<Int, Int>,
 ) {
     init {
+        require(titleCount >= statuses.total)
         require(daysWatched >= 0.0)
         require(meanScore == null || meanScore in 1.0..10.0)
         require(scores.keys.all { it in 1..10 })
+        require(rated <= titleCount)
+    }
+
+    // The titles that have the user's score, and those that do not.
+    val rated: Int get() = scores.values.sum()
+
+    val unrated: Int get() = titleCount - rated
+
+    // The start years by decade, as the decade's first year, newest first.
+    val decades: List<Counted<Int>>
+        get() =
+            years.entries
+                .groupBy({ it.key.floorDiv(DECADE) * DECADE }, { it.value })
+                .map { (decade, counts) -> Counted(decade, counts.sum()) }
+                .sortedByDescending { it.value }
+
+    private companion object {
+        const val DECADE = 10
     }
 }
 

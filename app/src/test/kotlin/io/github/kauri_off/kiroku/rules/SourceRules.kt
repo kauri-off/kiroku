@@ -283,7 +283,7 @@ fun airingValueProblems(
 private val statistic =
     Regex(
         """\b(UserStatistics|Counted)\s*(<[^>()]*>)?\s*\(|\bStatusCounts\s*(\.\s*Companion\s*)?(\.|::)\s*of\b|""" +
-            """\.copy\s*\(\s*(statuses|daysWatched|meanScore|scores|genres|mediaTypes|years|watching|completed|onHold|dropped|planned)\s*=""",
+            """\.copy\s*\(\s*(titleCount|statuses|daysWatched|meanScore|scores|genres|mediaTypes|years|watching|completed|onHold|dropped|planned)\s*=""",
     )
 private val statusCounts = Regex("""\bStatusCounts\s*\(""")
 private val titleStatistics = Regex("""\bTitleStatistics\s*$""")

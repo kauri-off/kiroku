@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureGenres as G
 object FixtureUser {
     val statistics: UserStatistics =
         UserStatistics(
+            titleCount = 31,
             statuses = StatusCounts(watching = 11, completed = 6, onHold = 3, dropped = 3, planned = 8),
             // 35 152 minutes of episodes, a day being 1440
             daysWatched = 35_152.0 / 1440,
@@ -81,6 +82,7 @@ object FixtureUser {
 
     val largeStatistics: UserStatistics =
         UserStatistics(
+            titleCount = 12_412,
             statuses = StatusCounts(watching = 17, completed = 2_384, onHold = 41, dropped = 163, planned = 9_807),
             daysWatched = 638.7,
             meanScore = 7.32,
