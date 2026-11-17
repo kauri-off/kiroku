@@ -279,6 +279,33 @@ fun airingValueProblems(
         .map { "$name:${it + 1}: an airing value made outside :core: ${lines[it].trim()}" }
 }
 
+// A list's statistics are :core's: no constructor or copy of one, and no status counts but a title's from a source.
+private val statistic =
+    Regex(
+        """\b(UserStatistics|Counted)\s*(<[^>()]*>)?\s*\(|\bStatusCounts\s*(\.|::)\s*of\b|""" +
+            """\.copy\s*\(\s*(statuses|daysWatched|meanScore|scores|genres|mediaTypes|years|watching|completed|onHold|dropped|planned)\s*=""",
+    )
+private val statusCounts = Regex("""\bStatusCounts\s*\(""")
+private val titleStatistics = Regex("""\bTitleStatistics\s*$""")
+
+fun statisticsValueProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val code = KotlinSource(source).code
+    val lines = code.lines()
+    val counts =
+        statusCounts.findAll(code).filterNot { call ->
+            val open = openParenthesis(code, call.range.first)
+            open != null && titleStatistics.containsMatchIn(code.substring(0, open))
+        }
+    return (statistic.findAll(code) + counts)
+        .map { code.substring(0, it.range.first).count { c -> c == '\n' } }
+        .sorted()
+        .map { "$name:${it + 1}: a statistics value made outside :core: ${lines[it].trim()}" }
+        .toList()
+}
+
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =
     projectDir

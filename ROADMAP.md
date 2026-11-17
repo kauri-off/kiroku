@@ -468,22 +468,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-01 Profile screen.**
 
-- [ ] **M6-02 Statistics calculator.** In `:core` only: one function from the entries of a list to its statistics,
-  the same for the signed-in user and for anyone else. It reads the app's own list model and nothing of where the
-  list came from, whose it is or how it was read. It gives every value `UserStatistics` holds; a value a screen
-  later needs is added here, and no code outside `:core` and its fixtures makes a statistic. Each of these has a
-  stated result: an empty list, an entry without a score, a title without an episode length, a start date, a media
-  type or genres, a status the app does not know, a count above the total. The fixtures' hand-written statistics
-  stay, as what a test expects of the calculator. The hand-off states, for the owner's approval, how each value is
-  counted where it could be counted in more than one way.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`: a test over a small list whose every value is worked out in the test's own
-  text; a test for each case named above; the fixtures' statistics equal the calculator's over the fixtures' list.
-  `./gradlew :app:testDebugUnitTest --tests '*SourceRulesTest'`: a rule test fails when code that ships outside
-  `:core` builds a statistics value. `./gradlew :data:testDebugUnitTest`, where the owner's recordings are (section
-  11.1): the calculator over his recorded list gives the completed count and, to two decimals, the mean score of
-  his recorded profile; a failure names the value that differs and not what it is; the test is skipped where the
-  recordings are absent or do not hold the whole list.
+- [x] **M6-02 Statistics calculator.**
 
 - [ ] **M6-03 Recorded answers of another user's list.** The recorder that needs the client id alone (section 11.1)
   also asks for the public user's list under their name in another letter case, and for the list of a name no
