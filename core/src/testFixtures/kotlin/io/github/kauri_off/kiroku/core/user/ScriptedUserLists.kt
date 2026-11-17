@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import kotlinx.coroutines.delay
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -31,7 +32,12 @@ class ScriptedUserLists(
 
     // Thrown by every request, as a client that fails to keep the port's word would.
     @Volatile
-    var throwing: Exception? = null
+    var throwing: Throwable? = null
+
+    private val running = AtomicInteger()
+
+    // The reads under way.
+    val reading: Int get() = running.get()
 
     // What the source has of [name] from the next read on; a name with no script is nobody's.
     fun has(
@@ -45,6 +51,18 @@ class ScriptedUserLists(
     fun private(name: String) = has(name, emptyList(), DataError.PrivateList)
 
     override suspend fun read(
+        name: String,
+        part: suspend (UserListPart) -> Unit,
+    ): Outcome<Unit> {
+        running.incrementAndGet()
+        try {
+            return answered(name, part)
+        } finally {
+            running.decrementAndGet()
+        }
+    }
+
+    private suspend fun answered(
         name: String,
         part: suspend (UserListPart) -> Unit,
     ): Outcome<Unit> {

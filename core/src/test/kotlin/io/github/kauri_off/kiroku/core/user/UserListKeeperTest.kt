@@ -12,12 +12,17 @@ import io.github.kauri_off.kiroku.core.repository.UserLists
 import io.github.kauri_off.kiroku.core.user.UserListState.None
 import io.github.kauri_off.kiroku.core.user.UserListState.Reading
 import io.github.kauri_off.kiroku.core.user.UserListState.Whole
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -51,10 +56,20 @@ class UserListKeeperTest {
         val last: UserListState get() = seen.last()
     }
 
+    // The keeper's own scope, a child of the test's, so that a test can see what still runs in it.
+    private lateinit var keeping: CoroutineScope
+
+    private val running: Int get() =
+        keeping.coroutineContext.job.children
+            .count { it.isActive }
+
     private fun TestScope.keeper(
         source: RemoteUserLists,
         held: Int = UserListKeeper.USERS_HELD,
-    ) = UserListKeeper(source, backgroundScope, { reported += it }, held)
+    ): UserListKeeper {
+        keeping = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext.job))
+        return UserListKeeper(source, keeping, { reported += it }, held)
+    }
 
     private fun TestScope.screen(
         lists: UserLists,
@@ -280,8 +295,9 @@ class UserListKeeperTest {
             assertEquals(4, a.seen.size)
             a.job.cancel()
             runCurrent()
-            assertEquals(listOf<UserListState>(Whole(entries(0..7), null)), screen(keeper, "b").seen)
+            assertEquals(1, keeper.holding)
             assertEquals(Reading(emptyList(), null, null), screen(keeper, "a").seen.first())
+            assertEquals(listOf<UserListState>(Whole(entries(0..7), null)), screen(keeper, "b").seen)
         }
 
     @Test
@@ -331,23 +347,146 @@ class UserListKeeperTest {
         }
 
     @Test
-    fun `with no screen waiting no further part is asked, and the read goes on when one waits again`() =
+    fun `with no screen waiting no further part is asked, and the list is read from its start when one waits again`() =
         runTest {
             val source = ScriptedUserLists().apply { has("viewer", parts(0..2, 3..5, 6..7, 8..9)) }
             val keeper = keeper(source)
             val screen = screen(keeper, "viewer")
             step()
             assertEquals(2, source.asked.size)
+            assertEquals(1, source.reading)
             screen.job.cancel()
+            runCurrent()
+            assertEquals(0, source.reading)
+            assertEquals(0, running)
             settle()
             assertEquals(2, source.asked.size)
 
             val back = screen(keeper, "viewer")
-            assertEquals(listOf<UserListState>(Reading(entries(0..5), null, null)), back.seen)
-            assertEquals(3, source.asked.size)
+            assertEquals(listOf<UserListState>(Reading(emptyList(), null, null)), back.seen)
+            step()
+            assertEquals(Reading(entries(0..2), null, null), back.last)
             settle()
             assertEquals(Whole(entries(0..9), null), back.last)
+            assertEquals(2 + 4, source.asked.size)
+        }
+
+    @Test
+    fun `a call never joins a read that its last screen left, however short the time between`() =
+        runTest {
+            val source = ScriptedUserLists().apply { has("viewer", parts(0..2, 3..5, 6..7, 8..9)) }
+            val keeper = keeper(source)
+            val screen = screen(keeper, "viewer")
+            step(2)
+            screen.job.cancel()
+            runCurrent()
+            val asked = refresh(keeper, "viewer")
+            assertEquals(listOf<UserListState>(Reading(emptyList(), null, null)), screen(keeper, "viewer").seen)
+            settle()
+            assertEquals(Outcome.Success(Unit), asked.await())
+            assertEquals(3 + 4, source.asked.size)
+        }
+
+    @Test
+    fun `a list held stays as it was when the read of it again is left`() =
+        runTest {
+            val source = ScriptedUserLists().apply { has("viewer", first) }
+            val keeper = keeper(source)
+            shown(keeper, "viewer")
+            source.has("viewer", second)
+            val asked = refresh(keeper, "viewer")
+            step()
+            asked.cancel()
+            settle()
+            assertEquals(3 + 2, source.asked.size)
+            assertEquals(0, source.reading)
+            assertEquals(listOf<UserListState>(Whole(entries(0..7), null)), screen(keeper, "viewer").seen)
+            settle()
+            assertEquals(3 + 2, source.asked.size)
+        }
+
+    @Test
+    fun `nothing is asked for a call that left before its read began`() =
+        runTest {
+            val source = ScriptedUserLists().apply { has("viewer", first) }
+            val keeper = keeper(source)
+            val asked = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { keeper.refreshList("viewer") }
+            assertEquals(1, running)
+            asked.cancel()
+            settle()
+            assertEquals(emptyList<String>(), source.asked)
+            assertEquals(0, running)
+            assertEquals(Whole(entries(0..7), null), shown(keeper, "viewer"))
+        }
+
+    @Test
+    fun `a sign-out stops the reads under way`() =
+        runTest {
+            val source = ScriptedUserLists()
+            listOf("a", "b").forEach { source.has(it, first) }
+            val keeper = keeper(source)
+            val a = screen(keeper, "a")
+            val b = refresh(keeper, "b")
+            step()
+            assertEquals(2, source.reading)
+            a.job.cancel()
+            b.cancel()
+            keeper.forget()
+            runCurrent()
+            assertEquals(0, source.reading)
+            assertEquals(0, running)
+            assertEquals(0, keeper.holding)
+            settle()
             assertEquals(4, source.asked.size)
+
+            val waiting = screen(keeper, "a")
+            step()
+            keeper.forget()
+            runCurrent()
+            assertEquals(1, source.reading)
+            assertEquals(1, running)
+            settle()
+            assertEquals(Whole(entries(0..7), null), waiting.last)
+            assertEquals(4 + 2 + 3, source.asked.size)
+        }
+
+    @Test
+    fun `the user whose last screen left longest ago is the one forgotten, whenever its first came`() =
+        runTest {
+            val source = ScriptedUserLists()
+            listOf("a", "b", "c", "d").forEach { source.has(it, first) }
+            val keeper = keeper(source)
+            val a = screen(keeper, "a")
+            shown(keeper, "b")
+            shown(keeper, "c")
+            a.job.cancel()
+            runCurrent()
+            shown(keeper, "d")
+            assertEquals(12, source.asked.size)
+            assertEquals(listOf<UserListState>(Whole(entries(0..7), null)), screen(keeper, "a").also { it.job.cancel() }.seen)
+            assertEquals(listOf<UserListState>(Reading(emptyList(), null, null)), screen(keeper, "b").seen)
+        }
+
+    @Test
+    fun `a part given after its read has ended changes nothing`() =
+        runTest {
+            var kept: (suspend (UserListPart) -> Unit)? = null
+            val late =
+                object : RemoteUserLists by ScriptedUserLists() {
+                    override suspend fun read(
+                        name: String,
+                        part: suspend (UserListPart) -> Unit,
+                    ): Outcome<Unit> {
+                        first.forEach { part(it) }
+                        kept = part
+                        return Outcome.Success(Unit)
+                    }
+                }
+            val keeper = keeper(late)
+            val screen = screen(keeper, "viewer")
+            backgroundScope.launch { checkNotNull(kept)(second[0]) }
+            runCurrent()
+            assertEquals(listOf(Reading(emptyList(), null, null), Whole(entries(0..7), null)), screen.seen)
         }
 
     @Test
@@ -425,6 +564,55 @@ class UserListKeeperTest {
             assertEquals(None(DataError.UnknownUser), shown(keeper, "Viewer"))
             assertEquals(listOf("viewer", "viewer", "viewer", "Viewer"), source.asked)
             assertTrue(keeper(ScriptedUserLists()).sameUser("viewer", "Viewer"))
+        }
+
+    @Test
+    fun `a source that throws an error fails the read alone, is reported, and the next read gives the list`() =
+        runTest {
+            val source = ScriptedUserLists().apply { has("viewer", first) }
+            val keeper = keeper(source)
+            val broken = NotImplementedError()
+            source.throwing = broken
+            val screen = screen(keeper, "viewer")
+            settle()
+            assertEquals(None(DataError.ServerError), screen.last)
+            val failed = refresh(keeper, "viewer")
+            settle()
+            assertEquals(Outcome.Failure(DataError.ServerError), failed.await())
+            assertEquals(listOf<Throwable>(broken, broken), reported)
+            assertTrue(keeping.isActive)
+
+            source.throwing = null
+            val read = refresh(keeper, "viewer")
+            settle()
+            assertEquals(Outcome.Success(Unit), read.await())
+            source.throwing = broken
+            val again = refresh(keeper, "viewer")
+            settle()
+            assertEquals(Outcome.Failure(DataError.ServerError), again.await())
+            assertEquals(Whole(entries(0..7), null), screen.last)
+            assertEquals(0, running)
+        }
+
+    @Test
+    fun `a read whose job ends with no outcome has failed, and its user is read again when asked`() =
+        runTest {
+            val source = ScriptedUserLists().apply { has("viewer", first) }
+            val keeper = keeper(source)
+            val screen = screen(keeper, "viewer")
+            val asked = refresh(keeper, "viewer")
+            step()
+            keeping.coroutineContext.cancelChildren()
+            runCurrent()
+            assertEquals(None(DataError.ServerError), screen.last)
+            assertEquals(Outcome.Failure(DataError.ServerError), asked.await())
+            assertEquals(2, source.asked.size)
+
+            val again = refresh(keeper, "viewer")
+            settle()
+            assertEquals(Outcome.Success(Unit), again.await())
+            assertEquals(Whole(entries(0..7), null), screen.last)
+            assertEquals(2 + 3, source.asked.size)
         }
 
     @Test

@@ -18,7 +18,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
@@ -30,12 +29,12 @@ import java.io.IOException
 class UserListKeeper(
     private val source: RemoteUserLists,
     private val scope: CoroutineScope,
-    // Hears of what nobody expected, the source's exceptions, once the read that met one has ended.
+    // Hears of what nobody expected, anything the source throws, once the read that met it has ended.
     private val unexpected: (Throwable) -> Unit,
     // How many users' lists are held at most, beyond those a screen waits for.
     private val held: Int = USERS_HELD,
 ) : UserLists {
-    // A read under way; it ends with no outcome when its user was forgotten.
+    // A read under way; it ends with no outcome when it was stopped or its user forgotten.
     private class Read(
         val end: CompletableDeferred<Outcome<Unit>?> = CompletableDeferred(),
     ) {
@@ -48,8 +47,8 @@ class UserListKeeper(
         // None once the user was forgotten.
         val state = MutableStateFlow<UserListState?>(UserListState.Reading(emptyList(), null, null))
 
-        // The screens that observe it and the calls that wait for its read.
-        val waiting = MutableStateFlow(0)
+        // The screens that observe it and the calls that wait for its read; a read is under way only while there is one.
+        var waiting = 0
         var read: Read? = null
         var shown = 0L
     }
@@ -63,6 +62,9 @@ class UserListKeeper(
         require(held > 0)
         check(scope.isActive) { STOPPED }
     }
+
+    // How many users are held now.
+    internal val holding: Int get() = synchronized(lock) { users.size }
 
     override fun observeList(name: String): Flow<UserListState> =
         flow {
@@ -80,7 +82,8 @@ class UserListKeeper(
 
     override suspend fun refreshList(name: String): Outcome<Unit> {
         while (true) {
-            val (user, read) = synchronized(lock) { waitFor(name).let { it to (it.read ?: read(it)) } }
+            val (user, read) =
+                synchronized(lock) { waitFor(name).let { it to (it.read?.takeUnless { read -> read.end.isCompleted } ?: read(it)) } }
             read.job.start()
             try {
                 read.end.await()?.let { return it }
@@ -107,31 +110,37 @@ class UserListKeeper(
         check(scope.isActive) { STOPPED }
         val user = users.firstOrNull { source.sameUser(it.name, name) } ?: User(name).also { users += it }
         user.shown = ++shows
-        user.waiting.update { it + 1 }
+        user.waiting++
         trim()
         return user
     }
 
+    // A read nobody waits for stops there, so no list is ever put together from parts read at two times.
     private fun leave(user: User) {
         synchronized(lock) {
-            user.waiting.update { it - 1 }
+            user.waiting--
             user.shown = ++shows
+            val read = user.read
+            if (user.waiting == 0 && read != null) {
+                release(user, read, failed = false)
+                read.job.cancel()
+            }
             trim()
         }
     }
 
     // Past the bound the user shown longest ago is forgotten, never one a screen waits for.
     private fun trim() {
-        while (users.size > held) drop(users.filter { it.waiting.value == 0 }.minByOrNull { it.shown } ?: return)
+        while (users.size > held) drop(users.filter { it.waiting == 0 }.minByOrNull { it.shown } ?: return)
     }
 
     private fun drop(user: User) {
         users -= user
         user.read?.let {
+            user.read = null
             it.job.cancel()
             it.end.complete(null)
         }
-        user.read = null
         user.state.value = null
     }
 
@@ -146,11 +155,31 @@ class UserListKeeper(
             }
         }
         read.job = scope.launch(start = CoroutineStart.LAZY) { run(user, read) }
-        read.job.invokeOnCompletion { read.end.complete(null) }
+        // A job that ended while the read was still its user's own ended by no doing of the keeper: the read failed.
+        read.job.invokeOnCompletion {
+            val lost = synchronized(lock) { (user.read === read).also { if (it) release(user, read, failed = true) } }
+            read.end.complete(if (lost && scope.isActive) Outcome.Failure(DataError.ServerError) else null)
+        }
         return read
     }
 
-    // One part at a time, and none while no screen waits; a title the source gives twice is on the list once.
+    // A read that ends with no outcome leaves the list that was held, else none: owed again, or failed.
+    private fun release(
+        user: User,
+        read: Read,
+        failed: Boolean,
+    ) {
+        user.during(read) { before ->
+            when {
+                before is UserListState.Whole -> before.copy(again = null)
+                failed -> UserListState.None(DataError.ServerError, before.user)
+                else -> UserListState.Reading(emptyList(), null, before.user)
+            }
+        }
+        user.read = null
+    }
+
+    // One part at a time; a title the source gives twice is on the list once.
     private suspend fun run(
         user: User,
         read: Read,
@@ -158,12 +187,12 @@ class UserListKeeper(
         var entries = emptyList<ListEntry>()
         var total: Int? = null
         var described: UserProfile? = null
-        var thrown: Exception? = null
+        var thrown: Throwable? = null
         val titles = HashSet<AnimeId>()
-        user.waiting.first { it > 0 }
         val end =
             try {
                 source.read(user.name) { part ->
+                    currentCoroutineContext().ensureActive()
                     val new = part.entries.filter { titles.add(it.anime.id) }
                     if (new.isNotEmpty()) entries = entries + new
                     total = part.total ?: total
@@ -174,9 +203,8 @@ class UserListKeeper(
                             else -> UserListState.Reading(entries, total, described ?: before.user)
                         }
                     }
-                    user.waiting.first { it > 0 }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 if (e is CancellationException) currentCoroutineContext().ensureActive()
                 Outcome.Failure(if (e is IOException) DataError.NoConnection else DataError.ServerError.also { thrown = e })
             }
@@ -197,7 +225,7 @@ class UserListKeeper(
         thrown?.let(unexpected)
     }
 
-    // Changes the state for the read that is the user's own; none for one whose user was forgotten.
+    // Changes the state for the read that is the user's own; none for one that was stopped or whose user was forgotten.
     private fun User.during(
         read: Read,
         change: (UserListState) -> UserListState,
@@ -207,7 +235,7 @@ class UserListKeeper(
             change(before).also { state.value = it }
         }
 
-    // A list that was never read, or whose read failed, is read when a screen comes to wait for it.
+    // A list that was never read whole, or whose read failed, is read when a screen comes to wait for it.
     private val UserListState?.owed: Boolean
         get() = this is UserListState.Reading || (this is UserListState.None && !error.ofUser)
 
