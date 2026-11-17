@@ -272,13 +272,4 @@ object ListFixtureStates {
     val signedOut = state(content = ListContent.SignedOut)
 
     val sessionExpired = watching.copy(sessionExpired = true)
-
-    val readOnly =
-        ListState(
-            owner = ListOwner.Other(set.otherUserName),
-            content = tabs(set.otherUserEntries, readOnly = true),
-            now = set.now,
-        )
-
-    val readOnlyByScore = sorted(ListStatus.Watching, ListSort.Score, readOnly = true)
 }

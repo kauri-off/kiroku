@@ -324,6 +324,25 @@ class DemoTest {
         }
 
     @Test
+    fun `a made-up title of the public user's list opens as that title, with a page`() =
+        runTest {
+            val demo = demo()
+            val madeUp =
+                Fixtures.reference.otherUserList
+                    .last()
+                    .anime
+            assertEquals(madeUp, demo.anime.observeAnime(madeUp.id).first())
+            assertEquals(Outcome.Success(Unit), demo.anime.refresh(madeUp.id))
+            assertEquals(
+                madeUp.id,
+                demo.anime
+                    .observeDetails(madeUp.id)
+                    .first()
+                    ?.id,
+            )
+        }
+
+    @Test
     fun `an expired session is shown, keeps the list and refuses writes`() =
         runTest {
             val demo = demo()

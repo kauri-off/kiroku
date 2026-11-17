@@ -333,6 +333,20 @@ private val writerOrGraph = Regex("""\b\w*(Graph|ListRepository|ListEngine)\w*\b
 
 private val initBlock = Regex("""\binit\s*\{""")
 
+// Another user's list holds nothing that writes the person's list or asks the airing source.
+val USER_LIST_SOURCES = setOf("UserListRoute.kt", "UserListViewModel.kt")
+
+private val writerOrAiring =
+    Regex("""\b\w*(ListRepository|ListEngine|ListWrite|ShellMessages|EditSheet|editSheet|Airing(Repository|Source))\w*\b|\.airing\b""")
+
+fun readOnlyListProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        writerOrAiring.find(line)?.let { "$name:${index + 1}: another user's list names ${it.value}: ${line.trim()}" }
+    }
+
 private val aliasOfWriterOrGraph = Regex("""\btypealias\s+\w+(\s*<[^>]*>)?\s*=\s*[\w.]*(AppGraph|ListRepository|ListEngine)\b""")
 
 fun viewModelProblems(

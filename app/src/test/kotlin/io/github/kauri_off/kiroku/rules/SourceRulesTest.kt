@@ -28,12 +28,34 @@ class SourceRulesTest {
                 "SignInViewModel.kt",
                 "SubScreenViewModels.kt",
                 "TitleViewModel.kt",
+                "UserListViewModel.kt",
             ),
             sources.filter { declaresViewModel(it.readText()) }.map { it.name }.toSet(),
         )
         assertTrue(sources.any { relative(it) == SHELL_VIEW_MODEL_SOURCE })
         assertEquals(emptyList<String>(), sources.flatMap { viewModelProblems(relative(it), it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { collectionProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun anotherUsersListNamesNoWriterAndNoAiring() {
+        val sources = appSources().filter { it.name in USER_LIST_SOURCES }
+        assertEquals(USER_LIST_SOURCES, sources.map { it.name }.toSet())
+        assertEquals(emptyList<String>(), sources.flatMap { readOnlyListProblems(relative(it), it.readText()) })
+        val planted =
+            listOf(
+                "class A(private val messages: ShellMessages) : ViewModel()\n",
+                "val editor = editSheetViewModel(graph, messages)\n",
+                "fun a(list: ListRepository) = Unit\n",
+                "fun a() = write(ListWrite.MarkNextWatched(anime))\n",
+                "val airing = graph.airing\n",
+                "class A(private val airing: AiringRepository) : ViewModel()\n",
+            )
+        for (source in planted) assertEquals(source, 1, readOnlyListProblems("A.kt", source).size)
+        assertEquals(
+            0,
+            readOnlyListProblems("A.kt", "class A(private val own: ListSource, private val post: (ShellMessage) -> Unit)\n").size,
+        )
     }
 
     @Test

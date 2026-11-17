@@ -40,6 +40,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -56,6 +57,8 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -118,8 +121,31 @@ class ListScreenTest {
     fun `no other tab and no other user's list has plus one`() {
         show(ListFixtureStates.planned)
         noneShown(plusOne)
-        show(ListFixtureStates.readOnly)
+        show(UserListFixtureStates.watching)
         compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
+    }
+
+    @Test
+    fun `another user's list read in parts shows how far it is over the rows so far`() {
+        show(UserListFixtureStates.reading)
+        compose.onNodeWithText("40\u00A0titles loaded").assertIsDisplayed()
+        compose.onNodeWithTag(WAVY_INDICATOR).assertIsDisplayed()
+        show(UserListFixtureStates.readingWithTotal)
+        compose.onNodeWithText("Loading 40\u00A0of\u00A0100").assertIsDisplayed()
+        compose.onNodeWithTag(COUNTED_WAVY_INDICATOR).assertIsDisplayed()
+        show(UserListFixtureStates.watching)
+        compose.onNodeWithTag(COUNTED_WAVY_INDICATOR).assertDoesNotExist()
+        compose.onNodeWithTag(WAVY_INDICATOR).assertDoesNotExist()
+    }
+
+    @Test
+    fun `another user's private list and an unknown name each say so, with nothing to retry`() {
+        show(UserListFixtureStates.privateList)
+        compose.onNodeWithText("This list is private").assertIsDisplayed()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        show(UserListFixtureStates.unknownUser)
+        compose.onNodeWithText("MyAnimeList has no user with this name").assertIsDisplayed()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
     }
 
     @Test
@@ -268,7 +294,7 @@ class ListScreenTest {
 
     @Test
     fun `the sort sheet offers the tab's sorts and sends the chosen one`() {
-        show(ListFixtureStates.readOnly.copy(sortSheetOpen = true))
+        show(UserListFixtureStates.watching.copy(sortSheetOpen = true))
         compose.onNodeWithText("Up next").assertDoesNotExist()
         compose.onNodeWithText("Start date").performClick()
         assertEquals(listOf(ListEvent.SelectSort(ListSort.StartDate)), events)
@@ -358,9 +384,9 @@ class ListScreenTest {
 
     @Test
     fun `another user's rows offer no edit`() {
-        show(ListFixtureStates.readOnly)
+        show(UserListFixtureStates.watching)
         val title =
-            ListFixtureStates.readOnly.page!!
+            UserListFixtureStates.watching.page!!
                 .rows
                 .first()
                 .title

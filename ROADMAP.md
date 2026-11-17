@@ -510,17 +510,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   shown are the calculator's over the fixtures' list; opened from another user's profile they are that user's, from
   the read their profile made; M6-02's rule test and `StringRulesTest` pass.
 
-- [ ] **M6-14 Another user's list in the app.** The list of a named user, where the chosen composition has it,
-  from the read their profile made and no second one. It cannot be written: nothing on it edits, steps or removes,
-  and no code of it holds the list's writer. A row opens the title's page, which shows the person's own entry. Its
-  orders are `:core`'s, and an entry with a status the app does not know is on it (section 7.1). Nothing of another
-  user's list is sent to AniList (section 2.1). Built once, on real state, and shown to the owner (section 9).
-  **Needs:** M6-09, M6-11.
-  **Check:** tests: opened after the profile, the list causes no request; no event of the screen reaches a write;
-  a row opens its title with the person's own status; with a list of several thousand entries held, the work of
-  the frames of a fling is counted in the style of `ListFrameWorkTest`; opening the list asks AniList for nothing;
-  an entry of an unknown status is shown. The screenshots are rendered with a case for the longest tab and for an
-  empty one, and the render's accessibility check passes.
+- [x] **M6-14 Another user's list in the app.**
 
 - [ ] **M6-15 [O] Emulator run.** The orchestrator runs the preview build once on the emulator against the
   sandbox, signed in: the own profile shows the counts of the sandbox's list; the user with several thousand

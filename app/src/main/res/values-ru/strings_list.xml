@@ -31,6 +31,15 @@
     <string name="list_signed_out">Войдите через MyAnimeList, чтобы видеть здесь свой список</string>
     <string name="list_sign_in">Войти</string>
     <string name="list_failed">Не удалось загрузить список</string>
+    <string name="list_private">Этот список скрыт</string>
+    <string name="list_unknown_user">На MyAnimeList нет пользователя с таким именем</string>
+    <string name="list_reading">Загружено %1$s\u00A0из\u00A0%2$s</string>
+    <plurals name="list_reading_unknown_total">
+        <item quantity="one">Загружен\u00A0%1$s\u00A0тайтл</item>
+        <item quantity="few">Загружено\u00A0%1$s\u00A0тайтла</item>
+        <item quantity="many">Загружено\u00A0%1$s\u00A0тайтлов</item>
+        <item quantity="other">Загружено\u00A0%1$s\u00A0тайтла</item>
+    </plurals>
     <string name="list_episode_watched">Серия\u00A0%1$d просмотрена</string>
     <string name="list_edit">Изменить</string>
 </resources>

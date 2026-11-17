@@ -15,8 +15,10 @@ import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.list.UserListRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
+import io.github.kauri_off.kiroku.profile.ProfileNotBuilt
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
 import io.github.kauri_off.kiroku.profile.ProfileRoute
@@ -156,7 +158,14 @@ fun appEntries(
                 NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             }
         }
-        entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
+        entry<ProfileNotBuiltKey> { key ->
+            val name = key.name
+            if (key.screen == ProfileNotBuilt.UserList && name != null) {
+                UserListRoute(name, graph, messages::post, snackbars, openTitle, onBack = { back() }, onSignIn = signIn)
+            } else {
+                ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
+            }
+        }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,
