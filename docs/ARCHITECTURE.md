@@ -629,7 +629,8 @@ only when rendered on the same machine.
 ## 12. Build, platform and distribution
 
 - **`minSdk` 26** (Android 8.0): `java.time` without desugaring, notification channels and adaptive icons
-  everywhere. The compile SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
+  everywhere. Shipped code calls only what Android 8.0 has, and the build fails for a call it lacks. The compile
+  SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
 - **Checks.** ktlint with its default rules and two exceptions: the package-name rule is off, because it rejects
   the underscore in the base package, and composable functions are exempt from the function-naming rule. Android
   Lint with the translation checks as errors; other warnings are not errors, because checks such as "newer version
