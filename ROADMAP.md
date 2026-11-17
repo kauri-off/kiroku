@@ -465,26 +465,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   Latin or MAL's word for the signed-in user reaches MAL as one segment and without a token, signed in too; a
   refusal half-way is a refusal after which background work backs off; `SendRulesTest` passes.
 
-- [ ] **M6-09 The Profile on real state.** The view models and the route of the Profile as `main` has it, in place
-  of its stand-in, changing nothing of what it shows. The signed-in user's profile: what M6-05 keeps of them, and
-  the statistics M6-02's calculator gives over the stored list, so that they follow an edit at once and work
-  offline (section 7.2). Another user's: M6-04's keeper, with its progress, a private list and an unknown name
-  each as what it is, and the failures of sections 2.3 and 6.2; a pull reads the list again. It opens by a name
-  the person gives and by M6-06's link, signed out too. The signed-in user's own name, opened as another's, is
-  their own profile; which names are one user is the port's answer, here and among the names opened earlier, which
-  hold only names that turned out to be users. No state assumes which users a source describes beyond their list.
-  Nothing is read before a screen is shown, and a rotation or a new process shows the same profile and typed text
-  (section 6.2). The account keeps its placeholder until M6-10.
-  **Needs:** M6-02, M6-04.
-  **Check:** `./gradlew :app:testDebugUnitTest`, on the demo: the own profile shows the calculator's values over
-  the demo's list, and a "+1" that completes a title changes them with no refresh; offline they show from the
-  stored list, and the refresh that failed is a message; another user's profile shows the progress and then the
-  statistics of the list of several thousand; the private user and an unknown name each show their own state, and
-  neither is asked again by itself; a read that fails with nothing held is the error state with Retry, and with a
-  list held the list stays; the Profile and a second screen of one user cause one read; nothing is read before the
-  screen counts as shown; after a new process the same profile and the typed name are there; signed out, another
-  user's profile opens; opening the own name shows the own profile. The Profile's screenshots are rendered and
-  differ from `main`'s in nothing.
+- [x] **M6-09 The Profile on real state.**
 
 - [ ] **M6-10 Live profiles.** The live graph's profiles are M6-04's keeper over M6-08's port, with M6-05's store,
   built at their first use and off the main thread; the sandbox runs on them, and the Profile is M6-09's route in

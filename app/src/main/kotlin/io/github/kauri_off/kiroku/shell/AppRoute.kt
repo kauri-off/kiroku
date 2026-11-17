@@ -15,12 +15,11 @@ import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.profile.OpenedProfiles
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
-import io.github.kauri_off.kiroku.profile.ProfileOwner
-import io.github.kauri_off.kiroku.profile.ProfileStandInRoute
-import io.github.kauri_off.kiroku.profile.profileStandIn
+import io.github.kauri_off.kiroku.profile.ProfileRoute
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
@@ -51,6 +50,10 @@ fun AppRoute(
     links: AppLinks? = null,
 ) {
     val messages = viewModel { ShellViewModel(graph.list) }.messages
+    val profiles = viewModel { OpenedProfiles() }
+    // Which profiles were opened is the signed-in user's, so a sign-out forgets it (S9).
+    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
+    LaunchedEffect(session) { if (session == Session.SignedOut) profiles.forget() }
     val covers = remember { MessageCovers() }
     ShownMessages(messages, snackbars, covers)
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
@@ -61,7 +64,7 @@ fun AppRoute(
     SignInTurns(graph, navigator)
     if (links != null) LinkTurns(links, navigator)
     CompositionLocalProvider(LocalMessageCovers provides covers) {
-        ShellRoute(navigator, snackbars, remember(graph, messages) { appEntries(graph, messages) })
+        ShellRoute(navigator, snackbars, remember(graph, messages, profiles) { appEntries(graph, messages, profiles) })
     }
 }
 
@@ -109,9 +112,9 @@ fun linkedPage(link: Link): OpenedPage =
 fun appEntries(
     graph: AppGraph,
     messages: ShellMessages,
+    profiles: OpenedProfiles,
 ): ShellEntries {
     val standIn = searchStandIn(graph)
-    val profile = profileStandIn(graph)
     return { navigator, snackbars ->
         val signIn = { navigator.open(SignInKey) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
@@ -138,18 +141,19 @@ fun appEntries(
                 BrowseRoute(it, key, graph, messages, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn)
             }
         }
+        // The real account keeps the placeholder until its profiles are wired.
         entry<ProfileRoot> {
-            if (profile == null) {
-                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
+            if (graph.madeUp) {
+                ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars)
             } else {
-                ProfileStandInRoute(profile, ProfileOwner.Me, graph, navigator, signIn, snackbars)
+                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             }
         }
         entry<OtherProfileKey> { key ->
-            if (profile == null) {
-                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
+            if (graph.madeUp) {
+                ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars)
             } else {
-                ProfileStandInRoute(profile, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars)
+                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             }
         }
         entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
@@ -180,7 +184,7 @@ fun appEntries(
     }
 }
 
-// Search in a release and Profile until their milestones: the placeholder, with the session banner of S6.
+// Search in a release and Profile on the real account until their milestones: the placeholder, with the banner of S6.
 @Composable
 private fun NotBuiltDestination(
     graph: AppGraph,

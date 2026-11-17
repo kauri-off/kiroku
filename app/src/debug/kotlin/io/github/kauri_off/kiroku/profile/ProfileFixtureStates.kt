@@ -3,8 +3,9 @@ package io.github.kauri_off.kiroku.profile
 import io.github.kauri_off.kiroku.core.fixtures.FixtureUser
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 
-// The Profile's states over the fixture set, for previews, screenshots and the stand-in of debug builds.
+// The Profile's states over the fixture set, for previews, screenshots and tests.
 object ProfileFixtureStates {
     val set = Fixtures.reference
 
@@ -21,9 +22,6 @@ object ProfileFixtureStates {
 
     val unknownName: String get() = FixtureUser.unknownName
 
-    // The users whose list is public: the large one under every name but the private one.
-    val publicNames: List<String> get() = listOf(otherName) + FixtureUser.guestNames
-
     // Five names opened earlier, newest first.
     val recent: List<String> get() = FixtureUser.openedNames
 
@@ -33,4 +31,11 @@ object ProfileFixtureStates {
         name: String,
         content: ProfileContent,
     ) = ProfileState(ProfileOwner.Other(name), content)
+
+    // Another user's list read so far, before it is whole.
+    fun reading(
+        name: String,
+        loaded: Int,
+        total: Int?,
+    ) = ProfileState(ProfileOwner.Other(name), ProfileContent.ListLoading, reading = UserListProgress(loaded, total))
 }
