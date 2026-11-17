@@ -33,7 +33,7 @@ class SandboxUsersTest {
     @get:Rule
     internal val sandbox = SandboxFixture(titles, public = { public })
 
-    private val lists by lazy { MalLists(sandbox.client.http, sandbox.session) }
+    private val lists by lazy { MalLists(sandbox.client.http) }
 
     private fun parse(text: String) = Json.parseToJsonElement(text)
 

@@ -246,5 +246,7 @@ class AiringCountsTest {
         override suspend fun refreshStale(page: Anime): Outcome<Unit> = throw UnsupportedOperationException()
 
         override suspend fun refresh(page: Anime): Outcome<Unit> = throw UnsupportedOperationException()
+
+        override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = throw UnsupportedOperationException()
     }
 }

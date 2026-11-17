@@ -1149,6 +1149,7 @@ val releaseComponents =
         DeclarationRule.STARTUP,
         profileInstaller,
         "androidx.room.MultiInstanceInvalidationService",
+        "io.github.kauri_off.kiroku.notify.MarkWatchedReceiver",
     )
 val debugMenu =
     setOf(
@@ -1168,11 +1169,12 @@ val startUpInitializers =
         "androidx.profileinstaller.ProfileInstallerInitializer",
     )
 
-// The network, whether the device is offline (section 2.3), and androidx.core's guard of receivers registered unexported.
+// The network, whether the device is offline (section 2.3), notifications and androidx.core's guard of receivers registered unexported.
 val releasePermissions =
     setOf(
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.POST_NOTIFICATIONS",
         ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
     )
 val declaredPermissions =

@@ -9,7 +9,16 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.notify.Announcement
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.InMemoryShownNotifications
+import io.github.kauri_off.kiroku.core.notify.Recheck
+import io.github.kauri_off.kiroku.core.notify.RunEnd
+import io.github.kauri_off.kiroku.core.notify.RunReport
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
@@ -569,6 +578,44 @@ class DemoTest {
             assertEquals(emptyList<Set<AnimeId>>(), demo.airingSource.requests)
             assertEquals(0, demo.server.listDownloads)
             assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `the demo's notifications run on the real rules, from their first use, over the alarm and the notifications it is given`() =
+        runTest {
+            val clock = DeviceClock(FixtureTime.reference, FixtureTime.zone)
+            val alarm = InMemoryNotificationAlarm()
+            val shown = InMemoryShownNotifications()
+            val runs = mutableListOf<RunReport>()
+            val demo = Demo(Fixtures.reference, backgroundScope, clock = clock, alarm = alarm, shown = shown, runs = { runs += it })
+            demo.list.observeEntries().first()
+            runCurrent()
+            assertEquals("nothing runs before its first use", emptyList<RunReport>(), runs)
+
+            assertEquals(RunEnd.Done, demo.notifications.run(RunTrigger.AppOpened).end)
+            assertEquals("nothing from before", emptyMap<AnimeId, Announcement>(), shown.notifications.value)
+            val next = checkNotNull(demo.notifications.observeComing().first()).first()
+            assertEquals(next.notifyAt, alarm.at.value)
+            assertEquals(ListStatus.Watching, demo.fixtures.entryFor(next.anime.id)?.status)
+
+            clock.instant = next.notifyAt
+            alarm.gone()
+            val report = demo.notifications.run(RunTrigger.Alarm)
+            assertEquals(listOf(next.anime.id to next.episode), report.posted.map { it.anime.id to it.episode })
+            assertEquals(Recheck.Answered, report.recheck)
+            assertEquals(listOf(setOf(next.anime.id)), demo.airingSource.requests)
+            assertEquals(setOf(next.anime.id), shown.notifications.value.keys)
+            assertEquals(report.posted, demo.notifications.observeSent().first())
+
+            // A change of the list is followed by a run, and so is a sign-out.
+            demo.list.write(ListWrite.SetWatched(next.anime, next.episode))
+            settle()
+            assertEquals(emptyMap<AnimeId, Announcement>(), shown.notifications.value)
+            demo.session.signOut()
+            settle()
+            assertNull(alarm.at.value)
+            assertEquals(emptyList<SentNotification>(), demo.notifications.observeSent().first())
+            assertEquals(RunEnd.SignedOut, runs.last().end)
         }
 
     @Test
