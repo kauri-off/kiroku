@@ -245,7 +245,7 @@ class NotificationEngine(
         } catch (e: CancellationException) {
             throw e
         } catch (_: DataException) {
-            // The list cannot be read: nothing is known to be removed from it, so nothing is touched.
+            // The list or the airing data cannot be read: nothing is known to be removed, so nothing is touched.
         } catch (e: Exception) {
             unexpected(e)
         }

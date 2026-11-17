@@ -627,6 +627,7 @@ abstract class NotificationEngineContract {
             assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(emptyList<SentNotification>(), w.sent())
+            assertEquals("the alarm is at what comes next before anything is posted", week(1), w.alarm.at.value)
 
             w.shown.dismiss(title.id)
             w.start()
@@ -635,6 +636,28 @@ abstract class NotificationEngineContract {
 
             assertEquals(listOf(title.id to 1, title.id to 1), w.alerts)
             assertEquals(listOf(1), w.sent().map { it.episode })
+        }
+
+    @Test
+    fun `N1 a notification of a cut-off run that reads otherwise by the next run is replaced without a second alert`() =
+        runTest {
+            val w = world()
+            w.pass(week(0))
+            w.clock.now = week(1)
+            w.alarm.gone()
+            w.process.steps = 0
+            w.process.diesAfter = 2
+            assertTrue(runCatching { w.engine.run(RunTrigger.AppOpened) }.isFailure)
+            assertEquals(mapOf(title.id to Shown(2, toWatch = 2, marks = 1)), w.showing)
+
+            w.write(ListWrite.MarkNextWatched(title))
+            w.start()
+            w.engine.run(RunTrigger.AppOpened)
+            runCurrent()
+
+            assertEquals(listOf(title.id to 1, title.id to 2), w.alerts)
+            assertEquals(mapOf(title.id to Shown(2, toWatch = 1, marks = 2)), w.showing)
+            assertEquals(listOf(1, 2), w.sent().map { it.episode })
         }
 
     @Test
@@ -1246,9 +1269,11 @@ abstract class NotificationEngineContract {
             w.clock.now = week(0)
             w.store.writesToFail = 1
 
-            val report = w.engine.run(RunTrigger.AppOpened)
+            val report = w.engine.run(RunTrigger.Alarm)
 
             assertEquals(RunEnd.Done, report.end)
+            assertEquals("the airing source is asked once", listOf(setOf(title.id)), w.source.calls.toList())
+            assertEquals(Recheck.Answered, report.recheck)
             assertEquals(listOf(title.id to 1), w.alerts)
             assertEquals(1, w.shown.posts.size)
             assertEquals(listOf(1), report.posted.map { it.episode })
