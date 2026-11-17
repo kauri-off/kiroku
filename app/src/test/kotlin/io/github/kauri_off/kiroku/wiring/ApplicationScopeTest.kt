@@ -97,6 +97,6 @@ class ApplicationScopeTest {
                 .flatMap { KotlinSource(it.readText()).code.lines() }
                 .filter { making.containsMatchIn(it) && "fun applicationScope" !in it }
                 .map { it.trim() }
-        assertEquals(listOf("createGraph(this, BuildConfig.MAL_CLIENT_ID, DeviceClock, applicationScope(reportUnexpected))"), made)
+        assertEquals(listOf("private val scope = applicationScope(reportUnexpected)"), made)
     }
 }

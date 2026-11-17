@@ -28,6 +28,9 @@ import kotlin.time.Duration.Companion.seconds
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class MainActivityTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     @get:Rule(order = 0)
     val source = StartsOn(DataSource.Demo)
 

@@ -478,7 +478,7 @@ class SourceRulesTest {
         assertTrue(shipped.any { relative(it) == APPLICATION_SCOPE_SOURCE })
         assertTrue(shipped.any { it.path.endsWith("core/src/testFixtures/kotlin/io/github/kauri_off/kiroku/core/demo/Demo.kt") })
         assertTrue(shipped.any { it.path.endsWith("data/session/MalSession.kt") })
-        assertTrue(shipped.none { "/src/test/" in it.path })
+        assertTrue(shipped.none { "/src/test/" in it.path || "/src/contract/" in it.path })
         assertEquals(emptyList<String>(), shipped.flatMap { scopeProblems(relative(it), it.readText()) })
     }
 
@@ -506,6 +506,53 @@ class SourceRulesTest {
             assertEquals(derived, emptyList<String>(), scopeProblems("A.kt", "val a = $derived\n"))
         }
         assertEquals(emptyList<String>(), scopeProblems(APPLICATION_SCOPE_SOURCE, "val a = CoroutineScope(SupervisorJob())\n"))
+    }
+
+    @Test
+    fun everyTestThatStartsTheAppEndsIt() {
+        val sources = appTestSources()
+        val starting = sources.flatMap { classesStartingTheApp(it.readText()) }
+        assertTrue(starting.containsAll(listOf("DebugMenuTest", "SandboxAppTest", "MainActivityTest", "ImageLoaderTest", "DebugGraphTest")))
+        assertTrue("SignInRouteTest" !in starting && "PosterFadeTest" !in starting)
+        assertEquals(emptyList<String>(), sources.flatMap { appEndingProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedTestThatStartsTheAppWithoutEndingItFails() {
+        val ends = "    @get:Rule(order = AppEnds.OUTERMOST)\n    val appEnds = AppEnds()\n"
+
+        fun test(
+            body: String,
+            config: String = "@Config(qualifiers = \"en\")",
+        ) = "@RunWith(RobolectricTestRunner::class)\n$config\nclass ATest {\n$body    @Test\n    fun a() = Unit\n}\n"
+        for (start in listOf(
+            "    val g = context.appGraph\n",
+            "    val s get() = context.scenarios\n",
+            "    val s = context.runningSource\n",
+            "    val l = SingletonImageLoader.get(context)\n",
+            "    @get:Rule\n    val c = createAndroidComposeRule<MainActivity>()\n",
+            "    @get:Rule\n    val c = createAndroidComposeRule<DebugMenuActivity>()\n",
+            "    val a = Robolectric.buildActivity(RedirectActivity::class.java)\n",
+            "    val a = ActivityScenario.launch(MainActivity::class.java)\n",
+            "    val g = createGraph(context, \"\", clock, scope)\n",
+            "    val g = SandboxGraph.create(context, clock) { _, _, _ -> parts }\n",
+        )) {
+            assertEquals(start, 1, appEndingProblems("ATest.kt", test(start)).size)
+            assertEquals(start, emptyList<String>(), appEndingProblems("ATest.kt", test(ends + start)))
+            assertEquals(start, emptyList<String>(), appEndingProblems("ATest.kt", test(start, "@Config(application = A::class)")))
+        }
+        val inner = "    @get:Rule(order = 0)\n    val appEnds = AppEnds()\n    val g = context.appGraph\n"
+        assertEquals(1, appEndingProblems("ATest.kt", test(inner)).size)
+        val named = "    val n = MainActivity::class.java.name\n    // context.appGraph\n"
+        assertEquals(emptyList<String>(), appEndingProblems("ATest.kt", test(named)))
+        assertEquals(emptyList<String>(), appEndingProblems("ATest.kt", "class ATest {\n    val g = context.appGraph\n}\n"))
+        val apostrophe = "    @Test\n    fun `the screen's form`() = Unit\n    val g = context.appGraph\n"
+        assertEquals(1, appEndingProblems("ATest.kt", test(apostrophe)).size)
+        val second = "class Other\n\n" + test("    val g = context.appGraph\n")
+        assertEquals(
+            listOf("ATest.kt:5: ATest starts the app without @get:Rule(order = AppEnds.OUTERMOST) val … = AppEnds()"),
+            appEndingProblems("ATest.kt", second),
+        )
     }
 
     // The screenshot harness renders inside the app's theme and window setup and has none of its own.

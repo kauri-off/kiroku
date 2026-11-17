@@ -12,8 +12,12 @@ import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -21,6 +25,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -34,6 +39,9 @@ import java.util.TimeZone
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class DebugGraphTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val device = Clock.offset(FixtureTime.clock, Duration.ofDays(7 * 30 + 2))
     private val context get() = RuntimeEnvironment.getApplication()
 
@@ -89,11 +97,14 @@ class DebugGraphTest {
         runTest {
             assertTrue(SourceChoice(context).choose(DataSource.Sandbox))
             for (id in listOf("0123abcd", "")) {
-                val graph = createGraph(context, id, device, backgroundScope, live = { error("The sandbox started the real account") })
+                // One process holds one graph: this start's work ends before the next one opens the same files.
+                val process = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext.job))
+                val graph = createGraph(context, id, device, process, live = { error("The sandbox started the real account") })
                 assertTrue(graph is SandboxGraph)
                 assertEquals(emptyList<String>(), (graph as SandboxGraph).sandbox.mal.asked)
                 assertEquals(Session.SignedOut, graph.session.observeSession().first())
                 assertTrue(graph.signIn.canStart)
+                process.coroutineContext.job.cancelAndJoin()
             }
             assertFalse(
                 context.noBackupFilesDir
