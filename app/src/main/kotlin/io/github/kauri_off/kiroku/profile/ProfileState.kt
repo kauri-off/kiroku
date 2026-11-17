@@ -2,10 +2,10 @@ package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.link.isAcceptedUserName
 import io.github.kauri_off.kiroku.core.link.readTypedLink
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
-import io.github.kauri_off.kiroku.notShown
 
 data class ProfileState(
     val owner: ProfileOwner,
@@ -110,8 +110,8 @@ fun List<String>.withOpened(name: String): List<String> =
 // What the dialog opens: the name typed or taken from a pasted profile link; null when there is none.
 fun OpenProfile.nameToOpen(): String? = (profileInput(name) as? ProfileInput.Name)?.name
 
-// The text is a link, but not to a MyAnimeList profile or list, so it is not taken as a name.
-val OpenProfile.notAProfileLink: Boolean get() = profileInput(name) == ProfileInput.OtherLink
+// The text is neither a name the app takes nor a profile link with one, so nothing opens.
+val OpenProfile.refused: Boolean get() = profileInput(name) == ProfileInput.Refused
 
 sealed interface ProfileInput {
     data object Blank : ProfileInput
@@ -120,16 +120,13 @@ sealed interface ProfileInput {
         val name: String,
     ) : ProfileInput
 
-    data object OtherLink : ProfileInput
+    data object Refused : ProfileInput
 }
 
-// The user a pasted profile link names, read as an opened link is; any other text with a scheme, or a host and a
-// path, is another link; the rest is a name.
+// The user a pasted profile link names, read as an opened link is, or the name typed; both by the app's name rule.
 fun profileInput(text: String): ProfileInput {
     val trimmed = text.trim()
     if (trimmed.isEmpty()) return ProfileInput.Blank
     (readTypedLink(trimmed) as? Link.Profile)?.let { return ProfileInput.Name(it.name) }
-    return if (anyLink.containsMatchIn(trimmed)) ProfileInput.OtherLink else ProfileInput.Name(trimmed)
+    return if (isAcceptedUserName(trimmed)) ProfileInput.Name(trimmed) else ProfileInput.Refused
 }
-
-private val anyLink = Regex(notShown("""://|^[^\s/]+\.[^\s/]+/"""))

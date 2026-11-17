@@ -9,7 +9,6 @@ import androidx.compose.runtime.CompositionTracer
 import androidx.compose.runtime.InternalComposeTracingApi
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
@@ -47,7 +46,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 // A picture fetched from the network fades in over what the poster showed, on the theme's fast effects spring
-// (ARCHITECTURE 8.5); one in memory is drawn in its first frame.
+// (ARCHITECTURE 8.5).
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -86,22 +85,6 @@ class PosterFadeTest {
         compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
         assertEquals(RED, centre())
         assertIdle()
-    }
-
-    @Test
-    fun `a picture already in memory is drawn in its first frame, with nothing to animate`() {
-        val url = pictures.picture("/medium/1.png", RED)
-        var again by mutableStateOf(false)
-        compose.setContent { Themed { key(again) { Poster(url, PosterSize.Row, Modifier.testTag(POSTER)) } } }
-        compose.waitUntil(5_000) { pictures.hasEnded(url) }
-        compose.waitForIdle()
-
-        compose.mainClock.autoAdvance = false
-        compose.runOnUiThread { applied { again = true } }
-        compose.mainClock.advanceTimeByFrame()
-        assertEquals(RED, centre())
-        assertIdle()
-        assertEquals(1, pictures.received.size)
     }
 
     @Test

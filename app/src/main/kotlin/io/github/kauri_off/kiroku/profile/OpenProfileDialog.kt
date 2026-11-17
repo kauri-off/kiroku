@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.window.DialogProperties
 import androidx.window.core.layout.WindowSizeClass.Companion.HEIGHT_DP_MEDIUM_LOWER_BOUND
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.link.USER_NAME_MAX_LENGTH
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Spacing
@@ -124,10 +126,10 @@ private fun Fields(
                 onEvent(ProfileEvent.TypeName(it.text))
             },
             label = { Text(stringResource(R.string.profile_user_name)) },
-            isError = dialog.notAProfileLink,
+            isError = dialog.refused,
             supportingText =
-                if (dialog.notAProfileLink) {
-                    { Text(stringResource(R.string.profile_not_a_profile_link)) }
+                if (dialog.refused) {
+                    { Text(pluralStringResource(R.plurals.profile_name_refused, USER_NAME_MAX_LENGTH, USER_NAME_MAX_LENGTH)) }
                 } else {
                     null
                 },

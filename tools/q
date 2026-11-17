@@ -2,7 +2,7 @@
 """usage: tools/q [ps]                  jobs running and queued, and what each queued job waits for
        tools/q top [--once]          the same with output tails and the machine's memory, refreshed
        tools/q stats [--since 24h]   waits, runs and memory peaks per kind, and what jobs waited for
-       tools/q view [--port N]       all of the above as a page for the browser, read-only (tools/qview)
+       tools/q view [--port N] [--host ADDR]  all of the above as a page for the browser, read-only (tools/qview)
        tools/q kill ID               stop a queued or running job and wait until nothing of it is left
        tools/q submit --kind KIND [--label TEXT] [-C DIR] -- CMD...   prints the job's id (tools/gw, tools/emu)
        tools/q wait ID [--max SECONDS] [--tail N]     exit: the job's code, 75 not finished, 76 stalled, 125 stopped

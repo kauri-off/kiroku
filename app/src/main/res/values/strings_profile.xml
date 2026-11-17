@@ -24,7 +24,10 @@
         <item quantity="other">%1$s\u00A0titles loaded</item>
     </plurals>
     <string name="profile_user_name">User name</string>
-    <string name="profile_not_a_profile_link">Not a MyAnimeList profile link</string>
+    <plurals name="profile_name_refused">
+        <item quantity="one">Enter up to\u00A0%1$d\u00A0character (Latin letters, digits, _ and -) or a MyAnimeList profile link</item>
+        <item quantity="other">Enter up to\u00A0%1$d\u00A0characters (Latin letters, digits, _ and -) or a MyAnimeList profile link</item>
+    </plurals>
     <string name="profile_recent">Recent</string>
     <string name="profile_open">Open</string>
     <string name="profile_cancel">Cancel</string>

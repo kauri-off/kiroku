@@ -1,10 +1,14 @@
 package io.github.kauri_off.kiroku.core.fixtures
 
 import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.link.USER_NAME_MAX_LENGTH
 import io.github.kauri_off.kiroku.core.model.AnimeId
 
 // Addresses of MAL's site: the forms of a title's and a profile's link the app opens, with what each opens, and the ones it refuses.
 object Links {
+    // A name of the most characters the app takes.
+    private val longest = "a".repeat(USER_NAME_MAX_LENGTH)
+
     val titles: Map<String, Link.Title> =
         mapOf(
             "https://myanimelist.net/anime/1" to 1L,
@@ -27,10 +31,9 @@ object Links {
             "https://www.myanimelist.net/profile/quiet-viewer/" to "quiet-viewer",
             "https://myanimelist.net/profile/sample_viewer?utm_source=share" to "sample_viewer",
             "https://myanimelist.net/profile/sample_viewer/#about" to "sample_viewer",
-            "https://myanimelist.net/profile/%D0%B8%D0%BC%D1%8F" to "имя",
-            "https://myanimelist.net/profile/a%20b" to "a b",
-            "https://myanimelist.net/profile/a%3Fb" to "a?b",
-            "https://myanimelist.net/profile/@me" to "@me",
+            "https://myanimelist.net/profile/sample%5Fviewer" to "sample_viewer",
+            "https://myanimelist.net/profile/0-9" to "0-9",
+            "https://myanimelist.net/profile/$longest" to longest,
         ).mapValues { Link.Profile(it.value) }
 
     val opened: Map<String, Link> = titles + profiles
@@ -101,6 +104,19 @@ object Links {
             "https://myanimelist.net/profile/%FF",
             "https://myanimelist.net/profile/sample viewer",
             "https://myanimelist.net/profile/{sample_viewer}",
+            "https://myanimelist.net/profile/@me",
+            "https://myanimelist.net/profile/a%20b",
+            "https://myanimelist.net/profile/a%3Fb",
+            "https://myanimelist.net/profile/%D0%B8%D0%BC%D1%8F",
+            "https://myanimelist.net/profile/a.b",
+            "https://myanimelist.net/profile/a%00b",
+            "https://myanimelist.net/profile/a%0Ab",
+            "https://myanimelist.net/profile/%E2%80%AEreganam",
+            "https://myanimelist.net/profile/%E2%80%8B",
+            "https://myanimelist.net/profile/a%5Cb",
+            "https://myanimelist.net/profile/a+b",
+            "https://myanimelist.net/profile/%252F",
+            "https://myanimelist.net/profile/${longest}x",
         )
 
     // Not addresses at all.

@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.Links
+import io.github.kauri_off.kiroku.core.link.USER_NAME_MAX_LENGTH
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -73,13 +74,32 @@ class ProfileStateTest {
     }
 
     @Test
-    fun aPastedNameIsDecodedAndOtherwiseAsSpelled() {
-        val names = mapOf("a%20b" to "a b", "%D0%B8%D0%BC%D1%8F" to "имя", "имя" to "имя", "Xi.nil" to "Xi.nil")
-        for ((segment, name) in names) assertEquals(ProfileInput.Name(name), profileInput("myanimelist.net/profile/$segment"))
+    fun aPastedHttpProfileLinkGivesItsName() {
+        assertEquals(ProfileInput.Name("sample_viewer"), profileInput("http://myanimelist.net/profile/sample_viewer"))
+        assertEquals(ProfileInput.Name("sample_viewer"), profileInput("http://www.myanimelist.net/profile/sample%5Fviewer/"))
     }
 
     @Test
-    fun anyOtherLinkIsNotAName() {
+    fun aNameTypedOrInALinkIsTakenOnlyByTheAppsNameRule() {
+        val refused =
+            listOf(
+                "a b",
+                "some.name",
+                "@me",
+                "имя",
+                "a".repeat(USER_NAME_MAX_LENGTH + 1),
+                "myanimelist.net/profile/a%20b",
+                "myanimelist.net/profile/%D0%B8%D0%BC%D1%8F",
+                "myanimelist.net/profile/@me",
+                "myanimelist.net/profile/%E2%80%8B",
+            )
+        for (text in refused) assertEquals(text, ProfileInput.Refused, profileInput(text))
+        val taken = listOf("sample_viewer", "Quiet-Viewer9", "a".repeat(USER_NAME_MAX_LENGTH))
+        for (name in taken) assertEquals(ProfileInput.Name(name), profileInput(" $name "))
+    }
+
+    @Test
+    fun anyOtherLinkIsRefused() {
         val links =
             listOf(
                 "m.myanimelist.net/profile/sample_viewer",
@@ -91,22 +111,20 @@ class ProfileStateTest {
                 "myanimelist.net/anime/1",
                 "myanimelist.net/profile/",
                 "Check https://myanimelist.net/profile/sample_viewer",
-                "http://myanimelist.net/profile/sample_viewer",
                 "https://myanimelist.net/profile/sample_viewer/reviews",
                 "https://myanimelist.net/animelist/sample_viewer",
                 "myanimelist.net/profile/a%2Fb",
-            ) + Links.refused + Links.handedOn
-        for (link in links) assertEquals(link, ProfileInput.OtherLink, profileInput(link))
+            ) + (Links.refused + Links.handedOn).filterNot { it.startsWith("http://") }
+        for (link in links) assertEquals(link, ProfileInput.Refused, profileInput(link))
         assertNull(OpenProfile(links[1], emptyList()).nameToOpen())
-        assertTrue(OpenProfile(links[1], emptyList()).notAProfileLink)
+        assertTrue(OpenProfile(links[1], emptyList()).refused)
     }
 
     @Test
-    fun anythingElseIsTakenAsAName() {
-        assertEquals(ProfileInput.Name("sample_viewer"), profileInput(" sample_viewer "))
-        assertEquals(ProfileInput.Name("some.name"), profileInput("some.name"))
+    fun blankIsNeitherANameNorRefused() {
         assertEquals(ProfileInput.Blank, profileInput("  "))
-        assertFalse(OpenProfile("sample_viewer", emptyList()).notAProfileLink)
+        assertFalse(OpenProfile("  ", emptyList()).refused)
+        assertFalse(OpenProfile("sample_viewer", emptyList()).refused)
     }
 
     @Test

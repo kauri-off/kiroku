@@ -25,7 +25,12 @@
         <item quantity="other">Загружено %1$s\u00A0тайтла</item>
     </plurals>
     <string name="profile_user_name">Имя пользователя</string>
-    <string name="profile_not_a_profile_link">Это не ссылка на профиль MyAnimeList</string>
+    <plurals name="profile_name_refused">
+        <item quantity="one">Введите до\u00A0%1$d\u00A0символа (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
+        <item quantity="few">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
+        <item quantity="many">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
+        <item quantity="other">Введите до\u00A0%1$d\u00A0символов (латинские буквы, цифры, _ и -) или ссылку на профиль MyAnimeList</item>
+    </plurals>
     <string name="profile_recent">Недавние</string>
     <string name="profile_open">Открыть</string>
     <string name="profile_cancel">Отмена</string>
