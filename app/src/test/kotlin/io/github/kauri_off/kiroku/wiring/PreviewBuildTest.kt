@@ -58,6 +58,7 @@ class PreviewBuildTest {
             """app › val composePreview = "androidx.compose.ui.tooling.PreviewActivity"""" to "Compose's preview activity, debug only",
             """app › "preview" to setOf(launcherActivity, profileInstaller, scenarioTile),""" to "the check of what it exports",
             """app › "preview" to releaseComponents + debugMenu,""" to "the check of its components: release's and the debug menu's",
+            """app › "preview" to releasePermissions,""" to "the check of its permissions: release's",
             """app › if (variant.buildType !in setOf("debug", "preview")) return@onVariants""" to
                 "its build-info file and the check of its shortcut",
             """data › create("preview") {""" to "the build type the app's preview takes",
