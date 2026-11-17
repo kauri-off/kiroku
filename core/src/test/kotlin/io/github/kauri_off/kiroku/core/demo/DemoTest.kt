@@ -12,14 +12,13 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
-import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
+import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -354,29 +353,65 @@ class DemoTest {
         }
 
     @Test
-    fun `another user's list is read only and loads by name`() =
+    fun `the public user's list of several thousand entries is read in parts, once, and held`() =
         runTest {
             val demo = demo()
-            val name = Fixtures.reference.otherUserName.uppercase()
-            val loads = demo.user.loadList(name).toList()
-            assertTrue(loads.first() is UserListLoad.Loading)
-            assertEquals(UserListLoad.Loaded(Fixtures.reference.otherUserEntries), loads.last())
+            val fixtures = Fixtures.reference
+            demo.server.latency = 1.seconds
+            val seen = mutableListOf<UserListState>()
+            backgroundScope.launch { demo.user.observeList(fixtures.otherUserName.uppercase()).collect { seen += it } }
+            settle()
+            val list = fixtures.otherUserList
+            assertTrue(list.size > 4_000)
+            assertEquals(UserListState.Whole(list, null), seen.last())
+            val parts = (list.size + DemoUserLists.PART_SIZE - 1) / DemoUserLists.PART_SIZE
+            assertEquals(parts, demo.userLists.requests.size)
+            val steps = seen.filterIsInstance<UserListState.Reading>()
+            assertEquals(List(parts) { it * DemoUserLists.PART_SIZE }, steps.map { it.entries.size })
+            assertTrue(steps.all { it.total == null && it.user == null })
 
-            assertEquals(
-                UserListLoad.Failed(DataError.UnknownUser),
-                demo.user
-                    .loadList("nobody_here")
-                    .toList()
-                    .last(),
-            )
+            assertEquals(seen.last(), demo.user.observeList(fixtures.otherUserName).first())
+            assertEquals(parts, demo.userLists.requests.size)
+            assertTrue(demo.user.sameUser(fixtures.otherUserName, fixtures.otherUserName.uppercase()))
+            assertFalse(demo.user.sameUser(fixtures.otherUserName, fixtures.privateUserName))
+        }
+
+    @Test
+    fun `the demo has no other user, and offline nobody's list is read`() =
+        runTest {
+            val demo = demo()
+            val fixtures = Fixtures.reference
+            for (name in listOf("nobody_here", fixtures.user.name)) {
+                assertEquals(
+                    name,
+                    UserListState.None(DataError.UnknownUser),
+                    demo.user.observeList(name).first { it !is UserListState.Reading },
+                )
+            }
             demo.server.offline.value = true
+            assertEquals(Outcome.Failure(DataError.NoConnection), demo.user.refreshList(fixtures.otherUserName))
             assertEquals(
-                UserListLoad.Failed(DataError.NoConnection),
-                demo.user
-                    .loadList(name)
-                    .toList()
-                    .last(),
+                UserListState.None(DataError.NoConnection),
+                demo.user.observeList(fixtures.otherUserName).first { it !is UserListState.Reading },
             )
+        }
+
+    @Test
+    fun `signing out and a reset each forget other users' lists`() =
+        runTest {
+            val demo = demo()
+            val name = Fixtures.reference.otherUserName
+            for (forget in listOf<suspend () -> Unit>({ demo.session.signOut() }, { demo.reset() })) {
+                val before = demo.userLists.requests.size
+                assertEquals(Outcome.Success(Unit), demo.user.refreshList(name))
+                assertTrue(demo.user.observeList(name).first() is UserListState.Whole)
+                val read = demo.userLists.requests.size
+                assertTrue(read > before)
+                forget()
+                assertEquals(read, demo.userLists.requests.size)
+                assertTrue(demo.user.observeList(name).first { it !is UserListState.Reading } is UserListState.Whole)
+                assertEquals(2 * read - before, demo.userLists.requests.size)
+            }
         }
 
     @Test
@@ -414,37 +449,18 @@ class DemoTest {
             demo.server.refusing.value = true
             assertEquals(Outcome.Failure(DataError.Refused), demo.search.search("kagetosho", 0, false))
             assertEquals(Outcome.Failure(DataError.Refused), demo.anime.refresh(FixtureAnime.exactToWatch.id))
-            assertEquals(
-                UserListLoad.Failed(DataError.Refused),
-                demo.user
-                    .loadList(Fixtures.reference.otherUserName)
-                    .toList()
-                    .last(),
-            )
+            assertEquals(Outcome.Failure(DataError.Refused), demo.user.refreshList(Fixtures.reference.otherUserName))
         }
 
     @Test
-    fun `a private list fails as private`() =
+    fun `a private list says so and is asked once`() =
         runTest {
             val demo = demo()
-            assertEquals(
-                listOf(UserListLoad.Loading(0, null), UserListLoad.Failed(DataError.PrivateList)),
-                demo.user.loadList(Fixtures.reference.privateUserName).toList(),
-            )
-        }
-
-    @Test
-    fun `a list loads in steps that report progress`() =
-        runTest {
-            val demo = demo()
-            val entries = Fixtures.reference.entries
-            val loads = demo.user.loadList(Fixtures.reference.user.name).toList()
-            val steps = loads.filterIsInstance<UserListLoad.Loading>()
-            assertTrue(steps.size > 2)
-            assertEquals(steps.map { it.loaded }.sorted(), steps.map { it.loaded })
-            assertEquals(entries.size, steps.last().loaded)
-            assertTrue(steps.all { it.total == entries.size })
-            assertEquals(UserListLoad.Loaded(entries), loads.last())
+            val name = Fixtures.reference.privateUserName
+            repeat(2) {
+                assertEquals(UserListState.None(DataError.PrivateList), demo.user.observeList(name).first { it !is UserListState.Reading })
+            }
+            assertEquals(listOf(name), demo.userLists.requests)
         }
 
     @Test

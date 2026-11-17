@@ -1046,6 +1046,30 @@ out=$(vget "/history?h=1")
 ok "  and shows it as lost, as an alarm, once the queue has dropped it" \
   '[[ $out == *"class=\"badge bad\"><i>!</i>lost: its unit died"* && $(vget /live) != *"unit gone"* ]]'
 kill "$(< "$T/bg.view")"
+"$W/tools/q" view --port 0 --host 127.0.0.2 > "$T/view.out" 2>&1 &
+echo $! > "$T/bg.view"
+for _ in {1..50}; do grep -qs '^http://127\.0\.0\.2:[0-9]*/ ' "$T/view.out" && break; sleep 0.1; done
+view=$(cut -d/ -f1-3 "$T/view.out")
+out=$(python3 -I - "$view" << 'PY'
+import sys, urllib.error, urllib.request
+url = sys.argv[1]
+port = url.rsplit(":", 1)[1]
+
+
+def code(address, host=None):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(address + "/live", headers={"Host": host} if host else {}), timeout=20) as x: return x.status
+    except urllib.error.HTTPError as x: return x.code
+    except OSError: return 0
+
+
+print(code(url), code(url, f"127.0.0.1:{port}"), code(f"http://127.0.0.1:{port}"))
+PY
+)
+ok "the view listens at the address --host names, and nowhere else" '[[ $out == "200 403 0" ]]'
+kill "$(< "$T/bg.view")"
+out=$("$W/tools/q" view --host example.com 2>&1)
+ok "  and takes nothing but an IPv4 address for it" '[[ $? == 2 && $out == *"--host ADDR"* ]]'
 
 out=$(q stats)
 ok "q stats reports waits, runs and memory peaks per kind, and what jobs waited for" \

@@ -273,7 +273,7 @@ class RecorderTest {
     fun `a list that cannot be read in the pages asked for is left out and the run goes on`() {
         api.answers { request ->
             when {
-                PRIVATE in request.url.encodedPath -> answer(403, body = """{"error":"forbidden"}""")
+                PRIVATE in request.url.encodedPath -> answer(403, body = NOT_PERMITTED)
                 "animelist" in request.url.encodedPath -> answer(body = """{"data":[{"node":{"id":1}},{"node":{"id":5}}],"paging":{}}""")
                 else -> answer()
             }
@@ -305,12 +305,13 @@ class RecorderTest {
     }
 
     @Test
-    fun `the refusal of the list of a user of the build's is an answer, and any other refusal ends the run`() {
+    fun `MAL's answer for a private list of a user of the build's is an answer, and any other refusal ends the run`() {
         api.answers { request ->
             when (request.url.encodedPath) {
                 "/v2/anime/5" -> answer(429, body = "Too many requests", type = "text/plain")
                 "/v2/anime/6" -> answer()
-                else -> answer(403, body = """{"error":"forbidden"}""")
+                "/v2/users/$PUBLIC/animelist" -> answer(403, body = """{"error":"forbidden"}""")
+                else -> answer(403, body = NOT_PERMITTED)
             }
         }
         val private = Ask("private", "users/${RecordedUser.Private.standIn}/animelist")
@@ -318,16 +319,43 @@ class RecorderTest {
 
         recorder().record(listOf(private, after))
         val stops =
-            listOf(Ask("limited", "anime/5"), Ask("title", "anime/7"), Ask("me", "users/@me"), Ask("other", "users/somebody/animelist"))
-                .map { refused -> assertThrows(RecorderStop::class.java) { recorder().record(listOf(refused, after)) }.message!!.lines() }
+            listOf(
+                Ask("limited", "anime/5"),
+                Ask("title", "anime/7"),
+                Ask("me", "users/@me"),
+                Ask("other", "users/somebody/animelist"),
+                Ask("public", "users/${RecordedUser.Public.standIn}/animelist"),
+            ).map { refused -> assertThrows(RecorderStop::class.java) { recorder().record(listOf(refused, after)) }.message!!.lines() }
 
         assertEquals(setOf("private.403.json", "after.200.json"), stored.keys)
         assertEquals(
             listOf("limited: MAL refuses requests (429), stopped", "title: MAL refuses requests (403), stopped") +
-                listOf("me: MAL refuses requests (403), stopped", "other: MAL refuses requests (403), stopped"),
+                listOf("me: MAL refuses requests (403), stopped", "other: MAL refuses requests (403), stopped") +
+                listOf("public: MAL refuses requests (403), stopped"),
             stops.map { it.first() },
         )
         assertEquals(1, asked.count { it == "/v2/anime/6" })
+    }
+
+    @Test
+    fun `a user's name in another letter case has every letter's case changed, and is stored as the user's stand-in`() {
+        api.answers { request ->
+            val next = "https://mal.example/v2/users/${request.url.pathSegments[2]}/animelist?offset=10"
+            answer(body = """{"data":[],"paging":{"next":"$next"}}""")
+        }
+
+        recorder(private = "1_2-3").record(
+            listOf(
+                Ask("other_case", "users/${RecordedUser.Public.inAnotherCase}/animelist?limit=10"),
+                Ask("no_letter", "users/${RecordedUser.Private.inAnotherCase}/animelist?limit=10"),
+            ),
+        )
+
+        assertEquals(listOf("/v2/users/sOME_nAME-7/animelist"), asked)
+        assertEquals(setOf("other_case.200.json"), stored.keys)
+        assertTrue("users/public-user/animelist?offset=10" in stored.getValue("other_case.200.json"))
+        assertEquals("no_letter: skipped, kiroku.recordPrivateUser has no letter whose case can change", said.last())
+        assertFalse((stored.values + said).any { it.contains(PUBLIC, ignoreCase = true) })
     }
 
     @Test
@@ -391,5 +419,6 @@ class RecorderTest {
         const val PRIVATE = "private_one"
         const val TOKEN = "a-token-9c1e"
         const val REFRESH = "a-refresh-51bd"
+        val NOT_PERMITTED = RecordedAnswers.named("list_private").body
     }
 }
