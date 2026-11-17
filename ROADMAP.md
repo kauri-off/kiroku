@@ -204,30 +204,7 @@ Acceptance: over seven days with notifications on, every entry of "Recently sent
 by AniList's schedule for a title the owner was watching; no episode of a watched title with an exact count is
 missing from it; there are no duplicates.
 
-- [ ] **M4-01 [A] What is notifiable.** In `:core` only, as values and rules without a store. From the stored list,
-  the stored schedules (what `AiringRepository.observeSchedules()` gives, and nothing fetched for a page, A12), the
-  notification settings, the record of what was announced and an instant, one rule gives: the announcements that
-  are due, one per title for its highest due episode (N6), each with the count still to watch and the episode "Mark
-  watched" would mark (N9); the earlier announcements that no longer stand (N7); and the earliest notification time
-  still to come (N8). Whether a count is exact and when an episode aired is the airing calculator's answer and is
-  computed nowhere else (A1). N4 and N5 hold, a finale is still due after MAL has marked its show finished (A13),
-  nothing is due more than three days after its notification time (N2), and no result depends on the time zone. The
-  settings (on or off, also for planned titles, the delay) and the record are defined here: the episodes announced,
-  and for N5 the moment from which each title is followed, with the rule that sets it at a sign-in, when
-  notifications or planned titles are turned on, and when a title is added or changes status, also when a sync
-  brings the change. The first run of a build with notifications over a list an earlier build stored counts as
-  turning them on. A title that a list download left out and a later one brings back is the title it was: its
-  moment and its announced episodes stay. The hand-off states, for the owner's approval, what that moment is for
-  each event N5 names.
-  **Needs:** nothing.
-  **Check:** `./gradlew :core:test`: a test for each of N4, N5 (one per event it names, and the delay's case), N6,
-  N7, A13 and the three days that fails without its rule; one test, named after it, for each failure of dailyAL
-  that section 5.1 lists: a dropped, a completed, an on-hold and a removed title, an episode postponed after it was
-  planned, an episode moved to another weekday, a show that has run for years and belongs to no season; applying
-  the rule and recording its result at any sequence of instants announces each episode at most once (N1); a title
-  left out by a download and brought back is announced neither twice nor late; a changed time zone changes no
-  result; a rule test fails when code outside the calculator derives an aired count or an air time for a
-  notification.
+- [x] **M4-01 [A] What is notifiable.**
 
 - [ ] **M4-02 [A] Notification engine.** In `:core` only, over ports as the list's and the airing's engines are: a
   store of M4-01's record and of the settings, the one alarm, and the notifications shown; with stores in memory

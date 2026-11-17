@@ -68,7 +68,9 @@ private fun countedAt(
         finished && total != null -> {
             val finale = episodes.firstOrNull { it.number == total }?.airsAt.takeIf { unread == null && doubtedOver == null }
             val aired = finale?.takeIf { !it.isAfter(now) }
-            Airing(AiredCount.Exact(total), total, null, aired, changesAt = finale.takeIf { aired == null })
+            // A13: of a finished title only the finale's time is told.
+            val airTimes = listOfNotNull(finale?.let { ScheduledEpisode(total, it) })
+            Airing(AiredCount.Exact(total), total, null, aired, changesAt = finale.takeIf { aired == null }, airTimes = airTimes)
         }
         unread != null -> estimated(anime, total, now, unread, wake = coming.minOfOrNull { it.airsAt }).atLeast(doubtedOver)
         else -> scheduled(anime, episodes, schedule?.totalEpisodes, total, finished, doubtedOver, now)
@@ -138,8 +140,19 @@ private fun scheduled(
         latestAiredAt = aired.filter { it.number <= count }.maxByOrNull { it.number }?.airsAt,
         inexact = doubt,
         changesAt = earliest(coming.minOfOrNull { it.airsAt }, stopsAt.takeIf { !stopped }),
+        airTimes = if (doubt == null) airTimes(episodes, total) else emptyList(),
     )
 }
+
+// Each episode within the total at its first time.
+private fun airTimes(
+    episodes: List<ScheduledEpisode>,
+    total: Int?,
+): List<ScheduledEpisode> =
+    episodes
+        .filter { total == null || it.number <= total }
+        .sortedWith(compareBy({ it.number }, { it.airsAt }))
+        .distinctBy { it.number }
 
 // A6: one episode at each weekly slot from MAL's start date, while that cannot run away.
 private fun estimated(
