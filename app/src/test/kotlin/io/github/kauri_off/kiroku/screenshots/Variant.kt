@@ -33,6 +33,9 @@ enum class Variant(
     ): String = "$language-w${widthDp}dp-h${heightDp}dp-${if (dark) "night" else "notnight"}-xhdpi"
 
     companion object {
-        fun forCase(isContent: Boolean): List<Variant> = entries.filter { isContent || !it.contentOnly }
+        fun forCase(
+            isContent: Boolean,
+            largeText: Boolean = isContent,
+        ): List<Variant> = entries.filter { isContent || !it.contentOnly || (largeText && it == RuLarge) }
     }
 }

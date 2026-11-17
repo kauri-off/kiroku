@@ -4,9 +4,11 @@ import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.time.Clock
 
-// A sandbox keeping its list, tokens and airing in [file]s, its titles read from public answers at its first request.
+// A sandbox keeping its list, tokens and airing in [file]s, its titles read from public answers at its first request;
+// [readTenrai] gives one of Tenrai's recorded answers by its file name.
 class Sandbox(
     read: (String) -> String,
+    readTenrai: (String) -> String,
     poster: (Long) -> String,
     clock: Clock,
     file: (String) -> File,
@@ -20,7 +22,9 @@ class Sandbox(
 
     val aniList = SandboxAniList({ airing.value }, clock)
 
-    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList)
+    val tenrai = SandboxTenrai(readTenrai)
+
+    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList, tenrai)
 
     // The list the sandbox started with and its schedules laid out again, as of now; then AniList answers again, from them.
     fun reset() {

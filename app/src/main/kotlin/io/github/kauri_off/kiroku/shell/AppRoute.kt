@@ -38,6 +38,8 @@ import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.titlesub.DetailsRoute
 import io.github.kauri_off.kiroku.titlesub.RelatedKey
 import io.github.kauri_off.kiroku.titlesub.RelatedRoute
+import io.github.kauri_off.kiroku.titlesub.ScoresKey
+import io.github.kauri_off.kiroku.titlesub.ScoresRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // The app: the shell over the screens built so far, with the messages that outlive the screen that posted them.
@@ -66,7 +68,7 @@ fun AppRoute(
 private fun ShellNavigator.showEditorOf(id: AnimeId) {
     val stack = stackOf(visible.last())
     val page = TitleKey(id.value)
-    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) }
+    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) || it == ScoresKey(id.value) }
     when {
         stack.last() is ListRoot || stack.last() == page -> Unit
         subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
@@ -156,6 +158,7 @@ fun appEntries(
                     openTitle = openTitle,
                     seeAllRelated = { id, opened -> navigator.open(RelatedKey(id.value, opened)) },
                     details = { id, opened -> navigator.open(DetailsKey(id.value, opened)) },
+                    scores = { navigator.open(ScoresKey(it.value)) },
                     recommendations = { navigator.open(NotBuiltKey(NotBuilt.Recommendations)) },
                     signIn = signIn,
                 ),
@@ -163,6 +166,7 @@ fun appEntries(
         }
         entry<RelatedKey> { key -> RelatedRoute(key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
+        entry<ScoresKey> { key -> ScoresRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
         entry<SignInKey> {
             SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })

@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +75,15 @@ class TestGraph(
         }
 
     override val clock = demo.clock
+    private val scoreAskCount = AtomicInteger()
+
+    // The score distributions the screens asked for so far.
+    val scoreAsks: Int get() = scoreAskCount.get()
+
+    override val scores =
+        object : ScoreDistributionRepository {
+            override suspend fun distribution(id: AnimeId) = demo.scores.distribution(id).also { scoreAskCount.incrementAndGet() }
+        }
     override val session: SessionRepository = CountedSession(demo.session, counter)
     private val syncCount = AtomicInteger()
 
