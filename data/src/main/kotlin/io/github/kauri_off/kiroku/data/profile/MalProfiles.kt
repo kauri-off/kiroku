@@ -74,7 +74,7 @@ private fun dayOf(text: String): LocalDate? =
         null
     }
 
-// Figures with one missing or unreadable are no figures; each such is noted.
+// Each figure MAL states, an unreadable one left out and noted; none when it states none.
 private fun figuresOf(
     element: JsonElement,
     repairs: Repairs,
@@ -85,18 +85,20 @@ private fun figuresOf(
         repairs.note("anime_statistics")
         return null
     }
+    val within = repairs.within("anime_statistics")
 
-    fun number(key: String): JsonPrimitive? = statistics[key] as? JsonPrimitive
-
-    val unread = mutableListOf<String>()
-
-    fun count(key: String): Int = number(key)?.intOrNull?.takeIf { it >= 0 } ?: 0.also { unread += key }
-
-    fun amount(
+    fun <T : Any> figure(
         key: String,
-        range: ClosedFloatingPointRange<Double>,
-    ): Double = number(key)?.doubleOrNull?.takeIf { it in range } ?: 0.0.also { unread += key }
+        read: (JsonPrimitive) -> T?,
+    ): T? {
+        val given = statistics[key]
+        return within.read(key, given.given(), (given as? JsonPrimitive)?.let(read))
+    }
 
+    fun count(key: String): Int? = figure(key) { it.intOrNull?.takeIf { count -> count >= 0 } }
+
+    // MAL states a mean of 0 for a list with nothing scored.
+    val mean = figure("mean_score") { it.doubleOrNull?.takeIf { mean -> mean in 0.0..10.0 } }?.takeIf { it > 0.0 }
     val figures =
         StatedFigures(
             watching = count("num_items_watching"),
@@ -107,9 +109,11 @@ private fun figuresOf(
             entries = count("num_items"),
             episodes = count("num_episodes"),
             rewatched = count("num_times_rewatched"),
-            daysWatched = amount("num_days_watched", 0.0..Double.MAX_VALUE),
-            meanScore = amount("mean_score", 0.0..10.0),
+            daysWatched = figure("num_days_watched") { it.doubleOrNull?.takeIf { days -> days >= 0.0 } },
+            meanScore = mean,
         )
-    for (key in unread) repairs.note("anime_statistics.$key")
-    return figures.takeIf { unread.isEmpty() }
+    return figures.takeIf { it != None }
 }
+
+// No figure stated.
+private val None = StatedFigures(null, null, null, null, null, null, null, null, null, null)

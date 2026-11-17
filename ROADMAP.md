@@ -241,15 +241,15 @@ missing from it; there are no duplicates.
   it.
 
 - [ ] **M4-07 Database: the record and the settings.** M4-02's store of the record in the database, as a real
-  migration (section 7.1), M4's only one; its settings in the source's preferences file. The record is in tables of
-  its own, which no download, refresh or list write touches, and from now on every migration test starts from a
-  database that holds announced episodes (N10).
+  migration (section 7.1) to the version after M6-05's, M4's only one; its settings in the source's preferences file.
+  The record is in tables of its own, which no download, refresh or list write touches, and from now on every
+  migration test starts from a database that holds announced episodes (N10).
   **Needs:** M4-02.
-  **Check:** `./gradlew :data:testDebugUnitTest`: M4-02's contract passes over the store; the migration test takes
-  a version 2 database that holds a list, titles and airing data to the new version and finds every row as it was;
-  a test fails for a schema version whose migration is not run over announced episodes; a list download, an airing
-  refresh and a record write made together lose nothing; a setting written is read by a new store over the same
-  file, and one that cannot be read counts as never made and is reported. `./gradlew
+  **Check:** `./gradlew :data:testDebugUnitTest`: M4-02's contract passes over the store; the migration test takes a
+  database of each earlier version that holds a list, titles and airing data to the new version and finds every row
+  as it was; a test fails for a schema version whose migration is not run over announced episodes; a list download,
+  an airing refresh and a record write made together lose nothing; a setting written is read by a new store over the
+  same file, and one that cannot be read counts as never made and is reported. `./gradlew
   :data:connectedDebugAndroidTest` passes on an emulator.
 
 - [ ] **M4-08 The notification on the device.** M4-02's port for the notifications shown, on Android's own: an

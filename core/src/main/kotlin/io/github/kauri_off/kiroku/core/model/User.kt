@@ -30,17 +30,17 @@ data class UserProfile(
 
 // What the profile's source states of the user's list, as it states it; the app's own statistics are the calculator's.
 data class StatedFigures(
-    val watching: Int,
-    val completed: Int,
-    val onHold: Int,
-    val dropped: Int,
-    val planned: Int,
-    val entries: Int,
-    val episodes: Int,
-    val rewatched: Int,
-    val daysWatched: Double,
-    // Zero when the source has no score to average.
-    val meanScore: Double,
+    val watching: Int?,
+    val completed: Int?,
+    val onHold: Int?,
+    val dropped: Int?,
+    val planned: Int?,
+    val entries: Int?,
+    val episodes: Int?,
+    val rewatched: Int?,
+    val daysWatched: Double?,
+    // Null also when the source has nothing scored to average.
+    val meanScore: Double?,
 )
 
 // Made only by the statistics calculator, and by the fixtures as what a test expects of it.

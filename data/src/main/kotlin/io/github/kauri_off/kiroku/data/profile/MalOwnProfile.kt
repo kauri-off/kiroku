@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
+import io.github.kauri_off.kiroku.core.repository.OwnProfile
 import io.github.kauri_off.kiroku.data.db.RoomProfileStore
 import io.github.kauri_off.kiroku.data.db.StoredProfile
 import kotlinx.coroutines.CancellationException
@@ -23,8 +24,8 @@ class MalOwnProfile(
     private val sessions: Flow<Session>,
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
-) {
-    fun observeOwnProfile(): Flow<UserProfile?> =
+) : OwnProfile {
+    override fun observeOwnProfile(): Flow<UserProfile?> =
         combine(sessions, store.observe()) { session, stored -> stored?.takeIf { it.owner == session.signIn }?.profile }
             .distinctUntilChanged()
             .catch { e ->
@@ -34,7 +35,7 @@ class MalOwnProfile(
             }
 
     // An answer for a sign-in that is no longer the session's is not stored: its list has ended.
-    suspend fun refreshOwnProfile(): Outcome<Unit> {
+    override suspend fun refreshOwnProfile(): Outcome<Unit> {
         val owner = sessions.first().signIn
         val answer = profiles.own()
         if (answer !is Outcome.Success) return answer as Outcome.Failure

@@ -29,16 +29,16 @@ internal data class ProfileRow(
 }
 
 internal data class StatedColumns(
-    val watching: Int,
-    val completed: Int,
-    @ColumnInfo(name = "on_hold") val onHold: Int,
-    val dropped: Int,
-    val planned: Int,
-    val entries: Int,
-    val episodes: Int,
-    val rewatched: Int,
-    @ColumnInfo(name = "days_watched") val daysWatched: Double,
-    @ColumnInfo(name = "mean_score") val meanScore: Double,
+    val watching: Int?,
+    val completed: Int?,
+    @ColumnInfo(name = "on_hold") val onHold: Int?,
+    val dropped: Int?,
+    val planned: Int?,
+    val entries: Int?,
+    val episodes: Int?,
+    val rewatched: Int?,
+    @ColumnInfo(name = "days_watched") val daysWatched: Double?,
+    @ColumnInfo(name = "mean_score") val meanScore: Double?,
 ) {
     fun toFigures(): StatedFigures =
         StatedFigures(watching, completed, onHold, dropped, planned, entries, episodes, rewatched, daysWatched, meanScore)

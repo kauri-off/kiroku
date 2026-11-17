@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.StatedFigures
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -219,6 +220,7 @@ class KirokuDatabaseTest {
                         is Long -> insert.bindLong(index + 1, value)
                         is Double -> insert.bindDouble(index + 1, value)
                         is String -> insert.bindText(index + 1, value)
+                        is List<*> -> insert.bindBlob(index + 1, value.map { it as Byte }.toByteArray())
                         else -> insert.bindNull(index + 1)
                     }
                 }
@@ -240,6 +242,14 @@ class KirokuDatabaseTest {
                     listOf(
                         mapOf("title_id" to 7L, "fetched_at" to fetchedAt.toColumn(), "known" to 0L, "total_episodes" to null),
                         mapOf("title_id" to anime.id.value, "fetched_at" to fetchedAt.toColumn(), "known" to 1L, "total_episodes" to 24L),
+                        // A schedule in doubt, from version 3 on; an earlier version has no column for it.
+                        mapOf(
+                            "title_id" to 8L,
+                            "fetched_at" to fetchedAt.toColumn(),
+                            "known" to 1L,
+                            "total_episodes" to 12L,
+                            "doubted_over" to 13L,
+                        ),
                     ),
                 AiringEpisodeRow.TABLE to
                     listOf(1L, 2L).map {
@@ -258,18 +268,8 @@ class KirokuDatabaseTest {
                     }
                     tables.associateWith { connection.named(it) }
                 }
-            assertEquals(
-                "$version",
-                list.keys +
-                    if (version >=
-                        2
-                    ) {
-                        airing.keys
-                    } else {
-                        emptySet()
-                    },
-                written.filterValues { it.isNotEmpty() }.keys,
-            )
+            val held = if (version >= AIRING_VERSION) list.keys + airing.keys else list.keys
+            assertEquals("$version", held, written.filterValues { it.isNotEmpty() }.keys)
 
             helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
                 for ((table, rows) in written) {
@@ -321,7 +321,8 @@ class KirokuDatabaseTest {
 
                 val profiles = RoomProfileStore(database, Dispatchers.IO) { unexpected += it }
                 assertEquals(null, profiles.observe().first())
-                val profile = StoredProfile(SignInId("owner"), UserProfile("someone", null, null), fetchedAt)
+                val stated = StatedFigures(1, null, 0, 0, 2, 3, 40, null, 0.5, null)
+                val profile = StoredProfile(SignInId("owner"), UserProfile("someone", null, null, stated), fetchedAt)
                 assertTrue(profiles.replace(profile) { true })
                 assertEquals(profile, profiles.observe().first())
             }
@@ -431,6 +432,9 @@ class KirokuDatabaseTest {
 
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
+
+        // The first version with airing data.
+        const val AIRING_VERSION = 2
 
         // Every version that may be on a device, as exported: a changed entity is a new version, never a new identity here.
         val IDENTITIES =
