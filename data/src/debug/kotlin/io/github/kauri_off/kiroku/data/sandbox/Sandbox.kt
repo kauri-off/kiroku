@@ -45,7 +45,7 @@ private class OnFirstRequest(
     private val site: Lazy<SandboxList>,
     private val airing: Lazy<SandboxAiring>,
 ) : MalList {
-    override fun title(id: Long): JsonObject? = site.value.title(id)?.let { airing.value.page(id) }
+    override fun title(id: Long): JsonObject? = site.value.title(id)?.let { SandboxUsers.titleOf(id, airing.value::page) }
 
     override fun entries(): List<Pair<Long, Listed>> = site.value.entries()
 
@@ -57,4 +57,6 @@ private class OnFirstRequest(
     ) = site.value.write(id, form)
 
     override fun remove(id: Long) = site.value.remove(id)
+
+    override fun usersList(name: String) = site.value.usersList(name)
 }
