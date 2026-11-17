@@ -176,11 +176,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-11 AniList in the scenario panel.**
 
-- [ ] **M3-12 [O] Emulator run.** The orchestrator runs the app once on the emulator against the sandbox: a count
-  rises as an air time passes with the network off; with AniList failing the stored counts stay; the preview
-  build installed over a build of M2 keeps its list.
-  **Needs:** M3-09, M3-10, M3-11.
-  **Check:** the three observations, with the screenshots of each; a difference is filed as a task.
+- [x] **M3-12 [O] Emulator run.**
 
 - [ ] **M3-13 [O] The owner's seven days.** At the start the owner compares the aired counts of three airing
   titles of his list, one of them on a break, with the broadcaster's or a streaming service's schedule. He then
