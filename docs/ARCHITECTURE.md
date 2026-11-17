@@ -340,13 +340,13 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   windows. Settings opens from Profile. Five destinations is the maximum.
 - Each destination keeps its own back stack. Tapping the current destination again pops it to its root.
 - Back from the root of Search or Profile goes to List; Back from the root of List leaves the app.
-- A notification or a deep link builds the stack List → Title, so Back never leaves the app unexpectedly.
+- A notification or a title's link builds the stack List → Title, and a profile's link List, then Profile → that
+  profile, so Back never leaves the app unexpectedly.
 - The app opens on List, tab Watching. Signed out, the List offers sign-in, and browsing without an account goes
   to Search.
 - Predictive back is on.
-- Deep links: a title's page, `https://[www.]myanimelist.net/anime/{id}` with or without its name and a trailing
-  slash, from Android 12, once the user has allowed the app's links in the system's settings;
-  `https://myanimelist.net/profile/{name}`; and the OAuth redirect.
+- Deep links, from Android 12 once the user has allowed the app's links in the system's settings: a title's and a
+  user's profile page on `[www.]myanimelist.net`; and the OAuth redirect.
 
 ### 6.4 Stack, wiring and demo mode
 

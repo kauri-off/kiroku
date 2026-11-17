@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.signin.FakeSignInGraph
@@ -49,7 +50,7 @@ open class LinkGraphApplication :
 class StartedByLinkApplication : LinkGraphApplication() {
     override fun onCreate() {
         super.onCreate()
-        links.opened(FixtureAnime.exactToWatch.id)
+        links.opened(Link.Title(FixtureAnime.exactToWatch.id))
     }
 }
 
@@ -73,7 +74,7 @@ class LinkRouteTest {
     }
 
     private fun link(anime: Anime) {
-        app.links.opened(anime.id)
+        app.links.opened(Link.Title(anime.id))
         compose.waitForIdle()
     }
 

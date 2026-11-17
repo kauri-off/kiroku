@@ -6,19 +6,19 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import io.github.kauri_off.kiroku.MainActivity
-import io.github.kauri_off.kiroku.core.link.animeLink
+import io.github.kauri_off.kiroku.core.link.readLink
 
-// Takes a link to a title's page on MAL: hands the title to the app's screen and brings it up, or hands the link on.
+// Takes a link to a title's or a profile's page on MAL: hands it to the app's screen and brings it up, or hands it on.
 class LinkActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Neither the activity made again nor an intent the system replays from the recent tasks is a link.
         val arrived = savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
         val address = intent.data
-        val id = if (arrived) intent.dataString?.let(::animeLink) else null
+        val link = if (arrived) intent.dataString?.let(::readLink) else null
         when {
-            id != null -> {
-                appLinks?.opened(id)
+            link != null -> {
+                appLinks?.opened(link)
                 bringUp()
             }
             !arrived -> bringUp()
