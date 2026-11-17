@@ -45,21 +45,16 @@ class ProfileStateTest {
 
     @Test
     fun theLastNameOpenedComesFirstAndTheOldestFallsOff() {
-        val opened = OpenedProfiles()
-        fixtures.recent.reversed().forEach { opened.opened(it, String::equals) }
-        opened.opened("newest", String::equals)
-        assertEquals(listOf("newest") + fixtures.recent.take(RECENT_PROFILES - 1), opened.names)
+        val names = fixtures.recent.reversed().fold(emptyList<String>()) { names, name -> names.withOpened(name, String::equals) }
+        assertEquals(listOf("newest") + fixtures.recent.take(RECENT_PROFILES - 1), names.withOpened("newest", String::equals))
     }
 
     // Which names are one user is the source's answer, never the app's own comparison.
     @Test
     fun aNameOfAUserOpenedAgainMovesToTheFrontAsTheSourceTellsUsers() {
-        val opened = OpenedProfiles()
-        listOf("c_three", "b_two", "a_one").forEach { opened.opened(it, String::equals) }
-        opened.opened("B_TWO") { a, b -> a.equals(b, ignoreCase = true) }
-        assertEquals(listOf("B_TWO", "a_one", "c_three"), opened.names)
-        opened.opened("A_ONE", String::equals)
-        assertEquals(listOf("A_ONE", "B_TWO", "a_one", "c_three"), opened.names)
+        val names = listOf("a_one", "b_two", "c_three").withOpened("B_TWO") { a, b -> a.equals(b, ignoreCase = true) }
+        assertEquals(listOf("B_TWO", "a_one", "c_three"), names)
+        assertEquals(listOf("A_ONE", "B_TWO", "a_one", "c_three"), names.withOpened("A_ONE", String::equals))
     }
 
     @Test

@@ -48,6 +48,7 @@ data class StatedFigures(
 data class UserStatistics internal constructor(
     val statuses: StatusCounts,
     val daysWatched: Double,
+    val episodesWatched: Int,
     val meanScore: Double?,
     val scores: Map<Int, Int>,
     val genres: List<Counted<Genre>>,
@@ -56,6 +57,7 @@ data class UserStatistics internal constructor(
 ) {
     init {
         require(daysWatched >= 0.0)
+        require(episodesWatched >= 0)
         require(meanScore == null || meanScore in 1.0..10.0)
         require(scores.keys.all { it in 1..10 })
     }

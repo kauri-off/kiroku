@@ -21,6 +21,7 @@ row. The owner is the final authority on the Russian column.
 | Undo | Undo | Отменить | Only for Undo. A dialog is dismissed with Cancel / «Отмена»; unsaved changes with Discard / Keep editing, «Не сохранять» / «Вернуться» |
 | Edit | Edit / Change | Изменить | A row's long press and its spoken action; the action of the "Added" snackbar |
 | The user's score | Your score / Not scored / Rate | Ваша оценка / Без оценки / Оценить | |
+| Titles with a score, counted | Scored / 7 of 31 scored / Nothing scored | Оценено / Оценено 7 из 31 / Оценок нет | A profile's count: "scored" as in "Not scored", never "rated" |
 | MAL's score and rank | MAL score / #12, Rank | Оценка MAL / №12, Место | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). The title page's header captions `#12` with Rank |
 | MAL's score distribution | MAL scores / Score 10 | Оценки MAL / Оценка 10 | One score of it is spoken with the word, "Score 10" / «Оценка 10», never as the bare number |
 | The default sort | Up next | На очереди | |

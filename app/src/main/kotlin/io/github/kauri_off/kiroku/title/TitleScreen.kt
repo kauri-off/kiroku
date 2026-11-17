@@ -55,8 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -91,13 +89,16 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
+import io.github.kauri_off.kiroku.design.component.Spaced
 import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
 import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.TitleSelection
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.headingRoom
 import io.github.kauri_off.kiroku.design.component.stepButtonMargin
+import io.github.kauri_off.kiroku.design.component.trimTop
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
@@ -255,24 +256,6 @@ private fun Gap(
         Spacer(Modifier.height(space))
         content()
     }
-}
-
-// A gap below zero lays the block over the blank room the block above leaves under its last line.
-@Composable
-private fun Spaced(
-    space: Dp,
-    content: @Composable () -> Unit,
-) = if (space >= Dp.Hairline) Gap(space, content = content) else Column(Modifier.trimTop(-space)) { content() }
-
-// The blank room above a section header's title: the header is a touch target tall with its title centred.
-@Composable
-private fun headingRoom(): Dp {
-    val title =
-        with(LocalDensity.current) {
-            MaterialTheme.typography.titleMedium.lineHeight
-                .toDp()
-        }
-    return maxOf((LocalMinimumInteractiveComponentSize.current - title) / 2, Dp.Hairline)
 }
 
 // The poster leads; the title, its facts and MAL's numbers are centred under it. A title without a picture has no box.
@@ -790,14 +773,6 @@ private val CardEnd = Spacing.s
 private val ButtonEnd = Spacing.m
 private val StatBarEnd = Spacing.s
 private val RowLead = Spacing.m
-
-// Leaves out the top [amount] of the content's own room, so it sits as close to the block above as plain text does.
-private fun Modifier.trimTop(amount: Dp) =
-    layout { measurable, constraints ->
-        val trim = amount.roundToPx()
-        val placeable = measurable.measure(constraints)
-        layout(placeable.width, (placeable.height - trim).coerceAtLeast(0)) { placeable.place(0, -trim) }
-    }
 
 // The list block's buttons, in the medium button size.
 private val PrimaryButtonHeight = ButtonDefaults.MediumContainerHeight

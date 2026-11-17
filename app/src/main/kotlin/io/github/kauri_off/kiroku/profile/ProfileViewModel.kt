@@ -160,8 +160,8 @@ class ProfileViewModel(
     // Collected while the Profile is shown; nothing is read for another user before then.
     val shown: StateFlow<Unit> get() = loads.shown
 
-    // The dialog's field, held as Compose state so the field reads each keystroke in the same frame.
-    val openProfile: OpenProfile? get() = typed.value?.let { OpenProfile(it, opened.names) }
+    // The dialog's field, held as Compose state so the field reads each keystroke in the same frame, with [recent].
+    fun openProfile(recent: List<String>): OpenProfile? = typed.value?.let { OpenProfile(it, recent) }
 
     // Whether [name] is the signed-in user's, as far as the own profile was read.
     fun isOwnName(name: String): Boolean = ownName?.let { user.sameUser(it, name) } ?: false

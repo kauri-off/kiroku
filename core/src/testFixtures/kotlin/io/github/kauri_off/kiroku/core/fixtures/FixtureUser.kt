@@ -25,6 +25,7 @@ object FixtureUser {
             statuses = StatusCounts(watching = 11, completed = 6, onHold = 3, dropped = 3, planned = 8),
             // 35 152 minutes of episodes, a day being 1440
             daysWatched = 35_152.0 / 1440,
+            episodesWatched = 1_468,
             // (4 + 6 + 7 + 8 + 8 + 9 + 10) / 7
             meanScore = 52.0 / 7,
             scores = mapOf(4 to 1, 6 to 1, 7 to 1, 8 to 2, 9 to 1, 10 to 1),
@@ -83,6 +84,7 @@ object FixtureUser {
         UserStatistics(
             statuses = StatusCounts(watching = 17, completed = 2_384, onHold = 41, dropped = 163, planned = 9_807),
             daysWatched = 638.7,
+            episodesWatched = 38_412,
             meanScore = 7.32,
             scores = mapOf(1 to 3, 2 to 7, 3 to 18, 4 to 42, 5 to 131, 6 to 309, 7 to 602, 8 to 711, 9 to 288, 10 to 76),
             genres =

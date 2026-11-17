@@ -358,4 +358,10 @@ interface PreferencesRepository {
         status: ListStatus,
         sort: TabSort,
     )
+
+    // The other users' profiles the person opened, newest first; a sign-out forgets them with the user's other choices.
+    fun observeOpenedProfiles(): Flow<List<String>>
+
+    // [change] takes the names kept and gives the names to keep, one change at a time.
+    suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>)
 }

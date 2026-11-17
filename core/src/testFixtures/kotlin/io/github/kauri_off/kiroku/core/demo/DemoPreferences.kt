@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 // The demo's choices, kept as long as its process, as the rest of the demo is.
 class DemoPreferences : PreferencesRepository {
     private val sorts = MutableStateFlow(ListStatus.entries.associateWith(TabSort::defaultFor))
+    private val opened = MutableStateFlow(emptyList<String>())
 
     override fun observeListSorts(): Flow<Map<ListStatus, TabSort>> = sorts
 
@@ -17,4 +18,13 @@ class DemoPreferences : PreferencesRepository {
         status: ListStatus,
         sort: TabSort,
     ) = sorts.update { it + (status to sort) }
+
+    override fun observeOpenedProfiles(): Flow<List<String>> = opened
+
+    override suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>) = opened.update(change)
+
+    // As a sign-out does.
+    fun forgetOpenedProfiles() {
+        opened.value = emptyList()
+    }
 }
