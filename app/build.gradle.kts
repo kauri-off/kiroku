@@ -134,6 +134,8 @@ android {
 
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
+        // The release build's lint is the only one that sees src/release.
+        fatal += "NewApi"
         warningsAsErrors = false
         abortOnError = true
     }

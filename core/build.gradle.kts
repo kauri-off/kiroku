@@ -91,6 +91,7 @@ abstract class CheckAndroidApi : DefaultTask() {
                     errors += message
                 }
             }
+        check(!classes.asFileTree.matching { include("**/*.class") }.isEmpty) { "No classes found in ${classes.files}" }
         val known = ClassListBuilder(log).apply { process((classes + libraries).files.toTypedArray()) }.packages
         signature.singleFile.inputStream().use {
             SignatureChecker(it, known, log).apply {
@@ -101,7 +102,8 @@ abstract class CheckAndroidApi : DefaultTask() {
         }
         report.get().asFile.writeText(errors.joinToString("\n", postfix = "\n"))
         check(errors.isEmpty()) {
-            "Calls missing from Android ${signature.singleFile.name}:\n" + errors.joinToString("\n")
+            "Calls missing from Android ${signature.singleFile.name}; one that D8 backports is written another way too:\n" +
+                errors.joinToString("\n")
         }
     }
 }

@@ -377,7 +377,9 @@ was chosen against, and why:
 - **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
   fifteen objects.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
-  (detekt's current line is alpha).
+  (detekt's current line is alpha), and for `:core`, which Lint's API check skips, Animal Sniffer's checker against
+  Gummy Bears' signature of the minSdk (not their Gradle plugins: one uses an API Gradle 10 removes, the other
+  breaks the configuration cache).
 - **Not used at all:** a chart library, AppCompat, `kotlinx-datetime`, a paging library, Google Play Services,
   Firebase, any closed-source dependency (which keeps F-Droid possible).
 - **Demo mode:** a debug or preview build chooses between the demo, the sandbox and the real account, each with its
