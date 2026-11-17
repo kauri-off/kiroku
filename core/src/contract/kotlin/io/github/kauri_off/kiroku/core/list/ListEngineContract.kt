@@ -913,6 +913,81 @@ abstract class ListEngineContract {
             assertEquals(opened.copy(watchedEpisodes = 13), s.shown(anime.id)?.values)
         }
 
+    // A unit is judged on the fields the Retry sets and the status, so a step that leaves the status alone keeps a date.
+    @Test
+    fun `a Retry of the start date alone tapped after a send marked an episode sets the date`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            val opened = checkNotNull(s.shown(anime.id)).values
+            val dated = opened.copy(startDate = PartialDate.Day(LocalDate.of(2025, 10, 5)))
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.Save(anime, dated, setOf(ListField.StartDate)))
+            settle()
+            s.server.failingWrites.value = false
+            assertEquals(opened, s.shown(anime.id)?.values)
+            assertEquals(Outcome.Success(Unit), s.list.send(ListWrite.MarkWatched(anime, 13)))
+
+            assertTrue(s.list.write(failures.single().retry) != null)
+            settle()
+            assertEquals(
+                dated.copy(watchedEpisodes = 13).carrying(ListField.StartDate),
+                s.server.requests
+                    .last()
+                    .values,
+            )
+            assertEquals(dated.copy(watchedEpisodes = 13), s.server.entry(anime.id)?.values)
+            assertEquals(dated.copy(watchedEpisodes = 13), s.shown(anime.id)?.values)
+        }
+
+    @Test
+    fun `a Retry of the start date alone tapped after the status changed sets nothing`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            val opened = checkNotNull(s.shown(anime.id)).values
+            s.server.failingWrites.value = true
+            s.list.write(
+                ListWrite.Save(anime, opened.copy(startDate = PartialDate.Day(LocalDate.of(2025, 10, 5))), setOf(ListField.StartDate)),
+            )
+            settle()
+            s.server.failingWrites.value = false
+            s.server.editOnWebsite(anime, opened.copy(status = ListStatus.OnHold))
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            val requests = s.server.requests.size
+
+            assertNull(s.list.write(failures.single().retry))
+            settle()
+            assertEquals(requests, s.server.requests.size)
+            assertEquals(opened.copy(status = ListStatus.OnHold), s.server.entry(anime.id)?.values)
+        }
+
+    // The start date moves with the first episode (W7), so a website change of it alone sets the rest of the unit aside too.
+    @Test
+    fun `a Retry of a planned title's first episode tapped after the website changed its start date sets nothing`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.plannedAiring
+            val opened = checkNotNull(s.shown(anime.id)).values
+            val first = opened.copy(status = ListStatus.Watching, watchedEpisodes = 1, startDate = today)
+            s.server.failingWrites.value = true
+            s.list.write(ListWrite.Save(anime, first, setOf(ListField.Status, ListField.WatchedEpisodes, ListField.StartDate)))
+            settle()
+            s.server.failingWrites.value = false
+            val website = opened.copy(startDate = PartialDate.Day(LocalDate.of(2026, 1, 1)))
+            s.server.editOnWebsite(anime, website)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            val requests = s.server.requests.size
+
+            assertNull(s.list.write(failures.single().retry))
+            settle()
+            assertEquals(requests, s.server.requests.size)
+            assertEquals(website, s.server.entry(anime.id)?.values)
+        }
+
     // A removal destroys every value, so it is retried only while the entry is exactly as it was at the failure.
     @Test
     fun `a Retry of a failed removal tapped after a send marked an episode removes nothing`() =

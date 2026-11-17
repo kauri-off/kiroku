@@ -188,9 +188,12 @@ data class WriteFailure(
                 val named = write.only ?: ListField.entries.toSet()
                 val held = untouched.values + write.values
                 val kept =
-                    ListField.units
-                        .filter { unit -> held.any { it.agrees(current, unit) } }
-                        .flatMapTo(mutableSetOf()) { unit -> unit.filter { it in named } }
+                    ListField.units.flatMapTo(mutableSetOf()) { unit ->
+                        val set = unit.filterTo(mutableSetOf()) { it in named }
+                        // The fields it sets and the status, so a date outlives a newer step that leaves the status alone.
+                        val judged = if (ListField.Status in unit) set + ListField.Status else set
+                        if (set.isNotEmpty() && held.any { it.agrees(current, judged) }) set else emptySet()
+                    }
                 when {
                     kept.isEmpty() -> null
                     kept == named -> write
@@ -212,11 +215,11 @@ data class WriteFailure(
         }
 }
 
-// Both are no entry, or both hold the same value in each field of [unit].
+// Both are no entry, or both hold the same value in each of [fields].
 private fun ListValues?.agrees(
     other: ListValues?,
-    unit: Set<ListField>,
-): Boolean = if (this == null || other == null) this == other else unit.all { it.of(this) == it.of(other) }
+    fields: Set<ListField>,
+): Boolean = if (this == null || other == null) this == other else fields.all { it.of(this) == it.of(other) }
 
 // What a title may hold that nobody changed since a write failed: MAL's confirmed values, and the request's if made.
 data class Untouched(
