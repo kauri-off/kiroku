@@ -23,9 +23,12 @@ data class ScheduledEpisode(
 data class AiringSchedule(
     val episodes: List<ScheduledEpisode>,
     val totalEpisodes: Int?,
+    // Non-null when the source doubts these numbers count the title, as when two entries of it each start at 1: the other's highest aired.
+    val doubtedOver: Int? = null,
 ) {
     init {
         require(totalEpisodes == null || totalEpisodes > 0)
+        require(doubtedOver == null || doubtedOver > 0)
     }
 }
 
@@ -58,6 +61,9 @@ enum class Inexact {
 
     // A5: the title still airs by MAL, and nothing has been scheduled for longer than a break lasts.
     ScheduleStopped,
+
+    // The source doubts which of the title's numberings it gave, so the count is at least the other's.
+    NumberingDoubted,
 }
 
 // What has aired of a title at an instant. Only :core builds one, and [airingAt] is the one way to from stored data.

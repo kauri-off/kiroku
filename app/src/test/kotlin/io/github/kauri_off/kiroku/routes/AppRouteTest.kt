@@ -115,7 +115,7 @@ class AppRouteTest {
         }
 
     // A row of the title page's watch order can show a status too; these clicks are of the page's own controls.
-    private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction() and !hasTestTag(TitleTags.chainRow)).performClick()
+    private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction() and !hasTestTag(TitleTags.chainCard)).performClick()
 
     private fun back() {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
@@ -134,7 +134,7 @@ class AppRouteTest {
     private fun scrollTo(text: String) =
         compose
             .onAllNodes(hasScrollAction() and hasScrollToNode())
-            .filter(hasAnyDescendant(hasText("Episodes watched")) or hasAnyDescendant(hasText("Related")))[0]
+            .filter(hasAnyDescendant(hasContentDescription("Episodes watched")) or hasAnyDescendant(hasText("Related")))[0]
             .performScrollToNode(hasText(text))
 
     private fun hasScrollToNode() = SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)
@@ -176,7 +176,7 @@ class AppRouteTest {
     fun `a row opens its title page and Back returns to the list`() {
         app()
         openKagerou()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         hides("My list")
         back()
         shows("My list")
@@ -192,16 +192,16 @@ class AppRouteTest {
         val page = {
             compose
                 .onAllNodes(
-                    hasText("Episodes watched") or hasContentDescription("Loading"),
+                    hasContentDescription("Episodes watched") or hasContentDescription("Loading"),
                 ).fetchSemanticsNodes()
                 .isNotEmpty()
         }
         repeat(FRAMES) { if (!page()) compose.mainClock.advanceTimeByFrame() }
         compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         graph.readsHeld = false
     }
 
@@ -353,7 +353,7 @@ class AppRouteTest {
         shows("Prequel")
         compose.onNodeWithText(FixtureAnime.prequel.titles.romaji).performClick()
         compose.waitForIdle()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         back()
         back()
         scrollTo("Details")
@@ -551,7 +551,7 @@ class AppRouteTest {
         app()
         graph.demo.server.offline.value = true
         openKagerou()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         compose.onAllNodesWithText("No connection").assertCountEquals(2)
         compose.mainClock.advanceTimeBy(AWAY_MILLIS)
         compose.onAllNodesWithText("No connection").assertCountEquals(1)
@@ -617,7 +617,7 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Episode\u00A013 watched")
         openKagerou()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         shows("Episode\u00A013 watched")
         click("Search")
         compose.waitForIdle()

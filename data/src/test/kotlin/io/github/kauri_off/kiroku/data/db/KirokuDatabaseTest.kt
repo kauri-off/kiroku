@@ -11,6 +11,8 @@ import androidx.sqlite.SQLITE_DATA_TEXT
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.kauri_off.kiroku.core.airing.AiringSchedule
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -36,6 +38,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import java.io.File
+import java.time.Instant
 
 // The harness of section 7.1: every schema change is a migration that is run here, and nothing erases the database.
 @RunWith(RobolectricTestRunner::class)
@@ -44,6 +47,7 @@ class KirokuDatabaseTest {
     private val name = "migration.db"
     private val anime = FixtureAnime.exactToWatch
     private val details = Fixtures.reference.details.getValue(anime.id)
+    private val fetchedAt = Instant.parse("2026-01-11T21:40:00.123456789Z")
 
     @get:Rule
     val helper =
@@ -250,6 +254,26 @@ class KirokuDatabaseTest {
         }
 
     @Test
+    fun `a version 2 database keeps its airing data through the migrations, with no schedule in doubt`() {
+        val known = listOf(anime.id.value, fetchedAt.toColumn(), 1L, 24L)
+        val episodes = listOf(1, 2).map { listOf(anime.id.value, it.toLong(), fetchedAt.plusSeconds(it.toLong()).toColumn()) }
+        helper.createDatabase(2).use { connection ->
+            connection.insert(AiringRow.TABLE, listOf(listOf(7L, fetchedAt.toColumn(), 0L, null), known))
+            connection.insert(AiringEpisodeRow.TABLE, episodes)
+        }
+
+        helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
+            assertEquals(listOf(listOf(7L, fetchedAt.toColumn(), 0L, null, null), known + null), connection.rows(AiringRow.TABLE))
+            assertEquals(episodes, connection.rows(AiringEpisodeRow.TABLE))
+        }
+        val database = KirokuDatabase.open(context, name)
+        val read = database.use { _ -> RoomAiringStore(database, Dispatchers.IO) { error -> throw error }.read() }
+
+        val schedule = AiringSchedule(listOf(1, 2).map { ScheduledEpisode(it, fetchedAt.plusSeconds(it.toLong())) }, 24)
+        assertEquals(mapOf(anime.id to StoredAiring(schedule, fetchedAt), AnimeId(7) to StoredAiring(null, fetchedAt)), read)
+    }
+
+    @Test
     fun `a title that has an entry or that a page names cannot be deleted, and a deleted title takes its details along`() {
         val database = KirokuDatabase.open(context, name)
         val list = RoomLocalList(database, CoroutineScope(Dispatchers.IO), Dispatchers.IO) { throw it }
@@ -334,6 +358,7 @@ class KirokuDatabaseTest {
             mapOf(
                 1 to "c908fc01889fca24c50eae1d46661170",
                 2 to "569924a95101271cd2502ea512c63260",
+                3 to "bf46dac8cbf593d04a1acac52b0f3c99",
             )
     }
 }

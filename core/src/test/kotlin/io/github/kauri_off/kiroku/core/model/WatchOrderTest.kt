@@ -146,4 +146,19 @@ class WatchOrderTest {
         assertTrue(after.walk.take(partial.walk.size) == partial.walk)
         assertEquals(listOf(s1, s2, s0, s3, sMinus).map { it.id }, after.walk)
     }
+
+    @Test
+    fun `a chain is whole only once every title's page is read and names no title outside it`() {
+        val complete = pages(s1 to listOf(sequel(s2)), s2 to listOf(prequel(s1), sequel(s3)), s3 to listOf(prequel(s2)))
+        assertTrue(sequelChain(s2, complete).whole)
+        assertFalse("a page not read", sequelChain(s2, complete - s3.id).whole)
+        assertTrue("the order is known", sequelChain(s2, complete - s3.id).order == listOf(s1, s2, s3))
+        val line = (1L..7L).map { title(100 + it, "20%02d-01-01".format(it)) }
+        val long =
+            line.withIndex().associate { (i, anime) ->
+                anime.id to listOfNotNull(line.getOrNull(i - 1)?.let(::prequel), line.getOrNull(i + 1)?.let(::sequel))
+            }
+        assertFalse("cut at the limit", sequelChain(line[0], long).whole)
+        assertTrue(sequelChain(line[0], long - line.last().id + (line[5].id to listOf(prequel(line[4])))).whole)
+    }
 }

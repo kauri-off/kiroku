@@ -86,6 +86,8 @@ internal class LiveAiring(
 
     override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flow { emitAll(airing().observeSchedules()) }
 
+    override fun observeStoredSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flow { emitAll(airing().observeStoredSchedules()) }
+
     override suspend fun refreshStale(): Outcome<Unit> = airing().refreshStale()
 
     override suspend fun refresh(): Outcome<Unit> = airing().refresh()

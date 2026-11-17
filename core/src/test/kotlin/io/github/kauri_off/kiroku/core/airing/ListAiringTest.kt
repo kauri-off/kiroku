@@ -458,6 +458,26 @@ class ListAiringTest {
         }
 
     @Test
+    fun `a schedule whose numbering the source doubts is shown as an estimate and is in nothing a notification reads`() =
+        runTest {
+            val s = subject()
+            with(s) {
+                val doubted = set.schedules.getValue(title.id).copy(doubtedOver = count + 3)
+                source.schedules += title.id to doubted
+                val (seen, _) = seen(title.id)
+                assertEquals(Outcome.Success(Unit), airing.refresh())
+
+                val shown = checkNotNull(seen.last().second)
+                assertEquals(AiredCount.Estimated(count + 3), shown.aired)
+                assertEquals(Inexact.NumberingDoubted, shown.inexact)
+                assertEquals(shown, airing.observePageAiring(title).first()[title.id])
+                assertEquals(doubted, store.read()[title.id]?.schedule)
+                assertFalse(title.id in airing.observeSchedules().first())
+                assertTrue(FixtureAnime.exactCaughtUp.id in airing.observeSchedules().first())
+            }
+        }
+
+    @Test
     fun `a list that cannot be read ends every observer's flow with the error, and an observer that comes later reads again`() =
         runTest {
             val s = subject()

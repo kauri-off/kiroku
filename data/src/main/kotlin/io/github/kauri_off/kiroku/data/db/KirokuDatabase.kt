@@ -34,7 +34,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 2
+        const val VERSION = 3
 
         val migrations: List<Migration> =
             listOf(
@@ -49,6 +49,10 @@ abstract class KirokuDatabase : RoomDatabase() {
                             "`airs_at` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `number`), FOREIGN KEY(`title_id`) " +
                             "REFERENCES `airing`(`title_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
                     )
+                },
+                // A stored schedule whose numbering the source doubts; none was before.
+                migration(2, 3) {
+                    execSQL("ALTER TABLE `airing` ADD COLUMN `doubted_over` INTEGER")
                 },
             )
 

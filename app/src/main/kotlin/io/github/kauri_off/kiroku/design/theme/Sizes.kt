@@ -13,6 +13,9 @@ object Sizes {
     val posterStrip: Dp = 104.dp
     val posterHeader: Dp = 120.dp
 
+    // The poster that leads the title page.
+    val posterHero: Dp = 220.dp
+
     // The user's picture in the Profile header, a list item's large leading image.
     val avatar: Dp = 56.dp
 
