@@ -129,6 +129,9 @@ class NotifyRulesTest {
                 "val today = LocalDate.ofInstant(now, zone)",
                 "val zone = TimeZone.getDefault().toZoneId()",
                 "val start = date.atStartOfDay().atOffset(offset)",
+                "val calendar = java.util.Calendar.getInstance()",
+                "val day = java.text.SimpleDateFormat(\"yyyy-MM-dd\").format(now)",
+                "val text = java.util.Date().toString()",
             )
         for (source in planted) assertTrue(source, zoneProblems("A.kt", source).isNotEmpty())
         val clean =
@@ -173,7 +176,7 @@ private val handedOn =
 private val forbidden =
     mapOf(
         "reads what a schedule holds" to Regex("""\.(episodes|totalEpisodes|doubtedOver)\b"""),
-        "reads MAL's airing facts" to Regex("""\.(broadcast|startDate|malEpisodes|airingStatus)\b"""),
+        "reads the title's own airing facts" to Regex("""\.(broadcast|startDate|malEpisodes|airingStatus)\b"""),
         "builds a value of the calculator" to Regex("""\b(AiredCount\.(Exact|Estimated)|ScheduledEpisode|Airing)\("""),
         "reads the calculator's result for a screen" to Regex("""\.(latestAiredAt|nextEpisode|changesAt|premiere)\b"""),
         "reads a clock or a zone" to
@@ -197,6 +200,7 @@ internal fun notifyProblems(
 private val zoneRead =
     Regex(
         """systemDefault|\bTimeZone\b|\bZoneOffset\b|\bOffsetDateTime\b|\.zone\b|getZone|withZone|atOffset""" +
+            """|\b(Calendar|SimpleDateFormat|DateFormat)\b|\bDate\(""" +
             """|\b(LocalDate|LocalDateTime|LocalTime|ZonedDateTime|Year|YearMonth)\.now\(""" +
             """|\b(atZone|atStartOfDay|ofInstant)\((?!JAPAN\))""",
     )

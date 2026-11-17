@@ -60,7 +60,7 @@ internal object NotifyCases {
         total: Int? = 12,
     ) = AiringSchedule(numbers.mapIndexed { index, number -> ScheduledEpisode(number, week(from + index)) }, total)
 
-    // [updatedAt] is MAL's time of the entry's last change, or the app's own when the change was made in it.
+    // [updatedAt] is the time of the entry's last change: the list provider's, or the app's own when the change was made in it.
     fun entry(
         anime: Anime = title,
         status: EntryStatus = ListStatus.Watching,

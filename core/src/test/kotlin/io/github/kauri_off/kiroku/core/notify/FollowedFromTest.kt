@@ -155,7 +155,7 @@ class FollowedFromTest {
             assertEquals(name, Followed(ListStatus.Watching, now), after.record.titles[title.id]?.followed)
             assertEquals(name, listOf(4), after.also { it.walk(synced, week(3)) }.episodes())
 
-            // MAL's time of the change is ahead of the device's: the moment is the run's own.
+            // The entry's time of change is ahead of the device's: the moment is the run's own.
             val ahead = followed(entry(other))
             change(ahead, synced.plus(hour))
             ahead.run(synced)
@@ -236,7 +236,7 @@ class FollowedFromTest {
     fun `a removal that failed leaves the title followed from where it was, and announces nothing twice`() {
         val device = followed(entry(updatedAt = week(-3)))
         assertEquals(listOf(title.id to 3), device.run(week(2)).announced)
-        // W2: the entry is gone while its removal is sent, and is back as MAL last confirmed it when that fails.
+        // W2: the entry is gone while its removal is sent, and is back as it was last confirmed when that fails.
         val confirmed = device.entries
         device.remove()
         assertEquals(setOf(title.id), device.run(now).withdrawn)

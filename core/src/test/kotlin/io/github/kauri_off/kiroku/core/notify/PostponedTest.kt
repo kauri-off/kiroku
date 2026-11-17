@@ -16,7 +16,7 @@ import org.junit.Test
 import java.time.Duration
 import java.time.Instant
 
-// N1, N7. Episode 3 is announced at week(2) from the stored schedule, and AniList then gives it another time.
+// N1, N7. Episode 3 is announced at week(2) from the stored schedule, which then gives it another time.
 class PostponedTest {
     private val followedFrom = Followed(ListStatus.Watching, week(0).minus(day))
     private val none = emptyList<Pair<AnimeId, Int>>()
@@ -123,9 +123,79 @@ class PostponedTest {
         val back = device.run(week(2).plus(hour.multipliedBy(2)))
         assertEquals(emptyList<Due>(), back.due)
         assertEquals(emptyList<Announcement>(), back.standing)
+        assertEquals(TitleRecord(followedFrom, Announced(3, week(2))), device.record.titles[title.id])
+        // A correction of minutes that the next run finds already past changes nothing either: that airing was announced.
+        val tenMinutes = Duration.ofMinutes(10)
+        device.schedules = moved(tenMinutes)
+        val corrected = device.run(week(2).plus(hour.multipliedBy(3)))
+        assertEquals(emptyList<Due>(), corrected.due)
+        assertEquals(TitleRecord(followedFrom, Announced(3, week(2))), device.record.titles[title.id])
+        assertEquals(none, device.walk(week(2).plus(hour.multipliedBy(3)), week(3)).announced)
+        val next = week(3).plus(tenMinutes)
+        assertEquals(listOf(Due(Announcement(title, 4, toWatch = 2, marks = 3), next, next)), device.run(next).due)
+        assertEquals(TitleRecord(followedFrom, Announced(4, next), standing = true), device.record.titles[title.id])
+    }
+
+    // The schedule with each of [times]' episodes at its time, and every other at its own.
+    private fun at(vararg times: Pair<Int, Instant>): Map<AnimeId, AiringSchedule> =
+        mapOf(
+            title.id to
+                weekly().let {
+                    it.copy(
+                        episodes =
+                            it.episodes.map { e ->
+                                e.copy(airsAt = times.toMap()[e.number] ?: e.airsAt)
+                            },
+                    )
+                },
+        )
+
+    @Test
+    fun `the highest of episodes announced as one, given its first time again, is not announced twice, nor is one below it`() {
+        val device = followed(entry(watched = 2), schedules = at(4 to week(2)))
+        assertEquals(listOf(Triple(title.id, 4, week(2))), device.run(week(2)).airings)
+        device.schedules = at(3 to week(3), 4 to week(4))
+        assertEquals(setOf(title.id), device.run(week(2).plus(hour)).withdrawn)
+        // Episode 4 has aired at week(2) after all, and episode 3 is still to come: both were told of at that airing.
+        device.schedules = at(3 to week(3), 4 to week(2))
+        assertEquals(emptyList<Due>(), device.run(week(2).plus(hour.multipliedBy(2))).due)
+        assertEquals(TitleRecord(followedFrom, Announced(4, week(2))), device.record.titles[title.id])
+        // A correction that the next run finds past, and episode 3's own time, announce nothing.
+        device.schedules = at(3 to week(3), 4 to week(2).plus(Duration.ofMinutes(10)))
+        assertEquals(none, device.walk(week(2).plus(hour.multipliedBy(3)), week(4).minus(hour)).announced)
+        assertEquals(listOf(Triple(title.id, 5, week(4))), device.run(week(4)).airings)
+    }
+
+    @Test
+    fun `the lower of episodes announced as one, given its first time again, is not announced twice`() {
+        val device = followed(entry(watched = 2), schedules = at(4 to week(2)))
+        assertEquals(listOf(Triple(title.id, 4, week(2))), device.run(week(2)).airings)
+        device.schedules = at(3 to week(3), 4 to week(4))
+        assertEquals(setOf(title.id), device.run(week(2).plus(hour)).withdrawn)
+        // Episode 3 has aired at week(2) after all, and episode 4 is still to come.
+        device.schedules = at(4 to week(4))
+        assertEquals(emptyList<Due>(), device.run(week(2).plus(hour.multipliedBy(2))).due)
+        assertEquals(TitleRecord(followedFrom, Announced(4, week(2)), takenBackTo = 3), device.record.titles[title.id])
+        // A correction of episode 3 that the next run finds past announces nothing; episode 4 is announced at its own time.
+        device.schedules = at(3 to week(2).plus(Duration.ofMinutes(10)), 4 to week(4))
+        assertEquals(none, device.walk(week(2).plus(hour.multipliedBy(3)), week(4).minus(hour)).announced)
+        assertEquals(listOf(Triple(title.id, 5, week(4))), device.run(week(4)).airings)
+    }
+
+    @Test
+    fun `an episode given its first time again while a lower one is still postponed is not announced twice`() {
+        // Episodes 3, 4 and 5 air together and are one announcement, of 5.
+        val device = followed(entry(watched = 2), schedules = at(4 to week(2), 5 to week(2)))
+        assertEquals(listOf(Triple(title.id, 5, week(2))), device.run(week(2)).airings)
+        device.schedules = at(3 to week(3), 4 to week(4), 5 to week(5), 6 to week(6))
+        assertEquals(setOf(title.id), device.run(week(2).plus(hour)).withdrawn)
+        // Episode 4 has aired at week(2) after all; 3 and 5 are still to come.
+        device.schedules = at(3 to week(3), 4 to week(2), 5 to week(5), 6 to week(6))
         assertEquals(none, device.walk(week(2).plus(hour.multipliedBy(2)), week(3).minus(hour)).announced)
-        assertEquals(listOf(Due(Announcement(title, 4, toWatch = 2, marks = 3), week(3), week(3))), device.run(week(3)).due)
-        assertEquals(TitleRecord(followedFrom, Announced(4, week(3)), standing = true), device.record.titles[title.id])
+        assertEquals(listOf(Triple(title.id, 3, week(3))), device.run(week(3)).airings)
+        assertEquals(none, device.walk(week(3), week(5).minus(hour)).announced)
+        assertEquals(listOf(Triple(title.id, 5, week(5))), device.run(week(5)).airings)
+        assertEquals(listOf(5, 3, 5), device.episodes())
     }
 
     @Test
@@ -148,7 +218,7 @@ class PostponedTest {
                 },
         )
         val device = announced()
-        // AniList adds episode 4 with a time an hour before episode 3's.
+        // The schedule gains episode 4 with a time an hour before episode 3's.
         device.schedules = with(week(2), week(2).minus(hour))
         assertEquals(listOf(Triple(title.id, 4, week(2).minus(hour))), device.run(week(2).plus(hour)).airings)
         assertEquals(TitleRecord(followedFrom, Announced(4, week(2)), standing = true), device.record.titles[title.id])

@@ -65,12 +65,11 @@ class AnnouncedOnceTest {
         )
     }
 
-    // The test's own account of what was announced of a title, kept from the recorded runs alone.
-    private class Told {
-        // The highest episode announced, the air time of the latest announcement, and the highest not taken back since.
-        var highest = 0
-        var airedAt: Instant? = null
-        var stands = 0
+    // The test's own account of one episode, kept from what the recorded runs found and announced, never from the record.
+    private class Seen {
+        // The air times it was announced for, and whether a run has found it not aired since it was announced.
+        val told = mutableSetOf<Instant>()
+        var unaired = false
     }
 
     @Test
@@ -85,7 +84,7 @@ class AnnouncedOnceTest {
         repeat(60) { round ->
             val random = Random(round)
             val device = Device(set.entries, set.schedules, NotificationSettings(alsoPlanned = random.nextBoolean()))
-            val told = mutableMapOf<AnimeId, Told>()
+            val seen = mutableMapOf<AnimeId, MutableMap<Int, Seen>>()
             val cut = mutableSetOf<Pair<AnimeId, Int>>()
             var now = set.now.minus(day.multipliedBy(14))
             repeat(500) {
@@ -155,24 +154,28 @@ class AnnouncedOnceTest {
                         result.record.titles[title]
                             ?.followed
                             ?.since ?: continue
-                    val account = told.getOrPut(title) { Told() }
+                    val episodes = seen.getOrPut(title) { mutableMapOf() }
                     val airing = airingAt(entry.anime, device.schedules[title], now)
-                    // An exact count below what was announced: those episodes have not aired, and are owed again when they do.
-                    val stands = (airing.aired as? AiredCount.Exact)?.value?.coerceAtMost(account.stands) ?: account.stands
-                    // N2, N6: the highest episode owed is the one announced, and nothing else is.
+                    // What was announced of the title: its highest episode, which told of those below it too, and the latest air time.
+                    val highest = episodes.filterValues { it.told.isNotEmpty() }.keys.maxOrNull() ?: 0
+                    val latest = episodes.values.flatMap { it.told }.maxOrNull()
+                    // N6: an episode below one that was announced and stands as aired was told of with it.
+                    val stood = episodes.filterValues { it.told.isNotEmpty() && !it.unaired }.keys.maxOrNull() ?: 0
+                    // N2: owed is an episode not told of yet, or one found not aired since that has aired at a later time than any told.
                     val due =
                         airing.airTimes
                             .filter {
                                 val at = it.airsAt.plus(delay)
                                 val limit = at.plus(announcedNoLaterThan.toJavaDuration())
-                                val fresh = it.number > account.highest || account.airedAt?.isBefore(it.airsAt) == true
-                                it.number > maxOf(entry.values.watchedEpisodes, stands) &&
-                                    fresh &&
+                                val again = episodes[it.number]?.unaired == true && latest != null && it.airsAt.isAfter(latest)
+                                val owes = it.number > highest || (again && it.number > stood)
+                                it.number > entry.values.watchedEpisodes &&
+                                    owes &&
                                     at.isAfter(since) &&
                                     !at.isAfter(now) &&
                                     !now.isAfter(limit)
                             }.maxByOrNull { it.number }
-                    val name = "${entry.anime.titles.romaji} at $now"
+                    val name = "round $round, ${entry.anime.titles.romaji} at $now"
                     assertEquals(
                         name,
                         listOfNotNull(due?.let { Triple(title, it.number, it.airsAt) }),
@@ -183,15 +186,19 @@ class AnnouncedOnceTest {
                     )
                     if (due != null) owed++
                     if (cutOff) continue
-                    account.stands = stands
                     if (due != null) {
-                        // N1: an episode announced before is announced again only once it was taken back, and for a later air time.
-                        if (due.number <= account.highest) afresh++
-                        assertTrue(name, due.number > account.stands)
-                        assertTrue(name, due.number > account.highest || due.airsAt.isAfter(account.airedAt))
-                        account.highest = maxOf(account.highest, due.number)
-                        account.airedAt = maxOf(due.airsAt, account.airedAt ?: due.airsAt)
-                        account.stands = due.number
+                        // It is told of, and with it those below it.
+                        if (due.number <= highest) afresh++
+                        episodes.getOrPut(due.number) { Seen() }.told += due.airsAt
+                        episodes.filterKeys { it <= due.number }.values.forEach { it.unaired = false }
+                    }
+                    val count = (airing.aired as? AiredCount.Exact)?.value ?: continue
+                    // An exact count below an episode that was told of: the run has found it not aired.
+                    for (number in count + 1..maxOf(highest, due?.number ?: 0)) episodes.getOrPut(number) { Seen() }.unaired = true
+                    // An episode found aired no later than an air time told: that airing was announced, whatever is corrected later.
+                    for ((number, episode) in episodes) {
+                        val airedAt = airing.airTimes.firstOrNull { it.number == number }?.airsAt ?: continue
+                        if (number <= count && latest != null && !airedAt.isAfter(latest) && !airedAt.isAfter(now)) episode.unaired = false
                     }
                 }
                 if (cutOff) cut += result.announced else again += result.announced.count { cut.remove(it) }

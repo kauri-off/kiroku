@@ -144,7 +144,7 @@ class NotifiableTest {
         val undated = title.copy(startDate = null, broadcast = null)
         assertEquals(AiredCount.Unknown, airingAt(undated, null, week(3)).aired)
         assertTrue(followed(entry(undated), schedules = emptyMap()).walk(week(-1), week(13)).all { it.silent })
-        // The same title with a schedule that agrees with MAL is announced until the schedule stops.
+        // The same title with a schedule that agrees with its own total is announced until the schedule stops.
         val stopping = followed(entry(), schedules = only(weekly(1..6)))
         assertEquals((1..6).toList(), stopping.walk(week(-1), week(14)).announced.map { it.second })
     }
@@ -264,7 +264,7 @@ class NotifiableTest {
     }
 
     @Test
-    fun `A13 a finale is announced after MAL has marked its show finished`() {
+    fun `A13 a finale is announced after its show is marked finished`() {
         // Marked before the finale's air time.
         val early = followed(entry(watched = 10))
         early.run(week(10))
