@@ -241,13 +241,18 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
 
 - **N1. Exactly once.** An episode that has aired is announced at most once, however many triggers run at the same
   time, and also when airing data is refreshed between its air time and its notification, the alarm is lost, a
-  delay is configured, the device restarts or the app is updated.
+  delay is configured, the device restarts or the app is updated. Four cases alert a second time, by decision: a
+  notification dismissed between its post and its record, when the process dies or the store fails there; an
+  episode announced from stored data whose re-check answered, after its bound, that it was postponed, when it
+  airs; an episode announced again after any postponement; and an episode a run posted and did not record, which
+  the user then marks watched and unmarks.
 - **N2. Not lost.** A notifiable episode whose notification time has passed is announced the next time the app
   gets to run: the alarm, a device restart, an app update, the app being opened, or periodic background work that
   needs no network. A notification that would come more than three days late is not shown.
 - **N3. Re-checked.** When the alarm fires and a network is available, the air time is checked again within a few
   seconds: a postponed episode is rescheduled instead of announced. When the check fails or takes too long, the
-  stored data is used.
+  stored data is used. An answer that comes after that and postpones the episode takes its notification back; if
+  the airing source then puts the episode back at its first time, it is not announced again.
 - **N4. Never for anything else.** No notification for a title that is dropped, completed, on hold, removed or not
   on the list, for an episode the user has watched, for a planned title unless that is enabled, or from an
   estimated or unknown count. An episode whose air time is not known is never announced.
@@ -275,12 +280,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 5.3 What the user gets
 
-- **Text.** Title: the anime title in the preferred title language. Text: "Episode 16 aired", and when more than
-  one aired episode is unwatched, "Episode 16 aired · 3 to watch", in the language in effect when it is posted.
-  Tapping opens the title page with the List beneath it.
-- **Grouping.** All episode notifications share one group with a summary ("3 new episodes"), so an evening with
-  several shows is one stack. **Channel:** "New episodes", default importance.
-- **Action.** One action, labelled with the episode it marks: "Mark ep. 14 watched".
+- **A notification** is one a title, in the preferred title language, in the language in effect when it is posted,
+  with one action that marks the episode it names. Tapping it opens the title page with the List beneath it; a
+  tapped notification goes and is not shown again.
+- **Grouping.** All episode notifications share one group with a summary, so an evening with several shows is one
+  stack. **Channel:** default importance.
 - **First run.** Notifications are on by default. On Android 13 and later the system permission prompt appears
   once, on the List, right after the first successful sign-in, with no custom dialog before it. If the user
   denies, the setting shows "Blocked in system settings" with a button, and nothing else in the app mentions it.

@@ -198,28 +198,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-01 [A] What is notifiable.**
 
-- [ ] **M4-02 [A] Notification engine.** In `:core` only, over ports as the list's and the airing's engines are: a
-  store of M4-01's record and of the settings, the one alarm, and the notifications shown; with stores in memory
-  and a contract suite. One run serves every trigger: it reads what is stored, applies M4-01's rule, posts what is
-  due and records it, withdraws what no longer stands (N7) and leaves the alarm at the earliest coming notification
-  time, or none (N8). Runs at the same time announce an episode once (N1), and a run cut off by the death of its
-  process neither loses its episode nor announces it twice; the hand-off states how. A run started by the alarm
-  with the device online first asks AniList again for the due titles alone, for a bounded few seconds: a postponed
-  episode is planned again instead of announced, and an answer that fails or is late leaves the stored data in use
-  (N3). While the process lives, a change of the list, of the airing data or of a setting, the delay alone
-  included, is followed by a run (N8). Signed out, nothing is posted, what is posted is withdrawn, no alarm is left
-  and the record is forgotten (S9); an expired session changes none of it (S6). For the screens the engine gives
-  the settings and takes their changes, what comes next, and what was sent: each announcement with its title and
-  episode, its air time, its notification time, when it was posted and how the re-check ended. Every run is
-  reported with its trigger and what it did, for M4-15. Demo mode can run on it. The hand-off states the ports and
-  the screens' surface for the orchestrator's approval before M4-07, M4-08 and M4-09 start.
-  **Needs:** M4-01.
-  **Check:** `./gradlew :core:test`, on virtual time: the contract suite holds a test for each of N1 (several runs
-  at once; a refresh that lands between an air time and its notification; the delay changed; an alarm that never
-  fired; a new engine over the same store, as after a restart or an update; a run cut off after each of its steps),
-  N2 (each trigger announces what is overdue, and nothing three days late), N3 (postponed, failed, slower than the
-  bound, offline), N7, N8 and S9, and the stores in memory pass it; a schedule fetched for a page reaches no run;
-  the re-check asks AniList for the due titles and no other.
+- [x] **M4-02 [A] Notification engine.**
 
 - [x] **M4-03 Background writes and the edits a screen holds.**
 
@@ -250,23 +229,7 @@ missing from it; there are no duplicates.
   same file, and one that cannot be read counts as never made and is reported. `./gradlew
   :data:connectedDebugAndroidTest` passes on an emulator.
 
-- [ ] **M4-08 The notification on the device.** M4-02's port for the notifications shown, on Android's own: an
-  episode's notification in its channel, one per title, grouped with the others; a tap opens the title page with
-  the List beneath it (section 6.3), also when the app was not running; the action is delivered to this app alone
-  and carries its title and the episode it marks; a later post for a title replaces the earlier one without
-  alerting again; a withdrawal removes it, and the group's summary with the last one. Its text comes from the
-  resources in the language in effect at the post, with the title in the preferred title language. What it says,
-  its icon and how the group reads are built once and shown to the owner (section 9): a tool of the debug menu
-  posts samples through the real channel, for one title, for several and for a title with more than one episode
-  unwatched. Read first, on developer.android.com: `develop/ui/compose/notifications/create-notification` and
-  `…/channels`, `develop/ui/views/notifications/group` and `…/navigation`.
-  **Needs:** M4-02, M4-06.
-  **Check:** tests: after posts, a replacement and withdrawals the notifications shown are exactly those the engine
-  asked for, and the summary exists only while one does; the tap's stack is List, then Title; the action's intent
-  names its title and episode and no other app can send or read it; under a Russian locale the text is Russian,
-  with its plural forms. On an emulator of the current Android and on M4-06's: the samples are in the shade as the
-  hand-off's screenshots show them, in both languages, and a tap on one with the app stopped opens the title page,
-  from which Back reaches the List.
+- [x] **M4-08 The notification on the device.**
 
 - [ ] **M4-09 [A] The alarm and the moments the app runs.** In `:app`: M4-02's alarm port on the system's alarm
   service, and everything that starts a run without a screen. The alarm is one-shot and is set so that it may fire
@@ -451,19 +414,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-07 Sandbox: other users.**
 
-- [ ] **M6-08 Another user's list from MAL.** In `:data`: M6-04's port over MAL's list of a named user. A part is
-  a page, asked one at a time, and the entries so far follow each. The name goes to MAL as one segment of the
-  address whatever it holds, with the client id alone, and never as MAL's word for the signed-in user. The outcomes
-  are M6-03's; a page that fails fails the read with that page's failure, and no page after it is asked; what was
-  repaired is reported once the list is whole (section 2.3). Whether two names are one user is answered from what
-  M6-03 recorded, and the sandbox answers a name in another letter case and a name no account can have as
-  recorded.
-  **Needs:** M6-03, M6-04, M6-07.
-  **Check:** `./gradlew :data:testDebugUnitTest`: M6-04's contract passes over it against the sandbox; the list of
-  several thousand is given whole, in parts, with the entries so far after each; a private list and an unknown name
-  are their outcomes on the recorded answers; a name that holds a slash, a question mark, a space, letters outside
-  Latin or MAL's word for the signed-in user reaches MAL as one segment and without a token, signed in too; a
-  refusal half-way is a refusal after which background work backs off; `SendRulesTest` passes.
+- [x] **M6-08 Another user's list from MAL.**
 
 - [x] **M6-09 The Profile on real state.**
 

@@ -156,6 +156,9 @@ class AiringEngine(
     // A pull on a title's page: a tracked title is refreshed; any other is fetched and held in memory (A12), unless finished.
     suspend fun refresh(anime: Anime): Outcome<Unit> = ask { tracking, _ -> listOfNotNull(pageTitle(tracking, anime)) }
 
+    // N3: asks for those of [titles] that are tracked and for no other, which a finished title is not.
+    suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = ask { tracking, _ -> titles.mapNotNull(tracking.tracked::get) }
+
     // A title's page that is shown: the same, only when what is held of the title is stale.
     suspend fun refreshStale(anime: Anime): Outcome<Unit> =
         ask { tracking, stored ->

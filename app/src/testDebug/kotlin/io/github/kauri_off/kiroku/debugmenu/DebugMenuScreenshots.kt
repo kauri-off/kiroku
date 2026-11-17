@@ -21,6 +21,8 @@ import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
+import io.github.kauri_off.kiroku.notificationsamples.NotificationSamplesSection
+import io.github.kauri_off.kiroku.notificationsamples.NotificationSamplesState
 import io.github.kauri_off.kiroku.recorder.RecorderSection
 import io.github.kauri_off.kiroku.recorder.RecorderState
 import io.github.kauri_off.kiroku.reports.Report
@@ -96,6 +98,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             ) { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.NotStarted(Halt.OnTheList), "21")) },
             case("airing-counts-stopped") { Menu(ScenarioState.Unavailable, airingCounts = STOPPED) },
             case("airing-counts-unreadable") { Menu(ScenarioState.Unavailable, airingCounts = AiringCountsState.Unreadable) },
+            case("notification-samples-blocked") { Menu(ScenarioState.Unavailable, samples = NotificationSamplesState(shown = false)) },
             case("reports") { Menu(ScenarioState.Unavailable, reports = REPORTS) },
             case("reports-renamed") { Menu(ScenarioState.Unavailable, reports = RENAMED, renamed = true) },
             case("tab-on-list") { OverList(Scenario()) },
@@ -184,6 +187,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         reports: List<Report> = emptyList(),
         renamed: Boolean = false,
         airingCounts: AiringCountsState = COUNTS,
+        samples: NotificationSamplesState = NotificationSamplesState(),
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
@@ -191,6 +195,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             { SignOutSection(signOut, onEvent = {}) },
             { RecorderSection(recorder, onEvent = {}) },
             { AiringCountsSection(airingCounts, onEvent = {}) },
+            { NotificationSamplesSection(samples, onEvent = {}) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
             { ReportsSection(reports, renamed) },

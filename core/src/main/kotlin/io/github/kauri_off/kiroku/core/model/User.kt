@@ -16,6 +16,15 @@ sealed interface Session {
     ) : Session
 }
 
+// Whose list the session's is: nobody's signed out, its sign-in's also once expired (S6).
+val Session.owner: SignInId?
+    get() =
+        when (this) {
+            Session.SignedOut -> null
+            is Session.SignedIn -> signIn
+            is Session.Expired -> signIn
+        }
+
 @JvmInline
 value class SignInId(
     val value: String,

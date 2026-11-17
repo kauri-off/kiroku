@@ -62,13 +62,56 @@ class NotifyRulesTest {
 
     @Test
     fun `the rules of notifications derive no aired count and no air time, and read no clock and no zone`() {
-        val sources = sources("notify")
-        assertEquals(setOf("Notifiable.kt", "NotificationRecord.kt", "NotificationSettings.kt"), sources.map { it.name }.toSet())
+        assertEquals(rules + carriers, sources("notify").map { it.name }.toSet())
+        val sources = sources("notify").filter { it.name in rules }
         assertEquals(emptyList<String>(), sources.flatMap { notifyProblems(it.name, it.readText()) })
         // The schedules reach the calculator, and the calculator is named once, as the one the rule asks.
         val code = sources.flatMap { code(it.readText()).lines() }.map { it.trim() }
         assertTrue(SCHEDULES_TO_THE_CALCULATOR in code)
         assertEquals(listOf(THE_RULE_ASKS_THE_CALCULATOR), code.filter { "airingAt" in it && !it.startsWith("import ") })
+    }
+
+    @Test
+    fun `what carries the rule out derives nothing either, reads schedules only as a notification may, and reads no zone`() {
+        val sources = sources("notify").filter { it.name in carriers }
+        assertEquals(carriers, sources.map { it.name }.toSet())
+        assertEquals(emptyList<String>(), sources.flatMap { carrierProblems(it.name, it.readText()) })
+        val code = sources.flatMap { code(it.readText()).lines() }.map { it.trim() }
+        // The schedules are read in one place and reach the rule, which is asked in the run alone.
+        assertEquals(1, code.count { it == SCHEDULES_AS_A_NOTIFICATION_MAY })
+        assertEquals(2, code.count { it.endsWith(THE_RUN_ASKS_THE_RULE) })
+        assertEquals(2, code.count { "notificationsAt(" in it })
+        val planted =
+            listOf(
+                "val schedules = airing.observeStoredSchedules().first()",
+                "val airing = airing.observePageAiring(anime).first()",
+                "val counts = airing.observeAiring().first()",
+                "val stored: Map<AnimeId, StoredAiring> = store.read()",
+                "val airing = airingAt(entry.anime, read.schedules[entry.anime.id], now)",
+                "val due = read.schedules.filterValues { it.episodes.any { e -> e.airsAt <= now } }",
+                "val schedules = airing.observeSchedules().first() - finished",
+                "val aired = AiredCount.Exact(announcement.episode)",
+                "val today = clock.instant().atZone(clock.zone).toLocalDate()",
+                "val zone = ZoneId.systemDefault()",
+                "val now = Instant.now()",
+            )
+        for (source in planted) assertTrue(source, carrierProblems("A.kt", source).isNotEmpty())
+        assertEquals(emptyList<String>(), carrierProblems("A.kt", "val began = clock.instant()\n" + carriersHandOn.joinToString("\n")))
+    }
+
+    @Test
+    fun `notifications name roles, never a service, in their code`() {
+        assertEquals(emptyList<String>(), sources("notify").flatMap { serviceProblems(it.name, it.readText()) })
+        val planted =
+            listOf(
+                "enum class Recheck { AniListAnswered }",
+                "class MalRecord(val malId: Long)",
+                "val anilistFailed: Boolean,",
+                "fun recheck(aniList: AiringSource)",
+                "val error = DataError.MalRefused",
+            )
+        for (source in planted) assertEquals(source, 1, serviceProblems("A.kt", source).size)
+        assertEquals(emptyList<String>(), serviceProblems("A.kt", "val normal = formal.minimal // MAL's dates are Japan's"))
     }
 
     @Test
@@ -163,6 +206,14 @@ private const val SCHEDULES_TO_THE_CALCULATOR = "val airing = calculate(anime, s
 private const val THE_RULE_ASKS_THE_CALCULATOR = "): Notifications = notificationsAt(entries, schedules, settings, record, now, ::airingAt)"
 private const val JAPAN_IS = "val JAPAN: ZoneId = ZoneId.of(\"Asia/Tokyo\")"
 
+private const val SCHEDULES_AS_A_NOTIFICATION_MAY = "val schedules = airing.observeSchedules().first()"
+private const val THE_RUN_ASKS_THE_RULE =
+    "result = notificationsAt(read.entries, read.schedules, read.settings, read.record, clock.instant())"
+
+// The files that say what is notifiable, and those that carry it out.
+private val rules = setOf("Notifiable.kt", "NotificationRecord.kt", "NotificationSettings.kt")
+private val carriers = setOf("NotificationEngine.kt", "NotificationPorts.kt", "NotificationRuns.kt")
+
 // The only lines of the notification rules that name the schedules or their type: they are handed on, never opened.
 private val handedOn =
     setOf(
@@ -195,6 +246,60 @@ internal fun notifyProblems(
         val opened = Regex("""\b(schedules|AiringSchedule)\b""").containsMatchIn(line) && line.trim() !in handedOn
         val problems = forbidden.filterValues { it.containsMatchIn(line) }.keys + listOfNotNull("opens the schedules".takeIf { opened })
         problems.map { "$name:${index + 1} $it: ${line.trim()}" }
+    }
+
+// The only lines of what carries the rule out that name the schedules or their type: read as a notification may, and handed on.
+private val carriersHandOn =
+    setOf(
+        "import io.github.kauri_off.kiroku.core.airing.AiringSchedule",
+        "val schedules: Map<AnimeId, AiringSchedule>,",
+        "schedules: Map<AnimeId, AiringSchedule>,",
+        "airing.observeSchedules(),",
+        ") { session, entries, schedules, settings -> seen(session.owner, entries, schedules, settings) }",
+        ") = if (owner == null) Seen(null, emptyList(), emptyMap(), null) else Seen(owner, entries, schedules, settings)",
+        "var $THE_RUN_ASKS_THE_RULE",
+        THE_RUN_ASKS_THE_RULE,
+        "seen = seen(read.owner, read.entries, read.schedules, read.settings)",
+        SCHEDULES_AS_A_NOTIFICATION_MAY,
+        "if (sessions.first().owner == owner) return Read(owner, stored.record, settings, entries, schedules)",
+    )
+
+private val forbiddenToCarriers =
+    forbidden - "reads a clock or a zone" +
+        mapOf(
+            "reads a zone or a clock of its own" to
+                Regex(
+                    """\b(ZoneId|ZoneOffset|ZonedDateTime|OffsetDateTime|LocalDate|LocalDateTime|LocalTime|TimeZone)\b""" +
+                        """|\.now\(\)|\.zone\b|currentTimeMillis""",
+                ),
+            "asks the calculator beside the rule" to Regex("""\bairingAt\b"""),
+            "reads airing data a notification may not" to
+                Regex(
+                    """\b(observeStoredSchedules|observePageAiring|observeAiring|observeStored|AiringStore|AiringSource|StoredAiring)\b""",
+                ),
+        )
+
+// A line of what carries the rule out that derives what only the calculator may, or reads what no notification may.
+internal fun carrierProblems(
+    name: String,
+    source: String,
+): List<String> =
+    code(source).lines().flatMapIndexed { index, line ->
+        val opened = Regex("""\b(schedules|AiringSchedule)\b""").containsMatchIn(line) && line.trim() !in carriersHandOn
+        val problems =
+            forbiddenToCarriers.filterValues { it.containsMatchIn(line) }.keys + listOfNotNull("opens the schedules".takeIf { opened })
+        problems.map { "$name:${index + 1} $it: ${line.trim()}" }
+    }
+
+private val service = Regex("""\b(MAL|Mal[A-Z]\w*|mal[A-Z]\w*|\w*Ani[Ll]ist\w*|ani[Ll]ist\w*)\b|\.Mal[A-Z]""")
+
+// A line of code that names a service where a role is meant.
+internal fun serviceProblems(
+    name: String,
+    source: String,
+): List<String> =
+    code(source).lines().flatMapIndexed { index, line ->
+        if (service.containsMatchIn(line)) listOf("$name:${index + 1} ${line.trim()}") else emptyList()
     }
 
 private val zoneRead =
