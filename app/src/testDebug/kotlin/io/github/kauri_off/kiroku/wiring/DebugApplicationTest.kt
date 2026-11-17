@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.source.runningSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -15,6 +16,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class DebugApplicationTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val application get() = RuntimeEnvironment.getApplication()
 
     @Test

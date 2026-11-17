@@ -19,7 +19,6 @@ class PreviewBuildTest {
             "standInPosters" to "posters of fixture titles, which only the demo and the sandbox show",
             "liveRecorder" to "the recorder, started only from the debug menu",
             "searchStandIn" to "fixture titles, on the demo and the sandbox only",
-            "profileStandIn" to "the fixture user, on the demo and the sandbox only",
             "signInFailed" to "one log line on why a sign-in failed, which names no credential",
         )
 

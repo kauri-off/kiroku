@@ -7,13 +7,16 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.ListWrite
-import io.github.kauri_off.kiroku.profile.profileStandIn
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -21,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -34,6 +38,9 @@ import java.util.TimeZone
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class DebugGraphTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val device = Clock.offset(FixtureTime.clock, Duration.ofDays(7 * 30 + 2))
     private val context get() = RuntimeEnvironment.getApplication()
 
@@ -89,11 +96,14 @@ class DebugGraphTest {
         runTest {
             assertTrue(SourceChoice(context).choose(DataSource.Sandbox))
             for (id in listOf("0123abcd", "")) {
-                val graph = createGraph(context, id, device, backgroundScope, live = { error("The sandbox started the real account") })
+                // One process holds one graph: this start's work ends before the next one opens the same files.
+                val process = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext.job))
+                val graph = createGraph(context, id, device, process, live = { error("The sandbox started the real account") })
                 assertTrue(graph is SandboxGraph)
                 assertEquals(emptyList<String>(), (graph as SandboxGraph).sandbox.mal.asked)
                 assertEquals(Session.SignedOut, graph.session.observeSession().first())
                 assertTrue(graph.signIn.canStart)
+                process.coroutineContext.job.cancelAndJoin()
             }
             assertFalse(
                 context.noBackupFilesDir
@@ -103,9 +113,9 @@ class DebugGraphTest {
             )
         }
 
-    // Search and Profile over the real account show what a release shows, so no fixture title is edited there.
+    // Search over the real account shows what a release shows, so no fixture title is edited there; Profile its placeholder.
     @Test
-    fun `fixture stand-ins are on the demo and the sandbox, and not on the real account`() =
+    fun `the fixture stand-in and the Profile are on the demo and the sandbox, and not on the real account`() =
         runTest {
             val graphs =
                 DataSource.entries.associateWith { source ->
@@ -114,7 +124,7 @@ class DebugGraphTest {
                 }
             val standingIn = graphs.filterValues { searchStandIn(it) != null }.keys
             assertEquals(setOf(DataSource.Demo, DataSource.Sandbox), standingIn)
-            assertEquals(standingIn, graphs.filterValues { profileStandIn(it) != null }.keys)
+            assertEquals(standingIn, graphs.filterValues { it.madeUp }.keys)
             assertTrue(graphs.getValue(DataSource.Account) is LiveGraph)
         }
 

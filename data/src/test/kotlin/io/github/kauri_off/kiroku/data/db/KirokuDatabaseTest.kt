@@ -22,6 +22,8 @@ import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.StatedFigures
+import io.github.kauri_off.kiroku.core.model.UserProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -194,17 +196,88 @@ class KirokuDatabaseTest {
 
     private fun List<List<Any?>>.ids(): List<AnimeId> = map { AnimeId(it.first() as Long) }
 
-    @Test
-    fun `a version 1 database on its exported schema keeps every row of its list and titles through the migrations`() {
-        val written = rowsOf(writtenByVersionOne("written-1.db"))
-        assertTrue(written.keys.containsAll(TABLES))
-        assertTrue(written.values.all { it.isNotEmpty() })
-        helper.createDatabase(1).use { connection ->
-            for ((table, rows) in written.entries.sortedBy { it.key != TitleRow.TABLE }) connection.insert(table, rows)
+    // A row as each column of its table holds it.
+    private fun SQLiteConnection.named(table: String): List<Map<String, Any?>> =
+        prepare("SELECT * FROM $table LIMIT 0").use { columns ->
+            val names = (0 until columns.getColumnCount()).map { columns.getColumnName(it) }
+            rows(table).map { names.zip(it).toMap() }
         }
 
-        helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
-            for ((table, rows) in written) assertEquals(table, rows, connection.rows(table))
+    // Each row with those of its values whose column the table has.
+    private fun SQLiteConnection.insertNamed(
+        table: String,
+        rows: List<Map<String, Any?>>,
+    ) {
+        val columns =
+            prepare("SELECT * FROM $table LIMIT 0").use { query ->
+                (0 until query.getColumnCount()).map { query.getColumnName(it) }
+            }
+        val held = rows.map { row -> columns.filter { it in row } }
+        for ((row, names) in rows.zip(held)) {
+            prepare("INSERT INTO $table (${names.joinToString()}) VALUES (${names.joinToString { "?" }})").use { insert ->
+                names.forEachIndexed { index, column ->
+                    when (val value = row[column]) {
+                        is Long -> insert.bindLong(index + 1, value)
+                        is Double -> insert.bindDouble(index + 1, value)
+                        is String -> insert.bindText(index + 1, value)
+                        is List<*> -> insert.bindBlob(index + 1, value.map { it as Byte }.toByteArray())
+                        else -> insert.bindNull(index + 1)
+                    }
+                }
+                insert.step()
+            }
+        }
+    }
+
+    // N10, section 7.1: a list, its titles and airing data, in a database of each earlier version, are each row as they were.
+    @Test
+    fun `a database of each earlier version keeps every row of its list, titles and airing data through the migrations`() {
+        val list =
+            AndroidSQLiteDriver().open(writtenByVersionOne("written-1.db").path).use { connection ->
+                connection.tables().associateWith { connection.named(it) }
+            }
+        val airing =
+            mapOf(
+                AiringRow.TABLE to
+                    listOf(
+                        mapOf("title_id" to 7L, "fetched_at" to fetchedAt.toColumn(), "known" to 0L, "total_episodes" to null),
+                        mapOf("title_id" to anime.id.value, "fetched_at" to fetchedAt.toColumn(), "known" to 1L, "total_episodes" to 24L),
+                        // A schedule in doubt, from version 3 on; an earlier version has no column for it.
+                        mapOf(
+                            "title_id" to 8L,
+                            "fetched_at" to fetchedAt.toColumn(),
+                            "known" to 1L,
+                            "total_episodes" to 12L,
+                            "doubted_over" to 13L,
+                        ),
+                    ),
+                AiringEpisodeRow.TABLE to
+                    listOf(1L, 2L).map {
+                        mapOf("title_id" to anime.id.value, "number" to it, "airs_at" to fetchedAt.plusSeconds(it).toColumn())
+                    },
+            )
+        assertTrue(list.keys.containsAll(TABLES))
+        assertTrue(list.values.all { it.isNotEmpty() })
+        for (version in 1 until KirokuDatabase.VERSION) {
+            context.deleteDatabase(name)
+            val written =
+                helper.createDatabase(version).use { connection ->
+                    val tables = connection.tables()
+                    for ((table, rows) in (list + airing).entries.sortedBy { it.key != TitleRow.TABLE && it.key != AiringRow.TABLE }) {
+                        if (table in tables) connection.insertNamed(table, rows)
+                    }
+                    tables.associateWith { connection.named(it) }
+                }
+            val held = if (version >= AIRING_VERSION) list.keys + airing.keys else list.keys
+            assertEquals("$version", held, written.filterValues { it.isNotEmpty() }.keys)
+
+            helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
+                for ((table, rows) in written) {
+                    val kept = connection.named(table).map { row -> row.filterKeys { it in rows.firstOrNull().orEmpty() } }
+                    assertEquals("$version: $table", rows, kept)
+                }
+                assertEquals("$version", 0, connection.rows(ProfileRow.TABLE).size)
+            }
         }
     }
 
@@ -245,6 +318,13 @@ class KirokuDatabaseTest {
                 val stored = Fixtures.reference.schedules.mapValues { StoredAiring(it.value, Fixtures.reference.now) }
                 airing.write(stored)
                 assertEquals(stored, airing.read())
+
+                val profiles = RoomProfileStore(database, Dispatchers.IO) { unexpected += it }
+                assertEquals(null, profiles.observe().first())
+                val stated = StatedFigures(1, null, 0, 0, 2, 3, 40, null, 0.5, null)
+                val profile = StoredProfile(SignInId("owner"), UserProfile("someone", null, null, stated), fetchedAt)
+                assertTrue(profiles.replace(profile) { true })
+                assertEquals(profile, profiles.observe().first())
             }
             scope.cancel()
 
@@ -353,12 +433,16 @@ class KirokuDatabaseTest {
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
 
+        // The first version with airing data.
+        const val AIRING_VERSION = 2
+
         // Every version that may be on a device, as exported: a changed entity is a new version, never a new identity here.
         val IDENTITIES =
             mapOf(
                 1 to "c908fc01889fca24c50eae1d46661170",
                 2 to "569924a95101271cd2502ea512c63260",
                 3 to "bf46dac8cbf593d04a1acac52b0f3c99",
+                4 to "7e5f8a37c34960ccc7f6550ea8aae3f2",
             )
     }
 }

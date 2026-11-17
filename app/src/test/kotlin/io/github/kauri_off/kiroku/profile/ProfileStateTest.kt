@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.profile
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.Links
 import io.github.kauri_off.kiroku.core.link.USER_NAME_MAX_LENGTH
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,22 +14,26 @@ import org.junit.Test
 class ProfileStateTest {
     private val fixtures = ProfileFixtureStates
 
+    // What a source says of a user besides the list may be nothing, for any user.
     @Test
-    fun anotherUserHasNoHeader() {
-        assertThrows(IllegalArgumentException::class.java) {
-            ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.Shown(fixtures.set.user, fixtures.nothing))
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            ProfileState(ProfileOwner.Me, ProfileContent.Shown(null, fixtures.nothing))
-        }
+    fun anyUserMayHaveAHeaderOrNone() {
+        ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.Shown(fixtures.set.user, fixtures.nothing))
+        ProfileState(ProfileOwner.Me, ProfileContent.Shown(null, fixtures.nothing))
     }
 
     @Test
-    fun onlyTheOwnProfileIsSignedOutAndOnlyAnotherUsersListLoads() {
+    fun onlyTheOwnProfileIsSignedOutAndOnlyAnotherUsersListIsRead() {
         assertThrows(IllegalArgumentException::class.java) {
             ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.SignedOut)
         }
-        assertThrows(IllegalArgumentException::class.java) { ProfileState(ProfileOwner.Me, ProfileContent.ListLoading(1, 2)) }
+        val read = UserListProgress(1, 2)
+        assertThrows(IllegalArgumentException::class.java) { ProfileState(ProfileOwner.Me, ProfileContent.ListLoading, reading = read) }
+        assertThrows(IllegalArgumentException::class.java) {
+            ProfileState(ProfileOwner.Me, ProfileContent.Shown(null, fixtures.nothing), reading = read)
+        }
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) { ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.ListLoading) }
         ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.Failed(DataError.PrivateList))
     }
 
@@ -40,14 +45,21 @@ class ProfileStateTest {
 
     @Test
     fun theLastNameOpenedComesFirstAndTheOldestFallsOff() {
-        val recent = fixtures.recent.withOpened("newest")
-        assertEquals(listOf("newest") + fixtures.recent.take(RECENT_PROFILES - 1), recent)
+        val opened = OpenedProfiles()
+        fixtures.recent.reversed().forEach { opened.opened(it, String::equals) }
+        opened.opened("newest", String::equals)
+        assertEquals(listOf("newest") + fixtures.recent.take(RECENT_PROFILES - 1), opened.names)
     }
 
+    // Which names are one user is the source's answer, never the app's own comparison.
     @Test
-    fun aNameOpenedAgainMovesToTheFrontWhateverItsCase() {
-        val recent = listOf("a_one", "b_two", "c_three").withOpened("B_TWO")
-        assertEquals(listOf("B_TWO", "a_one", "c_three"), recent)
+    fun aNameOfAUserOpenedAgainMovesToTheFrontAsTheSourceTellsUsers() {
+        val opened = OpenedProfiles()
+        listOf("c_three", "b_two", "a_one").forEach { opened.opened(it, String::equals) }
+        opened.opened("B_TWO") { a, b -> a.equals(b, ignoreCase = true) }
+        assertEquals(listOf("B_TWO", "a_one", "c_three"), opened.names)
+        opened.opened("A_ONE", String::equals)
+        assertEquals(listOf("A_ONE", "B_TWO", "a_one", "c_three"), opened.names)
     }
 
     @Test
@@ -125,17 +137,5 @@ class ProfileStateTest {
         assertEquals(ProfileInput.Blank, profileInput("  "))
         assertFalse(OpenProfile("  ", emptyList()).refused)
         assertFalse(OpenProfile("sample_viewer", emptyList()).refused)
-    }
-
-    @Test
-    fun theStandInRemembersOnlyNamesThatExist() {
-        val standIn = fixtureProfile
-        val before = standIn.recent
-        standIn.opened(fixtures.unknownName)
-        assertEquals(before, standIn.recent)
-        standIn.opened(fixtures.privateName)
-        assertEquals(fixtures.privateName, standIn.recent.first())
-        standIn.opened(fixtures.recent.last())
-        assertEquals(fixtures.recent.last(), standIn.recent.first())
     }
 }

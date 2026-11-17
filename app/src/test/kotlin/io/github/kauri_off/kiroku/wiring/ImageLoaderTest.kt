@@ -65,6 +65,9 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ImageLoaderTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val compose = composeRule()
 
     @get:Rule

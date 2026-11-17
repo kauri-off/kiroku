@@ -1,11 +1,13 @@
 package io.github.kauri_off.kiroku.link
 
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -128,6 +130,17 @@ class ProfileLinkRouteTest {
         link(other)
         onProfileOf(other)
         assertTheOwnProfileAndTheListAreBeneath()
+    }
+
+    // A configuration change keeps the open dialog and its text; only a link that leaves the screen closes it.
+    @Test
+    fun `the open dialog and its text survive a recreated activity`() {
+        click("Profile")
+        click("Open another profile")
+        compose.onNode(hasSetTextAction()).performTextReplacement("sample_vie")
+        recreate()
+        assertTrue(compose.onAllNodes(isDialog()).fetchSemanticsNodes().isNotEmpty())
+        compose.onNode(hasSetTextAction() and hasText("sample_vie")).assertExists()
     }
 
     @Test
