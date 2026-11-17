@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.list
 
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.data.anime.Repairs
@@ -18,40 +19,50 @@ import retrofit2.http.QueryMap
 
 // Whose list is read: the signed-in user's, as the session, or a named user's public one, with the client id alone.
 sealed interface ListUser {
-    data object SignedIn : ListUser
+    class SignedIn(
+        val session: MalSession,
+    ) : ListUser
 
     data class Named(
         val name: String,
     ) : ListUser
 }
 
-// A user's whole list from MAL, page after page, or the failure of the first page that failed; a page's repairs are
+// A user's list from MAL, page after page, or the failure of the first page that failed; a page's repairs are
 // reported once the whole list is read.
 class MalLists internal constructor(
     private val http: MalHttp,
-    private val session: MalSession,
     private val maxEntries: Int,
 ) {
-    constructor(http: MalHttp, session: MalSession) : this(http, session, MAX_ENTRIES)
+    constructor(http: MalHttp) : this(http, MAX_ENTRIES)
 
     private val api by http.api(ListApi::class)
 
     suspend fun list(user: ListUser): Outcome<List<ListEntry>> {
         val entries = mutableListOf<ListEntry>()
+        return pages(user) { entries += it }.map { entries }
+    }
+
+    // Each page's entries once its answer is read and closed, the next page asked only when [each] has returned.
+    suspend fun pages(
+        user: ListUser,
+        each: suspend (List<ListEntry>) -> Unit,
+    ): Outcome<Unit> {
+        if (user is ListUser.Named && !isUserSegment(user.name)) return Outcome.Failure(DataError.UnknownUser)
         val repaired = mutableListOf<Set<String>>()
         var offset = 0
         while (true) {
-            val page =
+            val read =
                 when (val outcome = page(user, offset)) {
                     is Outcome.Failure -> return outcome
                     is Outcome.Success -> outcome.value
                 }
-            entries += page.entries
-            if (page.repaired.isNotEmpty()) repaired += page.repaired
-            offset = page.next ?: break
+            if (read.repaired.isNotEmpty()) repaired += read.repaired
+            each(read.entries)
+            offset = read.next ?: break
         }
         for (fields in repaired) http.unexpected(RepairedAnswer(fields))
-        return Outcome.Success(entries)
+        return Outcome.Success(Unit)
     }
 
     // The next page must start where this one ended, below the bound; anything else fails rather than end the list early.
@@ -67,7 +78,7 @@ class MalLists internal constructor(
             return page
         }
         return when (user) {
-            ListUser.SignedIn -> session.authorised(http) { read(it) }
+            is ListUser.SignedIn -> user.session.authorised(http) { read(it) }
             is ListUser.Named -> http.call(anotherUsersList = true) { read(null) }.clientIdOutcome()
         }
     }
@@ -75,7 +86,7 @@ class MalLists internal constructor(
     private val ListUser.path: String
         get() =
             when (this) {
-                ListUser.SignedIn -> "@me"
+                is ListUser.SignedIn -> ME
                 is ListUser.Named -> name
             }
 
@@ -87,6 +98,12 @@ class MalLists internal constructor(
         const val MAX_ENTRIES = 100_000
     }
 }
+
+// MAL's word for the signed-in user in place of a name.
+private const val ME = "@me"
+
+// A name nobody can have is not asked: one that is no segment of an address, or MAL's word for the signed-in user.
+private fun isUserSegment(name: String): Boolean = name != "" && name != "." && name != ".." && !name.equals(ME, ignoreCase = true)
 
 private interface ListApi {
     @GET("users/{user}/animelist")

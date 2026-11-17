@@ -430,19 +430,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-07 Sandbox: other users.**
 
-- [ ] **M6-08 Another user's list from MAL.** In `:data`: M6-04's port over MAL's list of a named user. A part is
-  a page, asked one at a time, and the entries so far follow each. The name goes to MAL as one segment of the
-  address whatever it holds, with the client id alone, and never as MAL's word for the signed-in user. The outcomes
-  are M6-03's; a page that fails fails the read with that page's failure, and no page after it is asked; what was
-  repaired is reported once the list is whole (section 2.3). Whether two names are one user is answered from what
-  M6-03 recorded, and the sandbox answers a name in another letter case and a name no account can have as
-  recorded.
-  **Needs:** M6-03, M6-04, M6-07.
-  **Check:** `./gradlew :data:testDebugUnitTest`: M6-04's contract passes over it against the sandbox; the list of
-  several thousand is given whole, in parts, with the entries so far after each; a private list and an unknown name
-  are their outcomes on the recorded answers; a name that holds a slash, a question mark, a space, letters outside
-  Latin or MAL's word for the signed-in user reaches MAL as one segment and without a token, signed in too; a
-  refusal half-way is a refusal after which background work backs off; `SendRulesTest` passes.
+- [x] **M6-08 Another user's list from MAL.**
 
 - [x] **M6-09 The Profile on real state.**
 

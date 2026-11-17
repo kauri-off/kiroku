@@ -41,7 +41,7 @@ class MalListsTest {
     internal val network = NetworkFixture()
 
     private val sessions by lazy { SessionFixture(folder.newFolder()) }
-    private val lists by lazy { MalLists(network.http, sessions.open()) }
+    private val lists by lazy { MalLists(network.http) }
     private val asked = CopyOnWriteArrayList<RecordedRequest>()
     private val user = ListUser.Named("public-user")
 
@@ -61,6 +61,13 @@ class MalListsTest {
     private fun recordedEntries(): List<ListEntry> = (1..3).flatMap { recordedJson("list_public_$it").toListPage(Repairs()).entries }
 
     private fun download(of: ListUser = user) = runBlocking { lists.list(of) }
+
+    // A named user's list, and the signed-in user's, whose pages the server answers alike.
+    private val bothUsers: List<ListUser> by lazy {
+        val session = sessions.open()
+        assertEquals(Outcome.Success(Unit), runBlocking { session.signIn(TokenGrant("access-1", "refresh-1")) })
+        listOf(user, ListUser.SignedIn(session))
+    }
 
     @Test
     fun `three pages give every entry once, in their order, each page asked with adult titles and in the titles' order`() {
@@ -117,15 +124,20 @@ class MalListsTest {
             }
         }
 
-        repeat(2) { download() as Outcome.Success }
+        for (of in bothUsers) {
+            network.unexpected.clear()
+            repeat(2) { download(of) as Outcome.Success }
 
-        val reported = network.unexpected.map { (it as RepairedAnswer).fields }
-        assertEquals(List(2) { listOf(setOf("node.mean"), setOf("list_status.score")) }.flatten(), reported)
+            val reported = network.unexpected.map { (it as RepairedAnswer).fields }
+            assertEquals("$of", List(2) { listOf(setOf("node.mean"), setOf("list_status.score")) }.flatten(), reported)
+        }
 
-        network.unexpected.clear()
         serve()
-        download() as Outcome.Success
-        assertTrue(network.unexpected.isEmpty())
+        for (of in bothUsers) {
+            network.unexpected.clear()
+            download(of) as Outcome.Success
+            assertTrue("$of", network.unexpected.isEmpty())
+        }
     }
 
     @Test
@@ -152,8 +164,10 @@ class MalListsTest {
             }
         }
 
-        assertEquals(Outcome.Failure(DataError.ServerError), download())
-        assertTrue(network.unexpected.isEmpty())
+        for (of in bothUsers) {
+            assertEquals("$of", Outcome.Failure(DataError.ServerError), download(of))
+            assertTrue("$of", network.unexpected.isEmpty())
+        }
     }
 
     // A recorded page whose next link is [link].
@@ -190,14 +204,14 @@ class MalListsTest {
     @Test
     fun `a list longer than the bound fails at the page that passes it, whatever size the pages are`() {
         serve { offset -> answer(200, pageWithNext("list_public_1", "$link?offset=${offset + 10}")) }
-        val bounded = MalLists(network.http, sessions.open(), maxEntries = 25)
+        val bounded = MalLists(network.http, maxEntries = 25)
 
         assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { bounded.list(user) })
         assertEquals(listOf("0", "10", "20"), asked.map { it.url.queryParameter("offset") })
         assertTrue(network.unexpected.single() is UnusableAnswer)
 
         serve()
-        val exactly = MalLists(network.http, sessions.open(), maxEntries = 30)
+        val exactly = MalLists(network.http, maxEntries = 30)
         assertEquals(recordedEntries(), (runBlocking { exactly.list(user) } as Outcome.Success).value)
     }
 
@@ -241,9 +255,9 @@ class MalListsTest {
         serve()
         val session = sessions.open()
         assertEquals(Outcome.Success(Unit), runBlocking { session.signIn(TokenGrant("access-1", "refresh-1")) })
-        val signedIn = MalLists(network.http, session)
+        val signedIn = MalLists(network.http)
 
-        assertEquals(recordedEntries(), (runBlocking { signedIn.list(ListUser.SignedIn) } as Outcome.Success).value)
+        assertEquals(recordedEntries(), (runBlocking { signedIn.list(ListUser.SignedIn(session)) } as Outcome.Success).value)
         for (request in asked) {
             assertEquals("/v2/users/@me/animelist", request.url.encodedPath)
             assertEquals("Bearer access-1", request.headers[AUTHORIZATION])
