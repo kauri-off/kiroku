@@ -12,6 +12,8 @@ import kotlin.time.Duration.Companion.milliseconds
 internal class RefusalFile(
     private val file: File,
     private val clock: Clock,
+    // No hold and no wait is written longer than this, so a file that holds one is not read.
+    private val longest: Duration,
     private val report: (Throwable) -> Unit,
     // What is reported of a file that cannot be read or deleted.
     private val odd: () -> Throwable,
@@ -22,8 +24,52 @@ internal class RefusalFile(
         val wait: Duration,
     )
 
-    // Never more than the hold that was set: a clock found set back starts the hold again, for the next process too.
+    // In milliseconds, as the file holds them; [restartedAt] is when the clock was found behind [setAt].
+    private data class Kept(
+        val setAt: Long,
+        val held: Long,
+        val wait: Long,
+        val restartedAt: Long? = null,
+    )
+
+    private var read = false
+    private var kept: Kept? = null
+
+    // What is left of the hold as it was set or, while the clock is behind the refusal, as counted from when that was found.
+    @Synchronized
     fun read(): Held? {
+        val kept = kept() ?: return null
+        val now = clock.millis()
+        val passed = now - if (now >= kept.setAt) kept.setAt else restarted(kept, now)
+        return Held((kept.held - passed).coerceAtLeast(0).milliseconds, kept.wait.milliseconds)
+    }
+
+    private fun restarted(
+        kept: Kept,
+        now: Long,
+    ): Long = kept.restartedAt?.takeIf { it <= now } ?: now.also { keep(kept.copy(restartedAt = now)) }
+
+    // A hold of [held] from now on.
+    @Synchronized
+    fun write(
+        held: Duration,
+        wait: Duration,
+    ) = keep(Kept(clock.millis(), held.inWholeMilliseconds, wait.inWholeMilliseconds))
+
+    @Synchronized
+    fun clear() {
+        if (kept() == null) return
+        kept = null
+        if (file.exists() && !file.delete()) report(odd())
+    }
+
+    private fun kept(): Kept? {
+        if (!read) kept = stored()
+        read = true
+        return kept
+    }
+
+    private fun stored(): Kept? {
         if (!file.exists()) return null
         val values =
             try {
@@ -37,37 +83,30 @@ internal class RefusalFile(
             } catch (_: NumberFormatException) {
                 return unreadable()
             }
-        if (values.size != 3 || values.any { it < 0 }) return unreadable()
-        val (setAt, held, wait) = values
-        val passed = clock.millis() - setAt
-        if (passed < 0) write(held.milliseconds, wait.milliseconds)
-        return Held((held - passed).coerceIn(0, held).milliseconds, wait.milliseconds)
+        val bound = longest.inWholeMilliseconds
+        if (values.size !in 3..4 || values.any { it < 0 } || values[1] > bound || values[2] > bound) return unreadable()
+        return Kept(values[0], values[1], values[2], values.getOrNull(3))
     }
 
     // Reported once: a file that cannot be read is deleted, as if no refusal had been kept.
-    private fun unreadable(): Held? {
+    private fun unreadable(): Kept? {
         report(odd())
         file.delete()
         return null
     }
 
-    // A hold of [held] from now on.
-    fun write(
-        held: Duration,
-        wait: Duration,
-    ) {
+    // A value the file does not take still holds in this process.
+    private fun keep(value: Kept) {
+        kept = value
+        read = true
         val next = File(file.path + ".new")
         try {
             file.parentFile?.mkdirs()
-            next.writeText("${clock.millis()} ${held.inWholeMilliseconds} ${wait.inWholeMilliseconds}\n")
+            next.writeText(listOfNotNull(value.setAt, value.held, value.wait, value.restartedAt).joinToString(" ", postfix = "\n"))
             Files.move(next.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         } catch (e: IOException) {
             next.delete()
             report(UnusableAnswer(e))
         }
-    }
-
-    fun clear() {
-        if (file.exists() && !file.delete()) report(odd())
     }
 }

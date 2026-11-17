@@ -49,8 +49,8 @@ class MalHttp(
     appVersion: String,
     private val device: Device,
     private val clock: Clock,
-    // Where MAL's back-off is kept across a process's death; one client, and one file, per process.
-    backOffFile: File,
+    // Where MAL's back-off is kept across a process's death, asked at its first use; one client, and one file, per process.
+    backOffFile: () -> File,
     // Hears of an answer that could not be used and of a fault of this layer, each without its message.
     internal val unexpected: (Throwable) -> Unit,
     log: ((String) -> Unit)? = null,
@@ -61,7 +61,7 @@ class MalHttp(
     // Where OkHttp runs a call; a test's may run it on the caller's own thread.
     private val calls: Dispatcher? = null,
 ) {
-    internal val backOff = MalBackOff(clock, RefusalFile(backOffFile, clock, unexpected) { BackOffFileFault() })
+    internal val backOff by lazy { MalBackOff(MalBackOff.file(backOffFile(), clock, unexpected)) }
 
     // How long work without a screen leaves MAL alone yet; zero when it may call.
     internal suspend fun refusedFor(): JavaDuration = withContext(io) { backOff.remaining() }

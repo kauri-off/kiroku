@@ -68,7 +68,7 @@ internal fun recorderHttp(
                 override fun isMainThread() = false
             },
         clock = Clock.systemUTC(),
-        backOffFile = scratchBackOffFile(),
+        backOffFile = ::scratchBackOffFile,
         unexpected = {},
     )
 

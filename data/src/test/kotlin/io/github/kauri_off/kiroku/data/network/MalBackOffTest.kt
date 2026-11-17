@@ -19,7 +19,7 @@ class MalBackOffTest {
     private val backOff by lazy { newProcess() }
 
     // The back-off a new process makes, over the same file.
-    private fun newProcess() = MalBackOff(clock, RefusalFile(file, clock, reported::add) { BackOffFileFault() })
+    private fun newProcess() = MalBackOff(MalBackOff.file(file, clock, reported::add))
 
     private fun pass(time: Duration) {
         clock.now += time
@@ -139,6 +139,55 @@ class MalBackOffTest {
         assertEquals(MalBackOff.First.minusMinutes(10), newProcess().remaining())
     }
 
+    // A real refusal is not ended early by a clock that was wrong for a while.
+    @Test
+    fun `a clock set back as a process starts and then put right leaves the wait as it was set`() {
+        backOff.refused(MalBackOff.Longest)
+        pass(Duration.ofMinutes(1))
+        clock.now -= Duration.ofDays(1)
+        assertEquals(MalBackOff.Longest, newProcess().remaining())
+        pass(Duration.ofMinutes(1))
+        clock.now += Duration.ofDays(1)
+        assertEquals(MalBackOff.Longest.minusMinutes(2), newProcess().remaining())
+        pass(MalBackOff.Longest.minusMinutes(2))
+        assertEquals(Duration.ZERO, newProcess().remaining())
+    }
+
+    @Test
+    fun `a clock set back and then put right inside one process leaves the wait as it was set`() {
+        backOff.refused(MalBackOff.Longest)
+        pass(Duration.ofMinutes(1))
+        clock.now -= Duration.ofDays(1)
+        assertEquals(MalBackOff.Longest, backOff.remaining())
+        pass(Duration.ofMinutes(1))
+        clock.now += Duration.ofDays(1)
+        assertEquals(MalBackOff.Longest.minusMinutes(2), backOff.remaining())
+        assertEquals(MalBackOff.Longest.minusMinutes(2), newProcess().remaining())
+    }
+
+    @Test
+    fun `a clock set back a second time starts the wait once more, and no later process again`() {
+        backOff.refused(null)
+        clock.now -= Duration.ofDays(1)
+        assertEquals(MalBackOff.First, newProcess().remaining())
+        pass(Duration.ofMinutes(10))
+        clock.now -= Duration.ofDays(1)
+        assertEquals(MalBackOff.First, newProcess().remaining())
+        pass(Duration.ofMinutes(10))
+        assertEquals(MalBackOff.First.minusMinutes(10), newProcess().remaining())
+    }
+
+    @Test
+    fun `a file as a build before the restart was kept wrote it is read`() {
+        file.writeText("${clock.millis()} ${Duration.ofHours(1).toMillis()} ${MalBackOff.First.toMillis()}\n")
+        pass(Duration.ofMinutes(10))
+        val process = newProcess()
+        assertEquals(Duration.ofMinutes(50), process.remaining())
+        process.refused(null)
+        assertEquals(MalBackOff.First, process.remaining())
+        assertEquals(emptyList<Throwable>(), reported)
+    }
+
     @Test
     fun `a new process doubles the wait of the one before, when that wait ran out without an answer`() {
         backOff.refused(null)
@@ -175,14 +224,30 @@ class MalBackOffTest {
 
     @Test
     fun `a file that cannot be read holds nothing back, is reported once and is gone`() {
-        for (text in listOf("soon", "1 2", "1 -2 3", "")) {
+        val longest = MalBackOff.Longest.toMillis()
+        val texts =
+            listOf(
+                "soon",
+                "1 2",
+                "1 -2 3",
+                "",
+                "1 2 3 4 5",
+                // A hold or a wait longer than any the app sets.
+                "${clock.millis()} ${longest + 1} $longest",
+                "${clock.millis()} $longest ${longest + 1}",
+            )
+        for (text in texts) {
             file.writeText(text)
             assertEquals(text, Duration.ZERO, newProcess().remaining())
             assertFalse(text, file.exists())
         }
-        assertEquals(List(4) { BackOffFileFault::class }, reported.map { it::class })
+        assertEquals(List(texts.size) { BackOffFileFault::class }, reported.map { it::class })
         assertEquals(Duration.ZERO, newProcess().remaining())
-        assertEquals(4, reported.size)
+        assertEquals(texts.size, reported.size)
+
+        // The longest of both is still read.
+        file.writeText("${clock.millis()} $longest $longest")
+        assertEquals(MalBackOff.Longest, newProcess().remaining())
     }
 
     @Test

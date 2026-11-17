@@ -310,6 +310,50 @@ class MalBackgroundTest {
             assertTrue(process.session.observeSession().first() is Session.SignedIn)
         }
 
+    // An expired session will not come back and a wait will end, so work is told of the session first.
+    @Test
+    fun `while MAL is refusing, an expired session is still said to be expired and a signed-out one signed out`() =
+        test {
+            val process = signedIn()
+            api = refusal(Duration.ofHours(1))
+            assertEquals(Outcome.Failure(DataError.Refused), process.read())
+            assertEquals(HeldBack.Refused(Duration.ofHours(1)), process.inBackground())
+
+            // MAL takes neither token of a screen's request: that ends the session and not the back-off.
+            val invalid = RecordedAnswers.named("token_invalid")
+            val rejected = RecordedAnswers.named("refresh_invalid")
+            api = { answer(invalid.status, invalid.body) }
+            token = { answer(rejected.status, rejected.body) }
+            assertEquals(Outcome.Failure(DataError.SessionExpired), process.read())
+            assertEquals(Duration.ofHours(1), process.http.refusedFor())
+            assertEquals(HeldBack.Expired, process.inBackground())
+            assertEquals(HeldBack.Expired, newProcess().inBackground())
+
+            val next = newProcess()
+            next.session.signOut()
+            assertEquals(Duration.ofHours(1), next.http.refusedFor())
+            assertEquals(HeldBack.SignedOut, next.inBackground())
+            assertEquals(HeldBack.SignedOut, newProcess().inBackground())
+            assertEquals(0, ran.get())
+        }
+
+    @Test
+    fun `an answer to a screen that is not a success leaves the work held back`() =
+        test {
+            api = refusal(Duration.ofHours(1))
+            assertEquals(refused, signedIn().inBackground())
+
+            for ((code, error) in listOf(404 to DataError.NotFound, 400 to DataError.InvalidRequest, 500 to DataError.ServerError)) {
+                val process = newProcess()
+                api = { answer(code) }
+                assertEquals(Outcome.Failure(error), process.read())
+                assertEquals("$code", HeldBack.Refused(Duration.ofHours(1)), process.inBackground())
+                assertEquals("$code", HeldBack.Refused(Duration.ofHours(1)), newProcess().inBackground())
+            }
+            assertEquals(1, ran.get())
+            assertTrue(network.backOffFile.exists())
+        }
+
     @Test
     fun `a new process whose tokens are due renews nothing at its start while MAL is refusing`() =
         test {

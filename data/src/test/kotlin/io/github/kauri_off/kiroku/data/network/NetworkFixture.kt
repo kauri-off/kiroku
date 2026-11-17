@@ -136,7 +136,7 @@ internal class NetworkFixture : ExternalResource() {
                     override fun isMainThread() = Thread.currentThread() === mainThread
                 },
             clock = clock,
-            backOffFile = backOffFile,
+            backOffFile = { backOffFile },
             unexpected = unexpected::add,
             log = log::add,
             repeatReadsAfter = repeatReadsAfter,

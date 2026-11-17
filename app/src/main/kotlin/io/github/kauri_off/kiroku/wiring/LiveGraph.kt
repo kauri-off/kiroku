@@ -58,7 +58,7 @@ internal class LiveParts(
             BuildConfig.VERSION_NAME,
             device,
             clock,
-            file(BACK_OFF),
+            { file(BACK_OFF) },
             unexpected,
             log,
             standIn = source.standIn,

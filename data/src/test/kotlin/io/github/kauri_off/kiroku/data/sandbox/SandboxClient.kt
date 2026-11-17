@@ -44,7 +44,7 @@ internal class SandboxClient(
                     override fun isMainThread() = false
                 },
             clock = clock,
-            backOffFile = scratchBackOffFile(),
+            backOffFile = ::scratchBackOffFile,
             unexpected = unexpected::add,
             log = log::add,
             repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds),

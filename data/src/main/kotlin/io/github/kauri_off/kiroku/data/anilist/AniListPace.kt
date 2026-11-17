@@ -4,6 +4,8 @@ import io.github.kauri_off.kiroku.data.network.RefusalFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.time.Clock
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -81,5 +83,11 @@ internal class AniListPace(
         val LongestRetryAfter = 24.hours
 
         fun spacingFor(limit: Int): Duration = 2.minutes / limit.coerceAtMost(HIGHEST_LIMIT)
+
+        fun file(
+            file: File,
+            clock: Clock,
+            report: (Throwable) -> Unit,
+        ) = RefusalFile(file, clock, maxOf(LongestRefusal, LongestRetryAfter), report) { AniListOddAnswer("block") }
     }
 }
