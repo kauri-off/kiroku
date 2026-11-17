@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_new_episodes">Новые серии</string>
+    <string name="notify_episode_aired">Вышла серия\u00A0%1$d</string>
+    <string name="notify_episode_aired_to_watch">Вышла серия\u00A0%1$d · к просмотру:\u00A0%2$d</string>
+    <string name="notify_mark_watched">Отметить серию\u00A0%1$d</string>
+</resources>

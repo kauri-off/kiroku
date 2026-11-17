@@ -229,23 +229,7 @@ missing from it; there are no duplicates.
   same file, and one that cannot be read counts as never made and is reported. `./gradlew
   :data:connectedDebugAndroidTest` passes on an emulator.
 
-- [ ] **M4-08 The notification on the device.** M4-02's port for the notifications shown, on Android's own: an
-  episode's notification in its channel, one per title, grouped with the others; a tap opens the title page with
-  the List beneath it (section 6.3), also when the app was not running; the action is delivered to this app alone
-  and carries its title and the episode it marks; a later post for a title replaces the earlier one without
-  alerting again; a withdrawal removes it, and the group's summary with the last one. Its text comes from the
-  resources in the language in effect at the post, with the title in the preferred title language. What it says,
-  its icon and how the group reads are built once and shown to the owner (section 9): a tool of the debug menu
-  posts samples through the real channel, for one title, for several and for a title with more than one episode
-  unwatched. Read first, on developer.android.com: `develop/ui/compose/notifications/create-notification` and
-  `…/channels`, `develop/ui/views/notifications/group` and `…/navigation`.
-  **Needs:** M4-02, M4-06.
-  **Check:** tests: after posts, a replacement and withdrawals the notifications shown are exactly those the engine
-  asked for, and the summary exists only while one does; the tap's stack is List, then Title; the action's intent
-  names its title and episode and no other app can send or read it; under a Russian locale the text is Russian,
-  with its plural forms. On an emulator of the current Android and on M4-06's: the samples are in the shade as the
-  hand-off's screenshots show them, in both languages, and a tap on one with the app stopped opens the title page,
-  from which Back reaches the List.
+- [x] **M4-08 The notification on the device.**
 
 - [ ] **M4-09 [A] The alarm and the moments the app runs.** In `:app`: M4-02's alarm port on the system's alarm
   service, and everything that starts a run without a screen. The alarm is one-shot and is set so that it may fire
