@@ -106,13 +106,13 @@ internal class LiveGraph(
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
-    override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }) }
+    override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }, { user }) }
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetListSorts() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
     override val scores by lazy { parts.scores }
     override val search by lazy { liveSearch(parts) }
-    override val user by lazy { liveUser(parts, account) }
+    override val user: LiveUser by lazy { liveUser(parts, account) }
     override val connection by lazy { liveConnection(parts) }
     override val preferences by lazy { livePreferences(parts) }
     override val signIn by lazy { liveSignIn(parts, account) }
@@ -127,16 +127,18 @@ internal class LiveGraph(
     }
 }
 
-// S9: a sign-out takes the user's list, its sorts and its airing data with it at once, also when nothing has asked for them yet.
+// S9: a sign-out takes the user's list, its sorts, its airing data and the profiles with it at once, also when nothing has asked for them yet.
 private class SignOutForgets(
     private val account: SessionRepository,
     private val list: () -> ListSource,
     private val airing: () -> LiveAiring,
+    private val user: () -> LiveUser,
 ) : SessionRepository by account {
     override suspend fun signOut() {
         account.signOut()
         // A read of the list makes its store agree with the session; a store that fails it is cleared at its next use.
         list().observeSyncedAt().first()
         airing().forget()
+        user().forget()
     }
 }

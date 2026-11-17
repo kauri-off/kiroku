@@ -434,20 +434,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-09 The Profile on real state.**
 
-- [ ] **M6-10 Live profiles.** The live graph's profiles are M6-04's keeper over M6-08's port, with M6-05's store,
-  built at their first use and off the main thread; the sandbox runs on them, and the Profile is M6-09's route in
-  every build. A sign-out leaves no profile in the database and no list held (S9), also when nothing had asked for
-  them, and they are forgotten where the user's other stores are. Another user's list is read without the tokens,
-  signed out and with the session expired too. The debug menu names the users the demo and the sandbox answer for.
-  **Needs:** M6-05, M6-08, M6-09.
-  **Check:** tests: reading the session or the list builds nothing of profiles, and started signed out nothing
-  builds an HTTP client before a profile is opened; on the sandbox, signed in and synced, the own profile's
-  completed count and mean score are those of the sandbox's own profile answer; its user with several thousand
-  entries opens by name and shows the statistics of the whole list; its private user and an unknown name each say
-  what they are; with the sandbox offline the own profile shows from the database; a new graph over the same files
-  shows the profile without a request; after a sign-out the database holds no profile and no list is held; the
-  tests of the app's start pass as before. The debug build passes the emulator's smoke run, and the debug menu's
-  screenshots are rendered.
+- [x] **M6-10 Live profiles.**
 
 - [ ] **M6-11 [O] The owner chooses the Profile.** On his phone, from the prototypes, the owner chooses the
   composition of the Profile, and with it where the statistics and another user's list are shown.

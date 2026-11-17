@@ -348,6 +348,9 @@ interface SearchRepository {
 interface OwnProfile {
     fun observeOwnProfile(): Flow<UserProfile?>
 
+    // When the profile shown was read; none while none is shown.
+    fun observeOwnProfileFetchedAt(): Flow<Instant?>
+
     suspend fun refreshOwnProfile(): Outcome<Unit>
 }
 

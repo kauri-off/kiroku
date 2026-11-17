@@ -129,7 +129,7 @@ class Demo(
     // On the real keeper over the demo's users.
     private val otherUsers = UserListKeeper(userLists, scope, unexpected)
 
-    val user: UserRepository = otherUsers.beside(DemoOwnProfile(fixtures, server, signIn))
+    val user: UserRepository = otherUsers.beside(DemoOwnProfile(fixtures, server, signIn, clock))
 
     val preferences: PreferencesRepository = DemoPreferences()
 

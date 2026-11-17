@@ -141,21 +141,8 @@ fun appEntries(
                 BrowseRoute(it, key, graph, messages, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn)
             }
         }
-        // The real account keeps the placeholder until its profiles are wired.
-        entry<ProfileRoot> {
-            if (graph.madeUp) {
-                ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars)
-            } else {
-                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
-            }
-        }
-        entry<OtherProfileKey> { key ->
-            if (graph.madeUp) {
-                ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars)
-            } else {
-                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
-            }
-        }
+        entry<ProfileRoot> { ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars) }
+        entry<OtherProfileKey> { key -> ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars) }
         entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
         entry<TitleKey> { key ->
             TitleRoute(
@@ -184,7 +171,7 @@ fun appEntries(
     }
 }
 
-// Search in a release and Profile on the real account until their milestones: the placeholder, with the banner of S6.
+// Search in a release until its milestone: the placeholder, with the banner of S6.
 @Composable
 private fun NotBuiltDestination(
     graph: AppGraph,

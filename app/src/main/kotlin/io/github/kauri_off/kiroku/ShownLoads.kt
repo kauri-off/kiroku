@@ -7,8 +7,10 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
+import io.github.kauri_off.kiroku.core.repository.OwnProfile
 import io.github.kauri_off.kiroku.core.repository.detailsStale
 import io.github.kauri_off.kiroku.core.repository.listStale
+import io.github.kauri_off.kiroku.core.repository.ownProfileStale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingCommand
@@ -123,6 +125,9 @@ suspend fun AnimeRepository.stale(
     known: Anime?,
     now: Instant,
 ): Boolean = detailsStale(readOrNull { observeAnime(id).first() } ?: known, readOrNull { observeRefreshedAt(id).first() }, now)
+
+// The own profile, none shown or read too long ago.
+suspend fun OwnProfile.profileStale(now: Instant): Boolean = ownProfileStale(readOrNull { observeOwnProfileFetchedAt().first() }, now)
 
 private inline fun <T> readOrNull(read: () -> T?): T? =
     try {

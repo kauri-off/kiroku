@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.core.user.UserListState
 import io.github.kauri_off.kiroku.core.user.ofUser
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.profileStale
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -261,14 +262,15 @@ class ProfileViewModel(
             }
     }
 
-    // Shown, the list is downloaded when stale and the profile read with it, or when none is stored; a pull asks both.
+    // Shown, the list is downloaded and the profile read each when stale by its own rule; a pull and a Retry ask both.
     private suspend fun refreshOwn(asked: Asked): DataError? {
         if (sessions.first() == Session.SignedOut) return null
-        val stale = asked != Asked.Shown || list.stale(clock.instant())
-        val unknown = !stale && storedProfile() == null
+        val now = clock.instant()
+        val listStale = asked != Asked.Shown || list.stale(now)
+        val profileStale = asked != Asked.Shown || user.profileStale(now)
         return coroutineScope {
-            val synced = async { if (stale) list.sync() else Outcome.Success(Unit) }
-            val profile = async { if (stale || unknown) user.refreshOwnProfile() else Outcome.Success(Unit) }
+            val synced = async { if (listStale) list.sync() else Outcome.Success(Unit) }
+            val profile = async { if (profileStale) user.refreshOwnProfile() else Outcome.Success(Unit) }
             listOf(synced.await(), profile.await()).firstNotNullOfOrNull { (it as? Outcome.Failure)?.error }
         }
     }
