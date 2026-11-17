@@ -5,8 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import io.github.kauri_off.kiroku.MainActivity
-import io.github.kauri_off.kiroku.core.fixtures.AnimeLinks
-import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.fixtures.Links
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -75,17 +74,17 @@ class LinkActivityTest {
     }
 
     @Test
-    fun `a link to a title hands its id to the app once and brings the app's screen up`() {
-        for ((address, id) in AnimeLinks.opened) {
+    fun `a link to a title or a profile hands what it names to the app once and brings the app's screen up`() {
+        for ((address, link) in Links.opened) {
             arrive(view(address))
-            assertEquals(address, AnimeId(id), links.take()?.id)
+            assertEquals(address, link, links.take()?.link)
             assertNull(links.take())
         }
     }
 
     @Test
     fun `whatever else the system hands the app goes on to the browser, and an intent without an address to nothing`() {
-        for (address in AnimeLinks.handedOn + AnimeLinks.refused + AnimeLinks.unreadable) handedOn(address)
+        for (address in Links.handedOn + Links.refused + Links.unreadable) handedOn(address)
         create(view(null))
         assertNull(shadowOf(application).nextStartedActivity)
         assertNull(links.link.value)
@@ -93,25 +92,25 @@ class LinkActivityTest {
 
     @Test
     fun `an intent replayed from the recent tasks brings the app up without its link`() {
-        arrive(view(AnimeLinks.opened.keys.first()).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY))
+        arrive(view(Links.profiles.keys.first()).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY))
         assertNull(links.link.value)
     }
 
     @Test
     fun `the activity made again for its link does not hand it over twice`() {
-        arrive(view(AnimeLinks.opened.keys.first()), saved = Bundle())
+        arrive(view(Links.profiles.keys.first()), saved = Bundle())
         assertNull(links.link.value)
     }
 
     @Test
     fun `two links in a row are two links, and the app takes each once`() {
-        val first = AnimeLinks.opened.keys.first()
+        val first = Links.profiles.keys.first()
         arrive(view(first))
         val one = links.link.value!!
         links.taken(one)
         arrive(view(first))
         val two = links.link.value!!
-        assertEquals(one.id, two.id)
+        assertEquals(one.link, two.link)
         assertTrue(one != two)
         links.taken(one)
         assertEquals(two, links.link.value)

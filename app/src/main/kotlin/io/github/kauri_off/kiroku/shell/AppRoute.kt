@@ -7,8 +7,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
@@ -85,20 +85,26 @@ private fun LinkTurns(
     val link by links.link.collectAsScreenState()
     LaunchedEffect(link) {
         link?.let {
-            navigator.openLink(it.id)
+            navigator.openLink(it.link)
             links.taken(it)
         }
     }
 }
 
-// A link opens its title over the List alone (section 6.3), whatever was shown.
-fun ShellNavigator.openLink(id: AnimeId) {
+// A link opens its page over its destination's root with the List alone beneath (section 6.3), whatever was shown.
+fun ShellNavigator.openLink(link: Link) {
+    val page = linkedPage(link)
     home(Destination.List)
-    open(linkedTitle(id))
+    home(page.destination)
+    open(page.key)
 }
 
-// The List's stack a link builds over its root.
-fun linkedTitle(id: AnimeId): NavKey = TitleKey(id.value)
+// A title over the List; a profile over the own Profile.
+fun linkedPage(link: Link): OpenedPage =
+    when (link) {
+        is Link.Title -> OpenedPage(Destination.List, TitleKey(link.id.value))
+        is Link.Profile -> OpenedPage(Destination.Profile, OtherProfileKey(link.name))
+    }
 
 fun appEntries(
     graph: AppGraph,

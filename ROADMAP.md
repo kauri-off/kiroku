@@ -465,21 +465,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   asked. Where the owner's recordings are: the mapper reads his recorded profile, and a failure names no value of
   it. `./gradlew :data:connectedDebugAndroidTest` passes on an emulator.
 
-- [ ] **M6-06 Profile links.** A link to a user's profile on MAL opens that user's profile in the app (section
-  6.3). The address is read in one place, with the title's link, into the user it names, the name decoded and
-  otherwise as the link spelled it; the same reader takes an address the person pastes where the app asks for a
-  name, there also without its scheme. The manifest claims a profile's page as it claims a title's, and an address
-  the filter matched that the app does not open goes on to the browser. A link opens its profile signed out too,
-  when the app was not running, and whatever screen was shown; Back from it reaches the List and does not leave the
-  app. Which destination's stack holds the profile is built once and shown to the owner (section 9).
-  **Needs:** nothing.
-  **Check:** tests: the reader takes a profile's page on either host, with or without a trailing slash, and
-  refuses another scheme, another host, a port, user info, a sub-page, an encoded slash and an empty name; the
-  manifest's filter and the reader agree on a table of addresses; a profile's link reaches the app once, a link
-  the system replays from the recent tasks does not, and any other address goes to the browser; the stack a link
-  builds ends at the List; a title's link opens its title as before. On an emulator of the current Android, with
-  the debug build's links allowed and the app stopped: a link to the demo's public user opens that profile, Back
-  reaches the List, and a link to its private user says the list is private.
+- [x] **M6-06 Profile links.**
 
 - [x] **M6-07 Sandbox: other users.**
 

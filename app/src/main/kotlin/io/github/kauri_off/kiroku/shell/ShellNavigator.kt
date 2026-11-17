@@ -92,13 +92,20 @@ class ShellNavigator(
     }
 }
 
+// A page over its destination's root, with the List alone beneath.
+data class OpenedPage(
+    val destination: Destination,
+    val key: NavKey,
+)
+
 // Survives recreation and process death: the stacks are saved with their keys, the selection by name.
 @Composable
-fun rememberShellNavigator(vararg overList: NavKey): ShellNavigator {
-    val list = rememberNavBackStack(Destination.List.root, *overList)
-    val search = rememberNavBackStack(Destination.Search.root)
-    val profile = rememberNavBackStack(Destination.Profile.root)
-    val selected = rememberSaveable { mutableStateOf(Destination.List) }
+fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator {
+    fun over(destination: Destination) = listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray()
+    val list = rememberNavBackStack(Destination.List.root, *over(Destination.List))
+    val search = rememberNavBackStack(Destination.Search.root, *over(Destination.Search))
+    val profile = rememberNavBackStack(Destination.Profile.root, *over(Destination.Profile))
+    val selected = rememberSaveable { mutableStateOf(start?.destination ?: Destination.List) }
     return remember(list, search, profile, selected) {
         ShellNavigator(
             mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
