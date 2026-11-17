@@ -8,6 +8,8 @@ buildscript {
     dependencies {
         classpath(libs.kotlin.gradle.plugin)
         classpath(libs.ksp.gradle.plugin)
+        // The check of :core runs on the ASM that AGP brings.
+        classpath(libs.animal.sniffer) { exclude(group = "org.ow2.asm") }
     }
 }
 
