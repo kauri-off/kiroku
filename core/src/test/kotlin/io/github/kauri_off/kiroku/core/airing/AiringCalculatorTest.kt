@@ -57,7 +57,7 @@ class AiringCalculatorTest {
     ) = Airing(AiredCount.Exact(count), total, next?.let(::episode), week(count - 1).takeIf { count > 0 })
 
     // The count's part of a result: without the instant it holds until and a premiere's date, beyond what every value must name.
-    private fun Airing.timeless() = copy(changesAt = nextEpisode?.airsAt, premiere = premiere as? Premiere.At)
+    private fun Airing.timeless() = copy(changesAt = nextEpisode?.airsAt, premiere = premiere as? Premiere.At, airTimes = emptyList())
 
     private fun at(
         anime: Anime,
@@ -74,6 +74,54 @@ class AiringCalculatorTest {
         assertEquals(exact(12, 12, next = null), at(title, schedule, week(11)))
         val gap = AiringSchedule(listOf(episode(1), episode(2), episode(5), episode(6)), 12)
         assertEquals(exact(5, 12, next = 6), at(title, gap, week(4)))
+    }
+
+    @Test
+    fun `an exact count tells the air times it rests on, aired and to come, and no other count tells any`() {
+        val episodes = (1..12).map(::episode)
+        for (n in listOf(-1, 0, 3, 11, 12)) assertEquals("week $n", episodes, airingAt(title, weekly(1..12), week(n)).airTimes)
+        assertEquals(
+            listOf(episode(1), episode(2), episode(5)),
+            airingAt(title, AiringSchedule(listOf(5, 1, 2).map(::episode), 12), week(3)).airTimes,
+        )
+        // None beyond the total, and each number once, at its first time.
+        val ownTotal = title.copy(malEpisodes = null)
+        assertEquals(episodes, airingAt(ownTotal, weekly(1..13, total = 12), week(3)).airTimes)
+        val twice = AiringSchedule(listOf(ScheduledEpisode(2, week(5)), episode(1), episode(2), ScheduledEpisode(1, week(4))), 12)
+        assertEquals(listOf(episode(1), episode(2)), airingAt(title, twice, week(0)).airTimes)
+        // An estimate tells none, whatever its reason.
+        val estimates =
+            listOf(
+                null,
+                weekly(13..24, from = 0),
+                weekly(1..13, total = 13),
+                AiringSchedule(emptyList(), 12),
+                weekly(1..12).copy(doubtedOver = 2),
+            )
+        for (schedule in estimates) {
+            for (n in listOf(
+                -1,
+                3,
+                40,
+            )) {
+                assertEquals("$schedule at week $n", emptyList<ScheduledEpisode>(), airingAt(title, schedule, week(n)).airTimes)
+            }
+        }
+        val stops = week(5).plus(SCHEDULE_STOPPED_AFTER)
+        assertEquals((1..6).map(::episode), airingAt(title, weekly(1..6), stops.minusNanos(1)).airTimes)
+        assertEquals(emptyList<ScheduledEpisode>(), airingAt(title, weekly(1..6), stops).airTimes)
+    }
+
+    @Test
+    fun `A13 of a title MAL marks finished the finale's air time alone is told`() {
+        for (n in listOf(3, 11, 30)) assertEquals("week $n", listOf(episode(12)), airingAt(finished, weekly(1..12), week(n)).airTimes)
+        assertEquals(listOf(episode(12)), airingAt(finished, weekly(1..13, total = 13), week(11)).airTimes)
+        for (schedule in listOf(null, weekly(1..8), weekly(13..24), weekly(13..24, from = 0), weekly(1..12).copy(doubtedOver = 2))) {
+            assertEquals("$schedule", emptyList<ScheduledEpisode>(), airingAt(finished, schedule, week(30)).airTimes)
+        }
+        // Without a total the finale is not known, and the schedule's episodes are told as of any title.
+        val noTotal = finished.copy(malEpisodes = null)
+        assertEquals((1..12).map(::episode), airingAt(noTotal, weekly(1..12, total = null), week(11)).airTimes)
     }
 
     @Test
@@ -386,7 +434,7 @@ class AiringCalculatorTest {
         val early = finished.copy(malEpisodes = null)
         val schedule = weekly(1..1, total = null)
         val result = airingAt(early, schedule, week(-1))
-        assertEquals(Airing(AiredCount.Exact(0), null, episode(1), null), result)
+        assertEquals(Airing(AiredCount.Exact(0), null, episode(1), null, airTimes = listOf(episode(1))), result)
         assertEquals(Premiere.At(week(0)), result.premiere)
         assertEquals(week(0), result.changesAt)
         val shown = titleAiring(early, watching(0), schedule, week(-1))
