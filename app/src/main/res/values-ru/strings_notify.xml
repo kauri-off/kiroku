@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_episodes">Новые серии</string>
+    <string name="notify_episode_aired">Вышла серия\u00A0%1$d</string>
+    <string name="notify_episode_aired_to_watch">Вышла серия\u00A0%1$d · к просмотру:\u00A0%2$d</string>
+    <string name="notify_mark_watched">Отметить серию\u00A0%1$d</string>
+    <plurals name="notify_summary">
+        <item quantity="one">%d\u00A0новая серия</item>
+        <item quantity="few">%d\u00A0новые серии</item>
+        <item quantity="many">%d\u00A0новых серий</item>
+        <item quantity="other">%d\u00A0новой серии</item>
+    </plurals>
+</resources>

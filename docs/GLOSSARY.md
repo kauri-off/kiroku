@@ -61,12 +61,8 @@ Wording decided before its feature exists. A row leaves this table when its reso
 
 | Concept | English | Russian | Notes |
 |---|---|---|---|
-| Notification channel | New episodes | Новые серии | |
-| Notification text | Episode 16 aired / Episode 16 aired · 3 to watch | Вышла серия 16 / Вышла серия 16 · к просмотру: 3 | The second when several are unwatched |
-| Notification action | Mark ep. 14 watched | Отметить серию 14 | |
 | Action failed | Could not save · Open | Не удалось сохранить · Открыть | |
 | Progress, Android 11 and earlier | Saving… on the channel "Saving changes" | Сохранение… / Сохранение изменений | |
-| Notification summary | 3 new episodes | %d новая серия, новые серии, новых серий | |
 | Status panel | Upcoming / Recently sent | Ближайшие / Недавно отправленные | |
 | Sign out | Sign out | Выйти | |
 

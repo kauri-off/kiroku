@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_episodes">New episodes</string>
+    <string name="notify_episode_aired">Episode\u00A0%1$d\u00A0aired</string>
+    <string name="notify_episode_aired_to_watch">Episode\u00A0%1$d\u00A0aired · %2$d\u00A0to watch</string>
+    <string name="notify_mark_watched">Mark ep.\u00A0%1$d\u00A0watched</string>
+    <plurals name="notify_summary">
+        <item quantity="one">%d\u00A0new episode</item>
+        <item quantity="other">%d\u00A0new episodes</item>
+    </plurals>
+</resources>
