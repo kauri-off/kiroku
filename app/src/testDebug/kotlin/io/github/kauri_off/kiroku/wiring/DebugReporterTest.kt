@@ -23,6 +23,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,6 +36,9 @@ import java.time.Clock
 // What a debug or preview build does with a report, as the graph is given it.
 @RunWith(RobolectricTestRunner::class)
 class DebugReporterTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val context get() = RuntimeEnvironment.getApplication()
     private val mainThread get() = shadowOf(Looper.getMainLooper())
 

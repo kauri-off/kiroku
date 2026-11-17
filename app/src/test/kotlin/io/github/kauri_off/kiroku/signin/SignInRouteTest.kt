@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.repository.SignInFailure
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
+import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.createGraph
@@ -230,6 +231,9 @@ class SignInRouteTest {
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class SignInWithoutClientIdTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val compose = composeRule()
 
     @get:Rule

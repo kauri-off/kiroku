@@ -399,5 +399,63 @@ fun scopeProblems(
 // The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
 fun shippedKotlinSources(): List<File> =
     projectSources().filter { source ->
-        source.extension == "kt" && listOf("test", "testDebug", "androidTest").none { "/src/$it/" in source.path }
+        source.extension == "kt" && listOf("test", "testDebug", "androidTest", "contract").none { "/src/$it/" in source.path }
     }
+
+// A test class on the app's own application that reaches its graph, builds one, or starts what does.
+private val topLevelClass = Regex("""^((data|open|abstract|internal|private)\s+)*class\s+(\w+)""")
+private val robolectricTest = Regex("""@RunWith\s*\(\s*RobolectricTestRunner::class\s*\)""")
+private val ownApplication = Regex("""@Config\s*\([^)]*\bapplication\s*=""")
+private val appActivity = """(MainActivity|DebugMenuActivity|RedirectActivity)\b"""
+private val startsTheApp =
+    Regex(
+        """\bappGraph\b|\.scenarios\b|\brunningSource\b|\bSingletonImageLoader\s*\.\s*get\s*\(|""" +
+            """\bcreateGraph\s*\(|\bSandboxGraph\s*\.\s*create\s*\(|""" +
+            """\b(createAndroidComposeRule|ActivityScenarioRule)\s*<\s*$appActivity|""" +
+            """\b(buildActivity|setupActivity|launch)\s*\(\s*$appActivity""",
+    )
+
+// Such a class ends the app with AppEnds, outside every other rule, so nothing of it acts on the next test's app.
+private val endsTheApp = Regex("""@get:Rule\s*\(\s*order\s*=\s*AppEnds\.OUTERMOST\s*\)\s*val\s+\w+\s*=\s*AppEnds\s*\(\s*\)""")
+
+// Each top-level class with its annotations, and the line it starts on.
+private fun classesOf(source: String): List<Triple<String, Int, String>> {
+    val lines = KotlinSource(source).code.lines()
+    val starts =
+        lines.indices.filter { topLevelClass.containsMatchIn(lines[it]) }.map { at ->
+            var start = at
+            while (start > 0 && lines[start - 1].trimStart().startsWith("@")) start--
+            at to start
+        }
+    return starts.mapIndexed { index, (at, start) ->
+        val end = starts.getOrNull(index + 1)?.second ?: lines.size
+        val name = topLevelClass.find(lines[at])!!.groupValues[3]
+        Triple(name, at + 1, lines.subList(start, end).joinToString("\n"))
+    }
+}
+
+fun classesStartingTheApp(source: String): List<String> =
+    classesOf(source)
+        .filter { (_, _, text) ->
+            val header = text.lines().takeWhile { !topLevelClass.containsMatchIn(it) }.joinToString("\n")
+            robolectricTest.containsMatchIn(header) && !ownApplication.containsMatchIn(header) && startsTheApp.containsMatchIn(text)
+        }.map { it.first }
+
+fun appEndingProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val starting = classesStartingTheApp(source)
+    return classesOf(source)
+        .filter { (cls, _, text) -> cls in starting && !endsTheApp.containsMatchIn(text) }
+        .map { (cls, at, _) -> "$name:$at: $cls starts the app without @get:Rule(order = AppEnds.OUTERMOST) val … = AppEnds()" }
+}
+
+// The Kotlin sources of the app's tests, in every test source set.
+fun appTestSources(): List<File> =
+    File(projectDir, "app/src")
+        .listFiles()
+        .orEmpty()
+        .filter { it.isDirectory && it.name.startsWith("test") }
+        .flatMap { set -> set.walk().filter { it.isFile && it.extension == "kt" }.toList() }
+        .sorted()

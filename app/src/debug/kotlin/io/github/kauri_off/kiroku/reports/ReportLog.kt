@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.reports
 
+import androidx.annotation.VisibleForTesting
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.wiring.FRAME
 import io.github.kauri_off.kiroku.wiring.typesOf
@@ -10,8 +11,10 @@ import java.io.File
 import java.io.IOException
 import java.time.DateTimeException
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 // A report as the debug menu shows it: when it was made, and the types of the log's report with their first frames.
 data class Report(
@@ -56,6 +59,20 @@ class ReportLog(
         }
     }
 
+    // A JVM runs one test's application after another: once the reports on their way are stored, none is kept.
+    @VisibleForTesting
+    fun forget() {
+        val done = CountDownLatch(1)
+        files.execute {
+            synchronized(this) {
+                kept.value = emptyList()
+                file = null
+            }
+            done.countDown()
+        }
+        check(done.await(FORGET_SECONDS, TimeUnit.SECONDS))
+    }
+
     private fun store() {
         val (file, reports) = synchronized(this) { file to kept.value }
         file?.let { write(it, reports) }
@@ -95,6 +112,7 @@ class ReportLog(
     private companion object {
         const val LIMIT = 20
         const val FRAMES = 3
+        const val FORGET_SECONDS = 10L
         val LINE = notShown("\n")
         val BETWEEN = LINE + LINE
         val NEXT = notShown(".next")

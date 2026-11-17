@@ -35,6 +35,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipeUp
 import androidx.lifecycle.Lifecycle
+import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -45,8 +46,10 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.shell.AppRoute
+import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -411,6 +414,42 @@ class AppRouteTest {
         shows("Not available in this build yet")
         back()
         back()
+        shows("kiroku_demo")
+        back()
+        shows("My list")
+    }
+
+    // Which profiles were opened is the signed-in user's: the next user to sign in does not see them.
+    @Test
+    fun `a sign-out forgets the names opened earlier`() {
+        app()
+        click("Profile")
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
+        click("Open")
+        shows("Completed")
+        back()
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        shows("Recent")
+        click("Cancel")
+        runBlocking { graph.session.signOut() }
+        compose.waitForIdle()
+        click("Open another profile")
+        compose.onNodeWithText("Recent").assertDoesNotExist()
+    }
+
+    // The own name, typed in any letter case or opened as another user's page, is the own Profile at its root.
+    @Test
+    fun `opening the own name shows the own profile`() {
+        app()
+        click("Profile")
+        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("KIROKU_DEMO")
+        click("Open")
+        assertEquals(listOf<NavKey>(Destination.Profile.root), navigator.stackOf(Destination.Profile))
+        compose.runOnUiThread { navigator.open(OtherProfileKey("Kiroku_Demo")) }
+        compose.waitForIdle()
+        assertEquals(listOf<NavKey>(Destination.Profile.root), navigator.stackOf(Destination.Profile))
         shows("kiroku_demo")
         back()
         shows("My list")
