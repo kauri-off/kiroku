@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.fixtures.Links
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -55,11 +56,10 @@ class ProfileStateTest {
     }
 
     @Test
-    fun aPastedProfileOrListLinkGivesItsName() {
+    fun aPastedProfileLinkGivesItsName() {
         val forms =
             listOf(
                 "https://myanimelist.net/profile/sample_viewer",
-                "http://myanimelist.net/profile/sample_viewer",
                 "https://www.myanimelist.net/profile/sample_viewer/",
                 "myanimelist.net/profile/sample_viewer",
                 "www.myanimelist.net/profile/sample_viewer",
@@ -67,18 +67,15 @@ class ProfileStateTest {
                 "https://myanimelist.net/profile/sample_viewer/?view=1",
                 "https://MyAnimeList.net/profile/sample_viewer/#top",
                 "https://myanimelist.net/profile/sample_viewer\n",
-                "https://myanimelist.net/profile/sample_viewer/reviews",
-                "https://myanimelist.net/animelist/sample_viewer",
-                "myanimelist.net/animelist/sample_viewer?status=2",
             )
         for (form in forms) assertEquals(form, ProfileInput.Name("sample_viewer"), profileInput(form))
+        for ((address, link) in Links.profiles) assertEquals(address, ProfileInput.Name(link.name), profileInput(address))
     }
 
     @Test
-    fun aPathSegmentIsTakenAsItIs() {
-        for (name in listOf("a%20b", "имя", "Xi.nil")) {
-            assertEquals(ProfileInput.Name(name), profileInput("https://myanimelist.net/profile/$name"))
-        }
+    fun aPastedNameIsDecodedAndOtherwiseAsSpelled() {
+        val names = mapOf("a%20b" to "a b", "%D0%B8%D0%BC%D1%8F" to "имя", "имя" to "имя", "Xi.nil" to "Xi.nil")
+        for ((segment, name) in names) assertEquals(ProfileInput.Name(name), profileInput("myanimelist.net/profile/$segment"))
     }
 
     @Test
@@ -94,7 +91,11 @@ class ProfileStateTest {
                 "myanimelist.net/anime/1",
                 "myanimelist.net/profile/",
                 "Check https://myanimelist.net/profile/sample_viewer",
-            )
+                "http://myanimelist.net/profile/sample_viewer",
+                "https://myanimelist.net/profile/sample_viewer/reviews",
+                "https://myanimelist.net/animelist/sample_viewer",
+                "myanimelist.net/profile/a%2Fb",
+            ) + Links.refused + Links.handedOn
         for (link in links) assertEquals(link, ProfileInput.OtherLink, profileInput(link))
         assertNull(OpenProfile(links[1], emptyList()).nameToOpen())
         assertTrue(OpenProfile(links[1], emptyList()).notAProfileLink)

@@ -1,6 +1,8 @@
 package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.link.readTypedLink
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
 import io.github.kauri_off.kiroku.notShown
@@ -121,19 +123,13 @@ sealed interface ProfileInput {
     data object OtherLink : ProfileInput
 }
 
-// The user name in a myanimelist.net profile or list link, with or without its scheme, "www.", a further path, a
-// trailing slash or a query; any other text with a scheme, or a host and a path, is another link; the rest is a name.
+// The user a pasted profile link names, read as an opened link is; any other text with a scheme, or a host and a
+// path, is another link; the rest is a name.
 fun profileInput(text: String): ProfileInput {
     val trimmed = text.trim()
     if (trimmed.isEmpty()) return ProfileInput.Blank
-    profileLink.matchEntire(trimmed)?.let { return ProfileInput.Name(it.groupValues[1]) }
+    (readTypedLink(trimmed) as? Link.Profile)?.let { return ProfileInput.Name(it.name) }
     return if (anyLink.containsMatchIn(trimmed)) ProfileInput.OtherLink else ProfileInput.Name(trimmed)
 }
-
-private val profileLink =
-    Regex(
-        notShown("""(?:https?://)?(?:www\.)?myanimelist\.net/(?:profile|animelist)/([^/?#\s]+)(?:/[^?#\s]*)?(?:[?#]\S*)?"""),
-        RegexOption.IGNORE_CASE,
-    )
 
 private val anyLink = Regex(notShown("""://|^[^\s/]+\.[^\s/]+/"""))
