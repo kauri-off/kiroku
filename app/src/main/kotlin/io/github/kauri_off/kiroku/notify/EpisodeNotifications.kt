@@ -23,8 +23,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
 
-// The episode notifications on the system's own: one a title in the channel of new episodes, grouped under a summary
-// that exists while one of them does. Their text is read from the resources at each post, in the language then in effect.
+// Episode notifications on the system's own: one a title, grouped under a summary, worded in the language at each post.
 class EpisodeNotifications(
     context: Context,
     private val language: () -> TitleLanguage,
@@ -57,7 +56,7 @@ class EpisodeNotifications(
                 channel()
                 enqueue { system.notify(tag(anime.id), EPISODE_ID, episode(anime, notification, alert)) }
             }
-            summary(shown.size + if (posting && was == null) 1 else 0)
+            summary(shown.isNotEmpty() || posting)
             enabled()
         }
 
@@ -67,7 +66,7 @@ class EpisodeNotifications(
             val gone = titles.filter { it in shown }
             if (gone.isEmpty()) return@withLock
             gone.forEach { system.cancel(tag(it), EPISODE_ID) }
-            summary(shown.size - gone.size)
+            summary(shown.size > gone.size)
         }
 
     // Whether the device shows the app's episode notifications at all: neither the app's nor the channel's are turned off.
@@ -78,7 +77,7 @@ class EpisodeNotifications(
     // The channel of new episodes, named in the language in effect; the system keeps what the person set on it.
     fun channel() =
         system.createNotificationChannel(
-            NotificationChannel(CHANNEL, context.getString(R.string.notify_channel_episodes), NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel(CHANNEL, context.getString(R.string.notify_new_episodes), NotificationManager.IMPORTANCE_DEFAULT),
         )
 
     private fun episodes(): Map<AnimeId, StatusBarNotification> =
@@ -124,25 +123,24 @@ class EpisodeNotifications(
             .build()
     }
 
-    // The group's summary for [count] episode notifications, posted again only when its count changes; none for none.
-    private suspend fun summary(count: Int) {
+    // The group's summary while one of its notifications is [shown]; it holds no count, so only a new language posts it again.
+    private suspend fun summary(shown: Boolean) {
+        val title = context.getString(R.string.notify_new_episodes)
         val current = system.activeNotifications.firstOrNull { it.id == SUMMARY_ID && it.tag == SUMMARY_TAG }
         when {
-            count == 0 -> system.cancel(SUMMARY_TAG, SUMMARY_ID)
-            current?.notification?.extras?.getInt(COUNT) == count -> Unit
+            !shown -> system.cancel(SUMMARY_TAG, SUMMARY_ID)
+            current?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() == title -> Unit
             else -> {
                 val summary =
                     NotificationCompat
                         .Builder(context, CHANNEL)
                         .setSmallIcon(R.drawable.ic_notification)
-                        .setContentTitle(context.resources.getQuantityString(R.plurals.notify_summary, count, count))
+                        .setContentTitle(title)
                         .setGroup(GROUP)
                         .setGroupSummary(true)
                         .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
                         .setOnlyAlertOnce(true)
-                        .setAutoCancel(true)
                         .setContentIntent(context.open())
-                        .addExtras(Bundle().apply { putInt(COUNT, count) })
                         .build()
                 enqueue { system.notify(SUMMARY_TAG, SUMMARY_ID, summary) }
             }
@@ -191,6 +189,5 @@ class EpisodeNotifications(
         private val MARKS = notShown("kiroku.marks")
         private val AIRED_AT = notShown("kiroku.airedAt")
         private val NOTIFY_AT = notShown("kiroku.notifyAt")
-        private val COUNT = notShown("kiroku.count")
     }
 }

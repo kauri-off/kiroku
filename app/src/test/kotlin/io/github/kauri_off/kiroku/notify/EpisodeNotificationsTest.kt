@@ -72,7 +72,7 @@ class EpisodeNotificationsTest {
         assertEquals(active().size, episodes.size + if (titles.isEmpty()) 0 else 1)
         summary()?.let { summary ->
             assertTrue(summary.flags and Notification.FLAG_GROUP_SUMMARY != 0)
-            assertEquals(titles.size.toString() + "\u00A0new episode" + if (titles.size == 1) "" else "s", summary.title)
+            assertEquals("New episodes", summary.title)
         }
     }
 
@@ -155,6 +155,7 @@ class EpisodeNotificationsTest {
         runBlocking {
             val shown = notifications()
             val first = airedAt
+            shown.post(announcement(shiokaze, 5), alert = true)
             shown.post(announcement(kagerou, 3), alert = true)
             val alerted = episode(kagerou)!!
             assertEquals(0, alerted.flags and Notification.FLAG_ONLY_ALERT_ONCE)
@@ -175,9 +176,10 @@ class EpisodeNotificationsTest {
             assertEquals(airedAt.toEpochMilli(), again.`when`)
 
             system.cancel(EpisodeNotifications.tag(kagerou.id), EpisodeNotifications.EPISODE_ID)
+            // Dismissed while another title's notification is still shown, it does not come back.
             shown.post(announcement(kagerou, 4, toWatch = 2, marks = 3), alert = false)
             assertNull(episode(kagerou))
-            assertShownExactly()
+            assertShownExactly(shiokaze)
         }
 
     @Test
@@ -190,8 +192,10 @@ class EpisodeNotificationsTest {
                 assertEquals(EpisodeNotifications.GROUP, notification.group)
                 assertEquals(EpisodeNotifications.CHANNEL, notification.channelId)
                 assertEquals(Notification.GROUP_ALERT_CHILDREN, notification.groupAlertBehavior)
-                assertTrue(notification.flags and Notification.FLAG_AUTO_CANCEL != 0)
             }
+            // A tapped notification goes; a tap on the summary takes none of the group with it.
+            assertTrue(episode(kagerou)!!.flags and Notification.FLAG_AUTO_CANCEL != 0)
+            assertEquals(0, summary()!!.flags and Notification.FLAG_AUTO_CANCEL)
             assertTrue(summary()!!.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
         }
 
@@ -215,11 +219,11 @@ class EpisodeNotificationsTest {
             val gap = 120.milliseconds
             val shown = notifications(gap)
             val began = System.nanoTime()
-            // Three notifications and the summary's three counts: six posts, five gaps.
+            // Three notifications and the summary once: four posts, three gaps.
             shown.post(announcement(kagerou, 3), alert = true)
             shown.post(announcement(shiokaze, 5), alert = true)
             shown.post(announcement(gekkou, 1), alert = true)
-            assertTrue((System.nanoTime() - began) >= (gap * 5).inWholeNanoseconds)
+            assertTrue((System.nanoTime() - began) >= (gap * 3).inWholeNanoseconds)
             assertShownExactly(kagerou, shiokaze, gekkou)
         }
 
@@ -244,26 +248,23 @@ class EpisodeNotificationsTest {
             assertEquals("Вышла серия\u00A016 · к просмотру:\u00A02", episode(kagerou)!!.text)
             assertEquals("Отметить серию\u00A015", episode(kagerou)!!.actions.single().title)
             assertEquals("Новые серии", system.getNotificationChannel(EpisodeNotifications.CHANNEL).name)
+            assertEquals("Новые серии", summary()!!.title)
         }
 
     @Test
     @Config(qualifiers = "ru")
-    fun `under a Russian locale the text is Russian, with its plural forms`() =
+    fun `under a Russian locale the text is Russian, with a count after a colon in place of a plural`() =
         runBlocking {
             val shown = notifications()
             shown.post(announcement(kagerou, 16), alert = true)
             assertEquals("Вышла серия\u00A016", episode(kagerou)!!.text)
             assertEquals("Отметить серию\u00A016", episode(kagerou)!!.actions.single().title)
             assertEquals("Новые серии", system.getNotificationChannel(EpisodeNotifications.CHANNEL).name)
-            assertEquals("1\u00A0новая серия", summary()!!.title)
-            val titles =
-                listOf(FixtureAnime.exactCaughtUp, FixtureAnime.exactOnBreak, FixtureAnime.longTitle, FixtureAnime.premiereYear)
-            val counts = mutableListOf<String?>()
-            for (anime in titles) {
-                shown.post(announcement(anime, 2), alert = true)
-                counts += summary()!!.title
+            assertEquals("Новые серии", summary()!!.title)
+            for ((toWatch, form) in listOf(2 to "2", 5 to "5", 21 to "21")) {
+                shown.post(announcement(kagerou, 16, toWatch = toWatch), alert = false)
+                assertEquals("Вышла серия\u00A016 · к просмотру:\u00A0$form", episode(kagerou)!!.text)
             }
-            assertEquals(listOf("2\u00A0новые серии", "3\u00A0новые серии", "4\u00A0новые серии", "5\u00A0новых серий"), counts)
         }
 
     @Test

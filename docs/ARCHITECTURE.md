@@ -280,12 +280,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 5.3 What the user gets
 
-- **Text.** Title: the anime title in the preferred title language. Text: "Episode 16 aired", and when more than
-  one aired episode is unwatched, "Episode 16 aired · 3 to watch", in the language in effect when it is posted.
-  Tapping opens the title page with the List beneath it.
-- **Grouping.** All episode notifications share one group with a summary ("3 new episodes"), so an evening with
-  several shows is one stack. **Channel:** "New episodes", default importance.
-- **Action.** One action, labelled with the episode it marks: "Mark ep. 14 watched".
+- **A notification** is one a title, in the preferred title language, in the language in effect when it is posted,
+  with one action that marks the episode it names. Tapping it opens the title page with the List beneath it; a
+  tapped notification goes and is not shown again.
+- **Grouping.** All episode notifications share one group with a summary, so an evening with several shows is one
+  stack. **Channel:** default importance.
 - **First run.** Notifications are on by default. On Android 13 and later the system permission prompt appears
   once, on the List, right after the first successful sign-in, with no custom dialog before it. If the user
   denies, the setting shows "Blocked in system settings" with a button, and nothing else in the app mentions it.

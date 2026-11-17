@@ -41,6 +41,10 @@ class NotificationTapTest {
     private fun start(intent: Intent): MainActivity {
         scenario = ActivityScenario.launch(intent)
         compose.waitForIdle()
+        return activity()
+    }
+
+    private fun activity(): MainActivity {
         var activity: MainActivity? = null
         scenario!!.onActivity { activity = it }
         return activity!!
@@ -71,6 +75,26 @@ class NotificationTapTest {
         // The start never shows the List first.
         assertEquals(0, app.test.wholeListReads)
         assertTheListIsBeneath(activity)
+    }
+
+    @Test
+    fun `a window made again keeps its stack and does not apply the tap that started it again`() {
+        start(tapIntent(app, kagerou.id))
+        onPageOf(kagerou)
+        back(activity())
+        compose.onNodeWithText("My list").assertExists()
+        scenario!!.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithText("My list").assertExists()
+        assertEquals(0, compose.onAllNodes(isHeading() and hasText(kagerou.titles.romaji)).fetchSemanticsNodes().size)
+        val tap = ReflectionHelpers.ClassParameter.from(Intent::class.java, tapIntent(app, kagerou.id))
+        scenario!!.onActivity { ReflectionHelpers.callInstanceMethod<Unit>(it, "onNewIntent", tap) }
+        compose.waitForIdle()
+        onPageOf(kagerou)
+        scenario!!.recreate()
+        compose.waitForIdle()
+        onPageOf(kagerou)
+        assertTheListIsBeneath(activity())
     }
 
     @Test
