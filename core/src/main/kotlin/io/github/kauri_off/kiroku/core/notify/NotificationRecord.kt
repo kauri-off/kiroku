@@ -12,20 +12,35 @@ data class Followed(
     val since: Instant,
 )
 
+// N1: the highest episode announced of a title, and the latest air time an announcement of it was made for.
+data class Announced(
+    val episode: Int,
+    val airedAt: Instant,
+) {
+    init {
+        require(episode > 0)
+    }
+}
+
 // What notifications remember of one title.
 data class TitleRecord(
     // Null while the title is not one notifications are for.
     val followed: Followed?,
-    // N1: the highest episode announced; none up to it is announced again.
-    val announced: Int?,
-    // N7: that announcement was posted and has not been withdrawn.
+    // No episode up to its episode is announced again, but for a later air time once it was taken back.
+    val announced: Announced?,
+    // The exact count that fell below what was announced: the episodes above it were announced before they aired.
+    val takenBackTo: Int? = null,
+    // N7: the announcement of [standsAt] was posted and has not been withdrawn.
     val standing: Boolean = false,
 ) {
     init {
         require(followed != null || announced != null)
-        require(announced == null || announced > 0)
-        require(!standing || announced != null)
+        require(takenBackTo == null || (announced != null && takenBackTo in 0 until announced.episode))
+        require(!standing || standsAt > 0)
     }
+
+    // The highest episode announced that was not taken back; 0 when there is none.
+    val standsAt: Int get() = takenBackTo ?: announced?.episode ?: 0
 }
 
 // All that notifications remember; a sign-out forgets it (S9).
@@ -65,8 +80,11 @@ fun NotificationRecord.following(
                     // Followed from when the title was added or its status changed, as its entry tells, and not from before [covered].
                     else -> Followed(entry.status, maxOf(covered, minOf(entry.updatedAt, now)))
                 }
-            val announced = before?.announced
-            if (followed == null && announced == null) null else id to TitleRecord(followed, announced, before?.standing == true)
+            when {
+                before != null && (followed != null || before.announced != null) -> id to before.copy(followed = followed)
+                followed != null -> id to TitleRecord(followed, announced = null)
+                else -> null
+            }
         }
     return NotificationRecord(since, plannedSince, seen.toMap())
 }

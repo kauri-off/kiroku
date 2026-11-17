@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.notify
 
+import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.Inexact
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
@@ -64,52 +65,28 @@ class AnnouncedOnceTest {
         )
     }
 
-    // N2, N6: the highest episode that is owed at [now] is the one announced. [before] is the record the run read.
-    private fun owed(
-        device: Device,
-        before: NotificationRecord,
-        result: Notifications,
-        now: Instant,
-    ): Int {
-        var owed = 0
-        val delay =
-            device.settings.delay.duration
-                .toJavaDuration()
-        for (entry in device.entries) {
-            val id = entry.anime.id
-            val since =
-                result.record.titles[id]
-                    ?.followed
-                    ?.since ?: continue
-            val floor = maxOf(entry.values.watchedEpisodes, before.titles[id]?.announced ?: 0)
-            val highest =
-                airingAt(entry.anime, device.schedules[id], now)
-                    .airTimes
-                    .filter {
-                        val at = it.airsAt.plus(delay)
-                        it.number > floor &&
-                            at.isAfter(since) &&
-                            !at.isAfter(now) &&
-                            !now.isAfter(at.plus(announcedNoLaterThan.toJavaDuration()))
-                    }.maxOfOrNull { it.number } ?: continue
-            assertEquals("${entry.anime.titles.romaji} at $now", listOf(id to highest), result.announced.filter { it.first == id })
-            owed++
-        }
-        return owed
+    // The test's own account of what was announced of a title, kept from the recorded runs alone.
+    private class Told {
+        // The highest episode announced, the air time of the latest announcement, and the highest not taken back since.
+        var highest = 0
+        var airedAt: Instant? = null
+        var stands = 0
     }
 
     @Test
-    fun `N1, N2 at any sequence of instants each episode is announced at most once and none that is due is left out`() {
+    fun `N1, N2 at any sequence of instants an episode is announced once for each air time it has, and none that is due is left out`() {
         val set = Fixtures.reference
         val statuses = ListStatus.entries + Fixtures.unknownListStatus
         var announced = 0
         var changes = 0
         var owed = 0
         var again = 0
+        var afresh = 0
         repeat(60) { round ->
             val random = Random(round)
             val device = Device(set.entries, set.schedules, NotificationSettings(alsoPlanned = random.nextBoolean()))
-            val posted = mutableSetOf<Pair<AnimeId, Int>>()
+            val told = mutableMapOf<AnimeId, Told>()
+            val cut = mutableSetOf<Pair<AnimeId, Int>>()
             var now = set.now.minus(day.multipliedBy(14))
             repeat(500) {
                 // The clock moves on by up to a day and a half, stands still, or is set back.
@@ -128,16 +105,17 @@ class AnnouncedOnceTest {
                         else -> now
                     }
                 val event = random.nextInt(16)
-                if (event < 10) changes++
+                if (event < 12) changes++
                 when (event) {
                     0 -> device.settings = device.settings.copy(delay = NotificationDelay.entries.random(random))
                     1 -> device.settings = device.settings.copy(on = !device.settings.on)
                     2 -> device.settings = device.settings.copy(alsoPlanned = !device.settings.alsoPlanned)
-                    // A refresh that moves a title's episodes, all or the later ones, by up to four hours either way.
+                    // A refresh that moves a title's episodes, all or the later ones: by up to four hours either way, or a week on.
                     3, 4 ->
                         device.schedules[id]?.let { schedule ->
                             val from = if (random.nextBoolean()) 1 else schedule.episodes.random(random).number
-                            device.schedules += id to shifted(schedule, Duration.ofMinutes(random.nextLong(-240, 240)), from)
+                            val by = if (random.nextInt(3) == 0) day.multipliedBy(7) else Duration.ofMinutes(random.nextLong(-240, 240))
+                            device.schedules += id to shifted(schedule, by, from)
                         }
                     5 -> device.schedules = if (random.nextBoolean()) device.schedules - id else set.schedules
                     6 -> device.status(statuses.random(random), changedAt, id)
@@ -156,21 +134,75 @@ class AnnouncedOnceTest {
                             val entry = set.entryFor(id)!!
                             device.entries += if (random.nextBoolean()) entry else entry.copy(updatedAt = changedAt)
                         }
+                    // The episode that aired last, of each title, is postponed with those after it: by an hour, or by a week.
+                    10, 11 ->
+                        device.schedules =
+                            device.schedules.mapValues { (_, schedule) ->
+                                val last = schedule.episodes.filter { !it.airsAt.isAfter(now) }.maxOfOrNull { it.number }
+                                if (last == null) schedule else shifted(schedule, if (event == 10) hour else day.multipliedBy(7), last)
+                            }
                 }
                 // One run in eight is cut off after it posted: it records nothing, and the next run posts the same again.
-                val before = device.record
                 val cutOff = random.nextInt(8) == 0
                 val result = device.run(now, cutOff)
                 assertSound(result, now)
-                owed += owed(device, before, result, now)
-                if (cutOff) again += result.announced.count { !posted.add(it) } else posted += result.announced
+                val delay =
+                    device.settings.delay.duration
+                        .toJavaDuration()
+                for (entry in device.entries) {
+                    val title = entry.anime.id
+                    val since =
+                        result.record.titles[title]
+                            ?.followed
+                            ?.since ?: continue
+                    val account = told.getOrPut(title) { Told() }
+                    val airing = airingAt(entry.anime, device.schedules[title], now)
+                    // An exact count below what was announced: those episodes have not aired, and are owed again when they do.
+                    val stands = (airing.aired as? AiredCount.Exact)?.value?.coerceAtMost(account.stands) ?: account.stands
+                    // N2, N6: the highest episode owed is the one announced, and nothing else is.
+                    val due =
+                        airing.airTimes
+                            .filter {
+                                val at = it.airsAt.plus(delay)
+                                val limit = at.plus(announcedNoLaterThan.toJavaDuration())
+                                val fresh = it.number > account.highest || account.airedAt?.isBefore(it.airsAt) == true
+                                it.number > maxOf(entry.values.watchedEpisodes, stands) &&
+                                    fresh &&
+                                    at.isAfter(since) &&
+                                    !at.isAfter(now) &&
+                                    !now.isAfter(limit)
+                            }.maxByOrNull { it.number }
+                    val name = "${entry.anime.titles.romaji} at $now"
+                    assertEquals(
+                        name,
+                        listOfNotNull(due?.let { Triple(title, it.number, it.airsAt) }),
+                        result.airings.filter {
+                            it.first ==
+                                title
+                        },
+                    )
+                    if (due != null) owed++
+                    if (cutOff) continue
+                    account.stands = stands
+                    if (due != null) {
+                        // N1: an episode announced before is announced again only once it was taken back, and for a later air time.
+                        if (due.number <= account.highest) afresh++
+                        assertTrue(name, due.number > account.stands)
+                        assertTrue(name, due.number > account.highest || due.airsAt.isAfter(account.airedAt))
+                        account.highest = maxOf(account.highest, due.number)
+                        account.airedAt = maxOf(due.airsAt, account.airedAt ?: due.airsAt)
+                        account.stands = due.number
+                    }
+                }
+                if (cutOff) cut += result.announced else again += result.announced.count { cut.remove(it) }
             }
-            assertEquals("round $round", device.announced.size, device.announced.toSet().size)
-            announced += device.announced.size
+            assertEquals("round $round", device.airings.size, device.airings.toSet().size)
+            announced += device.airings.size
         }
-        assertTrue("$announced", announced > 1000)
-        assertTrue("$owed", owed > 1000)
-        assertTrue("$again", again > 20)
+        assertTrue("$announced", announced > 800)
+        assertTrue("$owed", owed > 800)
+        assertTrue("$again", again > 50)
+        assertTrue("$afresh", afresh > 100)
         assertTrue("$changes", changes > 10000)
     }
 
@@ -187,18 +219,6 @@ class AnnouncedOnceTest {
         device.schedules = mapOf(title.id to weekly())
         assertEquals(none, device.walk(delayed.plus(hour.dividedBy(2)), week(3)).announced)
         assertEquals(listOf(3, 4), device.also { it.run(week(3).plus(hour.multipliedBy(3))) }.episodes())
-    }
-
-    @Test
-    fun `N1 a refresh after the announcement that moves its episode later does not announce it again`() {
-        val device = followed(entry(watched = 2))
-        assertEquals(listOf(title.id to 3), device.run(week(2)).announced)
-        for (by in listOf(hour, day, day.multipliedBy(7))) {
-            device.schedules = mapOf(title.id to shifted(weekly(), by, from = 3))
-            val moved = week(2).plus(by)
-            assertEquals("$by", none, device.walk(moved.minus(hour), moved.plus(hour)).announced)
-        }
-        assertEquals(listOf(3), device.episodes())
     }
 
     @Test

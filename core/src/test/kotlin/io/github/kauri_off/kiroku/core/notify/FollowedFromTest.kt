@@ -209,14 +209,14 @@ class FollowedFromTest {
         device.walk(week(0), week(3))
         device.remove()
         assertEquals(setOf(title.id), device.run(week(3).plus(hour)).withdrawn)
-        assertEquals(TitleRecord(followed = null, announced = 4), device.record.titles[title.id])
+        assertEquals(TitleRecord(followed = null, announced = Announced(4, week(3))), device.record.titles[title.id])
         assertTrue(device.walk(week(3).plus(hour), added).all { it.silent && it.withdrawn.isEmpty() })
         device.entries = listOf(entry(updatedAt = added))
         val back = device.run(added)
         assertEquals(none, back.announced)
         assertEquals(emptyList<Announcement>(), back.standing)
         assertEquals(listOf(Coming(title, 6, week(5), week(5))), back.coming)
-        assertEquals(TitleRecord(Followed(ListStatus.Watching, added), announced = 4), device.record.titles[title.id])
+        assertEquals(TitleRecord(Followed(ListStatus.Watching, added), Announced(4, week(3))), device.record.titles[title.id])
         assertEquals(listOf(4, 6), device.also { it.walk(added, week(5)) }.episodes())
 
         // Added again on the website and synced later: what aired after the add is announced, and nothing from before it.
@@ -244,7 +244,7 @@ class FollowedFromTest {
         val back = device.run(now.plusSeconds(5))
         assertEquals(none, back.announced)
         assertEquals(emptyList<Announcement>(), back.standing)
-        assertEquals(TitleRecord(Followed(ListStatus.Watching, firstRun), announced = 3), device.record.titles[title.id])
+        assertEquals(TitleRecord(Followed(ListStatus.Watching, firstRun), Announced(3, week(2))), device.record.titles[title.id])
         assertEquals(listOf(3, 4), device.also { it.walk(now, week(3)) }.episodes())
     }
 
@@ -294,6 +294,6 @@ class FollowedFromTest {
         device.status(ListStatus.Dropped, at = week(0))
         device.status(ListStatus.Dropped, at = week(0), id = other.id)
         device.run(week(0).plus(hour))
-        assertEquals(mapOf(title.id to TitleRecord(followed = null, announced = 1)), device.record.titles)
+        assertEquals(mapOf(title.id to TitleRecord(followed = null, announced = Announced(1, week(0)))), device.record.titles)
     }
 }

@@ -250,47 +250,6 @@ class NotifiableTest {
     }
 
     @Test
-    fun `N7 an announcement of an episode AniList has since postponed is withdrawn, and the episode is never announced again`() {
-        for (by in listOf(hour, day.multipliedBy(7))) {
-            val postponed =
-                weekly().let {
-                    it.copy(
-                        episodes =
-                            it.episodes.map { e ->
-                                if (e.number <
-                                    3
-                                ) {
-                                    e
-                                } else {
-                                    e.copy(airsAt = e.airsAt.plus(by))
-                                }
-                            },
-                    )
-                }
-            val device = followed(entry())
-            device.run(week(2))
-            device.schedules = only(postponed)
-            // The exact count is 2 again: nothing says episode 3 has aired, and "Mark watched" would mark it.
-            val after = device.run(week(2).plus(hour.dividedBy(2)))
-            assertEquals("$by", setOf(title.id), after.withdrawn)
-            assertEquals("$by", emptyList<Announcement>(), after.standing)
-            assertEquals(
-                "$by",
-                TitleRecord(Followed(ListStatus.Watching, week(0).minus(day)), announced = 3),
-                device.record.titles[title.id],
-            )
-            // It airs at its new time: it is neither announced nor posted again, and the next episode is announced as ever.
-            val later = device.walk(week(2).plus(hour.dividedBy(2)), week(3).plus(by).minus(hour))
-            assertTrue("$by", later.all { it.due.isEmpty() && it.standing.isEmpty() && it.withdrawn.isEmpty() })
-            assertEquals(
-                "$by",
-                listOf(Due(Announcement(title, 4, toWatch = 4, marks = 1), week(3).plus(by), week(3).plus(by))),
-                device.run(week(3).plus(by)).due,
-            )
-        }
-    }
-
-    @Test
     fun `a newer episode takes the place of the standing announcement, and nothing is withdrawn`() {
         val device = followed(entry())
         device.run(week(0))
@@ -299,7 +258,7 @@ class NotifiableTest {
         assertEquals(emptyList<Announcement>(), next.standing)
         assertEquals(emptySet<AnimeId>(), next.withdrawn)
         assertEquals(
-            TitleRecord(Followed(ListStatus.Watching, week(0).minus(day)), announced = 2, standing = true),
+            TitleRecord(Followed(ListStatus.Watching, week(0).minus(day)), Announced(2, week(1)), standing = true),
             device.record.titles[title.id],
         )
     }

@@ -83,8 +83,9 @@ internal class Device(
     var settings: NotificationSettings = NotificationSettings(),
     var record: NotificationRecord = NotificationRecord(),
 ) {
-    // Every episode announced, in order.
+    // Every episode announced, in order, and each with the air time it was announced for.
     val announced = mutableListOf<Pair<AnimeId, Int>>()
+    val airings = mutableListOf<Triple<AnimeId, Int, Instant>>()
 
     // One run: the rule applied at [now] and its result recorded; a run cut off after it posted records nothing.
     fun run(
@@ -95,6 +96,7 @@ internal class Device(
         if (cutOff) return result
         record = result.record
         announced += result.announced
+        airings += result.airings
         return result
     }
 
@@ -131,6 +133,9 @@ internal class Device(
 }
 
 internal val Notifications.announced: List<Pair<AnimeId, Int>> get() = due.map { it.announcement.anime.id to it.announcement.episode }
+
+internal val Notifications.airings: List<Triple<AnimeId, Int, Instant>>
+    get() = due.map { Triple(it.announcement.anime.id, it.announcement.episode, it.airedAt) }
 
 internal val List<Notifications>.announced: List<Pair<AnimeId, Int>> get() = flatMap { it.announced }
 

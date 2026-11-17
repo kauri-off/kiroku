@@ -82,23 +82,34 @@ internal fun notificationsAt(
         // N4: a title notifications are not for announces nothing, and what was posted of it is withdrawn below.
         val since = title.followed?.since ?: continue
         val watched = entry.values.watchedEpisodes
-        val announced = title.announced ?: 0
+        val highest = title.announced?.episode ?: 0
+        val lastAiredAt = title.announced?.airedAt
         val airing = calculate(anime, schedules[anime.id], now)
         val count = (airing.aired as? AiredCount.Exact)?.value
-        // N1, N4, N5: not announced, not watched, and with a notification time after the moment the title is followed from.
+        // N1, N7: an exact count below what was announced says it has not aired: it is taken back, to be announced when it airs.
+        val stands = count?.takeIf { it < title.standsAt } ?: title.standsAt
+        val back = stands < title.standsAt
+        // N1, N4, N5: not watched, not announced unless for a later air time, and due after the moment the title is followed from.
         val open =
             airing.airTimes
-                .filter { it.number > maxOf(watched, announced) }
+                .filter { it.number > maxOf(watched, stands) && (it.number > highest || lastAiredAt?.isBefore(it.airsAt) == true) }
                 .map { Timed(it.number, it.airsAt, it.airsAt.plus(delay)) }
                 .filter { it.notifyAt.isAfter(since) }
         // N2, N6: the highest episode whose notification time has come, no longer ago than the limit.
         val announce = open.filter { !it.notifyAt.isAfter(now) && !now.isAfter(it.notifyAt.plus(limit)) }.maxByOrNull { it.episode }
         if (announce != null && count != null) {
             due += Due(Announcement(anime, announce.episode, count - watched, watched + 1), announce.airsAt, announce.notifyAt)
-            titles[anime.id] = title.copy(announced = announce.episode, standing = true)
-        } else if (title.standing && watched < announced && (count == null || count >= announced)) {
-            // N7: it stands without an exact count, and not once an exact count says its episode has not aired.
-            standing += Announcement(anime, announced, count?.minus(watched), watched + 1)
+            titles[anime.id] =
+                title.copy(
+                    announced = Announced(maxOf(announce.episode, highest), maxOf(announce.airsAt, lastAiredAt ?: announce.airsAt)),
+                    takenBackTo = announce.episode.takeIf { it < highest },
+                    standing = true,
+                )
+        } else if (back) {
+            titles[anime.id] = title.copy(takenBackTo = stands, standing = false)
+        } else if (title.standing && watched < stands) {
+            // N7: it stands without an exact count too.
+            standing += Announcement(anime, stands, count?.minus(watched), watched + 1)
         }
         // N8: the soonest time still to come, which announces the highest episode it is the time of.
         open
@@ -106,9 +117,9 @@ internal fun notificationsAt(
             .minWithOrNull(compareBy<Timed> { it.notifyAt }.thenByDescending { it.episode })
             ?.let { coming += Coming(anime, it.episode, it.airsAt, it.notifyAt) }
     }
-    // N7: any other posted announcement is withdrawn, and stays recorded as announced.
+    // N7: any other posted announcement is withdrawn.
     val kept = due.mapTo(mutableSetOf()) { it.announcement.anime.id } + standing.map { it.anime.id }
-    val withdrawn = titles.filter { (id, title) -> title.standing && id !in kept }.keys
+    val withdrawn = followed.titles.filter { (id, title) -> title.standing && id !in kept }.keys
     for (id in withdrawn) titles[id] = titles.getValue(id).copy(standing = false)
     return Notifications(
         due = due.sortedWith(compareBy({ it.notifyAt }, { it.announcement.anime.id.value })),
