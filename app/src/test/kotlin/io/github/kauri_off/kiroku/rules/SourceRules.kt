@@ -282,7 +282,7 @@ fun airingValueProblems(
 // A list's statistics are :core's: no constructor or copy of one, and no status counts but a title's from a source.
 private val statistic =
     Regex(
-        """\b(UserStatistics|Counted)\s*(<[^>()]*>)?\s*\(|\bStatusCounts\s*(\.|::)\s*of\b|""" +
+        """\b(UserStatistics|Counted)\s*(<[^>()]*>)?\s*\(|\bStatusCounts\s*(\.\s*Companion\s*)?(\.|::)\s*of\b|""" +
             """\.copy\s*\(\s*(statuses|daysWatched|meanScore|scores|genres|mediaTypes|years|watching|completed|onHold|dropped|planned)\s*=""",
     )
 private val statusCounts = Regex("""\bStatusCounts\s*\(""")

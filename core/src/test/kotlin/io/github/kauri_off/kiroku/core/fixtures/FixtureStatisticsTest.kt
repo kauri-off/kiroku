@@ -15,6 +15,28 @@ class FixtureStatisticsTest {
     }
 
     @Test
+    fun `three weeks earlier, a title that started in a year's first three weeks counts in the year before`() {
+        val set = FixtureSets.all.toMap().getValue("3 weeks earlier")
+
+        // The reference's years, with 2026-01-18, 2025-01-01, 2024-01-10, 2020-01-11 and the year 2027 each a year earlier.
+        assertEquals(
+            mapOf(
+                2004 to 1,
+                2017 to 1,
+                2018 to 1,
+                2019 to 3,
+                2021 to 1,
+                2022 to 2,
+                2023 to 3,
+                2024 to 2,
+                2025 to 12,
+                2026 to 4,
+            ),
+            statisticsOf(set.entries).years,
+        )
+    }
+
+    @Test
     fun `the large statistics agree with themselves`() {
         val statistics = Fixtures.reference.largeStatistics
         val total = statistics.statuses.total

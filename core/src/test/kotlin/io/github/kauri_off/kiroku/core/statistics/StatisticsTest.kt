@@ -25,7 +25,8 @@ class StatisticsTest {
     private val action = FixtureGenres.action
     private val comedy = FixtureGenres.comedy
     private val drama = FixtureGenres.drama
-    private val romance = FixtureGenres.romance
+    private val supernatural = FixtureGenres.supernatural
+    private val military = FixtureGenres.military
 
     private var nextId = 1L
 
@@ -35,6 +36,7 @@ class StatisticsTest {
         episodes: Int? = 12,
         year: Int? = 2020,
         genres: List<Genre>? = emptyList(),
+        seconds: Long? = null,
     ) = Anime(
         id = AnimeId(nextId++),
         titles = Titles("Title $nextId"),
@@ -48,7 +50,7 @@ class StatisticsTest {
         meanScore = null,
         rank = null,
         genres = genres,
-        averageEpisodeDuration = minutes?.let(Duration::ofMinutes),
+        averageEpisodeDuration = seconds?.let(Duration::ofSeconds) ?: minutes?.let(Duration::ofMinutes),
     )
 
     private fun entry(
@@ -66,10 +68,10 @@ class StatisticsTest {
             statisticsOf(
                 listOf(
                     entry(anime(MediaType.Tv, 24, 12, 2020, listOf(action, comedy)), ListStatus.Completed, 12, 8),
-                    entry(anime(MediaType.Movie, 120, 1, 2019, listOf(drama)), ListStatus.Completed, 1, 10),
-                    entry(anime(MediaType.Tv, 24, 24, 2020, listOf(comedy, romance)), ListStatus.Watching, 6),
+                    entry(anime(MediaType.Movie, 120, 1, 2019, listOf(military)), ListStatus.Completed, 1, 10),
+                    entry(anime(MediaType.Tv, 24, 24, 2020, listOf(comedy, supernatural)), ListStatus.Watching, 6),
                     entry(anime(MediaType.Ova, 30, 2, 2015, listOf(action)), ListStatus.Dropped, 1, 3),
-                    entry(anime(MediaType.Tv, 24, 13, 2021, listOf(comedy)), ListStatus.Planned, 0),
+                    entry(anime(MediaType.Tv, 24, 13, 2021, listOf(comedy)), ListStatus.Planned, 0, 4),
                     entry(anime(MediaType.Ona, 15, 10, 2020, emptyList()), ListStatus.OnHold, 4, 6),
                 ),
             )
@@ -77,12 +79,12 @@ class StatisticsTest {
         assertEquals(StatusCounts(watching = 1, completed = 2, onHold = 1, dropped = 1, planned = 1), statistics.statuses)
         // 12 × 24 + 1 × 120 + 6 × 24 + 1 × 30 + 0 × 24 + 4 × 15 = 642 minutes, a day being 1440.
         assertEquals(642.0 / 1440, statistics.daysWatched, 0.0)
-        // (8 + 10 + 3 + 6) / 4: the two entries without a score are left out.
-        assertEquals(6.75, statistics.meanScore!!, 0.0)
-        assertEquals(mapOf(3 to 1, 6 to 1, 8 to 1, 10 to 1), statistics.scores)
-        // Drama and Romance tie at one; Drama's id is the lower.
-        assertEquals(listOf(Counted(comedy, 3), Counted(action, 2), Counted(drama, 1), Counted(romance, 1)), statistics.genres)
-        // Movie, OVA and ONA tie at one, in the order MediaType declares them.
+        // (8 + 10 + 3 + 4 + 6) / 5: the Planned entry's score is in, the one entry without a score is left out.
+        assertEquals(6.2, statistics.meanScore!!, 0.0)
+        assertEquals(mapOf(3 to 1, 4 to 1, 6 to 1, 8 to 1, 10 to 1), statistics.scores)
+        // Supernatural (37) and Military (38) tie at one: by id, not by name.
+        assertEquals(listOf(Counted(comedy, 3), Counted(action, 2), Counted(supernatural, 1), Counted(military, 1)), statistics.genres)
+        // Movie, OVA and ONA tie at one, in the calculator's order of types.
         assertEquals(
             listOf(Counted(MediaType.Tv, 3), Counted(MediaType.Movie, 1), Counted(MediaType.Ova, 1), Counted(MediaType.Ona, 1)),
             statistics.mediaTypes,
@@ -128,6 +130,14 @@ class StatisticsTest {
     }
 
     @Test
+    fun `an episode length counts to the second`() {
+        // MAL gives lengths in seconds: 3 × 1435 s = 4305 s.
+        val statistics = statisticsOf(listOf(entry(anime(minutes = null, seconds = 1_435), watched = 3)))
+
+        assertEquals(4_305.0 / 86_400, statistics.daysWatched, 0.0)
+    }
+
+    @Test
     fun `a title without a start date is in no year, and counts everywhere else`() {
         val statistics = statisticsOf(listOf(entry(anime(year = null), score = 5), entry(anime(year = 2004))))
 
@@ -137,31 +147,32 @@ class StatisticsTest {
     }
 
     @Test
-    fun `a title without a media type is in no type, and one the app does not know is a type of its own`() {
+    fun `a title without a media type is in no type, ties follow the calculator's order, and an unknown type counts as its own`() {
+        val known =
+            listOf(
+                MediaType.Tv,
+                MediaType.TvSpecial,
+                MediaType.Movie,
+                MediaType.Ova,
+                MediaType.Ona,
+                MediaType.Special,
+                MediaType.Music,
+                MediaType.Commercial,
+                MediaType.PromotionalVideo,
+            )
+        val unknown = listOf(MediaType.Unrecognized("cm_short"), MediaType.Unrecognized("tv_short"))
         val statistics =
             statisticsOf(
-                listOf(
-                    entry(anime(type = null), score = 4),
-                    entry(anime(type = MediaType.Unrecognized("tv_short"))),
-                    entry(anime(type = MediaType.Unrecognized("cm_short"))),
-                    entry(anime(type = MediaType.PromotionalVideo)),
-                ),
+                listOf(entry(anime(type = null), score = 4)) + (known + unknown).reversed().map { entry(anime(type = it)) },
             )
 
-        assertEquals(
-            listOf(
-                Counted(MediaType.PromotionalVideo, 1),
-                Counted(MediaType.Unrecognized("cm_short"), 1),
-                Counted(MediaType.Unrecognized("tv_short"), 1),
-            ),
-            statistics.mediaTypes,
-        )
-        assertEquals(4, statistics.statuses.completed)
+        assertEquals((known + unknown).map { Counted(it, 1) }, statistics.mediaTypes)
+        assertEquals(12, statistics.statuses.completed)
         assertEquals(mapOf(4 to 1), statistics.scores)
     }
 
     @Test
-    fun `a title without genres is in no genre, and a genre is counted once per title by its id`() {
+    fun `a title without genres is in no genre, a genre is counted once per title by its id, and ties go by id`() {
         val renamed = Genre(comedy.id, "Comedy (renamed)")
         val statistics =
             statisticsOf(
@@ -170,11 +181,16 @@ class StatisticsTest {
                     entry(anime(genres = emptyList())),
                     entry(anime(genres = listOf(comedy, comedy, drama))),
                     entry(anime(genres = listOf(renamed))),
+                    entry(anime(genres = listOf(military, supernatural))),
                 ),
             )
 
-        assertEquals(listOf(Counted(comedy, 2), Counted(drama, 1)), statistics.genres)
-        assertEquals(4, statistics.statuses.completed)
+        // Drama (8), Supernatural (37) and Military (38) tie at one: by name Military would come before Supernatural.
+        assertEquals(
+            listOf(Counted(comedy, 2), Counted(drama, 1), Counted(supernatural, 1), Counted(military, 1)),
+            statistics.genres,
+        )
+        assertEquals(5, statistics.statuses.completed)
         assertEquals(mapOf(2 to 1), statistics.scores)
     }
 

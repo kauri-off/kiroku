@@ -444,6 +444,7 @@ class SourceRulesTest {
                 "val a = StatusCounts(1, 2, 3, 4, 5)",
                 "val a = StatusCounts.of(entries.map { it.status })",
                 "val a = entries.map { it.status }.let(StatusCounts::of)",
+                "val a = StatusCounts.Companion.of(statuses)",
                 "val a = statistics.copy(meanScore = 7.0)",
                 "val a = statistics.copy(\n    daysWatched = 0.0,\n)",
                 "val a = statistics.statuses.copy(completed = done)",

@@ -45,7 +45,9 @@ class OwnerStatisticsTest {
             }
         val mean = OwnerRecordings.read("profile") { BigDecimal(recorded.getValue("mean_score").jsonPrimitive.content) }
 
-        val statistics = statisticsOf(pages.flatMap { it.entries })
+        val entries = pages.flatMap { it.entries }
+        assertTrue("the recorded list is empty", entries.isNotEmpty())
+        val statistics = statisticsOf(entries)
 
         assertTrue("the completed count differs from the profile's", statistics.statuses.completed == completed)
         // MAL gives a mean of zero where nothing is scored, and the mean to two decimals.

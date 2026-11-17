@@ -50,6 +50,7 @@ private fun genresOf(entries: Collection<ListEntry>): List<Counted<Genre>> =
         .map { (_, same) -> Counted(same.first(), same.size) }
         .sortedWith(compareByDescending<Counted<Genre>> { it.count }.thenBy { it.value.id })
 
+// The order of media types that tie: TV first, promotional videos last, then those the app does not know.
 private val MediaType.order: Int
     get() =
         when (this) {
