@@ -34,6 +34,8 @@
     <string name="title_loading_watch_order">Loading the watch order</string>
     <string name="title_related">Related</string>
     <string name="title_statistics">Statistics</string>
+    <string name="title_scores">MAL scores</string>
+    <string name="title_scores_row">Votes for each score</string>
     <string name="title_details">Details</string>
     <string name="title_recommendations">Recommendations</string>
     <plurals name="title_titles">

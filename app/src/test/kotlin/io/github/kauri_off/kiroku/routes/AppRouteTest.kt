@@ -40,6 +40,7 @@ import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.design.composeRule
@@ -343,6 +344,22 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Save")
         assertEquals(ListStatus.Planned, values(FixtureAnime.notOnListAiring)?.status)
+    }
+
+    @Test
+    fun `the title page asks the scores of nobody, and its row opens them, asked then and gone back from`() {
+        app()
+        openKagerou()
+        scrollTo("Details")
+        compose.waitForIdle()
+        assertEquals(emptyList<AnimeId>(), graph.demo.scoreSource.requests)
+
+        click("MAL scores")
+        compose.waitForIdle()
+        showsSubstring("\u00A0votes")
+        assertEquals(listOf(kagerou.id), graph.demo.scoreSource.requests)
+        back()
+        shows("Details")
     }
 
     @Test

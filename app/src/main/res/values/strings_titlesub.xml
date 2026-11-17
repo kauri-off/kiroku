@@ -64,4 +64,12 @@
     <string name="titlesub_rating_violence_17">R (17+, violence and profanity)</string>
     <string name="titlesub_rating_mild_nudity">R+ (mild nudity)</string>
     <string name="titlesub_rating_hentai">Rx (hentai)</string>
+    <string name="titlesub_scores_spoken">Score\u00A0%1$d</string>
+    <plurals name="titlesub_scores_votes">
+        <item quantity="one">%1$s\u00A0vote</item>
+        <item quantity="other">%1$s\u00A0votes</item>
+    </plurals>
+    <string name="titlesub_scores_none">Nobody has scored this title yet</string>
+    <string name="titlesub_scores_not_known">The scores of this title are not known yet</string>
+    <string name="titlesub_scores_failed">Could not load the scores</string>
 </resources>

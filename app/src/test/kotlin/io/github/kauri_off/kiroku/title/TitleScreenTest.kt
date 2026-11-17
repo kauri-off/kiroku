@@ -32,6 +32,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -94,6 +95,17 @@ class TitleScreenTest {
         action()
         compose.waitForIdle()
         assertEquals(listOf(event), events)
+    }
+
+    @Test
+    fun theScoresRowSitsAboveDetailsAndOpensTheScores() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        scrollTo("Details")
+        val scores = compose.onNodeWithText("MAL scores").fetchSemanticsNode().boundsInRoot
+        val details = compose.onNodeWithText("Details").fetchSemanticsNode().boundsInRoot
+        assertTrue(scores.bottom <= details.top)
+        compose.onNodeWithText("Votes for each score").assertExists()
+        sends(TitleEvent.OpenScores) { compose.onNodeWithText("MAL scores").performClick() }
     }
 
     @Test

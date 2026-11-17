@@ -119,6 +119,8 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-27 Watch order on the title page.**
 
+- [x] **M2-35 MAL scores of a title.**
+
 - [x] **M2-28 Back gesture preview.**
 
 - [x] **M2-29 Messages that are the only way back.**
@@ -465,17 +467,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-06 Profile links.**
 
-- [ ] **M6-07 Sandbox: other users.** The sandbox's MAL answers for other users' lists in the recorded shapes: a
-  public user whose list has several thousand entries, made from the sandbox's titles and given in pages of the
-  size asked; a user whose list is private; and nobody else. It answers them to the client id alone, signed in or
-  not, and its failures (offline, slow) apply to them. Its profile of the signed-in user is held to the owner's
-  recording.
-  **Needs:** nothing.
-  **Check:** `./gradlew :data:testDebugUnitTest`: given the entries of the recorded public pages, the sandbox's
-  pages hold the same titles in the same order, values and offsets; its answers for the private user and for an
-  unknown name are the recorded ones; `MalLists` reads the list of several thousand whole, each entry once; a
-  request for another user's list that carries a token is answered as one without. Where the owner's recordings
-  are: the sandbox's profile has the fields of his recorded one, each of the same kind.
+- [x] **M6-07 Sandbox: other users.**
 
 - [ ] **M6-08 Another user's list from MAL.** In `:data`: M6-04's port over MAL's list of a named user. A part is
   a page, asked one at a time, and the entries so far follow each. The name goes to MAL as one segment of the
@@ -607,9 +599,9 @@ P1 to P5. The sources other than MAL are unchecked (ARCHITECTURE section 13, ite
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|
 | P1 | Manga and a fuller list | Manga lists, title pages, search, rankings and statistics; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts and a filter across statuses; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes; deep links to manga pages | MAL only |
-| P2 | A deeper title page | Votes per score; characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | Jikan, AniList, MAL |
+| P2 | A deeper title page | Characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | AniList, MAL, one not chosen yet |
 | P3 | Schedule and discovery | A weekly schedule of the user's airing titles; a season browser; suggestions; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
-| P4 | Community, read-only | Forum boards, topics and posts; a title's discussions; users' reviews of a title | MAL, Jikan |
+| P4 | Community, read-only | Forum boards, topics and posts; a title's discussions; users' reviews of a title | MAL, one not chosen yet |
 | P5 | Reach | F-Droid; community translations, each reviewed by a speaker; Russian titles as a fourth title language; a pure-black theme; a choice of start tab; reference screenshots compared in CI; an "Up next" widget | Shikimori for Russian titles |
 
 ### Not built

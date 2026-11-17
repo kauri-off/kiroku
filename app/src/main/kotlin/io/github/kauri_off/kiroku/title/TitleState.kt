@@ -223,6 +223,8 @@ sealed interface TitleEvent {
 
     data object OpenDetails : TitleEvent
 
+    data object OpenScores : TitleEvent
+
     data object OpenRecommendations : TitleEvent
 
     data object Retry : TitleEvent
