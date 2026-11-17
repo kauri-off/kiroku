@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
+import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
@@ -324,28 +325,29 @@ interface SearchRepository {
     ): Outcome<Page<Ranked<Anime>>>
 }
 
-sealed interface UserListLoad {
-    data class Loading(
-        val loaded: Int,
-        val total: Int?,
-    ) : UserListLoad
-
-    data class Loaded(
-        val entries: List<ListEntry>,
-    ) : UserListLoad
-
-    data class Failed(
-        val error: DataError,
-    ) : UserListLoad
-}
-
-interface UserRepository {
+interface OwnProfile {
     fun observeOwnProfile(): Flow<UserProfile?>
 
     suspend fun refreshOwnProfile(): Outcome<Unit>
-
-    fun loadList(userName: String): Flow<UserListLoad>
 }
+
+// Other users' lists as a screen sees them; whose list it is, is the name the person gave.
+interface UserLists {
+    // Read once however many observe it, a part at a time while one does; a failed read is tried again when one comes.
+    fun observeList(name: String): Flow<UserListState>
+
+    // The person asked: reads the list again, or joins the read under way; the list held stays unless the user's answer changed.
+    suspend fun refreshList(name: String): Outcome<Unit>
+
+    fun sameUser(
+        a: String,
+        b: String,
+    ): Boolean
+}
+
+interface UserRepository :
+    OwnProfile,
+    UserLists
 
 // The person's choices, kept across restarts. A choice that cannot be read counts as never made, and is reported.
 interface PreferencesRepository {

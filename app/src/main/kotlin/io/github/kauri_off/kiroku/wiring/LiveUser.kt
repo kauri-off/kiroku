@@ -3,8 +3,8 @@ package io.github.kauri_off.kiroku.wiring
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.UserProfile
-import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.core.user.UserListState
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -20,5 +20,12 @@ internal fun liveUser(
 
         override suspend fun refreshOwnProfile(): Outcome<Unit> = Outcome.Failure(DataError.SessionExpired)
 
-        override fun loadList(userName: String): Flow<UserListLoad> = flowOf(UserListLoad.Failed(DataError.ServerError))
+        override fun observeList(name: String): Flow<UserListState> = flowOf(UserListState.None(DataError.ServerError))
+
+        override suspend fun refreshList(name: String): Outcome<Unit> = Outcome.Failure(DataError.ServerError)
+
+        override fun sameUser(
+            a: String,
+            b: String,
+        ): Boolean = a == b
     }
