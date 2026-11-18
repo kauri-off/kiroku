@@ -98,11 +98,11 @@ class SandboxNotificationsTest {
     private fun <T> waited(block: suspend () -> T): T = runBlocking { withTimeout(WAIT) { block() } }
 
     // A new process of the app on the sandbox, over the files the one before it left; that one has ended.
-    private fun started(): SandboxGraph {
+    private fun started(device: Device = Online): SandboxGraph {
         ended()
         val scope = applicationScope(unexpected::add)
         val graph =
-            SandboxGraph.create(context, Clock.systemUTC(), Online) { source, device, clock ->
+            SandboxGraph.create(context, Clock.systemUTC(), device) { source, device, clock ->
                 LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, unexpected::add, device = device)
             }
         process = Process(graph, scope)
@@ -447,7 +447,62 @@ class SandboxNotificationsTest {
         assertEquals(Outcome.Failure(DataError.NoConnection), report.airing)
         assertEquals(listOf(due), report.notifications!!.posted.ofSoon())
         assertEquals(due, shown().getValue(soon).episode)
+        // A write without a screen is not sent either, and waits for a connection.
+        val watching = waited { later.list.observeEntries().first() }.first { it.status == ListStatus.Watching }
+        val write = ListWrite.MarkNextWatched(watching.anime)
+        assertEquals(ListWork.Done(Outcome.Failure(DataError.NoConnection)), waited { later.withoutScreen.sendToList(write) })
         assertEquals(emptyList<String>(), requests(before))
+    }
+
+    // An episode AniList moved since is known to the engine's run: the airing data is updated before it.
+    @Test
+    fun `a periodic run announces from the airing data it has just updated, so an episode postponed since is not announced`() {
+        val graph = started()
+        graph.signedIn()
+        graph.synced()
+        graph.run(RunTrigger.AppOpened)
+        val stored = graph.coming().single { it.anime.id == soon }
+        val postponed = checkNotNull(waited { withContext(Dispatchers.IO) { graph.sandbox.plant(now().plus(Duration.ofMinutes(30))) } })
+        assertEquals(stored.episode, postponed.episode)
+        // Past the stored time and the airing data's freshness; before the new time.
+        time.ahead = time.ahead + Duration.ofMinutes(16)
+
+        val report = waited { periodicRun(graph.withoutScreen) }
+
+        assertEquals(Outcome.Success(Unit), report.airing)
+        assertEquals(emptyList<Int>(), report.notifications!!.posted.ofSoon())
+        assertEquals(postponed.at, graph.coming().single { it.anime.id == soon }.notifyAt)
+    }
+
+    // A device that cannot tell its connection is offline to work without a screen: waited out, never a failed write.
+    @Test
+    fun `a connection check that throws sends nothing without a screen, answers no connection and is reported`() {
+        val thrown = IllegalStateException("The connectivity service is gone")
+        val device =
+            object : Device by Online {
+                @Volatile
+                var throwing = false
+
+                override fun isOnline(): Boolean = if (throwing) throw thrown else true
+            }
+        val graph = started(device)
+        graph.signedIn()
+        graph.synced()
+        val watching = waited { graph.list.observeEntries().first() }.first { it.status == ListStatus.Watching }
+        device.throwing = true
+        val before = asked()
+
+        assertEquals(ListWork.Done(Outcome.Failure(DataError.NoConnection)), waited { graph.withoutScreen.syncList() })
+        assertEquals(
+            ListWork.Done(Outcome.Failure(DataError.NoConnection)),
+            waited { graph.withoutScreen.sendToList(ListWrite.MarkNextWatched(watching.anime)) },
+        )
+        assertEquals(Outcome.Failure(DataError.NoConnection), waited { graph.withoutScreen.updateAiring() })
+
+        assertEquals(emptyList<String>(), requests(before))
+        assertEquals(List(3) { thrown }, unexpected.filter { it === thrown })
+        unexpected.removeAll { it === thrown }
+        device.throwing = false
     }
 
     @Test

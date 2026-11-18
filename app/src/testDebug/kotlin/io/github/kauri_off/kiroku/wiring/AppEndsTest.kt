@@ -1,5 +1,11 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.content.Context
+import androidx.work.CoroutineWorker
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import kotlinx.coroutines.CoroutineScope
@@ -10,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -65,5 +72,54 @@ class AppEndsTest {
             }
         val thrown = assertThrows(IllegalStateException::class.java) { AppEnds().apply(test, Description.EMPTY).evaluate() }
         assertTrue(thrown.cause is IllegalArgumentException)
+    }
+
+    @Test
+    fun `scheduled work the app set up for itself fails that test alone, and the next test finds none`() {
+        val test =
+            object : Statement() {
+                override fun evaluate() {
+                    WorkManager.getInstance(app)
+                }
+            }
+        assertThrows(AssertionError::class.java) { AppEnds().apply(test, Description.EMPTY).evaluate() }
+        assertFalse(WorkManager.isInitialized())
+    }
+
+    // Work that ends after its WorkManager is gone reads a store that is gone, and fails the next test that runs coroutines.
+    @Test
+    fun `work still running when the test ends has ended before its scheduled work goes`() {
+        SlowWorker.ended = false
+        val test =
+            object : Statement() {
+                override fun evaluate() {
+                    TestScheduledWork.install(app)
+                    WorkManager
+                        .getInstance(app)
+                        .enqueue(OneTimeWorkRequestBuilder<SlowWorker>().build())
+                        .result
+                        .get()
+                }
+            }
+        AppEnds().apply(test, Description.EMPTY).evaluate()
+        assertTrue(SlowWorker.ended)
+        assertFalse(WorkManager.isInitialized())
+    }
+}
+
+class SlowWorker(
+    context: Context,
+    parameters: WorkerParameters,
+) : CoroutineWorker(context, parameters) {
+    override suspend fun doWork(): Result {
+        delay(SLOW)
+        ended = true
+        return Result.success()
+    }
+
+    companion object {
+        @Volatile
+        var ended = false
+        private const val SLOW = 300L
     }
 }

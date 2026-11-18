@@ -24,7 +24,9 @@ class AppEnds : ExternalResource() {
         val clockSet = shadowOf(app).registeredReceivers.filter { receiver -> CLOCK_SET.any(receiver.intentFilter::hasAction) }
         assertEquals(emptyList<Any>(), clockSet)
         TestScheduledWork.end()
-        assertFalse("scheduled work set up for every later test: give the test TestScheduledWork", WorkManager.isInitialized())
+        val leaked = WorkManager.isInitialized()
+        if (leaked) TestScheduledWork.forgetLeaked()
+        assertFalse("the app set up scheduled work of its own: give the test TestScheduledWork", leaked)
     }
 
     companion object {

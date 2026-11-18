@@ -2,7 +2,11 @@ package io.github.kauri_off.kiroku.sandbox
 
 import android.app.AlarmManager
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Looper
+import androidx.work.NetworkType
+import androidx.work.WorkInfo
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -15,7 +19,6 @@ import io.github.kauri_off.kiroku.notify.PeriodicWork
 import io.github.kauri_off.kiroku.notify.RunReceiver
 import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.notify.heldRuns
-import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
@@ -33,6 +36,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowNetworkCapabilities
 import java.net.URI
 import java.time.Duration
 import java.time.Instant
@@ -145,34 +149,86 @@ class SandboxRunsTest {
         assertEquals(emptyList<URI>(), connections.asked)
     }
 
+    private fun works(): Map<String, WorkInfo> =
+        listOf(PeriodicWork.ONLINE, PeriodicWork.STORED).associateWith { TestScheduledWork.periodic(context, it).single() }
+
+    // The work under [name] run as the system runs it at its first time, and ended.
+    private fun ran(name: String) {
+        val work = TestScheduledWork.periodic(context, name).single()
+        TestScheduledWork.run(context, work)
+        until("the run of $name has ended") {
+            TestScheduledWork.periodic(context, name).single().let {
+                it.state == WorkInfo.State.ENQUEUED && it.nextScheduleTimeMillis > work.nextScheduleTimeMillis
+            }
+        }
+    }
+
     @Test
-    fun `the periodic work is there once however often it is scheduled, and run with no connection it posts what is overdue`() {
+    fun `the two periodic works are each there once however often they are scheduled, the first run an interval away`() {
         TestScheduledWork.install(context)
         val aired = opened()
         time.ahead = Duration.between(Instant.now(), aired.notifyAt).plusSeconds(1)
-        graph.scenarios.set(Scenario(offline = true))
         val asked = graph.sandbox.mal.asked.size
 
-        val scheduled = System.currentTimeMillis()
         PeriodicWork.schedule(context)
-        val first = TestScheduledWork.periodic(context).single()
-        assertTrue(
-            "${first.nextScheduleTimeMillis - scheduled}",
-            first.nextScheduleTimeMillis >= scheduled + PeriodicWork.INTERVAL.toMillis(),
-        )
+        val first = works()
         Thread.sleep(PAUSE)
         repeat(2) { PeriodicWork.schedule(context) }
-        val again = TestScheduledWork.periodic(context).single()
-        assertEquals(first.id, again.id)
-        assertEquals(first.nextScheduleTimeMillis, again.nextScheduleTimeMillis)
-        assertEquals(PeriodicWork.INTERVAL.toMillis(), again.periodicityInfo!!.repeatIntervalMillis)
+        val again = works()
 
-        TestScheduledWork.run(context, again)
-        until("the episode is posted") { shown()[soon]?.episode == aired.episode }
+        for ((name, work) in again) {
+            assertEquals(name, first.getValue(name).id, work.id)
+            assertEquals(name, first.getValue(name).nextScheduleTimeMillis, work.nextScheduleTimeMillis)
+            assertEquals(name, PeriodicWork.INTERVAL.toMillis(), work.periodicityInfo!!.repeatIntervalMillis)
+            assertEquals(name, PeriodicWork.INTERVAL.toMillis(), work.initialDelayMillis)
+            assertEquals(name, WorkInfo.State.ENQUEUED, work.state)
+            assertEquals(name, 0, work.runAttemptCount)
+        }
+        // S7: only a job that requires a network is given one in the rare and restricted buckets.
+        assertEquals(NetworkType.CONNECTED, again.getValue(PeriodicWork.ONLINE).constraints.requiredNetworkType)
+        assertEquals(NetworkType.NOT_REQUIRED, again.getValue(PeriodicWork.STORED).constraints.requiredNetworkType)
+        // Nothing ran when they were scheduled, though the episode is due.
+        assertEquals(null, shown()[soon])
         assertEquals(
             emptyList<String>(),
             graph.sandbox.mal.asked
                 .drop(asked),
+        )
+    }
+
+    @Test
+    fun `run by the system, the work that needs no network posts what is overdue from stored data alone, and the other downloads`() {
+        TestScheduledWork.install(context)
+        val aired = opened()
+        time.ahead = Duration.between(Instant.now(), aired.notifyAt).plusSeconds(1)
+        PeriodicWork.schedule(context)
+        val asked = graph.sandbox.mal.asked.size
+
+        ran(PeriodicWork.STORED)
+
+        assertEquals(aired.episode, shown()[soon]?.episode)
+        assertEquals(
+            emptyList<String>(),
+            graph.sandbox.mal.asked
+                .drop(asked),
+        )
+
+        // The test's device has a connection now, as the system gives the work that requires one.
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        val internet =
+            ShadowNetworkCapabilities.newInstance().also {
+                shadowOf(
+                    it,
+                ).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            }
+        shadowOf(connectivity).setNetworkCapabilities(connectivity.activeNetwork, internet)
+        ran(PeriodicWork.ONLINE)
+
+        assertTrue(
+            "${graph.sandbox.mal.asked.drop(asked)}",
+            graph.sandbox.mal.asked
+                .drop(asked)
+                .any { it.endsWith(LIST) },
         )
         assertEquals(emptyList<URI>(), connections.asked)
     }
@@ -180,5 +236,6 @@ class SandboxRunsTest {
     private companion object {
         val WAIT = 20.seconds
         const val PAUSE = 20L
+        const val LIST = "/v2/users/@me/animelist"
     }
 }
