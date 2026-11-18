@@ -543,78 +543,52 @@ class SourceRulesTest {
         assertEquals(emptyList<String>(), scopeProblems(APPLICATION_SCOPE_SOURCE, "val a = CoroutineScope(SupervisorJob())\n"))
     }
 
-    // S7 and section 2.3: work without a screen calls MAL through its one way in, which renews due tokens and keeps its back-off.
+    // S7 and section 2.3: work without a screen has the app as WithoutScreen alone, whose calls go through MAL's one way in.
     @Test
-    fun workWithoutAScreenReachesMalThroughTheGraphsWayInAlone() {
+    fun workWithoutAScreenIsGivenTheAppAsWithoutScreenAlone() {
         val sources = appSources()
         val without = sources.filter { runsWithoutAScreen(relative(it), it.readText()) }.map { it.name }.toSet()
-        assertTrue("$without", without.containsAll(listOf("RunReceiver.kt", "HeldRuns.kt", "MarkWatchedReceiver.kt", "ScenarioTile.kt")))
-        assertTrue("$without", "LiveGraph.kt" !in without && "ListRoute.kt" !in without)
+        val known = listOf("RunReceiver.kt", "HeldRuns.kt", "MarkWatchedReceiver.kt", "ScenarioTile.kt", "DeviceClock.kt")
+        assertTrue("$without", without.containsAll(known))
+        assertTrue("$without", "LiveGraph.kt" !in without && "ListRoute.kt" !in without && "KirokuApplication.kt" !in without)
         assertEquals(emptyList<String>(), sources.flatMap { withoutScreenProblems(relative(it), it.readText()) })
+        // The type hands out neither the list nor the graph: its members are the runs and the two calls.
+        val seam = sources.single { it.name == "WithoutScreen.kt" }.readText()
+        val members = Regex("""interface WithoutScreen \{(.*?)\n\}""", RegexOption.DOT_MATCHES_ALL).find(KotlinSource(seam).code)
+        val declared = Regex("""\b(val|fun)\s+(\w+)""").findAll(checkNotNull(members).groupValues[1]).map { it.groupValues[2] }.toList()
+        assertEquals(listOf("notificationRuns", "syncList", "sendToList"), declared)
     }
 
     @Test
-    fun plantedWorkWithoutAScreenThatReachesMalFails() {
+    fun plantedWorkWithoutAScreenThatGoesPastWithoutScreenFails() {
         val receiver = "class A : BroadcastReceiver() {\n    override fun onReceive(context: Context, intent: Intent) {\n"
         val planted =
             listOf(
                 "$receiver        scope.launch { context.appGraph.list.sync() }\n    }\n}\n",
-                "$receiver        val graph = context.appGraph\n        scope.launch { graph.list.send(write) }\n    }\n}\n",
-                "$receiver        scope.launch { context.appGraph.anime.refresh(id) }\n    }\n}\n",
-                "$receiver        scope.launch { context.appGraph.user.refreshOwnProfile() }\n    }\n}\n",
+                "$receiver        scope.launch { with(context.appGraph) { list.sync() } }\n    }\n}\n",
+                "$receiver        val graph = (context.applicationContext as AppGraphOwner).graph\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().sync() }\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().send(write) }\n    }\n}\n",
+                "$receiver        scope.launch { titles.refresh(id) }\n    }\n}\n",
+                "val a = registerReceiver(object : BroadcastReceiver() {\n" +
+                    "    override fun onReceive(c: Context, i: Intent) = run { c.appGraph.list.sync() }\n})\n",
+                "$receiver        (context.appGraph.withoutScreen { it } as BackgroundRun.Ran).value.sync()\n    }\n}\n",
                 "class A(private val list: ListRepository) : Worker(context, parameters)\n",
                 "class A(\n    private val list: ListSource,\n) : CoroutineWorker(context, parameters)\n",
                 "class A(private val way: MalBackground) : Service()\n",
-                "class A : JobService() {\n    val search = (application as AppGraphOwner).graph.search\n}\n",
             )
         for (source in planted) assertEquals(source, 1, withoutScreenProblems("app/src/main/kotlin/A.kt", source).size)
         // Anything in the notify package counts, whatever it declares.
-        val inPackage = "suspend fun a(list: ListRepository) = list.sync()\n"
+        val inPackage = "suspend fun a(list: ListRepository) = list\n"
         assertEquals(1, withoutScreenProblems("app/src/main/kotlin/notify/A.kt", inPackage).size)
         val clean =
             "$receiver        scope.launch {\n" +
-                "            context.appGraph.withoutScreen { it.send(ListWrite.MarkWatched(anime, episode)) }\n" +
-                "            context.appGraph.airing.refresh()\n            context.heldRuns?.start(RunTrigger.MarkedWatched)\n" +
+                "            context.withoutScreen?.sendToList(ListWrite.MarkWatched(anime, episode))\n" +
+                "            context.withoutScreen?.syncList()\n            context.heldRuns?.start(RunTrigger.MarkedWatched)\n" +
                 "            val title = announcement.anime.id\n        }\n    }\n}\n"
         assertEquals(emptyList<String>(), withoutScreenProblems("app/src/main/kotlin/notify/A.kt", clean))
         // A screen's code is not held to it.
         assertEquals(emptyList<String>(), withoutScreenProblems("app/src/main/kotlin/list/A.kt", "val list = graph.list\n"))
-    }
-
-    @Test
-    fun everyPartBuiltAtItsFirstUseIsBuiltByOnFirstUse() {
-        val shipped = shippedKotlinSources()
-        assertTrue(shipped.any { relative(it) == FIRST_USE_SOURCE })
-        assertEquals(emptyList<String>(), shipped.flatMap { firstUseProblems(relative(it), it.readText()) })
-    }
-
-    @Test
-    fun aPlantedFirstUseBuildFails() {
-        for (planted in listOf("withContext(Dispatchers.IO) { built.value }", "withContext(io) { part.value }")) {
-            assertEquals(planted, 1, firstUseProblems("A.kt", "val a = $planted\n").size)
-        }
-        for (allowed in listOf("built.onFirstUse(scope)", "withContext(Dispatchers.IO) { sandbox.reset() }")) {
-            assertEquals(allowed, emptyList<String>(), firstUseProblems("A.kt", "val a = $allowed\n"))
-        }
-        assertEquals(emptyList<String>(), firstUseProblems(FIRST_USE_SOURCE, "withContext(Dispatchers.IO) { value }\n"))
-    }
-
-    @Test
-    fun everyPartBuiltAtItsFirstUseIsBuiltByOnFirstUse() {
-        val shipped = shippedKotlinSources()
-        assertTrue(shipped.any { relative(it) == FIRST_USE_SOURCE })
-        assertEquals(emptyList<String>(), shipped.flatMap { firstUseProblems(relative(it), it.readText()) })
-    }
-
-    @Test
-    fun aPlantedFirstUseBuildFails() {
-        for (planted in listOf("withContext(Dispatchers.IO) { built.value }", "withContext(io) { part.value }")) {
-            assertEquals(planted, 1, firstUseProblems("A.kt", "val a = $planted\n").size)
-        }
-        for (allowed in listOf("built.onFirstUse(scope)", "withContext(Dispatchers.IO) { sandbox.reset() }")) {
-            assertEquals(allowed, emptyList<String>(), firstUseProblems("A.kt", "val a = $allowed\n"))
-        }
-        assertEquals(emptyList<String>(), firstUseProblems(FIRST_USE_SOURCE, "withContext(Dispatchers.IO) { value }\n"))
     }
 
     @Test

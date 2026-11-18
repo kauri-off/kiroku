@@ -55,7 +55,7 @@ internal class LiveNotifications(
             NotificationEngine(
                 store(),
                 SystemAlarm(parts.context),
-                EpisodeNotifications(parts.context, language),
+                EpisodeNotifications(parts.context, parts.source.name, language),
                 list(),
                 airing(),
                 session,
@@ -69,11 +69,11 @@ internal class LiveNotifications(
 
     private suspend fun engine(): NotificationEngine = built.onFirstUse(parts.scope)
 
-    // The tokens are renewed beside the run, which calls MAL for nothing and so waits for nothing of it.
+    // S7: only the opening renews, beside its run. A broadcast's run is let go by its hold, and a renewal cut there loses the session.
     override suspend fun run(trigger: RunTrigger): RunReport =
         coroutineScope {
             val engine = engine()
-            launch { reported { renew() } }
+            if (trigger == RunTrigger.AppOpened) launch { reported { renew() } }
             engine.run(trigger)
         }
 
@@ -87,8 +87,9 @@ internal class LiveNotifications(
     // Nothing reads what was sent before a run of this process has ended, so none of it is another sign-in's.
     override fun observeSent(): Flow<List<SentNotification>> =
         flow {
-            if (!ran) run(RunTrigger.AppOpened)
-            emitAll(engine().observeSent())
+            val engine = engine()
+            if (!ran) engine.run(RunTrigger.AppOpened)
+            emitAll(engine.observeSent())
         }
 
     // S9, after the session is signed out: what is shown, the alarm and the record go; the next start makes a run that failed.

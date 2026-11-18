@@ -16,13 +16,15 @@ import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.data.network.Device
-import io.github.kauri_off.kiroku.data.session.HeldBack
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -41,6 +43,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
 // The notifications of a live graph are built at their first use, and with nobody signed in they reach no host.
@@ -88,13 +91,13 @@ class LiveNotificationsTest {
             assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
             // Naming them builds nothing either.
             val notifications = graph.notifications
-            assertSame(notifications, graph.notificationRuns)
+            assertSame(notifications, graph.withoutScreen.notificationRuns)
             assertEquals(emptyList<Thread>(), built.toList())
 
             assertEquals(NotificationSettings(), notifications.observeSettings().first())
             assertEquals(1, built.size)
             assertNotSame(Looper.getMainLooper().thread, built.single())
-            graph.notificationRuns.run(RunTrigger.AppOpened)
+            graph.notifications.run(RunTrigger.AppOpened)
             notifications.observeComing().first()
             assertEquals(1, built.size)
             assertEquals(emptyList<Throwable>(), unexpected.toList())
@@ -106,13 +109,13 @@ class LiveNotificationsTest {
             val graph = graph(backgroundScope)
 
             for (trigger in RunTrigger.entries) {
-                val report = graph.notificationRuns.run(trigger)
+                val report = graph.notifications.run(trigger)
                 assertEquals(trigger, report.trigger)
                 assertEquals("$trigger", RunEnd.SignedOut, report.end)
             }
             assertEquals(emptyList<Coming>(), graph.notifications.observeComing().first())
             assertEquals(emptyList<SentNotification>(), graph.notifications.observeSent().first())
-            assertEquals(HeldBack.SignedOut, graph.withoutScreen { it.sync() })
+            assertEquals(ListWork.SignedOut, graph.withoutScreen.syncList())
 
             assertEquals(0, device.clientBuilds.get())
             assertEquals(0, shadowOf(context.getSystemService(AlarmManager::class.java)).scheduledAlarms.size)
@@ -133,45 +136,100 @@ class LiveNotificationsTest {
             assertEquals(emptyList<Throwable>(), unexpected.toList())
         }
 
-    // The alarm's promise is the notification: MAL's answer to a renewal may take as long as a request may.
+    private fun notifications(
+        scope: CoroutineScope,
+        renew: suspend () -> Unit,
+    ): LiveNotifications {
+        val demo = Demo(Fixtures.reference, scope)
+        return LiveNotifications(
+            LiveParts(context, LiveSource.Account, "0123abcd", demo.clock, scope, unexpected::add, device = device),
+            demo.session.observeSession(),
+            { demo.list },
+            { demo.airing },
+            { demo.connection },
+            { TitleLanguage.Romaji },
+            { InMemoryNotificationStore() },
+            renew,
+        )
+    }
+
+    // MAL revokes the old tokens as it answers a renewal, and a broadcast's hold lets its process go before a slow answer.
     @Test
-    fun `a run does not wait for the renewal of the tokens, returns once both have ended, and ends as it would when the renewal fails`() =
+    fun `only the opening's run asks for the renewal of the tokens, beside itself, and a read of what was sent does not`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob())
-            val demo = Demo(Fixtures.reference, scope)
             val renewals = AtomicInteger()
             val renewed = CompletableDeferred<Unit>()
             val notifications =
-                LiveNotifications(
-                    LiveParts(context, LiveSource.Account, "0123abcd", demo.clock, scope, unexpected::add, device = device),
-                    demo.session.observeSession(),
-                    { demo.list },
-                    { demo.airing },
-                    { demo.connection },
-                    { TitleLanguage.Romaji },
-                    { InMemoryNotificationStore() },
-                    renew = {
-                        renewals.incrementAndGet()
-                        renewed.await()
-                    },
-                )
+                notifications(scope) {
+                    renewals.incrementAndGet()
+                    renewed.await()
+                }
 
-            val run = async { notifications.run(RunTrigger.Alarm) }
-            // The engine's run has ended: what comes next is known, which it is not before one.
-            assertTrue(withTimeout(WAIT) { notifications.observeComing().first { it != null } }!!.isNotEmpty())
-            assertEquals(1, renewals.get())
+            // The read's own run ends with nothing renewed, and the read waits for no renewal.
+            withTimeout(WAIT) { notifications.observeSent().first() }
+            for (trigger in RunTrigger.entries - RunTrigger.AppOpened) {
+                assertEquals(trigger, withTimeout(WAIT) { notifications.run(trigger) }.trigger)
+            }
+            assertEquals(0, renewals.get())
+
+            val run = async { notifications.run(RunTrigger.AppOpened) }
+            withTimeout(WAIT) { while (renewals.get() == 0) delay(PAUSE) }
+            // The engine's run does not wait for it: another run is made meanwhile.
+            assertEquals(RunEnd.Done, withTimeout(WAIT) { notifications.run(RunTrigger.Changed) }.end)
             assertTrue(run.isActive)
             renewed.completeExceptionally(IllegalStateException(BROKEN))
             val report = withTimeout(WAIT) { run.await() }
 
-            assertEquals(RunTrigger.Alarm, report.trigger)
+            assertEquals(RunTrigger.AppOpened, report.trigger)
             assertEquals(RunEnd.Done, report.end)
+            assertEquals(1, renewals.get())
             assertEquals(listOf(BROKEN), unexpected.map { it.message })
+            scope.coroutineContext.job.cancelAndJoin()
+        }
+
+    // A receiver's run, the opening's run and a screen's read meet at a cold start.
+    @Test
+    fun `first uses made together build one engine`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob())
+            val builds = AtomicInteger()
+            val building = CountDownLatch(1)
+            val graph =
+                LiveGraph(
+                    LiveParts(context, LiveSource.Account, "0123abcd", Clock.systemUTC(), scope, unexpected::add, device = device),
+                    listStore = { InMemoryLocalList() },
+                    notificationStore = { parts, preferences ->
+                        builds.incrementAndGet()
+                        // Held until every first use has had the time to begin its own build.
+                        building.await()
+                        liveNotificationStore(parts, preferences)
+                    },
+                )
+            val uses =
+                listOf<suspend () -> Unit>(
+                    { graph.notifications.run(RunTrigger.Alarm) },
+                    { graph.notifications.run(RunTrigger.AppOpened) },
+                    { graph.notifications.observeSettings().first() },
+                    { graph.notifications.observeComing().first() },
+                    { graph.notifications.observeSent().first() },
+                ).map { use -> async(Dispatchers.IO) { use() } }
+            withTimeout(WAIT) { while (builds.get() == 0) delay(PAUSE) }
+            delay(MEET)
+            building.countDown()
+            withTimeout(WAIT) { uses.awaitAll() }
+
+            assertEquals(1, builds.get())
+            assertEquals(emptyList<Throwable>(), unexpected.toList())
             scope.coroutineContext.job.cancelAndJoin()
         }
 
     private companion object {
         const val WAIT = 20_000L
         const val BROKEN = "The renewal broke"
+        const val PAUSE = 10L
+
+        // Long enough for calls started together to reach a build that is held.
+        const val MEET = 300L
     }
 }

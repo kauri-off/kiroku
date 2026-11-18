@@ -8,11 +8,9 @@ import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
-import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
-import io.github.kauri_off.kiroku.data.session.BackgroundRun
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
@@ -63,7 +61,7 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
             // Neither is asked for anything before the graph is there: the engine starts no run of its own.
             lateinit var graph: DemoGraph
             val alarm = DemoAlarm(scope) { graph.demo }
-            val shown = EpisodeNotifications(context, { graph.titleLanguage })
+            val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
             DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown), scope).also { graph = it }
         }
         DataSource.Sandbox ->
@@ -115,9 +113,6 @@ class DemoGraph(
     override val connection = demo.connection
     override val preferences = demo.preferences
     override val notifications get() = demo.notifications
-    override val notificationRuns get() = demo.notifications
-
-    override suspend fun <T> withoutScreen(work: suspend (ListRepository) -> T): BackgroundRun<T> = BackgroundRun.Ran(work(list))
-
+    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications })
     override val madeUp = true
 }

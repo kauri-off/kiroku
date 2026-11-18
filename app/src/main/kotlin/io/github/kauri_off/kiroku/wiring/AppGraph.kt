@@ -2,7 +2,6 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
-import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -13,7 +12,6 @@ import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
-import io.github.kauri_off.kiroku.data.session.BackgroundRun
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -47,11 +45,8 @@ interface AppGraph {
     // The notification settings, what comes next and what was sent.
     val notifications: NotificationsRepository
 
-    // What the alarm, the moments the system starts the app at and its opening run; a graph without notifications has none.
-    val notificationRuns: NotificationRuns? get() = null
-
-    // The list for work no screen asked for, its one way to MAL: due tokens are renewed first (S7), and a refusal holds it back.
-    suspend fun <T> withoutScreen(work: suspend (ListRepository) -> T): BackgroundRun<T>
+    // The part of the app for code that runs without a screen, which is given nothing else of the graph.
+    val withoutScreen: WithoutScreen
 
     // True for made-up titles and users, as the demo and the sandbox have, which a screen not built yet may stand in with.
     val madeUp: Boolean get() = false

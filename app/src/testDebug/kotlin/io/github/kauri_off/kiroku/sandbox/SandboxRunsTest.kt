@@ -87,7 +87,7 @@ class SandboxRunsTest {
             Instant.ofEpochMilli(it.triggerAtMs)
         }
 
-    private fun shown() = waited { EpisodeNotifications(context, { TitleLanguage.Romaji }).shown() }
+    private fun shown() = waited { EpisodeNotifications(context, "sandbox", { TitleLanguage.Romaji }).shown() }
 
     @Test
     fun `the alarm the engine set starts the run that posts the episode, and each moment the app is started at sets the alarm again`() {
@@ -96,7 +96,7 @@ class SandboxRunsTest {
             assertEquals(SignInStep.SignedIn, graph.signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
             assertEquals(Outcome.Success(Unit), graph.list.sync())
             assertEquals(Outcome.Success(Unit), graph.airing.refresh())
-            graph.notificationRuns!!.run(RunTrigger.AppOpened)
+            graph.withoutScreen.notificationRuns!!.run(RunTrigger.AppOpened)
         }
         val aired = waited { graph.notifications.observeComing().first { it != null } }!!.single { it.anime.id == soon }
         time.ahead = Duration.between(Instant.now(), aired.notifyAt).plusSeconds(1)

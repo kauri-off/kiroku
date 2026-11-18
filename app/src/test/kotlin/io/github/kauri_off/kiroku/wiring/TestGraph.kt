@@ -20,7 +20,6 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
-import io.github.kauri_off.kiroku.data.session.BackgroundRun
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -142,9 +141,8 @@ class TestGraph(
     override val search = demo.search
     override val user = demo.user
     override val notifications get() = demo.notifications
+    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications })
     override val madeUp = true
-
-    override suspend fun <T> withoutScreen(work: suspend (ListRepository) -> T): BackgroundRun<T> = BackgroundRun.Ran(work(list))
 
     // The test's main dispatcher, so that the state a view model builds is built within the test's scheduler.
     override val background: CoroutineDispatcher = Dispatchers.Main

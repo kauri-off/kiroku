@@ -5,8 +5,8 @@ import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
-import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
 import io.github.kauri_off.kiroku.data.anilist.AniListAiring
@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import io.github.kauri_off.kiroku.data.profile.MalOwnProfile
 import io.github.kauri_off.kiroku.data.session.BackgroundRun
+import io.github.kauri_off.kiroku.data.session.HeldBack
 import io.github.kauri_off.kiroku.data.session.MalBackground
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
@@ -141,9 +142,24 @@ internal class LiveGraph(
             renew = { wayIn.run { } },
         )
     }
-    override val notificationRuns: NotificationRuns get() = notifications
+    override val withoutScreen: WithoutScreen =
+        object : WithoutScreen {
+            override val notificationRuns: NotificationRuns get() = notifications
 
-    override suspend fun <T> withoutScreen(work: suspend (ListRepository) -> T): BackgroundRun<T> = wayIn.run { work(list) }
+            override suspend fun syncList() = inBackground { list.sync() }
+
+            override suspend fun sendToList(write: ListWrite) = inBackground { list.send(write) }
+        }
+
+    // The work behind MAL's way in, with what held it back told by its role.
+    private suspend fun <T> inBackground(work: suspend () -> T): ListWork<T> =
+        when (val run = wayIn.run(work)) {
+            is BackgroundRun.Ran -> ListWork.Done(run.value)
+            HeldBack.SignedOut -> ListWork.SignedOut
+            HeldBack.Expired -> ListWork.SessionExpired
+            HeldBack.TokensUnread -> ListWork.SessionUnread
+            is HeldBack.Refused -> ListWork.Refused(run.remaining)
+        }
 
     override val images = parts.http.callFactory
 

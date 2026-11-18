@@ -26,11 +26,14 @@ import kotlin.time.Duration.Companion.nanoseconds
 // Episode notifications on the system's own: one a title, grouped under a summary, worded in the language at each post.
 class EpisodeNotifications(
     context: Context,
+    // Whose list they are of: a debug build's sources share the device, and each sees and removes its own alone.
+    private val source: String,
     private val language: () -> TitleLanguage,
     private val gap: Duration = ENQUEUE_GAP,
 ) : ShownNotifications {
     private val context = context.applicationContext
     private val system = this.context.getSystemService(NotificationManager::class.java)
+    private val summaryTag = summaryTag(source)
     private val lock = Mutex()
     private var enqueuedAt: Long? = null
 
@@ -38,7 +41,7 @@ class EpisodeNotifications(
         lock.withLock {
             val shown = episodes()
             // A summary whose episodes the person dismissed goes with the last of them.
-            if (shown.isEmpty()) system.cancel(SUMMARY_TAG, SUMMARY_ID)
+            if (shown.isEmpty()) system.cancel(summaryTag, SUMMARY_ID)
             shown.mapNotNull { (title, posted) -> posted.shown()?.let { title to it } }.toMap()
         }
 
@@ -54,7 +57,7 @@ class EpisodeNotifications(
             val posting = alert || was != null
             if (posting) {
                 channel()
-                enqueue { system.notify(tag(anime.id), EPISODE_ID, episode(anime, notification, alert)) }
+                enqueue { system.notify(tag(source, anime.id), EPISODE_ID, episode(anime, notification, alert)) }
             }
             summary(shown.isNotEmpty() || posting)
             enabled()
@@ -65,7 +68,7 @@ class EpisodeNotifications(
             val shown = episodes()
             val gone = titles.filter { it in shown }
             if (gone.isEmpty()) return@withLock
-            gone.forEach { system.cancel(tag(it), EPISODE_ID) }
+            gone.forEach { system.cancel(tag(source, it), EPISODE_ID) }
             summary(shown.size > gone.size)
         }
 
@@ -83,7 +86,7 @@ class EpisodeNotifications(
     private fun episodes(): Map<AnimeId, StatusBarNotification> =
         system.activeNotifications
             .filter { it.id == EPISODE_ID }
-            .mapNotNull { posted -> posted.tag?.let(::titleOf)?.let { it to posted } }
+            .mapNotNull { posted -> posted.tag?.let { titleOf(source, it) }?.let { it to posted } }
             .toMap()
 
     private fun episode(
@@ -114,7 +117,7 @@ class EpisodeNotifications(
             // The time the episode aired, which a silent replacement keeps, so the stack does not reorder.
             .setWhen(airedAt.toEpochMilli())
             .setOnlyAlertOnce(!alert)
-            .setGroup(GROUP)
+            .setGroup(group(source))
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setAutoCancel(true)
             .setContentIntent(context.tap(anime.id))
@@ -126,9 +129,9 @@ class EpisodeNotifications(
     // The group's summary while one of its notifications is [shown]; it holds no count, so only a new language posts it again.
     private suspend fun summary(shown: Boolean) {
         val title = context.getString(R.string.notify_new_episodes)
-        val current = system.activeNotifications.firstOrNull { it.id == SUMMARY_ID && it.tag == SUMMARY_TAG }
+        val current = system.activeNotifications.firstOrNull { it.id == SUMMARY_ID && it.tag == summaryTag }
         when {
-            !shown -> system.cancel(SUMMARY_TAG, SUMMARY_ID)
+            !shown -> system.cancel(summaryTag, SUMMARY_ID)
             current
                 ?.notification
                 ?.extras
@@ -140,13 +143,13 @@ class EpisodeNotifications(
                         .Builder(context, CHANNEL)
                         .setSmallIcon(R.drawable.ic_notification)
                         .setContentTitle(title)
-                        .setGroup(GROUP)
+                        .setGroup(group(source))
                         .setGroupSummary(true)
                         .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
                         .setOnlyAlertOnce(true)
                         .setContentIntent(context.open())
                         .build()
-                enqueue { system.notify(SUMMARY_TAG, SUMMARY_ID, summary) }
+                enqueue { system.notify(summaryTag, SUMMARY_ID, summary) }
             }
         }
     }
@@ -170,24 +173,34 @@ class EpisodeNotifications(
 
     companion object {
         val CHANNEL = notShown("episodes")
-        val GROUP = notShown("episodes")
         val ENQUEUE_GAP = 250.milliseconds
 
         // Every episode notification has this id under its title's tag; the summary has its own.
         const val EPISODE_ID = 1
         const val SUMMARY_ID = 2
-        val SUMMARY_TAG = notShown("summary")
 
-        fun tag(title: AnimeId): String = TAG_PREFIX + title.value
+        fun group(source: String): String = notShown("episodes:$source")
 
-        fun titleOf(tag: String): AnimeId? =
+        fun summaryTag(source: String): String = notShown("summary:$source")
+
+        fun tag(
+            source: String,
+            title: AnimeId,
+        ): String = prefix(source) + title.value
+
+        // The title of an episode notification of [source]; none for another source's tag.
+        fun titleOf(
+            source: String,
+            tag: String,
+        ): AnimeId? =
             tag
-                .removePrefix(TAG_PREFIX)
+                .removePrefix(prefix(source))
                 .takeIf { it != tag }
                 ?.toLongOrNull()
                 ?.let(::AnimeId)
 
-        private val TAG_PREFIX = notShown("episode:")
+        private fun prefix(source: String) = notShown("episode:$source:")
+
         private val EPISODE = notShown("kiroku.episode")
         private val TO_WATCH = notShown("kiroku.toWatch")
         private val MARKS = notShown("kiroku.marks")

@@ -355,7 +355,7 @@ class MalBackgroundTest {
         }
 
     @Test
-    fun `a new process whose tokens are due renews nothing at its start while MAL is refusing`() =
+    fun `a new process whose tokens are due renews nothing by reading its session, during a refusal or after it, until work asks`() =
         test {
             val first = signedIn()
             pass(RENEW_AFTER)
@@ -367,11 +367,14 @@ class MalBackgroundTest {
             settle()
             assertEquals(emptyList<String>(), grants)
 
-            // Once the wait is over, reading the session renews them.
+            // Once the wait is over, reading the session still sends nothing; the way in renews.
             pass(MalBackOff.First)
+            api = { answer() }
             val next = newProcess()
             assertTrue(next.session.observeSession().first() is Session.SignedIn)
             settle()
+            assertEquals(emptyList<String>(), grants)
+            assertTrue(next.inBackground() is BackgroundRun.Ran)
             assertEquals(1, grants.size)
         }
 

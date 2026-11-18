@@ -22,13 +22,12 @@ import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
-import io.github.kauri_off.kiroku.data.session.BackgroundRun
-import io.github.kauri_off.kiroku.data.session.HeldBack
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.KeysInMemory
+import io.github.kauri_off.kiroku.wiring.ListWork
 import io.github.kauri_off.kiroku.wiring.LiveParts
 import io.github.kauri_off.kiroku.wiring.applicationScope
 import kotlinx.coroutines.CoroutineScope
@@ -137,14 +136,14 @@ class SandboxNotificationsTest {
         assertEquals(Outcome.Success(Unit), waited { airing.refresh() })
     }
 
-    private fun SandboxGraph.run(trigger: RunTrigger): RunReport = waited { notificationRuns!!.run(trigger) }
+    private fun SandboxGraph.run(trigger: RunTrigger): RunReport = waited { withoutScreen.notificationRuns!!.run(trigger) }
 
     private fun SandboxGraph.coming(): List<Coming> = waited { notifications.observeComing().first { it != null } }!!
 
     private fun SandboxGraph.sent(): List<SentNotification> = waited { notifications.observeSent().first() }
 
     // What the device shows, as the engine reads it back.
-    private fun shown(): Map<AnimeId, Shown> = waited { EpisodeNotifications(context, { TitleLanguage.Romaji }).shown() }
+    private fun shown(): Map<AnimeId, Shown> = waited { EpisodeNotifications(context, SOURCE, { TitleLanguage.Romaji }).shown() }
 
     private fun posted() = shadowOf(context.getSystemService(NotificationManager::class.java)).allNotifications
 
@@ -270,57 +269,125 @@ class SandboxNotificationsTest {
         assertEquals(listOf(next.episode), updated.run(RunTrigger.Alarm).posted.ofSoon())
     }
 
+    // MAL refuses a write, which sets its back-off; the title written to.
+    private fun SandboxGraph.refused(): AnimeId {
+        val watching = waited { list.observeEntries().first() }.first { it.status == ListStatus.Watching }
+        scenarios.set(Scenario(writes = WriteFault.Refused))
+        assertEquals(Outcome.Failure(DataError.Refused), waited { list.send(ListWrite.MarkNextWatched(watching.anime)) })
+        scenarios.set(Scenario())
+        assertTrue(File(context.noBackupFilesDir, "sandbox.backoff").isFile)
+        return watching.anime.id
+    }
+
     @Test
-    fun `a run by each trigger renews tokens that are due, once, and with MAL's back-off set sends MAL nothing (S7)`() {
+    fun `only the opening's run renews tokens that are due, once, and with MAL's back-off set no run sends MAL anything (S7)`() {
         val graph = started()
         graph.signedIn()
         graph.synced()
         graph.run(RunTrigger.AppOpened)
         assertEquals(1, requests(0).count { it == TOKEN })
 
-        for (trigger in RunTrigger.entries) {
-            // The tokens are a week old again.
-            time.ahead = time.ahead + DUE
-            val before = asked()
-            assertEquals("$trigger", RunEnd.Done, graph.run(trigger).end)
-            assertEquals("$trigger", listOf(TOKEN), requests(before).filter { MAL in it })
-            // New tokens are not due.
-            val renewed = asked()
-            graph.run(trigger)
-            assertEquals("$trigger", emptyList<String>(), requests(renewed).filter { MAL in it })
-        }
-
-        // MAL refuses a request, and the tokens come due while its back-off lasts.
+        // A run the system starts is let go by its hold, and MAL revokes the old tokens as it answers: none renews.
         time.ahead = time.ahead + DUE
-        val watching = waited { graph.list.observeEntries().first() }.first { it.status == ListStatus.Watching }
-        graph.scenarios.set(Scenario(writes = WriteFault.Refused))
-        assertEquals(Outcome.Failure(DataError.Refused), waited { graph.list.send(ListWrite.MarkNextWatched(watching.anime)) })
-        graph.scenarios.set(Scenario())
-        assertTrue(File(context.noBackupFilesDir, "sandbox.backoff").isFile)
-        val refused = asked()
-        for (trigger in RunTrigger.entries) assertEquals("$trigger", RunEnd.Done, graph.run(trigger).end)
-        assertTrue(waited { graph.withoutScreen { it.sync() } } is HeldBack.Refused)
-        assertEquals(emptyList<String>(), requests(refused).filter { MAL in it })
-
-        // A new process, as the alarm starts one, is held back by the same file.
+        val due = asked()
+        for (trigger in RunTrigger.entries - RunTrigger.AppOpened) assertEquals("$trigger", RunEnd.Done, graph.run(trigger).end)
+        assertEquals(emptyList<String>(), requests(due).filter { MAL in it })
+        // Nor does a new process such a run starts, by its run or by reading its session.
         val later = started()
         val began = asked()
         assertEquals(RunEnd.Done, later.run(RunTrigger.Alarm).end)
+        assertTrue(waited { later.session.observeSession().first() } is Session.SignedIn)
+        assertEquals(RunEnd.Done, later.run(RunTrigger.DeviceRestarted).end)
         assertEquals(emptyList<String>(), requests(began).filter { MAL in it })
+
+        assertEquals(RunEnd.Done, later.run(RunTrigger.AppOpened).end)
+        assertEquals(listOf(TOKEN), requests(began).filter { MAL in it })
+        // New tokens are not due.
+        later.run(RunTrigger.AppOpened)
+        assertEquals(listOf(TOKEN), requests(began).filter { MAL in it })
+
+        // MAL refuses a request, and the tokens come due while its back-off lasts.
+        time.ahead = time.ahead + DUE
+        later.refused()
+        val refused = asked()
+        for (trigger in RunTrigger.entries) assertEquals("$trigger", RunEnd.Done, later.run(trigger).end)
+        assertTrue(waited { later.withoutScreen.syncList() } is ListWork.Refused)
+        assertEquals(emptyList<String>(), requests(refused).filter { MAL in it })
+    }
+
+    // W5 owes a download for a write that died with its process, and the list's engine starts it at its first read.
+    @Test
+    fun `with MAL's back-off set and a write that died with its process, a process the alarm starts sends MAL nothing`() {
+        val first = started()
+        first.signedIn()
+        first.synced()
+        first.run(RunTrigger.AppOpened)
+        val written = first.refused()
+        ended()
+        // The entry as a write leaves it whose request was not answered when the process died.
+        SQLiteDatabase.openDatabase(context.getDatabasePath("sandbox.db").path, null, SQLiteDatabase.OPEN_READWRITE).use {
+            it.execSQL("UPDATE list_entry SET unconfirmed = 1 WHERE title_id = ${written.value}")
+        }
+        assertEquals(1L, rows("list_entry", "unconfirmed = 1"))
+
+        val later = started()
+        val began = asked()
+        for (trigger in listOf(RunTrigger.Alarm, RunTrigger.DeviceRestarted, RunTrigger.AppUpdated)) {
+            assertEquals("$trigger", RunEnd.Done, later.run(trigger).end)
+        }
+        // The engine has read the list, which returned the entry to what MAL confirmed; its download waits for the back-off's end.
+        assertEquals(0L, rows("list_entry", "unconfirmed = 1"))
+        Thread.sleep(OWED)
+        assertEquals(emptyList<String>(), requests(began).filter { MAL in it })
+        // It stays owed: the list has no time of a download, so the next screen that shows it downloads it.
+        assertEquals(null, waited { later.list.observeSyncedAt().first() })
+        assertEquals(Outcome.Success(Unit), waited { later.list.sync() })
+        assertTrue(waited { later.list.observeSyncedAt().first() } != null)
     }
 
     @Test
-    fun `work without a screen reaches the list through the way in, which renews tokens that are due before it`() {
+    fun `work without a screen reaches the list through MAL's way in, which renews tokens that are due before it`() {
         val graph = started()
         graph.signedIn()
         time.ahead = DUE
         val before = asked()
 
-        assertEquals(BackgroundRun.Ran(Outcome.Success(Unit)), waited { graph.withoutScreen { it.sync() } })
+        assertEquals(ListWork.Done(Outcome.Success(Unit)), waited { graph.withoutScreen.syncList() })
 
         val sent = requests(before).filter { MAL in it }
         assertEquals(TOKEN, sent.first())
         assertTrue("$sent", sent.drop(1).isNotEmpty() && sent.drop(1).all { it == LIST })
+        // A write goes the same way, and is held back with everything else once MAL refuses.
+        val watching = waited { graph.list.observeEntries().first() }.first { it.status == ListStatus.Watching }
+        val write = ListWrite.MarkNextWatched(watching.anime)
+        assertEquals(ListWork.Done(Outcome.Success(Unit)), waited { graph.withoutScreen.sendToList(write) })
+        graph.refused()
+        val refused = asked()
+        assertTrue(waited { graph.withoutScreen.sendToList(write) } is ListWork.Refused)
+        assertEquals(emptyList<String>(), requests(refused).filter { MAL in it })
+    }
+
+    // A debug or preview build's sources share the device: each has its own notifications there, as it has its own files.
+    @Test
+    fun `a run neither removes nor takes for its own a notification another source posted for the same title`() {
+        val graph = started()
+        val aired = graph.announced()
+        val own = shown().getValue(soon)
+        val other = EpisodeNotifications(context, "account", { TitleLanguage.Romaji })
+        val others = own.copy(episode = aired.episode + 7)
+        waited { other.post(graph.coming().first { it.anime.id == soon }.anime, others, alert = true) }
+        val sent = graph.sent()
+
+        for (trigger in listOf(RunTrigger.AppOpened, RunTrigger.Alarm)) graph.run(trigger)
+
+        assertEquals(mapOf(soon to others), waited { other.shown() })
+        assertEquals(own, shown().getValue(soon))
+        assertEquals(sent, graph.sent())
+        // A sign-out of this source leaves the other's as well.
+        waited { graph.session.signOut() }
+        assertEquals(emptyMap<AnimeId, Shown>(), shown())
+        assertEquals(mapOf(soon to others), waited { other.shown() })
+        waited { other.withdraw(setOf(soon)) }
     }
 
     @Test
@@ -400,7 +467,11 @@ class SandboxNotificationsTest {
 
     private companion object {
         const val WAIT = 20_000L
+        const val SOURCE = "sandbox"
         const val MAL = "sandbox.invalid"
+
+        // Longer than the list's engine takes to start a download it owes.
+        const val OWED = 2_000L
         const val TOKEN = "POST sandbox.invalid/v1/oauth2/token"
         const val LIST = "GET sandbox.invalid/v2/users/@me/animelist"
 

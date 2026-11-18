@@ -172,6 +172,8 @@ abstract class ListEngineContract {
         @Volatile
         var unreadAs: DataError = DataError.ServerError
 
+        override suspend fun refusedFor() = inner.refusedFor()
+
         override suspend fun fetch(): Outcome<List<ListEntry>> {
             fetchesUnder += session()
             fault()
@@ -2450,6 +2452,46 @@ abstract class ListEngineContract {
                     ?.values,
             )
             assertEquals(s.server.entries().toSet(), restarted.observeEntries().first().toSet())
+        }
+
+    // Section 2.3: a sync the engine starts itself is work nobody asked for, in a process with no screen too.
+    @Test
+    fun `W5 the sync a start owes waits for the end of MAL's refusal, and is not made after a sync that was asked for`() =
+        runTest {
+            for (asked in listOf(false, true)) {
+                val process = childScope()
+                val s = subject(scope = process)
+                val anime = FixtureAnime.exactToWatch
+                s.server.latency = 1.minutes
+                s.list.write(ListWrite.MarkNextWatched(anime))
+                runCurrent()
+                kill(s, process)
+                s.server.latency = 1.seconds
+                s.server.leftAloneFor = 10.minutes
+                val before = s.server.listDownloads
+
+                val restarted = s.engine(backgroundScope)
+                assertEquals(
+                    12,
+                    restarted
+                        .observeEntry(anime.id)
+                        .first()
+                        ?.values
+                        ?.watchedEpisodes,
+                )
+                advanceTimeBy(9.minutes)
+                runCurrent()
+                assertEquals(before, s.server.listDownloads)
+                assertNull(restarted.observeSyncedAt().first())
+
+                // What a screen asks for is sent during the refusal, and ends what was owed.
+                if (asked) assertEquals(Outcome.Success(Unit), restarted.sync())
+                s.server.leftAloneFor = Duration.ZERO
+                advanceTimeBy(2.minutes)
+                settle()
+                assertEquals(before + 1, s.server.listDownloads)
+                assertTrue(restarted.observeSyncedAt().first() != null)
+            }
         }
 
     @Test

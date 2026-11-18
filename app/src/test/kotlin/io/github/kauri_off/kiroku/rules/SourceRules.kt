@@ -432,20 +432,21 @@ fun firstUseProblems(
 }
 
 // Code that runs with no screen asking for it: the notify package, and whatever declares a receiver, a service or scheduled work.
-private val componentWithoutAScreen = Regex("""(\)|\bclass\s+\w+)\s*:\s*[\w.]*(BroadcastReceiver|Service|Worker)\s*\(""")
+private val componentWithoutAScreen = Regex("""(\)|\bclass\s+\w+|\bobject)\s*:\s*[\w.]*(BroadcastReceiver|Service|Worker)\s*\(""")
 
 fun runsWithoutAScreen(
     name: String,
     source: String,
 ): Boolean = "/notify/" in name || componentWithoutAScreen.containsMatchIn(KotlinSource(source).code)
 
-// What calls MAL when asked: the graph's areas that do, and their types. Such code is given the list by the graph's
-// withoutScreen alone, as its block's parameter, so it names none of them.
-private val reachesMal =
+// Such code has the app as WithoutScreen alone, which hands out no list. What that type cannot hold: the graph reached
+// another way, and a list or a call of one handed to it from a file that is not held to this.
+private val pastWithoutScreen =
     Regex(
-        """\b\w*(ListRepository|ListEngine|ListSource|AnimeRepository|SearchRepository|UserRepository|OwnProfile|UserLists)\w*\b|""" +
+        """\b\w*(AppGraph|appGraph)\w*\b|""" +
+            """\b\w*(ListRepository|ListEngine|ListSource|AnimeRepository|SearchRepository|UserRepository|OwnProfile|UserLists)\w*\b|""" +
             """\b(SignIn|SignInOwner|MalHttp|MalSession|MalBackground|MalRemoteList)\b|""" +
-            """\.\s*(list|search|user|signIn)\b(?!\s*\()|\.\s*anime\s*\.\s*refresh\b""",
+            """\.\s*(sync|send|write|refresh\w*)\s*\(""",
     )
 
 fun withoutScreenProblems(
@@ -454,10 +455,10 @@ fun withoutScreenProblems(
 ): List<String> {
     if (!runsWithoutAScreen(name, source)) return emptyList()
     return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
-        reachesMal
+        pastWithoutScreen
             .find(
                 line,
-            )?.let { "$name:${index + 1}: work without a screen names ${it.value}, not the graph's withoutScreen: ${line.trim()}" }
+            )?.let { "$name:${index + 1}: work without a screen names ${it.value}, past WithoutScreen: ${line.trim()}" }
     }
 }
 

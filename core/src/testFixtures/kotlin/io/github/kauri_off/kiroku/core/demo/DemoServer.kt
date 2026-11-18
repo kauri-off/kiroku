@@ -39,6 +39,10 @@ class DemoServer(
 
     val refusing = MutableStateFlow(false)
 
+    // How long MAL asks to be left alone yet by requests nobody asked for.
+    @Volatile
+    var leftAloneFor: Duration = Duration.ZERO
+
     // Refuses writes alone; reads still work.
     val refusingWrites = MutableStateFlow(false)
 
@@ -158,6 +162,8 @@ class DemoServer(
             else -> null
         }
     }
+
+    override suspend fun refusedFor(): Duration = leftAloneFor
 
     override suspend fun fetch(): Outcome<List<ListEntry>> {
         load(needsSignIn = true)?.let { return Outcome.Failure(it) }
