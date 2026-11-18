@@ -17,6 +17,10 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
+import io.github.kauri_off.kiroku.core.notify.Coming
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.SentNotification
+import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
@@ -51,6 +55,8 @@ sealed interface ListWrite {
     data class MarkWatched(
         override val anime: Anime,
         val episode: Int,
+        // A notification's action marks in the list it was made in alone; a screen's, in the list it shows.
+        val madeIn: SignInId? = null,
     ) : ListWrite {
         init {
             require(episode > 0)
@@ -84,7 +90,7 @@ sealed interface ListWrite {
         override val anime: Anime get() = change.anime
     }
 
-    // Applies the failed write again as a new edit (W2).
+    // Applies again, as a new edit, what the failed write set that nothing has changed since (W2).
     data class Retry(
         val failure: WriteFailure,
     ) : ListWrite {
@@ -95,14 +101,15 @@ sealed interface ListWrite {
     val steps: Boolean
         get() = this is MarkWatched || this is MarkNextWatched || this is StepWatched || (this is Retry && failure.write.steps)
 
-    // An Undo and a Retry belong to the list they were made in, and no other list takes them.
-    val bound: Boolean get() = this is Undo || this is Retry
+    // An Undo, a Retry and a notification's "Mark watched" belong to the list they were made in, and no other list takes them.
+    val bound: Boolean get() = this is Undo || this is Retry || (this is MarkWatched && madeIn != null)
 
     val list: SignInId?
         get() =
             when (this) {
                 is Undo -> change.list
                 is Retry -> failure.list
+                is MarkWatched -> madeIn
                 else -> null
             }
 
@@ -129,7 +136,7 @@ sealed interface ListWrite {
                     it.values.withWatched((it.values.watchedEpisodes + by).coerceAtLeast(0), it.anime.malEpisodes, today)
                 }
             is Undo -> change.revert(current)
-            is Retry -> failure.write.applyTo(current, today)
+            is Retry -> failure.left(current?.values)?.applyTo(current, today) ?: current?.values
         }
 }
 
@@ -175,9 +182,57 @@ data class WriteFailure(
     val error: DataError,
     val write: ListWrite,
     val list: SignInId?,
+    // Null for a write that was never applied; its Retry then sets all it carries.
+    val untouched: Untouched? = null,
 ) {
-    val retry: ListWrite get() = ListWrite.Retry(this)
+    val retry: ListWrite.Retry get() = ListWrite.Retry(this)
+
+    // W2: what a Retry over [current] still sets, each unit changed since the failure left out; null when none is left.
+    fun left(current: ListValues?): ListWrite? {
+        val untouched = untouched ?: return write
+        return when (write) {
+            is ListWrite.Save -> {
+                val named = write.only ?: ListField.entries.toSet()
+                val held = untouched.values + write.values
+                val kept =
+                    ListField.units.flatMapTo(mutableSetOf()) { unit ->
+                        val set = unit.filterTo(mutableSetOf()) { it in named }
+                        // The fields it sets and the status, so a date outlives a newer step that leaves the status alone.
+                        val judged = if (ListField.Status in unit) set + ListField.Status else set
+                        if (set.isNotEmpty() && held.any { it.agrees(current, judged) }) set else emptySet()
+                    }
+                when {
+                    kept.isEmpty() -> null
+                    kept == named -> write
+                    else -> write.copy(only = kept)
+                }
+            }
+            is ListWrite.Remove -> write.takeIf { current == null || current in untouched.values }
+            else -> write
+        }
+    }
+
+    // A Retry over [current] would change nothing: what it sets is there, or what was there changed since.
+    fun settledBy(current: ListValues?): Boolean =
+        when (val left = left(current)) {
+            null -> true
+            is ListWrite.Save -> current != null && left.over(current) == current
+            is ListWrite.Remove -> current == null
+            else -> false
+        }
 }
+
+// Both are no entry, or both hold the same value in each of [fields].
+private fun ListValues?.agrees(
+    other: ListValues?,
+    fields: Set<ListField>,
+): Boolean = if (this == null || other == null) this == other else fields.all { it.of(this) == it.of(other) }
+
+// What a title may hold that nobody changed since a write failed: MAL's confirmed values, and the request's if made.
+data class Untouched(
+    // Null is no entry.
+    val values: Set<ListValues?>,
+)
 
 // The list as a screen sees it: read and synced, never written, so a write can only go through the shell.
 interface ListSource {
@@ -231,8 +286,11 @@ interface AiringRepository {
     // For the page of [page] alone, never for a notification: the same with [page]'s own result, also from what the page fetched (A12).
     fun observePageAiring(page: Anime): Flow<Map<AnimeId, Airing>>
 
-    // The stored schedules, which are all a notification may read.
+    // The stored schedules whose numbering the source does not doubt, which are all a notification may read.
     fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>>
+
+    // Every stored schedule, a doubted one too: for the debug menu, never for a notification.
+    fun observeStoredSchedules(): Flow<Map<AnimeId, AiringSchedule>>
 
     // Asks for the tracked titles whose data is stale, as a screen does when it is shown.
     suspend fun refreshStale(): Outcome<Unit>
@@ -245,6 +303,23 @@ interface AiringRepository {
 
     // A pull on a page.
     suspend fun refresh(page: Anime): Outcome<Unit>
+
+    // N3: asks for those of [titles] that are tracked and for no other, and returns once the store holds each answer.
+    suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit>
+}
+
+// Notifications as a screen sees them: the person's choices, what comes next and what was sent.
+interface NotificationsRepository {
+    fun observeSettings(): Flow<NotificationSettings>
+
+    // Stores the change at once, whatever run is under way, and returns once the run that follows it has ended (N5, N8).
+    suspend fun changeSettings(change: (NotificationSettings) -> NotificationSettings): Outcome<Unit>
+
+    // Each title's next notification as the last run found it, the soonest first; null while no run has ended, so no reader waits.
+    fun observeComing(): Flow<List<Coming>?>
+
+    // What was posted, the latest first.
+    fun observeSent(): Flow<List<SentNotification>>
 }
 
 enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular }
@@ -273,28 +348,32 @@ interface SearchRepository {
     ): Outcome<Page<Ranked<Anime>>>
 }
 
-sealed interface UserListLoad {
-    data class Loading(
-        val loaded: Int,
-        val total: Int?,
-    ) : UserListLoad
-
-    data class Loaded(
-        val entries: List<ListEntry>,
-    ) : UserListLoad
-
-    data class Failed(
-        val error: DataError,
-    ) : UserListLoad
-}
-
-interface UserRepository {
+interface OwnProfile {
     fun observeOwnProfile(): Flow<UserProfile?>
 
-    suspend fun refreshOwnProfile(): Outcome<Unit>
+    // When the profile shown was read; none while none is shown.
+    fun observeOwnProfileFetchedAt(): Flow<Instant?>
 
-    fun loadList(userName: String): Flow<UserListLoad>
+    suspend fun refreshOwnProfile(): Outcome<Unit>
 }
+
+// Other users' lists as a screen sees them; whose list it is, is the name the person gave.
+interface UserLists {
+    // Read once however many observe it, a part at a time while one does; a failed read is tried again when one comes.
+    fun observeList(name: String): Flow<UserListState>
+
+    // The person asked: reads the list again, or joins the read under way; the list held stays unless the user's answer changed.
+    suspend fun refreshList(name: String): Outcome<Unit>
+
+    fun sameUser(
+        a: String,
+        b: String,
+    ): Boolean
+}
+
+interface UserRepository :
+    OwnProfile,
+    UserLists
 
 // The person's choices, kept across restarts. A choice that cannot be read counts as never made, and is reported.
 interface PreferencesRepository {
@@ -305,4 +384,10 @@ interface PreferencesRepository {
         status: ListStatus,
         sort: TabSort,
     )
+
+    // The other users' profiles the person opened, newest first; a sign-out forgets them with the user's other choices.
+    fun observeOpenedProfiles(): Flow<List<String>>
+
+    // [change] takes the names kept and gives the names to keep, one change at a time.
+    suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>)
 }

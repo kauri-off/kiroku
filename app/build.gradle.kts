@@ -5,6 +5,7 @@ import org.gradle.process.ExecOperations
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 import java.util.zip.ZipFile
 import javax.inject.Inject
@@ -66,6 +67,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         manifestPlaceholders["appLabel"] = "@string/app_name"
+        testInstrumentationRunner = "io.github.kauri_off.kiroku.notify.RecordedRunsRunner"
         buildConfigField("String", "MAL_CLIENT_ID", "\"$malClientId\"")
     }
 
@@ -134,6 +136,8 @@ android {
 
     lint {
         error += setOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
+        // The release build's lint is the only one that sees src/release.
+        fatal += "NewApi"
         warningsAsErrors = false
         abortOnError = true
     }
@@ -152,6 +156,8 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.process)
+    implementation(libs.work.runtime)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
@@ -172,6 +178,10 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.coil.test)
     testImplementation(libs.okhttp.mockwebserver3)
+    testImplementation(libs.work.testing)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 val screenshotsRecorded =
@@ -191,6 +201,9 @@ tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach
     val status = providers.exec { commandLine("git", "status", "--porcelain") }.standardOutput.asText
     outputs.upToDateWhen { !recorded.get() }
     outputs.cacheIf { !recorded.get() }
+    // A render has a limit of its own, so the screens it adds do not use up the tests' limit.
+    val testLimit = timeout.get()
+    timeout.set(recorded.map { if (it) Duration.ofMinutes(30) else testLimit })
     doFirst {
         if (recorded.get()) {
             outputDir.get().asFile.deleteRecursively()
@@ -506,6 +519,7 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/debugmenu/",
                 "io/github/kauri_off/kiroku/design/gallery/",
                 "io/github/kauri_off/kiroku/recorder/",
+                "io/github/kauri_off/kiroku/notificationlog/",
                 "io/github/kauri_off/kiroku/data/recorder/",
                 "io/github/kauri_off/kiroku/data/sandbox/",
                 "io/github/kauri_off/kiroku/sandbox/",
@@ -641,27 +655,28 @@ abstract class VerifyShortcuts : DefaultTask() {
     }
 }
 
-// What a merged manifest gets wrong about the addresses it takes, its build type's redirect and MAL's title pages; nothing when right.
+// What a merged manifest gets wrong about the addresses it takes, its build type's redirect and MAL's pages; nothing when right.
 object RedirectRule {
     const val ANDROID = "http://schemas.android.com/apk/res/android"
     const val ACTIVITY = "io.github.kauri_off.kiroku.signin.RedirectActivity"
     const val LINK = "io.github.kauri_off.kiroku.link.LinkActivity"
 
-    // True from Android 12, whose filters can match a title's page exactly; false before.
+    // True from Android 12, whose filters can match a title's and a profile's page exactly; false before.
     const val LINK_ENABLED = "@bool/links_claimed"
     const val VIEW = "android.intent.action.VIEW"
     const val DEFAULT = "android.intent.category.DEFAULT"
     const val BROWSABLE = "android.intent.category.BROWSABLE"
     private val COMPONENTS = listOf("activity", "activity-alias", "service", "receiver", "provider")
 
-    // A title's page on MAL from a browser: the forms `animeLink` in :core opens, and no other page of MAL's.
+    // A title's or a profile's page on MAL from a browser: the forms `readLink` in :core opens, and no other page of MAL's.
     val linkData =
         listOf(
             mapOf("scheme" to "https"),
             mapOf("host" to "myanimelist.net"),
             mapOf("host" to "www.myanimelist.net"),
         ) +
-            listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") }
+            listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") } +
+            listOf("", "/").map { mapOf("pathAdvancedPattern" to "/profile/[^/]+$it") }
 
     // An intent filter: actions, categories, each data element's attributes, other children, and its own attributes.
     data class Filter(
@@ -717,7 +732,9 @@ object RedirectRule {
             },
             "$ACTIVITY takes $own, not $redirect from a browser and nothing else".takeIf { own != listOf(browser) },
             "$ACTIVITY is disabled or asks for a permission, so no browser reaches it".takeIf { shut },
-            "$LINK takes $linkFilters, not a title's page on MAL from a browser and nothing else".takeIf { linkFilters != listOf(title) },
+            "$LINK takes $linkFilters, not a title's or a profile's page on MAL from a browser and nothing else".takeIf {
+                linkFilters != listOf(title)
+            },
             "$LINK is not enabled by $LINK_ENABLED alone, or asks for a permission".takeIf { !linkOpen },
             "Other apps can start $exported, not ${alsoExported + ACTIVITY + LINK}".takeIf { exported != alsoExported + ACTIVITY + LINK },
         )
@@ -766,7 +783,7 @@ abstract class VerifyRedirect : DefaultTask() {
         val problems = RedirectRule.problems(RedirectRule.parse(manifest.get().asFile), redirect.get(), alsoExported.get())
         check(problems.isEmpty()) { problems.joinToString("\n") }
         report.get().asFile.writeText(
-            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}, ${RedirectRule.LINK} a title's page on MAL; " +
+            "${RedirectRule.ACTIVITY} alone takes ${redirect.get()}, ${RedirectRule.LINK} a title's or a profile's page on MAL; " +
                 "exported besides them: ${alsoExported.get()}\n",
         )
     }
@@ -843,11 +860,14 @@ abstract class VerifyRedirectRule : DefaultTask() {
                 "the redirect activity asks for a permission" to
                     { own(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
                 "there is no redirect activity" to { own(it).let { activity -> activity.parentNode.removeChild(activity) } },
-                // The link activity claims more of MAL's site, or claims it where a filter cannot match a title's page exactly.
+                // The link activity claims more of MAL's site, or claims it where a filter cannot match a page exactly.
                 "the link takes a manga's page" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/manga/[1-9][0-9]*")) },
                 "the link takes a title's sub-pages" to
                     { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*/[^/]+/.*")) },
                 "the link takes an id that is no number" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/.*")) },
+                "the link takes a profile's sub-pages" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/profile/[^/]+/.+")) },
+                "the link takes a user's list" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/animelist/[^/]+")) },
+                "the link takes a profile by prefix" to { linkFilter(it).addData(mapOf("pathPrefix" to "/profile/")) },
                 "the link takes a path prefix" to { linkFilter(it).addData(mapOf("pathPrefix" to "/anime/")) },
                 "the link takes every path" to { document -> linkFilter(document).removeData { "pathAdvancedPattern" in it } },
                 "the link takes http" to { linkFilter(it).addData(mapOf("scheme" to "http")) },
@@ -871,7 +891,7 @@ abstract class VerifyRedirectRule : DefaultTask() {
                     { link(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
                 "the link is not exported" to { link(it).setAttributeNS(android, "android:exported", "false") },
                 "there is no link activity" to { link(it).let { activity -> activity.parentNode.removeChild(activity) } },
-                "the launcher takes a title's page" to { main(it).filter(RedirectRule.linkData) },
+                "the launcher takes a title's or a profile's page" to { main(it).filter(RedirectRule.linkData) },
                 // Something else is newly open to other apps.
                 "another activity is exported" to { it.added("activity").setAttributeNS(android, "android:exported", "true") },
                 "another provider is exported" to { it.added("provider").setAttributeNS(android, "android:exported", "true") },
@@ -942,6 +962,222 @@ abstract class VerifyRedirectRule : DefaultTask() {
     }
 }
 
+// How a merged manifest's components, start-up initializers, permissions and queries differ from those its build type names.
+object DeclarationRule {
+    const val STARTUP = "androidx.startup.InitializationProvider"
+    const val COMPONENTS = "Components"
+    const val INITIALIZERS = "Start-up initializers"
+    const val PERMISSIONS = "Permissions"
+    const val QUERIES = "Queries"
+    private val components = setOf("activity", "activity-alias", "service", "receiver", "provider")
+    private val permissions = setOf("uses-permission", "uses-permission-sdk-23")
+
+    // Where each kind is named in this file.
+    private val lists =
+        mapOf(
+            COMPONENTS to "releaseComponents, debugMenu or declaredComponents",
+            INITIALIZERS to "startUpInitializers",
+            PERMISSIONS to "releasePermissions or declaredPermissions",
+            QUERIES to "declaredQueries",
+        )
+
+    // Each problem starts with its kind; nothing when the manifest declares what [named] names, kind by kind.
+    fun problems(
+        manifest: org.w3c.dom.Document,
+        named: Map<String, Set<String>>,
+    ): List<String> {
+        val found = found(manifest)
+        return lists.flatMap { (kind, where) ->
+            val declared = found.getValue(kind)
+            val expected = named.getValue(kind)
+            listOfNotNull(
+                (declared - expected).takeIf { it.isNotEmpty() }?.let {
+                    "$kind the build does not name: $it. Name them in $where in app/build.gradle.kts, or take them out with " +
+                        "tools:node=\"remove\" in app/src/main/AndroidManifest.xml."
+                },
+                (expected - declared).takeIf { it.isNotEmpty() }?.let {
+                    "$kind the build names that are not there: $it. Take them out of $where in app/build.gradle.kts."
+                },
+            )
+        }
+    }
+
+    // A component the manifest enables on some Android versions alone, by a resource that differs between them.
+    fun enabledBy(
+        name: String,
+        bool: String,
+    ) = "$name enabled by $bool"
+
+    // A permission asked for up to an Android version alone.
+    fun upTo(
+        name: String,
+        api: Int,
+    ) = "$name up to API $api"
+
+    // Components and initializers by name, a permission of the package's own as ".NAME", a query by its whole element.
+    private fun found(manifest: org.w3c.dom.Document): Map<String, Set<String>> {
+        val root = manifest.documentElement
+        val own = root.getAttribute("package") + "."
+        val declared = root.children("application").flatMap { it.children() }.filter { it.tagName in components }
+        return mapOf(
+            COMPONENTS to
+                declared.mapTo(mutableSetOf()) { component ->
+                    val name = component.name().ifEmpty { "<${component.tagName}> without a name" }
+                    component
+                        .getAttributeNS(
+                            RedirectRule.ANDROID,
+                            "enabled",
+                        ).takeIf { it.startsWith("@bool/") }
+                        ?.let { enabledBy(name, it) }
+                        ?: name
+                },
+            INITIALIZERS to
+                declared.filter { it.name() == STARTUP }.flatMap { it.children("meta-data") }.mapTo(mutableSetOf()) { it.name() },
+            PERMISSIONS to
+                root.children().filter { it.tagName in permissions }.mapTo(mutableSetOf()) {
+                    val name = if (it.name().startsWith(own)) "." + it.name().removePrefix(own) else it.name()
+                    it.getAttributeNS(RedirectRule.ANDROID, "maxSdkVersion").toIntOrNull()?.let { api -> upTo(name, api) } ?: name
+                },
+            QUERIES to root.children("queries").flatMap { it.children() }.mapTo(mutableSetOf()) { it.described() },
+        )
+    }
+
+    private fun org.w3c.dom.Element.children(tag: String? = null): List<org.w3c.dom.Element> =
+        (0 until childNodes.length).mapNotNull { childNodes.item(it) as? org.w3c.dom.Element }.filter { tag == null || it.tagName == tag }
+
+    private fun org.w3c.dom.Element.described(): String {
+        val attributes = (0 until attributes.length).map { attributes.item(it) }.map { "${it.localName}=${it.nodeValue}" }.sorted()
+        return (listOf(tagName) + attributes + children().map { "(${it.described()})" }).joinToString(" ")
+    }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(RedirectRule.ANDROID, "name")
+}
+
+// A dependency brings no component, start-up initializer, permission or query in unseen; the rule is held to manifests
+// a library would make, each of which has to fail with its own kind alone.
+abstract class VerifyDeclarations : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:Input
+    abstract val components: SetProperty<String>
+
+    @get:Input
+    abstract val initializers: SetProperty<String>
+
+    @get:Input
+    abstract val permissions: SetProperty<String>
+
+    @get:Input
+    abstract val queries: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val named =
+            mapOf(
+                DeclarationRule.COMPONENTS to components.get(),
+                DeclarationRule.INITIALIZERS to initializers.get(),
+                DeclarationRule.PERMISSIONS to permissions.get(),
+                DeclarationRule.QUERIES to queries.get(),
+            )
+
+        fun problems(change: (org.w3c.dom.Document) -> Unit): List<String> =
+            DeclarationRule.problems(RedirectRule.parse(manifest.get().asFile).also(change), named)
+        val found = problems {}
+        check(found.isEmpty()) { found.joinToString("\n") }
+        val component = components.get().first { it != DeclarationRule.STARTUP }
+        val wrong =
+            mapOf<String, Pair<String, (org.w3c.dom.Document) -> Unit>>(
+                "a library adds an activity" to (DeclarationRule.COMPONENTS to { it.added("application", "activity") }),
+                "a library adds an activity-alias" to (DeclarationRule.COMPONENTS to { it.added("application", "activity-alias") }),
+                "a library adds a service" to (DeclarationRule.COMPONENTS to { it.added("application", "service") }),
+                "a library adds a receiver" to (DeclarationRule.COMPONENTS to { it.added("application", "receiver") }),
+                "a library adds a provider" to (DeclarationRule.COMPONENTS to { it.added("application", "provider") }),
+                "a library adds a component without a name" to
+                    (DeclarationRule.COMPONENTS to { it.added("application", "service").removeAttributeNS(RedirectRule.ANDROID, "name") }),
+                "a named component is gone" to (DeclarationRule.COMPONENTS to { it.removed(component) }),
+                "a library adds a start-up initializer" to
+                    (DeclarationRule.INITIALIZERS to { it.startUp().appendChild(it.planted("meta-data")) }),
+                "a named start-up initializer is gone" to
+                    (DeclarationRule.INITIALIZERS to { it.removed(initializers.get().first()) }),
+                "a library adds a permission" to (DeclarationRule.PERMISSIONS to { it.added("manifest", "uses-permission") }),
+                "a library adds a permission from Android 6" to
+                    (DeclarationRule.PERMISSIONS to { it.added("manifest", "uses-permission-sdk-23") }),
+                "a named permission is gone" to (DeclarationRule.PERMISSIONS to { it.removed(permissions.get().first()) }),
+                "a permission is asked for on more Android versions" to
+                    (DeclarationRule.PERMISSIONS to { it.widened("uses-permission", "maxSdkVersion") }),
+                "a component is enabled on more Android versions" to
+                    (DeclarationRule.COMPONENTS to { it.widened("service", "enabled") }),
+                "a library adds a query for a package" to (DeclarationRule.QUERIES to { it.query().appendChild(it.planted("package")) }),
+                "a library adds a query for a provider, which is no component" to
+                    (
+                        DeclarationRule.QUERIES to { document ->
+                            val provider = document.createElement("provider")
+                            provider.setAttributeNS(RedirectRule.ANDROID, "android:authorities", "io.github.kauri_off.kiroku.planted")
+                            document.query().appendChild(provider)
+                        }
+                    ),
+                "a named query is gone" to
+                    (
+                        DeclarationRule.QUERIES to { document ->
+                            document.query().let { queries -> queries.removeChild(queries.getElementsByTagName("*").item(0)) }
+                        }
+                    ),
+            )
+        val missed =
+            wrong.filter { (_, case) -> problems(case.second).map { it.substringBefore(" the build") }.toSet() != setOf(case.first) }.keys
+        check(missed.isEmpty()) { "The declaration check does not fail with the kind alone for these wrong manifests: $missed" }
+        report.get().asFile.writeText(
+            named.entries.joinToString("") { (kind, names) -> "$kind: ${names.sorted()}\n" } +
+                "Fails when ${wrong.keys.joinToString(", ")}\n",
+        )
+    }
+
+    private fun org.w3c.dom.Document.planted(tag: String): org.w3c.dom.Element =
+        createElement(tag).also { it.setAttributeNS(RedirectRule.ANDROID, "android:name", "io.github.kauri_off.kiroku.Planted") }
+
+    private fun org.w3c.dom.Document.added(
+        parent: String,
+        tag: String,
+    ): org.w3c.dom.Element = planted(tag).also { getElementsByTagName(parent).item(0).appendChild(it) }
+
+    // The first element of the manifest that names [name], taken out.
+    private fun org.w3c.dom.Document.removed(name: String) {
+        val all = getElementsByTagName("*")
+        val element = (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.first { it.name() == name.substringBefore(" ") }
+        element.parentNode.removeChild(element)
+    }
+
+    // The first [tag] that holds [attribute] to some Android versions, holding it no longer.
+    private fun org.w3c.dom.Document.widened(
+        tag: String,
+        attribute: String,
+    ) {
+        val all = getElementsByTagName(tag)
+        val element =
+            (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.first {
+                it.getAttributeNS(RedirectRule.ANDROID, attribute).let { value ->
+                    value.startsWith("@bool/") || value.toIntOrNull() != null
+                }
+            }
+        element.removeAttributeNS(RedirectRule.ANDROID, attribute)
+    }
+
+    private fun org.w3c.dom.Document.startUp(): org.w3c.dom.Element {
+        val all = getElementsByTagName("provider")
+        return (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.single { it.name() == DeclarationRule.STARTUP }
+    }
+
+    private fun org.w3c.dom.Element.name() = getAttributeNS(RedirectRule.ANDROID, "name")
+
+    private fun org.w3c.dom.Document.query(): org.w3c.dom.Element =
+        getElementsByTagName("queries").item(0) as org.w3c.dom.Element? ?: added("manifest", "queries")
+}
+
 // Section 3.1's redirects as MAL has them, and what else each build type lets another app start.
 val registeredRedirects =
     mapOf(
@@ -953,12 +1189,76 @@ val launcherActivity = "io.github.kauri_off.kiroku.MainActivity"
 val scenarioTile = "io.github.kauri_off.kiroku.scenario.ScenarioTile"
 val profileInstaller = "androidx.profileinstaller.ProfileInstallReceiver"
 val composePreview = "androidx.compose.ui.tooling.PreviewActivity"
+
+// Scheduled work's service, which the system's job scheduler alone may bind.
+val scheduledWork = "androidx.work.impl.background.systemjob.SystemJobService"
+
+// N9: the foreground service the system runs expedited work as before Android 12, and what it asks for there.
+val savingInTheForeground = "androidx.work.impl.foreground.SystemForegroundService"
+val savingUpTo = 30
 val exportedBesidesTheRedirect =
     mapOf(
-        "release" to setOf(launcherActivity, profileInstaller),
-        "debug" to setOf(launcherActivity, profileInstaller, scenarioTile, composePreview),
-        "preview" to setOf(launcherActivity, profileInstaller, scenarioTile),
+        "release" to setOf(launcherActivity, profileInstaller, scheduledWork),
+        "debug" to setOf(launcherActivity, profileInstaller, scheduledWork, scenarioTile, composePreview),
+        "preview" to setOf(launcherActivity, profileInstaller, scheduledWork, scenarioTile),
     )
+
+// Every component of each build type's merged manifest, and what runs when the process starts: no initializer of the network.
+val releaseComponents =
+    setOf(
+        launcherActivity,
+        RedirectRule.ACTIVITY,
+        DeclarationRule.enabledBy(RedirectRule.LINK, RedirectRule.LINK_ENABLED),
+        DeclarationRule.STARTUP,
+        profileInstaller,
+        "androidx.room.MultiInstanceInvalidationService",
+        "io.github.kauri_off.kiroku.notify.MarkWatchedReceiver",
+        "io.github.kauri_off.kiroku.notify.RunReceiver",
+        DeclarationRule.enabledBy(scheduledWork, "@bool/enable_system_job_service_default"),
+        DeclarationRule.enabledBy(savingInTheForeground, "@bool/saving_in_the_foreground"),
+        "androidx.work.impl.utils.ForceStopRunnable\$BroadcastReceiver",
+        "androidx.work.impl.background.systemalarm.RescheduleReceiver",
+    )
+val debugMenu =
+    setOf(
+        "io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity",
+        "io.github.kauri_off.kiroku.debugmenu.GalleryActivity",
+        scenarioTile,
+    )
+val declaredComponents =
+    mapOf(
+        "release" to releaseComponents,
+        "debug" to releaseComponents + debugMenu + composePreview,
+        "preview" to releaseComponents + debugMenu,
+    )
+val startUpInitializers =
+    setOf(
+        "androidx.lifecycle.ProcessLifecycleInitializer",
+        "androidx.profileinstaller.ProfileInstallerInitializer",
+    )
+
+// The network, the offline check (section 2.3), notifications, androidx.core's guard of unexported receivers, exact alarms (section 5.1), the restart,
+// and N9's foreground service with its wake lock before Android 12.
+val releasePermissions =
+    setOf(
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.POST_NOTIFICATIONS",
+        ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        DeclarationRule.upTo("android.permission.FOREGROUND_SERVICE", savingUpTo),
+        DeclarationRule.upTo("android.permission.WAKE_LOCK", savingUpTo),
+    )
+val declaredPermissions =
+    mapOf(
+        "release" to releasePermissions,
+        "debug" to releasePermissions,
+        "preview" to releasePermissions,
+    )
+
+// The browsers that offer Custom Tabs, for the sign-in.
+val declaredQueries = setOf("intent (action name=android.support.customtabs.action.CustomTabsService)")
 
 androidComponents {
     onVariants { variant ->
@@ -970,7 +1270,16 @@ androidComponents {
                 alsoExported.set(exportedBesidesTheRedirect.getValue(variant.buildType!!))
                 report.set(layout.buildDirectory.file("reports/redirect-${variant.name}.txt"))
             }
-        tasks.named { it == "assemble$name" || it == "test" }.configureEach { dependsOn(verified) }
+        val declared =
+            tasks.register<VerifyDeclarations>("verify${name}Declarations") {
+                manifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                components.set(declaredComponents.getValue(variant.buildType!!))
+                initializers.set(startUpInitializers)
+                permissions.set(declaredPermissions.getValue(variant.buildType!!))
+                queries.set(declaredQueries)
+                report.set(layout.buildDirectory.file("reports/declarations-${variant.name}.txt"))
+            }
+        tasks.named { it == "assemble$name" || it == "test" }.configureEach { dependsOn(verified, declared) }
         if (variant.buildType == "debug") {
             val rule =
                 tasks.register<VerifyRedirectRule>("verifyRedirectRule") {

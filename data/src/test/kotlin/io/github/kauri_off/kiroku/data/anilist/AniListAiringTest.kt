@@ -86,7 +86,14 @@ class AniListAiringTest {
         id: Int,
         total: Int?,
         index: Int = 0,
-    ): Outcome<FetchedAiring?> = Outcome.Success(FetchedAiring(AiringSchedule(recordedEpisodes(case, id, index), total)))
+        doubtedOver: Int? = null,
+    ): Outcome<FetchedAiring?> = Outcome.Success(FetchedAiring(AiringSchedule(recordedEpisodes(case, id, index), total, doubtedOver)))
+
+    // 51039's [index]-th entry with every page of its schedule.
+    private fun recordedPair(index: Int): AniListEntry =
+        aniListPage(AniListRecordings.body("totals_differ_by_more")) {}!!
+            .entries[index]
+            .copy(episodes = recordedEpisodes("totals_differ_by_more", 51039, index), moreEpisodes = false)
 
     private fun spacing(): Long = AniListPace.spacingFor(AniListRecordings.limit).inWholeMilliseconds
 
@@ -106,6 +113,30 @@ class AniListAiringTest {
                 assertEquals(case, whole(case, id, total), answer)
                 assertEquals(case, pagesOf(case).size, aniList.requests.size)
             }
+            assertEquals(emptyList<Asked>(), aniList.unrecorded)
+        }
+
+    @Test
+    fun `a title is handed over whole as soon as its last page is read, before the pages of a longer schedule asked with it`() =
+        runTest {
+            val long = pagesOf("hundreds_of_episodes")
+            aniList.answer = { asked ->
+                if (asked.ids.size == 2) {
+                    val both = mediaOf(json("airing_weekly")) + mediaOf(json(long.first()))
+                    reply(200, json("airing_weekly").edited(MEDIA, JsonArray(both)).toString())
+                } else {
+                    aniList.recorded(asked)
+                }
+            }
+            val handed = mutableListOf<Pair<Map<AnimeId, Outcome<FetchedAiring?>>, Int>>()
+
+            val answers =
+                aniList.client(this).fetch(listOf(61987, 235).map(::titleWithId), since) { part -> handed += part to aniList.requests.size }
+
+            assertEquals(listOf(setOf(AnimeId(61987)) to 1, setOf(AnimeId(235)) to long.size), handed.map { (part, at) -> part.keys to at })
+            assertEquals(answers, handed.fold(emptyMap<AnimeId, Outcome<FetchedAiring?>>()) { all, (part, _) -> all + part })
+            assertEquals(whole("airing_weekly", 61987, 12), answers.of(61987))
+            assertEquals(whole("hundreds_of_episodes", 235, null), answers.of(235))
             assertEquals(emptyList<Asked>(), aniList.unrecorded)
         }
 
@@ -141,7 +172,7 @@ class AniListAiringTest {
     @Test
     fun `of two entries with one MAL id the one with the highest aired episode is chosen, every page of both followed`() =
         runTest {
-            assertEquals(whole("totals_differ_by_more", 51039, 62, index = 1), fetch(listOf(51039)).of(51039))
+            assertEquals(whole("totals_differ_by_more", 51039, 62, index = 1, doubtedOver = 52), fetch(listOf(51039)).of(51039))
             assertEquals(3, aniList.requests.size)
             assertEquals(emptyList<Asked>(), aniList.unrecorded)
         }
@@ -155,7 +186,7 @@ class AniListAiringTest {
                 reply(200, page.edited(MEDIA, JsonArray(mediaOf(page).reversed())).toString())
             }
 
-            assertEquals(whole("totals_differ_by_more", 51039, 62, index = 1), fetch(listOf(51039)).of(51039))
+            assertEquals(whole("totals_differ_by_more", 51039, 62, index = 1, doubtedOver = 52), fetch(listOf(51039)).of(51039))
             assertEquals(3, aniList.requests.size)
         }
 
@@ -194,6 +225,92 @@ class AniListAiringTest {
         }
         val count = airingAt(anime, AiringSchedule(chosen(listOf(later, series), RecordedAt).episodes, null), RecordedAt).aired
         assertEquals(AiredCount.Exact(latest.number), count)
+        for (entries in listOf(listOf(special, series), listOf(later, series))) {
+            assertNull(doubtedOver(series, entries, RecordedAt))
+            assertNull(doubtedOver(series, entries.map { it.copy(status = "FINISHED") }, RecordedAt))
+        }
+        // Before the series' first episode the special is the only one aired, and the series still premieres exactly.
+        val premiere =
+            series.episodes
+                .first()
+                .airsAt
+                .minusSeconds(1)
+        assertEquals(series, chosen(listOf(special, series), premiere))
+        assertNull(doubtedOver(series, listOf(special, series), premiere))
+    }
+
+    @Test
+    fun `of one title split into two entries that each number from 1, the later doubts the earlier from its first episode on`() {
+        val first = recordedPair(0)
+        val second = recordedEntry("more_than_one_page", 55809).copy(malId = 51039)
+        val pair = listOf(first, second)
+        val anime = recordedTitle("airing_on_a_break").anime
+        val starts = second.episodes.first().airsAt
+        assertEquals(listOf("FINISHED", "RELEASING"), pair.map { it.status })
+        assertTrue(first.episodes.maxOf { it.airsAt } < starts)
+        assertEquals(null, anime.malEpisodes)
+
+        for (at in listOf(starts.minusSeconds(1), starts) + second.episodes.drop(2).map { it.airsAt } + RecordedAt) {
+            for (entries in listOf(pair, pair.reversed())) {
+                val entry = chosen(entries, at)
+                val schedule = AiringSchedule(entry.episodes, entry.total, doubtedOver(entry, entries, at))
+                val airing = airingAt(anime, schedule, at)
+
+                assertEquals("$at", second, entry)
+                assertEquals("$at", 52, schedule.doubtedOver)
+                assertEquals("$at", AiredCount.Estimated(52), airing.aired)
+                assertNull("$at", airing.nextEpisode)
+            }
+        }
+        // What the count was without the doubt: exact, and from 52 down to 1 on the day the second entry began.
+        assertEquals(AiredCount.Exact(1), airingAt(anime, AiringSchedule(second.episodes, second.total), starts).aired)
+        // Without the second entry's status the first is chosen; the doubt is the same from the second's first episode on.
+        val alike = listOf(first, second.copy(status = "FINISHED"))
+        assertEquals(first, chosen(alike, starts))
+        assertNull(doubtedOver(first, alike, starts.minusSeconds(1)))
+        assertEquals(1, doubtedOver(first, alike, starts))
+        assertEquals(AiredCount.Estimated(52), airingAt(anime, AiringSchedule(first.episodes, first.total, 1), starts).aired)
+    }
+
+    @Test
+    fun `a first entry that finished without a schedule is doubted as aired up to its total, from before the second's first episode on`() {
+        val first = recordedEntry("more_than_one_page", 59953).copy(malId = 55809)
+        val second = recordedEntry("more_than_one_page", 55809)
+        val pair = listOf(first, second)
+        val anime = recordedTitle("airing_on_a_break").anime
+        val starts = second.episodes.first().airsAt
+        assertEquals(listOf("FINISHED", "RELEASING"), pair.map { it.status })
+        assertEquals(listOf(26, 180), pair.map { it.total })
+        assertEquals(emptyList<ScheduledEpisode>(), first.episodes)
+
+        for (at in listOf(starts.minusSeconds(1), starts) + second.episodes.drop(2).map { it.airsAt } + RecordedAt) {
+            for (entries in listOf(pair, pair.reversed())) {
+                val entry = chosen(entries, at)
+                val schedule = AiringSchedule(entry.episodes, entry.total, doubtedOver(entry, entries, at))
+                val airing = airingAt(anime, schedule, at)
+
+                assertEquals("$at", second, entry)
+                assertEquals("$at", 26, schedule.doubtedOver)
+                assertEquals("$at", AiredCount.Estimated(26), airing.aired)
+                assertNull("$at", airing.nextEpisode)
+            }
+        }
+        assertEquals(AiredCount.Exact(1), airingAt(anime, AiringSchedule(second.episodes, second.total), starts).aired)
+        // A second entry that numbers on from the first's total is not doubted.
+        val numberedOn = second.copy(episodes = second.episodes.map { it.copy(number = it.number + 26) })
+        assertNull(doubtedOver(numberedOn, listOf(first, numberedOn), starts))
+    }
+
+    @Test
+    fun `the recorded split title is doubted from the first episode of its later entry on, whichever entry is chosen`() {
+        val pair = listOf(recordedPair(0), recordedPair(1))
+        val secondStarts = pair[1].episodes.first().airsAt
+
+        for (entries in listOf(pair, pair.reversed())) {
+            assertEquals(52, doubtedOver(pair[1], entries, RecordedAt))
+            assertNull(doubtedOver(pair[0], entries, secondStarts.minusSeconds(1)))
+            assertEquals(24, doubtedOver(pair[0], entries, secondStarts))
+        }
     }
 
     @Test

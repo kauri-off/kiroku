@@ -26,7 +26,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
@@ -35,17 +34,21 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipeUp
 import androidx.lifecycle.Lifecycle
+import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.shell.AppRoute
+import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -115,7 +118,7 @@ class AppRouteTest {
         }
 
     // A row of the title page's watch order can show a status too; these clicks are of the page's own controls.
-    private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction() and !hasTestTag(TitleTags.chainRow)).performClick()
+    private fun click(text: String) = compose.onNode(hasText(text) and hasClickAction() and !hasTestTag(TitleTags.chainCard)).performClick()
 
     private fun back() {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
@@ -134,7 +137,7 @@ class AppRouteTest {
     private fun scrollTo(text: String) =
         compose
             .onAllNodes(hasScrollAction() and hasScrollToNode())
-            .filter(hasAnyDescendant(hasText("Episodes watched")) or hasAnyDescendant(hasText("Related")))[0]
+            .filter(hasAnyDescendant(hasContentDescription("Episodes watched")) or hasAnyDescendant(hasText("Related")))[0]
             .performScrollToNode(hasText(text))
 
     private fun hasScrollToNode() = SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)
@@ -176,7 +179,7 @@ class AppRouteTest {
     fun `a row opens its title page and Back returns to the list`() {
         app()
         openKagerou()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         hides("My list")
         back()
         shows("My list")
@@ -192,16 +195,16 @@ class AppRouteTest {
         val page = {
             compose
                 .onAllNodes(
-                    hasText("Episodes watched") or hasContentDescription("Loading"),
+                    hasContentDescription("Episodes watched") or hasContentDescription("Loading"),
                 ).fetchSemanticsNodes()
                 .isNotEmpty()
         }
         repeat(FRAMES) { if (!page()) compose.mainClock.advanceTimeByFrame() }
         compose.onAllNodesWithContentDescription("Loading").assertCountEquals(0)
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         graph.readsHeld = false
     }
 
@@ -343,6 +346,22 @@ class AppRouteTest {
     }
 
     @Test
+    fun `the title page asks the scores of nobody, and its row opens them, asked then and gone back from`() {
+        app()
+        openKagerou()
+        scrollTo("Details")
+        compose.waitForIdle()
+        assertEquals(emptyList<AnimeId>(), graph.demo.scoreSource.requests)
+
+        click("MAL scores")
+        compose.waitForIdle()
+        showsSubstring("\u00A0votes")
+        assertEquals(listOf(kagerou.id), graph.demo.scoreSource.requests)
+        back()
+        shows("Details")
+    }
+
+    @Test
     fun `See all opens every related title, which opens its own page, and Details opens the details`() {
         app()
         openKagerou()
@@ -353,7 +372,7 @@ class AppRouteTest {
         shows("Prequel")
         compose.onNodeWithText(FixtureAnime.prequel.titles.romaji).performClick()
         compose.waitForIdle()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         back()
         back()
         scrollTo("Details")
@@ -381,19 +400,59 @@ class AppRouteTest {
     }
 
     @Test
-    fun `Profile opens another user by name, whose rows lead to screens not built yet`() {
+    fun `Profile opens another user by name, and their list`() {
         app()
         click("Profile")
         shows("kiroku_demo")
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
         click("Open")
         shows("sample_viewer")
-        compose.onNodeWithContentDescription("View list").performScrollTo().performClick()
+        compose.onNodeWithText("View list").performClick()
         shows("sample_viewer's list")
-        shows("Not available in this build yet")
+        shows(FixtureAnime.longTitle.titles.romaji)
         back()
         back()
+        shows("kiroku_demo")
+        back()
+        shows("My list")
+    }
+
+    // Which profiles were opened is the signed-in user's: the next user to sign in does not see them.
+    @Test
+    fun `a sign-out forgets the names opened earlier`() {
+        app()
+        click("Profile")
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
+        click("Open")
+        shows("Completed")
+        back()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
+        shows("Recent")
+        click("Cancel")
+        runBlocking { graph.session.signOut() }
+        compose.waitForIdle()
+        click("Open another profile")
+        compose.onNodeWithText("Recent").assertDoesNotExist()
+    }
+
+    // The own name, typed in any letter case or opened as another user's page, is the own Profile at its root.
+    @Test
+    fun `opening the own name shows the own profile`() {
+        app()
+        click("Profile")
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("KIROKU_DEMO")
+        click("Open")
+        assertEquals(listOf<NavKey>(Destination.Profile.root), navigator.stackOf(Destination.Profile))
+        compose.runOnUiThread { navigator.open(OtherProfileKey("Kiroku_Demo")) }
+        compose.waitForIdle()
+        assertEquals(listOf<NavKey>(Destination.Profile.root), navigator.stackOf(Destination.Profile))
         shows("kiroku_demo")
         back()
         shows("My list")
@@ -551,7 +610,7 @@ class AppRouteTest {
         app()
         graph.demo.server.offline.value = true
         openKagerou()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         compose.onAllNodesWithText("No connection").assertCountEquals(2)
         compose.mainClock.advanceTimeBy(AWAY_MILLIS)
         compose.onAllNodesWithText("No connection").assertCountEquals(1)
@@ -617,7 +676,7 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Episode\u00A013 watched")
         openKagerou()
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         shows("Episode\u00A013 watched")
         click("Search")
         compose.waitForIdle()

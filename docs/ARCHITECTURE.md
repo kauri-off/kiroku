@@ -46,14 +46,16 @@ without affecting its page (section 2.3).
 | The signed-in user's list (read and write), own profile | MAL API v2 | Yes |
 | Another user's public list | MAL API v2 | No (client id only) |
 | Airing times of episodes | AniList GraphQL, keyed by MAL id | No |
-| Score histogram, characters, videos, reviews, other users' avatar and "about" | Jikan v4; not in 1.0 | No |
+| A title's score distribution (MAL's votes per score) | Tenrai, keyed by MAL id | No |
+| Characters, videos, reviews, other users' avatar and "about" | None chosen (section 13); not in 1.0 | |
 
 - Kiroku has no server of its own, scrapes no HTML and loads no remote configuration.
 - AniList is chosen for airing times because it is a documented public API that knows real episode times, breaks
   and delays, and covers long-running shows regardless of season (dailyAL issue #8). MAL's own `broadcast` field (a
   weekday and a Japan-time slot) knows none of that and only feeds the estimate of section 4.
 - **Privacy.** AniList receives the MAL ids of the unfinished titles on the user's list and of an airing title whose
-  page is open, and nothing else about the user. There is no analytics and no crash reporting.
+  page is open, and nothing else about the user. Tenrai receives the device's IP address, the app's name and version, and
+  the MAL id of each title whose MAL scores are opened. There is no analytics and no crash reporting.
 
 ### 2.2 External constraints and their consequences
 
@@ -62,7 +64,8 @@ MAL (from its API reference):
 - The only user endpoint is `users/@me`, but anyone's public list can be read with the client id alone. Kiroku
   downloads another user's list and computes their statistics itself, with the same code as for the signed-in
   user. Their avatar, join date and "about" are not available and are not shown in 1.0.
-- There is no user search: another user is opened by exact user name or by a `myanimelist.net/profile/…` link.
+- There is no user search: another user is opened by user name, in any letter case, or by a
+  `myanimelist.net/profile/…` link.
 - Title statistics are the status distribution and the member count; MAL's API has no per-score histogram.
 - Search has no filter parameters, so 1.0 has no search filters.
 - Dates may be partial ("2017-10-23", "2017-10", "2017").
@@ -80,16 +83,23 @@ AniList (from its API documentation and recorded answers):
   some have two, and AniList sometimes numbers episodes differently from MAL (a second season that continues at
   13, or one MAL title split into seasons that each start at 1). All are normal cases for section 4, not errors.
 
+Tenrai (from its documentation and recorded answers):
+
+- Its public limit is 4 requests a second and 120 a minute per IP address; a refusal is a 429 with `Retry-After`, or a
+  403 from its anti-abuse system. The app asks one title at a time, well below that.
+- It refreshes scores daily and caches answers up to 12 hours, so a distribution can be a day and a half old; an
+  answer does not say how old it is.
+
 ### 2.3 When a source fails
 
 | Source | Failure | What the user gets |
 |---|---|---|
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
-| MAL | Refused when reading another user's list | "This list is private". Not treated as rate limiting. |
-| MAL | Refused anywhere else | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
+| MAL | Answered as a private list when reading another user's list | "This list is private". Not treated as rate limiting. |
+| MAL | Refused otherwise | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
-| An optional source (after 1.0) | Any failure | Its part of the page says so and offers Retry, and never blocks or delays the rest of the page. |
+| An optional source (Tenrai's score distribution; others after 1.0) | Any failure, refusal or rate limit | Its part of the app says so and offers Retry, and never blocks or delays the page it belongs to. |
 
 The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the
 internet.
@@ -172,15 +182,17 @@ the background.
   Every screen, sort order and notification uses it; the list row and the title page show the same numbers.
 - **A2. Correct between refreshes.** The aired count rises when a stored air time passes, with no network call, and
   a visible screen updates at that moment without polling.
-- **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's, otherwise unknown. A
-  title MAL marks as finished has aired completely. The aired count never exceeds a known total. An airing status
-  the app does not know is read as airing by every rule, freshness included.
+- **A3. Totals.** The total is MAL's episode count when MAL has one, otherwise AniList's unless its schedule is not
+  used or its numbering is doubted, otherwise unknown. A title MAL marks as finished has aired completely. The aired
+  count never exceeds a known total. An airing status the app does not know is read as airing by every rule,
+  freshness included.
 - **A4. A schedule numbered differently is not used.** When AniList's episode numbers evidently continue an
   earlier season (they do not begin at episode 1, and run past MAL's total or reach a number that a show with
   MAL's start date cannot have reached), AniList's data is not used for that title.
-- **A5. Doubt is shown as an estimate.** A count is estimated, not exact, when the two sources' totals differ, or
-  when AniList appears to have stopped tracking the title. The estimate is AniList's own count, which stops at
-  MAL's total.
+- **A5. Doubt is shown as an estimate.** A count is estimated, not exact, when the two sources' totals differ, when
+  AniList appears to have stopped tracking the title, or when AniList has two entries for the title whose
+  numberings cannot be told apart; the estimate is then at least the other entry's highest aired episode. The
+  estimate is AniList's own count, or more where its numbering is doubted, and stops at MAL's total.
 - **A6. The weekly estimate is bounded.** It is used only when MAL gives a full start date and a broadcast weekday
   and time, and the result cannot run away (the total is known, or the show started recently). Without it the
   count is 0 for a title that has not started and unknown otherwise. A count of 0 is exact only when a stored
@@ -216,9 +228,10 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
 - **Alarms are one-shot and are re-checked when they fire.** What is due and what comes next is computed from the
   stored list and airing data every time; there is no stored plan that could drift. Only the next due notification
   is scheduled, not one alarm per title, which keeps the app far from the system's alarm quotas.
-- **A late notification is acceptable; a missing one is not.** The alarm is inexact by default, which needs no
-  permission, and exact when the user has granted exact alarms. The manifest declares `SCHEDULE_EXACT_ALARM`;
-  `USE_EXACT_ALARM` is not used, because Google Play reserves it for alarm-clock and calendar apps.
+- **A late notification is acceptable; a missing one is not.** The alarm is exact where the system lets the app set
+  exact alarms (always before Android 12, from the install on 12 and 13, by the user's grant from 14) and inexact
+  elsewhere. The manifest declares `SCHEDULE_EXACT_ALARM`; `USE_EXACT_ALARM` is not used, because Google Play
+  reserves it for alarm-clock and calendar apps.
 - The app never opens a system settings screen unasked and never asks for a battery exemption on its own.
 - What is **notifiable** is defined in `:core`: the title's list status is Watching (or Planned, if the user
   enabled that); its aired count is exact and the episode has a known air time; the user has not watched it; it
@@ -229,13 +242,18 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
 
 - **N1. Exactly once.** An episode that has aired is announced at most once, however many triggers run at the same
   time, and also when airing data is refreshed between its air time and its notification, the alarm is lost, a
-  delay is configured, the device restarts or the app is updated.
+  delay is configured, the device restarts or the app is updated. Four cases alert a second time, by decision: a
+  notification dismissed between its post and its record, when the process dies or the store fails there; an
+  episode announced from stored data whose re-check answered, after its bound, that it was postponed, when it
+  airs; an episode announced again after any postponement; and an episode a run posted and did not record, which
+  the user then marks watched and unmarks.
 - **N2. Not lost.** A notifiable episode whose notification time has passed is announced the next time the app
   gets to run: the alarm, a device restart, an app update, the app being opened, or periodic background work that
   needs no network. A notification that would come more than three days late is not shown.
 - **N3. Re-checked.** When the alarm fires and a network is available, the air time is checked again within a few
   seconds: a postponed episode is rescheduled instead of announced. When the check fails or takes too long, the
-  stored data is used.
+  stored data is used. An answer that comes after that and postpones the episode takes its notification back; if
+  the airing source then puts the episode back at its first time, it is not announced again.
 - **N4. Never for anything else.** No notification for a title that is dropped, completed, on hold, removed or not
   on the list, for an episode the user has watched, for a planned title unless that is enabled, or from an
   estimated or unknown count. An episode whose air time is not known is never announced.
@@ -248,14 +266,15 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
   has watched the announced episode.
 - **N8. The alarm follows the data.** After any change to the list, the airing data or a notification setting (the
   delay alone included), the scheduled alarm is the earliest coming notification time, or none. It is restored
-  after a device restart, an app update, a change of the exact-alarm permission, and when the app is opened after
-  a force-stop. A change of time zone moves nothing.
+  after a device restart, an app update, the exact-alarm access being given, and when the app is opened after a
+  force-stop. When the access is taken away, the system removes the alarm and ends the app without telling it; the
+  next run (the app's opening, a restart or the periodic work) sets it again. A change of time zone moves nothing.
 - **N9. The action counts once.** "Mark watched" marks the next unwatched episode and never jumps the count over
   episodes the user has not seen. A second tap, a retry after the server already accepted it, or a sync that
   already brought the change do not raise the count again. Without a network it waits and retries; if it finally
-  fails, the notification is replaced by "Could not save · Open". It works on every supported Android version: on
-  Android 8 to 11 the system runs such work as a foreground service, which shows "Saving…" on its own
-  low-importance channel "Saving changes"; on Android 12 and later no foreground service starts or is declared.
+  fails, the title's notification says so and opens the title. It works on every supported Android version: on
+  Android 8 to 11 the system runs such work as a foreground service, which shows its own notification on a
+  low-importance channel of its own; on Android 12 and later no foreground service starts or is enabled.
 - **N10. The record of announced episodes survives** app updates and database changes (section 7.1).
 
 Tests demonstrate each of these without a device, with every dailyAL failure case among them. Before a release,
@@ -263,12 +282,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 5.3 What the user gets
 
-- **Text.** Title: the anime title in the preferred title language. Text: "Episode 16 aired", and when more than
-  one aired episode is unwatched, "Episode 16 aired · 3 to watch", in the language in effect when it is posted.
-  Tapping opens the title page with the List beneath it.
-- **Grouping.** All episode notifications share one group with a summary ("3 new episodes"), so an evening with
-  several shows is one stack. **Channel:** "New episodes", default importance.
-- **Action.** One action, labelled with the episode it marks: "Mark ep. 14 watched".
+- **A notification** is one a title, in the preferred title language, in the language in effect when it is posted,
+  with one action that marks the episode it names. Tapping it opens the title page with the List beneath it; a
+  tapped notification goes and is not shown again.
+- **Grouping.** All episode notifications share one group with a summary, so an evening with several shows is one
+  stack. **Channel:** default importance.
 - **First run.** Notifications are on by default. On Android 13 and later the system permission prompt appears
   once, on the List, right after the first successful sign-in, with no custom dialog before it. If the user
   denies, the setting shows "Blocked in system settings" with a button, and nothing else in the app mentions it.
@@ -320,7 +338,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position,
   and update rows in place. A row whose title no longer belongs to the tab leaves at once, and Undo puts it back in
   the same place; a title that joins the tab appears at the end until the order is next computed. After a row leaves,
-  a "+1" on a row that moved up is not applied until the rows have stood still a moment.
+  a "+1" on a row that moved up is not applied until the rows have stood still a moment. Another user's list, while
+  it is read, adds each part's titles at the end of their tabs; its order is computed when the read ends.
 - Text a person types is state the view model owns and changes inside the event; no flow sits between a keystroke and
   its field.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
@@ -337,13 +356,13 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   windows. Settings opens from Profile. Five destinations is the maximum.
 - Each destination keeps its own back stack. Tapping the current destination again pops it to its root.
 - Back from the root of Search or Profile goes to List; Back from the root of List leaves the app.
-- A notification or a deep link builds the stack List → Title, so Back never leaves the app unexpectedly.
+- A notification or a title's link builds the stack List → Title, and a profile's link List, then Profile → that
+  profile, so Back never leaves the app unexpectedly.
 - The app opens on List, tab Watching. Signed out, the List offers sign-in, and browsing without an account goes
   to Search.
 - Predictive back is on.
-- Deep links: a title's page, `https://[www.]myanimelist.net/anime/{id}` with or without its name and a trailing
-  slash, from Android 12, once the user has allowed the app's links in the system's settings;
-  `https://myanimelist.net/profile/{name}`; and the OAuth redirect.
+- Deep links, from Android 12 once the user has allowed the app's links in the system's settings: a title's and a
+  user's profile page on `[www.]myanimelist.net`; and the OAuth redirect.
 
 ### 6.4 Stack, wiring and demo mode
 
@@ -357,10 +376,14 @@ was chosen against, and why:
   used.
 - **Storage:** Room, with its annotation processor only in `:data`; DataStore Preferences for settings.
 - **Sign-in:** Custom Tabs and the Keystore directly (`security-crypto` is deprecated).
+- **Scheduled work:** WorkManager, set up at its first use, for work that waits for a network or repeats. The alarm
+  goes to the alarm service directly, and its receiver holds its run.
 - **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
   fifteen objects.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
-  (detekt's current line is alpha).
+  (detekt's current line is alpha), and for `:core`, which Lint's API check skips, Animal Sniffer's checker against
+  Gummy Bears' signature of the minSdk (not their Gradle plugins: one uses an API Gradle 10 removes, the other
+  breaks the configuration cache).
 - **Not used at all:** a chart library, AppCompat, `kotlinx-datetime`, a paging library, Google Play Services,
   Firebase, any closed-source dependency (which keeps F-Droid possible).
 - **Demo mode:** a debug or preview build chooses between the demo, the sandbox and the real account, each with its
@@ -385,8 +408,8 @@ was chosen against, and why:
   periodic background work.
 - A screen counts as shown while it is on top and started, and as shown again only after its state's stop timeout;
   a load that failed for want of a connection is repeated once when the connection returns while it is shown.
-- Held in memory only: search results, browse lists, other users' lists and statistics (kept for the session), and
-  the airing data of A12.
+- Held in memory only: search results, browse lists, other users' lists and statistics, titles' score distributions
+  (kept for the session), and the airing data of A12.
 - A value is stored under MAL's own code, so a code the app learns later needs no migration. An entry with a list
   status the app does not know stays on the List.
 - A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
@@ -405,9 +428,9 @@ was chosen against, and why:
   state where they would be, and a snackbar.
 - All messages are snackbars or inline text. Toasts are not used. A snackbar outlives the screen that caused it, and
   one is shown at a time. One that is the only way back (a completion's Undo, a failed save's Retry) is never
-  replaced, another of its kind waits behind it while its title's values are unchanged, and its time runs only
-  while the user can see and tap it; a finger holding any message stops its time, which starts again in full when
-  let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
+  replaced, and another of its kind waits behind it: an Undo while its title's values are unchanged, a Retry while
+  it has something left to set (W2). Its time runs only while the user can see and tap it; a finger holding any
+  message stops its time, which starts again in full when let go. Any message, one that must stay too, can be swiped away; that ends it as its time running out does and
   runs no action. Ordinary messages are not queued.
 
 ### 7.3 Writes to the list
@@ -427,9 +450,11 @@ changes without asking. "+1" on a row offers Undo, and so does a change on the t
   confirmed (not "the value before the tap"), no later edit of that entry that was still waiting is sent, and a
   snackbar says "Could not save · Retry", also when MAL refused the write; with the session expired it offers no
   Retry, as the banner offers sign-in (S6). Retry applies, as a new edit, each value the failed edits set, as shown
-  just before the failure. Example: the server has 12; two taps show 13, then 14; the request carrying 13
-  fails. 14 is not sent, the row shows 12, and Retry sends 14. A write MAL may have made (it failed with a server
-  error or without a connection) is followed by a download, and its message goes once the entry shows the change.
+  just before the failure, that nothing has changed since; of the status, the count and the two dates it sets none
+  once one it sets, or the status, has changed. A removal, once applied, is retried only while the entry is as it
+  was. Its message goes once none is left. Example: the server has 12; two taps show 13, then 14; the request
+  carrying 13 fails. 14 is not sent, the row shows 12, and Retry sends 14. A write MAL may have made (it failed with
+  a server error or without a connection) is followed by a download.
 - **W3. Undo is one write** that takes back the undone edit alone, applied to the values as they are: a step is
   undone by the opposite step, and any other value the edit set (status, dates, a typed count) goes back only
   while it still holds what the edit put there. A change off a status the app does not know offers no Undo, as that
@@ -555,8 +580,8 @@ The code and the screenshots rendered from `main` are the record of what was dec
   or check; those needing the user's sign-in, by the owner with a debug tool, as sent less token and client id.
 - **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
   reads recorded files before they are committed. The owner's stay outside all checkouts; tests skip without them.
-- Nobody calls the MAL API by hand with the client id. AniList needs no key, so an agent records its responses
-  itself.
+- Nobody calls the MAL API by hand with the client id. AniList and Tenrai need no key, so an agent records their
+  responses itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another
   app on the device.
 
@@ -573,7 +598,7 @@ section says what a render gives and what it cannot show.
 - **Cases.** Each screen has one registry file, `<Screen>Screenshots`, which declares its cases: content, loading,
   empty and error, plus the cases its task needs. A screen that has no loading, empty or error state says why, and the
   render writes the reason to `<screen>/NOT_SHOWN.txt`. A **gallery** case renders every shared component in all
-  its states. A case can declare the keyboard open, or its own window size.
+  its states. A case can declare the keyboard open, its own window size, or `ru-large` as well.
 
 **Variants.** Every case is rendered in the five standard variants: `en-light`, `en-dark`, `ru-light` and `ru-dark`
 on a phone-sized screen, and `ru-stress`, Russian on a small screen at a larger font scale. The content case also
@@ -608,14 +633,17 @@ only when rendered on the same machine.
 ## 12. Build, platform and distribution
 
 - **`minSdk` 26** (Android 8.0): `java.time` without desugaring, notification channels and adaptive icons
-  everywhere. The compile SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
+  everywhere. Shipped code calls only what Android 8.0 has, and the build fails for a call it lacks. The compile
+  SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
 - **Checks.** ktlint with its default rules and two exceptions: the package-name rule is off, because it rejects
   the underscore in the base package, and composable functions are exempt from the function-naming rule. Android
   Lint with the translation checks as errors; other warnings are not errors, because checks such as "newer version
   available" would fail the build whenever a library publishes a release.
 - **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and push to `main` that changes
   more than documents, and checks every pull request's title as a conventional commit; its workflow files say what
-  it runs and keeps. What it builds for a pull request is built without any secret.
+  it runs and keeps. What it builds for a pull request is built without any secret. A pull request builds only the
+  debug variant; the release and preview builds, with R8 and their lint, run on the push to `main`, where a failure
+  is fixed forward.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build
@@ -633,10 +661,11 @@ Each of these could change a decision above.
 
 1. **A sign-in with the app killed while the browser is open has not been run on a phone.** A sign-in has: MAL
    granted a token with a lifetime.
-2. **MAL's behaviour at its edges:** whether its answer when it limits requests can be told apart from a private
-   list's (section 2.3 tells them apart by the endpoint); its rate limits; the shortest search query it accepts
-   (believed to be three characters); what its website changes by itself when an edit completes a title, which W7
-   assumes (through the API it changes nothing by itself).
+2. **MAL's behaviour at its edges:** its rate limits, and what it answers when it limits requests: a private list
+   is told by the answer recorded for one, a refusal with its own error code, and a limit answered in the same words
+   would read as a private list; the shortest search query it accepts (believed to be three characters); what its
+   website changes by itself when an edit completes a title, which W7 assumes (through the API it changes nothing by
+   itself).
 3. **AniList:** its API terms prohibit its use "within competing, non-complementary services of the same nature",
    anime list and tracker services included, for all its data. The owner reads Kiroku, which keeps no list at
    AniList and is open source and non-commercial, as complementary, and the stored schedules of the tracked titles,
@@ -645,5 +674,8 @@ Each of these could change a decision above.
    apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-5. **Sources named for after 1.0** (Jikan, AniList's links and characters, Shikimori) are unchecked; Jikan could
-   not be reached from the maintainer's machine.
+5. **Sources beyond MAL and AniList.** The score distribution comes from Tenrai; characters, videos, reviews and
+   other users' avatars have no source. Tenrai is in beta and does
+   not say who runs it. Like every source of MAL's score distribution it serves what it reads from MAL's website,
+   which clause 4(i) of MAL's API agreement rules out for an app's own requests; the owner accepts that risk, and the
+   app itself scrapes nothing. AniList's links and characters and Shikimori are unchecked.

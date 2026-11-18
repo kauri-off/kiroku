@@ -1,23 +1,27 @@
 package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.link.isAcceptedUserName
+import io.github.kauri_off.kiroku.core.link.readTypedLink
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
-import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 
 data class ProfileState(
     val owner: ProfileOwner,
     val content: ProfileContent,
     val sessionExpired: Boolean = false,
     val refreshing: Boolean = false,
+    // How far the read of another user's list is, the first one or one again; null while none is under way.
+    val reading: UserListProgress? = null,
     // The "Open another profile" dialog; null while it is closed.
     val openProfile: OpenProfile? = null,
 ) {
     init {
         require(content !is ProfileContent.SignedOut || owner == ProfileOwner.Me)
-        require(content !is ProfileContent.ListLoading || owner is ProfileOwner.Other)
-        // MAL's API gives the header only for the signed-in user.
-        require(content !is ProfileContent.Shown || (content.header != null) == (owner == ProfileOwner.Me))
+        require(content !is ProfileContent.ListLoading || (owner is ProfileOwner.Other && reading != null))
+        require(reading == null || owner is ProfileOwner.Other)
     }
 }
 
@@ -34,15 +38,8 @@ sealed interface ProfileContent {
 
     data object SignedOut : ProfileContent
 
-    // Another user's list, read page by page before their statistics can be computed.
-    data class ListLoading(
-        val loaded: Int,
-        val total: Int?,
-    ) : ProfileContent {
-        init {
-            require(loaded >= 0 && (total == null || total >= 0))
-        }
-    }
+    // Another user's list, read part by part before their statistics can be computed; how far is the state's reading.
+    data object ListLoading : ProfileContent
 
     data class Failed(
         val error: DataError,
@@ -101,15 +98,11 @@ sealed interface ProfileEvent {
 
 const val RECENT_PROFILES = 5
 
-// The names opened last, newest first, each once whatever its case, as MAL's names ignore case.
-fun List<String>.withOpened(name: String): List<String> =
-    (listOf(name) + filterNot { it.equals(name, ignoreCase = true) }).take(RECENT_PROFILES)
-
 // What the dialog opens: the name typed or taken from a pasted profile link; null when there is none.
 fun OpenProfile.nameToOpen(): String? = (profileInput(name) as? ProfileInput.Name)?.name
 
-// The text is a link, but not to a MyAnimeList profile or list, so it is not taken as a name.
-val OpenProfile.notAProfileLink: Boolean get() = profileInput(name) == ProfileInput.OtherLink
+// The text is neither a name the app takes nor a profile link with one, so nothing opens.
+val OpenProfile.refused: Boolean get() = profileInput(name) == ProfileInput.Refused
 
 sealed interface ProfileInput {
     data object Blank : ProfileInput
@@ -118,22 +111,13 @@ sealed interface ProfileInput {
         val name: String,
     ) : ProfileInput
 
-    data object OtherLink : ProfileInput
+    data object Refused : ProfileInput
 }
 
-// The user name in a myanimelist.net profile or list link, with or without its scheme, "www.", a further path, a
-// trailing slash or a query; any other text with a scheme, or a host and a path, is another link; the rest is a name.
+// The user a pasted profile link names, read as an opened link is, or the name typed; both by the app's name rule.
 fun profileInput(text: String): ProfileInput {
     val trimmed = text.trim()
     if (trimmed.isEmpty()) return ProfileInput.Blank
-    profileLink.matchEntire(trimmed)?.let { return ProfileInput.Name(it.groupValues[1]) }
-    return if (anyLink.containsMatchIn(trimmed)) ProfileInput.OtherLink else ProfileInput.Name(trimmed)
+    (readTypedLink(trimmed) as? Link.Profile)?.let { return ProfileInput.Name(it.name) }
+    return if (isAcceptedUserName(trimmed)) ProfileInput.Name(trimmed) else ProfileInput.Refused
 }
-
-private val profileLink =
-    Regex(
-        notShown("""(?:https?://)?(?:www\.)?myanimelist\.net/(?:profile|animelist)/([^/?#\s]+)(?:/[^?#\s]*)?(?:[?#]\S*)?"""),
-        RegexOption.IGNORE_CASE,
-    )
-
-private val anyLink = Regex(notShown("""://|^[^\s/]+\.[^\s/]+/"""))

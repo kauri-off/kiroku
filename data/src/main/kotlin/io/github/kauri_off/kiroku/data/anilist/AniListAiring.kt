@@ -3,15 +3,16 @@ package io.github.kauri_off.kiroku.data.anilist
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
+import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.Sent
+import io.github.kauri_off.kiroku.data.network.retryAfter
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -22,7 +23,6 @@ import java.time.Instant
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 // AniList's episode times of titles by MAL id (section 2.2), asked over the one HTTP client with the MAL ids alone.
@@ -35,22 +35,30 @@ class AniListAiring(
     private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) : AiringSource {
     private val url = address.toHttpUrl()
-    private val pace = AniListPace(time, clock, AniListBlock(blockFile, clock, http.unexpected))
+    private val pace = AniListPace(time, AniListPace.file(blockFile, clock, http.unexpected))
     private val turns = Mutex()
 
     // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking.
     private val failures = mutableMapOf<Int, Pair<ComparableTimeMark, DataError>>()
 
-    // Whole schedules: every title's pages of episodes are followed to the last, so nothing is left out.
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct()).run() }
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+
+    // Whole schedules: every title's pages of episodes are followed to the last, and each title handed over once it is final.
+    override suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct(), whole).run() }
 
     private inner class Fetch(
         ids: List<AnimeId>,
+        private val whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ) {
         private val results = mutableMapOf<AnimeId, Outcome<FetchedAiring?>>()
+        private val handed = mutableSetOf<AnimeId>()
         private val asked = mutableMapOf<Int, AnimeId>()
 
         // Each title's entries, in AniList's order, with the pages of their schedules read so far.
@@ -86,7 +94,10 @@ class AniListAiring(
         }
 
         private suspend fun fetched() {
-            firstPages(asked.keys.toList(), last = false).chunked(AniListSchedule.TITLES_PER_PAGE).forEach { firstPages(it, last = true) }
+            firstPages(asked.keys.toList(), last = false).also { handOver() }.chunked(AniListSchedule.TITLES_PER_PAGE).forEach {
+                firstPages(it, last = true)
+                handOver()
+            }
             for (schedulePage in 2..Int.MAX_VALUE) {
                 val more = gathered.filterValues { entries -> entries.any { it.moreEpisodes } }.keys.toList()
                 if (more.isEmpty()) break
@@ -95,13 +106,26 @@ class AniListAiring(
                     break
                 }
                 laterPages(more, schedulePage)
+                handOver()
             }
+            handOver()
+        }
+
+        // Each title not handed over yet whose answer is final: a failure, an unknown id, or a schedule read to its last page.
+        private suspend fun handOver() {
             val now = clock.instant()
             for ((malId, entries) in gathered) {
+                val id = asked.getValue(malId)
+                if (id in results || entries.any { it.moreEpisodes }) continue
                 val entry = chosen(entries, now)
                 val episodes = entry.episodes.sortedWith(compareBy({ it.number }, { it.airsAt }))
-                results[asked.getValue(malId)] = Outcome.Success(FetchedAiring(AiringSchedule(episodes, entry.total)))
+                val schedule = AiringSchedule(episodes, entry.total, doubtedOver(entry, entries, now))
+                results[id] = Outcome.Success(FetchedAiring(schedule))
             }
+            val part = results.filterKeys { it !in handed }
+            if (part.isEmpty()) return
+            handed += part.keys
+            whole(part)
         }
 
         // First pages of episodes; only one page of titles settles an id, and after a failed page more ids than fill one are asked again.
@@ -205,7 +229,7 @@ class AniListAiring(
             }
             sent as Sent.Answered
             if (sent.status == 403 || sent.status == 429) {
-                pace.refused(retryAfter(sent.headers))
+                pace.refused(retryAfter(sent.headers, clock))
                 return stop(DataError.Refused)
             }
             val read = if (sent.status == 200) aniListPage(sent.body, http.unexpected) else null
@@ -233,13 +257,6 @@ class AniListAiring(
         }
     }
 
-    private fun retryAfter(headers: Headers): Duration? {
-        val value = headers[RETRY_AFTER]?.trim() ?: return null
-        value.toLongOrNull()?.let { return it.seconds }
-        val at = headers.getInstant(RETRY_AFTER) ?: return null
-        return (at.epochSecond - clock.instant().epochSecond).coerceAtLeast(0).seconds
-    }
-
     private class Asked(
         val entries: Map<Int, List<AniListEntry>>,
         val unreadable: Set<Int>,
@@ -260,7 +277,6 @@ class AniListAiring(
     private companion object {
         val JsonType = "application/json".toMediaType()
         const val LIMIT = "X-RateLimit-Limit"
-        const val RETRY_AFTER = "Retry-After"
 
         // More pages than these fail the titles concerned: a thousand episodes, or more pages of titles than their ids fill.
         const val MOST_SCHEDULE_PAGES = 40
@@ -295,4 +311,35 @@ internal fun chosen(
     return entries.reduce { best, entry -> if (preference.compare(entry, best) > 0) entry else best }
 }
 
+// Another entry's highest aired number when either restarts below the other or [chosen] aired less; a one-episode entry is a special.
+internal fun doubtedOver(
+    chosen: AniListEntry,
+    entries: List<AniListEntry>,
+    now: Instant,
+): Int? {
+    fun AniListEntry.aired() = episodes.filter { it.airsAt <= now }
+    val own = chosen.aired()
+    return entries
+        .filter { it != chosen && it.total != 1 }
+        .mapNotNull { other ->
+            val theirs = other.aired()
+            // A finished entry without a schedule has aired up to its total, at times not known.
+            val untimed = other.total?.takeIf { other.episodes.isEmpty() && other.status == FINISHED }
+            if (untimed != null) return@mapNotNull untimed.takeIf { (chosen.episodes.minOfOrNull { it.number } ?: 0) < it }
+            val highest = theirs.maxOfOrNull { it.number } ?: return@mapNotNull null
+            highest.takeIf { it > (own.maxOfOrNull { it.number } ?: 0) || restarts(own, theirs) || restarts(theirs, own) }
+        }.maxOrNull()
+}
+
+// [later] begins to air after [earlier]'s last aired episode, at a number below the highest [earlier] reached.
+private fun restarts(
+    earlier: List<ScheduledEpisode>,
+    later: List<ScheduledEpisode>,
+): Boolean {
+    val first = later.minByOrNull { it.airsAt } ?: return false
+    val last = earlier.maxOfOrNull { it.airsAt } ?: return false
+    return first.airsAt > last && later.minOf { it.number } < earlier.maxOf { it.number }
+}
+
 private const val RELEASING = "RELEASING"
+private const val FINISHED = "FINISHED"

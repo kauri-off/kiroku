@@ -89,7 +89,7 @@ class ListAiring(
 
     // A12: a page's title is computed apart from the list's only where the page knows another schedule, or the list has none of it.
     private val asked: Flow<Asked> =
-        combine(unfinished, engine.observeSchedules(), watched, pageSchedules) { titles, stored, watched, pageSchedules ->
+        combine(unfinished, engine.observeStored(), watched, pageSchedules) { titles, stored, watched, pageSchedules ->
             val ofList = titles.mapValues { (id, anime) -> AiringOf(anime, stored[id]) }
             val pages = watched.keys intersect pageSchedules.keys
             val ofPages =
@@ -146,6 +146,8 @@ class ListAiring(
 
     override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = engine.observeSchedules()
 
+    override fun observeStoredSchedules(): Flow<Map<AnimeId, AiringSchedule>> = engine.observeStored()
+
     override suspend fun refreshStale(): Outcome<Unit> = engine.refreshStale().also { given() }
 
     override suspend fun refresh(): Outcome<Unit> = engine.refresh().also { given() }
@@ -153,6 +155,9 @@ class ListAiring(
     override suspend fun refreshStale(page: Anime): Outcome<Unit> = engine.refreshStale(page).also { given() }
 
     override suspend fun refresh(page: Anime): Outcome<Unit> = engine.refresh(page).also { given() }
+
+    // A notification reads the store, so this waits for no observer of the results.
+    override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = engine.refresh(titles)
 
     // A refresh returns once the observers are given the list and the data as they are after it, so a read that follows holds them.
     private suspend fun given() {

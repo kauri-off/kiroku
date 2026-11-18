@@ -23,9 +23,12 @@ data class ScheduledEpisode(
 data class AiringSchedule(
     val episodes: List<ScheduledEpisode>,
     val totalEpisodes: Int?,
+    // Non-null when the source doubts these numbers count the title, as when two entries of it each start at 1: the other's highest aired.
+    val doubtedOver: Int? = null,
 ) {
     init {
         require(totalEpisodes == null || totalEpisodes > 0)
+        require(doubtedOver == null || doubtedOver > 0)
     }
 }
 
@@ -58,6 +61,9 @@ enum class Inexact {
 
     // A5: the title still airs by MAL, and nothing has been scheduled for longer than a break lasts.
     ScheduleStopped,
+
+    // The source doubts which of the title's numberings it gave, so the count is at least the other's.
+    NumberingDoubted,
 }
 
 // What has aired of a title at an instant. Only :core builds one, and [airingAt] is the one way to from stored data.
@@ -73,10 +79,15 @@ data class Airing internal constructor(
     val changesAt: Instant? = nextEpisode?.airsAt,
     // What is known of the premiere of a title that has aired nothing; null once an episode has aired.
     val premiere: Premiere? = if (nextEpisode != null && aired == AiredCount.Exact(0)) Premiere.At(nextEpisode.airsAt) else null,
+    // The air times an exact count rests on, aired and to come, each number once and in order: all a notification tells of.
+    val airTimes: List<ScheduledEpisode> = emptyList(),
 ) {
     init {
         require(total == null || total > 0)
         require((aired is AiredCount.Exact) == (inexact == null))
+        require(airTimes.isEmpty() || aired is AiredCount.Exact)
+        require(airTimes.zipWithNext().all { (earlier, later) -> earlier.number < later.number })
+        require(total == null || airTimes.all { it.number <= total })
         if (aired is AiredCount.Known) {
             require(aired.value >= 0)
             require(total == null || aired.value <= total)

@@ -72,7 +72,8 @@ summary() {
 has() { grep -qxF -- "$2" "$F/$1"; }
 
 mkdir -p "$F" "$F2" "$W/tools" "$T/bin" "$T/sdk/emulator" "$T/sdk/platform-tools" "$T/sdk/cmdline-tools/latest/bin" \
-  "$T/sdk/build-tools/36.0.0" "$T/sdk/system-images/android-36/google_apis/x86_64" "$T/other" "$W/app" \
+  "$T/sdk/build-tools/36.0.0" "$T/sdk/system-images/android-36/google_apis/x86_64" \
+  "$T/sdk/system-images/android-30/google_apis/x86_64" "$T/other" "$W/app" \
   "$T/real/tools" "$T/tracked/tools" "$T/home" "$T/logbin" "$T/victim"
 for d in "$W" "$T/real" "$T/tracked"; do
   cp "$SRC/gw" "$SRC/emu" "$SRC/queue.sh" "$SRC/q" "$SRC/q.conf" "$d/tools/"
@@ -180,7 +181,10 @@ case "$*" in
     ;;
   kill-server) kill "$(< "$FAKE/adb.server")" 2> /dev/null ;;
   "shell getprop sys.boot_completed") [[ ${FAKE_BOOT:-} == never ]] || ! kill -0 "$(< "$FAKE/emu.pid")" || echo 1 ;;
-  "shell echo"*) echo "API 36, fake, 1080x2400" ;;
+  "shell echo"*)
+    sdk=36
+    if grep -qx kiroku-30 "$FAKE/emu.argv"; then sdk=30; fi
+    echo "API ${FAKE_SDK:-$sdk}, fake, 1080x2400" ;;
   "emu kill") [[ -n ${FAKE_EMU_NOKILL:-} ]] || kill "$(< "$FAKE/emu.pid")" ;;
   "devices") printf 'List of devices attached\n%s\tdevice\n' "$ANDROID_SERIAL" ;;
   install*) echo Success ;;
@@ -200,9 +204,10 @@ EOF
 cat > "$T/sdk/cmdline-tools/latest/bin/avdmanager" << 'EOF'
 #!/usr/bin/env bash
 [[ -z ${FAKE_AVD_FAIL:-} ]] || exit 1
-echo x >> "$FAKE/avdmanager.calls"
-mkdir -p "$ANDROID_AVD_HOME/kiroku.avd"
-echo "path=$ANDROID_AVD_HOME/kiroku.avd" > "$ANDROID_AVD_HOME/kiroku.ini"
+printf '%s\n' "$*" >> "$FAKE/avdmanager.calls"
+while (($#)) && [[ $1 != -n ]]; do shift; done
+mkdir -p "$ANDROID_AVD_HOME/$2.avd"
+echo "path=$ANDROID_AVD_HOME/$2.avd" > "$ANDROID_AVD_HOME/$2.ini"
 EOF
 
 cat > "$T/sdk/build-tools/36.0.0/aapt2" << 'EOF'
@@ -242,9 +247,11 @@ run() {
   [[ ! -e $F/job.bgpid ]] || wait "$(< "$F/job.bgpid")" 2> /dev/null
 }
 
-job() {
+job_at() {
   run env ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=1 "$W/tools/emu" _job "$@"
 }
+
+job() { job_at 36 "$@"; }
 
 # tools/gw: arguments, kinds and what reaches the queue
 run tools/gw
@@ -335,7 +342,7 @@ ok "gw refuses --client-id after the Gradle arguments" '[[ $rc == 2 && $out == *
 export ANDROID_HOME=$T/sdk
 run tools/emu run adb devices
 ok "emu run submits kind emu with the command intact" \
-  'grep -qx emu "$F/q.calls" && [[ $(tr "\n" " " < "$F/submit.argv") == "$W/tools/emu _job run adb devices " ]]'
+  'grep -qx emu "$F/q.calls" && [[ $(tr "\n" " " < "$F/submit.argv") == "$W/tools/emu _job 36 run adb devices " ]]'
 nok "emu run reports the device and the command's output" \
   '[[ $rc == 0 && $out == *"ready: API 36"* && $out == *"emulator-$port	device"* ]]'
 FAKE_RC=75 run tools/emu --wait fake-2
@@ -349,6 +356,23 @@ nok "emu smoke passes and writes screenshots" \
   '[[ $rc == 0 && $out == *"smoke passed"* && -s $W/build/emu/smoke/1-launch.png && -s $W/build/emu/smoke/2-settled.png ]]'
 nok "  removes the previous smoke output and dismisses the keyguard" \
   '[[ ! -e $W/build/emu/smoke/stale.png ]] && grep -q "wm dismiss-keyguard" "$F/adb.log"'
+run tools/emu --api 30 run adb devices
+ok "emu --api 30 run submits the image's API level with the command intact" \
+  '[[ $(tr "\n" " " < "$F/submit.argv") == "$W/tools/emu _job 30 run adb devices " ]]'
+nok "  and the job boots Android 11" '[[ $rc == 0 && $out == *"ready: API 30"* && $out == *"emulator-$port	device"* ]]'
+run tools/emu --api=30 smoke "$T/app.apk"
+ok "emu --api=30 smoke submits the image's API level" \
+  '[[ $(tr "\n" " " < "$F/submit.argv") == "$W/tools/emu _job 30 smoke $T/app.apk " ]]'
+nok "  and passes on it" '[[ $rc == 0 && $out == *"ready: API 30"* && $out == *"smoke passed"* ]]'
+for a in 29 31 37 3O "" 036; do
+  run tools/emu --api "$a" run true
+  ok "emu refuses --api '$a' and names the images it has" \
+    '[[ $rc == 2 && $out == *"--api must be one of 36 30, not"* && ! -e $F/q.calls ]]'
+done
+for c in "--api 30" "--api 30 ps" "--api 30 --wait fake-2" "--api 30 _job 30 run true" "ps --api 30"; do
+  run tools/emu $c
+  ok "emu refuses: $c" '[[ $rc == 2 && $out == usage:* && ! -e $F/q.calls ]]'
+done
 
 # internal entry points outside the queue: refused before any adb call or write
 refused() {
@@ -361,18 +385,18 @@ R=$T/real/tools/emu
 ok "_smoke called directly is refused" 'refused "$T/real" "$R" _smoke "$T/app.apk" && [[ $out == *"only inside"* ]]'
 ok "_smoke with a slot but outside an emu job is refused" \
   'refused "$T/real" env KIROKU_EMU_JOB=$$ KIROKU_Q_SLOT=0 "$R" _smoke "$T/app.apk"'
-ok "_job without a slot is refused" 'refused "$T/real" "$R" _job run true'
+ok "_job without a slot is refused" 'refused "$T/real" "$R" _job 36 run true'
 ok "_job with the queue's slot but outside a queue unit is refused" \
-  'refused "$T/real" env KIROKU_Q_SLOT=0 "$R" _job run true && [[ $out == *"only inside an emu job"* ]]'
+  'refused "$T/real" env KIROKU_Q_SLOT=0 "$R" _job 36 run true && [[ $out == *"only inside an emu job"* ]]'
 ok "_job with a slot that is a path is refused" \
-  'refused "$T/real" env KIROKU_Q_SLOT=0/../../../victim "$R" _job run true'
+  'refused "$T/real" env KIROKU_Q_SLOT=0/../../../victim "$R" _job 36 run true'
 for s in 10 01 -0 a; do
-  ok "_job with slot $s is refused" 'refused "$T/real" env KIROKU_Q_SLOT=$s "$R" _job run true'
+  ok "_job with slot $s is refused" 'refused "$T/real" env KIROKU_Q_SLOT=$s "$R" _job 36 run true'
 done
 cp "$W/tools/test-hooks" "$T/tracked/tools/"
 git -C "$T/tracked" add tools/emu
 ok "test settings are ignored where tools/ is tracked" \
-  'refused "$T/tracked" env KIROKU_Q_SLOT=0 "$T/tracked/tools/emu" _job run true'
+  'refused "$T/tracked" env KIROKU_Q_SLOT=0 "$T/tracked/tools/emu" _job 36 run true'
 
 # tools/emu job: device, isolation, exit codes
 if ((!ns)); then
@@ -415,7 +439,7 @@ nok "an adb server started by a process without the environment is stopped with 
   'all_gone adb.server && [[ ! -e $AVDR/run-$port ]]'
 nok "  and the unrestricted adb is not on the command's PATH" '[[ $rc == 0 ]]'
 run env ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=1 ADB_SERVER_SOCKET=tcp:h:5037 ANDROID_ADB_SERVER_ADDRESS=h \
-  ADB_VENDOR_KEYS=/k ANDROID_ADB_LOG_PATH=/l "$W/tools/emu" _job run sh -c 'env > "$FAKE/cmd.env"'
+  ADB_VENDOR_KEYS=/k ANDROID_ADB_LOG_PATH=/l "$W/tools/emu" _job 36 run sh -c 'env > "$FAKE/cmd.env"'
 nok "emu job clears inherited adb redirections" \
   '[[ $rc == 0 ]] && ! grep -qE "^(ADB_SERVER_SOCKET|ANDROID_ADB_SERVER_ADDRESS|ADB_VENDOR_KEYS|ANDROID_ADB_LOG_PATH)=" "$F/cmd.env"'
 job run sh -c 'exit 75'
@@ -440,6 +464,38 @@ FAKE_AVD_FAIL=1 job run true
 ok "emu job exits 69 when the AVD cannot be created" '[[ $rc == 69 && ! -e $F/emu.pid ]]'
 job run true
 nok "emu job recreates an incomplete AVD" '[[ $rc == 0 && -s $F/avdmanager.calls && -e $AVDR/avd-$port/.complete ]]'
+nok "the default image's AVD is kiroku of API 36" \
+  'grep -q -- "-n kiroku -k system-images;android-36;google_apis;x86_64 " "$F/avdmanager.calls"'
+grep -vx -- kiroku "$F/emu.argv" > "$T/argv.36"
+cp -a "$AVDR/avd-$port" "$T/avd36.before"
+rm -rf "${AVDR:?}/avd-30-$port"
+job_at 30 run sh -c 'env > "$FAKE/cmd.env"'
+nok "emu job of API 30 creates its own AVD, kiroku-30, from the API 30 image" \
+  '[[ $rc == 0 && $out == *"ready: API 30"* ]] &&
+  grep -q -- "-n kiroku-30 -k system-images;android-30;google_apis;x86_64 " "$F/avdmanager.calls" &&
+  grep -qx "path=$AVDR/avd-30-$port/kiroku-30.avd" "$AVDR/avd-30-$port/kiroku-30.ini"'
+nok "  in an AVD directory of its own in the slot, and leaves the default one as it was" \
+  'has emu.env "ANDROID_AVD_HOME=$AVDR/avd-30-$port" && has cmd.env "ANDROID_AVD_HOME=$AVDR/avd-30-$port" &&
+  diff -r "$T/avd36.before" "$AVDR/avd-$port" > /dev/null && [[ ! -e $AVDR/avd-$port/kiroku-30.ini ]]'
+nok "  and boots it with the same options as the default image, window-less, on the slot's port" \
+  'grep -qx -- kiroku-30 "$F/emu.argv" && grep -vx -- kiroku-30 "$F/emu.argv" | cmp -s - "$T/argv.36" &&
+  has emu.argv -no-window && has emu.argv "$port"'
+nok "  and stops everything after it" 'all_gone emu.pid emu.child emu.escaped adb.server && [[ ! -e $AVDR/run-$port ]]'
+job_at 30 run true
+nok "emu job of API 30 reuses its complete AVD" '[[ $rc == 0 && ! -e $F/avdmanager.calls ]]'
+job run true
+nok "  and so does the default image after it" '[[ $rc == 0 && ! -e $F/avdmanager.calls ]] && has emu.argv kiroku'
+FAKE_SDK=29 job_at 30 run true
+nok "emu job exits 69 when the booted emulator is not of the API asked" \
+  '[[ $rc == 69 && $out == *"reports API 29, not API 30"* ]] && all_gone emu.pid emu.child emu.escaped adb.server'
+job_at 29 run true
+ok "emu job refuses an API level it has no image for" '[[ $rc == 2 && $out == *"--api must be one of"* && ! -e $F/emu.pid ]]'
+mv "$T/sdk/system-images/android-30" "$T/images30"
+rm -rf "$AVDR/avd-30-$port"
+job_at 30 run true
+ok "emu job of API 30 exits 69 without its image and names the one to install" \
+  '[[ $rc == 69 && $out == *"sdkmanager \"system-images;android-30;google_apis;x86_64\""* && ! -e $F/emu.pid ]]'
+mv "$T/images30" "$T/sdk/system-images/android-30"
 mv "$AVDR/avd-$port" "$T/avd-saved"
 ln -s "$T/victim" "$AVDR/avd-$port"
 job run true
@@ -528,7 +584,7 @@ nok "a task that is not connected is not checked for device tests" '[[ $rc == 0 
 nok "gw in an emu job builds without the client id too" 'has gradle.args -Pkiroku.malClientId='
 rm -rf "$W/data"
 (
-  env FAKE="$F2" ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=0 "$W/tools/emu" _job run sh -c 'env -i FAKE="$FAKE" \
+  env FAKE="$F2" ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=0 "$W/tools/emu" _job 36 run sh -c 'env -i FAKE="$FAKE" \
     "$ANDROID_HOME/platform-tools/adb" shell echo side; : > "$FAKE/side.ready"
     for _ in $(seq 1 200); do [[ -e $FAKE/side.go ]] && break; sleep 0.1; done' > "$T/side.out" 2>&1
   echo $? > "$T/side.rc"
@@ -547,7 +603,7 @@ nok "two jobs side by side: a command without the environment reaches its own jo
 mkdir -p "$T/nons"
 printf '#!/bin/sh\nexit 1\n' > "$T/nons/unshare"
 chmod +x "$T/nons/unshare"
-run env ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=1 PATH="$T/nons:$PATH" "$W/tools/emu" _job run true
+run env ANDROID_HOME="$T/sdk" KIROKU_Q_SLOT=1 PATH="$T/nons:$PATH" "$W/tools/emu" _job 36 run true
 ok "emu job exits 69 before booting when the command cannot be given this run's adb" \
   '[[ $rc == 69 && $out == *"cannot be given this run'"'"'s adb"* && ! -e $F/emu.pid && ! -e $F/adb.log && ! -e $AVDR/run-$port ]]'
 job run tools/emu run true
@@ -556,7 +612,7 @@ nok "emu cannot start another emulator inside an emu job" '[[ $rc == 1 && $out =
 # tools/emu job: stopped by a signal
 term_job() {
   rm -rf "${F:?}"/*
-  env KIROKU_Q_SLOT=1 "$W/tools/emu" _job run "$@" > "$T/term.out" 2>&1 &
+  env KIROKU_Q_SLOT=1 "$W/tools/emu" _job 36 run "$@" > "$T/term.out" 2>&1 &
   local pid=$! t0
   for _ in {1..100}; do grep -qs -- "$wait_for" "$F/adb.log" "$T/term.out" && break; sleep 0.1; done
   t0=$SECONDS
@@ -580,6 +636,24 @@ FAKE_EMU_NOKILL=1 wait_for=":: emu kill" term_job true
 nok "emu job on TERM during its shutdown finishes it quickly" \
   '[[ $took -le 6 ]] && all_gone emu.pid emu.child emu.escaped adb.server && [[ ! -e $AVDR/run-$port ]]'
 
+# tools/emu ps: an emulator of either image under Kiroku's tree, nothing else
+ps_fake() {
+  env ANDROID_AVD_HOME="$1" FAKE="$F" bash -c 'sleep 60; :' emulator -avd "$2" -port 1 &
+  echo $! > "$T/bg.ps$3"
+}
+ps_fake "$AVDR/avd-$port" kiroku 1
+ps_fake "$AVDR/avd-30-$((port + 4))" kiroku-30 2
+ps_fake "$T/other" kiroku 3
+ps_fake "$AVDR/avd-$port" kiroku-x 4
+ps_fake "$AVDR/avd-$port" Medium_Phone 5
+sleep 0.3
+run tools/emu ps
+ok "emu ps lists the emulators of both images in Kiroku's tree and no other" \
+  '[[ $rc == 0 && $(wc -l <<< "$out") == 2 ]] && grep -q "^$(< "$T/bg.ps1") .* -avd kiroku " <<< "$out" &&
+  grep -q "^$(< "$T/bg.ps2") .* -avd kiroku-30 " <<< "$out"'
+kill $(cat "$T"/bg.ps*) 2> /dev/null
+rm "$T"/bg.ps*
+
 # tools/emu smoke outcomes
 smoke() { job smoke "$T/app.apk"; }
 smoke
@@ -590,12 +664,22 @@ for c in crash anr dead behind nostart noactivity; do
 done
 
 # the build: a hung unit-test task fails by itself
-ok "every module's unit-test tasks have a time limit of 10 minutes" \
+ok "every module's unit-test tasks have a time limit of 10 minutes, and the app's render one of its own of 30" \
   'python3 -I - "$SRC/../build.gradle.kts" "$SRC"/../*/build.gradle.kts << "PY"
-import re, sys
-root, *modules = (open(p).read() for p in sys.argv[1:])
+import os, re, sys
+root = open(sys.argv[1]).read()
+modules = {os.path.basename(os.path.dirname(p)): open(p).read() for p in sys.argv[2:]}
 block = re.search(r"subprojects \{.*?tasks\.withType<Test>\(\)\.configureEach \{(.*?)\n    \}", root, re.S)
-sys.exit(not block or "timeout = Duration.ofMinutes(10)" not in block.group(1) or any("timeout" in m for m in modules))
+app = re.search(r"\ntasks\.withType<Test>\(\)\.matching \{ it\.name == \"testDebugUnitTest\" \}\.configureEach \{(.*?)\n\}", modules.get("app", ""), re.S)
+limits = [line.strip() for line in app.group(1).splitlines() if "timeout" in line or "testLimit" in line] if app else []
+own = ["val testLimit = timeout.get()", "timeout.set(recorded.map { if (it) Duration.ofMinutes(30) else testLimit })"]
+sys.exit(
+    not block
+    or "timeout = Duration.ofMinutes(10)" not in block.group(1)
+    or limits != own
+    or any("timeout" in text for name, text in modules.items() if name != "app")
+    or modules["app"].count("timeout") != 2
+)
 PY'
 
 # tools/q itself: every job below is a real unit of the systemd user manager that runs a fake command
@@ -1046,6 +1130,30 @@ out=$(vget "/history?h=1")
 ok "  and shows it as lost, as an alarm, once the queue has dropped it" \
   '[[ $out == *"class=\"badge bad\"><i>!</i>lost: its unit died"* && $(vget /live) != *"unit gone"* ]]'
 kill "$(< "$T/bg.view")"
+"$W/tools/q" view --port 0 --host 127.0.0.2 > "$T/view.out" 2>&1 &
+echo $! > "$T/bg.view"
+for _ in {1..50}; do grep -qs '^http://127\.0\.0\.2:[0-9]*/ ' "$T/view.out" && break; sleep 0.1; done
+view=$(cut -d/ -f1-3 "$T/view.out")
+out=$(python3 -I - "$view" << 'PY'
+import sys, urllib.error, urllib.request
+url = sys.argv[1]
+port = url.rsplit(":", 1)[1]
+
+
+def code(address, host=None):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(address + "/live", headers={"Host": host} if host else {}), timeout=20) as x: return x.status
+    except urllib.error.HTTPError as x: return x.code
+    except OSError: return 0
+
+
+print(code(url), code(url, f"127.0.0.1:{port}"), code(f"http://127.0.0.1:{port}"))
+PY
+)
+ok "the view listens at the address --host names, and nowhere else" '[[ $out == "200 403 0" ]]'
+kill "$(< "$T/bg.view")"
+out=$("$W/tools/q" view --host example.com 2>&1)
+ok "  and takes nothing but an IPv4 address for it" '[[ $? == 2 && $out == *"--host ADDR"* ]]'
 
 out=$(q stats)
 ok "q stats reports waits, runs and memory peaks per kind, and what jobs waited for" \

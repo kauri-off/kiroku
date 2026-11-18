@@ -10,11 +10,10 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.data.list.MalRemoteList
 import io.github.kauri_off.kiroku.data.session.MalSession
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
 import java.time.Instant
 
 // The list of a live source: the engine over MAL's list and the source's store, whose owner's sorts go with it (S9).
@@ -26,7 +25,7 @@ internal fun liveList(
 ): ListRepository =
     ListEngine(
         MalRemoteList(parts.http, session),
-        StoreOnFirstUse({ store(parts) }, forgetSorts),
+        StoreOnFirstUse({ store(parts) }, parts.scope, forgetSorts),
         session.observeSession(),
         parts.clock,
         parts.scope,
@@ -36,11 +35,12 @@ internal fun liveList(
 // The store is built at the engine's first call of it, which comes after the session is known, and off the main thread.
 private class StoreOnFirstUse(
     build: () -> LocalList,
+    private val scope: CoroutineScope,
     private val forgetSorts: suspend () -> Unit,
 ) : LocalList {
     private val built = lazy(build)
 
-    private suspend fun store(): LocalList = if (built.isInitialized()) built.value else withContext(Dispatchers.IO) { built.value }
+    private suspend fun store(): LocalList = built.onFirstUse(scope)
 
     override fun observeEntries(): Flow<List<ListEntry>> = flow { emitAll(store().observeEntries()) }
 

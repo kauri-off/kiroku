@@ -6,9 +6,10 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -16,6 +17,7 @@ import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.signin.FakeSignInGraph
@@ -48,7 +50,7 @@ open class LinkGraphApplication :
 class StartedByLinkApplication : LinkGraphApplication() {
     override fun onCreate() {
         super.onCreate()
-        links.opened(FixtureAnime.exactToWatch.id)
+        links.opened(Link.Title(FixtureAnime.exactToWatch.id))
     }
 }
 
@@ -72,7 +74,7 @@ class LinkRouteTest {
     }
 
     private fun link(anime: Anime) {
-        app.links.opened(anime.id)
+        app.links.opened(Link.Title(anime.id))
         compose.waitForIdle()
     }
 
@@ -93,7 +95,7 @@ class LinkRouteTest {
 
     // The title page of [anime] is on top: its header is shown, and only the page has the stepper's label.
     private fun onPageOf(anime: Anime) {
-        compose.onAllNodesWithText(anime.titles.romaji).fetchSemanticsNodes().let { assertEquals(1, it.size) }
+        compose.onAllNodes(isHeading() and hasText(anime.titles.romaji)).fetchSemanticsNodes().let { assertEquals(1, it.size) }
         hides("My list")
     }
 
@@ -110,7 +112,7 @@ class LinkRouteTest {
         shows("My list")
         link(kagerou)
         onPageOf(kagerou)
-        shows("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
         assertTheListIsBeneath()
     }
 
@@ -194,7 +196,7 @@ class LinkRouteTest {
         shows("My list")
         recreate()
         shows("My list")
-        hides("Episodes watched")
+        compose.onNodeWithContentDescription("Episodes watched").assertDoesNotExist()
     }
 
     @Test

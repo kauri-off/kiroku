@@ -10,9 +10,12 @@
     <string name="title_mal_score">MAL score</string>
     <string name="title_no_score_value" translatable="false">—</string>
     <string name="title_no_score">No score</string>
-    <string name="title_ranked">Ranked #%1$s</string>
+    <string name="title_rank">Rank</string>
+    <string name="title_rank_value">#%1$s</string>
+    <string name="title_members">Members</string>
     <string name="title_add_to_list">Add to list</string>
     <string name="title_rate">Rate</string>
+    <string name="title_your_score_spoken">Your score:\u00A0%1$d</string>
     <string name="title_aired">%d\u00A0aired</string>
     <string name="title_aired_estimated">~%d\u00A0aired</string>
     <string name="title_to_watch">%d\u00A0to\u00A0watch</string>
@@ -21,22 +24,24 @@
     <string name="title_synopsis">Synopsis</string>
     <string name="title_synopsis_more">More</string>
     <string name="title_synopsis_less">Less</string>
-    <string name="title_your_score_label">Your score</string>
     <string name="title_watch_order">Watch order</string>
     <string name="title_this_title">This title</string>
-    <plurals name="title_this_title_spoken">
-        <item quantity="one">This title, %1$d\u00A0of\u00A0%2$d\u00A0title</item>
-        <item quantity="other">This title, %1$d\u00A0of\u00A0%2$d\u00A0titles</item>
+    <string name="title_place_facts">%1$d\u00A0· %2$s</string>
+    <plurals name="title_place_spoken">
+        <item quantity="one">%1$d\u00A0of\u00A0%2$d\u00A0title</item>
+        <item quantity="other">%1$d\u00A0of\u00A0%2$d\u00A0titles</item>
     </plurals>
     <string name="title_loading_watch_order">Loading the watch order</string>
     <string name="title_related">Related</string>
     <string name="title_statistics">Statistics</string>
-    <plurals name="title_members">
-        <item quantity="one">%s\u00A0member</item>
-        <item quantity="other">%s\u00A0members</item>
-    </plurals>
+    <string name="title_scores">MAL scores</string>
+    <string name="title_scores_row">Votes for each score</string>
     <string name="title_details">Details</string>
     <string name="title_recommendations">Recommendations</string>
+    <plurals name="title_titles">
+        <item quantity="one">%d\u00A0title</item>
+        <item quantity="other">%d\u00A0titles</item>
+    </plurals>
     <string name="title_loading_details">Loading details</string>
     <string name="title_not_found">This title is not on MyAnimeList</string>
     <string name="title_could_not_load">Could not load this title</string>

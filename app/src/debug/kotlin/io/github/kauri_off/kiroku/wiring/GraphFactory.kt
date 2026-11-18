@@ -6,11 +6,15 @@ import android.util.Log
 import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notificationlog.RunLog
+import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.reports.ReportLog
 import io.github.kauri_off.kiroku.reports.reportLog
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
@@ -20,6 +24,12 @@ import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
+import kotlin.time.toKotlinDuration
 
 private val UNEXPECTED = notShown("An exception the app did not expect")
 
@@ -48,19 +58,60 @@ internal val requestLog: ((String) -> Unit)? = { Log.d(LOG_TAG, it) }
 internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
     when (SourceChoice(context).startsOn(clientId)) {
         DataSource.Account -> null
-        DataSource.Demo -> DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context)), scope)
+        DataSource.Demo -> {
+            // Neither is asked for anything before the graph is there: the engine starts no run of its own.
+            lateinit var graph: DemoGraph
+            val alarm = DemoAlarm(scope) { graph.demo }
+            val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
+            // Gone with its process, as the demo is.
+            val runs = RunLog(null)
+            DemoGraph(
+                Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown, runs::keep),
+                scope,
+                runs,
+                shown,
+            ).also {
+                graph = it
+            }
+        }
         DataSource.Sandbox ->
-            SandboxGraph.create(context, clock) { source, device ->
-                LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reportUnexpected, requestLog, device)
+            SandboxGraph.create(context, clock) { source, device, sandboxClock ->
+                LiveParts(context, source, SandboxMal.CLIENT_ID, sandboxClock, scope, reportUnexpected, requestLog, device)
             }
     }
 }
 
 internal val standInPosters: Interceptor? = StandInPosters
 
+// The demo is gone with its process, so its alarm is a wait in that process, by the demo's own time, and not the system's.
+internal class DemoAlarm(
+    private val scope: CoroutineScope,
+    private val demo: () -> Demo,
+) : NotificationAlarm {
+    private var waiting: Job? = null
+
+    override suspend fun set(at: Instant?) {
+        synchronized(this) {
+            waiting?.cancel()
+            waiting =
+                at?.let {
+                    scope.launch {
+                        delay(Duration.between(demo().clock.instant(), it).toKotlinDuration())
+                        // Apart from the wait, which the run's own next alarm ends.
+                        scope.launch { demo().notifications.run(RunTrigger.Alarm) }
+                    }
+                }
+        }
+    }
+}
+
 class DemoGraph(
     val demo: Demo,
     scope: CoroutineScope,
+    // What the demo's notification engine did in this process.
+    val runLog: RunLog = RunLog(null),
+    // The demo's notifications on the device, which none has outside a process that shows them.
+    shown: EpisodeNotifications? = null,
 ) : AppGraph,
     ScenariosOwner {
     override val scenarios = Scenarios(demo, scope)
@@ -70,9 +121,12 @@ class DemoGraph(
     override val list = demo.list
     override val anime = demo.anime
     override val airing = demo.airing
+    override val scores = demo.scores
     override val search = demo.search
     override val user = demo.user
     override val connection = demo.connection
     override val preferences = demo.preferences
+    override val notifications get() = demo.notifications
+    override val withoutScreen = WorkAtOnce({ list }, { airing }, { demo.notifications }, { session }, shown)
     override val madeUp = true
 }

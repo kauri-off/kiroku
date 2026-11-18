@@ -225,6 +225,19 @@ class SandboxMalTest {
     ) = assertTrue(sandbox.list.write(id, form) is Written.Done)
 
     @Test
+    fun `the profile counts each status, the whole list and the mean of the scores given, from the list`() {
+        put(FINISHED, mapOf("status" to "completed", "score" to "8"))
+        put(NO_TOTAL, mapOf("status" to "completed"))
+        put(ANOTHER, mapOf("status" to "plan_to_watch"))
+        val statistics =
+            parse(sandbox.ask("GET", "users/@me?fields=${MalFields.PROFILE}").second).jsonObject["anime_statistics"]!!.jsonObject
+        val counts = ListStatusCodes.associateWith { statistics["num_items_$it"]!!.jsonPrimitive.content }
+        assertEquals(mapOf("watching" to "0", "completed" to "2", "on_hold" to "0", "dropped" to "0", "plan_to_watch" to "1"), counts)
+        assertEquals("3", statistics["num_items"]!!.jsonPrimitive.content)
+        assertEquals(8.0, statistics["mean_score"]!!.jsonPrimitive.content.toDouble(), 0.0)
+    }
+
+    @Test
     fun `a sign-in's code is granted the tokens of MAL's printed answer once, for its own verifier`() {
         val address =
             "${SandboxMal.Hosts.signIn}authorize?response_type=code&client_id=${SandboxMal.CLIENT_ID}&state=s1" +
@@ -371,6 +384,7 @@ class SandboxMalTest {
         const val TOKEN = "POST sandbox.invalid/v1/oauth2/token"
         const val TOTAL = 26
         const val NO_TOTAL = 21L
+        const val ANOTHER = 5L
         val day = PartialDate.Day(LocalDate.of(2001, 1, 1))
     }
 }

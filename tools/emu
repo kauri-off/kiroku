@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
-USAGE="usage: tools/emu run CMD [ARGS...]   boot Kiroku's emulator as a queue job, run CMD against it, shut it down
-       tools/emu smoke APK           install and launch APK; screenshots and logcat in build/emu/smoke/
-       tools/emu --wait ID           wait again for a job that is not finished
-       tools/emu ps                  list running Kiroku emulators (no job)
+USAGE="usage: tools/emu [--api N] run CMD [ARGS...] boot Kiroku's emulator as a queue job, run CMD against it, stop it
+       tools/emu [--api N] smoke APK         install and launch APK; screenshots and logcat in build/emu/smoke/
+       tools/emu --wait ID                   wait again for a job that is not finished
+       tools/emu ps                          list running Kiroku emulators (no job)
+--api picks the emulator's Android version: 36 (the default) or 30 (Android 11).
 CMD runs in the worktree with adb on PATH; adb reaches this job's emulator and nothing else.
 Waits up to 100 s, then prints the job's last 60 lines, the path of its full log and its memory peak.
 Exit: CMD's code (1 = failed); 69 no emulator could be started, 75 not finished, 76 stalled, 125 job stopped,
 2 refused (nothing ran)."
 . "$(dirname "$0")/queue.sh"
 
-IMAGE='system-images;android-36;google_apis;x86_64'
-AVD=kiroku
+# One system image per API level; each has its own AVD name and its own AVD directory in every slot.
+declare -A IMAGES=([36]='system-images;android-36;google_apis;x86_64'
+  [30]='system-images;android-30;google_apis;x86_64')
+DEFAULT_API=36
+API=$DEFAULT_API
 PORT_BASE=${HOOK[port_base]:-5640}
 K=${HOOK[avd_root]:-$(realpath -m -- "$HOME/.android")/kiroku}
 SLOT=
@@ -27,7 +31,7 @@ kiroku_emulators() {
   for p in /proc/[0-9]*; do
     argv=$({ tr '\0' ' ' < "$p/cmdline"; } 2> /dev/null) || continue
     [[ $argv == *emulator* || $argv == *qemu-system* ]] || continue
-    [[ " $argv " == *" -avd $AVD "* ]] || continue
+    [[ " $argv " =~ \ -avd\ kiroku(-[0-9]+)?\  ]] || continue
     { mapfile -d '' -t e < "$p/environ"; } 2> /dev/null || continue
     if [[ " ${e[*]} " == *" ANDROID_AVD_HOME=$K/"* ]]; then echo "${p#/proc/} $argv"; fi
   done
@@ -147,11 +151,19 @@ own_adb() {
     2> /dev/null) == "$(id -u)" ]]
 }
 
+# The default image keeps the names it always had; another one gets its API level in both.
+pick_image() {
+  [[ $1 =~ ^[0-9]+$ && -n ${IMAGES[$1]:-} ]] ||
+    die "--api must be one of $(printf '%s\n' "${!IMAGES[@]}" | sort -rn | paste -sd' '), not '$1'"
+  API=$1 IMAGE=${IMAGES[$1]} AVD=kiroku AVD_DIR=avd
+  if ((API != DEFAULT_API)); then AVD=kiroku-$API AVD_DIR=avd-$API; fi
+}
+
 ensure_avd() {
-  local home=$K/avd-$PORT
+  local home=$K/$AVD_DIR-$PORT
   if [[ -L $home || ! -f $home/.complete ]]; then
     [[ -d $ANDROID_HOME/${IMAGE//;//} ]] || { echo "system image missing: run sdkmanager \"$IMAGE\"" >&2; return 1; }
-    rm_in "$K" "avd-$PORT" || return 1
+    rm_in "$K" "$AVD_DIR-$PORT" || return 1
     mkdir -p "$home"
     echo no | ANDROID_AVD_HOME=$home "$ANDROID_HOME"/cmdline-tools/latest/bin/avdmanager -s \
       create avd -n "$AVD" -k "$IMAGE" -d pixel_7 > /dev/null || return 1
@@ -182,7 +194,7 @@ boot() {
     -read-only -no-snapshot -no-window -no-audio -no-boot-anim -no-metrics -gpu swiftshader_indirect \
     > "$log" 2>&1 < /dev/null &
   emu_pid=$!
-  echo "emulator $ANDROID_SERIAL booting (slot $SLOT, AVD $AVD, pid $emu_pid, log ${log#"$ROOT"/})"
+  echo "emulator $ANDROID_SERIAL booting (slot $SLOT, AVD $AVD of $IMAGE, pid $emu_pid, log ${log#"$ROOT"/})"
   until boot_completed; do
     if ! alive "$emu_pid"; then
       tail -20 "$log" >&2
@@ -195,6 +207,7 @@ boot() {
     settings put global animator_duration_scale 0' > /dev/null || nodevice "the emulator does not answer adb"
   info=$(adb shell 'echo "API $(getprop ro.build.version.sdk), $(getprop ro.product.model), $(wm size)"' |
     tr -d '\r' | sed 's/Physical size: //') || nodevice "the emulator does not answer adb"
+  [[ $info == "API $API,"* ]] || nodevice "the emulator of $IMAGE reports ${info%%,*}, not API $API"
   echo "emulator $ANDROID_SERIAL ready: $info"
 }
 
@@ -278,6 +291,8 @@ job() {
   ! in_emu_job || die "tools/emu cannot start an emulator inside an emu job"
   slot_env
   in_queue_unit || die "_job runs only inside an emu job of the queue: use tools/emu run or tools/emu smoke"
+  pick_image "${1:-}"
+  shift
   [[ ${1:-} == run && $# -ge 2 || ${1:-} == smoke && $# == 2 ]] || usage
   own_tree || die "$K must be a directory that is not a symlink"
   export KIROKU_RUN=kiroku-$SLOT-$$-$SRANDOM KIROKU_EMU_JOB=$$ ADB_REJECT_KILL_SERVER=1
@@ -299,16 +314,22 @@ job() {
   return "$rc"
 }
 
+api=$DEFAULT_API
 case ${1:-} in
-  run | smoke) ! in_emu_job || die "tools/emu cannot start an emulator inside an emu job" ;;&
-  run) [[ $# -ge 2 ]] || usage; qsubmit emu emu "$SELF/tools/emu" _job "$@" ;;
+  --api) [[ $# -ge 2 ]] || usage; api=$2; shift 2; [[ ${1:-} == run || ${1:-} == smoke ]] || usage ;;
+  --api=*) api=${1#--api=}; shift; [[ ${1:-} == run || ${1:-} == smoke ]] || usage ;;
+esac
+case ${1:-} in
+  run | smoke) ! in_emu_job || die "tools/emu cannot start an emulator inside an emu job"; pick_image "$api" ;;&
+  run) [[ $# -ge 2 ]] || usage; qsubmit emu emu "$SELF/tools/emu" _job "$API" "$@" ;;
   smoke)
     [[ $# == 2 ]] || usage
     [[ -f $2 ]] || die "no file $2 (build the APK first: tools/gw assembleDebug)"
-    qsubmit emu emu "$SELF/tools/emu" _job smoke "$(realpath "$2")"
+    qsubmit emu emu "$SELF/tools/emu" _job "$API" smoke "$(realpath "$2")"
     ;;
   --wait) [[ $# == 2 ]] || usage; qwait emu "$2" ;;
   ps)
+    [[ $# == 1 ]] || usage
     list=$(kiroku_emulators)
     if [[ -n $list ]]; then echo "$list"; else echo "no Kiroku emulator running"; fi
     ;;

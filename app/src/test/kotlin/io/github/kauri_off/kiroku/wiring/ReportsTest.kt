@@ -59,7 +59,7 @@ class ReportsTest {
         val account =
             "live: () -> AppGraph = " +
                 "{ LiveGraph(LiveParts(context, LiveSource.Account, clientId, clock, scope, reportUnexpected, requestLog)) },"
-        val sandbox = "LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reportUnexpected, requestLog, device)"
+        val sandbox = "LiveParts(context, source, SandboxMal.CLIENT_ID, sandboxClock, scope, reportUnexpected, requestLog, device)"
         assertEquals(listOf(account, sandbox).sorted(), made.sorted())
     }
 

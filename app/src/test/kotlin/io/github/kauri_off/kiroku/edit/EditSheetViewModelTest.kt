@@ -240,6 +240,49 @@ class EditSheetViewModelTest {
             assertEquals(9, s.values(anime)?.score)
         }
 
+    private fun markedThirteenth(): suspend (TestGraph) -> Unit =
+        {
+            assertEquals(Outcome.Success(Unit), it.list.send(ListWrite.MarkWatched(anime, 13)))
+        }
+
+    // Section 7.3: "Mark watched" from a notification while the sheet is open stays when the sheet leaves the count alone.
+    @Test
+    fun `a sheet opened before a send and saved after it with the score alone leaves the send's episode`() =
+        test(before = markedThirteenth()) { s ->
+            assertEquals(13, s.sheet.draft.watchedEpisodes)
+            assertEquals(Outcome.Success(Unit), s.graph.list.send(ListWrite.MarkWatched(anime, 14)))
+
+            s.editor.onEvent(EditSheetEvent.ScoreChanged(9))
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            val server =
+                s.graph.demo.server
+                    .entry(anime.id)
+                    ?.values
+            assertEquals(14, server?.watchedEpisodes)
+            assertEquals(9, server?.score)
+            assertEquals(server, s.values(anime))
+        }
+
+    // W1: a count the sheet changed is the one shown last.
+    @Test
+    fun `a sheet opened before a send and saved after it with the count changed leaves the sheet's count`() =
+        test(before = markedThirteenth()) { s ->
+            assertEquals(Outcome.Success(Unit), s.graph.list.send(ListWrite.MarkWatched(anime, 14)))
+
+            s.editor.onEvent(EditSheetEvent.WatchedChanged(15))
+            s.editor.onEvent(EditSheetEvent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(
+                15,
+                s.graph.demo.server
+                    .entry(anime.id)
+                    ?.values
+                    ?.watchedEpisodes,
+            )
+            assertEquals(15, s.values(anime)?.watchedEpisodes)
+        }
+
     @Test
     fun `Save is written although the sheet's screen is closed before the write is applied`() =
         test(slowWrites = true) { s ->

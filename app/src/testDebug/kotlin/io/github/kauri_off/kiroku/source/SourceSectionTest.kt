@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
+import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.LiveGraph
@@ -58,6 +59,9 @@ class QuietAccountApplication :
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class SourceSectionTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val compose = composeRule()
 
     @get:Rule
@@ -77,6 +81,18 @@ class SourceSectionTest {
 
         assertEquals(1, restarts.size)
         assertEquals(DataSource.Demo, SourceChoice(context).chosen())
+    }
+
+    @Test
+    fun `the section names the other users the demo and the sandbox answer for, by the names each answers to`() {
+        compose.setContent { Column { SourceSection(SourceState(DataSource.Account, DataSource.Account), onEvent = {}) } }
+        compose
+            .onNodeWithText(
+                "Other users of the demo: sample_viewer, whose list is public, and quiet_viewer, whose list is private",
+            ).assertExists()
+        compose
+            .onNodeWithText("Other users of the sandbox: Sandbox_Public, whose list is public, and Sandbox_Private, whose list is private")
+            .assertExists()
     }
 
     @Test

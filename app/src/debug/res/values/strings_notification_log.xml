@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_log_title">Notifications</string>
+    <string name="notification_log_detail">Each run of the notification engine, newest first, kept across restarts. A delay is from the notification time to the post, both by the device\'s clock</string>
+    <string name="notification_log_none">No run yet. Runs are kept across restarts</string>
+    <string name="notification_log_earlier">Show earlier runs</string>
+    <string name="notification_log_plant_detail">Plants the next episode of %1$s at AniList, kept in the sandbox\'s files until a reset</string>
+    <string name="notification_log_minutes">Minutes from now</string>
+    <string name="notification_log_plant">Plant an episode</string>
+    <string name="notification_log_postpone">Postpone at AniList</string>
+    <string name="notification_log_planted">Episode\u00A0%1$d\u00A0airs %2$s</string>
+    <string name="notification_log_planted_postponed">Episode\u00A0%1$d\u00A0airs %2$s at AniList, planted for %3$s</string>
+    <string name="notification_log_none_left">No episode of it is left to air: reset the sandbox</string>
+    <string name="notification_log_aired">The planted episode has aired: nothing to postpone</string>
+    <string name="notification_log_when">%1$s · took\u00A0%2$s</string>
+    <string name="notification_log_trigger_alarm">Alarm</string>
+    <string name="notification_log_trigger_restarted">Device restarted</string>
+    <string name="notification_log_trigger_updated">App updated</string>
+    <string name="notification_log_trigger_access">Exact alarms allowed</string>
+    <string name="notification_log_trigger_opened">App opened</string>
+    <string name="notification_log_trigger_periodic">Periodic work</string>
+    <string name="notification_log_trigger_marked">Marked watched</string>
+    <string name="notification_log_trigger_changed">List, airing data or settings changed</string>
+    <string name="notification_log_posted">Sent: %1$s, episode\u00A0%2$d, %3$s</string>
+    <string name="notification_log_posted_hidden">Sent: %1$s, episode\u00A0%2$d, %3$s; the device did not show it</string>
+    <string name="notification_log_late">%1$s after its notification time</string>
+    <string name="notification_log_early">%1$s before its notification time</string>
+    <string name="notification_log_between">", "</string>
+    <string name="notification_log_title_id">title\u00A0%1$d</string>
+    <string name="notification_log_withdrawn">Withdrawn: %1$s</string>
+    <string name="notification_log_recheck_answered">Re-check: AniList answered</string>
+    <string name="notification_log_recheck_failed">Re-check: AniList failed, stored data used</string>
+    <string name="notification_log_recheck_late">Re-check: AniList answered too late, stored data used</string>
+    <string name="notification_log_recheck_offline">Re-check: no connection, stored data used</string>
+    <string name="notification_log_signed_out">Nobody is signed in: everything was forgotten</string>
+    <string name="notification_log_failed">The run failed</string>
+    <string name="notification_log_not_built">The notification engine could not be built: nothing was done</string>
+    <plurals name="notification_log_withdrawn_count">
+        <item quantity="one">Withdrawn:\u00A0%d\u00A0title</item>
+        <item quantity="other">Withdrawn:\u00A0%d\u00A0titles</item>
+    </plurals>
+    <string name="notification_log_alarm">Next alarm %1$s</string>
+    <string name="notification_log_no_alarm">No alarm set</string>
+    <string name="notification_log_alarm_failed">The alarm could not be set</string>
+    <string name="notification_log_seconds">%1$s\u00A0s</string>
+    <string name="notification_log_minutes_seconds">%1$d\u00A0min\u00A0%2$d\u00A0s</string>
+    <string name="notification_log_hours_minutes">%1$d\u00A0h\u00A0%2$d\u00A0min</string>
+</resources>

@@ -18,6 +18,8 @@ import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.score.ScoreDistribution
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
@@ -34,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -228,4 +231,48 @@ class DetailsViewModel(
             else -> DetailsState.Loading(title.session)
         }
     }
+}
+
+// One title's score distribution: asked once the screen is first shown, again only by a Retry after a failure.
+class ScoresViewModel(
+    private val id: AnimeId,
+    private val scores: ScoreDistributionRepository,
+    session: SessionRepository,
+) : ViewModel() {
+    // Null while it is asked.
+    private val answer = MutableStateFlow<Outcome<ScoreDistribution?>?>(null)
+    private var asked = false
+    private var asking: Job? = null
+
+    val state: StateFlow<ScoresState> =
+        combine(
+            answer.onStart {
+                if (!asked) {
+                    asked = true
+                    ask()
+                }
+            },
+            session.observeSession().onStart<Session?> { emit(null) },
+        ) { answer, session -> build(answer, session) }
+            .stateIn(viewModelScope, WhileShown, ScoresState.Loading(null))
+
+    fun onEvent(event: ScoresEvent) {
+        if (event == ScoresEvent.Retry && answer.value is Outcome.Failure) ask()
+    }
+
+    private fun ask() {
+        if (asking?.isActive == true) return
+        answer.value = null
+        asking = viewModelScope.launch { answer.value = scores.distribution(id) }
+    }
+
+    private fun build(
+        answer: Outcome<ScoreDistribution?>?,
+        session: Session?,
+    ): ScoresState =
+        when (answer) {
+            null -> ScoresState.Loading(session)
+            is Outcome.Failure -> ScoresState.Failed(answer.error, session)
+            is Outcome.Success -> answer.value?.let { ScoresState.Shown(it, session) } ?: ScoresState.NotKnown(session)
+        }
 }

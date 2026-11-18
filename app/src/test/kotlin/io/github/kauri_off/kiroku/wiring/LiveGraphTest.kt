@@ -1,5 +1,8 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.content.ContextWrapper
+import android.database.DatabaseUtils
+import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -18,6 +21,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.core.user.UserListState
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
@@ -40,6 +44,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import okhttp3.Interceptor
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -54,6 +63,7 @@ import org.robolectric.RuntimeEnvironment
 import java.io.File
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 // Nothing of the network or of the list's store is built before its first use, and each source has its own files.
@@ -114,6 +124,103 @@ class LiveGraphTest {
             assertEquals(emptyList<ListEntry>(), list.observeEntries().first())
             assertEquals(1, stores.get())
             assertEquals(0, device.clientBuilds.get())
+            assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    // Section 2.1: started signed out, names and the own profile ask for no HTTP client; another user's list does, with no token.
+    @Test
+    fun `reading the session or the list builds nothing of profiles, and signed out no HTTP client is built before a list is read`() =
+        runTest {
+            val sent = CopyOnWriteArrayList<Request>()
+            val notFound =
+                Interceptor { chain ->
+                    sent += chain.request()
+                    Response
+                        .Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(404)
+                        .message("")
+                        .body("".toResponseBody())
+                        .build()
+                }
+            val source = LiveSource("profiles", MalHosts("http://127.0.0.1:1/v2/", "http://127.0.0.1:1/v1/oauth2/"), notFound)
+            val built = CopyOnWriteArrayList<Thread>()
+            val graph =
+                LiveGraph(parts(backgroundScope, source), listStore = { store() }, ownProfile = { p, session ->
+                    built += Thread.currentThread()
+                    ownProfileOf(p, session)
+                })
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
+
+            assertSame(Looper.getMainLooper().thread, Thread.currentThread())
+            assertTrue(graph.user.sameUser("Someone", "someone"))
+            assertEquals(emptyList<Thread>(), built)
+            assertFalse(context.getDatabasePath("profiles.db").exists())
+            assertNull(graph.user.observeOwnProfile().first())
+            assertNotSame(Looper.getMainLooper().thread, built.single())
+            assertEquals(0, device.clientBuilds.get())
+
+            assertEquals(UserListState.None(DataError.NotFound), graph.user.observeList("Someone").first { it is UserListState.None })
+            assertTrue(device.clientBuilds.get() > 0)
+            assertEquals(listOf<String?>(null), sent.map { it.header("Authorization") })
+            assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    // S9: the profile leaves the database by its own forgetting, whatever stores the list, also when nothing asked for it.
+    @Test
+    fun `after a sign-out the database holds no profile, also when nothing had asked for one and the list is stored elsewhere`() =
+        runTest {
+            val graph = LiveGraph(parts(backgroundScope), listStore = { store() })
+            graph.anime.observeAnime(AnimeId(1)).first()
+            val file = context.getDatabasePath("account.db").path
+            SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("INSERT INTO own_profile (owner, name, fetched_at) VALUES ('someone', 'Someone', 0)")
+            }
+            val profiles = {
+                SQLiteDatabase
+                    .openDatabase(
+                        file,
+                        null,
+                        SQLiteDatabase.OPEN_READONLY,
+                    ).use { DatabaseUtils.queryNumEntries(it, "own_profile") }
+            }
+            assertEquals(1L, profiles())
+
+            graph.session.signOut()
+            assertEquals(0L, profiles())
+            assertEquals(0, device.clientBuilds.get())
+            assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    // S9: the signed-in user's own profile goes too, so it is forgotten once the session no longer names its owner.
+    @Test
+    fun `a sign-out of an expired session leaves no profile of its own sign-in in the database`() =
+        runTest {
+            val parts = parts(backgroundScope)
+            val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
+            parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
+            val graph = LiveGraph(parts, listStore = { store() })
+            assertEquals(Session.Expired(SignInId(signIn)), graph.session.observeSession().first())
+            graph.anime.observeAnime(AnimeId(1)).first()
+            val file = context.getDatabasePath("account.db").path
+            SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("INSERT INTO own_profile (owner, name, fetched_at) VALUES ('$signIn', 'Someone', 0)")
+            }
+            val profiles = {
+                SQLiteDatabase
+                    .openDatabase(
+                        file,
+                        null,
+                        SQLiteDatabase.OPEN_READONLY,
+                    ).use { DatabaseUtils.queryNumEntries(it, "own_profile") }
+            }
+            assertEquals(1L, profiles())
+
+            graph.session.signOut()
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(0L, profiles())
             assertEquals(emptyList<Throwable>(), unexpected)
         }
 
@@ -268,6 +375,48 @@ class LiveGraphTest {
 
             assertEquals(Outcome.Failure(DataError.NoConnection), liveTitles(parts).refresh(AnimeId(61987)))
             assertTrue(requests.toString(), requests.single().startsWith("GET 127.0.0.1/v2/anime/61987?fields "))
+        }
+
+    // The folder is made when it is missing, which is disk work the app's start does not wait for.
+    @Test
+    fun `making the parts of a live graph looks up no folder of its files`() =
+        runTest {
+            val lookups = AtomicInteger()
+            val counting =
+                object : ContextWrapper(context) {
+                    override fun getNoBackupFilesDir(): File {
+                        lookups.incrementAndGet()
+                        return super.getNoBackupFilesDir()
+                    }
+                }
+            val parts =
+                LiveParts(counting, LiveSource.Account, "0123abcd", Clock.systemUTC(), backgroundScope, unexpected::add, device = device)
+            assertEquals(0, lookups.get())
+
+            parts.file("tokens")
+            assertEquals(1, lookups.get())
+        }
+
+    // So that work started in a new process still leaves MAL alone (section 2.3), and no backup carries a refusal to another device.
+    @Test
+    fun `MAL's back-off is kept in the source's own file, which is not backed up`() =
+        runTest {
+            val refusing =
+                Interceptor { chain ->
+                    Response
+                        .Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(429)
+                        .message("")
+                        .body("".toResponseBody())
+                        .build()
+                }
+            val parts = parts(backgroundScope, LiveSource("refused", MalHosts.Real, refusing))
+
+            assertEquals(Outcome.Failure(DataError.Refused), liveTitles(parts).refresh(AnimeId(61987)))
+            assertTrue(File(context.noBackupFilesDir, "refused.backoff").isFile)
+            assertFalse(File(context.noBackupFilesDir, "account.backoff").exists())
         }
 
     // Every request goes through MalHttp's one client, so none can miss the sandbox's stand-in or the rules of sending.

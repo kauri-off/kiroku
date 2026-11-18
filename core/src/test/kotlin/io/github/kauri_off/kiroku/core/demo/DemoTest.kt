@@ -9,17 +9,25 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.notify.Announcement
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.InMemoryShownNotifications
+import io.github.kauri_off.kiroku.core.notify.Recheck
+import io.github.kauri_off.kiroku.core.notify.RunEnd
+import io.github.kauri_off.kiroku.core.notify.RunReport
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
-import io.github.kauri_off.kiroku.core.repository.UserListLoad
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
+import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -238,6 +246,29 @@ class DemoTest {
         }
 
     @Test
+    fun `reset brings back the airing data the demo started with, a schedule AniList moved and a title it forgot included`() =
+        runTest {
+            val demo = demo()
+            val started = demo.airing.observeSchedules().first()
+            val id = FixtureAnime.exactToWatch.id
+            val moved =
+                started.getValue(id).let { schedule ->
+                    schedule.copy(episodes = schedule.episodes.map { it.copy(airsAt = it.airsAt.plus(Duration.ofDays(7))) })
+                }
+            demo.airingSource.schedules = demo.fixtures.schedules + (id to moved)
+            assertEquals(Outcome.Success(Unit), demo.airing.refresh())
+            demo.list.write(ListWrite.Remove(FixtureAnime.exactCaughtUp))
+            settle()
+            assertEquals(started - FixtureAnime.exactCaughtUp.id + (id to moved), demo.airing.observeSchedules().first())
+
+            val asked = demo.airingSource.requests.size
+            assertEquals(Outcome.Success(Unit), demo.reset())
+            settle()
+            assertEquals(started, demo.airing.observeSchedules().first())
+            assertEquals(emptyList<Set<AnimeId>>(), demo.airingSource.requests.drop(asked))
+        }
+
+    @Test
     fun `an Undo from before a sign-out is refused once the demo is signed in again`() =
         runTest {
             val demo = demo()
@@ -302,6 +333,25 @@ class DemoTest {
         }
 
     @Test
+    fun `a made-up title of the public user's list opens as that title, with a page`() =
+        runTest {
+            val demo = demo()
+            val madeUp =
+                Fixtures.reference.otherUserList
+                    .last()
+                    .anime
+            assertEquals(madeUp, demo.anime.observeAnime(madeUp.id).first())
+            assertEquals(Outcome.Success(Unit), demo.anime.refresh(madeUp.id))
+            assertEquals(
+                madeUp.id,
+                demo.anime
+                    .observeDetails(madeUp.id)
+                    .first()
+                    ?.id,
+            )
+        }
+
+    @Test
     fun `an expired session is shown, keeps the list and refuses writes`() =
         runTest {
             val demo = demo()
@@ -331,29 +381,65 @@ class DemoTest {
         }
 
     @Test
-    fun `another user's list is read only and loads by name`() =
+    fun `the public user's list of several thousand entries is read in parts, once, and held`() =
         runTest {
             val demo = demo()
-            val name = Fixtures.reference.otherUserName.uppercase()
-            val loads = demo.user.loadList(name).toList()
-            assertTrue(loads.first() is UserListLoad.Loading)
-            assertEquals(UserListLoad.Loaded(Fixtures.reference.otherUserEntries), loads.last())
+            val fixtures = Fixtures.reference
+            demo.server.latency = 1.seconds
+            val seen = mutableListOf<UserListState>()
+            backgroundScope.launch { demo.user.observeList(fixtures.otherUserName.uppercase()).collect { seen += it } }
+            settle()
+            val list = fixtures.otherUserList
+            assertTrue(list.size > 4_000)
+            assertEquals(UserListState.Whole(list, null), seen.last())
+            val parts = (list.size + DemoUserLists.PART_SIZE - 1) / DemoUserLists.PART_SIZE
+            assertEquals(parts, demo.userLists.requests.size)
+            val steps = seen.filterIsInstance<UserListState.Reading>()
+            assertEquals(List(parts) { it * DemoUserLists.PART_SIZE }, steps.map { it.entries.size })
+            assertTrue(steps.all { it.total == null && it.user == null })
 
-            assertEquals(
-                UserListLoad.Failed(DataError.UnknownUser),
-                demo.user
-                    .loadList("nobody_here")
-                    .toList()
-                    .last(),
-            )
+            assertEquals(seen.last(), demo.user.observeList(fixtures.otherUserName).first())
+            assertEquals(parts, demo.userLists.requests.size)
+            assertTrue(demo.user.sameUser(fixtures.otherUserName, fixtures.otherUserName.uppercase()))
+            assertFalse(demo.user.sameUser(fixtures.otherUserName, fixtures.privateUserName))
+        }
+
+    @Test
+    fun `the demo has no other user, and offline nobody's list is read`() =
+        runTest {
+            val demo = demo()
+            val fixtures = Fixtures.reference
+            for (name in listOf("nobody_here", fixtures.user.name)) {
+                assertEquals(
+                    name,
+                    UserListState.None(DataError.UnknownUser),
+                    demo.user.observeList(name).first { it !is UserListState.Reading },
+                )
+            }
             demo.server.offline.value = true
+            assertEquals(Outcome.Failure(DataError.NoConnection), demo.user.refreshList(fixtures.otherUserName))
             assertEquals(
-                UserListLoad.Failed(DataError.NoConnection),
-                demo.user
-                    .loadList(name)
-                    .toList()
-                    .last(),
+                UserListState.None(DataError.NoConnection),
+                demo.user.observeList(fixtures.otherUserName).first { it !is UserListState.Reading },
             )
+        }
+
+    @Test
+    fun `signing out and a reset each forget other users' lists`() =
+        runTest {
+            val demo = demo()
+            val name = Fixtures.reference.otherUserName
+            for (forget in listOf<suspend () -> Unit>({ demo.session.signOut() }, { demo.reset() })) {
+                val before = demo.userLists.requests.size
+                assertEquals(Outcome.Success(Unit), demo.user.refreshList(name))
+                assertTrue(demo.user.observeList(name).first() is UserListState.Whole)
+                val read = demo.userLists.requests.size
+                assertTrue(read > before)
+                forget()
+                assertEquals(read, demo.userLists.requests.size)
+                assertTrue(demo.user.observeList(name).first { it !is UserListState.Reading } is UserListState.Whole)
+                assertEquals(2 * read - before, demo.userLists.requests.size)
+            }
         }
 
     @Test
@@ -391,37 +477,18 @@ class DemoTest {
             demo.server.refusing.value = true
             assertEquals(Outcome.Failure(DataError.Refused), demo.search.search("kagetosho", 0, false))
             assertEquals(Outcome.Failure(DataError.Refused), demo.anime.refresh(FixtureAnime.exactToWatch.id))
-            assertEquals(
-                UserListLoad.Failed(DataError.Refused),
-                demo.user
-                    .loadList(Fixtures.reference.otherUserName)
-                    .toList()
-                    .last(),
-            )
+            assertEquals(Outcome.Failure(DataError.Refused), demo.user.refreshList(Fixtures.reference.otherUserName))
         }
 
     @Test
-    fun `a private list fails as private`() =
+    fun `a private list says so and is asked once`() =
         runTest {
             val demo = demo()
-            assertEquals(
-                listOf(UserListLoad.Loading(0, null), UserListLoad.Failed(DataError.PrivateList)),
-                demo.user.loadList(Fixtures.reference.privateUserName).toList(),
-            )
-        }
-
-    @Test
-    fun `a list loads in steps that report progress`() =
-        runTest {
-            val demo = demo()
-            val entries = Fixtures.reference.entries
-            val loads = demo.user.loadList(Fixtures.reference.user.name).toList()
-            val steps = loads.filterIsInstance<UserListLoad.Loading>()
-            assertTrue(steps.size > 2)
-            assertEquals(steps.map { it.loaded }.sorted(), steps.map { it.loaded })
-            assertEquals(entries.size, steps.last().loaded)
-            assertTrue(steps.all { it.total == entries.size })
-            assertEquals(UserListLoad.Loaded(entries), loads.last())
+            val name = Fixtures.reference.privateUserName
+            repeat(2) {
+                assertEquals(UserListState.None(DataError.PrivateList), demo.user.observeList(name).first { it !is UserListState.Reading })
+            }
+            assertEquals(listOf(name), demo.userLists.requests)
         }
 
     @Test
@@ -511,6 +578,44 @@ class DemoTest {
             assertEquals(emptyList<Set<AnimeId>>(), demo.airingSource.requests)
             assertEquals(0, demo.server.listDownloads)
             assertEquals(emptyList<ListRequest>(), demo.server.requests)
+        }
+
+    @Test
+    fun `the demo's notifications run on the real rules, from their first use, over the alarm and the notifications it is given`() =
+        runTest {
+            val clock = DeviceClock(FixtureTime.reference, FixtureTime.zone)
+            val alarm = InMemoryNotificationAlarm()
+            val shown = InMemoryShownNotifications()
+            val runs = mutableListOf<RunReport>()
+            val demo = Demo(Fixtures.reference, backgroundScope, clock = clock, alarm = alarm, shown = shown, runs = { runs += it })
+            demo.list.observeEntries().first()
+            runCurrent()
+            assertEquals("nothing runs before its first use", emptyList<RunReport>(), runs)
+
+            assertEquals(RunEnd.Done, demo.notifications.run(RunTrigger.AppOpened).end)
+            assertEquals("nothing from before", emptyMap<AnimeId, Announcement>(), shown.notifications.value)
+            val next = checkNotNull(demo.notifications.observeComing().first()).first()
+            assertEquals(next.notifyAt, alarm.at.value)
+            assertEquals(ListStatus.Watching, demo.fixtures.entryFor(next.anime.id)?.status)
+
+            clock.instant = next.notifyAt
+            alarm.gone()
+            val report = demo.notifications.run(RunTrigger.Alarm)
+            assertEquals(listOf(next.anime.id to next.episode), report.posted.map { it.anime.id to it.episode })
+            assertEquals(Recheck.Answered, report.recheck)
+            assertEquals(listOf(setOf(next.anime.id)), demo.airingSource.requests)
+            assertEquals(setOf(next.anime.id), shown.notifications.value.keys)
+            assertEquals(report.posted, demo.notifications.observeSent().first())
+
+            // A change of the list is followed by a run, and so is a sign-out.
+            demo.list.write(ListWrite.SetWatched(next.anime, next.episode))
+            settle()
+            assertEquals(emptyMap<AnimeId, Announcement>(), shown.notifications.value)
+            demo.session.signOut()
+            settle()
+            assertNull(alarm.at.value)
+            assertEquals(emptyList<SentNotification>(), demo.notifications.observeSent().first())
+            assertEquals(RunEnd.SignedOut, runs.last().end)
         }
 
     @Test

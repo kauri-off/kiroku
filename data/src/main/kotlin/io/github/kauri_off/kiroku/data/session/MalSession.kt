@@ -121,10 +121,7 @@ class MalSession internal constructor(
 
     private val read =
         scope.async(start = CoroutineStart.LAZY) {
-            when (val stored = gate.withLock { readFile(first = true) }) {
-                null -> scope.launch { readAgain() }
-                else -> renewAtStart(stored)
-            }
+            if (gate.withLock { readFile(first = true) } == null) scope.launch { readAgain() }
         }
 
     // Null when the file is there and could not be read; only the first such failure is reported.
@@ -148,13 +145,13 @@ class MalSession internal constructor(
         var attempt = 0
         while (true) {
             delay(retryAfter(attempt++).toMillis())
-            val stored = gate.withLock { if (state.value == null) readFile(first = false) else return } ?: continue
-            return renewAtStart(stored)
+            if (gate.withLock { if (state.value == null) readFile(first = false) else return } != null) return
         }
     }
 
-    private fun renewAtStart(stored: Stored) {
-        if (stored is Stored.SignedIn && due(stored.tokens)) scope.launch { renew(stored.tokens) }
+    // A renewal nobody asked for is background work: it is not sent while MAL's back-off lasts (section 2.3).
+    private suspend fun renewUnasked(tokens: Tokens) {
+        if (!guarded(false) { endpoint.refusing() }) renew(tokens)
     }
 
     override fun observeSession(): Flow<Session> =
@@ -210,13 +207,16 @@ class MalSession internal constructor(
             }
         }
 
-    // S7: for whatever starts work without a screen; the session itself does it when it is first read.
-    suspend fun renewIfDue() {
+    // S7: only when asked, through the way in: MAL revokes the old pair as it answers, so whoever asks stays until it has.
+    internal suspend fun renewIfDue() {
         guarded(Unit) {
             val tokens = (stored() as? Stored.SignedIn)?.tokens ?: return
-            if (due(tokens)) renew(tokens)
+            if (due(tokens)) renewUnasked(tokens)
         }
     }
+
+    // The session as it is, with nothing sent for it; null when the file could not be read.
+    internal suspend fun current(): Session? = guarded(null) { stored()?.session }
 
     // The seconds MAL gave the access token in use; null when nobody is signed in or MAL did not say.
     internal suspend fun accessTokenLifetime(): Long? = guarded(null) { (stored() as? Stored.SignedIn)?.tokens?.lifetime }

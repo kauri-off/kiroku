@@ -15,12 +15,18 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okio.Buffer
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 // An answer of the sandbox: its status, its body and the headers it carries beyond the body's type.
 class SandboxAnswer(
@@ -29,17 +35,45 @@ class SandboxAnswer(
     val headers: Map<String, String> = emptyMap(),
 )
 
+enum class SandboxAniListFault { None, Fails, NoAnswer }
+
 // AniList on the device: the shared query answered from [airing] as AniList answers it, its paging and its limit included.
 class SandboxAniList(
     private val airing: () -> SandboxAiring,
     private val clock: Clock,
 ) {
-    // The MAL ids of every query it answered, one list a request.
+    // The MAL ids of every query it received and did not refuse, one list a request.
     val asked = CopyOnWriteArrayList<List<Long>>()
 
     private val sent = ArrayDeque<Instant>()
 
+    private val lock = ReentrantLock()
+    private val changed = lock.newCondition()
+
+    // Fails: every query gets a server error. No answer: a request waits until the fault is off or its client gives up.
+    var fault: SandboxAniListFault = SandboxAniListFault.None
+        get() = lock.withLock { field }
+        set(value) =
+            lock.withLock {
+                field = value
+                changed.signalAll()
+            }
+
     fun answers(url: HttpUrl): Boolean = url == Address
+
+    // A request the HTTP client sends: held while AniList does not answer, as a server that took it and never replies.
+    fun answer(chain: Interceptor.Chain): SandboxAnswer {
+        val end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(chain.readTimeoutMillis().toLong())
+        lock.withLock {
+            while (fault == SandboxAniListFault.NoAnswer) {
+                if (chain.call().isCanceled()) throw IOException("Canceled")
+                val left = end - System.nanoTime()
+                if (left <= 0) throw SocketTimeoutException("timeout")
+                changed.awaitNanos(minOf(left, HELD_LOOK))
+            }
+        }
+        return answer(chain.request())
+    }
 
     fun answer(request: Request): SandboxAnswer {
         if (request.header("User-Agent").isNullOrBlank()) return refused(FORBIDDEN, "Forbidden.")
@@ -47,6 +81,7 @@ class SandboxAniList(
         val variables = variables(request) ?: return refused(BAD_REQUEST, "Only the shared query is answered.")
         val ids = variables.ids
         asked.add(ids)
+        if (fault == SandboxAniListFault.Fails) return refused(SERVER_ERROR, "Internal Server Error.", limit())
         val all = ids.toSet().flatMap { airing().entries(it) }.sortedBy { it.aniListId }
         val titles = all.drop((variables.page - 1) * AniListSchedule.TITLES_PER_PAGE).take(AniListSchedule.TITLES_PER_PAGE)
         val body =
@@ -161,6 +196,10 @@ class SandboxAniList(
         private const val BAD_REQUEST = 400
         private const val FORBIDDEN = 403
         private const val TOO_MANY = 429
+        private const val SERVER_ERROR = 500
+
+        // How often a held request looks whether its call was cancelled.
+        private val HELD_LOOK = TimeUnit.MILLISECONDS.toNanos(50)
         private val json = Json
     }
 }

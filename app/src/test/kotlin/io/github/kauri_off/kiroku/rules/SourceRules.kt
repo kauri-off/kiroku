@@ -279,6 +279,35 @@ fun airingValueProblems(
         .map { "$name:${it + 1}: an airing value made outside :core: ${lines[it].trim()}" }
 }
 
+// A list's statistics are :core's: no constructor or copy of one, no status counts but a title's from a source, and
+// no count made from the scores.
+private val statistic =
+    Regex(
+        """\b(UserStatistics|Counted)\s*(<[^>()]*>)?\s*\(|\bStatusCounts\s*(\.\s*Companion\s*)?(\.|::)\s*of\b|""" +
+            """\.copy\s*\(\s*(titleCount|statuses|daysWatched|episodesWatched|meanScore|scores|scored|genres|mediaTypes|years|watching|""" +
+            """completed|onHold|dropped|planned)\s*=|\bscores\s*\.\s*values\s*\.\s*(sum|sumOf|fold|reduce|count)\b""",
+    )
+private val statusCounts = Regex("""\bStatusCounts\s*\(""")
+private val titleStatistics = Regex("""\bTitleStatistics\s*$""")
+
+fun statisticsValueProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val code = KotlinSource(source).code
+    val lines = code.lines()
+    val counts =
+        statusCounts.findAll(code).filterNot { call ->
+            val open = openParenthesis(code, call.range.first)
+            open != null && titleStatistics.containsMatchIn(code.substring(0, open))
+        }
+    return (statistic.findAll(code) + counts)
+        .map { code.substring(0, it.range.first).count { c -> c == '\n' } }
+        .sorted()
+        .map { "$name:${it + 1}: a statistics value made outside :core: ${lines[it].trim()}" }
+        .toList()
+}
+
 // Every Kotlin, Gradle script and XML source of the project's modules.
 fun projectSources(): List<File> =
     projectDir
@@ -305,6 +334,24 @@ const val SHELL_VIEW_MODEL_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kir
 private val writerOrGraph = Regex("""\b\w*(Graph|ListRepository|ListEngine)\w*\b""")
 
 private val initBlock = Regex("""\binit\s*\{""")
+
+// Another user's list holds nothing that writes or downloads the person's list, posts a message that can act on it, or
+// asks the airing source; of the graph's list it takes the entries alone.
+val USER_LIST_SOURCES = setOf("UserListRoute.kt", "UserListViewModel.kt")
+
+private val writerOrAiring =
+    Regex(
+        """\b\w*(ListRepository|ListEngine|ListSource|ListWrite|ShellMessage|EditSheet|editSheet|Airing(Repository|Source))\w*\b""" +
+            """|\.airing\b|\.(sync|write)\s*\(|\bgraph\.list\b(?!\.observeEntries\(\))""",
+    )
+
+fun readOnlyListProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        writerOrAiring.find(line)?.let { "$name:${index + 1}: another user's list names ${it.value}: ${line.trim()}" }
+    }
 
 private val aliasOfWriterOrGraph = Regex("""\btypealias\s+\w+(\s*<[^>]*>)?\s*=\s*[\w.]*(AppGraph|ListRepository|ListEngine)\b""")
 
@@ -369,8 +416,112 @@ fun scopeProblems(
     }
 }
 
+// The one place a part built at its first use is reached off the main thread, so that a build meeting its scope's end ends as that end does.
+const val FIRST_USE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/wiring/OnFirstUse.kt"
+
+private val firstUseBuild = Regex("""\bwithContext\s*\([^)]*\)\s*\{\s*[\w.]*\bvalue\s*\}""")
+
+fun firstUseProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (name == FIRST_USE_SOURCE) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (firstUseBuild.containsMatchIn(line)) "$name:${index + 1}: build it with onFirstUse: ${line.trim()}" else null
+    }
+}
+
+// Code that runs with no screen asking for it: the notify package, and whatever declares a receiver, a service or scheduled work.
+private val componentWithoutAScreen = Regex("""(\)|\bclass\s+\w+|\bobject)\s*:\s*[\w.]*(BroadcastReceiver|Service|Worker)\s*\(""")
+
+fun runsWithoutAScreen(
+    name: String,
+    source: String,
+): Boolean = "/notify/" in name || componentWithoutAScreen.containsMatchIn(KotlinSource(source).code)
+
+// Such code has the app as WithoutScreen alone, which hands out no list. What that type cannot hold: the graph reached
+// another way, and a list or a call of one handed to it from a file that is not held to this.
+private val pastWithoutScreen =
+    Regex(
+        """\b\w*(AppGraph|appGraph)\w*\b|""" +
+            """\b\w*(ListRepository|ListEngine|ListSource|AnimeRepository|SearchRepository|UserRepository|OwnProfile|UserLists)\w*\b|""" +
+            """\b(SignIn|SignInOwner|MalHttp|MalSession|MalBackground|MalRemoteList)\b|""" +
+            """(\b|::\s*)(sync|send|write|refresh\w*)\s*\(|::\s*(sync|send|write|refresh\w*)\b""",
+    )
+
+fun withoutScreenProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (!runsWithoutAScreen(name, source)) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        pastWithoutScreen
+            .find(
+                line,
+            )?.let { "$name:${index + 1}: work without a screen names ${it.value}, past WithoutScreen: ${line.trim()}" }
+    }
+}
+
 // The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
 fun shippedKotlinSources(): List<File> =
     projectSources().filter { source ->
-        source.extension == "kt" && listOf("test", "testDebug", "androidTest").none { "/src/$it/" in source.path }
+        source.extension == "kt" && listOf("test", "testDebug", "androidTest", "contract").none { "/src/$it/" in source.path }
     }
+
+// A test class on the app's own application that reaches its graph, builds one, or starts what does.
+private val topLevelClass = Regex("""^((data|open|abstract|internal|private)\s+)*class\s+(\w+)""")
+private val robolectricTest = Regex("""@RunWith\s*\(\s*RobolectricTestRunner::class\s*\)""")
+private val ownApplication = Regex("""@Config\s*\([^)]*\bapplication\s*=""")
+private val appActivity = """(MainActivity|DebugMenuActivity|RedirectActivity)\b"""
+private val startsTheApp =
+    Regex(
+        """\bappGraph\b|\.scenarios\b|\brunningSource\b|\bSingletonImageLoader\s*\.\s*get\s*\(|""" +
+            """\bcreateGraph\s*\(|\bSandboxGraph\s*\.\s*create\s*\(|""" +
+            """\b(createAndroidComposeRule|ActivityScenarioRule)\s*<\s*$appActivity|""" +
+            """\b(buildActivity|setupActivity|launch)\s*\(\s*$appActivity""",
+    )
+
+// Such a class ends the app with AppEnds, outside every other rule, so nothing of it acts on the next test's app.
+private val endsTheApp = Regex("""@get:Rule\s*\(\s*order\s*=\s*AppEnds\.OUTERMOST\s*\)\s*val\s+\w+\s*=\s*AppEnds\s*\(\s*\)""")
+
+// Each top-level class with its annotations, and the line it starts on.
+private fun classesOf(source: String): List<Triple<String, Int, String>> {
+    val lines = KotlinSource(source).code.lines()
+    val starts =
+        lines.indices.filter { topLevelClass.containsMatchIn(lines[it]) }.map { at ->
+            var start = at
+            while (start > 0 && lines[start - 1].trimStart().startsWith("@")) start--
+            at to start
+        }
+    return starts.mapIndexed { index, (at, start) ->
+        val end = starts.getOrNull(index + 1)?.second ?: lines.size
+        val name = topLevelClass.find(lines[at])!!.groupValues[3]
+        Triple(name, at + 1, lines.subList(start, end).joinToString("\n"))
+    }
+}
+
+fun classesStartingTheApp(source: String): List<String> =
+    classesOf(source)
+        .filter { (_, _, text) ->
+            val header = text.lines().takeWhile { !topLevelClass.containsMatchIn(it) }.joinToString("\n")
+            robolectricTest.containsMatchIn(header) && !ownApplication.containsMatchIn(header) && startsTheApp.containsMatchIn(text)
+        }.map { it.first }
+
+fun appEndingProblems(
+    name: String,
+    source: String,
+): List<String> {
+    val starting = classesStartingTheApp(source)
+    return classesOf(source)
+        .filter { (cls, _, text) -> cls in starting && !endsTheApp.containsMatchIn(text) }
+        .map { (cls, at, _) -> "$name:$at: $cls starts the app without @get:Rule(order = AppEnds.OUTERMOST) val … = AppEnds()" }
+}
+
+// The Kotlin sources of the app's tests, in every test source set.
+fun appTestSources(): List<File> =
+    File(projectDir, "app/src")
+        .listFiles()
+        .orEmpty()
+        .filter { it.isDirectory && it.name.startsWith("test") }
+        .flatMap { set -> set.walk().filter { it.isFile && it.extension == "kt" }.toList() }
+        .sorted()

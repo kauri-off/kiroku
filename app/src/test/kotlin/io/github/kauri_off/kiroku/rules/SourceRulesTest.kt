@@ -22,16 +22,46 @@ class SourceRulesTest {
             setOf(
                 "EditSheetViewModel.kt",
                 "ListViewModel.kt",
+                "OpenedProfiles.kt",
+                "ProfileViewModel.kt",
                 "ShellViewModel.kt",
                 "SignInViewModel.kt",
+                "StatisticsViewModel.kt",
                 "SubScreenViewModels.kt",
                 "TitleViewModel.kt",
+                "UserListViewModel.kt",
             ),
             sources.filter { declaresViewModel(it.readText()) }.map { it.name }.toSet(),
         )
         assertTrue(sources.any { relative(it) == SHELL_VIEW_MODEL_SOURCE })
         assertEquals(emptyList<String>(), sources.flatMap { viewModelProblems(relative(it), it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { collectionProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun anotherUsersListNamesNoWriterAndNoAiring() {
+        val sources = appSources().filter { it.name in USER_LIST_SOURCES }
+        assertEquals(USER_LIST_SOURCES, sources.map { it.name }.toSet())
+        assertEquals(emptyList<String>(), sources.flatMap { readOnlyListProblems(relative(it), it.readText()) })
+        val planted =
+            listOf(
+                "class A(private val messages: ShellMessages) : ViewModel()\n",
+                "val editor = editSheetViewModel(graph, messages)\n",
+                "fun a(list: ListRepository) = Unit\n",
+                "fun a() = write(ListWrite.MarkNextWatched(anime))\n",
+                "val airing = graph.airing\n",
+                "class A(private val airing: AiringRepository) : ViewModel()\n",
+                "fun a() = viewModelScope.launch { own.sync() }\n",
+                "fun a() = graph.list.write(step)\n",
+                "fun a() = post(ShellMessage(text, ShellMessage.Action.Change(id)))\n",
+                "val list = graph.list\n",
+                "class A(private val own: ListSource) : ViewModel()\n",
+            )
+        for (source in planted) assertEquals(source, 1, readOnlyListProblems("A.kt", source).size)
+        val clean =
+            "class A(private val own: Flow<List<ListEntry>>, private val failed: (DataError) -> Unit)\n" +
+                "val a = graph.list.observeEntries()\n"
+        assertEquals(0, readOnlyListProblems("A.kt", clean).size)
     }
 
     @Test
@@ -186,7 +216,7 @@ class SourceRulesTest {
     @Test
     fun everyTextFieldTakesTheAutofillModifier() {
         val sources = appSources()
-        assertEquals(6, sources.sumOf { textFields(it.readText()) })
+        assertEquals(7, sources.sumOf { textFields(it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { autofillProblems(relative(it), it.readText()) })
     }
 
@@ -426,6 +456,49 @@ class SourceRulesTest {
     }
 
     @Test
+    fun appAndDataCodeMakeNoStatistic() {
+        val sources = appSources() + dataSources()
+        assertTrue(sources.any { it.name == "ProfileFixtureStates.kt" })
+        assertTrue(sources.any { relative(it).endsWith("data/anime/MalAnime.kt") })
+        assertEquals(emptyList<String>(), sources.flatMap { statisticsValueProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedStatisticFails() {
+        val planted =
+            listOf(
+                "val a = UserStatistics(counts, 0.0, null, emptyMap(), emptyList(), emptyList(), emptyMap())",
+                "val a = io.github.kauri_off.kiroku.core.model.UserStatistics(\n    statuses = counts,\n)",
+                "val a = Counted(genre, 3)",
+                "val a = Counted<MediaType>(MediaType.Tv, 3)",
+                "val a = StatusCounts(1, 2, 3, 4, 5)",
+                "val a = StatusCounts.of(entries.map { it.status })",
+                "val a = entries.map { it.status }.let(StatusCounts::of)",
+                "val a = StatusCounts.Companion.of(statuses)",
+                "val a = statistics.copy(meanScore = 7.0)",
+                "val a = statistics.copy(titleCount = 0)",
+                "val a = statistics.copy(\n    daysWatched = 0.0,\n)",
+                "val a = statistics.statuses.copy(completed = done)",
+                "val a = TitleStatistics(counts, members).also { StatusCounts(1, 2, 3, 4, 5) }",
+                "val a = statistics.copy(episodesWatched = 0)",
+                "val a = statistics.copy(\n    titleCount = 3,\n)",
+                "private val UserStatistics.scored: Int get() = scores.values.sum()",
+                "val a = statistics.scores.values.sumOf { it }",
+            )
+        for (source in planted) {
+            assertEquals(source, 1, statisticsValueProblems("app/src/main/kotlin/A.kt", "$source\n").size)
+            assertEquals(source, 1, statisticsValueProblems("data/src/main/kotlin/A.kt", "$source\n").size)
+        }
+        val clean =
+            "fun a(statistics: UserStatistics): List<Counted<Genre>> = statistics.genres\n" +
+                "val b = statisticsOf(entries)\nval c = statistics.statuses[ListStatus.Completed]\n" +
+                "val d = TitleStatistics(StatusCounts(w, c, h, d, p), members)\n" +
+                "val e = TitleStatistics(\n    StatusCounts(\n        watching = w,\n    ),\n    members,\n)\n" +
+                "val f = entry.copy(values = values)\nval g = statistics.scored + statistics.titleCount\n"
+        assertEquals(emptyList<String>(), statisticsValueProblems("app/src/main/kotlin/A.kt", clean))
+    }
+
+    @Test
     fun everySourceSetThatShipsIsScanned() {
         val scanned = appSources().map { relative(it) }
         assertTrue(scanned.any { it.startsWith("app/src/main/") })
@@ -440,7 +513,7 @@ class SourceRulesTest {
         assertTrue(shipped.any { relative(it) == APPLICATION_SCOPE_SOURCE })
         assertTrue(shipped.any { it.path.endsWith("core/src/testFixtures/kotlin/io/github/kauri_off/kiroku/core/demo/Demo.kt") })
         assertTrue(shipped.any { it.path.endsWith("data/session/MalSession.kt") })
-        assertTrue(shipped.none { "/src/test/" in it.path })
+        assertTrue(shipped.none { "/src/test/" in it.path || "/src/contract/" in it.path })
         assertEquals(emptyList<String>(), shipped.flatMap { scopeProblems(relative(it), it.readText()) })
     }
 
@@ -468,6 +541,107 @@ class SourceRulesTest {
             assertEquals(derived, emptyList<String>(), scopeProblems("A.kt", "val a = $derived\n"))
         }
         assertEquals(emptyList<String>(), scopeProblems(APPLICATION_SCOPE_SOURCE, "val a = CoroutineScope(SupervisorJob())\n"))
+    }
+
+    // S7 and section 2.3: work without a screen has the app as WithoutScreen alone, whose calls go through MAL's one way in.
+    @Test
+    fun workWithoutAScreenIsGivenTheAppAsWithoutScreenAlone() {
+        val sources = appSources()
+        val without = sources.filter { runsWithoutAScreen(relative(it), it.readText()) }.map { it.name }.toSet()
+        val known =
+            listOf("RunReceiver.kt", "HeldRuns.kt", "MarkWatchedReceiver.kt", "PeriodicWork.kt", "ScenarioTile.kt", "DeviceClock.kt")
+        assertTrue("$without", without.containsAll(known))
+        assertTrue("$without", "LiveGraph.kt" !in without && "ListRoute.kt" !in without && "KirokuApplication.kt" !in without)
+        assertEquals(emptyList<String>(), sources.flatMap { withoutScreenProblems(relative(it), it.readText()) })
+        // The type hands out neither the list nor the graph: its members are the runs, the list's two calls and the airing's,
+        // reads of the list and the session on the device, and the notice that a write could not be saved.
+        val seam = sources.single { it.name == "WithoutScreen.kt" }.readText()
+        val members = Regex("""interface WithoutScreen \{(.*?)\n\}""", RegexOption.DOT_MATCHES_ALL).find(KotlinSource(seam).code)
+        val declared = Regex("""\b(val|fun)\s+(\w+)""").findAll(checkNotNull(members).groupValues[1]).map { it.groupValues[2] }.toList()
+        assertEquals(listOf("notificationRuns", "syncList", "sendToList", "updateAiring", "titleOnList", "session", "notSaved"), declared)
+    }
+
+    @Test
+    fun plantedWorkWithoutAScreenThatGoesPastWithoutScreenFails() {
+        val receiver = "class A : BroadcastReceiver() {\n    override fun onReceive(context: Context, intent: Intent) {\n"
+        val planted =
+            listOf(
+                "$receiver        scope.launch { context.appGraph.list.sync() }\n    }\n}\n",
+                "$receiver        scope.launch { with(context.appGraph) { list.sync() } }\n    }\n}\n",
+                "$receiver        val graph = (context.applicationContext as AppGraphOwner).graph\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().sync() }\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().send(write) }\n    }\n}\n",
+                "$receiver        scope.launch { titles.refresh(id) }\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().run { sync() } }\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().apply { send(write) } }\n    }\n}\n",
+                "$receiver        val download = context.ownList()::sync\n    }\n}\n",
+                "$receiver        scope.launch { with(context.titles()) { refreshStale(id) } }\n    }\n}\n",
+                "val a = registerReceiver(object : BroadcastReceiver() {\n" +
+                    "    override fun onReceive(c: Context, i: Intent) = run { c.appGraph.list.sync() }\n})\n",
+                "$receiver        (context.appGraph.withoutScreen { it } as BackgroundRun.Ran).value.sync()\n    }\n}\n",
+                "class A(private val list: ListRepository) : Worker(context, parameters)\n",
+                "class A(\n    private val list: ListSource,\n) : CoroutineWorker(context, parameters)\n",
+                "class A(private val way: MalBackground) : Service()\n",
+            )
+        for (source in planted) assertEquals(source, 1, withoutScreenProblems("app/src/main/kotlin/A.kt", source).size)
+        // Anything in the notify package counts, whatever it declares.
+        val inPackage = "suspend fun a(list: ListRepository) = list\n"
+        assertEquals(1, withoutScreenProblems("app/src/main/kotlin/notify/A.kt", inPackage).size)
+        val clean =
+            "$receiver        scope.launch {\n" +
+                "            context.withoutScreen?.sendToList(ListWrite.MarkWatched(anime, episode))\n" +
+                "            context.withoutScreen?.syncList()\n            context.heldRuns?.start(RunTrigger.MarkedWatched)\n" +
+                "            val title = announcement.anime.id\n        }\n    }\n}\n"
+        assertEquals(emptyList<String>(), withoutScreenProblems("app/src/main/kotlin/notify/A.kt", clean))
+        // A screen's code is not held to it.
+        assertEquals(emptyList<String>(), withoutScreenProblems("app/src/main/kotlin/list/A.kt", "val list = graph.list\n"))
+    }
+
+    @Test
+    fun everyTestThatStartsTheAppEndsIt() {
+        val sources = appTestSources()
+        val starting = sources.flatMap { classesStartingTheApp(it.readText()) }
+        assertTrue(starting.containsAll(listOf("DebugMenuTest", "SandboxAppTest", "MainActivityTest", "ImageLoaderTest", "DebugGraphTest")))
+        assertTrue("SignInRouteTest" !in starting && "PosterFadeTest" !in starting)
+        assertEquals(emptyList<String>(), sources.flatMap { appEndingProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedTestThatStartsTheAppWithoutEndingItFails() {
+        val ends = "    @get:Rule(order = AppEnds.OUTERMOST)\n    val appEnds = AppEnds()\n"
+
+        fun test(
+            body: String,
+            config: String = "@Config(qualifiers = \"en\")",
+        ) = "@RunWith(RobolectricTestRunner::class)\n$config\nclass ATest {\n$body    @Test\n    fun a() = Unit\n}\n"
+        for (start in listOf(
+            "    val g = context.appGraph\n",
+            "    val s get() = context.scenarios\n",
+            "    val s = context.runningSource\n",
+            "    val l = SingletonImageLoader.get(context)\n",
+            "    @get:Rule\n    val c = createAndroidComposeRule<MainActivity>()\n",
+            "    @get:Rule\n    val c = createAndroidComposeRule<DebugMenuActivity>()\n",
+            "    val a = Robolectric.buildActivity(RedirectActivity::class.java)\n",
+            "    val a = ActivityScenario.launch(MainActivity::class.java)\n",
+            "    val g = createGraph(context, \"\", clock, scope)\n",
+            "    val g = SandboxGraph.create(context, clock) { _, _, _ -> parts }\n",
+        )) {
+            assertEquals(start, 1, appEndingProblems("ATest.kt", test(start)).size)
+            assertEquals(start, emptyList<String>(), appEndingProblems("ATest.kt", test(ends + start)))
+            assertEquals(start, emptyList<String>(), appEndingProblems("ATest.kt", test(start, "@Config(application = A::class)")))
+        }
+        val inner = "    @get:Rule(order = 0)\n    val appEnds = AppEnds()\n    val g = context.appGraph\n"
+        assertEquals(1, appEndingProblems("ATest.kt", test(inner)).size)
+        val named = "    val n = MainActivity::class.java.name\n    // context.appGraph\n"
+        assertEquals(emptyList<String>(), appEndingProblems("ATest.kt", test(named)))
+        assertEquals(emptyList<String>(), appEndingProblems("ATest.kt", "class ATest {\n    val g = context.appGraph\n}\n"))
+        val apostrophe = "    @Test\n    fun `the screen's form`() = Unit\n    val g = context.appGraph\n"
+        assertEquals(1, appEndingProblems("ATest.kt", test(apostrophe)).size)
+        val second = "class Other\n\n" + test("    val g = context.appGraph\n")
+        assertEquals(
+            listOf("ATest.kt:5: ATest starts the app without @get:Rule(order = AppEnds.OUTERMOST) val … = AppEnds()"),
+            appEndingProblems("ATest.kt", second),
+        )
     }
 
     // The screenshot harness renders inside the app's theme and window setup and has none of its own.

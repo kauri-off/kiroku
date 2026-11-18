@@ -4,6 +4,7 @@ import androidx.datastore.core.Serializer
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferencesFileSerializer
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -11,6 +12,8 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -93,6 +96,8 @@ class StoredPreferencesTest {
                 .first()
                 .also { scope.coroutineContext.job.cancelAndJoin() }
         }
+
+    private val opened = stringPreferencesKey("opened_profiles")
 
     private fun sort(status: String) = stringPreferencesKey("list_sort_$status")
 
@@ -182,22 +187,56 @@ class StoredPreferencesTest {
     }
 
     @Test
-    fun `forgetting the list's sorts leaves every other choice, also for a new process, and a disk that fails it throws`() {
+    fun `forgetting the user's choices takes the sorts and the profiles opened and leaves the rest, and a disk that fails it throws`() {
         val score = TabSort(ListSort.Score, SortDirection.Ascending)
         val other = stringPreferencesKey("another_choice")
         written(other to "kept", sort("dropped") to "score", direction("dropped") to "ascending")
         process {
             it.setListSort(ListStatus.Completed, score)
+            it.updateOpenedProfiles { listOf("sample_viewer") }
             writesFail = true
-            assertTrue(runCatching { it.forgetListSorts() }.exceptionOrNull() is PreferencesFailure)
+            assertTrue(runCatching { it.forgetUsersChoices() }.exceptionOrNull() is PreferencesFailure)
             writesFail = false
             assertEquals(score, it.observeListSorts().first().getValue(ListStatus.Completed))
-            it.forgetListSorts()
+            it.forgetUsersChoices()
             assertEquals(defaults, it.observeListSorts().first())
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
         }
-        process { assertEquals(defaults, it.observeListSorts().first()) }
+        process {
+            assertEquals(defaults, it.observeListSorts().first())
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+        }
         assertEquals(mapOf<Preferences.Key<*>, Any>(Pair(other, "kept")), stored().asMap())
         assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `the profiles opened are kept in their order for a new process, each change made on the names kept`() {
+        process {
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+            it.updateOpenedProfiles { names -> listOf("b_two") + names }
+            it.updateOpenedProfiles { names -> listOf("a-one") + names }
+        }
+        process {
+            assertEquals(listOf("a-one", "b_two"), it.observeOpenedProfiles().first())
+            it.updateOpenedProfiles { emptyList() }
+        }
+        process { assertEquals(emptyList<String>(), it.observeOpenedProfiles().first()) }
+        assertEquals(emptyMap<Preferences.Key<*>, Any>(), stored().asMap())
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `profiles opened that the app would not open are none, are reported once, and the next one opened is kept`() {
+        written(opened to "sample_viewer\nnot a name")
+        process {
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+            it.updateOpenedProfiles { names -> listOf("sample_viewer") + names }
+        }
+        process { assertEquals(listOf("sample_viewer"), it.observeOpenedProfiles().first()) }
+        assertEquals(1, reports.size)
+        assertTrue(reports.single() is PreferencesFailure)
     }
 
     @Test
@@ -248,6 +287,85 @@ class StoredPreferencesTest {
                 }.toMap()
         assertEquals(expected, stored)
         assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `notification settings written are read by a new process over the same file, under their codes, and stay when the sorts go`() {
+        process { assertEquals(NotificationSettings(), it.observeNotificationSettings().first()) }
+        val codes =
+            mapOf(
+                NotificationDelay.None to "none",
+                NotificationDelay.HalfHour to "half_hour",
+                NotificationDelay.Hour to "hour",
+                NotificationDelay.ThreeHours to "three_hours",
+            )
+        for ((delay, code) in codes) {
+            val chosen = NotificationSettings(on = delay.ordinal % 2 == 0, alsoPlanned = delay.ordinal % 2 == 1, delay = delay)
+            process { it.writeNotificationSettings(chosen) }
+            process { assertEquals(chosen, it.observeNotificationSettings().first()) }
+            val stored = stored().asMap().mapKeys { it.key.name }
+            assertEquals(mapOf("notify_on" to chosen.on, "notify_also_planned" to chosen.alsoPlanned, "notify_delay" to code), stored)
+        }
+        val chosen = NotificationSettings(on = false, alsoPlanned = true, delay = NotificationDelay.Hour)
+        process {
+            it.writeNotificationSettings(chosen)
+            it.setListSort(ListStatus.Completed, TabSort(ListSort.Score))
+            it.forgetUsersChoices()
+        }
+        process { assertEquals(chosen, it.observeNotificationSettings().first()) }
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `a notification setting that cannot be read counts as never made, is reported once, and the others keep theirs`() {
+        val on = booleanPreferencesKey("notify_on")
+        val planned = booleanPreferencesKey("notify_also_planned")
+        val delay = stringPreferencesKey("notify_delay")
+        val made = NotificationSettings(on = false, alsoPlanned = true, delay = NotificationDelay.ThreeHours)
+        val unreadable =
+            listOf(
+                arrayOf(stringPreferencesKey("notify_on") to "false", planned to true, delay to "three_hours") to made.copy(on = true),
+                arrayOf(on to false, intPreferencesKey("notify_also_planned") to 1, delay to "three_hours") to
+                    made.copy(alsoPlanned = false),
+                arrayOf(on to false, planned to true, delay to "two_hours") to made.copy(delay = NotificationDelay.None),
+                arrayOf(on to false, planned to true, booleanPreferencesKey("notify_delay") to true) to
+                    made.copy(delay = NotificationDelay.None),
+            )
+        for ((values, expected) in unreadable) {
+            file.delete()
+            reports.clear()
+            written(*values)
+            val read =
+                process {
+                    val first = it.observeNotificationSettings().first()
+                    it.setListSort(ListStatus.OnHold, TabSort(ListSort.Title))
+                    assertEquals(first, it.observeNotificationSettings().first())
+                    first
+                }
+            val case = values.joinToString()
+            assertEquals(case, expected, read)
+            assertEquals(case, 1, reports.size)
+            assertTrue(case, reports.single() is PreferencesFailure)
+        }
+    }
+
+    @Test
+    fun `a notification setting the disk cannot write throws and leaves the one before, and an unreadable file gives defaults`() {
+        val chosen = NotificationSettings(on = false)
+        process {
+            it.writeNotificationSettings(chosen)
+            writesFail = true
+            val failed = runCatching { it.writeNotificationSettings(NotificationSettings(delay = NotificationDelay.Hour)) }
+            assertTrue(failed.exceptionOrNull() is PreferencesFailure)
+            writesFail = false
+            assertEquals(chosen, it.observeNotificationSettings().first())
+        }
+        assertEquals(emptyList<Throwable>(), reports)
+        readsFail = true
+        process { assertEquals(NotificationSettings(), it.observeNotificationSettings().first()) }
+        assertEquals(1, reports.size)
+        readsFail = false
+        process { assertEquals(chosen, it.observeNotificationSettings().first()) }
     }
 
     @Test

@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.profile
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.fixtures.Links
+import io.github.kauri_off.kiroku.core.link.USER_NAME_MAX_LENGTH
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,22 +14,26 @@ import org.junit.Test
 class ProfileStateTest {
     private val fixtures = ProfileFixtureStates
 
+    // What a source says of a user besides the list may be nothing, for any user.
     @Test
-    fun anotherUserHasNoHeader() {
-        assertThrows(IllegalArgumentException::class.java) {
-            ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.Shown(fixtures.set.user, fixtures.nothing))
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            ProfileState(ProfileOwner.Me, ProfileContent.Shown(null, fixtures.nothing))
-        }
+    fun anyUserMayHaveAHeaderOrNone() {
+        ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.Shown(fixtures.set.user, fixtures.nothing))
+        ProfileState(ProfileOwner.Me, ProfileContent.Shown(null, fixtures.nothing))
     }
 
     @Test
-    fun onlyTheOwnProfileIsSignedOutAndOnlyAnotherUsersListLoads() {
+    fun onlyTheOwnProfileIsSignedOutAndOnlyAnotherUsersListIsRead() {
         assertThrows(IllegalArgumentException::class.java) {
             ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.SignedOut)
         }
-        assertThrows(IllegalArgumentException::class.java) { ProfileState(ProfileOwner.Me, ProfileContent.ListLoading(1, 2)) }
+        val read = UserListProgress(1, 2)
+        assertThrows(IllegalArgumentException::class.java) { ProfileState(ProfileOwner.Me, ProfileContent.ListLoading, reading = read) }
+        assertThrows(IllegalArgumentException::class.java) {
+            ProfileState(ProfileOwner.Me, ProfileContent.Shown(null, fixtures.nothing), reading = read)
+        }
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) { ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.ListLoading) }
         ProfileState(ProfileOwner.Other(fixtures.otherName), ProfileContent.Failed(DataError.PrivateList))
     }
 
@@ -38,14 +45,16 @@ class ProfileStateTest {
 
     @Test
     fun theLastNameOpenedComesFirstAndTheOldestFallsOff() {
-        val recent = fixtures.recent.withOpened("newest")
-        assertEquals(listOf("newest") + fixtures.recent.take(RECENT_PROFILES - 1), recent)
+        val names = fixtures.recent.reversed().fold(emptyList<String>()) { names, name -> names.withOpened(name, String::equals) }
+        assertEquals(listOf("newest") + fixtures.recent.take(RECENT_PROFILES - 1), names.withOpened("newest", String::equals))
     }
 
+    // Which names are one user is the source's answer, never the app's own comparison.
     @Test
-    fun aNameOpenedAgainMovesToTheFrontWhateverItsCase() {
-        val recent = listOf("a_one", "b_two", "c_three").withOpened("B_TWO")
-        assertEquals(listOf("B_TWO", "a_one", "c_three"), recent)
+    fun aNameOfAUserOpenedAgainMovesToTheFrontAsTheSourceTellsUsers() {
+        val names = listOf("a_one", "b_two", "c_three").withOpened("B_TWO") { a, b -> a.equals(b, ignoreCase = true) }
+        assertEquals(listOf("B_TWO", "a_one", "c_three"), names)
+        assertEquals(listOf("A_ONE", "B_TWO", "a_one", "c_three"), names.withOpened("A_ONE", String::equals))
     }
 
     @Test
@@ -55,26 +64,10 @@ class ProfileStateTest {
     }
 
     @Test
-    fun numbersShareTheRowEquallyWhenEveryLongestWordFits() {
-        assertEquals(listOf(100, 100, 100), rowWidths(listOf(60, 90, 100), width = 320, gap = 10))
-    }
-
-    @Test
-    fun aLongerWordTakesItsWidthAndTheOthersShareTheRest() {
-        assertEquals(listOf(130, 85, 85), rowWidths(listOf(130, 40, 80), width = 320, gap = 10))
-    }
-
-    @Test
-    fun numbersWhoseLongestWordsDoNotFitAreStacked() {
-        assertNull(rowWidths(listOf(130, 100, 80), width = 320, gap = 10))
-    }
-
-    @Test
-    fun aPastedProfileOrListLinkGivesItsName() {
+    fun aPastedProfileLinkGivesItsName() {
         val forms =
             listOf(
                 "https://myanimelist.net/profile/sample_viewer",
-                "http://myanimelist.net/profile/sample_viewer",
                 "https://www.myanimelist.net/profile/sample_viewer/",
                 "myanimelist.net/profile/sample_viewer",
                 "www.myanimelist.net/profile/sample_viewer",
@@ -82,22 +75,38 @@ class ProfileStateTest {
                 "https://myanimelist.net/profile/sample_viewer/?view=1",
                 "https://MyAnimeList.net/profile/sample_viewer/#top",
                 "https://myanimelist.net/profile/sample_viewer\n",
-                "https://myanimelist.net/profile/sample_viewer/reviews",
-                "https://myanimelist.net/animelist/sample_viewer",
-                "myanimelist.net/animelist/sample_viewer?status=2",
             )
         for (form in forms) assertEquals(form, ProfileInput.Name("sample_viewer"), profileInput(form))
+        for ((address, link) in Links.profiles) assertEquals(address, ProfileInput.Name(link.name), profileInput(address))
     }
 
     @Test
-    fun aPathSegmentIsTakenAsItIs() {
-        for (name in listOf("a%20b", "имя", "Xi.nil")) {
-            assertEquals(ProfileInput.Name(name), profileInput("https://myanimelist.net/profile/$name"))
-        }
+    fun aPastedHttpProfileLinkGivesItsName() {
+        assertEquals(ProfileInput.Name("sample_viewer"), profileInput("http://myanimelist.net/profile/sample_viewer"))
+        assertEquals(ProfileInput.Name("sample_viewer"), profileInput("http://www.myanimelist.net/profile/sample%5Fviewer/"))
     }
 
     @Test
-    fun anyOtherLinkIsNotAName() {
+    fun aNameTypedOrInALinkIsTakenOnlyByTheAppsNameRule() {
+        val refused =
+            listOf(
+                "a b",
+                "some.name",
+                "@me",
+                "имя",
+                "a".repeat(USER_NAME_MAX_LENGTH + 1),
+                "myanimelist.net/profile/a%20b",
+                "myanimelist.net/profile/%D0%B8%D0%BC%D1%8F",
+                "myanimelist.net/profile/@me",
+                "myanimelist.net/profile/%E2%80%8B",
+            )
+        for (text in refused) assertEquals(text, ProfileInput.Refused, profileInput(text))
+        val taken = listOf("sample_viewer", "Quiet-Viewer9", "a".repeat(USER_NAME_MAX_LENGTH))
+        for (name in taken) assertEquals(ProfileInput.Name(name), profileInput(" $name "))
+    }
+
+    @Test
+    fun anyOtherLinkIsRefused() {
         val links =
             listOf(
                 "m.myanimelist.net/profile/sample_viewer",
@@ -109,29 +118,19 @@ class ProfileStateTest {
                 "myanimelist.net/anime/1",
                 "myanimelist.net/profile/",
                 "Check https://myanimelist.net/profile/sample_viewer",
-            )
-        for (link in links) assertEquals(link, ProfileInput.OtherLink, profileInput(link))
+                "https://myanimelist.net/profile/sample_viewer/reviews",
+                "https://myanimelist.net/animelist/sample_viewer",
+                "myanimelist.net/profile/a%2Fb",
+            ) + (Links.refused + Links.handedOn).filterNot { it.startsWith("http://") }
+        for (link in links) assertEquals(link, ProfileInput.Refused, profileInput(link))
         assertNull(OpenProfile(links[1], emptyList()).nameToOpen())
-        assertTrue(OpenProfile(links[1], emptyList()).notAProfileLink)
+        assertTrue(OpenProfile(links[1], emptyList()).refused)
     }
 
     @Test
-    fun anythingElseIsTakenAsAName() {
-        assertEquals(ProfileInput.Name("sample_viewer"), profileInput(" sample_viewer "))
-        assertEquals(ProfileInput.Name("some.name"), profileInput("some.name"))
+    fun blankIsNeitherANameNorRefused() {
         assertEquals(ProfileInput.Blank, profileInput("  "))
-        assertFalse(OpenProfile("sample_viewer", emptyList()).notAProfileLink)
-    }
-
-    @Test
-    fun theStandInRemembersOnlyNamesThatExist() {
-        val standIn = fixtureProfile
-        val before = standIn.recent
-        standIn.opened(fixtures.unknownName)
-        assertEquals(before, standIn.recent)
-        standIn.opened(fixtures.privateName)
-        assertEquals(fixtures.privateName, standIn.recent.first())
-        standIn.opened(fixtures.recent.last())
-        assertEquals(fixtures.recent.last(), standIn.recent.first())
+        assertFalse(OpenProfile("  ", emptyList()).refused)
+        assertFalse(OpenProfile("sample_viewer", emptyList()).refused)
     }
 }

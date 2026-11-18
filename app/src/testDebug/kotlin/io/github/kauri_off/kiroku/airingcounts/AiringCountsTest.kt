@@ -153,6 +153,24 @@ class AiringCountsTest {
     }
 
     @Test
+    fun `a title whose numbering AniList doubts is doubt with how far the other entry aired, and a reason before it keeps its own`() {
+        val doubted = FixtureAnime.exactToWatch
+        val totals = FixtureAnime.estimatedCaughtUp
+        val schedules =
+            set.schedules +
+                (doubted.id to set.schedules.getValue(doubted.id).copy(doubtedOver = 20)) +
+                (totals.id to set.schedules.getValue(totals.id).copy(doubtedOver = 2))
+        val airing = set.airing + listOf(doubted, totals).associate { it.id to airingAt(it, schedules[it.id], set.now) }
+
+        val listed = airingCounts(set.entries, airing, schedules, TitleLanguage.Romaji).notExact
+        val first = listed.single { it.id == doubted.id }
+        assertEquals(CountKind.Doubt, first.kind)
+        assertEquals(AiredCount.Estimated(20), first.aired)
+        assertEquals(Why.DoubtedOver(20), first.why)
+        assertEquals(Why.TotalsDiffer(12, 13), listed.single { it.id == totals.id }.why)
+    }
+
+    @Test
     fun `the counts are read again when what is stored changes, and a list that cannot be read ends them as unreadable`() =
         runTest {
             val entries = MutableStateFlow(set.entries)
@@ -217,7 +235,9 @@ class AiringCountsTest {
 
         override fun observePageAiring(page: Anime) = throw UnsupportedOperationException()
 
-        override fun observeSchedules() = flowOf(set.schedules)
+        override fun observeSchedules() = throw UnsupportedOperationException()
+
+        override fun observeStoredSchedules() = flowOf(set.schedules)
 
         override suspend fun refreshStale(): Outcome<Unit> = throw UnsupportedOperationException()
 
@@ -226,5 +246,7 @@ class AiringCountsTest {
         override suspend fun refreshStale(page: Anime): Outcome<Unit> = throw UnsupportedOperationException()
 
         override suspend fun refresh(page: Anime): Outcome<Unit> = throw UnsupportedOperationException()
+
+        override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = throw UnsupportedOperationException()
     }
 }

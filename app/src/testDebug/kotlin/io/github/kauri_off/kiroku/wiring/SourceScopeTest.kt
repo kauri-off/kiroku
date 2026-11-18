@@ -14,6 +14,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,6 +27,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 @RunWith(RobolectricTestRunner::class)
 @Config(shadows = [RefusingConnectivity::class])
 class SourceScopeTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val context get() = RuntimeEnvironment.getApplication()
     private val clock = FixtureTime.clock
     private val reported = CopyOnWriteArrayList<Throwable>()
@@ -66,7 +70,7 @@ class SourceScopeTest {
             SandboxGraph.create(
                 context,
                 clock,
-            ) { source, device -> LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reported::add, device = device) },
+            ) { source, device, clock -> LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reported::add, device = device) },
             refused = true,
         )
 

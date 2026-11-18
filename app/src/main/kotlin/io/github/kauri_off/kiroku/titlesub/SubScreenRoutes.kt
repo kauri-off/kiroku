@@ -39,6 +39,11 @@ data class DetailsKey(
     }
 }
 
+@Serializable
+data class ScoresKey(
+    val id: Long,
+) : NavKey
+
 @Composable
 fun RelatedRoute(
     key: RelatedKey,
@@ -99,6 +104,29 @@ fun DetailsRoute(
                 DetailsEvent.Back -> onBack()
                 DetailsEvent.SignIn -> onSignIn()
                 DetailsEvent.Retry -> details.onEvent(event)
+            }
+        },
+        snackbars = snackbars,
+    )
+}
+
+@Composable
+fun ScoresRoute(
+    key: ScoresKey,
+    graph: AppGraph,
+    snackbars: SnackbarHostState,
+    onBack: () -> Unit,
+    onSignIn: () -> Unit,
+) {
+    val scores = viewModel { ScoresViewModel(AnimeId(key.id), graph.scores, graph.session) }
+    val state by scores.state.collectAsScreenState()
+    ScoresScreen(
+        state = state,
+        onEvent = { event ->
+            when (event) {
+                ScoresEvent.Back -> onBack()
+                ScoresEvent.SignIn -> onSignIn()
+                ScoresEvent.Retry -> scores.onEvent(event)
             }
         },
         snackbars = snackbars,

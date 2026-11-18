@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import java.time.Instant
 
 // What the airing of a live source is built from: its source of episode times, its store and its list.
@@ -60,12 +59,9 @@ internal class LiveAiring(
     @Volatile
     private var opened = false
 
-    private suspend fun <T> onFirstUse(part: Lazy<T>): T =
-        if (part.isInitialized()) part.value else withContext(Dispatchers.IO) { part.value }
-
     // S9: the store is emptied at its first use while nobody is signed in, for a sign-out the process did not finish.
     private suspend fun store(): SignedInStore {
-        val store = onFirstUse(store)
+        val store = store.onFirstUse(parts.scope)
         if (!opened) {
             opening.withLock {
                 if (!opened) reported { store.forget() }
@@ -77,7 +73,7 @@ internal class LiveAiring(
 
     private suspend fun airing(): AiringRepository {
         store()
-        return onFirstUse(built)
+        return built.onFirstUse(parts.scope)
     }
 
     override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flow { emitAll(airing().observeAiring()) }
@@ -86,6 +82,8 @@ internal class LiveAiring(
 
     override fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flow { emitAll(airing().observeSchedules()) }
 
+    override fun observeStoredSchedules(): Flow<Map<AnimeId, AiringSchedule>> = flow { emitAll(airing().observeStoredSchedules()) }
+
     override suspend fun refreshStale(): Outcome<Unit> = airing().refreshStale()
 
     override suspend fun refresh(): Outcome<Unit> = airing().refresh()
@@ -93,6 +91,8 @@ internal class LiveAiring(
     override suspend fun refreshStale(page: Anime): Outcome<Unit> = airing().refreshStale(page)
 
     override suspend fun refresh(page: Anime): Outcome<Unit> = airing().refresh(page)
+
+    override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = airing().refresh(titles)
 
     // S9, after the session is signed out; a store that fails it is emptied at the first use of the next process.
     suspend fun forget() = reported { store().forget() }
@@ -113,15 +113,21 @@ internal class SignedInSource(
     private val source: AiringSource,
     private val session: Flow<Session>,
 ) : AiringSource {
+    override suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         session
             .map { it == Session.SignedOut }
             .distinctUntilChanged()
-            .transformLatest { signedOut -> emit(if (signedOut) null else source.fetch(titles, since)) }
+            .transformLatest { signedOut -> emit(if (signedOut) null else source.fetch(titles, since, whole)) }
             .first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
 }
 

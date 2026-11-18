@@ -22,6 +22,10 @@ import androidx.sqlite.execSQL
         ListStateRow::class,
         AiringRow::class,
         AiringEpisodeRow::class,
+        ProfileRow::class,
+        NotificationStateRow::class,
+        NotificationTitleRow::class,
+        SentRow::class,
     ],
     version = KirokuDatabase.VERSION,
 )
@@ -32,9 +36,13 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     internal abstract fun airing(): AiringDao
 
+    internal abstract fun profile(): ProfileDao
+
+    internal abstract fun notifications(): NotificationDao
+
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 2
+        const val VERSION = 5
 
         val migrations: List<Migration> =
             listOf(
@@ -48,6 +56,37 @@ abstract class KirokuDatabase : RoomDatabase() {
                         "CREATE TABLE IF NOT EXISTS `airing_episode` (`title_id` INTEGER NOT NULL, `number` INTEGER NOT NULL, " +
                             "`airs_at` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `number`), FOREIGN KEY(`title_id`) " +
                             "REFERENCES `airing`(`title_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+                    )
+                },
+                // A stored schedule whose numbering the source doubts; none was before.
+                migration(2, 3) {
+                    execSQL("ALTER TABLE `airing` ADD COLUMN `doubted_over` INTEGER")
+                },
+                // The signed-in user's profile, in a table of its own.
+                migration(3, 4) {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `own_profile` (`owner` TEXT NOT NULL, `name` TEXT NOT NULL, `picture` TEXT, " +
+                            "`joined` TEXT, `fetched_at` INTEGER NOT NULL, `stated_watching` INTEGER, `stated_completed` INTEGER, " +
+                            "`stated_on_hold` INTEGER, `stated_dropped` INTEGER, `stated_planned` INTEGER, `stated_entries` INTEGER, " +
+                            "`stated_episodes` INTEGER, `stated_rewatched` INTEGER, `stated_days_watched` REAL, " +
+                            "`stated_mean_score` REAL, PRIMARY KEY(`owner`))",
+                    )
+                },
+                // The record of notifications and what was posted, in tables of their own and empty (N10).
+                migration(4, 5) {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `notification_state` (`id` INTEGER NOT NULL, `owner` TEXT, `since` INTEGER, " +
+                            "`planned_since` INTEGER, PRIMARY KEY(`id`))",
+                    )
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `notification_title` (`title_id` INTEGER NOT NULL, `followed_status` TEXT, " +
+                            "`followed_since` INTEGER, `announced_episode` INTEGER, `announced_aired_at` INTEGER, " +
+                            "`taken_back_to` INTEGER, `standing` INTEGER NOT NULL, PRIMARY KEY(`title_id`))",
+                    )
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `notification_sent` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`title_id` INTEGER NOT NULL, `episode` INTEGER NOT NULL, `aired_at` INTEGER NOT NULL, " +
+                            "`notify_at` INTEGER NOT NULL, `posted_at` INTEGER NOT NULL, `recheck` TEXT NOT NULL, `shown` INTEGER NOT NULL)",
                     )
                 },
             )

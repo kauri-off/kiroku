@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.error.StoreCalls
 import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.endedCall
 import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -13,9 +14,11 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.changedFrom
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.Untouched
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -26,8 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -45,6 +47,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.random.Random
+import kotlin.time.Duration
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
 class ListEngine(
@@ -101,6 +104,17 @@ class ListEngine(
                 anime: Anime,
                 values: SentValues?,
             ) = remoteCall { remote.put(anime, values) }.about(anime.id)
+
+            // A refusal that cannot be asked about is none: the sync is made.
+            override suspend fun refusedFor(): Duration =
+                try {
+                    remote.refusedFor()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    unexpected(e)
+                    Duration.ZERO
+                }
 
             // An answer about another title is the engine's own exception, and nothing of it is stored.
             private fun Outcome<ListEntry?>.about(id: AnimeId) =
@@ -305,7 +319,7 @@ class ListEngine(
         }
     }
 
-    // W2: a failure still held goes once MAL's settled values of its title are those its Retry would set.
+    // W2: a failure still held goes once a Retry over MAL's settled values of its title would change nothing.
     private fun settled(
         id: AnimeId,
         entry: StoredEntry?,
@@ -315,12 +329,7 @@ class ListEngine(
         synchronized(held) {
             held.removeAll { failure ->
                 val write = failure.write
-                write.anime.id == id &&
-                    when (write) {
-                        is ListWrite.Save -> values != null && write.over(values) == values
-                        is ListWrite.Remove -> values == null
-                        else -> false
-                    }
+                write.anime.id == id && (write is ListWrite.Save || write is ListWrite.Remove) && failure.settledBy(values)
             }
         }
     }
@@ -351,8 +360,7 @@ class ListEngine(
         return try {
             sync.await()
         } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException(STOPPED, e)
+            scope.endedCall(IllegalStateException(STOPPED, e))
         }
     }
 
@@ -363,23 +371,31 @@ class ListEngine(
             hold(it)
             return null
         }
-        return try {
-            withContext(NonCancellable) {
-                try {
-                    locked {
-                        check(!stopped) { STOPPED }
-                        val refused = refused(write, checkNotNull(settled))
-                        if (refused == null) edit(write) else null.also { hold(refused) }
+        var stoppedFirst = false
+        val change =
+            try {
+                withContext(NonCancellable) {
+                    try {
+                        locked {
+                            stoppedFirst = stopped
+                            if (stoppedFirst) {
+                                null
+                            } else {
+                                val refused = refused(write, checkNotNull(settled))
+                                if (refused == null) edit(write) else null.also { hold(refused) }
+                            }
+                        }
+                    } catch (_: StoreFailure) {
+                        hold(write.failed(DataError.StorageError, write.list ?: session.owner))
+                        null
                     }
-                } catch (_: StoreFailure) {
-                    hold(WriteFailure(DataError.StorageError, write.plain, write.list ?: session.owner))
-                    null
                 }
+            } catch (e: CancellationException) {
+                scope.endedCall(IllegalStateException(STOPPED, e))
             }
-        } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException(STOPPED, e)
-        }
+        // Out of the NonCancellable block, so that a caller cancelled while it waited behind the end hears its cancellation.
+        if (stoppedFirst) scope.endedCall(IllegalStateException(STOPPED))
+        return change
     }
 
     // An Undo or a Retry of another sign-in's list is for no list at all; any other write needs a signed-in session.
@@ -396,7 +412,13 @@ class ListEngine(
     private fun refused(
         write: ListWrite,
         session: Session,
-    ): WriteFailure? = refusal(write, session)?.let { WriteFailure(it, write.plain, if (write.bound) write.list else session.owner) }
+    ): WriteFailure? = refusal(write, session)?.let { write.failed(it, if (write.bound) write.list else session.owner) }
+
+    // A Retry that fails again is still the failure it came from, and still leaves what has changed since.
+    private fun ListWrite.failed(
+        error: DataError,
+        list: SignInId?,
+    ): WriteFailure = if (this is ListWrite.Retry) failure.copy(error = error, list = list) else WriteFailure(error, this, list)
 
     // An unconfirmed title with nothing on its way to MAL, or one MAL may have changed unseen, is sent even unchanged.
     private suspend fun edit(write: ListWrite): ListChange? {
@@ -404,9 +426,10 @@ class ListEngine(
         val stored = local.read(id)
         val anime = stored?.anime ?: write.anime
         val current = stored?.entry?.shown?.let { ListEntry(anime, it.values, it.updatedAt) }
-        val values = write.applyTo(current, today())
+        val plain = write.left(current?.values) ?: return null
+        val values = plain.applyTo(current, today())
         val from = if (id in pending) current?.values else stored?.entry?.confirmed?.values
-        val named = (write.plain as? ListWrite.Save)?.only ?: values?.let { v -> from?.let { v.changedFrom(it) } }
+        val named = (plain as? ListWrite.Save)?.only ?: values?.let { v -> from?.let { v.changedFrom(it) } }
         val owed = stored?.entry?.unconfirmed == true && id !in pending || id in unsure && named?.isEmpty() != true
         if (values == current?.values && !owed) return null
         val next = values?.let { ListEntry(anime, it, clock.instant()) }
@@ -415,7 +438,7 @@ class ListEngine(
         if (stored == null) local.add(anime, entry) else local.write(mapOf(id to entry))
         pending[id] = (pending[id] ?: 0) + 1
         accept(Put(anime, values, from, named, epochs[id] ?: 0, list))
-        return ListChange(current, next, write.steps, checkNotNull(settled?.owner))
+        return ListChange(current, next, plain.steps, checkNotNull(settled?.owner))
     }
 
     override suspend fun send(write: ListWrite): Outcome<Unit> {
@@ -423,7 +446,7 @@ class ListEngine(
         val result = CompletableDeferred<Outcome<Unit>>()
         val refusal =
             try {
-                locked { refusal(write, checkNotNull(settled)) ?: null.also { accept(Direct(write.plain, result, list)) } }
+                locked { refusal(write, checkNotNull(settled)) ?: null.also { accept(Direct(write, result, list)) } }
             } catch (_: StoreFailure) {
                 DataError.StorageError
             }
@@ -434,6 +457,20 @@ class ListEngine(
         check(!stopped) { STOPPED }
         accepted += request
         queue.trySend(request)
+    }
+
+    // A sync nobody asked for waits for the end of MAL's refusal (section 2.3), and is left when a download came meanwhile.
+    private fun syncUnasked() {
+        scope.launch {
+            var waited = false
+            while (true) {
+                val wait = mal.refusedFor()
+                if (wait <= Duration.ZERO) break
+                waited = true
+                delay(wait)
+            }
+            if (!waited || syncedAt.value == null) sync()
+        }
     }
 
     // W4: a title edited since the download began keeps its values; every other one becomes what MAL has.
@@ -553,13 +590,14 @@ class ListEngine(
                         if (outcome.error.unsure) unsure += id
                         val shown = stored?.shown
                         val retry = shown?.let { ListWrite.Save(put.anime, it.values, touched(put)) } ?: ListWrite.Remove(put.anime)
-                        WriteFailure(outcome.error, retry, settled?.owner)
+                        val made = if (outcome.error.unsure) setOf(put.values) else emptySet()
+                        WriteFailure(outcome.error, retry, settled?.owner, Untouched(setOf(stored?.confirmed?.values) + made))
                     }
                 }
             }
         if (failure != null) {
             hold(failure)
-            if (failure.error.unsure) scope.launch { sync() }
+            if (failure.error.unsure) syncUnasked()
         }
     }
 
@@ -586,6 +624,8 @@ class ListEngine(
     ) {
         val id = put.id
         var only: Set<ListField>? = null
+        // Without the store, what the edit found and what it sent stand in for what MAL confirmed.
+        var untouched = Untouched(setOf(put.from, put.values))
         val (last, owner) =
             mutex.withLock {
                 try {
@@ -598,6 +638,7 @@ class ListEngine(
                 touch(id)
                 try {
                     val confirmed = local.read(id)?.entry?.confirmed
+                    untouched = Untouched(setOf(confirmed?.values, put.values))
                     local.restore(mapOf(id to confirmed?.let { StoredEntry.settled(it) }))
                 } catch (_: StoreFailure) {
                 }
@@ -608,13 +649,12 @@ class ListEngine(
                 (accepted.filterIsInstance<Put>().lastOrNull { it.id == id && it.epoch == put.epoch } ?: put) to settled?.owner
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
-        hold(WriteFailure(error, retry, owner))
-        scope.launch { sync() }
+        hold(WriteFailure(error, retry, owner, untouched))
+        syncUnasked()
     }
 
     // N9: the write is applied to the entry as MAL has it now, and nothing is sent when that changes nothing.
     private suspend fun send(direct: Direct): Outcome<Unit> {
-        val write = direct.write
         val id = direct.id
         if (!current(direct)) return expired
         val confirmed =
@@ -622,6 +662,7 @@ class ListEngine(
                 is Outcome.Failure -> return outcome
                 is Outcome.Success -> outcome.value
             }
+        val write = direct.write.left(confirmed?.values) ?: return Outcome.Success(Unit)
         val values = write.applyTo(confirmed, today())
         val refusal =
             when {
@@ -683,7 +724,7 @@ class ListEngine(
                 unexpected(e)
                 true
             }
-        if (owes) scope.launch { sync() }
+        if (owes) syncUnasked()
     }
 
     private fun Outcome<ListEntry?>.recorded(): Outcome<ListRecord?> =
@@ -750,7 +791,7 @@ class ListEngine(
         if (restored) return
         val returned = returnToConfirmed()
         restored = true
-        if (returned) scope.launch { sync() }
+        if (returned) syncUnasked()
     }
 
     // The requests of these titles were cut off, so what MAL has of them is not known: a sync is owed.
@@ -787,15 +828,8 @@ class ListEngine(
         return session
     }
 
-    private val Session.owner: SignInId?
-        get() =
-            when (this) {
-                Session.SignedOut -> null
-                is Session.SignedIn -> signIn
-                is Session.Expired -> signIn
-            }
-
-    private val ListWrite.plain: ListWrite get() = if (this is ListWrite.Retry) failure.write else this
+    // A Retry is what is left of its failed write over [current]; null when nothing is.
+    private fun ListWrite.left(current: ListValues?): ListWrite? = if (this is ListWrite.Retry) failure.left(current) else this
 
     private suspend inline fun <T> locked(block: () -> T): T =
         mutex.withLock {

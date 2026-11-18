@@ -22,10 +22,15 @@ import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -129,6 +134,10 @@ abstract class AiringEngineContract {
         @Volatile
         var writesToFail = 0
 
+        // Every write waits for it, while it is there.
+        @Volatile
+        var writesHeld: CompletableDeferred<Unit>? = null
+
         val writes = CopyOnWriteArrayList<Map<AnimeId, StoredAiring?>>()
 
         @Volatile
@@ -149,6 +158,7 @@ abstract class AiringEngineContract {
         }
 
         override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
+            writesHeld?.await()
             fault()
             if (failingWrites || (failingForgets && null in titles.values)) throw IOException("The disk is full")
             if (writesToFail > 0) {
@@ -315,6 +325,24 @@ abstract class AiringEngineContract {
             assertEquals(bare, shown[FixtureAnime.estimatedToWatch.id])
             assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
             assertEquals(1, s.source.calls.size)
+        }
+
+    @Test
+    fun `a schedule whose numbering the source doubts is stored with its doubt, and is not among the schedules a notification reads`() =
+        runTest {
+            val anime = FixtureAnime.exactToWatch
+            val plain = fixtures.schedules.getValue(anime.id)
+            val doubted = plain.copy(doubtedOver = 20)
+            val s = subject(schedules = fixtures.schedules + (anime.id to doubted), seeded = false)
+            assertEquals(Outcome.Success(Unit), s.engine.refreshStale())
+
+            assertEquals(StoredAiring(doubted, fixtures.now), s.stored(anime))
+            assertEquals(doubted, s.engine.observeStored().first()[anime.id])
+            assertEquals(fixtures.schedules.filterKeys { it in tracked && it != anime.id }, s.engine.observeSchedules().first())
+
+            s.source.schedules += anime.id to plain
+            assertEquals(Outcome.Success(Unit), s.engine.refresh())
+            assertEquals(plain, s.engine.observeSchedules().first()[anime.id])
         }
 
     @Test
@@ -561,6 +589,45 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `N3 a refresh of named titles asks for the tracked ones among them and for no other, and stores what it is answered`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            val before = s.stored()
+            val moved =
+                fixtures.schedules.getValue(due.id).let {
+                    it.copy(
+                        episodes =
+                            it.episodes.map { e ->
+                                e.copy(airsAt = e.airsAt.plusSeconds(60))
+                            },
+                    )
+                }
+            s.source.schedules = fixtures.schedules + (due.id to moved)
+            s.clock.advance(1.minutes)
+            val named =
+                setOf(
+                    due,
+                    FixtureAnime.droppedEstimated,
+                    FixtureAnime.completedUnscored,
+                    FixtureAnime.notOnListAiring,
+                ).map { it.id }
+
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(named.toSet()))
+
+            assertEquals(listOf(setOf(due.id)), s.source.calls.toList())
+            assertEquals(StoredAiring(moved, s.clock.now), s.stored(due))
+            assertEquals(before - due.id, s.stored() - due.id)
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(named.toSet() - due.id))
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(emptySet<AnimeId>()))
+            assertEquals(1, s.source.calls.size)
+            s.source.failure = DataError.NoConnection
+            assertEquals(Outcome.Failure(DataError.NoConnection), s.engine.refresh(setOf(due.id)))
+            assertEquals(StoredAiring(moved, s.clock.now), s.stored(due))
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
+    @Test
     fun `A11 a new title whose fetch failed is asked for again at the next refresh, and not before`() =
         runTest {
             val added = FixtureAnime.notOnListAiring
@@ -785,6 +852,39 @@ abstract class AiringEngineContract {
 
             for (refresh in others + first) assertEquals(Outcome.Success(Unit), refresh.await())
             assertEquals(listOf(tracked), s.source.calls.toList())
+        }
+
+    // A process that never lives through a whole call, as one a broadcast starts, still keeps the titles answered in it.
+    @Test
+    fun `A10 a title the source hands over whole is stored and answered while its call goes on, and stays when the call is cut`() =
+        runTest {
+            val process = childScope()
+            val s = subject(seeded = false, scope = process)
+            val first = FixtureAnime.exactToWatch
+            s.source.handedFirst = setOf(first.id)
+            s.source.latency = 1.minutes
+
+            val held = CompletableDeferred<Unit>().also { s.store.writesHeld = it }
+            val all = process.async { s.engine.refreshStale() }
+            val named = process.async { s.engine.refresh(setOf(first.id)) }
+            runCurrent()
+
+            assertFalse("the title is answered before it is stored", named.isCompleted)
+            held.complete(Unit)
+            s.store.writesHeld = null
+            runCurrent()
+            assertEquals(listOf(tracked), s.source.calls.toList())
+            assertTrue("the named title waits for the whole call", named.isCompleted)
+            assertEquals(Outcome.Success(Unit), named.await())
+            assertFalse(all.isCompleted)
+            val kept = mapOf(first.id to StoredAiring(fixtures.schedules[first.id], fixtures.now))
+            assertEquals(kept, s.stored())
+
+            process.cancel()
+            runCurrent()
+
+            assertEquals(kept, s.stored())
+            assertEquals(emptyList<Throwable>(), s.unexpected)
         }
 
     @Test
@@ -1214,6 +1314,33 @@ abstract class AiringEngineContract {
             assertEquals(setOf(s.clock.now), s.stored().values.mapTo(mutableSetOf()) { it.fetchedAt })
         }
 
+    // The scope's end reaches its children one at a time; the engine's may run its end before a refresh of the same scope hears of it.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a refresh in the engine's own scope ends cancelled with it, also when the engine has stopped first`() =
+        runTest {
+            val process = childScope()
+            val s = subject(scope = process)
+            s.source.latency = 1.seconds
+            s.clock.advance(20.minutes)
+            lateinit var refresh: Deferred<Outcome<Unit>>
+            var raced = false
+            process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) {
+                testScheduler.runCurrent()
+                raced = refresh.isCompleted
+            }
+            refresh = process.async { s.engine.refresh() }
+            runCurrent()
+
+            process.cancel()
+            runCurrent()
+
+            assertTrue("the refresh ended before the scope's end reached it", raced)
+            assertTrue(refresh.isCancelled)
+            assertTrue("${refresh.getCompletionExceptionOrNull()}", refresh.getCompletionExceptionOrNull() is CancellationException)
+            assertSame(null, s.unexpected.firstOrNull())
+        }
+
     @Test
     fun `after its scope has ended the engine refuses a refresh, and one that was waiting ends with it`() =
         runTest {
@@ -1236,7 +1363,7 @@ abstract class AiringEngineContract {
             runCurrent()
 
             assertTrue(refresh.isCompleted)
-            assertTrue(waiting is IllegalStateException)
+            assertTrue("$waiting", waiting is IllegalStateException && waiting !is CancellationException)
             val refused = runCatching { s.engine.refresh() }.exceptionOrNull()
             assertTrue(refused is IllegalStateException)
             assertSame(null, s.unexpected.firstOrNull())

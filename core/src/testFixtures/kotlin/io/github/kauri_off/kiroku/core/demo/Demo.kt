@@ -10,6 +10,13 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
+import io.github.kauri_off.kiroku.core.notify.InMemoryShownNotifications
+import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.NotificationEngine
+import io.github.kauri_off.kiroku.core.notify.RunReport
+import io.github.kauri_off.kiroku.core.notify.ShownNotifications
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -18,6 +25,9 @@ import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
+import io.github.kauri_off.kiroku.core.user.UserListKeeper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -44,6 +54,10 @@ class Demo(
     clockSet: Flow<Unit> = emptyFlow(),
     // Whether the airing store starts as fetched just now; if not, it starts empty, as after an install.
     airingStored: Boolean = true,
+    // The alarm and the notifications of the demo's device; in memory when none is given.
+    alarm: NotificationAlarm = InMemoryNotificationAlarm(),
+    shown: ShownNotifications = InMemoryShownNotifications(),
+    runs: (RunReport) -> Unit = {},
 ) {
     val server = DemoServer(fixtures.entries, clock, latency)
 
@@ -53,7 +67,11 @@ class Demo(
     private val signIn = MutableStateFlow<SignInId?>(fixtures.session.signIn)
     private var signIns = 1
 
-    val session: SessionRepository = DemoSessionRepository(signIn, server)
+    val session: SessionRepository =
+        DemoSessionRepository(signIn, server) {
+            otherUsers.forget()
+            choices.forgetOpenedProfiles()
+        }
 
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
@@ -66,27 +84,60 @@ class Demo(
 
     val airingSource = DemoAiringSource(fixtures, server)
 
-    // On the real rules over a store in memory, which starts as fetched just now, as a device that was just synced.
+    // As fetched just now, as a device that was just synced, or empty.
+    private val startingAiring = {
+        fixtures.entries.filter { airingStored && it.tracked }.associate {
+            it.anime.id to StoredAiring(fixtures.schedules[it.anime.id], clock.instant())
+        }
+    }
+
+    private val airingStore = InMemoryAiringStore(startingAiring())
+
+    // On the real rules over a store in memory.
     val airing: AiringRepository =
         ListAiring(
             airingSource,
-            InMemoryAiringStore(
-                fixtures.entries.filter { airingStored && it.tracked }.associate {
-                    it.anime.id to
-                        StoredAiring(fixtures.schedules[it.anime.id], clock.instant())
-                },
-            ),
+            airingStore,
             list,
             AiringTime(clock, clockSet) { if (clockRuns) delay(it) else awaitCancellation() },
             scope,
             unexpected,
         )
 
+    // On the real rules over a record in memory; built at its first use and following the list from its first run.
+    val notifications: NotificationEngine by lazy {
+        NotificationEngine(
+            InMemoryNotificationStore(),
+            alarm,
+            shown,
+            list,
+            airing,
+            session.observeSession(),
+            connection,
+            clock,
+            scope,
+            reports = runs,
+            unexpected = unexpected,
+        )
+    }
+
+    val scoreSource = DemoScoreDistributions(fixtures, server)
+
+    // Kept for the process as the app keeps them.
+    val scores: ScoreDistributionRepository = KeptScoreDistributions(scoreSource)
+
     val search: SearchRepository = DemoSearchRepository(fixtures, server)
 
-    val user: UserRepository = DemoUserRepository(fixtures, server, signIn)
+    val userLists = DemoUserLists(fixtures, server)
 
-    val preferences: PreferencesRepository = DemoPreferences()
+    // On the real keeper over the demo's users.
+    private val otherUsers = UserListKeeper(userLists, scope, unexpected)
+
+    val user: UserRepository = otherUsers.beside(DemoOwnProfile(fixtures, server, signIn, clock))
+
+    private val choices = DemoPreferences()
+
+    val preferences: PreferencesRepository = choices
 
     // Whether an edit is on its way to MAL.
     val saving: Boolean get() = server.writing.value > 0 || store.unconfirmed.value
@@ -102,15 +153,18 @@ class Demo(
         }
     }
 
-    // The demo as it started: every failure off, signed in, no details fetched, and the list synced back to the fixtures.
+    // As it started: every failure off, signed in, no details fetched, nobody's list held, the list and the airing data the fixtures'.
     suspend fun reset(): Outcome<Unit> {
         server.reset(fixtures.entries, latency)
         airingSource.failure = null
-        airingSource.holding?.complete(Unit)
-        airingSource.holding = null
         airingSource.schedules = fixtures.schedules
+        airingSource.hold(false)
+        scoreSource.failure = null
+        airingStore.write(airingStore.read().mapValues { null } + startingAiring())
         store.reset()
         details.forget()
+        otherUsers.forget()
+        choices.forgetOpenedProfiles()
         if (signIn.value == null) signIn.value = SignInId("demo-${++signIns}")
         return list.sync()
     }
@@ -126,6 +180,20 @@ class Demo(
             scope: CoroutineScope,
             unexpected: (Throwable) -> Unit = { throw it },
             clockSet: Flow<Unit> = emptyFlow(),
-        ): Demo = Demo(Fixtures.at(clock), scope, latency, unexpected = unexpected, clockRuns = true, clockSet = clockSet)
+            alarm: NotificationAlarm = InMemoryNotificationAlarm(),
+            shown: ShownNotifications = InMemoryShownNotifications(),
+            runs: (RunReport) -> Unit = {},
+        ): Demo =
+            Demo(
+                Fixtures.at(clock),
+                scope,
+                latency,
+                unexpected = unexpected,
+                clockRuns = true,
+                clockSet = clockSet,
+                alarm = alarm,
+                shown = shown,
+                runs = runs,
+            )
     }
 }

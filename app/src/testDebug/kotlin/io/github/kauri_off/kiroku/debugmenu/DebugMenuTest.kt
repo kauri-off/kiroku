@@ -33,6 +33,7 @@ import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.source.runningSource
+import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.DemoGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
 import io.github.kauri_off.kiroku.wiring.reportUnexpected
@@ -54,6 +55,9 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class DebugMenuTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     @get:Rule(order = 0)
     val source = StartsOn(DataSource.Demo)
 

@@ -10,4 +10,6 @@
     <string name="source_running_sandbox">Still in the sandbox until the app starts again</string>
     <string name="source_restart">Restart</string>
     <string name="source_not_kept">The choice could not be saved</string>
+    <string name="source_users_demo">Other users of the demo: %1$s, whose list is public, and %2$s, whose list is private</string>
+    <string name="source_users_sandbox">Other users of the sandbox: %1$s, whose list is public, and %2$s, whose list is private</string>
 </resources>

@@ -21,7 +21,9 @@ row. The owner is the final authority on the Russian column.
 | Undo | Undo | Отменить | Only for Undo. A dialog is dismissed with Cancel / «Отмена»; unsaved changes with Discard / Keep editing, «Не сохранять» / «Вернуться» |
 | Edit | Edit / Change | Изменить | A row's long press and its spoken action; the action of the "Added" snackbar |
 | The user's score | Your score / Not scored / Rate | Ваша оценка / Без оценки / Оценить | |
-| MAL's score and rank | MAL score / Ranked #12 | Оценка MAL / №12 в рейтинге | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms) |
+| Titles with a score, counted | Scored / Not scored / 7 of 31 scored / Nothing scored | Оценено / Без оценки / Оценено 7 из 31 / Оценок нет | A profile's count: "scored" as in "Not scored", never "rated" |
+| MAL's score and rank | MAL score / #12, Rank | Оценка MAL / №12, Место | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). The title page's header captions `#12` with Rank |
+| MAL's score distribution | MAL scores / Score 10 | Оценки MAL / Оценка 10 | One score of it is spoken with the word, "Score 10" / «Оценка 10», never as the bare number |
 | The default sort | Up next | На очереди | |
 | Synopsis, Related, Details | Synopsis, Related, Details | Описание, Связанное, Подробности | |
 | Airing status | Airing / Finished / Not yet aired | Выходит / Завершено / Ещё не вышло | |
@@ -51,6 +53,7 @@ setting decide.
 | Premiere, time known | `Premieres Sat 17:30` | `Премьера сб 17:30` | Time as for the next episode. No colon |
 | Premiere, date known | `Premieres 4 Jan` / `Premieres 4 Jan 2027` / `Premieres January 2027` / `Premieres 2027` | `Премьера 4 янв.` / `Премьера 4 янв. 2027 г.` / `Премьера в январе 2027 г.` / `Премьера в 2027 г.` | By the precision of MAL's date. A full date has no year in the list row and has it on the title page |
 | A message with its action | `Episode 13 watched · Undo` | `Серия 13 просмотрена · Отменить` | The message, «·», the action |
+| "Mark watched" from a notification that failed | `Could not save: episode 13 watched` | `Не удалось сохранить: серия 13 просмотрена` | In the title's notification, in its place; a tap opens the title, so it has no action of its own |
 | Facts line | `TV · 2024 · 24 episodes` | `ТВ · 2024 · 24 серии` | The episode count is a plural |
 | A number with a noun | `1,234,567 members` | `1 234 567 участников` | Plural resources; digits grouped by the locale |
 | A share under one percent | `<1%` | `<1 %` | Spoken "less than 1 percent" / «менее 1 процента» |
@@ -62,12 +65,6 @@ Wording decided before its feature exists. A row leaves this table when its reso
 
 | Concept | English | Russian | Notes |
 |---|---|---|---|
-| Notification channel | New episodes | Новые серии | |
-| Notification text | Episode 16 aired / Episode 16 aired · 3 to watch | Вышла серия 16 / Вышла серия 16 · к просмотру: 3 | The second when several are unwatched |
-| Notification action | Mark ep. 14 watched | Отметить серию 14 | |
-| Action failed | Could not save · Open | Не удалось сохранить · Открыть | |
-| Progress, Android 11 and earlier | Saving… on the channel "Saving changes" | Сохранение… / Сохранение изменений | |
-| Notification summary | 3 new episodes | %d новая серия, новые серии, новых серий | |
 | Sign out | Sign out | Выйти | |
 
 ## Rules

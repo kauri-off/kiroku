@@ -13,8 +13,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getBoundsInRoot
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToIndex
@@ -35,13 +33,13 @@ import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Sizes
-import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import io.github.kauri_off.kiroku.title.TitleFixtures
 import io.github.kauri_off.kiroku.title.TitleScreen
+import io.github.kauri_off.kiroku.title.TitleTags
 import io.github.kauri_off.kiroku.wiring.Pictures.Companion.BLUE
 import io.github.kauri_off.kiroku.wiring.Pictures.Companion.GREEN
 import io.github.kauri_off.kiroku.wiring.Pictures.Companion.HUGE_HEIGHT
@@ -67,6 +65,9 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ImageLoaderTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     private val compose = composeRule()
 
     @get:Rule
@@ -169,16 +170,13 @@ class ImageLoaderTest {
         assertEquals(listOf("/medium/1.png", "/large/1.png"), received.map { it.url.encodedPath })
     }
 
-    // The centre of the header's poster, which stands before the title's heading.
+    // The centre of the header's poster.
     private fun header(anime: Anime): Int {
-        val title = compose.onNode(isHeading() and hasText(anime.titles.romaji)).getBoundsInRoot()
+        val poster = compose.onNodeWithTag(TitleTags.poster).getBoundsInRoot()
         val image = compose.onRoot().captureToImage().asAndroidBitmap()
-        return with(compose.density) {
-            image.getPixel(
-                (title.left - Spacing.l - Sizes.posterHeader / 2).roundToPx(),
-                (title.top + Sizes.posterHeader * 3 / 4).roundToPx(),
-            )
-        }
+        return with(
+            compose.density,
+        ) { image.getPixel(((poster.left + poster.right) / 2).roundToPx(), ((poster.top + poster.bottom) / 2).roundToPx()) }
     }
 
     @Test

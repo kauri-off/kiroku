@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.model.changedFrom
 import io.github.kauri_off.kiroku.core.model.over
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
+import kotlin.time.Duration
 
 // What MAL does for the user's list. A failure is an outcome, never an exception.
 interface RemoteList {
@@ -26,6 +27,9 @@ interface RemoteList {
         anime: Anime,
         values: SentValues?,
     ): Outcome<ListEntry?>
+
+    // How long MAL asks to be left alone yet by requests nobody asked for (section 2.3); zero when it may be asked.
+    suspend fun refusedFor(): Duration
 }
 
 // A write's [fields] of [values] alone; MAL keeps a value left out, and never gets a status the app does not know.

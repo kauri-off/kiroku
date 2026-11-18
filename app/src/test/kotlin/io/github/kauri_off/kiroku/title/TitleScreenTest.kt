@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -30,6 +32,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -69,6 +72,21 @@ class TitleScreenTest {
             ).performScrollToNode(hasText(text))
     }
 
+    private fun scrollToCard(spoken: String) {
+        compose
+            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasContentDescription(spoken))
+    }
+
+    // A watch-order card, by the title its sentence starts with.
+    private fun spokenFirst(title: String) =
+        SemanticsMatcher("spoken first: $title") { node ->
+            node.config
+                .getOrNull(SemanticsProperties.ContentDescription)
+                .orEmpty()
+                .any { it.startsWith("$title, ") }
+        }
+
     private fun sends(
         event: TitleEvent,
         action: () -> Unit,
@@ -77,6 +95,17 @@ class TitleScreenTest {
         action()
         compose.waitForIdle()
         assertEquals(listOf(event), events)
+    }
+
+    @Test
+    fun theScoresRowSitsAboveDetailsAndOpensTheScores() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        scrollTo("Details")
+        val scores = compose.onNodeWithText("MAL scores").fetchSemanticsNode().boundsInRoot
+        val details = compose.onNodeWithText("Details").fetchSemanticsNode().boundsInRoot
+        assertTrue(scores.bottom <= details.top)
+        compose.onNodeWithText("Votes for each score").assertExists()
+        sends(TitleEvent.OpenScores) { compose.onNodeWithText("MAL scores").performClick() }
     }
 
     @Test
@@ -103,10 +132,10 @@ class TitleScreenTest {
         show(TitleFixtures.of(FixtureAnime.exactToWatch))
         compose.onNodeWithText("TV\u00A0· 2025").assertIsDisplayed()
         compose.onNodeWithText("episodes", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Episodes watched").assertIsDisplayed()
         show(TitleFixtures.of(FixtureAnime.notOnListAiring))
         compose.onNodeWithText("episodes", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Episodes watched").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Episodes watched").assertDoesNotExist()
     }
 
     // Decision for M2-24: a score not known yet is left out; "—" is said only once the title's page was read.
@@ -116,7 +145,8 @@ class TitleScreenTest {
         compose.onNodeWithText("TV\u00A0· 2024").assertIsDisplayed()
         compose.onNodeWithText("MAL score").assertDoesNotExist()
         compose.onNodeWithContentDescription("No score").assertDoesNotExist()
-        compose.onNodeWithText("Ranked", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Rank").assertDoesNotExist()
+        compose.onNodeWithText("Members").assertDoesNotExist()
         show(TitleFixtures.of(FixtureAnime.premiereTimeLater))
         compose.onNodeWithContentDescription("No score").assertIsDisplayed()
     }
@@ -164,6 +194,23 @@ class TitleScreenTest {
         sends(TitleEvent.Share) { compose.onNodeWithText("Share").performClick() }
     }
 
+    // The poster leads the header only for a title with a picture: a title without one has no empty box.
+    @Test
+    fun thePosterIsDrawnOnlyForATitleWithAPicture() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        compose.onNodeWithTag(TitleTags.poster).assertIsDisplayed()
+        val bare = FixtureAnime.premiereUnannounced
+        assertEquals(null, bare.posterUrl ?: bare.largePosterUrl)
+        show(TitleFixtures.of(bare))
+        compose.onNodeWithTag(TitleTags.poster).assertDoesNotExist()
+    }
+
+    @Test
+    fun aGivenScoreIsSpokenAsTheUsersAndOpensTheSheet() {
+        show(TitleFixtures.of(FixtureAnime.exactToWatch))
+        sends(TitleEvent.Edit) { compose.onNodeWithContentDescription("Your score:\u00A08").assertIsDisplayed().performClick() }
+    }
+
     @Test
     fun theListBlockSendsItsEvents() {
         show(TitleFixtures.of(FixtureAnime.notOnListAiring))
@@ -187,8 +234,10 @@ class TitleScreenTest {
         sends(TitleEvent.CollapseSynopsis) { compose.onNodeWithText("Less").performClick() }
         show(shown)
         for (card in shown.page.chain.filterNot { it.current }) {
-            scrollTo(card.title)
-            sends(TitleEvent.OpenRelated(card.anime.id)) { compose.onNode(hasText(card.title) and hasClickAction()).performClick() }
+            compose
+                .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+                .performScrollToNode(spokenFirst(card.title))
+            sends(TitleEvent.OpenRelated(card.anime.id)) { compose.onNode(spokenFirst(card.title) and hasClickAction()).performClick() }
         }
         val first = shown.page.related.first()
         scrollTo("Statistics")
@@ -197,20 +246,23 @@ class TitleScreenTest {
             TitleEvent.SeeAllRelated,
         ) { compose.onNode(hasContentDescription("See all", substring = true) or hasText("See all")).performClick() }
         scrollTo("Recommendations")
+        compose.onNodeWithContentDescription("Recommendations, 2\u00A0titles").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Details, Studio Hanamizuki, Kouyou Animation\u00A0· Light novel").assertIsDisplayed()
         sends(TitleEvent.OpenDetails) { compose.onNodeWithText("Details").performClick() }
         sends(TitleEvent.OpenRecommendations) { compose.onNodeWithText("Recommendations").performClick() }
     }
 
-    // The page's own title is marked in its place in the order and opens nothing; the others open their pages.
+    // The page's own title is marked in the order and opens nothing; the others open their pages. Each card is one
+    // sentence: its title, its place once the whole chain is known, its type and year, its status or "This title".
     @Test
     fun theWatchOrderMarksThePagesOwnTitleAndShowsTheWalkWhileItRuns() {
+        val own = FixtureAnime.exactToWatch.titles.romaji
         show(TitleFixtures.chainLoading)
-        val spoken = "This title, 2\u00A0of\u00A03\u00A0titles"
-        compose
-            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-            .performScrollToNode(hasContentDescription(spoken))
-        compose.onNode(hasContentDescription(spoken) and hasClickAction()).assertDoesNotExist()
-        compose.onNodeWithContentDescription(spoken).assertIsDisplayed()
+        val walking = "$own, TV\u00A0· 2025, This title"
+        scrollToCard(walking)
+        compose.onNode(hasContentDescription(walking) and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription(walking).assertIsDisplayed()
+        compose.onNodeWithContentDescription("\u00A0of\u00A0", substring = true).assertDoesNotExist()
         compose
             .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .performScrollToNode(hasContentDescription("Loading the watch order"))
@@ -219,11 +271,13 @@ class TitleScreenTest {
         compose.onNodeWithContentDescription("Loading the watch order").assertDoesNotExist()
         val film = TitleFixtures.filmBetweenSeasons
         show(TitleFixtures.chainOfFour)
-        compose
-            .onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-            .performScrollToNode(hasContentDescription("This title, 2\u00A0of\u00A04\u00A0titles"))
-        scrollTo(film.titles.romaji)
-        sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(hasText(film.titles.romaji) and hasClickAction()).performClick() }
+        val numbered = "$own, 2\u00A0of\u00A04\u00A0titles, TV\u00A0· 2025, This title"
+        scrollToCard(numbered)
+        compose.onNode(hasContentDescription(numbered) and hasClickAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription(numbered).assertIsDisplayed()
+        val first = "${FixtureAnime.prequel.titles.romaji}, 1\u00A0of\u00A04\u00A0titles, TV\u00A0· 2023, Completed"
+        compose.onNode(hasContentDescription(first) and hasClickAction()).assertIsDisplayed()
+        sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(spokenFirst(film.titles.romaji) and hasClickAction()).performClick() }
     }
 
     // Review M1: with no related title for the strip, the section is "See all" alone.
@@ -271,7 +325,7 @@ class TitleScreenTest {
     @Test
     fun detailsThatCouldNotLoadSayWhyUnderTheSummaryAndOfferRetry() {
         show(TitleFixtures.of(FixtureAnime.exactToWatch, details = null).copy(detailsWait = DetailsWait.Failed(DataError.NoConnection)))
-        compose.onNodeWithText("Episodes watched").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Episodes watched").assertIsDisplayed()
         compose.onNodeWithText("No connection").assertIsDisplayed()
         compose.onNodeWithContentDescription("Loading details").assertDoesNotExist()
         sends(TitleEvent.Retry) { compose.onNodeWithText("Retry").performClick() }
@@ -298,17 +352,17 @@ class TitleScreenTest {
     }
 }
 
-// The place of the page's own title is spoken with the total's plural, as the Russian genitive after «из» needs.
+// A card's place is spoken with the total's plural, as the Russian genitive after «из» needs.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "ru")
 class TitleSpokenPlaceTest {
     @Test
-    fun theOwnTitlesPlaceTakesThePluralOfTheTotal() {
+    fun aPlaceTakesThePluralOfTheTotal() {
         val resources = RuntimeEnvironment.getApplication().resources
 
-        fun spoken(of: Int) = resources.getQuantityString(R.plurals.title_this_title_spoken, of, 2, of)
-        assertEquals("Этот тайтл, 2\u00A0из\u00A02\u00A0тайтлов", spoken(2))
-        assertEquals("Этот тайтл, 2\u00A0из\u00A05\u00A0тайтлов", spoken(5))
-        assertEquals("Этот тайтл, 2\u00A0из\u00A021\u00A0тайтла", spoken(21))
+        fun spoken(of: Int) = resources.getQuantityString(R.plurals.title_place_spoken, of, 2, of)
+        assertEquals("2\u00A0из\u00A02\u00A0тайтлов", spoken(2))
+        assertEquals("2\u00A0из\u00A05\u00A0тайтлов", spoken(5))
+        assertEquals("2\u00A0из\u00A021\u00A0тайтла", spoken(21))
     }
 }

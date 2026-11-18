@@ -64,6 +64,9 @@ internal val ClientIdRequests: List<Ask> =
         Ask("list_public", "users/${RecordedUser.Public.standIn}/$LIST&sort=anime_title", pages = 3),
         Ask("list_private", "users/${RecordedUser.Private.standIn}/$LIST&limit=10"),
         Ask("list_unknown_user", "users/kiroku-no-user-0/$LIST&limit=10"),
+        Ask("list_public_another_case", "users/${RecordedUser.Public.inAnotherCase}/$LIST&sort=anime_title&limit=10"),
+        // A space is in no user's name.
+        Ask("list_impossible_name", "users/kiroku no user/$LIST&limit=10"),
         // M2-11: the session.
         Ask("token_invalid", "users/@me", accessToken = "made-up-access-token"),
         Ask("refresh_invalid", "token", refreshToken = "made-up-refresh-token"),

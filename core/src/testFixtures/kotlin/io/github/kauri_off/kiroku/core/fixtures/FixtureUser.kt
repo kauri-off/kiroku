@@ -1,21 +1,34 @@
 package io.github.kauri_off.kiroku.core.fixtures
 
+import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Counted
+import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.MediaType
+import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.StatusCounts
+import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.model.UserStatistics
+import java.time.Duration
+import java.time.LocalDate
+import java.time.Year
+import java.time.YearMonth
 import io.github.kauri_off.kiroku.core.fixtures.FixtureGenres as G
 
 object FixtureUser {
     val statistics: UserStatistics =
         UserStatistics(
+            titleCount = 31,
             statuses = StatusCounts(watching = 11, completed = 6, onHold = 3, dropped = 3, planned = 8),
-            daysWatched = 24.4,
-            meanScore = 7.43,
+            // 35 152 minutes of episodes, a day being 1440
+            daysWatched = 35_152.0 / 1440,
+            episodesWatched = 1_468,
+            // (4 + 6 + 7 + 8 + 8 + 9 + 10) / 7
+            meanScore = 52.0 / 7,
             scores = mapOf(4 to 1, 6 to 1, 7 to 1, 8 to 2, 9 to 1, 10 to 1),
             genres =
                 listOf(
@@ -23,8 +36,8 @@ object FixtureUser {
                     Counted(G.comedy, 10),
                     Counted(G.drama, 10),
                     Counted(G.romance, 8),
-                    Counted(G.sliceOfLife, 6),
                     Counted(G.mystery, 6),
+                    Counted(G.sliceOfLife, 6),
                     Counted(G.action, 5),
                     Counted(G.adventure, 4),
                     Counted(G.supernatural, 4),
@@ -47,8 +60,8 @@ object FixtureUser {
                 listOf(
                     Counted(MediaType.Tv, 23),
                     Counted(MediaType.Movie, 2),
-                    Counted(MediaType.Ona, 2),
                     Counted(MediaType.Ova, 2),
+                    Counted(MediaType.Ona, 2),
                     Counted(MediaType.Special, 1),
                 ),
             years =
@@ -70,8 +83,10 @@ object FixtureUser {
 
     val largeStatistics: UserStatistics =
         UserStatistics(
+            titleCount = 12_412,
             statuses = StatusCounts(watching = 17, completed = 2_384, onHold = 41, dropped = 163, planned = 9_807),
             daysWatched = 638.7,
+            episodesWatched = 38_412,
             meanScore = 7.32,
             scores = mapOf(1 to 3, 2 to 7, 3 to 18, 4 to 42, 5 to 131, 6 to 309, 7 to 602, 8 to 711, 9 to 288, 10 to 76),
             genres =
@@ -173,6 +188,193 @@ object FixtureUser {
             other(FixtureAnime.film, ListStatus.Completed, 1, null),
             other(FixtureAnime.plannedFinished, ListStatus.Planned, 0, null),
         )
+
+    // How many titles the public user's list has beyond [otherUserEntries]: several thousand, as a long-time user's.
+    const val GENERATED_ENTRIES = 4_300
+
+    // Made-up titles and entries for a list of several thousand, the same for the same day; none is in the fixture set.
+    fun generatedEntries(today: LocalDate): List<ListEntry> = List(GENERATED_ENTRIES) { generated(it, today) }
+
+    private const val FIRST_GENERATED_ID = 910_000L
+
+    private val firstWords =
+        listOf(
+            "Aozora",
+            "Hoshikuzu",
+            "Yuugure",
+            "Tsukikage",
+            "Kazamidori",
+            "Hanagasumi",
+            "Shirogane",
+            "Kurogane",
+            "Akatsuki",
+            "Tasogare",
+            "Minamikaze",
+            "Kitaguni",
+            "Umibe",
+            "Yamabiko",
+            "Kawasemi",
+            "Tokeidai",
+            "Mahoroba",
+            "Utakata",
+            "Shigure",
+            "Shinkirou",
+            "Hidamari",
+            "Amayadori",
+            "Yukiakari",
+            "Harukaze",
+            "Natsuzora",
+            "Akibare",
+            "Fuyugomori",
+            "Asayake",
+            "Yoimachi",
+            "Komorebi",
+            "Tsumugi",
+            "Hotaru",
+            "Suzuran",
+            "Tsubaki",
+            "Kikyou",
+            "Wakaba",
+            "Sazanami",
+            "Inazuma",
+            "Kagaribi",
+            "Oboro",
+        )
+
+    private val secondWords =
+        listOf(
+            "Kissaten",
+            "Yuubinkyoku",
+            "Toshokan",
+            "Shokudou",
+            "Gakuen",
+            "Kishidan",
+            "Tanteidan",
+            "Shoutengai",
+            "Ryodan",
+            "Koubou",
+            "Monogatari",
+            "Nikki",
+            "Kikou",
+            "Senki",
+            "Densetsu",
+            "Kyoushitsu",
+            "Shashinkan",
+            "Tenmondai",
+            "Hanayashiki",
+            "Orchestra",
+            "Rhapsody",
+            "Serenade",
+            "Chronicle",
+            "Days",
+            "Diary",
+            "Express",
+            "Station",
+            "Workshop",
+            "Garden",
+            "Lighthouse",
+            "no Uta",
+            "no Niwa",
+            "no Yakusoku",
+            "no Tabiji",
+            "no Kioku",
+            "no Hakobune",
+            "no Rakuen",
+            "no Shirabe",
+            "no Yoake",
+            "no Mukou",
+        )
+
+    private val sequels = listOf("", " 2nd Season", ": Zoku", " Gaiden")
+
+    private val formats =
+        listOf(MediaType.Tv, MediaType.Tv, MediaType.Tv, MediaType.Tv, MediaType.Tv, MediaType.Tv, MediaType.Movie) +
+            listOf(MediaType.Ova, MediaType.Ona, MediaType.Special, MediaType.Tv, MediaType.Music, MediaType.TvSpecial, null)
+
+    private val seriesLengths = listOf(12, 13, 24, 12, 25, 26, 11, 50, 12, 10)
+
+    private val genres =
+        with(G) {
+            listOf(comedy, action, fantasy, drama, romance, sciFi, sliceOfLife, supernatural, adventure, mystery, school) +
+                listOf(shounen, mecha, psychological, historical, music, sports, isekai, military, seinen, horror, suspense, space)
+        }
+
+    private val statuses =
+        List(13) { ListStatus.Completed } + List(4) { ListStatus.Planned } +
+            listOf(ListStatus.Watching, ListStatus.OnHold, ListStatus.Dropped)
+
+    private val scores = listOf(7, 8, 6, 7, 9, 8, 7, 10, 5, 8, 7, 6, 9, 8, 7, 4, 8, 7, 3, 9, 6, 8, 2, 7)
+
+    private fun generated(
+        index: Int,
+        today: LocalDate,
+    ): ListEntry {
+        val format = formats[index % formats.size]
+        val episodes =
+            when (format) {
+                MediaType.Tv, null -> seriesLengths[index % seriesLengths.size].takeIf { index % 101 != 0 }
+                MediaType.Ova, MediaType.Ona -> 2 + index % 5
+                else -> 1
+            }
+        val started = today.minusDays(120L + (index * 37L) % 14_000)
+        val anime =
+            Anime(
+                id = AnimeId(FIRST_GENERATED_ID + index),
+                titles =
+                    Titles(
+                        firstWords[index % firstWords.size] + " " + secondWords[(index / firstWords.size) % secondWords.size] +
+                            sequels[index / (firstWords.size * secondWords.size)],
+                    ),
+                posterUrl = "${FixtureAnime.POSTER_URL}${FIRST_GENERATED_ID + index}.jpg",
+                largePosterUrl = null,
+                mediaType = format,
+                airingStatus = AiringStatus.Finished,
+                malEpisodes = episodes,
+                startDate =
+                    when (index % 79) {
+                        0 -> null
+                        1 -> PartialDate.OnlyYear(Year.from(started))
+                        2 -> PartialDate.Month(YearMonth.from(started))
+                        else -> PartialDate.Day(started)
+                    },
+                broadcast = null,
+                meanScore = (5.0 + (index * 37 % 400) / 100.0).takeIf { index % 67 != 0 },
+                rank = (200 + index).takeIf { index % 67 != 0 },
+                genres =
+                    List(1 + index % 3) { genres[(index * 7 + it * 5) % genres.size] }.distinct().takeIf { index % 89 != 0 },
+                averageEpisodeDuration =
+                    when (format) {
+                        MediaType.Movie -> Duration.ofMinutes(85L + index % 40)
+                        MediaType.Music -> Duration.ofMinutes(4)
+                        else -> Duration.ofMinutes(23).plusSeconds(40L + index % 60)
+                    }.takeIf { index % 83 != 0 },
+            )
+        val status: EntryStatus = statuses[(index * 7) % statuses.size]
+        val total = episodes ?: 12
+        val finished = started.plusDays(30L + index % 90)
+        return ListEntry(
+            anime = anime,
+            values =
+                ListValues(
+                    status = status,
+                    watchedEpisodes =
+                        when (status) {
+                            ListStatus.Completed -> total
+                            ListStatus.Planned -> 0
+                            else -> index % total
+                        },
+                    score =
+                        when (status) {
+                            ListStatus.Completed -> scores[(index / 3) % scores.size].takeIf { index % 6 != 0 }
+                            ListStatus.Dropped -> (2 + index % 4).takeIf { index % 2 == 0 }
+                            else -> null
+                        },
+                    startDate = PartialDate.Day(started.plusDays(7)).takeIf { status != ListStatus.Planned && index % 4 != 0 },
+                    finishDate = PartialDate.Day(finished).takeIf { status == ListStatus.Completed && index % 5 != 0 },
+                ),
+            updatedAt = finished.atTime(12 + index % 11, index % 60).atZone(FixtureTime.zone).toInstant(),
+        )
+    }
 
     // 17 characters, one more than MAL allows a user name, so no account has it.
     val unknownName: String = "nobody_has_a_name"

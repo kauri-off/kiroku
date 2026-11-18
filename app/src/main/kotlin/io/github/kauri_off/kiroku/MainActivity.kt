@@ -1,13 +1,16 @@
 package io.github.kauri_off.kiroku
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.link.appLinks
+import io.github.kauri_off.kiroku.notify.tappedTitle
 import io.github.kauri_off.kiroku.shell.AppRoute
-import io.github.kauri_off.kiroku.shell.linkedTitle
+import io.github.kauri_off.kiroku.shell.linkedPage
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.appGraph
 
@@ -23,13 +26,19 @@ class MainActivity : ComponentActivity() {
         val hold = splashHold(window.decorView, savedInstanceState)
         splash = hold
         val links = appLinks
-        // A start by a link opens on its title, so the List never shows first; a restored window keeps its stacks.
+        if (savedInstanceState == null) intent.tappedTitle()?.let { links?.opened(Link.Title(it)) }
+        // A start by a link or a notification opens on its page, so the List never shows first; a restored window keeps its stacks.
         val start = if (savedInstanceState == null) links?.take() else null
         setKirokuContent {
             CompositionLocalProvider(LocalSplashHold provides hold) {
-                val overList = listOfNotNull(start?.let { linkedTitle(it.id) })
-                AppRoute(appGraph, rememberShellNavigator(*overList.toTypedArray()), links = links)
+                AppRoute(appGraph, rememberShellNavigator(start?.let { linkedPage(it.link) }), links = links)
             }
         }
+    }
+
+    // A tap on a notification while the screen exists opens its title over the List, as a link does.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.tappedTitle()?.let { appLinks?.opened(Link.Title(it)) }
     }
 }

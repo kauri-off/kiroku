@@ -12,6 +12,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Dispatcher
@@ -28,6 +30,7 @@ import retrofit2.Converter
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.lang.reflect.Type
@@ -48,6 +51,8 @@ class MalHttp(
     appVersion: String,
     private val device: Device,
     private val clock: Clock,
+    // Where MAL's back-off is kept across a process's death, asked at its first use; one client, and one file, per process.
+    backOffFile: () -> File,
     // Hears of an answer that could not be used and of a fault of this layer, each without its message.
     internal val unexpected: (Throwable) -> Unit,
     log: ((String) -> Unit)? = null,
@@ -58,7 +63,10 @@ class MalHttp(
     // Where OkHttp runs a call; a test's may run it on the caller's own thread.
     private val calls: Dispatcher? = null,
 ) {
-    val backOff = MalBackOff(clock)
+    internal val backOff by lazy { MalBackOff(MalBackOff.file(backOffFile(), clock, unexpected)) }
+
+    // How long work without a screen leaves MAL alone yet; zero when it may call.
+    internal suspend fun refusedFor(): JavaDuration = withContext(io) { backOff.remaining() }
 
     // False when the device answers in MAL's place, as the sandbox does, also for titles MAL does not have.
     internal val reachesMal: Boolean get() = standIn == null
@@ -100,7 +108,7 @@ class MalHttp(
 
     // Runs [request] off the main thread; however it fails, the failure is an answer: only an Error is not caught.
     internal suspend fun <T> call(
-        // A refusal is then a private list, and no reason to back off.
+        // MAL's answers for a private list and an unknown name are then those outcomes, and no reason to back off.
         anotherUsersList: Boolean = false,
         request: suspend () -> T,
     ): MalAnswer<T> {
@@ -140,9 +148,10 @@ class MalHttp(
             currentCoroutineContext().ensureActive()
             unusable(e)
         } catch (e: HttpException) {
-            answered(e.code(), e.response()?.headers(), anotherUsersList)
+            val body = if (anotherUsersList) e.response()?.errorBody()?.let(::text) else null
+            answered(e.code(), e.response()?.headers(), body?.let { anotherUsersListError(e.code(), it) })
         } catch (e: NotSentAgain) {
-            e.status?.let { answered(it, null, anotherUsersList) } ?: unanswered(e.failure)
+            e.status?.let { answered(it, null, null) } ?: unanswered(e.failure)
         } catch (_: NotAnAnswer) {
             Tried(MalAnswer.Failed(DataError.ServerError))
         } catch (e: IOException) {
@@ -152,22 +161,31 @@ class MalHttp(
         }
     }
 
+    // A body MAL sent with a failure; null when it cannot be read.
+    private fun text(body: ResponseBody): String? =
+        try {
+            body.string()
+        } catch (_: IOException) {
+            null
+        }
+
     private fun answered(
         status: Int,
         headers: Headers?,
-        anotherUsersList: Boolean,
+        // What the answer is when it is MAL's for another user's list it cannot give.
+        ofAnotherUsersList: DataError?,
     ): Tried<Nothing> {
         val error =
             when {
+                ofAnotherUsersList != null -> ofAnotherUsersList
                 status == 401 -> return Tried(MalAnswer.Rejected)
-                status == 403 && anotherUsersList -> DataError.PrivateList
                 status == 403 || status == 429 -> DataError.Refused
-                status == 404 -> if (anotherUsersList) DataError.UnknownUser else DataError.NotFound
+                status == 404 -> DataError.NotFound
                 status == 408 || status >= 500 -> DataError.ServerError
                 status >= 400 -> DataError.InvalidRequest
                 else -> DataError.ServerError
             }
-        if (error == DataError.Refused) backOff.refused(headers?.let(::retryAfter))
+        if (error == DataError.Refused) backOff.refused(headers?.let { retryAfter(it, clock) }?.toJavaDuration())
         return Tried(MalAnswer.Failed(error), again = status >= 500)
     }
 
@@ -222,12 +240,6 @@ class MalHttp(
             }
         }
 
-    private fun retryAfter(headers: Headers): JavaDuration? {
-        val seconds = headers[RETRY_AFTER]?.trim()?.toLongOrNull()
-        if (seconds != null) return JavaDuration.ofSeconds(seconds)
-        return headers.getInstant(RETRY_AFTER)?.let { JavaDuration.between(clock.instant(), it) }
-    }
-
     private fun offline(): Boolean =
         try {
             !device.isOnline()
@@ -252,9 +264,31 @@ class MalHttp(
         val RepeatReadsAfter = listOf(500.milliseconds, 1500.milliseconds)
         private val ConnectTimeout = 10.seconds
         private val TransferTimeout = 20.seconds
-        private const val RETRY_AFTER = "Retry-After"
     }
 }
+
+// MAL's answer for another user's list that is private or whose name no user has, told by the recorded answers.
+internal fun anotherUsersListError(
+    status: Int,
+    body: String,
+): DataError? =
+    when {
+        isPrivateList(status, body) -> DataError.PrivateList
+        status == 404 && errorCode(body) == "not_found" -> DataError.UnknownUser
+        else -> null
+    }
+
+internal fun isPrivateList(
+    status: Int,
+    body: String,
+): Boolean = status == 403 && errorCode(body) == "not_permitted"
+
+private fun errorCode(body: String): String? =
+    try {
+        ((Json.parseToJsonElement(body) as? JsonObject)?.get("error") as? JsonPrimitive)?.takeIf { it.isString }?.content
+    } catch (_: SerializationException) {
+        null
+    }
 
 // How a request of [MalHttp.send] ended.
 internal sealed interface Sent {

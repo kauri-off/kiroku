@@ -182,6 +182,45 @@ class AniListPaceTest {
         }
 
     @Test
+    fun `a clock that stays set back does not start a refusal's hold again for the processes after the first`() =
+        runTest {
+            aniList.answer = { refused("600") }
+            fetch(1)
+            network.clock.now = network.clock.now.minus(Duration.ofDays(1))
+            aniList.newProcess(this)
+            assertEquals(Outcome.Failure(DataError.Refused), fetch(1).of(1))
+
+            network.clock.now = network.clock.now.plusSeconds(400)
+            aniList.newProcess(this)
+            aniList.answer = { copiesOf(it) }
+            assertEquals(Outcome.Failure(DataError.Refused), fetch(1).of(1))
+            heldFor(200.seconds)
+        }
+
+    // A real refusal is not ended early by a clock that was wrong for a while.
+    @Test
+    fun `a clock set back as a process starts and then put right leaves a refusal's hold as it was set`() =
+        runTest {
+            aniList.answer = { refused("21600") }
+            fetch(1)
+            network.clock.now =
+                network.clock.now
+                    .plusSeconds(60)
+                    .minus(Duration.ofDays(1))
+            aniList.newProcess(this)
+            assertEquals(Outcome.Failure(DataError.Refused), fetch(1).of(1))
+
+            network.clock.now =
+                network.clock.now
+                    .plusSeconds(60)
+                    .plus(Duration.ofDays(1))
+            aniList.newProcess(this)
+            aniList.answer = { copiesOf(it) }
+            assertEquals(Outcome.Failure(DataError.Refused), fetch(1).of(1))
+            heldFor(6.hours - 2.minutes)
+        }
+
+    @Test
     fun `a block file that cannot be read holds nothing back and is reported`() =
         runTest {
             aniList.blockFile.writeText("soon")

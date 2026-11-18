@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.debugmenu.DebugMenuActivity
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
+import io.github.kauri_off.kiroku.wiring.AppEnds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -40,6 +41,9 @@ import kotlin.time.toJavaDuration
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ScenarioOverlayTest {
+    @get:Rule(order = AppEnds.OUTERMOST)
+    val appEnds = AppEnds()
+
     @get:Rule(order = 0)
     val source = StartsOn(DataSource.Demo)
 

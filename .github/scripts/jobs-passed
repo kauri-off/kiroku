@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Usage: jobs-passed <event> < needs.json. Prints the jobs that did not pass and exits 1 if there are any; on a pull
+# request the release job alone may be skipped.
+set -uo pipefail
+
+failed=$(jq -r --arg event "$1" '
+  to_entries
+  | map(select(.value.result != "success" and (.key != "release" or $event != "pull_request" or .value.result != "skipped")))
+  | map("\(.key) \(.value.result)")
+  | join(", ")') || exit 2
+[[ -z $failed ]] || { echo "$failed"; exit 1; }

@@ -6,10 +6,12 @@ import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListRepository
+import io.github.kauri_off.kiroku.core.repository.NotificationsRepository
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
+import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +25,9 @@ interface AppGraph {
     val list: ListRepository
     val anime: AnimeRepository
     val airing: AiringRepository
+
+    // A title's score distribution, from a service apart from MAL's pages.
+    val scores: ScoreDistributionRepository
     val search: SearchRepository
     val user: UserRepository
     val connection: Connection
@@ -36,6 +41,12 @@ interface AppGraph {
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
+
+    // The notification settings, what comes next and what was sent.
+    val notifications: NotificationsRepository
+
+    // The part of the app for code that runs without a screen, which is given nothing else of the graph.
+    val withoutScreen: WithoutScreen
 
     // True for made-up titles and users, as the demo and the sandbox have, which a screen not built yet may stand in with.
     val madeUp: Boolean get() = false

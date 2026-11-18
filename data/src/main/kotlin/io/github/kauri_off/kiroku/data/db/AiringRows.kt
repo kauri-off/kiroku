@@ -16,6 +16,7 @@ internal data class AiringRow(
     // False when the source did not know the title: it then has no schedule, total or episodes.
     val known: Boolean,
     @ColumnInfo(name = "total_episodes") val totalEpisodes: Int?,
+    @ColumnInfo(name = "doubted_over") val doubtedOver: Int?,
 ) {
     companion object {
         const val TABLE = "airing"
@@ -46,6 +47,7 @@ internal data class AiringEpisodeJoin(
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
     val known: Boolean,
     @ColumnInfo(name = "total_episodes") val totalEpisodes: Int?,
+    @ColumnInfo(name = "doubted_over") val doubtedOver: Int?,
     val number: Int?,
     @ColumnInfo(name = "airs_at") val airsAt: Long?,
 )
@@ -58,16 +60,23 @@ internal fun List<AiringEpisodeJoin>.toStored(): StoredAiring {
             AiringSchedule(
                 episodes = mapNotNull { row -> row.number?.let { ScheduledEpisode(it, instantOf(checkNotNull(row.airsAt))) } },
                 totalEpisodes = title.totalEpisodes,
+                doubtedOver = title.doubtedOver,
             )
         } else {
-            check(title.totalEpisodes == null && all { it.number == null })
+            check(title.totalEpisodes == null && title.doubtedOver == null && all { it.number == null })
             null
         }
     return StoredAiring(schedule, instantOf(title.fetchedAt))
 }
 
 internal fun StoredAiring.toRow(titleId: Long): AiringRow =
-    AiringRow(titleId, fetchedAt.toColumn(), known = schedule != null, totalEpisodes = schedule?.totalEpisodes)
+    AiringRow(
+        titleId,
+        fetchedAt.toColumn(),
+        known = schedule != null,
+        totalEpisodes = schedule?.totalEpisodes,
+        doubtedOver = schedule?.doubtedOver,
+    )
 
 internal fun StoredAiring.toEpisodeRows(titleId: Long): List<AiringEpisodeRow> =
     schedule?.episodes.orEmpty().map { AiringEpisodeRow(titleId, it.number, it.airsAt.toColumn()) }

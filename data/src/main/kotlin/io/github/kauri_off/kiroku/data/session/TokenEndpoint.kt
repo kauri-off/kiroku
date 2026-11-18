@@ -12,6 +12,9 @@ import kotlinx.serialization.json.longOrNull
 // MAL's token endpoint: a grant's form goes out, with the client's own credentials added by the sender.
 internal fun interface TokenEndpoint {
     suspend fun post(grant: Map<String, String>): TokenReply
+
+    // True while MAL's back-off lasts (section 2.3).
+    suspend fun refusing(): Boolean = false
 }
 
 internal sealed interface TokenReply {

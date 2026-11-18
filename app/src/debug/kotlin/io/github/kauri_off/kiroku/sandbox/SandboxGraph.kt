@@ -4,14 +4,20 @@ import android.content.Context
 import androidx.annotation.VisibleForTesting
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
+import io.github.kauri_off.kiroku.data.sandbox.Planted
 import io.github.kauri_off.kiroku.data.sandbox.Sandbox
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notificationlog.RunLog
+import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioSubject
 import io.github.kauri_off.kiroku.scenario.Scenarios
@@ -27,9 +33,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Clock
+import java.time.Duration
 import kotlin.time.TimeSource
 
 // The live graph whole over MAL on the device, which keeps a made-up list in the source's own files.
@@ -49,6 +57,18 @@ class SandboxGraph internal constructor(
 
     suspend fun writeOwed() = live.writeOwed()
 
+    // What the notification engine did, kept in the sandbox's files.
+    val runLog: RunLog get() = live.runLog
+
+    // An episode of the planted title airs [after] from now at AniList; the app asks for it at once, as a refresh would.
+    suspend fun plant(after: Duration): Planted? =
+        withContext(Dispatchers.IO) { sandbox.plant(clock.instant().plus(after)) }?.also {
+            parts.scope.launch { airing.refresh(setOf(AnimeId(SandboxAiring.SOON))) }
+        }
+
+    // AniList moves the planted episode [by] later and the app is not told: it learns of it when it next asks, as from AniList.
+    suspend fun postpone(by: Duration): Planted? = withContext(Dispatchers.IO) { sandbox.postpone(by) }
+
     private inner class SandboxScenarios : ScenarioSubject {
         override val sandbox = true
 
@@ -64,6 +84,12 @@ class SandboxGraph internal constructor(
                     WriteFault.Refused -> SandboxWrites.Refused
                     WriteFault.ServerError -> SandboxWrites.Fail
                 }
+            this@SandboxGraph.sandbox.aniList.fault =
+                when (scenario.aniList) {
+                    AniListFault.None -> SandboxAniListFault.None
+                    AniListFault.Fails -> SandboxAniListFault.Fails
+                    AniListFault.NoAnswer -> SandboxAniListFault.NoAnswer
+                }
         }
 
         override fun expireAccess() = this@SandboxGraph.sandbox.mal.expireAccess()
@@ -72,10 +98,12 @@ class SandboxGraph internal constructor(
 
         override suspend fun awaitSaves() = true
 
-        // The sandbox's list as it started, which the next sync brings to the app.
-        override suspend fun reset(): Outcome<Unit> {
+        // The sandbox's list as it started, which the next sync brings to the app, and its schedules, which a refresh brings.
+        // They are laid out before AniList answers again, so that a request the reset releases sees them.
+        override suspend fun reset(off: () -> Unit): Outcome<Unit> {
             withContext(Dispatchers.IO) { this@SandboxGraph.sandbox.reset() }
-            return list.sync()
+            off()
+            return list.sync().also { parts.scope.launch { airing.refresh() } }
         }
     }
 
@@ -83,21 +111,23 @@ class SandboxGraph internal constructor(
         // The sandbox of this app's files; nothing is read or built before its first request.
         internal fun create(
             context: Context,
-            clock: Clock,
+            deviceClock: Clock,
             device: Device = AndroidDevice(context),
-            parts: (LiveSource, Device) -> LiveParts,
+            parts: (LiveSource, Device, Clock) -> LiveParts,
         ): SandboxGraph {
+            val clock = movedClock ?: deviceClock
             // The titles of the public answers the debug and preview builds hold as assets; posters are the stand-in art's.
             val sandbox =
                 Sandbox(
                     read = { name -> context.assets.open(notShown("recorded/$name.200.json")).use { it.readBytes().decodeToString() } },
+                    readTenrai = { file -> context.assets.open(notShown("tenrai/$file")).use { it.readBytes().decodeToString() } },
                     poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
                     clock = clock,
                     file = { kind -> File(context.noBackupFilesDir, notShown("$NAME.mal.$kind")) },
                 )
             val sandboxDevice = SandboxDevice(device)
             val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = aniListTime)
-            return SandboxGraph(parts(source, sandboxDevice), sandbox, sandboxDevice)
+            return SandboxGraph(parts(source, sandboxDevice, clock), sandbox, sandboxDevice)
         }
 
         private val NAME = notShown("sandbox")
@@ -106,6 +136,11 @@ class SandboxGraph internal constructor(
         @VisibleForTesting
         @Volatile
         internal var aniListTime: TimeSource.WithComparableMarks = DeviceTime
+
+        // The clock of the sandbox and of the app on it, which a test may move on; the device's when null.
+        @VisibleForTesting
+        @Volatile
+        internal var movedClock: Clock? = null
     }
 }
 

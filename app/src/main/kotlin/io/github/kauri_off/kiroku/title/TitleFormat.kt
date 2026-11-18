@@ -16,6 +16,8 @@ import io.github.kauri_off.kiroku.text.currentLocale
 import io.github.kauri_off.kiroku.text.premiereText
 import io.github.kauri_off.kiroku.text.relationName
 import io.github.kauri_off.kiroku.text.typeAndYear
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.NumberFormat
 import java.time.ZonedDateTime
 
@@ -48,6 +50,16 @@ fun scoreText(score: Double): String =
             minimumFractionDigits = 2
             maximumFractionDigits = 2
         }.format(score)
+
+// A list's mean score as MAL writes it: two decimals, rounded half up.
+@Composable
+fun meanScoreText(mean: Double): String = scoreText(roundedHalfUp(mean, 2))
+
+// Half up from the value as written in decimals, as MAL rounds its profile's numbers.
+fun roundedHalfUp(
+    value: Double,
+    digits: Int,
+): Double = BigDecimal.valueOf(value).setScale(digits, RoundingMode.HALF_UP).toDouble()
 
 @Composable
 fun countText(value: Int): String = NumberFormat.getIntegerInstance(currentLocale()).format(value)

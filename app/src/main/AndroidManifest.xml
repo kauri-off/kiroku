@@ -2,6 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Section 5.1: the alarm is exact only where the system lets the app set exact alarms. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- The alarm and scheduled work are set again after a restart of the device. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- N9: before Android 12 the system runs "Mark watched" as a foreground service, which holds a wake lock; from 12 neither is asked for. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.WAKE_LOCK"
+        android:maxSdkVersion="30" />
+
     <application
         android:name=".KirokuApplication"
         android:icon="@mipmap/ic_launcher"
@@ -21,7 +34,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- Nothing of the network runs when the process starts: OkHttp finds its platform at the first request. -->
+        <!-- Nothing of the network or a database runs when the process starts: OkHttp finds its platform at the first request, emoji are drawn with the system's font, not one Google Play services downloads, and scheduled work is set up at its first use. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -31,7 +44,32 @@
             <meta-data
                 android:name="okhttp3.internal.platform.PlatformInitializer"
                 tools:node="remove" />
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
         </provider>
+        <!-- N9: the foreground service is there before Android 12 alone. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:enabled="@bool/saving_in_the_foreground"
+            tools:replace="android:enabled" />
+        <!-- No other app asks scheduled work for its state. -->
+        <receiver
+            android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
+            tools:node="remove" />
+        <!-- The alarm, and the moments the system starts the app at; only the system and the app itself reach it. -->
+        <receiver
+            android:name=".notify.RunReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".signin.RedirectActivity"
             android:exported="true"
@@ -46,7 +84,7 @@
                     android:scheme="${oauthScheme}" />
             </intent-filter>
         </activity>
-        <!-- A title's page on MAL, with or without its name and a slash; claimed from Android 12, which can match it exactly. -->
+        <!-- A title's page on MAL, with or without its name and a slash, and a user's profile page; claimed from Android 12, which can match them exactly. -->
         <activity
             android:name=".link.LinkActivity"
             android:enabled="@bool/links_claimed"
@@ -66,8 +104,14 @@
                 <data android:pathAdvancedPattern="/anime/[1-9][0-9]*/" />
                 <data android:pathAdvancedPattern="/anime/[1-9][0-9]*/[^/]+" />
                 <data android:pathAdvancedPattern="/anime/[1-9][0-9]*/[^/]+/" />
+                <data android:pathAdvancedPattern="/profile/[^/]+" />
+                <data android:pathAdvancedPattern="/profile/[^/]+/" />
             </intent-filter>
         </activity>
+        <!-- "Mark watched" from a notification: only this app's own pending intent reaches it. -->
+        <receiver
+            android:name=".notify.MarkWatchedReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

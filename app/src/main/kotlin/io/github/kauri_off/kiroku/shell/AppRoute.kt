@@ -7,20 +7,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.list.UserListRoute
+import io.github.kauri_off.kiroku.profile.OpenedProfiles
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
+import io.github.kauri_off.kiroku.profile.ProfileNotBuilt
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
-import io.github.kauri_off.kiroku.profile.ProfileOwner
-import io.github.kauri_off.kiroku.profile.ProfileStandInRoute
-import io.github.kauri_off.kiroku.profile.profileStandIn
+import io.github.kauri_off.kiroku.profile.ProfileRoute
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
@@ -30,6 +31,8 @@ import io.github.kauri_off.kiroku.signin.SignInRoute
 import io.github.kauri_off.kiroku.signin.SignInTurns
 import io.github.kauri_off.kiroku.signin.browse
 import io.github.kauri_off.kiroku.signin.signedIn
+import io.github.kauri_off.kiroku.statistics.StatisticsRoute
+import io.github.kauri_off.kiroku.statistics.statisticsPage
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -38,6 +41,8 @@ import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.titlesub.DetailsRoute
 import io.github.kauri_off.kiroku.titlesub.RelatedKey
 import io.github.kauri_off.kiroku.titlesub.RelatedRoute
+import io.github.kauri_off.kiroku.titlesub.ScoresKey
+import io.github.kauri_off.kiroku.titlesub.ScoresRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // The app: the shell over the screens built so far, with the messages that outlive the screen that posted them.
@@ -49,6 +54,7 @@ fun AppRoute(
     links: AppLinks? = null,
 ) {
     val messages = viewModel { ShellViewModel(graph.list) }.messages
+    val profiles = viewModel { OpenedProfiles(graph.preferences) }
     val covers = remember { MessageCovers() }
     ShownMessages(messages, snackbars, covers)
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
@@ -59,14 +65,14 @@ fun AppRoute(
     SignInTurns(graph, navigator)
     if (links != null) LinkTurns(links, navigator)
     CompositionLocalProvider(LocalMessageCovers provides covers) {
-        ShellRoute(navigator, snackbars, remember(graph, messages) { appEntries(graph, messages) })
+        ShellRoute(navigator, snackbars, remember(graph, messages, profiles) { appEntries(graph, messages, profiles) })
     }
 }
 
 private fun ShellNavigator.showEditorOf(id: AnimeId) {
     val stack = stackOf(visible.last())
     val page = TitleKey(id.value)
-    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) }
+    val subScreen = stack.last().let { it == DetailsKey(id.value) || it == RelatedKey(id.value) || it == ScoresKey(id.value) }
     when {
         stack.last() is ListRoot || stack.last() == page -> Unit
         subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
@@ -83,27 +89,33 @@ private fun LinkTurns(
     val link by links.link.collectAsScreenState()
     LaunchedEffect(link) {
         link?.let {
-            navigator.openLink(it.id)
+            navigator.openLink(it.link)
             links.taken(it)
         }
     }
 }
 
-// A link opens its title over the List alone (section 6.3), whatever was shown.
-fun ShellNavigator.openLink(id: AnimeId) {
+// A link opens its page over its destination's root with the List alone beneath (section 6.3), whatever was shown.
+fun ShellNavigator.openLink(link: Link) {
+    val page = linkedPage(link)
     home(Destination.List)
-    open(linkedTitle(id))
+    home(page.destination)
+    open(page.key)
 }
 
-// The List's stack a link builds over its root.
-fun linkedTitle(id: AnimeId): NavKey = TitleKey(id.value)
+// A title over the List; a profile over the own Profile.
+fun linkedPage(link: Link): OpenedPage =
+    when (link) {
+        is Link.Title -> OpenedPage(Destination.List, TitleKey(link.id.value))
+        is Link.Profile -> OpenedPage(Destination.Profile, OtherProfileKey(link.name))
+    }
 
 fun appEntries(
     graph: AppGraph,
     messages: ShellMessages,
+    profiles: OpenedProfiles,
 ): ShellEntries {
     val standIn = searchStandIn(graph)
-    val profile = profileStandIn(graph)
     return { navigator, snackbars ->
         val signIn = { navigator.open(SignInKey) }
         val openTitle = { id: AnimeId, opened: TitleSummary? -> navigator.open(TitleKey(id.value, opened)) }
@@ -130,21 +142,26 @@ fun appEntries(
                 BrowseRoute(it, key, graph, messages, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn)
             }
         }
-        entry<ProfileRoot> {
-            if (profile == null) {
-                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
-            } else {
-                ProfileStandInRoute(profile, ProfileOwner.Me, graph, navigator, signIn, snackbars)
+        entry<ProfileRoot> { ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars) }
+        entry<OtherProfileKey> { key -> ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars) }
+        entry<ProfileNotBuiltKey> { key ->
+            val name = key.name
+            val page = key.statisticsPage
+            when {
+                key.screen == ProfileNotBuilt.UserList && name != null ->
+                    UserListRoute(
+                        name,
+                        graph,
+                        onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                        snackbars,
+                        openTitle,
+                        onBack = { back() },
+                        onSignIn = signIn,
+                    )
+                page != null -> StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
+                else -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
             }
         }
-        entry<OtherProfileKey> { key ->
-            if (profile == null) {
-                NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
-            } else {
-                ProfileStandInRoute(profile, ProfileOwner.Other(key.name), graph, navigator, signIn, snackbars)
-            }
-        }
-        entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,
@@ -156,6 +173,7 @@ fun appEntries(
                     openTitle = openTitle,
                     seeAllRelated = { id, opened -> navigator.open(RelatedKey(id.value, opened)) },
                     details = { id, opened -> navigator.open(DetailsKey(id.value, opened)) },
+                    scores = { navigator.open(ScoresKey(it.value)) },
                     recommendations = { navigator.open(NotBuiltKey(NotBuilt.Recommendations)) },
                     signIn = signIn,
                 ),
@@ -163,6 +181,7 @@ fun appEntries(
         }
         entry<RelatedKey> { key -> RelatedRoute(key, graph, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn) }
         entry<DetailsKey> { key -> DetailsRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
+        entry<ScoresKey> { key -> ScoresRoute(key, graph, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<NotBuiltKey> { key -> NotBuiltScreen(key.screen, onBack = { back() }, snackbars) }
         entry<SignInKey> {
             SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })
@@ -170,7 +189,7 @@ fun appEntries(
     }
 }
 
-// Search in a release and Profile until their milestones: the placeholder, with the session banner of S6.
+// Search in a release until its milestone: the placeholder, with the banner of S6.
 @Composable
 private fun NotBuiltDestination(
     graph: AppGraph,

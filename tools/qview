@@ -1,12 +1,14 @@
 #!/usr/bin/env -S python3 -I
-"""usage: tools/q view [--port N]   the queue as a page for the browser; prints its address and serves until stopped
+"""usage: tools/q view [--port N] [--host ADDR]   the queue as a page for the browser; prints its address and serves until stopped
 The page is at http://127.0.0.1:N/ (default 7475; 0 takes any free port) and reaches nothing but this machine.
+--host ADDR listens on another IPv4 address of this machine instead, for a browser on another device; 0.0.0.0 is
+every address. Whoever reaches that address can read the page: it has no sign-in.
 It shows what runs, what waits and for what, the emulator slots, the machine's memory against the budget and the
 margin, what ended and how, with a way to each log's tail, and the last hours per kind.
 It only reads, with the functions of tools/q beside it and without the state's lock: no request starts, stops or
 changes a job. It is not a queue job, reserves nothing and works only while a request is answered.
 Client ids are masked in every command and log line it shows. /state.json has the page's data."""
-import html, importlib.machinery, importlib.util, json, os, re, secrets, shlex, sys, threading, time, traceback
+import html, importlib.machinery, importlib.util, ipaddress, json, os, re, secrets, shlex, sys, threading, time, traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -489,7 +491,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD": self.wfile.write(data)
 
     def do_GET(self):
-        if self.headers.get("Host") not in self.server.hosts: return self.answer(403, "this view answers only at its own address")
+        if not self.server.at(self.headers.get("Host")): return self.answer(403, "this view answers only at its own address")
         url = urlsplit(self.path)
         ask = {k: v[-1] for k, v in parse_qs(url.query).items()}
         hours = int(ask["h"]) if ask.get("h") in {str(h) for h in WINDOWS} else 3
@@ -520,6 +522,11 @@ class Handler(BaseHTTPRequestHandler):
     do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = refuse
 
 
+def ipv4(text):
+    try: return isinstance(ipaddress.ip_address(text), ipaddress.IPv4Address)
+    except ValueError: return False
+
+
 def main():
     a = sys.argv[1:]
     if not os.environ.get("KIROKU_Q_HERE"):
@@ -528,15 +535,23 @@ def main():
             view = f"{os.path.dirname(main_q)}/qview"
             if not os.path.isfile(view): q.die(f"qview: the main checkout has no tools/qview yet; KIROKU_Q_HERE=1 runs this copy")
             os.execv(view, [view] + a)
-    port = PORT
-    if len(a) == 2 and a[0] == "--port" and a[1].isdigit(): port = int(a[1])
-    elif a: q.die(__doc__)
+    port, host = PORT, "127.0.0.1"
+    while len(a) >= 2 and a[0] in ("--port", "--host"):
+        if a[0] == "--port" and a[1].isdigit(): port = int(a[1])
+        elif a[0] == "--host" and ipv4(a[1]): host = a[1]
+        else: q.die(__doc__)
+        a = a[2:]
+    if a: q.die(__doc__)
     ThreadingHTTPServer.daemon_threads = True
-    try: server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    except OSError as x: q.die(f"qview: cannot listen on 127.0.0.1:{port} ({x.strerror}): the view may be running already; --port N takes another")
+    try: server = ThreadingHTTPServer((host, port), Handler)
+    except OSError as x: q.die(f"qview: cannot listen on {host}:{port} ({x.strerror}): the view may be running already; --port N takes another")
     port = server.server_address[1]
-    server.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
-    print(f"http://127.0.0.1:{port}/  the queue's view; it only reads, and Ctrl-C stops it", flush=True)
+    names = {host} | ({"localhost"} if ipaddress.ip_address(host).is_loopback else set())
+    every = host == "0.0.0.0"
+    server.at = lambda h: bool(h) and h.endswith(f":{port}") and (ipv4(h[:-len(str(port)) - 1]) or h.startswith("localhost:") if every
+                                                                    else h[:-len(str(port)) - 1] in names)
+    print(f"http://{host}:{port}/  the queue's view; it only reads, and Ctrl-C stops it"
+          + ("" if host == "127.0.0.1" else "; anyone who reaches this address can read it"), flush=True)
     try:
         while True: server.handle_request()
     except KeyboardInterrupt: pass

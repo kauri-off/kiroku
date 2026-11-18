@@ -3,10 +3,14 @@ package io.github.kauri_off.kiroku.data.sandbox
 import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 
-// A sandbox keeping its list, tokens and airing in [file]s, its titles read from public answers at its first request.
+// A sandbox keeping its list, tokens and airing in [file]s, its titles read from public answers at its first request;
+// [readTenrai] gives one of Tenrai's recorded answers by its file name.
 class Sandbox(
     read: (String) -> String,
+    readTenrai: (String) -> String,
     poster: (Long) -> String,
     clock: Clock,
     file: (String) -> File,
@@ -20,11 +24,25 @@ class Sandbox(
 
     val aniList = SandboxAniList({ airing.value }, clock)
 
-    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList)
+    val tenrai = SandboxTenrai(readTenrai)
 
-    // The list the sandbox started with and its schedules laid out again, as of now.
+    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList, tenrai)
+
+    // The title episodes are planted of, by its name at MAL.
+    val plantedTitle: String? get() = airing.value.titles[SandboxAiring.SOON]?.text("title")
+
+    val planted: List<Planted> get() = airing.value.planted
+
+    // An episode of the planted title that airs at [at] by AniList and by every refresh after, also in a new process.
+    fun plant(at: Instant): Planted? = airing.value.plant(at)
+
+    // AniList moves the episode planted last [by] later; MAL's own page is left as it is.
+    fun postpone(by: Duration): Planted? = airing.value.postpone(by)
+
+    // The list the sandbox started with and its schedules laid out again, as of now; then AniList answers again, from them.
     fun reset() {
         airing.value.reset()
+        aniList.fault = SandboxAniListFault.None
         site.value.reset()
     }
 
@@ -40,7 +58,7 @@ private class OnFirstRequest(
     private val site: Lazy<SandboxList>,
     private val airing: Lazy<SandboxAiring>,
 ) : MalList {
-    override fun title(id: Long): JsonObject? = site.value.title(id)?.let { airing.value.page(id) }
+    override fun title(id: Long): JsonObject? = site.value.title(id)?.let { SandboxUsers.titleOf(id, airing.value::page) }
 
     override fun entries(): List<Pair<Long, Listed>> = site.value.entries()
 
@@ -52,4 +70,6 @@ private class OnFirstRequest(
     ) = site.value.write(id, form)
 
     override fun remove(id: Long) = site.value.remove(id)
+
+    override fun usersList(name: String) = site.value.usersList(name)
 }

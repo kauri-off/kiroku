@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.error.StoreCalls
 import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.endedCall
 import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -23,9 +24,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -37,6 +36,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -91,6 +91,8 @@ class AiringEngine(
 
     // Of the titles asked for, those a page asked for.
     private val forPages = mutableSetOf<AnimeId>()
+
+    @Volatile
     private var stopped = false
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
@@ -127,10 +129,14 @@ class AiringEngine(
     }
 
     // The schedules of the stored titles, after every change to one; a title the source does not know has none.
-    fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> =
+    fun observeStored(): Flow<Map<AnimeId, AiringSchedule>> =
         read {
             local.observe().map { stored -> stored.mapNotNull { (id, airing) -> airing.schedule?.let { id to it } }.toMap() }
         }
+
+    // The same without a schedule whose numbering the source doubts: all that a notification may read.
+    fun observeSchedules(): Flow<Map<AnimeId, AiringSchedule>> =
+        observeStored().map { stored -> stored.filterValues { it.doubtedOver == null } }.distinctUntilChanged()
 
     // For a title's page alone, never for a notification: the stored schedule, else the one fetched for the page (A12).
     fun observePageSchedule(id: AnimeId): Flow<AiringSchedule?> =
@@ -151,6 +157,9 @@ class AiringEngine(
 
     // A pull on a title's page: a tracked title is refreshed; any other is fetched and held in memory (A12), unless finished.
     suspend fun refresh(anime: Anime): Outcome<Unit> = ask { tracking, _ -> listOfNotNull(pageTitle(tracking, anime)) }
+
+    // N3: asks for those of [titles] that are tracked and for no other, which a finished title is not.
+    suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = ask { tracking, _ -> titles.mapNotNull(tracking.tracked::get) }
 
     // A title's page that is shown: the same, only when what is held of the title is stale.
     suspend fun refreshStale(anime: Anime): Outcome<Unit> =
@@ -260,15 +269,16 @@ class AiringEngine(
             } catch (_: StoreFailure) {
                 return Outcome.Failure(DataError.StorageError)
             } catch (e: Exception) {
-                if (e is CancellationException || !scope.isActive) throw e
+                if (e is CancellationException) throw e
+                if (stopped && e is IllegalStateException) scope.endedCall(e)
+                if (!scope.isActive) throw e
                 unexpected(e)
                 return Outcome.Failure(DataError.ServerError)
             }
         return try {
             answers.awaitAll().firstNotNullOfOrNull { it }?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
         } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException(STOPPED, e)
+            scope.endedCall(IllegalStateException(STOPPED, e))
         }
     }
 
@@ -286,33 +296,49 @@ class AiringEngine(
         return answers
     }
 
-    // One call to the source. A10: a title is stored only when its answer is whole, and any other stays as it was.
+    // One call to the source. A10: a title is stored only when its answer is whole, as soon as it is; any other stays as it was.
     private suspend fun answer(titles: Map<AnimeId, Anime>) {
-        val errors =
-            try {
-                val began = clock.instant()
-                // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
-                val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
-                keep(titles.keys, fetch(titles, since), began, since)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                unexpected(e)
-                titles.keys.associateWith { DataError.ServerError }
+        val told = mutableSetOf<AnimeId>()
+
+        // Answers [ids], each with its error in [errors] or none.
+        suspend fun tell(
+            ids: Set<AnimeId>,
+            errors: Map<AnimeId, DataError?>,
+        ) {
+            mutex.withLock {
+                forPages -= ids
+                for (id in ids) asked.remove(id)?.complete(errors[id])
             }
-        mutex.withLock {
-            forPages -= titles.keys
-            for (id in titles.keys) asked.remove(id)?.complete(errors[id])
+            told += ids
+        }
+        try {
+            val began = clock.instant()
+            // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
+            val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
+            val answers =
+                fetch(titles, since) { part ->
+                    val ids = part.keys.filterTo(mutableSetOf()) { it in titles && it !in told }
+                    if (ids.isNotEmpty()) tell(ids, keep(ids, part, began, since))
+                }
+            val rest = titles.keys - told
+            tell(rest, keep(rest, answers, began, since))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            unexpected(e)
+            val rest = titles.keys - told
+            tell(rest, rest.associateWith { DataError.ServerError })
         }
     }
 
-    // The source throwing fails every title of the call: an IOException as no connection, anything else reported.
+    // The source throwing fails every title of the call not answered yet: an IOException as no connection, anything else reported.
     private suspend fun fetch(
         titles: Map<AnimeId, Anime>,
         since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         try {
-            source.fetch(titles.values, since)
+            source.fetch(titles.values, since, whole)
         } catch (e: Exception) {
             stores.ended(e)
             val error = if (e is IOException) DataError.NoConnection else DataError.ServerError.also { unexpected(e) }

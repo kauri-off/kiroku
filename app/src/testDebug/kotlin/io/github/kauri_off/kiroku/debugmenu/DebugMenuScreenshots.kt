@@ -12,21 +12,34 @@ import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.notify.Recheck
+import io.github.kauri_off.kiroku.core.notify.RunEnd
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
+import io.github.kauri_off.kiroku.data.sandbox.Planted
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
+import io.github.kauri_off.kiroku.notificationlog.LoggedPost
+import io.github.kauri_off.kiroku.notificationlog.LoggedRun
+import io.github.kauri_off.kiroku.notificationlog.NotificationLogSection
+import io.github.kauri_off.kiroku.notificationlog.NotificationLogState
+import io.github.kauri_off.kiroku.notificationlog.PlantRefusal
+import io.github.kauri_off.kiroku.notificationlog.PlantState
+import io.github.kauri_off.kiroku.notificationsamples.NotificationSamplesSection
+import io.github.kauri_off.kiroku.notificationsamples.NotificationSamplesState
 import io.github.kauri_off.kiroku.recorder.RecorderSection
 import io.github.kauri_off.kiroku.recorder.RecorderState
 import io.github.kauri_off.kiroku.reports.Report
 import io.github.kauri_off.kiroku.reports.ReportsSection
+import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.EdgeMarker
-import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioSection
 import io.github.kauri_off.kiroku.scenario.ScenarioState
@@ -46,7 +59,8 @@ import java.time.Duration
 import java.time.Instant
 
 class DebugMenuScreenshots : ScreenshotRegistry() {
-    private val several = Scenario(offline = true, slow = true, writes = WriteFault.Refused, store = StoreFault.WritesFail)
+    private val several =
+        Scenario(offline = true, slow = true, writes = WriteFault.Refused, store = StoreFault.WritesFail, aniList = AniListFault.Fails)
 
     override val content = contentCase { Menu(ScenarioState.Ready(Scenario())) }
     override val loading =
@@ -56,48 +70,57 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
     override val empty = notShown("The menu always has its build and the gallery; off the demo its scenarios say why there are none")
     override val error = notShown("The menu makes no request that can fail; a store it cannot read is the airing-counts-unreadable case")
 
+    // Each case sets every section it can, so a section's states share cases rather than each having its own.
     override val cases =
         listOf(
-            case("several-on") { Menu(ScenarioState.Ready(several)) },
-            case("waiting-for-save") { Menu(ScenarioState.Ready(several, ResetState.WaitingForSave)) },
-            case("save-dropped") { Menu(ScenarioState.Ready(Scenario(), ResetState.SaveDropped)) },
-            case("real-account") { Menu(ScenarioState.Unavailable) },
+            case("faults-on") { Menu(ScenarioState.Ready(several), source = SourceState(DataSource.Demo, DataSource.Demo, kept = false)) },
             case("sandbox") {
                 Menu(
-                    ScenarioState.Ready(several.copy(store = StoreFault.None), sandbox = true),
+                    ScenarioState.Ready(several.copy(store = StoreFault.None, aniList = AniListFault.NoAnswer), sandbox = true),
                     source = SourceState(DataSource.Sandbox, DataSource.Sandbox),
                     signOut = SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))),
                     recorder = RecorderState(null),
+                    runs =
+                        NotificationLogState(
+                            RUNS,
+                            plant = PlantState(PLANTED_TITLE, Planted(5, AT.plusSeconds(600), AT.plusSeconds(1500)), PlantRefusal.NoneLeft),
+                            minutes = "15",
+                        ),
                 )
             },
-            case("signed-out") { Menu(ScenarioState.Unavailable, signOut = SignOutState.Account(Session.SignedOut)) },
-            case("source-chosen") { Menu(ScenarioState.Unavailable, source = SourceState(DataSource.Account, chosen = DataSource.Demo)) },
-            case(
-                "source-not-kept",
-            ) { Menu(ScenarioState.Ready(Scenario()), source = SourceState(DataSource.Demo, DataSource.Demo, kept = false)) },
-            case("uncommitted-build") { Menu(ScenarioState.Unavailable, BUILD.copy(commit = Commit(HASH, dirty = true))) },
-            case("unnamed-build") { Menu(ScenarioState.Unavailable, BUILD.copy(commit = null, built = null)) },
+            case("real-account") {
+                Menu(
+                    ScenarioState.Unavailable,
+                    BUILD.copy(commit = Commit(HASH, dirty = true)),
+                    source = SourceState(DataSource.Account, chosen = DataSource.Demo),
+                    reports = REPORTS,
+                    runs = NotificationLogState(MANY_RUNS),
+                )
+            },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
-            case("recorder-running") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Running(TITLE, 12, 47), "1")) },
-            case("recorder-recorded") {
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Recorded(TITLE, 47, RECORDED, ListAfter.Same), "1"))
+            case("recorder-running") {
+                Menu(
+                    ScenarioState.Unavailable,
+                    recorder = RecorderState(Recording.Running(TITLE, 12, 47), "1"),
+                    airingCounts = AiringCountsState.Unreadable,
+                    samples = NotificationSamplesState(shown = false),
+                    runs =
+                        NotificationLogState(
+                            listOf(LoggedRun.notBuilt(RunTrigger.AppOpened, AT.plusSeconds(60))) + RUNS.take(1),
+                            plant = PlantState(PLANTED_TITLE, Planted(4, AT.plusSeconds(300))),
+                        ),
+                )
             },
             case("recorder-stopped-left") {
                 val stopped = Recording.Stopped(TITLE, "score_set", Halt.Refused(429), 31, RUN, ListAfter.Left)
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(stopped, "1"))
+                Menu(
+                    ScenarioState.Unavailable,
+                    BUILD.copy(commit = null, built = null),
+                    recorder = RecorderState(stopped, "1"),
+                    airingCounts = STOPPED,
+                )
             },
-            case("recorder-leftover-removed") {
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Leftover(TITLE, ListAfter.Removed, null)))
-            },
-            case(
-                "recorder-refused",
-            ) { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.NotStarted(Halt.OnTheList), "21")) },
-            case("airing-counts-stopped") { Menu(ScenarioState.Unavailable, airingCounts = STOPPED) },
-            case("airing-counts-unreadable") { Menu(ScenarioState.Unavailable, airingCounts = AiringCountsState.Unreadable) },
-            case("reports") { Menu(ScenarioState.Unavailable, reports = REPORTS) },
-            case("reports-renamed") { Menu(ScenarioState.Unavailable, reports = RENAMED, renamed = true) },
             case("tab-on-list") { OverList(Scenario()) },
-            case("marker-on-list") { OverList(Scenario(offline = true)) },
             case("marker-several-on-list") { OverList(several) },
         )
 
@@ -123,21 +146,98 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     ),
                 )
             }
-        val RECORDED = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded")
-        val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
-        val RENAMED =
+        val AT: Instant = Instant.parse("2026-11-12T09:30:00Z")
+        val PLANTED_TITLE = FixtureAnime.exactToWatch.titles.romaji
+
+        private fun post(
+            anime: Anime,
+            episode: Int,
+            notifyAt: Instant,
+            postedAt: Instant,
+            shown: Boolean = true,
+            delay: Duration = Duration.ZERO,
+        ) = LoggedPost(anime.id, anime.titles.romaji, episode, notifyAt.minus(delay), notifyAt, postedAt, shown)
+
+        // Runs the engine could have made, newest first: each post inside its run, after its notification time.
+        val RUNS =
             listOf(
-                Report(
-                    Instant.parse("2026-11-12T09:40:00Z"),
+                LoggedRun(
+                    RunTrigger.Alarm,
+                    AT,
+                    AT.plusMillis(5400),
+                    RunEnd.Done,
+                    Recheck.Late,
                     listOf(
-                        "Unexpected: o3.k",
-                        "Stands for: q2.c",
-                        "\tat o3.f.c(Unknown Source:41)",
-                        "\tat o3.f.e(Unknown Source:7)",
-                        "\tat o3.e.u(Unknown Source:15)",
+                        post(FixtureAnime.exactToWatch, 4, AT, AT.plusMillis(5300)),
+                        post(FixtureAnime.longTitle, 7, AT, AT.plusMillis(5350), shown = false, delay = Duration.ofMinutes(30)),
                     ),
+                    emptyList(),
+                    AT.plusSeconds(604800),
+                    alarmFailed = false,
+                ),
+                LoggedRun(
+                    RunTrigger.Changed,
+                    AT.minusSeconds(40),
+                    AT.minusSeconds(40),
+                    RunEnd.Done,
+                    Recheck.NotAsked,
+                    emptyList(),
+                    listOf(FixtureAnime.exactOnBreak.id, FixtureAnime.estimatedToWatch.id),
+                    AT,
+                    false,
+                ),
+                LoggedRun(
+                    RunTrigger.DeviceRestarted,
+                    AT.minusSeconds(4000),
+                    AT.minusSeconds(3999),
+                    RunEnd.Failed,
+                    Recheck.NotAsked,
+                    listOf(post(FixtureAnime.exactOnBreak, 2, AT.minusSeconds(4000 + 7380), AT.minusSeconds(4000).plusMillis(500))),
+                    emptyList(),
+                    null,
+                    true,
+                ),
+                LoggedRun(
+                    RunTrigger.Alarm,
+                    AT.minusSeconds(7000),
+                    AT.minusSeconds(6997),
+                    RunEnd.Done,
+                    Recheck.Answered,
+                    emptyList(),
+                    emptyList(),
+                    AT,
+                    false,
+                ),
+                LoggedRun(
+                    RunTrigger.Changed,
+                    AT.minusSeconds(9000),
+                    AT.minusSeconds(8999),
+                    RunEnd.SignedOut,
+                    Recheck.NotAsked,
+                    emptyList(),
+                    emptyList(),
+                    null,
+                    false,
+                    forgotten = 2,
                 ),
             )
+
+        // More runs than are shown at once, as days of use leave them.
+        val MANY_RUNS =
+            (0 until 34).map { i ->
+                LoggedRun(
+                    RunTrigger.entries[i % RunTrigger.entries.size],
+                    AT.minusSeconds(3600L * i),
+                    AT.minusSeconds(3600L * i).plusMillis(120),
+                    RunEnd.Done,
+                    if (i % RunTrigger.entries.size == 0) Recheck.Offline else Recheck.NotAsked,
+                    emptyList(),
+                    emptyList(),
+                    AT.plusSeconds(3600),
+                    false,
+                )
+            }
+        val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
         val REPORTS =
             listOf(
                 Report(
@@ -180,8 +280,9 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             if (scenarios == ScenarioState.Unavailable) SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))) else SignOutState.Demo,
         recorder: RecorderState = RecorderState(if (scenarios == ScenarioState.Unavailable) Recording.Idle else null),
         reports: List<Report> = emptyList(),
-        renamed: Boolean = false,
         airingCounts: AiringCountsState = COUNTS,
+        samples: NotificationSamplesState = NotificationSamplesState(),
+        runs: NotificationLogState = NotificationLogState(emptyList()),
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
@@ -189,9 +290,11 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             { SignOutSection(signOut, onEvent = {}) },
             { RecorderSection(recorder, onEvent = {}) },
             { AiringCountsSection(airingCounts, onEvent = {}) },
+            { NotificationSamplesSection(samples, onEvent = {}) },
+            { NotificationLogSection(runs, onEvent = {}) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
-            { ReportsSection(reports, renamed) },
+            { ReportsSection(reports, renamed = false) },
         ),
         onClose = {},
     )

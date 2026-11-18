@@ -13,28 +13,46 @@ import java.time.YearMonth
 import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
-// The sandbox's MAL: its titles, and its user's list kept in [file], which outlives the process as the website's does.
+// The sandbox's MAL: its titles and their copies, its user's list kept in [file], which outlives the process as the
+// website's does, and the lists of its other users.
 class SandboxList(
     private val titles: Map<Long, JsonObject>,
     private val clock: Clock,
     private val file: File? = null,
     private val starting: (Instant) -> Map<Long, Listed> = { SandboxTitles.startingList(titles, it) },
+    // The list of SandboxUsers.PUBLIC, made of [titles] and their copies.
+    public: (Map<Long, JsonObject>) -> Map<Long, Listed> = SandboxUsers::publicList,
 ) : MalList {
     // The starting list is kept at once, so that the next process finds it as this one left it.
     private val list: MutableMap<Long, Listed> = read()?.toMutableMap() ?: starting(clock.instant()).toMutableMap().also { kept(it) }
 
-    override fun title(id: Long): JsonObject? = titles[id]
+    private val publicList by lazy { inTitleOrder(public(titles).toList()) }
 
-    override fun entries(): List<Pair<Long, Listed>> =
-        synchronized(list) { list.toList() }.sortedWith(compareBy({ titles[it.first]?.text("title")?.lowercase() }, { it.first }))
+    override fun title(id: Long): JsonObject? = SandboxUsers.titleOf(id, titles::get)
+
+    override fun entries(): List<Pair<Long, Listed>> = inTitleOrder(synchronized(list) { list.toList() })
+
+    private fun inTitleOrder(entries: List<Pair<Long, Listed>>): List<Pair<Long, Listed>> =
+        entries
+            .map { title(it.first)?.text("title")?.lowercase() to it }
+            .sortedWith(compareBy({ it.first }, { it.second.first }))
+            .map { it.second }
 
     override fun entry(id: Long): Listed? = synchronized(list) { list[id] }
+
+    override fun usersList(name: String): UsersList? =
+        when {
+            name.equals(SandboxMal.USER_NAME, ignoreCase = true) -> UsersList.Public(entries())
+            name.equals(SandboxUsers.PUBLIC, ignoreCase = true) -> UsersList.Public(publicList)
+            name.equals(SandboxUsers.PRIVATE, ignoreCase = true) -> UsersList.Private
+            else -> null
+        }
 
     override fun write(
         id: Long,
         form: Map<String, String>,
     ): Written {
-        val title = titles[id] ?: return Written.Unknown
+        val title = title(id) ?: return Written.Unknown
         return synchronized(list) {
             val entry = written(list[id], form, title.episodes, clock.instant()) ?: return Written.Refused
             list[id] = entry
@@ -44,7 +62,7 @@ class SandboxList(
     }
 
     override fun remove(id: Long): Boolean {
-        if (id !in titles) return false
+        if (title(id) == null) return false
         synchronized(list) {
             list.remove(id)
             kept()

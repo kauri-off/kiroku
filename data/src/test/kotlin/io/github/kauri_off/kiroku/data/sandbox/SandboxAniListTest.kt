@@ -32,17 +32,22 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.time.Duration
 import java.time.Instant
 import java.time.YearMonth
+import kotlin.concurrent.thread
 
 // M3-07: the sandbox answers AniList's shared query on the device, in the recorded answers' shapes and with AniList's paging,
 // its schedules on each title's weekly slot and agreeing with its MAL pages, laid out again at a reset.
@@ -55,7 +60,14 @@ class SandboxAniListTest {
     private inner class OnDevice(
         val files: File = folder.newFolder(),
     ) {
-        val sandbox = Sandbox(read = { recorded("$it.200.json") }, poster = ::poster, clock = clock, file = { File(files, it) })
+        val sandbox =
+            Sandbox(
+                read = { recorded("$it.200.json") },
+                readTenrai = ::recordedTenrai,
+                poster = ::poster,
+                clock = clock,
+                file = { File(files, it) },
+            )
         val client = SandboxClient(sandbox.mal, clock = clock)
 
         // AniList's answer to the shared query, asked through the app's client by a client that keeps AniList's limit.
@@ -543,7 +555,142 @@ class SandboxAniListTest {
         assertTrue("POST graphql.anilist.co/" in device.sandbox.mal.asked)
     }
 
+    @Test
+    fun `failing, it answers with a server error, and not answering, it holds a request until it answers again or the client gives up`() {
+        val device = OnDevice()
+        val aniList = device.sandbox.aniList
+        val body = AniListSchedule.body(listOf(WEEKLY.toInt()))
+        aniList.fault = SandboxAniListFault.Fails
+        val (status, text) = device.post(body)
+        assertEquals(500, status)
+        assertEquals(JsonNull, Json.parseToJsonElement(text).jsonObject["data"])
+        assertEquals(listOf(WEEKLY), aniList.asked.last())
+
+        aniList.fault = SandboxAniListFault.NoAnswer
+        val client =
+            OkHttpClient
+                .Builder()
+                .readTimeout(HELD)
+                .addInterceptor(device.sandbox.mal)
+                .build()
+
+        fun call(client: OkHttpClient) =
+            client.newCall(
+                Request
+                    .Builder()
+                    .url(AniListSchedule.ADDRESS)
+                    .header("User-Agent", "Kiroku/1.2.3")
+                    .post(body.toRequestBody(JSON))
+                    .build(),
+            )
+        val began = System.nanoTime()
+        assertThrows(SocketTimeoutException::class.java) { call(client).execute() }
+        assertTrue(Duration.ofNanos(System.nanoTime() - began) >= HELD)
+
+        val cancelled = call(client.newBuilder().readTimeout(Duration.ofMinutes(1)).build())
+        thread {
+            Thread.sleep(HELD.toMillis())
+            cancelled.cancel()
+        }
+        val asked = System.nanoTime()
+        assertThrows(IOException::class.java) { cancelled.execute() }
+        assertTrue(Duration.ofNanos(System.nanoTime() - asked) < Duration.ofSeconds(10))
+
+        val answered = call(client.newBuilder().readTimeout(Duration.ofMinutes(1)).build())
+        thread {
+            Thread.sleep(HELD.toMillis())
+            aniList.fault = SandboxAniListFault.None
+        }
+        assertEquals(200, answered.execute().use { it.code })
+        assertEquals(listOf(WEEKLY), aniList.asked.last())
+    }
+
+    @Test
+    fun `a reset lays the schedules out again before AniList answers again, so a request held until then answers from them`() {
+        val device = OnDevice()
+        device.sandbox.aniList.fault = SandboxAniListFault.NoAnswer
+        var answer: Pair<Int, String>? = null
+        val held = thread { answer = device.post(AniListSchedule.body(listOf(SandboxAiring.SOON.toInt()))) }
+        while ("POST graphql.anilist.co/" !in device.sandbox.mal.asked) Thread.sleep(POLL)
+        clock.now += Duration.ofDays(1)
+
+        device.sandbox.reset()
+        held.join()
+        assertEquals(SandboxAniListFault.None, device.sandbox.aniList.fault)
+        val (status, body) = checkNotNull(answer)
+        assertEquals(200, status)
+        val next =
+            Json
+                .parseToJsonElement(body)
+                .jsonObject.media
+                .single()
+                .nodes
+                .map { it.at }
+                .first { it > clock.now }
+        assertTrue("$next", next <= clock.now + SandboxAiring.SOON_AFTER)
+    }
+
+    @Test
+    fun `a planted episode is AniList's at its time in every answer and in a new process, and at its new time once postponed`() {
+        val first = OnDevice()
+
+        fun soon(device: OnDevice = first) = device.entries(listOf(SandboxAiring.SOON)).getValue(SandboxAiring.SOON).single()
+        val laid = soon()
+        val next = laid.coming.first()
+        val slot = first.mal(SandboxAiring.SOON)["broadcast"]
+
+        val at = clock.now + Duration.ofMinutes(20)
+        val planted = checkNotNull(first.sandbox.plant(at))
+        assertEquals(Planted(next.episode, at), planted)
+        val expected =
+            laid.schedule.map {
+                if (it.episode <
+                    next.episode
+                ) {
+                    it
+                } else {
+                    Aired(it.episode, at + WEEK.multipliedBy((it.episode - next.episode).toLong()))
+                }
+            }
+        repeat(2) { assertEquals(expected, soon().schedule) }
+        assertEquals(expected, soon(OnDevice(first.files)).schedule)
+        assertEquals(listOf(planted), OnDevice(first.files).sandbox.planted)
+        assertEquals(slot, first.mal(SandboxAiring.SOON)["broadcast"])
+
+        val postponed = checkNotNull(first.sandbox.postpone(Duration.ofMinutes(15)))
+        assertEquals(Planted(next.episode, at, at + Duration.ofMinutes(15)), postponed)
+        val later = OnDevice(first.files)
+        assertEquals(
+            expected.map {
+                if (it.episode <
+                    next.episode
+                ) {
+                    it
+                } else {
+                    it.copy(at = it.at + Duration.ofMinutes(15))
+                }
+            },
+            soon(later).schedule,
+        )
+
+        // Once it has aired, it is not postponed, and the next plant is the episode after it.
+        clock.now = postponed.at + Duration.ofMinutes(1)
+        assertEquals(null, later.sandbox.postpone(Duration.ofMinutes(15)))
+        val again = checkNotNull(later.sandbox.plant(clock.now + Duration.ofMinutes(5)))
+        assertEquals(next.episode + 1, again.episode)
+        assertEquals(postponed.at, soon(OnDevice(first.files)).schedule.single { it.episode == next.episode }.at)
+        assertEquals(again.at, soon(OnDevice(first.files)).coming.first().at)
+        assertEquals(null, later.sandbox.plant(clock.now))
+
+        later.sandbox.reset()
+        assertEquals(emptyList<Planted>(), OnDevice(first.files).sandbox.planted)
+        clock.now += YEARS
+        assertEquals(null, OnDevice(first.files).sandbox.plant(clock.now + Duration.ofMinutes(5)))
+    }
+
     private companion object {
+        const val POLL = 10L
+        val HELD: Duration = Duration.ofMillis(300)
         val START: Instant = Instant.parse("2026-11-16T05:47:00Z")
         val WEEK: Duration = Duration.ofDays(7)
         val MONTH: Duration = Duration.ofDays(31)

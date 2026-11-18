@@ -7,8 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
@@ -31,7 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-// ARCHITECTURE 9.4: on a 411 × 891 dp screen with its system bars, the header, the list block and the airing block of
+// On a 411 × 891 dp screen with its system bars, the header, the list block and the airing block of
 // a title of up to two lines end above the gesture bar, in both languages of the base variants.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -65,7 +66,7 @@ class TitleAboveTheFoldTest {
         compose.waitForIdle()
         val layout =
             compose
-                .onNodeWithText(shown.page.title)
+                .onNode(isHeading() and hasText(shown.page.title))
                 .fetchSemanticsNode()
                 .config[DrawnTitleKey]
                 .layout
