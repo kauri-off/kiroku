@@ -3,10 +3,14 @@ package io.github.kauri_off.kiroku.wiring
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.os.Looper
+import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Coming
+import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
@@ -14,6 +18,7 @@ import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.session.HeldBack
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -128,6 +134,43 @@ class LiveNotificationsTest {
             assertEquals(emptyList<Throwable>(), unexpected.toList())
         }
 
+    // The alarm's promise is the notification: MAL's answer to a renewal may take as long as a request may.
+    @Test
+    fun `a run does not wait for the renewal of the tokens, returns once both have ended, and ends as it would when the renewal fails`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob())
+            val demo = Demo(Fixtures.reference, scope)
+            val renewals = AtomicInteger()
+            val renewed = CompletableDeferred<Unit>()
+            val notifications =
+                LiveNotifications(
+                    LiveParts(context, LiveSource.Account, "0123abcd", demo.clock, scope, unexpected::add, device = device),
+                    demo.session.observeSession(),
+                    { demo.list },
+                    { demo.airing },
+                    { demo.connection },
+                    { TitleLanguage.Romaji },
+                    { InMemoryNotificationStore() },
+                    renew = {
+                        renewals.incrementAndGet()
+                        renewed.await()
+                    },
+                )
+
+            val run = async { notifications.run(RunTrigger.Alarm) }
+            // The engine's run has ended: what comes next is known, which it is not before one.
+            assertTrue(withTimeout(WAIT) { notifications.observeComing().first { it != null } }!!.isNotEmpty())
+            assertEquals(1, renewals.get())
+            assertTrue(run.isActive)
+            renewed.completeExceptionally(IllegalStateException(BROKEN))
+            val report = withTimeout(WAIT) { run.await() }
+
+            assertEquals(RunTrigger.Alarm, report.trigger)
+            assertEquals(RunEnd.Done, report.end)
+            assertEquals(listOf(BROKEN), unexpected.map { it.message })
+            scope.coroutineContext.job.cancelAndJoin()
+        }
+
     // A test ends its app's scope while work of that scope may still be asking for an area.
     @Test
     fun `an area first asked for once the source's scope has ended ends its caller as cancelled, and nothing is reported`() =
@@ -146,4 +189,9 @@ class LiveNotificationsTest {
             }
             assertEquals(emptyList<Throwable>(), unexpected.toList())
         }
+
+    private companion object {
+        const val WAIT = 20_000L
+        const val BROKEN = "The renewal broke"
+    }
 }

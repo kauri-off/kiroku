@@ -325,18 +325,22 @@ class SandboxNotificationsTest {
 
     @Test
     fun `after a sign-out the database holds no record, nothing is posted and no alarm is set (S9)`() {
-        val graph = started()
-        graph.announced()
-        assertTrue(soon in shown())
-        assertTrue(rows("notification_title") > 0)
-        assertTrue(rows("notification_sent") > 0)
-        assertTrue(alarm() != null)
+        // In the process that announced, and in a later one in which nothing has asked for notifications.
+        for (later in listOf(false, true)) {
+            var graph = started()
+            graph.announced()
+            assertTrue(soon in shown())
+            assertTrue(rows("notification_title") > 0)
+            assertTrue(rows("notification_sent") > 0)
+            assertTrue(alarm() != null)
+            if (later) graph = started()
 
-        waited { graph.session.signOut() }
+            waited { graph.session.signOut() }
 
-        assertNoRecord()
-        assertEquals(emptyList<SentNotification>(), graph.sent())
-        assertEquals(emptyList<Coming>(), graph.coming())
+            assertNoRecord()
+            assertEquals(emptyList<SentNotification>(), graph.sent())
+            assertEquals(emptyList<Coming>(), graph.coming())
+        }
     }
 
     private fun assertNoRecord() {
