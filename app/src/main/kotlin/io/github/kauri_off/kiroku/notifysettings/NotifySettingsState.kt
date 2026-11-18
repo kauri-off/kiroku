@@ -23,6 +23,8 @@ sealed interface NotifySettingsContent {
         val device: DeviceState,
         // Null while nobody is signed in: nothing is announced and nothing is recorded (S9).
         val record: NotifyRecord?,
+        // The last test notification was not shown, and the device still shows none of the app's.
+        val testNotShown: Boolean = false,
     ) : NotifySettingsContent
 
     data class Failed(

@@ -28,6 +28,10 @@ class NotifySettingsScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("notifications-blocked") { Screen(state(device = allowed.copy(notifications = NotificationAccess.Blocked))) },
+            case("test-not-shown") {
+                val blocked = allowed.copy(notifications = NotificationAccess.Blocked)
+                Screen(fixtures.state(NotifySettingsContent.Shown(settings, blocked, record, testNotShown = true)))
+            },
             case("channel-off") { Screen(state(device = allowed.copy(notifications = NotificationAccess.ChannelOff))) },
             case("exact-alarms-not-allowed") { Screen(state(device = allowed.copy(exactAlarms = ExactAlarms.NotAllowed))) },
             case("exact-alarms-no-setting") { Screen(state(device = allowed.copy(exactAlarms = ExactAlarms.NoSetting))) },

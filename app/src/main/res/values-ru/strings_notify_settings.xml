@@ -25,6 +25,7 @@
     <string name="notify_settings_battery_unrestricted">Без ограничений</string>
     <string name="notify_settings_battery_restricted">Ограничено в настройках Android</string>
     <string name="notify_settings_send_test">Отправить пробное уведомление</string>
+    <string name="notify_settings_test_not_shown">Не показано: уведомления на этом устройстве отключены</string>
     <string name="notify_settings_limits">После «Остановить» уведомления не приходят, пока вы снова не откроете Kiroku.</string>
 
     <string name="notify_settings_upcoming">Ближайшие</string>

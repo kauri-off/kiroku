@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.notifysettings
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -139,5 +142,20 @@ class NotifySettingsScreenTest {
         compose.onNodeWithText("Could not read the notification settings").assertExists()
         compose.onNodeWithText("Retry").performClick()
         assertEquals(listOf<NotifySettingsEvent>(NotifySettingsEvent.Retry), events)
+    }
+
+    @Test
+    fun aTestNotificationTheDeviceDidNotShowIsToldUnderTheButton() {
+        val blocked = fixtures.allowed.copy(notifications = NotificationAccess.Blocked)
+        var notShown by mutableStateOf(false)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val content = NotifySettingsContent.Shown(fixtures.settings, blocked, fixtures.record, testNotShown = notShown)
+                NotifySettingsScreen(fixtures.state(content), { events += it }, SnackbarHostState())
+            }
+        }
+        compose.onNodeWithText("Not shown: notifications are turned off on this device").assertDoesNotExist()
+        notShown = true
+        compose.onNodeWithText("Not shown: notifications are turned off on this device").assertExists()
     }
 }

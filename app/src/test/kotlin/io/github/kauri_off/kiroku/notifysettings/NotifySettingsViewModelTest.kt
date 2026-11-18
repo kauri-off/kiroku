@@ -1,13 +1,19 @@
 package io.github.kauri_off.kiroku.notifysettings
 
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationAlarm
 import io.github.kauri_off.kiroku.core.notify.InMemoryShownNotifications
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.core.repository.NotificationsRepository
+import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.MovingClock
@@ -15,7 +21,12 @@ import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -46,6 +58,7 @@ class NotifySettingsViewModelTest {
         val alarm: InMemoryNotificationAlarm,
         val shown: InMemoryShownNotifications,
         val model: NotifySettingsViewModel,
+        val messages: ShellMessages,
     ) {
         var device: DeviceState? = null
         var tests = 0
@@ -55,7 +68,11 @@ class NotifySettingsViewModelTest {
         fun content() = model.state.value.content as NotifySettingsContent.Shown
     }
 
-    private fun TestScope.app(): App {
+    private fun TestScope.app(
+        notifications: (NotificationsRepository) -> NotificationsRepository = { it },
+        checks: Flow<Unit> = emptyFlow(),
+        testShows: Boolean = true,
+    ): App {
         val clock = MovingClock(fixtures.now, FixtureTime.zone)
         val alarm = InMemoryNotificationAlarm()
         val shown = InMemoryShownNotifications()
@@ -63,22 +80,24 @@ class NotifySettingsViewModelTest {
         val demo = Demo(fixtures, scope, clock = clock, alarm = alarm, shown = shown)
         val graph = TestGraph(demo)
         lateinit var app: App
+        val messages = ShellMessages(scope, graph.list)
         val model =
             NotifySettingsViewModel(
                 graph.session,
-                graph.notifications,
+                notifications(graph.notifications),
                 graph.list,
                 clock,
                 graph.titleLanguage,
                 graph.background,
                 { app.device ?: allowed },
+                checks,
                 {
                     app.tests++
-                    true
+                    testShows
                 },
-                ShellMessages(scope, graph.list),
+                messages,
             )
-        app = App(demo, clock, alarm, shown, model)
+        app = App(demo, clock, alarm, shown, model, messages)
         showing(model.state)
         return app
     }
@@ -209,6 +228,105 @@ class NotifySettingsViewModelTest {
             app.model.onEvent(NotifySettingsEvent.SetAlsoPlanned(true))
             advanceUntilIdle()
             assertTrue(app.content().settings.alsoPlanned)
+        }
+
+    @Test
+    fun `a change the store refuses says so, and the settings stay as stored`() =
+        runTest(dispatcher) {
+            val app =
+                app(notifications = { engine ->
+                    object : NotificationsRepository by engine {
+                        override suspend fun changeSettings(change: (NotificationSettings) -> NotificationSettings) =
+                            Outcome.Failure(DataError.StorageError)
+                    }
+                })
+            app.model.readDevice()
+            advanceUntilIdle()
+            app.model.onEvent(NotifySettingsEvent.SetOn(false))
+            advanceUntilIdle()
+            assertEquals(
+                ShellMessage(ShellMessage.Text.CouldNotSave),
+                app.messages.current.value
+                    ?.message,
+            )
+            assertTrue(app.content().settings.on)
+        }
+
+    @Test
+    fun `an expired session shows its banner over the settings and the record`() =
+        runTest(dispatcher) {
+            val app = app()
+            app.model.readDevice()
+            advanceUntilIdle()
+            assertFalse(app.model.state.value.sessionExpired)
+            app.demo.server.sessionExpired.value = true
+            advanceUntilIdle()
+            assertTrue(app.model.state.value.sessionExpired)
+            assertNotNull(app.content().record)
+        }
+
+    @Test
+    fun `settings that cannot be read are the error state, and Retry reads them again`() =
+        runTest(dispatcher) {
+            var failing = true
+            val app =
+                app(notifications = { engine ->
+                    object : NotificationsRepository by engine {
+                        override fun observeSettings() =
+                            flow {
+                                if (failing) throw DataException(DataError.StorageError)
+                                emitAll(engine.observeSettings())
+                            }
+                    }
+                })
+            app.model.readDevice()
+            advanceUntilIdle()
+            assertEquals(NotifySettingsContent.Failed(DataError.StorageError), app.model.state.value.content)
+            failing = false
+            advanceUntilIdle()
+            assertEquals(NotifySettingsContent.Failed(DataError.StorageError), app.model.state.value.content)
+            app.model.onEvent(NotifySettingsEvent.Retry)
+            advanceUntilIdle()
+            assertTrue(app.content().settings.on)
+        }
+
+    @Test
+    fun `the device is read again at each check while the screen stays shown, and the latest read is the one shown`() =
+        runTest(dispatcher) {
+            val checks = MutableSharedFlow<Unit>()
+            val app = app(checks = checks)
+            app.model.readDevice()
+            advanceUntilIdle()
+            assertEquals(allowed, app.content().device)
+
+            app.device = allowed.copy(notifications = NotificationAccess.ChannelOff)
+            checks.emit(Unit)
+            advanceUntilIdle()
+            assertEquals(NotificationAccess.ChannelOff, app.content().device.notifications)
+
+            app.device = allowed
+            app.model.readDevice()
+            advanceUntilIdle()
+            assertEquals(allowed, app.content().device)
+        }
+
+    @Test
+    fun `a test notification the device does not show is told so, until the device shows the app's notifications`() =
+        runTest(dispatcher) {
+            val checks = MutableSharedFlow<Unit>()
+            val app = app(checks = checks, testShows = false)
+            app.device = allowed.copy(notifications = NotificationAccess.Blocked)
+            app.model.readDevice()
+            advanceUntilIdle()
+            assertFalse(app.content().testNotShown)
+            app.model.onEvent(NotifySettingsEvent.SendTest)
+            advanceUntilIdle()
+            assertTrue(app.content().testNotShown)
+
+            app.device = allowed
+            checks.emit(Unit)
+            advanceUntilIdle()
+            assertFalse(app.content().testNotShown)
         }
 
     private companion object {

@@ -44,6 +44,7 @@ fun NotifySettingsRoute(
                 graph.titleLanguage,
                 graph.background,
                 device::read,
+                deviceChecks(),
                 tests::test,
                 messages,
             )

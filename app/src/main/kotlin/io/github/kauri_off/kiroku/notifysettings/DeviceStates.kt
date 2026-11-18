@@ -12,6 +12,22 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+
+// The shade and a window beside the app change the states without pausing the screen, so they are read again this often.
+val DEVICE_CHECK_EVERY: Duration = 1.seconds
+
+fun deviceChecks(every: Duration = DEVICE_CHECK_EVERY): Flow<Unit> =
+    flow {
+        while (true) {
+            delay(every)
+            emit(Unit)
+        }
+    }
 
 // What the device lets the app do with notifications, and the system screen where the person changes each.
 class DeviceStates(

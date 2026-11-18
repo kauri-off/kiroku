@@ -115,7 +115,7 @@ private fun Shown(
             contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + Spacing.s),
         ) {
             item(key = Section.Settings) { Settings(content.settings, onEvent) }
-            item(key = Section.Device) { Device(content.device, onEvent) }
+            item(key = Section.Device) { Device(content.device, content.testNotShown, onEvent) }
             val record = content.record
             if (record == null) {
                 item(key = Section.SignedOut) { SignedOut(onEvent) }
@@ -177,6 +177,7 @@ private fun SwitchRow(
 @Composable
 private fun Device(
     device: DeviceState,
+    testNotShown: Boolean,
     onEvent: (NotifySettingsEvent) -> Unit,
 ) {
     Column(Modifier.padding(top = Spacing.l)) {
@@ -213,6 +214,14 @@ private fun Device(
             modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.s),
         ) {
             Text(stringResource(R.string.notify_settings_send_test))
+        }
+        if (testNotShown) {
+            Text(
+                stringResource(R.string.notify_settings_test_not_shown),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = Spacing.l, top = Spacing.s, end = Spacing.l),
+            )
         }
         Note(stringResource(R.string.notify_settings_limits), Modifier.padding(top = Spacing.s))
     }

@@ -4,6 +4,10 @@ import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.ResolveInfo
+import android.net.Uri
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.test.hasScrollAction
@@ -40,6 +44,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowAlarmManager
+import java.util.concurrent.TimeUnit
 
 // The route over the demo, with the device's states as the system's own managers give them.
 @RunWith(RobolectricTestRunner::class)
@@ -83,10 +88,16 @@ class NotifySettingsRouteTest {
         compose.waitForIdle()
     }
 
+    // The time of one check passes with the activity resumed.
+    private fun passCheck() {
+        shadowOf(Looper.getMainLooper()).idleFor(DEVICE_CHECK_EVERY.inWholeMilliseconds * 2, TimeUnit.MILLISECONDS)
+        compose.waitForIdle()
+    }
+
     private fun started(): Intent? = shadowOf(compose.activity).nextStartedActivity
 
     @Test
-    fun `the states shown are the device's as it was when the screen was last shown`() {
+    fun `on a return from the system's screens the states are the device's at once`() {
         device(notificationsOn = false, exactAlarms = false, restricted = true)
         show()
         compose.onNodeWithText("Blocked in Android settings").assertExists()
@@ -94,14 +105,45 @@ class NotifySettingsRouteTest {
         compose.onNodeWithText("Restricted in Android settings").assertExists()
 
         device(notificationsOn = true, exactAlarms = true, restricted = false)
-        compose.waitForIdle()
-        compose.onNodeWithText("Blocked in Android settings").assertExists()
-
         leaveAndReturn()
         compose.onNodeWithText("Blocked in Android settings").assertDoesNotExist()
         compose.onNodeWithText("Allowed").assertExists()
         compose.onNodeWithText("Allowed: notifications come on time").assertExists()
         compose.onNodeWithText("Not restricted").assertExists()
+    }
+
+    // The shade and a window beside the app change them while the screen stays resumed.
+    @Test
+    fun `the states follow the device while the screen stays resumed`() {
+        device(notificationsOn = true, exactAlarms = true, restricted = false)
+        show()
+        compose.onNodeWithText("Allowed").assertExists()
+
+        device(notificationsOn = false, exactAlarms = true, restricted = true)
+        passCheck()
+        assertEquals(Lifecycle.State.RESUMED, compose.activityRule.scenario.state)
+        compose.onNodeWithText("Blocked in Android settings").assertExists()
+        compose.onNodeWithText("Allowed").assertDoesNotExist()
+        compose.onNodeWithText("Restricted in Android settings").assertExists()
+
+        notifications.createNotificationChannel(NotificationChannel(EpisodeNotifications.CHANNEL, "x", NotificationManager.IMPORTANCE_NONE))
+        device(notificationsOn = true, exactAlarms = true, restricted = false)
+        passCheck()
+        compose.onNodeWithText("The category “New episodes” is turned off").assertExists()
+    }
+
+    @Test
+    fun `a system screen the device does not have gives way to the app's own info screen`() {
+        device(notificationsOn = true, exactAlarms = false, restricted = false)
+        val details = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.packageName, null))
+        val settingsApp = ResolveInfo().apply { activityInfo = ActivityInfo().apply { packageName = "com.android.settings" } }
+        shadowOf(app.packageManager).addResolveInfoForIntent(details, settingsApp)
+        shadowOf(app).checkActivities(true)
+        show()
+        compose.onNodeWithContentDescription("Not allowed", substring = true).performClick()
+        val opened = started()!!
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, opened.action)
+        assertEquals("package:${app.packageName}", opened.dataString)
     }
 
     @Test

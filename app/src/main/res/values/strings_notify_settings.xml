@@ -25,6 +25,7 @@
     <string name="notify_settings_battery_unrestricted">Not restricted</string>
     <string name="notify_settings_battery_restricted">Restricted in Android settings</string>
     <string name="notify_settings_send_test">Send a test notification</string>
+    <string name="notify_settings_test_not_shown">Not shown: notifications are turned off on this device</string>
     <string name="notify_settings_limits">After Force stop, no notification comes until you open Kiroku again.</string>
 
     <string name="notify_settings_upcoming">Upcoming</string>

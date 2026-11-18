@@ -27,7 +27,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -43,12 +45,19 @@ class NotifySettingsViewModel(
     private val titleLanguage: TitleLanguage,
     background: CoroutineDispatcher,
     private val device: () -> DeviceState,
+    // Each value asks for the device's states again, as they can change while the screen stays shown.
+    deviceChecks: Flow<Unit>,
     private val test: suspend () -> Boolean,
     private val messages: ShellMessages,
 ) : ViewModel() {
     private val sessions = session.observeSession()
     private val retries = MutableStateFlow(0)
     private val devices = MutableStateFlow<DeviceState?>(null)
+    private val testShown = MutableStateFlow<Boolean?>(null)
+
+    // Every read goes to [devices], so the latest read is the one shown.
+    private val deviceNow: Flow<DeviceState> =
+        merge(devices.filterNotNull(), deviceChecks.transform<Unit, DeviceState> { readDevice() })
 
     // Null while signed out: nothing is announced and nothing is recorded (S9).
     private val record: Flow<NotifyRecord?> =
@@ -66,8 +75,9 @@ class NotifySettingsViewModel(
             }
 
     private val content: Flow<NotifySettingsContent> =
-        combine(notifications.observeSettings(), devices.filterNotNull(), record) { settings, device, record ->
-            NotifySettingsContent.Shown(settings, device, record) as NotifySettingsContent
+        combine(notifications.observeSettings(), deviceNow, record, testShown) { settings, device, record, testShown ->
+            val testNotShown = testShown == false && device.notifications != NotificationAccess.Allowed
+            NotifySettingsContent.Shown(settings, device, record, testNotShown) as NotifySettingsContent
         }.readAgainOnRetry(retries) { NotifySettingsContent.Failed(it) }
 
     val state: StateFlow<NotifySettingsState> =
@@ -86,7 +96,7 @@ class NotifySettingsViewModel(
             is NotifySettingsEvent.SetOn -> change { it.copy(on = event.on) }
             is NotifySettingsEvent.SetAlsoPlanned -> change { it.copy(alsoPlanned = event.on) }
             is NotifySettingsEvent.SetDelay -> change { it.copy(delay = event.delay) }
-            NotifySettingsEvent.SendTest -> viewModelScope.launch { test() }
+            NotifySettingsEvent.SendTest -> viewModelScope.launch { testShown.value = test() }
             NotifySettingsEvent.Retry -> retries.update { it + 1 }
             else -> Unit
         }
