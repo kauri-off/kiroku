@@ -51,5 +51,6 @@
     <string name="common_moved_to_completed">Перенесено в Просмотрено</string>
     <string name="common_no_connection">Нет соединения</string>
     <string name="common_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
+    <string name="common_no_client_id">В этой сборке нет идентификатора\u00A0клиента MyAnimeList</string>
     <string name="common_could_not_refresh">Не удалось обновить</string>
 </resources>

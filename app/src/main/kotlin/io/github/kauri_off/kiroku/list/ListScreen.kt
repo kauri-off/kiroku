@@ -317,6 +317,7 @@ private fun failedState(
     return when (failure) {
         ListFailure.NoConnection -> ScreenState.Error(stringResource(R.string.common_no_connection), retry)
         ListFailure.Refused -> ScreenState.Error(stringResource(R.string.common_refused), retry)
+        ListFailure.NoClientId -> ScreenState.Error(stringResource(R.string.common_no_client_id), retry)
         ListFailure.Other -> ScreenState.Error(stringResource(R.string.list_failed), retry)
         ListFailure.PrivateList -> ScreenState.Empty(stringResource(R.string.list_private))
         ListFailure.UnknownUser -> ScreenState.Empty(stringResource(R.string.list_unknown_user))

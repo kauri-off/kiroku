@@ -692,6 +692,7 @@ internal fun DataError.toListFailure(): ListFailure =
     when (this) {
         DataError.NoConnection -> ListFailure.NoConnection
         DataError.Refused -> ListFailure.Refused
+        DataError.NoClientId -> ListFailure.NoClientId
         DataError.PrivateList -> ListFailure.PrivateList
         DataError.UnknownUser -> ListFailure.UnknownUser
         else -> ListFailure.Other

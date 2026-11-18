@@ -115,7 +115,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 val stopped = Recording.Stopped(TITLE, "score_set", Halt.Refused(429), 31, RUN, ListAfter.Left)
                 Menu(
                     ScenarioState.Unavailable,
-                    BUILD.copy(commit = null, built = null),
+                    BUILD.copy(commit = null, built = null, hasClientId = false),
                     recorder = RecorderState(stopped, "1"),
                     airingCounts = STOPPED,
                 )
@@ -127,7 +127,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
     private companion object {
         const val HASH = "72e26f6"
         const val SIGN_IN = "sign-in"
-        val BUILD = BuildInfo("preview", "0.1.0", Commit(HASH, dirty = false), Instant.parse("2026-11-12T09:41:00Z"))
+        val BUILD = BuildInfo("preview", "0.1.0", Commit(HASH, dirty = false), Instant.parse("2026-11-12T09:41:00Z"), hasClientId = true)
         val TITLE = RecordedTitle(1, "Cowboy Bebop", 26)
         val FIXTURES = Fixtures.reference
         val COUNTS = AiringCountsState.Read(airingCounts(FIXTURES.entries, FIXTURES.airing, FIXTURES.schedules, TitleLanguage.Romaji))

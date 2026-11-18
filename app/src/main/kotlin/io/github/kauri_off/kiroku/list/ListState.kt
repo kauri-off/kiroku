@@ -111,7 +111,7 @@ data class ListPage(
 )
 
 // The last two are another user's list's: their own answer about it.
-enum class ListFailure { NoConnection, Refused, Other, PrivateList, UnknownUser }
+enum class ListFailure { NoConnection, Refused, NoClientId, Other, PrivateList, UnknownUser }
 
 data class ListRow(
     val id: AnimeId,
