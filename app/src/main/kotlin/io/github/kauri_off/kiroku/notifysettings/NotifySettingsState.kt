@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.notifysettings
 
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.Recheck
 import java.time.Instant
 import java.time.ZonedDateTime
 
@@ -15,26 +18,11 @@ sealed interface NotifySettingsContent {
     data object Loading : NotifySettingsContent
 
     data class Shown(
-        val settings: NotifySettings,
+        val settings: NotificationSettings,
         val device: DeviceState,
         // Null while nobody is signed in: nothing is announced and nothing is recorded (S9).
         val record: NotifyRecord?,
     ) : NotifySettingsContent
-}
-
-data class NotifySettings(
-    val on: Boolean,
-    val alsoPlanned: Boolean,
-    val delay: NotifyDelay,
-)
-
-enum class NotifyDelay(
-    val minutes: Int,
-) {
-    None(0),
-    HalfHour(30),
-    Hour(60),
-    ThreeHours(180),
 }
 
 // What the device lets the app do, as read when the screen is shown.
@@ -67,7 +55,6 @@ enum class DeviceSetting { Notifications, ExactAlarms, Battery }
 
 data class NotifyRecord(
     val listSyncedAt: Instant?,
-    val schedulesUpdatedAt: Instant?,
     // Soonest first.
     val upcoming: List<UpcomingNotification>,
     // Newest first.
@@ -90,17 +77,6 @@ data class SentNotification(
     val recheck: Recheck,
 )
 
-// How the check of the air time with AniList before a post ended (N3).
-enum class Recheck {
-    Confirmed,
-    Failed,
-    TooSlow,
-    Offline,
-
-    // The post came from a run the alarm did not start, which checks nothing.
-    NotRun,
-}
-
 sealed interface NotifySettingsEvent {
     data object Back : NotifySettingsEvent
 
@@ -115,7 +91,7 @@ sealed interface NotifySettingsEvent {
     ) : NotifySettingsEvent
 
     data class SetDelay(
-        val delay: NotifyDelay,
+        val delay: NotificationDelay,
     ) : NotifySettingsEvent
 
     data class OpenSetting(

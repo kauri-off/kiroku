@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.notifysettings
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsFixtureStates.allowed
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsFixtureStates.record
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsFixtureStates.settings
@@ -39,15 +40,15 @@ class NotifySettingsScreenshots : ScreenshotRegistry() {
             case("planned-and-delay") {
                 Screen(
                     state(
-                        settings = settings.copy(alsoPlanned = true, delay = NotifyDelay.Hour),
-                        record = fixtures.delayed(NotifyDelay.Hour),
+                        settings = settings.copy(alsoPlanned = true, delay = NotificationDelay.Hour),
+                        record = fixtures.delayed(NotificationDelay.Hour),
                     ),
                 )
             },
             case("nothing-sent") { Screen(state(record = record.copy(sent = emptyList()))) },
             case("never-synced") {
                 Screen(
-                    state(record = record.copy(listSyncedAt = null, schedulesUpdatedAt = null, upcoming = emptyList(), sent = emptyList())),
+                    state(record = record.copy(listSyncedAt = null, upcoming = emptyList(), sent = emptyList())),
                 )
             },
             case("long-record") { Screen(state(record = record.copy(sent = fixtures.longRecord))) },

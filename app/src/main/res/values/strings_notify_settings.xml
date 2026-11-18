@@ -16,7 +16,7 @@
     <string name="notify_settings_notifications">Notifications</string>
     <string name="notify_settings_notifications_allowed">Allowed</string>
     <string name="notify_settings_notifications_blocked">Blocked in Android settings</string>
-    <string name="notify_settings_notifications_channel_off">The category “New episodes” is turned off</string>
+    <string name="notify_settings_notifications_channel_off">The category “%1$s” is turned off</string>
     <string name="notify_settings_exact_alarms">Alarms and reminders</string>
     <string name="notify_settings_exact_alarms_allowed">Allowed: notifications come on time</string>
     <string name="notify_settings_exact_alarms_not_allowed">Not allowed: notifications may come late</string>
@@ -30,8 +30,6 @@
     <string name="notify_settings_upcoming">Upcoming</string>
     <string name="notify_settings_list_synced">List synced %1$s</string>
     <string name="notify_settings_list_not_synced">The list has not been synced yet</string>
-    <string name="notify_settings_schedules_updated">Airing schedules updated %1$s</string>
-    <string name="notify_settings_schedules_not_updated">Airing schedules have not been loaded yet</string>
     <string name="notify_settings_upcoming_none">No title on your list has a known next episode</string>
     <string name="notify_settings_off">Notifications are off</string>
     <string name="notify_settings_signed_out">Sign in to get notifications about new episodes</string>

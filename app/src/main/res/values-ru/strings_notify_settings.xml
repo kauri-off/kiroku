@@ -16,7 +16,7 @@
     <string name="notify_settings_notifications">Уведомления</string>
     <string name="notify_settings_notifications_allowed">Разрешены</string>
     <string name="notify_settings_notifications_blocked">Заблокированы в настройках Android</string>
-    <string name="notify_settings_notifications_channel_off">Категория «Новые серии» отключена</string>
+    <string name="notify_settings_notifications_channel_off">Категория «%1$s» отключена</string>
     <string name="notify_settings_exact_alarms">Будильники и напоминания</string>
     <string name="notify_settings_exact_alarms_allowed">Разрешены: уведомления приходят вовремя</string>
     <string name="notify_settings_exact_alarms_not_allowed">Не разрешены: уведомления могут опаздывать</string>
@@ -30,8 +30,6 @@
     <string name="notify_settings_upcoming">Ближайшие</string>
     <string name="notify_settings_list_synced">Список синхронизирован %1$s</string>
     <string name="notify_settings_list_not_synced">Список ещё не синхронизирован</string>
-    <string name="notify_settings_schedules_updated">Расписание обновлено %1$s</string>
-    <string name="notify_settings_schedules_not_updated">Расписание ещё не загружено</string>
     <string name="notify_settings_upcoming_none">Ни у одного тайтла в списке не известна следующая серия</string>
     <string name="notify_settings_off">Уведомления выключены</string>
     <string name="notify_settings_signed_out">Войдите, чтобы получать уведомления о новых сериях</string>

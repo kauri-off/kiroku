@@ -3,8 +3,12 @@ package io.github.kauri_off.kiroku.notifysettings
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.Recheck
 import java.time.Duration
 import java.time.Instant
+import kotlin.time.toJavaDuration
 
 // The notification settings' states over the fixture set, for previews and screenshots.
 object NotifySettingsFixtureStates {
@@ -15,7 +19,10 @@ object NotifySettingsFixtureStates {
     // How long after its time each notification was posted, in turn.
     private val lateness = listOf(0L, 3L, 1L, 14L, 0L, 2L)
 
-    val settings = NotifySettings(on = true, alsoPlanned = false, delay = NotifyDelay.None)
+    // How each re-check ended, in turn.
+    private val rechecks = listOf(Recheck.Answered, Recheck.Failed, Recheck.Late, Recheck.Offline, Recheck.NotAsked)
+
+    val settings = NotificationSettings()
 
     val allowed = DeviceState(NotificationAccess.Allowed, ExactAlarms.Allowed, BatteryUse.Unrestricted)
 
@@ -42,7 +49,7 @@ object NotifySettingsFixtureStates {
                     it.episode,
                     airedAt = it.notifyAt,
                     sentAt = it.notifyAt.plus(Duration.ofMinutes(lateness[index % lateness.size])),
-                    recheck = Recheck.entries[index % Recheck.entries.size],
+                    recheck = rechecks[index % rechecks.size],
                 )
             }.sortedByDescending { it.sentAt }
 
@@ -56,24 +63,23 @@ object NotifySettingsFixtureStates {
                 episode = index % EPISODES + 1,
                 airedAt = aired,
                 sentAt = aired.plus(Duration.ofMinutes(lateness[index % lateness.size])),
-                recheck = Recheck.entries[index % Recheck.entries.size],
+                recheck = rechecks[index % rechecks.size],
             )
         }
 
     val record =
         NotifyRecord(
             listSyncedAt = now.minus(Duration.ofMinutes(SYNCED_MINUTES_AGO)),
-            schedulesUpdatedAt = now.minus(Duration.ofMinutes(SYNCED_MINUTES_AGO - 1)),
             upcoming = upcoming,
             sent = sent,
         )
 
     // The record with every upcoming notification [delay] after its episode airs.
-    fun delayed(delay: NotifyDelay) =
-        record.copy(upcoming = upcoming.map { it.copy(notifyAt = it.notifyAt.plus(Duration.ofMinutes(delay.minutes.toLong()))) })
+    fun delayed(delay: NotificationDelay) =
+        record.copy(upcoming = upcoming.map { it.copy(notifyAt = it.notifyAt.plus(delay.duration.toJavaDuration())) })
 
     fun state(
-        settings: NotifySettings = this.settings,
+        settings: NotificationSettings = this.settings,
         device: DeviceState = allowed,
         record: NotifyRecord? = this.record,
     ) = NotifySettingsState(

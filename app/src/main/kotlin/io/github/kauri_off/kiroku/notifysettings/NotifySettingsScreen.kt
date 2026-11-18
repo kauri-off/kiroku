@@ -41,6 +41,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.Recheck
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
@@ -121,7 +124,7 @@ private fun Shown(
 
 @Composable
 private fun Settings(
-    settings: NotifySettings,
+    settings: NotificationSettings,
     onEvent: (NotifySettingsEvent) -> Unit,
 ) {
     Column(Modifier.padding(top = Spacing.s)) {
@@ -141,7 +144,7 @@ private fun Settings(
             supportingContent = { Text(stringResource(R.string.notify_settings_delay_detail)) },
             content = { Text(stringResource(R.string.notify_settings_delay)) },
         )
-        val delays = NotifyDelay.entries
+        val delays = NotificationDelay.entries
         ConnectedChoice(
             labels = delays.map { stringResource(it.label()) },
             chosen = delays.indexOf(settings.delay),
@@ -175,7 +178,12 @@ private fun Device(
         SectionHeader(stringResource(R.string.notify_settings_device))
         DeviceRow(
             label = stringResource(R.string.notify_settings_notifications),
-            value = stringResource(device.notifications.text()),
+            value =
+                if (device.notifications == NotificationAccess.ChannelOff) {
+                    stringResource(R.string.notify_settings_notifications_channel_off, stringResource(R.string.notify_new_episodes))
+                } else {
+                    stringResource(device.notifications.text())
+                },
             health = device.notifications.health(),
             setting = DeviceSetting.Notifications,
             onEvent = onEvent,
@@ -244,10 +252,6 @@ private fun LazyListScope.upcoming(
             Note(
                 record.listSyncedAt?.let { stringResource(R.string.notify_settings_list_synced, times.pastTime(it)) }
                     ?: stringResource(R.string.notify_settings_list_not_synced),
-            )
-            Note(
-                record.schedulesUpdatedAt?.let { stringResource(R.string.notify_settings_schedules_updated, times.pastTime(it)) }
-                    ?: stringResource(R.string.notify_settings_schedules_not_updated),
             )
             when {
                 !on -> Message(R.string.notify_settings_off)
@@ -360,10 +364,12 @@ private fun Health.tint(): Color =
 private fun NotificationAccess.health(): Health = if (this == NotificationAccess.Allowed) Health.Fine else Health.Broken
 
 private fun NotificationAccess.text(): Int =
-    when (this) {
-        NotificationAccess.Allowed -> R.string.notify_settings_notifications_allowed
-        NotificationAccess.Blocked -> R.string.notify_settings_notifications_blocked
-        NotificationAccess.ChannelOff -> R.string.notify_settings_notifications_channel_off
+    if (this ==
+        NotificationAccess.Allowed
+    ) {
+        R.string.notify_settings_notifications_allowed
+    } else {
+        R.string.notify_settings_notifications_blocked
     }
 
 private fun ExactAlarms.health(): Health = if (this == ExactAlarms.NotAllowed) Health.Late else Health.Fine
@@ -385,21 +391,21 @@ private fun BatteryUse.text(): Int =
         BatteryUse.Restricted -> R.string.notify_settings_battery_restricted
     }
 
-private fun NotifyDelay.label(): Int =
+private fun NotificationDelay.label(): Int =
     when (this) {
-        NotifyDelay.None -> R.string.notify_settings_delay_none
-        NotifyDelay.HalfHour -> R.string.notify_settings_delay_half_hour
-        NotifyDelay.Hour -> R.string.notify_settings_delay_hour
-        NotifyDelay.ThreeHours -> R.string.notify_settings_delay_three_hours
+        NotificationDelay.None -> R.string.notify_settings_delay_none
+        NotificationDelay.HalfHour -> R.string.notify_settings_delay_half_hour
+        NotificationDelay.Hour -> R.string.notify_settings_delay_hour
+        NotificationDelay.ThreeHours -> R.string.notify_settings_delay_three_hours
     }
 
 private fun Recheck.text(): Int? =
     when (this) {
-        Recheck.Confirmed -> R.string.notify_settings_recheck_confirmed
+        Recheck.Answered -> R.string.notify_settings_recheck_confirmed
         Recheck.Failed -> R.string.notify_settings_recheck_failed
-        Recheck.TooSlow -> R.string.notify_settings_recheck_too_slow
+        Recheck.Late -> R.string.notify_settings_recheck_too_slow
         Recheck.Offline -> R.string.notify_settings_recheck_offline
-        Recheck.NotRun -> null
+        Recheck.NotAsked -> null
     }
 
 private const val TITLE_LINES = 2

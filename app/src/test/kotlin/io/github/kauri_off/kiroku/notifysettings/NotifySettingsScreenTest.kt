@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.Recheck
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -53,7 +55,7 @@ class NotifySettingsScreenTest {
             listOf(
                 NotifySettingsEvent.SetOn(false),
                 NotifySettingsEvent.SetAlsoPlanned(true),
-                NotifySettingsEvent.SetDelay(NotifyDelay.Hour),
+                NotifySettingsEvent.SetDelay(NotificationDelay.Hour),
             ),
             events,
         )
