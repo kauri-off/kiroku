@@ -22,10 +22,13 @@ import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1269,6 +1272,27 @@ abstract class AiringEngineContract {
             assertEquals(before, s.stored())
             assertEquals(Outcome.Success(Unit), s.engine.refresh())
             assertEquals(setOf(s.clock.now), s.stored().values.mapTo(mutableSetOf()) { it.fetchedAt })
+        }
+
+    // The scope's end reaches its children one at a time; the engine's may run its end before a refresh of the same scope hears of it.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a refresh in the engine's own scope ends cancelled with it, also when the engine has stopped first`() =
+        runTest {
+            val process = childScope()
+            val s = subject(scope = process)
+            s.source.latency = 1.seconds
+            s.clock.advance(20.minutes)
+            process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) { testScheduler.runCurrent() }
+            val refresh = process.async { s.engine.refresh() }
+            runCurrent()
+
+            process.cancel()
+            runCurrent()
+
+            assertTrue(refresh.isCancelled)
+            assertTrue("${refresh.getCompletionExceptionOrNull()}", refresh.getCompletionExceptionOrNull() is CancellationException)
+            assertSame(null, s.unexpected.firstOrNull())
         }
 
     @Test

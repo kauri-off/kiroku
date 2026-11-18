@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureUser
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
+import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
@@ -30,6 +31,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -44,8 +46,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.toJavaDuration
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModelTest {
@@ -95,23 +100,30 @@ class ProfileViewModelTest {
     // The names opened earlier, as kept with the person's choices.
     private suspend fun Opened.recent() = graph.preferences.observeOpenedProfiles().first()
 
-    // The signed-in user's profile as a store holds it: [stored] until a refresh stores the fixture user, kept after a
-    // sign-out until something forgets it.
+    // The signed-in user's profile as a store holds it: [stored], read at [fetchedAt], until a refresh stores the fixture
+    // user, kept after a sign-out until something forgets it.
     private class OwnStore(
         inner: UserRepository,
         stored: UserProfile?,
         private val answer: Outcome<Unit> = Outcome.Success(Unit),
         private val latency: Duration = Duration.ZERO,
+        fetchedAt: Instant = Fixtures.reference.now,
     ) : UserRepository by inner {
         val held = MutableStateFlow(stored)
+        val fetched = MutableStateFlow(fetchedAt)
         var refreshes = 0
 
         override fun observeOwnProfile(): Flow<UserProfile?> = held
 
+        override fun observeOwnProfileFetchedAt(): Flow<Instant?> = combine(held, fetched) { held, at -> at.takeIf { held != null } }
+
         override suspend fun refreshOwnProfile(): Outcome<Unit> {
             refreshes++
             delay(latency)
-            if (answer is Outcome.Success) held.value = Fixtures.reference.user
+            if (answer is Outcome.Success) {
+                fetched.value = Fixtures.reference.now
+                held.value = Fixtures.reference.user
+            }
             return answer
         }
     }
@@ -552,6 +564,31 @@ class ProfileViewModelTest {
             advanceUntilIdle()
             assertEquals(syncs, app.graph.syncs)
             assertEquals(refreshes, user.refreshes)
+        }
+
+    // The header is read by its own rule: a day after it was read, and not with each download of a stale list.
+    @Test
+    fun `the own Profile shown asks for the profile alone once it was read a day ago, and not before`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val day = Freshness.ownProfile.toJavaDuration()
+            val user = OwnStore(app.graph.user, stored = fixtures.user, fetchedAt = fixtures.now - day + 1.minutes.toJavaDuration())
+            val me = app.profile(ProfileOwner.Me, user = user)
+            var screen = showing(me.state, me.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertTrue(app.graph.syncs > 0)
+            assertEquals(0, user.refreshes)
+            val syncs = app.graph.syncs
+            screen.cancel()
+            user.fetched.value = fixtures.now - day
+            advanceTimeBy(STOPPED_AFTER)
+            runCurrent()
+            screen = showing(me.state, me.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(syncs, app.graph.syncs)
+            assertEquals(1, user.refreshes)
         }
 
     @Test

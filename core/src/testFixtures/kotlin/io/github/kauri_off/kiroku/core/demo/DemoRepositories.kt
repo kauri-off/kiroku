@@ -216,14 +216,21 @@ internal class DemoSearchRepository(
     }
 }
 
+// The fixtures' user, as if read when the demo started and again at each refresh.
 internal class DemoOwnProfile(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
     private val signIn: MutableStateFlow<SignInId?>,
+    private val clock: Clock,
 ) : OwnProfile {
+    private val fetchedAt = MutableStateFlow(clock.instant())
+
     override fun observeOwnProfile(): Flow<UserProfile?> = signIn.map { if (it != null) fixtures.user else null }
 
-    override suspend fun refreshOwnProfile(): Outcome<Unit> = server.load(needsSignIn = true).toOutcome()
+    override fun observeOwnProfileFetchedAt(): Flow<Instant?> = combine(signIn, fetchedAt) { signIn, at -> at.takeIf { signIn != null } }
+
+    override suspend fun refreshOwnProfile(): Outcome<Unit> =
+        server.load(needsSignIn = true).toOutcome().also { if (it is Outcome.Success) fetchedAt.value = clock.instant() }
 }
 
 // The demo's other users: one whose public list has several thousand entries, one whose list is private, and nobody else.

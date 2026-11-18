@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.db
 
+import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -21,6 +22,10 @@ class RoomProfileStore(
             .distinctUntilChanged()
             .map { rows -> rows.firstOrNull()?.let { readable(unexpected) { it.toStored() } } }
             .flowOn(dispatcher)
+
+    // Forgets every profile but that of [owner], asked inside the write; every one for none.
+    internal suspend fun forgetAllBut(owner: suspend () -> SignInId?) =
+        withContext(dispatcher) { database.transaction { dao.deleteAllBut(owner()?.value) } }
 
     // Stores [stored] in place of any other, unless [owns], asked inside the write, says its owner no longer holds the session.
     internal suspend fun replace(

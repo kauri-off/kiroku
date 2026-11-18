@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import java.time.Clock
+import java.time.Instant
 
 // The own-profile part of the user's repository: MAL's last whole answer, shown to the sign-in it was read as, expired too (S6).
 class MalOwnProfile(
@@ -25,8 +26,15 @@ class MalOwnProfile(
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
 ) : OwnProfile {
-    override fun observeOwnProfile(): Flow<UserProfile?> =
-        combine(sessions, store.observe()) { session, stored -> stored?.takeIf { it.owner == session.signIn }?.profile }
+    override fun observeOwnProfile(): Flow<UserProfile?> = observeOwn { it.profile }
+
+    override fun observeOwnProfileFetchedAt(): Flow<Instant?> = observeOwn { it.fetchedAt }
+
+    // S9, at a sign-out: every profile but the session's leaves the database.
+    suspend fun forget() = store.forgetAllBut { sessions.first().signIn }
+
+    private fun <T> observeOwn(value: (StoredProfile) -> T): Flow<T?> =
+        combine(sessions, store.observe()) { session, stored -> stored?.takeIf { it.owner == session.signIn }?.let(value) }
             .distinctUntilChanged()
             .catch { e ->
                 if (e !is Exception || e is CancellationException) throw e
