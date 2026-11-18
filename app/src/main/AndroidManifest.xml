@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".KirokuApplication"
         android:icon="@mipmap/ic_launcher"
@@ -73,6 +75,10 @@
                 <data android:pathAdvancedPattern="/profile/[^/]+/" />
             </intent-filter>
         </activity>
+        <!-- "Mark watched" from a notification: only this app's own pending intent reaches it. -->
+        <receiver
+            android:name=".notify.MarkWatchedReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

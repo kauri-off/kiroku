@@ -11,8 +11,18 @@ object ProfileFixtureStates {
 
     val own = ProfileContent.Shown(set.user, set.userStatistics)
 
+    // The signed-in user with a list of several thousand titles: the numbers at their widest.
+    val ownLarge = ProfileContent.Shown(set.user, set.largeStatistics)
+
+    // The signed-in user's list with no title scored.
+    val nothingScored =
+        ProfileContent.Shown(set.user, statisticsOf(set.entries.map { it.copy(values = it.values.copy(score = null)) }))
+
     // Another user with a list of several thousand titles.
-    val other = ProfileContent.Shown(null, set.largeStatistics)
+    val other: ProfileContent.Shown by lazy { ProfileContent.Shown(null, statisticsOf(set.otherUserList)) }
+
+    // Another user's few titles.
+    val otherFew = ProfileContent.Shown(null, statisticsOf(set.otherUserEntries))
 
     // A list with nothing on it: every count zero and no mean score.
     val nothing = statisticsOf(emptyList())

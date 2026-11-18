@@ -61,6 +61,7 @@ fun ProfileRoute(
             )
         }
     val state by profile.state.collectAsScreenState()
+    val recent by opened.names.collectAsScreenState()
     CountAsShown(profile.shown)
     // The dialog is modal, so only a link leaves it open on a screen that goes; it is not there when Back returns.
     val activity = LocalActivity.current
@@ -72,7 +73,7 @@ fun ProfileRoute(
         LaunchedEffect(own) { if (own) navigator.remove(key) }
     }
     val name = key?.name
-    ProfileScreen(state.copy(openProfile = profile.openProfile), snackbars = snackbars, onEvent = { event ->
+    ProfileScreen(state.copy(openProfile = profile.openProfile(recent)), snackbars = snackbars, onEvent = { event ->
         profile.onEvent(event)
         when (event) {
             ProfileEvent.Back -> navigator.back()

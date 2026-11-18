@@ -12,9 +12,11 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModelStore
@@ -26,6 +28,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
@@ -110,7 +113,8 @@ class ProcessDeathTest {
         }
         val other = Fixtures.reference.otherUserName
         compose.onNode(hasText("Profile") and hasClickAction()).performClick()
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNode(hasSetTextAction()).performTextReplacement(other)
         compose.onNode(hasText("Open") and hasClickAction()).performClick()
         compose.waitForIdle()

@@ -7,7 +7,7 @@ import java.io.File
 
 // The port, the keeper and the surface of other users' lists say nothing of the service the lists come from.
 class UserListNamesTest {
-    private val services = setOf("myanimelist", "anilist", "jikan")
+    private val services = setOf("myanimelist", "anilist", "tenrai")
     private val identifier = Regex("[A-Za-z_][A-Za-z0-9_]*")
     private val word = Regex("[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
 
@@ -87,7 +87,7 @@ class UserListNamesTest {
                 "class MyAnimeListUsers : RemoteUserLists" to "names a service",
                 "interface MALUserLists" to "names a service",
                 "val source = \"anilist\"" to "names a service",
-                "val jikan_users = 2" to "names a service",
+                "val tenrai_users = 2" to "names a service",
                 "val profile = \"https://example.invalid/profile/\" + name" to "holds an address",
                 "val host = \"www.example.invalid\" // The site" to "holds an address",
                 "if (code == 403) return Outcome.Failure(DataError.PrivateList)" to "holds a status code",

@@ -5,21 +5,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -37,8 +42,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -46,28 +54,36 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
 import io.github.kauri_off.kiroku.core.user.UserListProgress
+import io.github.kauri_off.kiroku.design.component.BarTitle
 import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.PageBlock
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.SessionBanner
+import io.github.kauri_off.kiroku.design.component.Spaced
 import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
 import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.headingRoom
+import io.github.kauri_off.kiroku.design.component.pageBlocks
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.currentLocale
+import io.github.kauri_off.kiroku.text.genreName
 import io.github.kauri_off.kiroku.text.label
+import io.github.kauri_off.kiroku.text.mediaTypeLabel
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.scoreText
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
 
-// The Profile of ARCHITECTURE section 9.7, the user's own or another user's, drawn from [state] alone. Its snackbars
+// The Profile, the user's own or another user's, drawn from [state] alone. Its snackbars
 // go to [snackbars], the host the caller draws.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +101,8 @@ fun ProfileScreen(
                 when (val owner = state.owner) {
                     ProfileOwner.Me ->
                         TopAppBar(
-                            title = { Text(stringResource(R.string.profile_title)) },
+                            // The own name is in the header.
+                            title = {},
                             actions = {
                                 IconButton(onClick = { onEvent(ProfileEvent.OpenSettings) }) {
                                     Icon(
@@ -98,7 +115,7 @@ fun ProfileScreen(
                         )
                     is ProfileOwner.Other ->
                         TopAppBar(
-                            title = { Text(owner.name) },
+                            title = { BarTitle(owner.name) },
                             navigationIcon = {
                                 IconButton(onClick = { onEvent(ProfileEvent.Back) }) {
                                     Icon(
@@ -199,6 +216,7 @@ private fun Shown(
     padding: PaddingValues,
 ) {
     val direction = LocalLayoutDirection.current
+    val heading = headingRoom()
     RefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = { onEvent(ProfileEvent.Refresh) },
@@ -213,27 +231,75 @@ private fun Shown(
         contentAlignment = Alignment.TopCenter,
     ) {
         LazyColumn(
-            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
-            contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.s),
+            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize().testTag(ProfileTags.page),
+            contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
-            content.header?.let { header -> item(key = Section.Header) { Header(header) } }
-            item(key = Section.Numbers) {
-                // The header's row ends in its own padding.
-                Numbers(content.statistics, Modifier.padding(top = if (content.header != null) Spacing.s else Spacing.m))
-            }
-            item(key = Section.Statuses) { Statuses(content.statistics, Modifier.padding(top = Spacing.l)) }
-            item(key = Section.Rows) { Rows(state.owner, onEvent, Modifier.padding(top = Spacing.s)) }
+            pageBlocks(blocks(content, state.owner, heading, onEvent))
         }
     }
 }
 
+// The page in one rhythm: Spacing.l from the header to the numbers, which end it, and Spacing.xl between groups.
+private fun blocks(
+    content: ProfileContent.Shown,
+    owner: ProfileOwner,
+    heading: Dp,
+    onEvent: (ProfileEvent) -> Unit,
+): List<PageBlock> =
+    buildList {
+        val own = owner == ProfileOwner.Me
+        val statistics = content.statistics
+        // Another user's name is in the bar.
+        val header = content.header?.takeIf { own }
+        header?.let { add(PageBlock(Section.Header, Spacing.xl) { Header(it) }) }
+        // Beside the own header the numbers keep to its start; with the name in the bar they are centred.
+        val alignment = if (own) Alignment.Start else Alignment.CenterHorizontally
+        add(PageBlock(Section.Numbers, Spacing.l) { Numbers(statistics, alignment) })
+        if (!own) {
+            add(
+                PageBlock(Section.List, Spacing.xl) {
+                    WideButton(R.string.profile_view_list, tonal = true) { onEvent(ProfileEvent.ViewList) }
+                },
+            )
+        }
+        // A list of statuses the app does not know alone has no bars to show, and still its rows.
+        if (statistics.statuses.total > 0) {
+            add(PageBlock(Section.Statuses, Spacing.xl, lead = heading, trail = StatBarEnd) { Statuses(statistics, heading) })
+        }
+        if (statistics.titleCount > 0) {
+            add(PageBlock(Section.Rows, Spacing.xl, lead = RowEnd, trail = RowEnd) { Rows(statistics, onEvent) })
+        } else {
+            add(PageBlock(Section.Nothing, Spacing.xl) { NothingOnList() })
+        }
+        if (own) {
+            add(
+                PageBlock(Section.Another, Spacing.xl) {
+                    WideButton(R.string.profile_open_another, tonal = false) { onEvent(ProfileEvent.StartOpenProfile()) }
+                },
+            )
+        }
+    }
+
+// The picture at the start, the name and the year the user joined beside it.
 @Composable
 private fun Header(profile: UserProfile) {
-    ListItem(
-        leadingContent = { Avatar(profile.pictureUrl) },
-        supportingContent = profile.joined?.let { { Text(stringResource(R.string.profile_joined, it.year)) } },
-        content = { Text(profile.name) },
-    )
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.l),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(profile.pictureUrl)
+        Column {
+            Text(profile.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+            profile.joined?.let {
+                Text(
+                    stringResource(R.string.profile_joined, it.year),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 // The user's picture cropped to a circle, or the person icon on the placeholder's colour when there is none.
@@ -255,21 +321,33 @@ private fun Avatar(url: String?) {
     }
 }
 
-// The three numbers the Profile is opened for.
+// The numbers the Profile is opened for, then the list's size, its episodes and its scores.
 @Composable
 private fun Numbers(
     statistics: UserStatistics,
-    modifier: Modifier = Modifier,
+    alignment: Alignment.Horizontal,
 ) {
     val mean = statistics.meanScore
-    StatNumbers(modifier.padding(horizontal = Spacing.l)) {
-        StatNumber(countText(statistics.statuses.completed), stringResource(R.string.profile_completed))
-        StatNumber(daysText(statistics.daysWatched), stringResource(R.string.profile_days_watched))
-        StatNumber(
-            value = mean?.let { scoreText(roundedHalfUp(it, 2)) } ?: stringResource(R.string.profile_no_mean_score_value),
-            caption = stringResource(R.string.profile_mean_score),
-            spokenValue = if (mean == null) stringResource(R.string.profile_no_mean_score) else null,
-        )
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+        StatNumbers(alignment = alignment) {
+            StatNumber(
+                countText(statistics.statuses.completed),
+                stringResource(R.string.profile_completed),
+                horizontalAlignment = alignment,
+            )
+            StatNumber(daysText(statistics.daysWatched), stringResource(R.string.profile_days_watched), horizontalAlignment = alignment)
+            StatNumber(
+                value = mean?.let { scoreText(roundedHalfUp(it, 2)) } ?: stringResource(R.string.profile_no_mean_score_value),
+                caption = stringResource(R.string.profile_mean_score),
+                spokenValue = if (mean == null) stringResource(R.string.profile_no_mean_score) else null,
+                horizontalAlignment = alignment,
+            )
+        }
+        StatNumbers(alignment = alignment) {
+            StatNumber(countText(statistics.titleCount), stringResource(R.string.profile_titles), horizontalAlignment = alignment)
+            StatNumber(countText(statistics.episodesWatched), stringResource(R.string.profile_episodes), horizontalAlignment = alignment)
+            StatNumber(countText(statistics.scored), stringResource(R.string.profile_scored), horizontalAlignment = alignment)
+        }
     }
 }
 
@@ -292,54 +370,117 @@ internal fun roundedHalfUp(
     digits: Int,
 ): Double = BigDecimal.valueOf(value).setScale(digits, RoundingMode.HALF_UP).toDouble()
 
+// The list by status, each a share of the whole list.
 @Composable
 private fun Statuses(
     statistics: UserStatistics,
-    modifier: Modifier = Modifier,
+    heading: Dp,
 ) {
     val statuses = statistics.statuses
-    Column(modifier) {
-        for (status in STATUS_ORDER) StatBar(stringResource(status.label()), statuses[status], statuses.total)
+    Column {
+        SectionHeader(stringResource(R.string.profile_by_status))
+        // The first bar's line is Spacing.m under the heading's.
+        Spaced(Spacing.m - heading - StatBarEnd) {
+            Column { for (status in STATUS_ORDER) StatBar(stringResource(status.label()), statuses[status], statuses.total) }
+        }
     }
 }
 
-// The sub-screens of the statistics, then the one thing to do from here: open another user, or this user's list.
+@Composable
+private fun NothingOnList() {
+    Text(
+        stringResource(R.string.profile_nothing_on_list),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
+    )
+}
+
+// The rows the rest of the statistics stand behind, each with what it holds under its name.
 @Composable
 private fun Rows(
-    owner: ProfileOwner,
+    statistics: UserStatistics,
     onEvent: (ProfileEvent) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Column(modifier) {
+    val separator = stringResource(R.string.common_separator)
+    val listSeparator = stringResource(R.string.common_list_separator)
+    val scored = statistics.scored
+    val values =
+        mapOf(
+            ProfileStatistics.ScoreDistribution to
+                if (scored > 0) {
+                    stringResource(R.string.profile_scored_of, countText(scored), countText(statistics.titleCount))
+                } else {
+                    stringResource(R.string.profile_nothing_scored)
+                },
+            ProfileStatistics.Genres to
+                statistics.genres
+                    .take(LEADING)
+                    .map { genreName(it.value) }
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(listSeparator),
+            ProfileStatistics.FormatsAndYears to
+                listOfNotNull(
+                    statistics.mediaTypes.firstOrNull()?.let {
+                        stringResource(R.string.profile_counted, mediaTypeLabel(it.value), countText(it.count))
+                    },
+                    statistics.years.keys
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { stringResource(R.string.profile_year_range, it.min(), it.max()) },
+                ).takeIf { it.isNotEmpty() }?.joinToString(separator),
+        )
+    Column {
         for (screen in ProfileStatistics.entries) {
-            LinkRow(stringResource(screen.label()), opensScreen = true) { onEvent(ProfileEvent.OpenStatistics(screen)) }
-        }
-        when (owner) {
-            ProfileOwner.Me ->
-                LinkRow(stringResource(R.string.profile_open_another), opensScreen = false) { onEvent(ProfileEvent.StartOpenProfile()) }
-            is ProfileOwner.Other ->
-                LinkRow(
-                    stringResource(R.string.profile_view_list),
-                    opensScreen = true,
-                ) { onEvent(ProfileEvent.ViewList) }
+            ValuedRow(stringResource(screen.label()), values[screen]) { onEvent(ProfileEvent.OpenStatistics(screen)) }
         }
     }
 }
 
-// A row that opens a screen ends in a chevron; one that opens a dialog does not.
 @Composable
-private fun LinkRow(
+private fun ValuedRow(
     label: String,
-    opensScreen: Boolean,
+    supporting: String?,
     onClick: () -> Unit,
 ) {
+    val spoken = listOfNotNull(label, supporting).joinToString(stringResource(R.string.common_list_separator))
     ListItem(
         onClick = onClick,
-        trailingContent = if (opensScreen) ({ Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) }) else null,
+        trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
+        supportingContent = supporting?.let { { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) } },
         // Labelled on the row itself, so a row cut off at the screen's edge is labelled too.
-        modifier = Modifier.semantics { contentDescription = label },
+        modifier = Modifier.semantics { contentDescription = spoken },
         content = { Text(label) },
     )
+}
+
+// A full-width button of the medium size, as the title page's status button: tonal for the page's main action.
+@Composable
+private fun WideButton(
+    label: Int,
+    tonal: Boolean,
+    onClick: () -> Unit,
+) {
+    val height = ButtonDefaults.MediumContainerHeight
+    val modifier = Modifier.padding(horizontal = Spacing.l).heightIn(min = height).fillMaxWidth()
+    val text = @Composable {
+        Text(stringResource(label), style = ButtonDefaults.textStyleFor(height), textAlign = TextAlign.Center)
+    }
+    if (tonal) {
+        FilledTonalButton(
+            onClick = onClick,
+            shapes = ButtonDefaults.shapesFor(height),
+            contentPadding = ButtonDefaults.contentPaddingFor(height),
+            modifier = modifier,
+        ) { text() }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            shapes = ButtonDefaults.shapesFor(height),
+            contentPadding = ButtonDefaults.contentPaddingFor(height),
+            modifier = modifier,
+        ) { text() }
+    }
 }
 
 internal fun ProfileStatistics.label(): Int =
@@ -353,7 +494,15 @@ private val STATUS_ORDER = listOf(ListStatus.Watching, ListStatus.Completed, Lis
 
 internal object ProfileTags {
     val avatar = notShown("profile-avatar")
+    val page = notShown("profile-page")
     val nameField = notShown("profile-name-field")
 }
 
-private enum class Section { Header, Numbers, Statuses, Rows }
+private enum class Section { Header, Numbers, List, Statuses, Nothing, Rows, Another }
+
+// The genres a row names.
+private const val LEADING = 3
+
+// The blank room under a statistics bar's line, and above and under a two-line list item's lines.
+private val StatBarEnd = Spacing.s
+private val RowEnd = Spacing.m

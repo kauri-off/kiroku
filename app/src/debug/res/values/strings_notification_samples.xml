@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_samples_title">Notification samples</string>
+    <string name="notification_samples_detail">Posts episode notifications of titles on the list through the app\'s own channel, in place of those shown</string>
+    <string name="notification_samples_blocked">The device shows none of the app\'s notifications: allow them in the system\'s settings</string>
+    <string name="notification_samples_one">One title</string>
+    <string name="notification_samples_several">Several titles</string>
+    <string name="notification_samples_to_watch">Several to watch</string>
+    <string name="notification_samples_remove">Remove all</string>
+</resources>

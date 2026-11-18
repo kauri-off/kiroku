@@ -7,11 +7,10 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
@@ -603,7 +602,8 @@ class SandboxAppTest {
 
     // Another user's profile by name, as the person opens it on the Profile shown.
     private fun openProfile(name: String) {
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput(name)
         compose.onNode(hasText("Open") and hasClickAction()).performClick()
     }

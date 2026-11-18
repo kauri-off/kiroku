@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.core.user.ScriptedUserLists
@@ -74,7 +75,7 @@ class ProfileViewModelTest {
 
     private fun TestScope.opened(scope: CoroutineScope = foregroundScope()): Opened {
         val graph = TestGraph(Demo(fixtures, scope))
-        return Opened(graph, ShellMessages(scope, graph.list), OpenedProfiles())
+        return Opened(graph, ShellMessages(scope, graph.list), OpenedProfiles(graph.preferences))
     }
 
     private fun Opened.profile(
@@ -95,6 +96,9 @@ class ProfileViewModelTest {
     )
 
     private val Opened.requests get() = graph.demo.userLists.requests
+
+    // The names opened earlier, as kept with the person's choices.
+    private suspend fun Opened.recent() = graph.preferences.observeOpenedProfiles().first()
 
     // The signed-in user's profile as a store holds it: [stored], read at [fetchedAt], until a refresh stores the fixture
     // user, kept after a sign-out until something forgets it.
@@ -353,9 +357,9 @@ class ProfileViewModelTest {
             before.onEvent(ProfileEvent.TypeName("sample_vie"))
             before.viewModelScope.cancel()
             val after = app.profile(ProfileOwner.Me, SavedStateHandle(saved.keys().associateWith { saved[it] }))
-            assertEquals("sample_vie", after.openProfile?.name)
+            assertEquals("sample_vie", after.openProfile(emptyList())?.name)
             after.onEvent(ProfileEvent.DismissOpenProfile)
-            assertNull(after.openProfile)
+            assertNull(after.openProfile(emptyList()))
         }
 
     @Test
@@ -384,7 +388,7 @@ class ProfileViewModelTest {
             assertTrue(other.own.value)
             assertEquals(ProfileContent.Shown(fixtures.user, app.ownStatistics()), other.state.value.content)
             assertTrue(app.requests.isEmpty())
-            assertTrue(app.opened.names.isEmpty())
+            assertTrue(app.recent().isEmpty())
         }
 
     @Test
@@ -398,11 +402,46 @@ class ProfileViewModelTest {
                 advanceUntilIdle()
                 screen.cancel()
             }
-            assertEquals(listOf(otherName.uppercase(), privateName), app.opened.names)
+            assertEquals(listOf(otherName.uppercase(), privateName), app.recent())
             val me = app.profile(ProfileOwner.Me)
             me.onEvent(ProfileEvent.StartOpenProfile())
-            assertEquals(OpenProfile("", listOf(otherName.uppercase(), privateName)), me.openProfile)
+            assertEquals(OpenProfile("", listOf(otherName.uppercase(), privateName)), me.openProfile(app.recent()))
         }
+
+    @Test
+    fun `a long read records its name once, not at every part`() =
+        runTest(dispatcher) {
+            val app = opened()
+            // Each part arrives on its own, so the read is seen part by part.
+            app.graph.demo.server.latency = 10.milliseconds
+            val counted = CountedPreferences(app.graph.preferences)
+            val recording = Opened(app.graph, app.messages, OpenedProfiles(counted))
+            val other = recording.profile(ProfileOwner.Other(otherName))
+            showing(other.state, other.shown)
+            runCurrent()
+            var parts = 0
+            while (other.state.value.content !is ProfileContent.Shown) {
+                if (other.state.value.content == ProfileContent.ListLoading) parts++
+                advanceTimeBy(10.milliseconds)
+                runCurrent()
+            }
+            advanceUntilIdle()
+            assertTrue(parts > 2)
+            assertEquals(wholeRead, app.requests.size)
+            assertEquals(1, counted.updates)
+            assertEquals(listOf(otherName), app.recent())
+        }
+
+    private class CountedPreferences(
+        private val inner: PreferencesRepository,
+    ) : PreferencesRepository by inner {
+        var updates = 0
+
+        override suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>) {
+            updates++
+            inner.updateOpenedProfiles(change)
+        }
+    }
 
     // A rotation is shorter than the stop timeout, so the read goes on and its progress does not start again.
     @Test
@@ -463,7 +502,7 @@ class ProfileViewModelTest {
             assertTrue(other.own.value)
             assertEquals(ProfileContent.Shown(fixtures.user, app.ownStatistics()), other.state.value.content)
             assertTrue(app.requests.isEmpty())
-            assertTrue(app.opened.names.isEmpty())
+            assertTrue(app.recent().isEmpty())
         }
 
     @Test

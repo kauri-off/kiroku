@@ -67,7 +67,11 @@ class Demo(
     private val signIn = MutableStateFlow<SignInId?>(fixtures.session.signIn)
     private var signIns = 1
 
-    val session: SessionRepository = DemoSessionRepository(signIn, server) { otherUsers.forget() }
+    val session: SessionRepository =
+        DemoSessionRepository(signIn, server) {
+            otherUsers.forget()
+            choices.forgetOpenedProfiles()
+        }
 
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
@@ -131,7 +135,9 @@ class Demo(
 
     val user: UserRepository = otherUsers.beside(DemoOwnProfile(fixtures, server, signIn, clock))
 
-    val preferences: PreferencesRepository = DemoPreferences()
+    private val choices = DemoPreferences()
+
+    val preferences: PreferencesRepository = choices
 
     // Whether an edit is on its way to MAL.
     val saving: Boolean get() = server.writing.value > 0 || store.unconfirmed.value
@@ -158,6 +164,7 @@ class Demo(
         store.reset()
         details.forget()
         otherUsers.forget()
+        choices.forgetOpenedProfiles()
         if (signIn.value == null) signIn.value = SignInId("demo-${++signIns}")
         return list.sync()
     }

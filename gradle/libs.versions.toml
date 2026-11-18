@@ -27,10 +27,13 @@ androidx-test-runner = "1.7.0"
 roborazzi = "1.78.0"
 turbine = "1.2.1"
 ktlint-gradle = "14.2.0"
+animal-sniffer = "1.29.1"
+gummy-bears = "0.16.0"
 
 [libraries]
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 ksp-gradle-plugin = { module = "com.google.devtools.ksp:symbol-processing-gradle-plugin", version.ref = "ksp" }
+animal-sniffer = { module = "org.codehaus.mojo:animal-sniffer", version.ref = "animal-sniffer" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-ui = { module = "androidx.compose.ui:ui" }

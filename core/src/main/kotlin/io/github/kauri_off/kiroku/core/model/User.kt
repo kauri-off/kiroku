@@ -52,11 +52,14 @@ data class StatedFigures(
     val meanScore: Double?,
 )
 
-// Made only by the statistics calculator, and by the fixtures as what a test expects of it.
+// Made only by the statistics calculator, and by the fixtures as what a test expects of it. Every count but [statuses]
+// is over every entry, one of a status the app does not know too.
 @ConsistentCopyVisibility
 data class UserStatistics internal constructor(
+    val titleCount: Int,
     val statuses: StatusCounts,
     val daysWatched: Double,
+    val episodesWatched: Int,
     val meanScore: Double?,
     val scores: Map<Int, Int>,
     val genres: List<Counted<Genre>>,
@@ -65,9 +68,17 @@ data class UserStatistics internal constructor(
 ) {
     init {
         require(daysWatched >= 0.0)
+        require(episodesWatched >= 0)
         require(meanScore == null || meanScore in 1.0..10.0)
         require(scores.keys.all { it in 1..10 })
+        require(titleCount >= statuses.total)
+        require(scored <= titleCount)
     }
+
+    // The titles that have the user's score, and those that do not.
+    val scored: Int get() = scores.values.sum()
+
+    val unscored: Int get() = titleCount - scored
 }
 
 @ConsistentCopyVisibility
