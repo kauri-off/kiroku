@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.debugmenu
 
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.wiring.malClientId
 import java.io.Reader
 import java.time.Instant
 import java.util.Properties
@@ -17,6 +18,8 @@ data class BuildInfo(
     val version: String,
     val commit: Commit?,
     val built: Instant?,
+    // Without one, a request to MAL without a token is not sent.
+    val hasClientId: Boolean,
 ) {
     companion object {
         // The file the build adds to the root of a debug or preview package.
@@ -28,7 +31,13 @@ data class BuildInfo(
                     ?.getResourceAsStream(FILE)
                     ?.reader()
                     ?.use(::parse) ?: Stamp(null, null)
-            return BuildInfo(BuildConfig.BUILD_TYPE, BuildConfig.VERSION_NAME, stamp.commit, stamp.built)
+            return BuildInfo(
+                BuildConfig.BUILD_TYPE,
+                BuildConfig.VERSION_NAME,
+                stamp.commit,
+                stamp.built,
+                malClientId(BuildConfig.MAL_CLIENT_ID) != null,
+            )
         }
 
         internal fun parse(reader: Reader): Stamp {

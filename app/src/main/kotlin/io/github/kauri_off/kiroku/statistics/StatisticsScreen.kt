@@ -114,6 +114,7 @@ private fun failedState(
         DataError.UnknownUser -> ScreenState.Empty(stringResource(R.string.statistics_unknown_user))
         DataError.NoConnection -> ScreenState.Error(stringResource(R.string.common_no_connection), retry)
         DataError.Refused -> ScreenState.Error(stringResource(R.string.common_refused), retry)
+        DataError.NoClientId -> ScreenState.Error(stringResource(R.string.common_no_client_id), retry)
         else -> ScreenState.Error(stringResource(R.string.statistics_could_not_load), retry)
     }
 }

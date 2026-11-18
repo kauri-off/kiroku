@@ -81,6 +81,7 @@ class MalHttp(
             .addInterceptor(UserAgent("Kiroku/$appVersion"))
             .addInterceptor(MarkSends)
             .apply { if (log != null) addInterceptor(RequestLog(log)) }
+            .addInterceptor(WithoutClientId(hosts.api.toHttpUrl(), clientId))
             .apply { if (standIn != null) addInterceptor(standIn) }
             .apply { if (calls != null) dispatcher(calls) }
             .addNetworkInterceptor(SendLimits)
@@ -152,6 +153,8 @@ class MalHttp(
             answered(e.code(), e.response()?.headers(), body?.let { anotherUsersListError(e.code(), it) })
         } catch (e: NotSentAgain) {
             e.status?.let { answered(it, null, null) } ?: unanswered(e.failure)
+        } catch (_: NoClientId) {
+            Tried(MalAnswer.Failed(DataError.NoClientId))
         } catch (_: NotAnAnswer) {
             Tried(MalAnswer.Failed(DataError.ServerError))
         } catch (e: IOException) {
