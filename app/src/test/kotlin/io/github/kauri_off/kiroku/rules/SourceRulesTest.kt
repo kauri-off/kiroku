@@ -216,7 +216,7 @@ class SourceRulesTest {
     @Test
     fun everyTextFieldTakesTheAutofillModifier() {
         val sources = appSources()
-        assertEquals(6, sources.sumOf { textFields(it.readText()) })
+        assertEquals(7, sources.sumOf { textFields(it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { autofillProblems(relative(it), it.readText()) })
     }
 
@@ -552,12 +552,12 @@ class SourceRulesTest {
         assertTrue("$without", without.containsAll(known))
         assertTrue("$without", "LiveGraph.kt" !in without && "ListRoute.kt" !in without && "KirokuApplication.kt" !in without)
         assertEquals(emptyList<String>(), sources.flatMap { withoutScreenProblems(relative(it), it.readText()) })
-        // The type hands out neither the list nor the graph: its members are the runs, the two calls, a read of the list on the device
-        // and the device's notifications.
+        // The type hands out neither the list nor the graph: its members are the runs, the two calls, reads of the list and the
+        // session on the device, and the notice that a write could not be saved.
         val seam = sources.single { it.name == "WithoutScreen.kt" }.readText()
         val members = Regex("""interface WithoutScreen \{(.*?)\n\}""", RegexOption.DOT_MATCHES_ALL).find(KotlinSource(seam).code)
         val declared = Regex("""\b(val|fun)\s+(\w+)""").findAll(checkNotNull(members).groupValues[1]).map { it.groupValues[2] }.toList()
-        assertEquals(listOf("notificationRuns", "syncList", "sendToList", "titleOnList", "shown"), declared)
+        assertEquals(listOf("notificationRuns", "syncList", "sendToList", "titleOnList", "session", "notSaved"), declared)
     }
 
     @Test

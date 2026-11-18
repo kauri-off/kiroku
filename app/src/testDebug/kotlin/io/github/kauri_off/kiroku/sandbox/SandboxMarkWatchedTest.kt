@@ -3,11 +3,19 @@ package io.github.kauri_off.kiroku.sandbox
 import android.app.Notification
 import android.app.NotificationManager
 import android.os.Looper
+import androidx.work.Configuration
+import androidx.work.WorkManager
+import androidx.work.await
+import androidx.work.impl.WorkManagerImpl
+import androidx.work.testing.SynchronousExecutor
+import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
@@ -20,6 +28,8 @@ import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.notify.MarkWatched
 import io.github.kauri_off.kiroku.notify.MarkWatchedTries
+import io.github.kauri_off.kiroku.notify.MarkWatchedWork
+import io.github.kauri_off.kiroku.notify.Tap
 import io.github.kauri_off.kiroku.notify.Tried
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
@@ -145,7 +155,15 @@ class SandboxMarkWatchedTest {
         episode: Int,
         tappedAt: Instant = now(),
         tried: Int = 0,
-    ): Tried = waited { tries().attempt(MarkWatched(SOURCE, title, episode), tappedAt, tried) }
+        madeIn: SignInId? = null,
+    ): Tried = waited { tries().attempt(markOf(title, episode), tappedAt, tried, madeIn) }
+
+    // The action of [title]'s notification as it is shown, or as one for [episode] would be.
+    private fun markOf(
+        title: AnimeId,
+        episode: Int,
+        source: String = SOURCE,
+    ) = MarkWatched(source, title, episode, shown()[title] ?: Shown(episode, null, episode, now(), now()))
 
     private fun SandboxGraph.watching(): ListEntry =
         waited { list.observeEntries().first() }.first { it.status == ListStatus.Watching && it.anime.id != soon }
@@ -266,7 +284,7 @@ class SandboxMarkWatchedTest {
 
         val waited = graph.tried(title.anime.id, next)
 
-        assertEquals(Tried.Again(MarkWatchedTries.waitAfter(0)), waited)
+        assertEquals(Tried.Again(MarkWatchedTries.waitAfter(0), graph.signIn()), waited)
         assertEquals(emptyList<String>(), graph.writes(before))
         graph.scenarios.set(Scenario())
         assertEquals(Tried.Saved, graph.tried(title.anime.id, next, tried = 1))
@@ -333,7 +351,7 @@ class SandboxMarkWatchedTest {
             val before = graph.asked()
             graph.sandbox.mal.delayMillis = ANSWER_TAKES
             val awaited = if (answered) PATCH else GET
-            val trying = graph.tryingAside(MarkWatched(SOURCE, title.anime.id, watched + 1))
+            val trying = graph.tryingAside(markOf(title.anime.id, watched + 1))
             waited { while (graph.requests(before).none { it.startsWith(awaited) }) delay(POLL) }
             // The process dies: its try first, then the rest of it.
             waited { trying.cancelAndJoin() }
@@ -386,10 +404,98 @@ class SandboxMarkWatchedTest {
         val title = graph.watching()
         val before = graph.asked()
 
-        val tried = waited { graph.tries().attempt(MarkWatched("account", title.anime.id, title.values.watchedEpisodes + 1), now(), 0) }
+        val tried = waited { graph.tries().attempt(markOf(title.anime.id, title.values.watchedEpisodes + 1, "account"), now(), 0) }
 
-        assertEquals(Tried.OtherSource, tried)
+        assertEquals(Tried.Dropped, tried)
         assertEquals(emptyList<String>(), graph.requests(before))
+    }
+
+    private fun SandboxGraph.signIn(): SignInId = (waited { session.observeSession().first() } as Session.SignedIn).signIn
+
+    // Everything of the sandbox's on the device, the group's summary included.
+    private fun ours() =
+        shadowOf(context.getSystemService(NotificationManager::class.java)).activeNotifications.filter {
+            it.tag?.contains(":$SOURCE") == true
+        }
+
+    // S9: a sign-out takes the user's taps with it.
+    @Test
+    fun `a tap waiting at a sign-out ends with it, sends and shows nothing, and leaves no work`() {
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().setExecutor(SynchronousExecutor()).build())
+        try {
+            val graph = announced()
+            val next = graph.entry(soon).values.watchedEpisodes + 1
+            val madeIn = graph.signIn()
+            graph.scenarios.set(Scenario(offline = true))
+            val tap = Tap(markOf(soon, next), now())
+            waited { MarkWatchedWork.tapped(context, tap).forEach { it.await() } }
+            assertTrue(graph.tried(soon, next, madeIn = madeIn) is Tried.Again)
+            assertEquals(
+                2,
+                WorkManager
+                    .getInstance(context)
+                    .getWorkInfosByTag(MarkWatchedWork.sourceTag(SOURCE))
+                    .get()
+                    .size,
+            )
+            graph.scenarios.set(Scenario())
+            val before = graph.asked()
+
+            waited { graph.session.signOut() }
+
+            assertEquals(emptyList<Any>(), WorkManager.getInstance(context).getWorkInfosByTag(MarkWatchedWork.sourceTag(SOURCE)).get())
+            // A try that a failed cancel would have left finds nobody signed in.
+            assertEquals(Tried.Dropped, graph.tried(soon, next, madeIn = madeIn))
+            waited { graph.tries().gaveUp(tap.mark, madeIn) }
+            assertEquals(emptyList<String>(), graph.writes(before))
+            assertEquals(emptyList<Any>(), ours())
+        } finally {
+            WorkManagerTestInitHelper.closeWorkDatabase()
+            WorkManagerImpl.setDelegate(null)
+        }
+    }
+
+    // As an Undo and a Retry are, a tap is bound to the sign-in whose list it was made in.
+    @Test
+    fun `a tap made in another sign-in's list sends nothing and shows nothing`() {
+        val graph = announced()
+        val shownBefore = posted(soon)?.extras?.getCharSequence(Notification.EXTRA_TEXT)
+        val before = graph.asked()
+
+        assertEquals(Tried.Dropped, graph.tried(soon, graph.entry(soon).values.watchedEpisodes + 1, madeIn = SignInId("another")))
+
+        assertEquals(emptyList<String>(), graph.requests(before))
+        assertEquals(shownBefore, posted(soon)?.extras?.getCharSequence(Notification.EXTRA_TEXT))
+    }
+
+    // A-F2: the person dismissed the notification before the write failed; the failure is still the engine's to take back.
+    @Test
+    fun `could not save for a dismissed notification goes when the list shows the episode watched, and at a sign-out with its summary`() {
+        for (signingOut in listOf(false, true)) {
+            val graph = announced()
+            val title = graph.entry(soon)
+            val announced = shown().getValue(soon)
+            val mark = markOf(soon, title.values.watchedEpisodes + 2)
+            context
+                .getSystemService(
+                    NotificationManager::class.java,
+                ).cancel(EpisodeNotifications.tag(SOURCE, soon), EpisodeNotifications.EPISODE_ID)
+
+            assertEquals(Tried.NotSaved, waited { graph.tries().attempt(mark, now(), 0) })
+            assertEquals(COULD_NOT_SAVE.format(mark.episode), posted(soon)?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString())
+            assertEquals(announced, shown().getValue(soon))
+
+            if (signingOut) {
+                waited { graph.session.signOut() }
+            } else {
+                // A screen marks the announced episode, as a sync would bring it.
+                assertEquals(Outcome.Success(Unit), waited { graph.list.send(ListWrite.SetWatched(title.anime, announced.episode)) })
+                waited { graph.withoutScreen.notificationRuns!!.run(RunTrigger.Changed) }
+            }
+            assertEquals("$signingOut", emptyList<Any>(), ours())
+            if (!signingOut) waited { graph.session.signOut() }
+            ended()
+        }
     }
 
     // A device with a connection, which a test's has not.

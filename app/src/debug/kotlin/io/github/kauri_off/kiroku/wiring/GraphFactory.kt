@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notificationlog.RunLog
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.reports.ReportLog
 import io.github.kauri_off.kiroku.reports.reportLog
@@ -62,9 +63,15 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
             lateinit var graph: DemoGraph
             val alarm = DemoAlarm(scope) { graph.demo }
             val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
-            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown), scope, shown).also {
-                graph =
-                    it
+            // Gone with its process, as the demo is.
+            val runs = RunLog(null)
+            DemoGraph(
+                Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown, runs::keep),
+                scope,
+                runs,
+                shown,
+            ).also {
+                graph = it
             }
         }
         DataSource.Sandbox ->
@@ -101,6 +108,8 @@ internal class DemoAlarm(
 class DemoGraph(
     val demo: Demo,
     scope: CoroutineScope,
+    // What the demo's notification engine did in this process.
+    val runLog: RunLog = RunLog(null),
     // The demo's notifications on the device, which none has outside a process that shows them.
     shown: EpisodeNotifications? = null,
 ) : AppGraph,
@@ -118,6 +127,6 @@ class DemoGraph(
     override val connection = demo.connection
     override val preferences = demo.preferences
     override val notifications get() = demo.notifications
-    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications }, shown)
+    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications }, { session }, shown)
     override val madeUp = true
 }

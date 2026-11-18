@@ -4,15 +4,19 @@ import android.content.Context
 import androidx.annotation.VisibleForTesting
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
+import io.github.kauri_off.kiroku.data.sandbox.Planted
 import io.github.kauri_off.kiroku.data.sandbox.Sandbox
+import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notificationlog.RunLog
 import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioSubject
@@ -33,6 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Clock
+import java.time.Duration
 import kotlin.time.TimeSource
 
 // The live graph whole over MAL on the device, which keeps a made-up list in the source's own files.
@@ -51,6 +56,18 @@ class SandboxGraph internal constructor(
     override val madeUp = true
 
     suspend fun writeOwed() = live.writeOwed()
+
+    // What the notification engine did, kept in the sandbox's files.
+    val runLog: RunLog get() = live.runLog
+
+    // An episode of the planted title airs [after] from now at AniList; the app asks for it at once, as a refresh would.
+    suspend fun plant(after: Duration): Planted? =
+        withContext(Dispatchers.IO) { sandbox.plant(clock.instant().plus(after)) }?.also {
+            parts.scope.launch { airing.refresh(setOf(AnimeId(SandboxAiring.SOON))) }
+        }
+
+    // AniList moves the planted episode [by] later and the app is not told: it learns of it when it next asks, as from AniList.
+    suspend fun postpone(by: Duration): Planted? = withContext(Dispatchers.IO) { sandbox.postpone(by) }
 
     private inner class SandboxScenarios : ScenarioSubject {
         override val sandbox = true

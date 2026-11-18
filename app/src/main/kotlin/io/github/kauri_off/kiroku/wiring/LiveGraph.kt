@@ -25,7 +25,9 @@ import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
+import io.github.kauri_off.kiroku.notify.MarkWatchedWork
 import io.github.kauri_off.kiroku.signin.SignInOwner
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -119,7 +121,17 @@ internal class LiveGraph(
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
-    override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }, { user }, { notifications }) }
+    override val session: SessionRepository by lazy {
+        SignOutForgets(
+            account,
+            { MarkWatchedWork.forget(parts.context, parts.source.name) },
+            { list },
+            { airing },
+            { user },
+            { notifications },
+            runLog,
+        )
+    }
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
@@ -133,6 +145,9 @@ internal class LiveGraph(
     // MAL's one way in for work without a screen; it holds nothing of its own.
     private val wayIn by lazy { MalBackground(parts.http, account) }
 
+    // What debug and preview builds keep of the notification engine's runs, for the debug menu; a release build keeps none.
+    val runLog = liveRunLog(parts)
+
     // The source's notifications on the device; making it posts and reads nothing.
     private val shown by lazy { EpisodeNotifications(parts.context, parts.source.name, { titleLanguage }) }
     override val notifications by lazy {
@@ -145,6 +160,7 @@ internal class LiveGraph(
             { shown },
             { notificationStore(parts, preferences) },
             renew = { wayIn.run { } },
+            reports = runLog,
         )
     }
     override val withoutScreen: WithoutScreen =
@@ -157,7 +173,9 @@ internal class LiveGraph(
 
             override suspend fun titleOnList(id: AnimeId) = list.observeEntry(id).first()?.anime
 
-            override val shown get() = this@LiveGraph.shown
+            override suspend fun session() = account.observeSession().first()
+
+            override val notSaved get() = shown
         }
 
     // The work behind MAL's way in, with what held it back told by its role.
@@ -184,13 +202,26 @@ internal class LiveGraph(
 // S9: a sign-out takes the user's notifications, list, sorts, airing data and profiles with it, also when nothing has asked for them yet.
 private class SignOutForgets(
     private val account: SessionRepository,
+    // The waiting "Mark watched" taps, ended before the sign-out so that none is tried in a list that is not its own.
+    private val taps: suspend () -> Unit,
     private val list: () -> ListSource,
     private val airing: () -> LiveAiring,
     private val user: () -> LiveUser,
     private val notifications: () -> LiveNotifications,
+    private val runs: KeptRuns?,
 ) : SessionRepository by account {
     override suspend fun signOut() {
+        try {
+            taps()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A try left by a failed cancel finds nobody signed in, and ends sending and showing nothing.
+            logTypes(e)
+        }
         account.signOut()
+        // Before the run that forgets the rest, which is then the first run kept.
+        runs?.forget()
         notifications().forget()
         // A read of the list makes its store agree with the session; a store that fails it is cleared at its next use.
         list().observeSyncedAt().first()

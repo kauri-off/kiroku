@@ -4,14 +4,35 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.core.notify.Shown
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.wiring.ListWork
 import io.github.kauri_off.kiroku.wiring.WithoutScreen
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import kotlin.time.Duration.Companion.seconds
+
+// What work on a title's notification may do to it: say that marking an episode watched could not be saved.
+interface NotSavedNotice {
+    // Whose list the notifications are of.
+    val source: String
+
+    // False when there is no title to say it of.
+    suspend fun couldNotSave(
+        title: AnimeId,
+        episode: Int,
+        anime: Anime?,
+        said: Shown,
+    ): Boolean
+}
 
 // What came of one try of "Mark watched" from a notification.
 sealed interface Tried {
@@ -21,13 +42,14 @@ sealed interface Tried {
     // It cannot be saved, and the title's notification says so.
     data object NotSaved : Tried
 
-    // To be tried again this much later, which is within the waiting.
+    // To be tried again this much later, which is within the waiting, in the list of [madeIn].
     data class Again(
         val after: Duration,
+        val madeIn: SignInId,
     ) : Tried
 
-    // The tap was on another source's notification, whose list this process does not have: nothing was sent.
-    data object OtherSource : Tried
+    // The list the tap was made on is not this process's (another source, a sign-out, another sign-in): nothing was sent or shown.
+    data object Dropped : Tried
 }
 
 // N9: one try of the write a notification's action asks for, and how long it waits for the next.
@@ -36,55 +58,72 @@ class MarkWatchedTries(
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
 ) {
-    // [tried] is how many tries came before this one.
+    // [madeIn] is the sign-in whose list the tap was made on, as the first try found it; [tried], how many tries came before.
     suspend fun attempt(
         mark: MarkWatched,
         tappedAt: Instant,
         tried: Int,
+        madeIn: SignInId? = null,
     ): Tried {
-        val shown = app.shown?.takeIf { it.source == mark.source } ?: return Tried.OtherSource
+        val notice = notice(mark) ?: return Tried.Dropped
+        // S8: a session that cannot be read ends the waiting at once.
+        val session = session() ?: return notSaved(notice, mark, null)
+        val owner = session.owner?.takeIf { madeIn == null || it == madeIn } ?: return Tried.Dropped
         val ends = tappedAt + WAITED_AT_MOST
         // A try that starts once the waiting has ended sends nothing, however late the system ran it.
-        if (!clock.instant().isBefore(ends)) return notSaved(shown, mark, null)
+        if (!clock.instant().isBefore(ends)) return notSaved(notice, mark, null)
         val anime =
             try {
                 app.titleOnList(mark.title)
             } catch (_: DataException) {
-                return again(shown, mark, null, waitAfter(tried), ends)
-            } ?: return notSaved(shown, mark, null)
+                return again(notice, mark, null, waitAfter(tried), ends, owner)
+            } ?: return notSaved(notice, mark, null)
         val work =
             try {
-                app.sendToList(ListWrite.MarkWatched(anime, mark.episode))
+                app.sendToList(ListWrite.MarkWatched(anime, mark.episode, owner))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 unexpected(e)
-                return notSaved(shown, mark, anime)
+                return notSaved(notice, mark, anime)
             }
         return when (work) {
             is ListWork.Done ->
-                when (val outcome = work.value) {
-                    is Outcome.Success -> saved()
-                    is Outcome.Failure ->
-                        if (outcome.error in passing) again(shown, mark, anime, waitAfter(tried), ends) else notSaved(shown, mark, anime)
+                when (val error = (work.value as? Outcome.Failure)?.error) {
+                    null -> saved()
+                    // Another sign-in's list now, or none: the tap is not its user's to save there.
+                    DataError.ListEnded -> Tried.Dropped
+                    in passing -> again(notice, mark, anime, waitAfter(tried), ends, owner)
+                    else -> notSaved(notice, mark, anime)
                 }
             // Section 2.3: the next try comes when the refusal has ended, and nothing is sent before.
-            is ListWork.Refused -> again(shown, mark, anime, work.remaining, ends)
-            ListWork.SignedOut, ListWork.SessionExpired, ListWork.SessionUnread -> notSaved(shown, mark, anime)
+            is ListWork.Refused -> again(notice, mark, anime, work.remaining, ends, owner)
+            ListWork.SignedOut -> Tried.Dropped
+            ListWork.SessionExpired, ListWork.SessionUnread -> notSaved(notice, mark, anime)
         }
     }
 
-    // The waiting ended with nothing saved, without another try: what the tap's notification is to say.
-    suspend fun gaveUp(mark: MarkWatched) {
-        val shown = app.shown?.takeIf { it.source == mark.source } ?: return
+    // The waiting ended with nothing saved, without another try: what the tap's notification is to say, if it is still its user's.
+    suspend fun gaveUp(
+        mark: MarkWatched,
+        madeIn: SignInId? = null,
+    ) {
+        val notice = notice(mark) ?: return
+        val owner = session()?.owner
+        if (owner == null || (madeIn != null && owner != madeIn)) return
         val anime =
             try {
                 app.titleOnList(mark.title)
             } catch (_: DataException) {
                 null
             }
-        notSaved(shown, mark, anime)
+        notSaved(notice, mark, anime)
     }
+
+    private fun notice(mark: MarkWatched): NotSavedNotice? = app.notSaved?.takeIf { it.source == mark.source }
+
+    // The session as stored; null when it cannot be read.
+    private suspend fun session(): Session? = withTimeoutOrNull(SESSION_READ) { app.session() }
 
     // N7: the title's notification goes, or names the next episode to mark without alerting.
     private suspend fun saved(): Tried {
@@ -99,19 +138,20 @@ class MarkWatchedTries(
     }
 
     private suspend fun again(
-        shown: EpisodeNotifications,
+        notice: NotSavedNotice,
         mark: MarkWatched,
         anime: Anime?,
         wait: Duration,
         ends: Instant,
-    ): Tried = if (clock.instant().plus(wait).isBefore(ends)) Tried.Again(wait) else notSaved(shown, mark, anime)
+        owner: SignInId,
+    ): Tried = if (clock.instant().plus(wait).isBefore(ends)) Tried.Again(wait, owner) else notSaved(notice, mark, anime)
 
     private suspend fun notSaved(
-        shown: EpisodeNotifications,
+        notice: NotSavedNotice,
         mark: MarkWatched,
         anime: Anime?,
     ): Tried {
-        shown.couldNotSave(mark.title, mark.episode, anime)
+        notice.couldNotSave(mark.title, mark.episode, anime, mark.said)
         return Tried.NotSaved
     }
 
@@ -121,6 +161,7 @@ class MarkWatchedTries(
 
         private val FIRST_WAIT: Duration = Duration.ofMinutes(1)
         private val LONGEST_WAIT: Duration = Duration.ofHours(1)
+        private val SESSION_READ = 5.seconds
 
         // What may answer otherwise later; anything else will not change by waiting.
         private val passing = setOf(DataError.NoConnection, DataError.ServerError, DataError.Refused, DataError.StorageError)
