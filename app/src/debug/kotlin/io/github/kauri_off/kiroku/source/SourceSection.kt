@@ -20,6 +20,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.data.sandbox.SandboxUsers
 import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -71,6 +73,8 @@ fun SourceSection(
 ) {
     SectionHeader(stringResource(R.string.source_title))
     SectionDetail(R.string.source_detail)
+    Users(stringResource(R.string.source_users_demo, Fixtures.reference.otherUserName, Fixtures.reference.privateUserName))
+    Users(stringResource(R.string.source_users_sandbox, SandboxUsers.PUBLIC, SandboxUsers.PRIVATE))
     ConnectedChoice(
         DataSource.entries.map { stringResource(it.label) },
         state.chosen.ordinal,
@@ -95,6 +99,16 @@ fun SourceSection(
         }
     }
 }
+
+// The names another user's profile opens on that source, as a section's detail.
+@Composable
+private fun Users(text: String) =
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = Spacing.l, top = Spacing.s, end = Spacing.l),
+    )
 
 private val DataSource.label: Int
     get() =

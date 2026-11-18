@@ -3,9 +3,15 @@ package io.github.kauri_off.kiroku.sandbox
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
 import androidx.lifecycle.Lifecycle
@@ -25,10 +31,15 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.core.statistics.statisticsOf
+import io.github.kauri_off.kiroku.core.user.UserListState
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
+import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTenrai
 import io.github.kauri_off.kiroku.data.sandbox.SandboxTitles
+import io.github.kauri_off.kiroku.data.sandbox.SandboxUsers
+import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
@@ -67,7 +78,9 @@ import java.net.Proxy
 import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
+import java.text.NumberFormat
 import java.time.Duration
+import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlin.time.toJavaDuration
@@ -576,6 +589,89 @@ class SandboxAppTest {
         meanwhile { airing()[weekly.anime.id]?.aired is AiredCount.Exact }
         shows("Session expired")
         assertTrue(waited { graph.session.observeSession().first() } is Session.Expired)
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
+    private fun profileTab() = compose.onNode(hasText("Profile") and hasClickAction()).performClick()
+
+    // Another user's profile by name, as the person opens it on the Profile shown.
+    private fun openProfile(name: String) {
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput(name)
+        compose.onNode(hasText("Open") and hasClickAction()).performClick()
+    }
+
+    private fun count(value: Int) = NumberFormat.getIntegerInstance(Locale.ENGLISH).format(value)
+
+    private fun <T> state(read: suspend () -> T) = waited { read() }
+
+    private fun readList(name: String) = state { graph.user.observeList(name).first { it !is UserListState.Reading } }
+
+    // Offline the own profile shows from the database; SandboxProfileTest shows it from a new graph over the same files.
+    @Test
+    fun `signed in and synced, the own profile's completed count and mean score are the sandbox's own, offline too`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        profileTab()
+        shows(SandboxMal.USER_NAME)
+        val profile = state { graph.user.observeOwnProfile().first { it != null } }!!
+        val statistics = statisticsOf(state { graph.list.observeEntries().first() })
+        assertEquals(profile.stated!!.completed, statistics.statuses.completed)
+        assertEquals(profile.stated!!.meanScore!!, statistics.meanScore!!, 1e-9)
+        shows(count(statistics.statuses.completed))
+        assertEquals(1L, rows("sandbox.db", "own_profile"))
+
+        graph.scenarios.set(Scenario(offline = true))
+        assertEquals(Outcome.Failure(DataError.NoConnection), waited { graph.user.refreshOwnProfile() })
+        assertEquals(profile, state { graph.user.observeOwnProfile().first() })
+        shows(SandboxMal.USER_NAME)
+        graph.scenarios.set(Scenario())
+
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
+    // Section 2.1 and S9: with every token rejected, a read that sent one would end the session; a profile left open reads again.
+    @Test
+    fun `other users' lists are read without a token signed in, expired and signed out, and a sign-out leaves no profile and no list`() {
+        signIn()
+        assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
+        assertEquals(Outcome.Success(Unit), waited { graph.user.refreshOwnProfile() })
+        assertEquals(1L, rows("sandbox.db", "own_profile"))
+
+        graph.scenarios.set(Scenario(sessionExpired = true))
+        profileTab()
+        openProfile(SandboxUsers.PUBLIC)
+        val whole = readList(SandboxUsers.PUBLIC) as UserListState.Whole
+        assertTrue(whole.entries.size > 3000)
+        assertEquals(
+            whole.entries.size,
+            whole.entries
+                .map { it.anime.id }
+                .toSet()
+                .size,
+        )
+        shows(count(statisticsOf(whole.entries).statuses.completed))
+        assertTrue(state { graph.session.observeSession().first() } is Session.SignedIn)
+
+        assertEquals(Outcome.Failure(DataError.SessionExpired), waited { graph.list.sync() })
+        assertTrue(state { graph.session.observeSession().first() } is Session.Expired)
+        assertEquals(Outcome.Success(Unit), waited { graph.user.refreshList(SandboxUsers.PUBLIC) })
+        assertEquals(UserListState.None(DataError.PrivateList), readList(SandboxUsers.PRIVATE))
+        assertEquals(UserListState.None(DataError.UnknownUser), readList("kiroku-no-user-0"))
+        graph.scenarios.set(Scenario())
+
+        val reads = {
+            graph.sandbox.mal.asked
+                .count { it == "GET sandbox.invalid/v2/users/${SandboxUsers.PUBLIC}/animelist" }
+        }
+        val before = reads()
+        waited { graph.session.signOut() }
+        assertEquals(0L, rows("sandbox.db", "own_profile"))
+        until { reads() > before }
+        shows(count(statisticsOf(whole.entries).statuses.completed))
+        assertEquals(whole.entries, (readList(SandboxUsers.PUBLIC) as UserListState.Whole).entries)
+        assertEquals(UserListState.Reading(emptyList(), null, null), state { graph.user.observeList(SandboxUsers.PRIVATE).first() })
         assertEquals(emptyList<URI>(), connections.asked)
     }
 

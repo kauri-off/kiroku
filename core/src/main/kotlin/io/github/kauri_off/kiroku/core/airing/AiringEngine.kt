@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -275,9 +276,13 @@ class AiringEngine(
             answers.awaitAll().firstNotNullOfOrNull { it }?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
+            // The scope's end is a caller's own cancellation when it runs in that scope, also before the end has reached it.
+            if (!scope.isActive && scope.coroutineContext.job.holds(currentCoroutineContext().job)) throw e
             throw IllegalStateException(STOPPED, e)
         }
     }
+
+    private fun Job.holds(job: Job): Boolean = children.any { it === job || it.holds(job) }
 
     // A title already asked for shares that answer, so no title is asked for twice at once.
     private fun want(titles: Collection<Anime>): List<Deferred<DataError?>> {
