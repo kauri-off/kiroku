@@ -67,11 +67,11 @@ data class UserStatistics internal constructor(
     val years: Map<Int, Int>,
 ) {
     init {
+        require(titleCount >= statuses.total)
         require(daysWatched >= 0.0)
         require(episodesWatched >= 0)
         require(meanScore == null || meanScore in 1.0..10.0)
         require(scores.keys.all { it in 1..10 })
-        require(titleCount >= statuses.total)
         require(scored <= titleCount)
     }
 
@@ -79,6 +79,18 @@ data class UserStatistics internal constructor(
     val scored: Int get() = scores.values.sum()
 
     val unscored: Int get() = titleCount - scored
+
+    // The start years by decade, as the decade's first year, newest first.
+    val decades: List<Counted<Int>>
+        get() =
+            years.entries
+                .groupBy({ it.key.floorDiv(DECADE) * DECADE }, { it.value })
+                .map { (decade, counts) -> Counted(decade, counts.sum()) }
+                .sortedByDescending { it.value }
+
+    private companion object {
+        const val DECADE = 10
+    }
 }
 
 @ConsistentCopyVisibility

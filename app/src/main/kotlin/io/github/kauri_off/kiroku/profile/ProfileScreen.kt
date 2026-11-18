@@ -21,7 +21,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,7 +38,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -53,9 +51,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
-import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.design.component.BarTitle
-import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.ListReadProgress
 import io.github.kauri_off.kiroku.design.component.PageBlock
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
@@ -67,7 +64,6 @@ import io.github.kauri_off.kiroku.design.component.StatBar
 import io.github.kauri_off.kiroku.design.component.StatNumber
 import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.StateAction
-import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.headingRoom
 import io.github.kauri_off.kiroku.design.component.pageBlocks
 import io.github.kauri_off.kiroku.design.theme.Sizes
@@ -78,9 +74,8 @@ import io.github.kauri_off.kiroku.text.genreName
 import io.github.kauri_off.kiroku.text.label
 import io.github.kauri_off.kiroku.text.mediaTypeLabel
 import io.github.kauri_off.kiroku.title.countText
-import io.github.kauri_off.kiroku.title.scoreText
-import java.math.BigDecimal
-import java.math.RoundingMode
+import io.github.kauri_off.kiroku.title.meanScoreText
+import io.github.kauri_off.kiroku.title.roundedHalfUp
 import java.text.NumberFormat
 
 // The Profile, the user's own or another user's, drawn from [state] alone. Its snackbars
@@ -144,7 +139,7 @@ fun ProfileScreen(
                     ),
                     body,
                 )
-            ProfileContent.ListLoading -> state.reading?.let { ListProgress(it, body) }
+            ProfileContent.ListLoading -> state.reading?.let { ListReadProgress(it.loaded, it.total, body) }
             is ProfileContent.Failed -> ScreenState(failedState(content.error, state.owner, onEvent), body)
             is ProfileContent.Shown -> Shown(content, state, onEvent, padding)
         }
@@ -169,42 +164,6 @@ private fun failedState(
         DataError.NoConnection -> ScreenState.Error(stringResource(R.string.common_no_connection)) { onEvent(ProfileEvent.Retry) }
         DataError.Refused -> ScreenState.Error(stringResource(R.string.common_refused)) { onEvent(ProfileEvent.Retry) }
         else -> ScreenState.Error(stringResource(R.string.profile_could_not_load)) { onEvent(ProfileEvent.Retry) }
-    }
-}
-
-// The counted wait of a long list: the share read so far and the line "Loading 3,000 of 12,400", where the loading
-// state would stand.
-@Composable
-private fun ListProgress(
-    progress: UserListProgress,
-    modifier: Modifier,
-) {
-    val loaded = countText(progress.loaded)
-    val total = progress.total?.takeIf { it > 0 }
-    val line =
-        total?.let { stringResource(R.string.profile_loading_list, loaded, countText(it)) }
-            ?: pluralStringResource(R.plurals.profile_loading_list_unknown_total, progress.loaded, loaded)
-    Box(
-        modifier.fillMaxSize().padding(horizontal = Spacing.l, vertical = Spacing.xl),
-        contentAlignment = Alignment.Center,
-    ) {
-        // One node for a screen reader: the line, read once, with the indicator's progress.
-        Column(
-            Modifier.widthIn(max = Sizes.messageMaxWidth).semantics(mergeDescendants = true) {},
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.l),
-        ) {
-            val indicator = Modifier.fillMaxWidth()
-            if (total != null) {
-                LinearWavyProgressIndicator(
-                    progress = { (progress.loaded.toFloat() / total).coerceIn(0f, 1f) },
-                    modifier = indicator.testTag(COUNTED_WAVY_INDICATOR),
-                )
-            } else {
-                LinearWavyProgressIndicator(indicator.testTag(WAVY_INDICATOR))
-            }
-            Text(line, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-        }
     }
 }
 
@@ -337,7 +296,7 @@ private fun Numbers(
             )
             StatNumber(daysText(statistics.daysWatched), stringResource(R.string.profile_days_watched), horizontalAlignment = alignment)
             StatNumber(
-                value = mean?.let { scoreText(roundedHalfUp(it, 2)) } ?: stringResource(R.string.profile_no_mean_score_value),
+                value = mean?.let { meanScoreText(it) } ?: stringResource(R.string.profile_no_mean_score_value),
                 caption = stringResource(R.string.profile_mean_score),
                 spokenValue = if (mean == null) stringResource(R.string.profile_no_mean_score) else null,
                 horizontalAlignment = alignment,
@@ -363,12 +322,6 @@ private fun daysText(days: Double): String =
                 maximumFractionDigits = 1
             }.format(roundedHalfUp(days, 1))
     }
-
-// Half up from the value as written in decimals, as MAL rounds its profile's numbers.
-internal fun roundedHalfUp(
-    value: Double,
-    digits: Int,
-): Double = BigDecimal.valueOf(value).setScale(digits, RoundingMode.HALF_UP).toDouble()
 
 // The list by status, each a share of the whole list.
 @Composable

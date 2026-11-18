@@ -430,16 +430,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-12 The Profile as chosen.**
 
-- [ ] **M6-13 Statistics views.** What the chosen composition shows of the statistics beyond the Profile's own
-  page, for the signed-in user and for another: stateless, on fixture states, each with its screenshot registry,
-  its route and its strings in a file of its own. Every number is the calculator's; one it lacks is added to the
-  calculator (M6-02). They are drawn with stock components and no chart library (sections 6.4 and 8.4); a genre and
-  a media type read as section 10 says. Built once, on real state, and shown to the owner (section 9).
-  **Needs:** M6-09, M6-11.
-  **Check:** the screenshots of each view in every variant, with cases for nothing scored, a single value, a list
-  of several thousand and the longest list of genres; the render's accessibility check passes; tests: the values
-  shown are the calculator's over the fixtures' list; opened from another user's profile they are that user's, from
-  the read their profile made; M6-02's rule test and `StringRulesTest` pass.
+- [x] **M6-13 Statistics views.**
 
 - [ ] **M6-14 Another user's list in the app.** The list of a named user, where the chosen composition has it,
   from the read their profile made and no second one. It cannot be written: nothing on it edits, steps or removes,

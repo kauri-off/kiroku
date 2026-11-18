@@ -26,11 +26,6 @@
     <string name="profile_could_not_load">Could not load the profile</string>
     <string name="profile_private_list">This list is private</string>
     <string name="profile_unknown_user">MyAnimeList has no user with this name</string>
-    <string name="profile_loading_list">Loading %1$s\u00A0of\u00A0%2$s</string>
-    <plurals name="profile_loading_list_unknown_total">
-        <item quantity="one">%1$s\u00A0title loaded</item>
-        <item quantity="other">%1$s\u00A0titles loaded</item>
-    </plurals>
     <string name="profile_user_name">User name</string>
     <plurals name="profile_name_refused">
         <item quantity="one">Enter up to\u00A0%1$d\u00A0character (Latin letters, digits, _\u00A0and\u00A0-) or a MyAnimeList profile link</item>
