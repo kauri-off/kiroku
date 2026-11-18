@@ -11,9 +11,9 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import java.time.Duration
 import java.time.Instant
@@ -32,6 +32,12 @@ class SystemAlarmOnDeviceTest {
         val whileIdle: Boolean,
         val wakes: Boolean,
     )
+
+    // A run the system started for a reason of its own, as at leaving the stopped state, is not this test's.
+    @Before
+    fun forget() {
+        while (application.started.tryReceive().isSuccess) Unit
+    }
 
     @After
     fun none() = runBlocking { alarm.set(null) }
@@ -66,7 +72,18 @@ class SystemAlarmOnDeviceTest {
     private fun exactAllowed() =
         AlarmManagerCompat.canScheduleExactAlarms(checkNotNull(application.getSystemService(AlarmManager::class.java)))
 
-    private fun next(): RunTrigger = runBlocking { withTimeout(FIRES_WITHIN) { application.started.receive() } }
+    // Waits for the run of [trigger], whatever else the system starts meanwhile.
+    private fun await(trigger: RunTrigger) =
+        runBlocking { withTimeout(FIRES_WITHIN) { while (application.started.receive() != trigger) Unit } }
+
+    // Sets the alarm a few seconds ahead and waits for its run, which does not come before its time.
+    private fun fires() {
+        val at = Instant.now().plusSeconds(SOON)
+        runBlocking { alarm.set(at) }
+        await(RunTrigger.Alarm)
+        assertFalse("fired before its time", Instant.now().isBefore(at))
+        assertEquals(emptyList<Pending>(), pending())
+    }
 
     @Test
     fun theAlarmSetIsTheOneAskedForAndTakesThePlaceOfTheOneBefore() =
@@ -82,27 +99,23 @@ class SystemAlarmOnDeviceTest {
         }
 
     @Test
-    fun theAlarmFiresAndStartsTheAlarmsRun() {
-        val at = Instant.now().plusSeconds(SOON)
-        runBlocking { alarm.set(at) }
-        assertNull("a run before the alarm's time", application.started.tryReceive().getOrNull())
-        assertEquals(RunTrigger.Alarm, next())
-        assertFalse("fired before its time", Instant.now().isBefore(at))
-        assertEquals(emptyList<Pending>(), pending())
-    }
+    fun theAlarmFiresAndStartsTheAlarmsRun() = fires()
 
+    // The access cannot be taken back here: the system ends the process it is taken from. A device that has it skips this.
     @Test
-    fun theAccessGivenStartsARunAndTheNextAlarmIsExact() {
+    fun theAccessGivenStartsARunAndTheNextAlarmIsExactAndFires() {
         assumeTrue("the access exists from Android 12", Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
         assumeTrue("the access is not given yet", !exactAllowed())
         val at = Instant.now().plus(Duration.ofDays(2))
         runBlocking { alarm.set(at) }
         assertFalse(pending().single().exact)
+        fires()
         shell("cmd appops set ${application.packageName} SCHEDULE_EXACT_ALARM allow")
-        assertEquals(RunTrigger.AlarmAccessChanged, next())
+        await(RunTrigger.AlarmAccessChanged)
         assertTrue(exactAllowed())
         runBlocking { alarm.set(at) }
         assertTrue(pending().single().exact)
+        fires()
     }
 
     private companion object {

@@ -10,16 +10,15 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HeldRunsTest {
@@ -30,7 +29,7 @@ class HeldRunsTest {
         engine: () -> NotificationRuns? = {
             runs
         },
-    ) = HeldRuns(CoroutineScope(StandardTestDispatcher(testScheduler)), runs = engine)
+    ) = HeldRuns(CoroutineScope(StandardTestDispatcher(testScheduler)), engine)
 
     @Test
     fun `each trigger starts one run and is held until that run has ended`() =
@@ -56,21 +55,35 @@ class HeldRunsTest {
         }
 
     @Test
-    fun `a run longer than a receiver is given is let go at that time and goes on to its end`() =
+    fun `a run longer than its receiver is given is let go at that time and goes on to its end`() =
         runTest {
-            val until = CompletableDeferred<Unit>().also { runs.until = it }
-            held().start(RunTrigger.Alarm) { done++ }
-            advanceTimeBy(HELD_FOR - 1.milliseconds)
-            assertEquals(0, done)
-            advanceTimeBy(1.milliseconds)
+            for (given in listOf(HELD_FOR, HELD_FOR_FOREGROUND)) {
+                val until = CompletableDeferred<Unit>().also { runs.until = it }
+                done = 0
+                held().start(RunTrigger.Alarm, given) { done++ }
+                advanceTimeBy(given - 1.milliseconds)
+                assertEquals("$given", 0, done)
+                advanceTimeBy(1.milliseconds)
+                runCurrent()
+                assertEquals("$given", 1, done)
+                assertEquals(emptyList<RunTrigger>(), runs.ended.toList())
+                until.complete(Unit)
+                runCurrent()
+                assertEquals(listOf(RunTrigger.Alarm), runs.ended.toList())
+                assertEquals("$given", 1, done)
+                runs.ended.clear()
+            }
+        }
+
+    @Test
+    fun `a run that cannot start, its scope having ended, is let go`() =
+        runTest {
+            val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+            scope.cancel()
+            HeldRuns(scope) { runs }.start(RunTrigger.DeviceRestarted) { done++ }
             runCurrent()
             assertEquals(1, done)
-            assertTrue("well under the minute a receiver is given", HELD_FOR <= 30.seconds)
-            assertEquals(emptyList<RunTrigger>(), runs.ended.toList())
-            until.complete(Unit)
-            runCurrent()
-            assertEquals(listOf(RunTrigger.Alarm), runs.ended.toList())
-            assertEquals(1, done)
+            assertEquals(emptyList<RunTrigger>(), runs.started.toList())
         }
 
     @Test

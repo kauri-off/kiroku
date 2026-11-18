@@ -13,28 +13,22 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-// How long a broadcast is held for its run: half the minute after which the system ends a process whose receiver is not done.
+// A broadcast is held for its run for less than the system gives its receiver: a minute, or ten seconds when it is a foreground one.
 val HELD_FOR = 30.seconds
+val HELD_FOR_FOREGROUND = 8.seconds
 
 // Starts the notification engine's runs where no screen asks for one, and at the app's opening.
 class HeldRuns(
     private val scope: CoroutineScope,
-    private val heldFor: Duration = HELD_FOR,
     // The engine, built at its first use and off the main thread; none in a graph without notifications.
     private val runs: () -> NotificationRuns?,
 ) {
-    // Calls [done] once: when the run has ended, or after [heldFor], past which the run goes on with nothing holding the process.
+    // Calls [done] once: when the run has ended or cannot start, or after [heldFor], past which the run goes on with nothing holding the process.
     fun start(
         trigger: RunTrigger,
+        heldFor: Duration = HELD_FOR,
         done: () -> Unit = {},
-    ): Job =
-        scope.launch {
-            try {
-                withTimeoutOrNull(heldFor) { runs()?.run(trigger) }
-            } finally {
-                done()
-            }
-        }
+    ): Job = scope.launch { withTimeoutOrNull(heldFor) { runs()?.run(trigger) } }.also { it.invokeOnCompletion { done() } }
 
     // A run each time the app comes to the foreground, which is also the first moment after a force-stop.
     fun atEachOpening(app: Lifecycle) {

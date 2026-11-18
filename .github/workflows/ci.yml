@@ -90,7 +90,7 @@ jobs:
       # after the tests, which share the runner's cores with nothing. The summary names the memory in use at its peak.
       - name: Format, Lint, tests and screenshots
         env:
-          DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug' || '' }}
+          DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug :app:assembleDebugAndroidTest' || '' }}
         run: |
           memory="$RUNNER_TEMP/memory"
           while sleep 2; do awk '/^MemTotal/ { t = $2 } /^MemAvailable/ { a = $2 } END { print int((t - a) / 1024) }' /proc/meminfo; done > "$memory" &

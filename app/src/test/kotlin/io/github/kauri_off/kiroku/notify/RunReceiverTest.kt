@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Looper
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,8 +17,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import kotlin.time.Duration.Companion.seconds
 
 // What starts a run without a screen (N2, N8): the alarm, a restart, an update and a change of the exact-alarm access.
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(application = RecordedRunsApplication::class)
 class RunReceiverTest {
@@ -62,6 +65,29 @@ class RunReceiverTest {
             assertTrue("${sent.action} finished once its run has ended", finished.isDone)
             runs.started.clear()
         }
+    }
+
+    @Test
+    fun `a broadcast is let go before the system ends its receiver, a foreground one's at ten seconds and another's at a minute`() {
+        val receiver =
+            shadowOf(application)
+                .registeredReceivers
+                .map { it.broadcastReceiver }
+                .filterIsInstance<RunReceiver>()
+                .single()
+        val access = AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED
+        for ((foreground, given) in listOf(true to 10.seconds, false to 60.seconds)) {
+            runs.until = CompletableDeferred()
+            application.sendBroadcast(Intent(access).addFlags(if (foreground) Intent.FLAG_RECEIVER_FOREGROUND else 0))
+            shadowOf(Looper.getMainLooper()).idle()
+            val finished = shadowOf(shadowOf(receiver).originalPendingResult).future
+            if (!foreground) application.time.advanceTimeBy(10.seconds)
+            assertFalse("foreground $foreground", finished.isDone)
+            application.time.advanceTimeBy(given - 1.seconds - if (foreground) 0.seconds else 10.seconds)
+            application.time.runCurrent()
+            assertTrue("foreground $foreground: let go a second before the system ends it", finished.isDone)
+        }
+        assertEquals(listOf(RunTrigger.AlarmAccessChanged, RunTrigger.AlarmAccessChanged), runs.started.toList())
     }
 
     @Test

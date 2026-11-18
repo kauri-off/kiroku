@@ -228,9 +228,10 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
 - **Alarms are one-shot and are re-checked when they fire.** What is due and what comes next is computed from the
   stored list and airing data every time; there is no stored plan that could drift. Only the next due notification
   is scheduled, not one alarm per title, which keeps the app far from the system's alarm quotas.
-- **A late notification is acceptable; a missing one is not.** The alarm is inexact by default, which needs no
-  permission, and exact when the user has granted exact alarms. The manifest declares `SCHEDULE_EXACT_ALARM`;
-  `USE_EXACT_ALARM` is not used, because Google Play reserves it for alarm-clock and calendar apps.
+- **A late notification is acceptable; a missing one is not.** The alarm is exact where the system lets the app set
+  exact alarms (always before Android 12, from the install on 12 and 13, by the user's grant from 14) and inexact
+  elsewhere. The manifest declares `SCHEDULE_EXACT_ALARM`; `USE_EXACT_ALARM` is not used, because Google Play
+  reserves it for alarm-clock and calendar apps.
 - The app never opens a system settings screen unasked and never asks for a battery exemption on its own.
 - What is **notifiable** is defined in `:core`: the title's list status is Watching (or Planned, if the user
   enabled that); its aired count is exact and the episode has a known air time; the user has not watched it; it
@@ -265,8 +266,9 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
   has watched the announced episode.
 - **N8. The alarm follows the data.** After any change to the list, the airing data or a notification setting (the
   delay alone included), the scheduled alarm is the earliest coming notification time, or none. It is restored
-  after a device restart, an app update, a change of the exact-alarm permission, and when the app is opened after
-  a force-stop. A change of time zone moves nothing.
+  after a device restart, an app update, the exact-alarm access being given, and when the app is opened after a
+  force-stop. When the access is taken away, the system removes the alarm and ends the app without telling it; the
+  next run (the app's opening, a restart or the periodic work) sets it again. A change of time zone moves nothing.
 - **N9. The action counts once.** "Mark watched" marks the next unwatched episode and never jumps the count over
   episodes the user has not seen. A second tap, a retry after the server already accepted it, or a sync that
   already brought the change do not raise the count again. Without a network it waits and retries; if it finally
@@ -373,6 +375,8 @@ was chosen against, and why:
   used.
 - **Storage:** Room, with its annotation processor only in `:data`; DataStore Preferences for settings.
 - **Sign-in:** Custom Tabs and the Keystore directly (`security-crypto` is deprecated).
+- **Scheduled work:** WorkManager, set up at its first use, for work that waits for a network or repeats. The alarm
+  goes to the alarm service directly, and its receiver holds its run.
 - **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
   fifteen objects.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint

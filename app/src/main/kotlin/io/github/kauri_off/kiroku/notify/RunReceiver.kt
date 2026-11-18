@@ -16,7 +16,8 @@ class RunReceiver : BroadcastReceiver() {
         val trigger = triggers[intent.action] ?: return
         val runs = context.heldRuns ?: return
         val pending = goAsync()
-        runs.start(trigger, pending::finish)
+        val foreground = intent.flags and Intent.FLAG_RECEIVER_FOREGROUND != 0
+        runs.start(trigger, if (foreground) HELD_FOR_FOREGROUND else HELD_FOR, pending::finish)
     }
 
     companion object {

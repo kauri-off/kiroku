@@ -8,7 +8,10 @@ import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -33,10 +36,12 @@ class RecordedRuns : NotificationRuns {
             }.await()
 }
 
-// An application whose runs are recorded, each started on the thread that asks for it.
+// An application whose runs are recorded, each started on the thread that asks for it, with a time that the test moves.
+@OptIn(ExperimentalCoroutinesApi::class)
 class RecordedRunsApplication :
     Application(),
     HeldRunsOwner {
     val runs = RecordedRuns()
-    override val heldRuns = HeldRuns(CoroutineScope(Dispatchers.Unconfined)) { runs }
+    val time = TestCoroutineScheduler()
+    override val heldRuns = HeldRuns(CoroutineScope(UnconfinedTestDispatcher(time))) { runs }
 }
