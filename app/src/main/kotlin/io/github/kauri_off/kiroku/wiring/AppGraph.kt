@@ -50,8 +50,7 @@ interface AppGraph {
     // What the alarm, the moments the system starts the app at and its opening run; a graph without notifications has none.
     val notificationRuns: NotificationRuns? get() = null
 
-    // The list for work no screen asked for (an alarm, scheduled work, a notification's action), which reaches MAL this way alone:
-    // a live source renews the tokens that are due first (S7) and holds the work back while MAL refuses it (section 2.3).
+    // The list for work no screen asked for, its one way to MAL: due tokens are renewed first (S7), and a refusal holds it back.
     suspend fun <T> withoutScreen(work: suspend (ListRepository) -> T): BackgroundRun<T>
 
     // True for made-up titles and users, as the demo and the sandbox have, which a screen not built yet may stand in with.

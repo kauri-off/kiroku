@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.error.StoreCalls
 import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.endsItsCaller
 import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -275,6 +276,8 @@ class AiringEngine(
             answers.awaitAll().firstNotNullOfOrNull { it }?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
+            // The scope's end is a caller's own cancellation when it runs in that scope, also before the end has reached it.
+            if (scope.endsItsCaller()) throw e
             throw IllegalStateException(STOPPED, e)
         }
     }

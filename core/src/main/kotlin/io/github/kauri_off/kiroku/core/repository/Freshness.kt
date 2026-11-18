@@ -14,6 +14,7 @@ object Freshness {
     val list: Duration = 15.minutes
     val details: Duration = 24.hours
     val airingDetails: Duration = 6.hours
+    val ownProfile: Duration = 24.hours
 
     // The list's, so that the sync of a stale list is followed by a refresh of every tracked title.
     val airing: Duration = list
@@ -40,6 +41,12 @@ fun airingStale(
     fetchedAt: Instant?,
     now: Instant,
 ): Boolean = stale(fetchedAt, now, Freshness.airing)
+
+// The signed-in user's profile, never read or read too long ago.
+fun ownProfileStale(
+    fetchedAt: Instant?,
+    now: Instant,
+): Boolean = stale(fetchedAt, now, Freshness.ownProfile)
 
 // A time after now means the clock was set back, so nothing is known of the age.
 private fun stale(

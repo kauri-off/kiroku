@@ -10,4 +10,6 @@
     <string name="source_running_sandbox">До перезапуска приложение работает в песочнице</string>
     <string name="source_restart">Перезапустить</string>
     <string name="source_not_kept">Не удалось сохранить выбор</string>
+    <string name="source_users_demo">Другие пользователи демо: %1$s со списком, открытым для всех, и %2$s со скрытым списком</string>
+    <string name="source_users_sandbox">Другие пользователи песочницы: %1$s со списком, открытым для всех, и %2$s со скрытым списком</string>
 </resources>

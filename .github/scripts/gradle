@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Usage: gradle <arguments>. Runs ./gradlew and writes the memory in use at its peak to the job's summary.
+set -uo pipefail
+
+memory=$(mktemp)
+while sleep 2; do awk '/^MemTotal/ { t = $2 } /^MemAvailable/ { a = $2 } END { print int((t - a) / 1024) }' /proc/meminfo; done > "$memory" &
+sampler=$!
+status=0
+./gradlew "$@" || status=$?
+kill "$sampler"
+total=$(awk '/^MemTotal/ { print int($2 / 1024) }' /proc/meminfo)
+echo "Memory in use at its peak, \`gradlew $*\`: $(sort -n "$memory" | tail -n 1) of $total MiB" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+exit "$status"

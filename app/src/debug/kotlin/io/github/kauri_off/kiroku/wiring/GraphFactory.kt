@@ -75,8 +75,7 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
 
 internal val standInPosters: Interceptor? = StandInPosters
 
-// The demo is gone with its process, so its alarm is a wait in that process, by the demo's own time: the system's alarm
-// would start a process whose demo has nothing due.
+// The demo is gone with its process, so its alarm is a wait in that process, by the demo's own time, and not the system's.
 internal class DemoAlarm(
     private val scope: CoroutineScope,
     private val demo: () -> Demo,

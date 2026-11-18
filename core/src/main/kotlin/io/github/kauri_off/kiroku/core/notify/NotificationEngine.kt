@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.error.StoreCalls
 import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.endsItsCaller
 import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -34,7 +35,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -211,12 +211,10 @@ class NotificationEngine(
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
             // The scope's end is a caller's own cancellation when it runs in that scope, also before the end has reached it.
-            if (!scope.isActive && scope.coroutineContext.job.holds(currentCoroutineContext().job)) throw e
+            if (scope.endsItsCaller()) throw e
             throw IllegalStateException(STOPPED, e)
         }
     }
-
-    private fun Job.holds(job: Job): Boolean = children.any { it === job || it.holds(job) }
 
     // N8: while the process lives, a change of the session, the list, the airing data or a setting is followed by a run.
     private fun follow() {

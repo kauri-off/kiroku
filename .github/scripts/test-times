@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+# Usage: test-times <directory>... Writes Markdown: each module's test time and its slowest classes, from JUnit XML.
+import glob
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+SLOWEST = 10
+
+classes = []
+for root in sys.argv[1:]:
+    for path in glob.glob(os.path.join(root, "*/build/test-results/*/TEST-*.xml")):
+        suite = ET.parse(path).getroot()
+        module = os.path.relpath(path, root).split(os.sep)[0]
+        classes.append((float(suite.get("time", 0)), module, suite.get("name", "?"), int(suite.get("tests", 0))))
+
+print("### Test time by class")
+print()
+if not classes:
+    print("No test results were found.")
+    sys.exit(0)
+for module in sorted({c[1] for c in classes}):
+    own = [c for c in classes if c[1] == module]
+    print(f"- `:{module}`: {len(own)} classes, {sum(c[3] for c in own)} tests, {sum(c[0] for c in own):.0f} s")
+print()
+print("| Seconds | Class | Tests |")
+print("|---:|---|---:|")
+for time, module, name, tests in sorted(classes, reverse=True)[:SLOWEST]:
+    print(f"| {time:.1f} | `:{module}` {name.rsplit('.', 1)[-1]} | {tests} |")
+print()
+print("Every class's time is in the JUnit XML this job keeps as an artifact.")

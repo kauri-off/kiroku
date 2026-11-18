@@ -34,8 +34,7 @@ internal fun liveNotificationStore(
     preferences: StoredPreferences,
 ): NotificationStore = RoomNotificationStore(parts.database, preferences, Dispatchers.IO, parts.unexpected)
 
-// The notifications of a live source: the engine over the source's record, the system's alarm and the device's notifications,
-// built at its first call, off the main thread.
+// A live source's notifications: the engine over its record, the system's alarm and the device's own, built at its first call.
 internal class LiveNotifications(
     private val parts: LiveParts,
     session: Flow<Session>,

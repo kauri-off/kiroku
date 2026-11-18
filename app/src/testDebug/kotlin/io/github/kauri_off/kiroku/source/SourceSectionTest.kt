@@ -84,6 +84,18 @@ class SourceSectionTest {
     }
 
     @Test
+    fun `the section names the other users the demo and the sandbox answer for, by the names each answers to`() {
+        compose.setContent { Column { SourceSection(SourceState(DataSource.Account, DataSource.Account), onEvent = {}) } }
+        compose
+            .onNodeWithText(
+                "Other users of the demo: sample_viewer, whose list is public, and quiet_viewer, whose list is private",
+            ).assertExists()
+        compose
+            .onNodeWithText("Other users of the sandbox: Sandbox_Public, whose list is public, and Sandbox_Private, whose list is private")
+            .assertExists()
+    }
+
+    @Test
     fun `before the process ends the session's file gets its try, then the first screen is asked for`() {
         val events = mutableListOf<String>()
         val started = { shadowOf(context).peekNextStartedActivity()?.component?.className }
