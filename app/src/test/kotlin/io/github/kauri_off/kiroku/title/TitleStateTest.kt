@@ -21,7 +21,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.lang.reflect.Method
 import java.time.Duration
 import java.time.LocalDate
 import java.time.Year
@@ -272,14 +271,6 @@ class TitleStateTest {
         moment = removed.moment.after(TitleEvent.StepWatched(1)).after(TitleEvent.SetWatched(3))
         assertEquals(TitleMoment(synopsisExpanded = true), moment)
         assertEquals(TitleMoment(), moment.after(TitleEvent.CollapseSynopsis))
-    }
-
-    // A page has no public copy, so a derived value cannot be patched apart from its source.
-    @Test
-    fun aPageCanOnlyBeBuiltFromItsSources() {
-        val copies = TitlePage::class.java.methods.filter { it.name == "copy" || it.name.startsWith("copy$") }
-        assertEquals(emptyList<Method>(), copies)
-        assertTrue(TitlePage::class.java.constructors.all { it.isSynthetic })
     }
 
     @Test

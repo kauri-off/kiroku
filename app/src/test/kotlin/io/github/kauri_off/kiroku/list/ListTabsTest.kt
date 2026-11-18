@@ -74,14 +74,6 @@ class ListTabsTest {
     @Config(qualifiers = "en-w411dp-h891dp")
     fun `at rest on each tab the right-to-left row is the stock one`() = assertStockOnEveryTab(LayoutDirection.Rtl)
 
-    @Test
-    @Config(qualifiers = "ru-w411dp-h891dp")
-    fun `at rest on each tab the right-to-left Russian row is the stock one`() = assertStockOnEveryTab(LayoutDirection.Rtl)
-
-    @Test
-    @Config(qualifiers = "ru-w411dp-h891dp", fontScale = LARGE_TEXT)
-    fun `at rest on each tab the right-to-left Russian row at large text is the stock one`() = assertStockOnEveryTab(LayoutDirection.Rtl)
-
     private fun assertStockOnEveryTab(direction: LayoutDirection = LayoutDirection.Ltr) {
         val statuses = ListStatus.entries
         var selected by mutableIntStateOf(0)

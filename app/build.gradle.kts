@@ -5,6 +5,7 @@ import org.gradle.process.ExecOperations
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 import java.util.zip.ZipFile
 import javax.inject.Inject
@@ -199,6 +200,9 @@ tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach
     val status = providers.exec { commandLine("git", "status", "--porcelain") }.standardOutput.asText
     outputs.upToDateWhen { !recorded.get() }
     outputs.cacheIf { !recorded.get() }
+    // A render has a limit of its own, so the screens it adds do not use up the tests' limit.
+    val testLimit = timeout.get()
+    timeout.set(recorded.map { if (it) Duration.ofMinutes(30) else testLimit })
     doFirst {
         if (recorded.get()) {
             outputDir.get().asFile.deleteRecursively()

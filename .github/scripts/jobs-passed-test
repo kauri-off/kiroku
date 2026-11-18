@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Tests jobs-passed on made-up results.
+set -uo pipefail
+SRC=$(cd "$(dirname "$0")" && pwd)
+fails=0
+
+check() {
+  local event=$1 needs=$2 status=$3 out=$4 got rc
+  got=$("$SRC/jobs-passed" "$event" <<< "$needs" 2> /dev/null)
+  rc=$?
+  if [[ $rc != "$status" || $got != "$out" ]]; then
+    echo "FAIL: $event $needs: exit $rc, '$got'; expected exit $status, '$out'"
+    fails=$((fails + 1))
+  fi
+}
+
+all() { printf '{"tools":{"result":"%s"},"tests":{"result":"%s"},"screenshots":{"result":"%s"},"release":{"result":"%s"}}' "$@"; }
+
+check pull_request "$(all success success success skipped)" 0 ""
+check push "$(all success success success success)" 0 ""
+check push "$(all success success success skipped)" 1 "release skipped"
+check pull_request "$(all success success skipped skipped)" 1 "screenshots skipped"
+check pull_request "$(all success cancelled success skipped)" 1 "tests cancelled"
+check pull_request "$(all failure success success failure)" 1 "tools failure, release failure"
+check pull_request "$(all success success success cancelled)" 1 "release cancelled"
+check pull_request "not json" 2 ""
+
+if ((fails)); then exit 1; fi
+echo "jobs-passed: all cases pass"

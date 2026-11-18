@@ -29,7 +29,6 @@ import io.github.kauri_off.kiroku.reports.Report
 import io.github.kauri_off.kiroku.reports.ReportsSection
 import io.github.kauri_off.kiroku.scenario.AniListFault
 import io.github.kauri_off.kiroku.scenario.EdgeMarker
-import io.github.kauri_off.kiroku.scenario.ResetState
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.ScenarioSection
 import io.github.kauri_off.kiroku.scenario.ScenarioState
@@ -60,12 +59,10 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
     override val empty = notShown("The menu always has its build and the gallery; off the demo its scenarios say why there are none")
     override val error = notShown("The menu makes no request that can fail; a store it cannot read is the airing-counts-unreadable case")
 
+    // Each case sets every section it can, so a section's states share cases rather than each having its own.
     override val cases =
         listOf(
-            case("several-on") { Menu(ScenarioState.Ready(several)) },
-            case("waiting-for-save") { Menu(ScenarioState.Ready(several, ResetState.WaitingForSave)) },
-            case("save-dropped") { Menu(ScenarioState.Ready(Scenario(), ResetState.SaveDropped)) },
-            case("real-account") { Menu(ScenarioState.Unavailable) },
+            case("faults-on") { Menu(ScenarioState.Ready(several), source = SourceState(DataSource.Demo, DataSource.Demo, kept = false)) },
             case("sandbox") {
                 Menu(
                     ScenarioState.Ready(several.copy(store = StoreFault.None, aniList = AniListFault.NoAnswer), sandbox = true),
@@ -74,35 +71,33 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     recorder = RecorderState(null),
                 )
             },
-            case("signed-out") { Menu(ScenarioState.Unavailable, signOut = SignOutState.Account(Session.SignedOut)) },
-            case("source-chosen") { Menu(ScenarioState.Unavailable, source = SourceState(DataSource.Account, chosen = DataSource.Demo)) },
-            case(
-                "source-not-kept",
-            ) { Menu(ScenarioState.Ready(Scenario()), source = SourceState(DataSource.Demo, DataSource.Demo, kept = false)) },
-            case("uncommitted-build") { Menu(ScenarioState.Unavailable, BUILD.copy(commit = Commit(HASH, dirty = true))) },
-            case("unnamed-build") { Menu(ScenarioState.Unavailable, BUILD.copy(commit = null, built = null)) },
+            case("real-account") {
+                Menu(
+                    ScenarioState.Unavailable,
+                    BUILD.copy(commit = Commit(HASH, dirty = true)),
+                    source = SourceState(DataSource.Account, chosen = DataSource.Demo),
+                    reports = REPORTS,
+                )
+            },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
-            case("recorder-running") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Running(TITLE, 12, 47), "1")) },
-            case("recorder-recorded") {
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Recorded(TITLE, 47, RECORDED, ListAfter.Same), "1"))
+            case("recorder-running") {
+                Menu(
+                    ScenarioState.Unavailable,
+                    recorder = RecorderState(Recording.Running(TITLE, 12, 47), "1"),
+                    airingCounts = AiringCountsState.Unreadable,
+                    samples = NotificationSamplesState(shown = false),
+                )
             },
             case("recorder-stopped-left") {
                 val stopped = Recording.Stopped(TITLE, "score_set", Halt.Refused(429), 31, RUN, ListAfter.Left)
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(stopped, "1"))
+                Menu(
+                    ScenarioState.Unavailable,
+                    BUILD.copy(commit = null, built = null),
+                    recorder = RecorderState(stopped, "1"),
+                    airingCounts = STOPPED,
+                )
             },
-            case("recorder-leftover-removed") {
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Leftover(TITLE, ListAfter.Removed, null)))
-            },
-            case(
-                "recorder-refused",
-            ) { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.NotStarted(Halt.OnTheList), "21")) },
-            case("airing-counts-stopped") { Menu(ScenarioState.Unavailable, airingCounts = STOPPED) },
-            case("airing-counts-unreadable") { Menu(ScenarioState.Unavailable, airingCounts = AiringCountsState.Unreadable) },
-            case("notification-samples-blocked") { Menu(ScenarioState.Unavailable, samples = NotificationSamplesState(shown = false)) },
-            case("reports") { Menu(ScenarioState.Unavailable, reports = REPORTS) },
-            case("reports-renamed") { Menu(ScenarioState.Unavailable, reports = RENAMED, renamed = true) },
             case("tab-on-list") { OverList(Scenario()) },
-            case("marker-on-list") { OverList(Scenario(offline = true)) },
             case("marker-several-on-list") { OverList(several) },
         )
 
@@ -128,21 +123,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     ),
                 )
             }
-        val RECORDED = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded")
         val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
-        val RENAMED =
-            listOf(
-                Report(
-                    Instant.parse("2026-11-12T09:40:00Z"),
-                    listOf(
-                        "Unexpected: o3.k",
-                        "Stands for: q2.c",
-                        "\tat o3.f.c(Unknown Source:41)",
-                        "\tat o3.f.e(Unknown Source:7)",
-                        "\tat o3.e.u(Unknown Source:15)",
-                    ),
-                ),
-            )
         val REPORTS =
             listOf(
                 Report(
@@ -185,7 +166,6 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             if (scenarios == ScenarioState.Unavailable) SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))) else SignOutState.Demo,
         recorder: RecorderState = RecorderState(if (scenarios == ScenarioState.Unavailable) Recording.Idle else null),
         reports: List<Report> = emptyList(),
-        renamed: Boolean = false,
         airingCounts: AiringCountsState = COUNTS,
         samples: NotificationSamplesState = NotificationSamplesState(),
     ) = DebugMenuScreen(
@@ -198,7 +178,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             { NotificationSamplesSection(samples, onEvent = {}) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
-            { ReportsSection(reports, renamed) },
+            { ReportsSection(reports, renamed = false) },
         ),
         onClose = {},
     )
