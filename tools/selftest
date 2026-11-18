@@ -664,12 +664,22 @@ for c in crash anr dead behind nostart noactivity; do
 done
 
 # the build: a hung unit-test task fails by itself
-ok "every module's unit-test tasks have a time limit of 10 minutes" \
+ok "every module's unit-test tasks have a time limit of 10 minutes, and the app's render one of its own of 30" \
   'python3 -I - "$SRC/../build.gradle.kts" "$SRC"/../*/build.gradle.kts << "PY"
-import re, sys
-root, *modules = (open(p).read() for p in sys.argv[1:])
+import os, re, sys
+root = open(sys.argv[1]).read()
+modules = {os.path.basename(os.path.dirname(p)): open(p).read() for p in sys.argv[2:]}
 block = re.search(r"subprojects \{.*?tasks\.withType<Test>\(\)\.configureEach \{(.*?)\n    \}", root, re.S)
-sys.exit(not block or "timeout = Duration.ofMinutes(10)" not in block.group(1) or any("timeout" in m for m in modules))
+app = re.search(r"\ntasks\.withType<Test>\(\)\.matching \{ it\.name == \"testDebugUnitTest\" \}\.configureEach \{(.*?)\n\}", modules.get("app", ""), re.S)
+limits = [line.strip() for line in app.group(1).splitlines() if "timeout" in line or "testLimit" in line] if app else []
+own = ["val testLimit = timeout.get()", "timeout.set(recorded.map { if (it) Duration.ofMinutes(30) else testLimit })"]
+sys.exit(
+    not block
+    or "timeout = Duration.ofMinutes(10)" not in block.group(1)
+    or limits != own
+    or any("timeout" in text for name, text in modules.items() if name != "app")
+    or modules["app"].count("timeout") != 2
+)
 PY'
 
 # tools/q itself: every job below is a real unit of the systemd user manager that runs a fake command

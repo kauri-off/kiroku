@@ -387,7 +387,7 @@ jobs:
           status=0
           failed=$(.github/scripts/jobs-passed "$GITHUB_EVENT_NAME" <<< "$NEEDS") || status=$?
           echo "failed=$failed" >> "$GITHUB_OUTPUT"
-          if [ "$status" != 0 ]; then echo "::error::Not passed: ${failed:-the jobs' results could not be read}"; fi
+          if [ "$status" != 0 ]; then echo "::error::Not passed: ${failed:-the results of the jobs could not be read}"; fi
           exit "$status"
 
       # An open issue with this title says main fails; the next run of main that passes closes it.
