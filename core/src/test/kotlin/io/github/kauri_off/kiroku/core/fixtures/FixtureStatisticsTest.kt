@@ -41,6 +41,7 @@ class FixtureStatisticsTest {
         val statistics = Fixtures.reference.largeStatistics
         val total = statistics.statuses.total
         assertTrue(total > 10_000)
+        assertEquals(total, statistics.titleCount)
         assertEquals(total, statistics.mediaTypes.sumOf { it.count })
         assertEquals(total, statistics.years.values.sum())
         val scored = statistics.scores.values.sum()

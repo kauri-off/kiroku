@@ -70,8 +70,6 @@ class ListScreenshots : ScreenshotRegistry() {
             case("offline-cached", content = screen(ListFixtureStates.offlineCached, ListFixtureStates.offlineMessage)),
             case("signed-out", content = screen(ListFixtureStates.signedOut)),
             case("session-expired", content = screen(ListFixtureStates.sessionExpired)),
-            case("read-only", content = screen(ListFixtureStates.readOnly)),
-            case("read-only-by-score", content = screen(ListFixtureStates.readOnlyByScore)),
         )
 
     // "+1" completes the top title: its row fades out and the rows below close up, a change inside the list.

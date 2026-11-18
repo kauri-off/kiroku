@@ -97,6 +97,8 @@ class StoredPreferencesTest {
                 .also { scope.coroutineContext.job.cancelAndJoin() }
         }
 
+    private val opened = stringPreferencesKey("opened_profiles")
+
     private fun sort(status: String) = stringPreferencesKey("list_sort_$status")
 
     private fun direction(status: String) = stringPreferencesKey("list_direction_$status")
@@ -185,22 +187,56 @@ class StoredPreferencesTest {
     }
 
     @Test
-    fun `forgetting the list's sorts leaves every other choice, also for a new process, and a disk that fails it throws`() {
+    fun `forgetting the user's choices takes the sorts and the profiles opened and leaves the rest, and a disk that fails it throws`() {
         val score = TabSort(ListSort.Score, SortDirection.Ascending)
         val other = stringPreferencesKey("another_choice")
         written(other to "kept", sort("dropped") to "score", direction("dropped") to "ascending")
         process {
             it.setListSort(ListStatus.Completed, score)
+            it.updateOpenedProfiles { listOf("sample_viewer") }
             writesFail = true
-            assertTrue(runCatching { it.forgetListSorts() }.exceptionOrNull() is PreferencesFailure)
+            assertTrue(runCatching { it.forgetUsersChoices() }.exceptionOrNull() is PreferencesFailure)
             writesFail = false
             assertEquals(score, it.observeListSorts().first().getValue(ListStatus.Completed))
-            it.forgetListSorts()
+            it.forgetUsersChoices()
             assertEquals(defaults, it.observeListSorts().first())
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
         }
-        process { assertEquals(defaults, it.observeListSorts().first()) }
+        process {
+            assertEquals(defaults, it.observeListSorts().first())
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+        }
         assertEquals(mapOf<Preferences.Key<*>, Any>(Pair(other, "kept")), stored().asMap())
         assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `the profiles opened are kept in their order for a new process, each change made on the names kept`() {
+        process {
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+            it.updateOpenedProfiles { names -> listOf("b_two") + names }
+            it.updateOpenedProfiles { names -> listOf("a-one") + names }
+        }
+        process {
+            assertEquals(listOf("a-one", "b_two"), it.observeOpenedProfiles().first())
+            it.updateOpenedProfiles { emptyList() }
+        }
+        process { assertEquals(emptyList<String>(), it.observeOpenedProfiles().first()) }
+        assertEquals(emptyMap<Preferences.Key<*>, Any>(), stored().asMap())
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `profiles opened that the app would not open are none, are reported once, and the next one opened is kept`() {
+        written(opened to "sample_viewer\nnot a name")
+        process {
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+            assertEquals(emptyList<String>(), it.observeOpenedProfiles().first())
+            it.updateOpenedProfiles { names -> listOf("sample_viewer") + names }
+        }
+        process { assertEquals(listOf("sample_viewer"), it.observeOpenedProfiles().first()) }
+        assertEquals(1, reports.size)
+        assertTrue(reports.single() is PreferencesFailure)
     }
 
     @Test
@@ -274,7 +310,7 @@ class StoredPreferencesTest {
         process {
             it.writeNotificationSettings(chosen)
             it.setListSort(ListStatus.Completed, TabSort(ListSort.Score))
-            it.forgetListSorts()
+            it.forgetUsersChoices()
         }
         process { assertEquals(chosen, it.observeNotificationSettings().first()) }
         assertEquals(emptyList<Throwable>(), reports)

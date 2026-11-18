@@ -279,11 +279,13 @@ fun airingValueProblems(
         .map { "$name:${it + 1}: an airing value made outside :core: ${lines[it].trim()}" }
 }
 
-// A list's statistics are :core's: no constructor or copy of one, and no status counts but a title's from a source.
+// A list's statistics are :core's: no constructor or copy of one, no status counts but a title's from a source, and
+// no count made from the scores.
 private val statistic =
     Regex(
         """\b(UserStatistics|Counted)\s*(<[^>()]*>)?\s*\(|\bStatusCounts\s*(\.\s*Companion\s*)?(\.|::)\s*of\b|""" +
-            """\.copy\s*\(\s*(statuses|daysWatched|meanScore|scores|genres|mediaTypes|years|watching|completed|onHold|dropped|planned)\s*=""",
+            """\.copy\s*\(\s*(titleCount|statuses|daysWatched|episodesWatched|meanScore|scores|scored|genres|mediaTypes|years|watching|""" +
+            """completed|onHold|dropped|planned)\s*=|\bscores\s*\.\s*values\s*\.\s*(sum|sumOf|fold|reduce|count)\b""",
     )
 private val statusCounts = Regex("""\bStatusCounts\s*\(""")
 private val titleStatistics = Regex("""\bTitleStatistics\s*$""")
@@ -332,6 +334,24 @@ const val SHELL_VIEW_MODEL_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kir
 private val writerOrGraph = Regex("""\b\w*(Graph|ListRepository|ListEngine)\w*\b""")
 
 private val initBlock = Regex("""\binit\s*\{""")
+
+// Another user's list holds nothing that writes or downloads the person's list, posts a message that can act on it, or
+// asks the airing source; of the graph's list it takes the entries alone.
+val USER_LIST_SOURCES = setOf("UserListRoute.kt", "UserListViewModel.kt")
+
+private val writerOrAiring =
+    Regex(
+        """\b\w*(ListRepository|ListEngine|ListSource|ListWrite|ShellMessage|EditSheet|editSheet|Airing(Repository|Source))\w*\b""" +
+            """|\.airing\b|\.(sync|write)\s*\(|\bgraph\.list\b(?!\.observeEntries\(\))""",
+    )
+
+fun readOnlyListProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        writerOrAiring.find(line)?.let { "$name:${index + 1}: another user's list names ${it.value}: ${line.trim()}" }
+    }
 
 private val aliasOfWriterOrGraph = Regex("""\btypealias\s+\w+(\s*<[^>]*>)?\s*=\s*[\w.]*(AppGraph|ListRepository|ListEngine)\b""")
 

@@ -1,16 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_title">Profile</string>
     <string name="profile_settings">Settings</string>
     <string name="profile_joined">Joined\u00A0%1$d</string>
     <string name="profile_completed">Completed</string>
     <string name="profile_days_watched">Days watched</string>
     <string name="profile_mean_score">Mean score</string>
+    <string name="profile_titles">Titles</string>
+    <string name="profile_episodes">Episodes</string>
+    <string name="profile_scored">Scored</string>
     <string name="profile_no_mean_score_value" translatable="false">—</string>
     <string name="profile_no_mean_score">No mean score</string>
+    <string name="profile_by_status">By status</string>
+    <string name="profile_nothing_on_list">Nothing on the list yet</string>
     <string name="profile_score_distribution">Score distribution</string>
     <string name="profile_genres">Genres</string>
     <string name="profile_formats_and_years">Formats and years</string>
+    <string name="profile_scored_of">%1$s\u00A0of\u00A0%2$s scored</string>
+    <string name="profile_nothing_scored">Nothing scored</string>
+    <string name="profile_counted" translatable="false">%1$s\u00A0%2$s</string>
+    <string name="profile_year_range" translatable="false">%1$d–%2$d</string>
     <string name="profile_open_another">Open another profile</string>
     <string name="profile_view_list">View list</string>
     <string name="profile_signed_out">Sign in with MyAnimeList to see your profile here</string>
@@ -18,11 +26,6 @@
     <string name="profile_could_not_load">Could not load the profile</string>
     <string name="profile_private_list">This list is private</string>
     <string name="profile_unknown_user">MyAnimeList has no user with this name</string>
-    <string name="profile_loading_list">Loading %1$s\u00A0of\u00A0%2$s</string>
-    <plurals name="profile_loading_list_unknown_total">
-        <item quantity="one">%1$s\u00A0title loaded</item>
-        <item quantity="other">%1$s\u00A0titles loaded</item>
-    </plurals>
     <string name="profile_user_name">User name</string>
     <plurals name="profile_name_refused">
         <item quantity="one">Enter up to\u00A0%1$d\u00A0character (Latin letters, digits, _\u00A0and\u00A0-) or a MyAnimeList profile link</item>

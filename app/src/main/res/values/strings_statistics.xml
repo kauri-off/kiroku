@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="statistics_score_distribution">Score distribution</string>
+    <string name="statistics_genres">Genres</string>
+    <string name="statistics_formats_and_years">Formats and years</string>
+    <string name="statistics_formats">Formats</string>
+    <string name="statistics_years">Years</string>
+    <string name="statistics_decade">%1$ds</string>
+    <string name="statistics_mean_score">Mean score</string>
+    <string name="statistics_no_mean_score_value" translatable="false">—</string>
+    <string name="statistics_no_mean_score">No mean score</string>
+    <string name="statistics_scored">Scored</string>
+    <string name="statistics_unscored">Not scored</string>
+    <string name="statistics_score_spoken">Score\u00A0%1$d</string>
+    <plurals name="statistics_bar_spoken">
+        <item quantity="one">%1$s:\u00A0%2$s\u00A0title</item>
+        <item quantity="other">%1$s:\u00A0%2$s\u00A0titles</item>
+    </plurals>
+    <string name="statistics_nothing_scored">Nothing scored</string>
+    <string name="statistics_none_known">Not known for any title on the list</string>
+    <string name="statistics_nothing_on_list">Nothing on the list yet</string>
+    <string name="statistics_signed_out">Sign in with MyAnimeList to see your statistics here</string>
+    <string name="statistics_sign_in">Sign in</string>
+    <string name="statistics_could_not_load">Could not load the statistics</string>
+    <string name="statistics_private_list">This list is private</string>
+    <string name="statistics_unknown_user">MyAnimeList has no user with this name</string>
+</resources>

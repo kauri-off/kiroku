@@ -221,33 +221,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-08 The notification on the device.**
 
-- [ ] **M4-09 [A] The alarm and the moments the app runs.** In `:app`: M4-02's alarm port on the system's alarm
-  service, and everything that starts a run without a screen. The alarm is one-shot and is set so that it may fire
-  while the device idles; it is exact when the system lets the app set exact alarms and inexact otherwise; the
-  manifest declares `SCHEDULE_EXACT_ALARM` and not `USE_EXACT_ALARM` (section 5.1). A run is started by the alarm,
-  by a restart of the device, by an update of the app, by a change of the exact-alarm access, and by the app being
-  opened, which is also the first moment after a force-stop (N2, N8). Each keeps the process alive until its run
-  has ended, within the time the system gives it. The task settles, for M4-11 and M4-12 too, how work without a
-  screen is run and held, and brings into the build what that needs, with the reason in the pull request; nothing
-  of it uses the network or the database when the process starts. No code opens a system settings screen or asks
-  for a battery exemption. Where the system delays or drops an alarm (Doze, an app the user rarely opens, a
-  force-stop), nothing works around it: the hand-off says, from the documentation and from the emulator, what is
-  delayed and by how much, for M4-13 to tell the user. Read first, on developer.android.com:
-  `develop/background-work/services/alarms`, `training/monitoring-device-state/doze-standby`,
-  `topic/performance/appstandby` and `topic/performance/power/power-details`,
-  `develop/background-work/background-tasks/broadcasts` and its `…/broadcast-exceptions`,
-  `about/versions/14/changes/schedule-exact-alarms`, and the stopped state in
-  `about/versions/15/behavior-changes-all`.
-  **Needs:** M4-02, M4-06.
-  **Check:** tests: each trigger starts one run and is held until it ends; the alarm set is the one the engine
-  asked for, replacing the one before, and exact only with the access; a time-zone change sets no other alarm; the
-  build's check of what the manifest lets another app start names every new component, and none is exported that
-  the system's own broadcasts do not need. On an emulator of the current Android, each observation written down in
-  the hand-off: with the device forced idle as the Doze page's testing section says, an alarm set by the app's own
-  code fires and its run ends, after the delay measured; after a restart of the device the alarm is set again
-  before the app is opened; after a force-stop nothing fires, and opening the app sets it again; the exact-alarm
-  access taken away and given back changes the kind of alarm set, without the app being opened; the clock set past
-  the alarm's time starts the run. On M4-06's emulator the alarm is set and fires.
+- [x] **M4-09 [A] The alarm and the moments the app runs.**
 
 - [ ] **M4-10 Live notifications.** The live graph's notifications are M4-02's engine over M4-07's store, M4-08's
   notifications and M4-09's alarm and triggers, each source with its own record, built at its first use and off the
@@ -428,40 +402,11 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   **Needs:** nothing.
   **Check:** one composition is chosen; M6-12, M6-13 and M6-14 start from its prototype.
 
-- [ ] **M6-12 The Profile as chosen.** The Profile's stateless screen in the chosen composition, for the signed-in
-  user and for another, on fixture states with its screenshot registry, and drawn from M6-09's state in the app.
-  It is built once, on real state, and shown to the owner (section 9), within sections 6.2, 7.2, 8 and 10; Settings
-  still opens from it (section 6.3). Names opened earlier, where it offers them, are kept across restarts with the
-  person's other choices and forgotten at a sign-out. Its strings are in the Profile's file in both languages, and
-  a term it introduces enters the glossary.
-  **Needs:** M6-09, M6-11.
-  **Check:** the screen's screenshots are rendered in every variant, with a case for each state M6-09 can give:
-  loading, a list being read with and without a total, a private list, an unknown name, each failure, signed out,
-  the session expired, nothing on the list, a list of several thousand; the render's accessibility check passes;
-  `StringRulesTest` and M6-09's tests pass. The owner looks at it on his phone, on the demo and on his account.
+- [x] **M6-12 The Profile as chosen.**
 
-- [ ] **M6-13 Statistics views.** What the chosen composition shows of the statistics beyond the Profile's own
-  page, for the signed-in user and for another: stateless, on fixture states, each with its screenshot registry,
-  its route and its strings in a file of its own. Every number is the calculator's; one it lacks is added to the
-  calculator (M6-02). They are drawn with stock components and no chart library (sections 6.4 and 8.4); a genre and
-  a media type read as section 10 says. Built once, on real state, and shown to the owner (section 9).
-  **Needs:** M6-09, M6-11.
-  **Check:** the screenshots of each view in every variant, with cases for nothing scored, a single value, a list
-  of several thousand and the longest list of genres; the render's accessibility check passes; tests: the values
-  shown are the calculator's over the fixtures' list; opened from another user's profile they are that user's, from
-  the read their profile made; M6-02's rule test and `StringRulesTest` pass.
+- [x] **M6-13 Statistics views.**
 
-- [ ] **M6-14 Another user's list in the app.** The list of a named user, where the chosen composition has it,
-  from the read their profile made and no second one. It cannot be written: nothing on it edits, steps or removes,
-  and no code of it holds the list's writer. A row opens the title's page, which shows the person's own entry. Its
-  orders are `:core`'s, and an entry with a status the app does not know is on it (section 7.1). Nothing of another
-  user's list is sent to AniList (section 2.1). Built once, on real state, and shown to the owner (section 9).
-  **Needs:** M6-09, M6-11.
-  **Check:** tests: opened after the profile, the list causes no request; no event of the screen reaches a write;
-  a row opens its title with the person's own status; with a list of several thousand entries held, the work of
-  the frames of a fling is counted in the style of `ListFrameWorkTest`; opening the list asks AniList for nothing;
-  an entry of an unknown status is shown. The screenshots are rendered with a case for the longest tab and for an
-  empty one, and the render's accessibility check passes.
+- [x] **M6-14 Another user's list in the app.**
 
 - [ ] **M6-15 [O] Emulator run.** The orchestrator runs the preview build once on the emulator against the
   sandbox, signed in: the own profile shows the counts of the sandbox's list; the user with several thousand

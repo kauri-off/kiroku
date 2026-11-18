@@ -67,6 +67,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         manifestPlaceholders["appLabel"] = "@string/app_name"
+        testInstrumentationRunner = "io.github.kauri_off.kiroku.notify.RecordedRunsRunner"
         buildConfigField("String", "MAL_CLIENT_ID", "\"$malClientId\"")
     }
 
@@ -155,6 +156,8 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.process)
+    implementation(libs.work.runtime)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
@@ -175,6 +178,9 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.coil.test)
     testImplementation(libs.okhttp.mockwebserver3)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 val screenshotsRecorded =
@@ -1139,11 +1145,14 @@ val launcherActivity = "io.github.kauri_off.kiroku.MainActivity"
 val scenarioTile = "io.github.kauri_off.kiroku.scenario.ScenarioTile"
 val profileInstaller = "androidx.profileinstaller.ProfileInstallReceiver"
 val composePreview = "androidx.compose.ui.tooling.PreviewActivity"
+
+// Scheduled work's service, which the system's job scheduler alone may bind.
+val scheduledWork = "androidx.work.impl.background.systemjob.SystemJobService"
 val exportedBesidesTheRedirect =
     mapOf(
-        "release" to setOf(launcherActivity, profileInstaller),
-        "debug" to setOf(launcherActivity, profileInstaller, scenarioTile, composePreview),
-        "preview" to setOf(launcherActivity, profileInstaller, scenarioTile),
+        "release" to setOf(launcherActivity, profileInstaller, scheduledWork),
+        "debug" to setOf(launcherActivity, profileInstaller, scheduledWork, scenarioTile, composePreview),
+        "preview" to setOf(launcherActivity, profileInstaller, scheduledWork, scenarioTile),
     )
 
 // Every component of each build type's merged manifest, and what runs when the process starts: no initializer of the network.
@@ -1156,6 +1165,10 @@ val releaseComponents =
         profileInstaller,
         "androidx.room.MultiInstanceInvalidationService",
         "io.github.kauri_off.kiroku.notify.MarkWatchedReceiver",
+        "io.github.kauri_off.kiroku.notify.RunReceiver",
+        scheduledWork,
+        "androidx.work.impl.utils.ForceStopRunnable\$BroadcastReceiver",
+        "androidx.work.impl.background.systemalarm.RescheduleReceiver",
     )
 val debugMenu =
     setOf(
@@ -1175,13 +1188,15 @@ val startUpInitializers =
         "androidx.profileinstaller.ProfileInstallerInitializer",
     )
 
-// The network, whether the device is offline (section 2.3), notifications and androidx.core's guard of receivers registered unexported.
+// The network, the offline check (section 2.3), notifications, androidx.core's guard of unexported receivers, exact alarms (section 5.1), the restart.
 val releasePermissions =
     setOf(
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.POST_NOTIFICATIONS",
         ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
     )
 val declaredPermissions =
     mapOf(

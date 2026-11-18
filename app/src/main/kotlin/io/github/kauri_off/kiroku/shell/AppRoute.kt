@@ -15,8 +15,10 @@ import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.list.UserListRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
+import io.github.kauri_off.kiroku.profile.ProfileNotBuilt
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
 import io.github.kauri_off.kiroku.profile.ProfileRoute
@@ -29,6 +31,8 @@ import io.github.kauri_off.kiroku.signin.SignInRoute
 import io.github.kauri_off.kiroku.signin.SignInTurns
 import io.github.kauri_off.kiroku.signin.browse
 import io.github.kauri_off.kiroku.signin.signedIn
+import io.github.kauri_off.kiroku.statistics.StatisticsRoute
+import io.github.kauri_off.kiroku.statistics.statisticsPage
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -50,10 +54,7 @@ fun AppRoute(
     links: AppLinks? = null,
 ) {
     val messages = viewModel { ShellViewModel(graph.list) }.messages
-    val profiles = viewModel { OpenedProfiles() }
-    // Which profiles were opened is the signed-in user's, so a sign-out forgets it (S9).
-    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
-    LaunchedEffect(session) { if (session == Session.SignedOut) profiles.forget() }
+    val profiles = viewModel { OpenedProfiles(graph.preferences) }
     val covers = remember { MessageCovers() }
     ShownMessages(messages, snackbars, covers)
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
@@ -156,7 +157,24 @@ fun appEntries(
                 NotBuiltDestination(graph, Destination.Profile, signIn, snackbars)
             }
         }
-        entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
+        entry<ProfileNotBuiltKey> { key ->
+            val name = key.name
+            val page = key.statisticsPage
+            when {
+                key.screen == ProfileNotBuilt.UserList && name != null ->
+                    UserListRoute(
+                        name,
+                        graph,
+                        onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                        snackbars,
+                        openTitle,
+                        onBack = { back() },
+                        onSignIn = signIn,
+                    )
+                page != null -> StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
+                else -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
+            }
+        }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,

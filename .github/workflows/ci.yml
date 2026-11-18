@@ -202,7 +202,7 @@ jobs:
       # Only the registries render here; the tests job runs every other class. On a push the release job builds debug.
       - name: Format, lint, the screenshots and the debug build
         env:
-          DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug' || '' }}
+          DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug :app:assembleDebugAndroidTest' || '' }}
         run: .github/scripts/gradle --continue ktlintCheck lint $DEBUG_BUILD :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*Screenshots'
 
       - name: Name the runner image of the screenshots
