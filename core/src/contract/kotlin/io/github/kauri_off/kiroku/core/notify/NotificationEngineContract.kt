@@ -80,6 +80,9 @@ abstract class NotificationEngineContract {
     // A new, empty store, on a device that knows the titles of [NotifyCases].
     protected abstract fun store(scope: TestScope): NotificationStore
 
+    // Damages the record the last store keeps so that it reads as nobody's; false for a store that cannot be damaged.
+    protected open suspend fun damageRecord(): Boolean = false
+
     private val a = Session.SignedIn(SignInId("a"))
     private val b = Session.SignedIn(SignInId("b"))
 
@@ -1506,6 +1509,32 @@ abstract class NotificationEngineContract {
             assertNull(w.alarm.at.value)
             assertEquals(StoredNotifications(null, NotificationRecord()), w.inner.read())
             assertEquals(emptyList<SentNotification>(), w.sent())
+        }
+
+    @Test
+    fun `a record the store reads as nobody's is forgotten by the next run, which announces nothing twice and what comes later`() =
+        runTest {
+            val w = world()
+            w.pass(week(0).plus(hour))
+            assertEquals(listOf(title.id to 1), w.alerts)
+            if (!damageRecord()) return@runTest
+
+            w.engine.run(RunTrigger.AppUpdated)
+            runCurrent()
+            assertEquals(listOf(title.id to 1), w.alerts)
+            assertEquals(a.signIn, w.inner.read().owner)
+            assertEquals(week(1), w.alarm.at.value)
+
+            w.pass(week(1).plus(hour))
+            assertEquals(listOf(title.id to 1, title.id to 2), w.alerts)
+            assertEquals(
+                Announced(2, week(1)),
+                w
+                    .record()
+                    .titles
+                    .getValue(title.id)
+                    .announced,
+            )
         }
 
     @Test

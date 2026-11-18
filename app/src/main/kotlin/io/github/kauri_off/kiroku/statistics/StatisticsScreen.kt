@@ -1,25 +1,19 @@
 package io.github.kauri_off.kiroku.statistics
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -27,33 +21,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.UserStatistics
-import io.github.kauri_off.kiroku.core.user.UserListProgress
-import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.BarTitle
+import io.github.kauri_off.kiroku.design.component.ListReadProgress
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StatNumber
 import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.StateAction
-import io.github.kauri_off.kiroku.design.component.WAVY_INDICATOR
+import io.github.kauri_off.kiroku.design.component.headingRoom
+import io.github.kauri_off.kiroku.design.component.pageBlocks
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.text.genreName
 import io.github.kauri_off.kiroku.text.mediaTypeLabel
 import io.github.kauri_off.kiroku.title.countText
-import io.github.kauri_off.kiroku.title.scoreText
-import java.math.BigDecimal
-import java.math.RoundingMode
+import io.github.kauri_off.kiroku.title.meanScoreText
 
 // A statistics page of the signed-in user or of another, drawn from [state] alone. Its snackbars go to [snackbars],
 // the host the caller draws.
@@ -71,7 +59,7 @@ fun StatisticsScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(stringResource(state.page.title()), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = { BarTitle(stringResource(state.page.title())) },
                     navigationIcon = {
                         IconButton(onClick = { onEvent(StatisticsEvent.Back) }) {
                             Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
@@ -95,7 +83,7 @@ fun StatisticsScreen(
                     ),
                     body,
                 )
-            is StatisticsContent.Reading -> ListProgress(content.progress, body)
+            is StatisticsContent.Reading -> ListReadProgress(content.progress.loaded, content.progress.total, body)
             is StatisticsContent.Failed -> ScreenState(failedState(content.error, onEvent), body)
             is StatisticsContent.Shown ->
                 if (content.statistics.titleCount == 0) {
@@ -130,37 +118,6 @@ private fun failedState(
     }
 }
 
-// The counted wait of a long list, where the loading state would stand: the share read so far and the line under it.
-@Composable
-private fun ListProgress(
-    progress: UserListProgress,
-    modifier: Modifier,
-) {
-    val loaded = countText(progress.loaded)
-    val total = progress.total?.takeIf { it > 0 }
-    val line =
-        total?.let { stringResource(R.string.statistics_loading_list, loaded, countText(it)) }
-            ?: pluralStringResource(R.plurals.statistics_loading_list_unknown_total, progress.loaded, loaded)
-    Box(modifier.fillMaxSize().padding(horizontal = Spacing.l, vertical = Spacing.xl), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.widthIn(max = Sizes.messageMaxWidth).semantics(mergeDescendants = true) {},
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.l),
-        ) {
-            val indicator = Modifier.fillMaxWidth()
-            if (total != null) {
-                LinearWavyProgressIndicator(
-                    progress = { (progress.loaded.toFloat() / total).coerceIn(0f, 1f) },
-                    modifier = indicator.testTag(COUNTED_WAVY_INDICATOR),
-                )
-            } else {
-                LinearWavyProgressIndicator(indicator.testTag(WAVY_INDICATOR))
-            }
-            Text(line, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-        }
-    }
-}
-
 // The page's one column, as wide as content may be and clear of the bars, its lines in the Profile's rhythm.
 @Composable
 private fun Page(
@@ -181,12 +138,12 @@ private fun Page(
         contentAlignment = Alignment.TopCenter,
     ) {
         val columns = barColumns(groups.flatMap { it.bars }, minOf(maxWidth, Sizes.contentMaxWidth) - Spacing.l * 2)
-        val metrics = pageMetrics()
+        val heading = headingRoom()
         LazyColumn(
             modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
             contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
-            lines(groups.flatMap { it.lines(columns, metrics) })
+            pageBlocks(groups.flatMap { it.blocks(columns, heading) })
         }
     }
 }
@@ -245,7 +202,7 @@ private fun ScoreNumbers(statistics: UserStatistics) {
     val mean = statistics.meanScore
     StatNumbers(Modifier.padding(horizontal = Spacing.l), alignment = centre) {
         StatNumber(
-            value = mean?.let { scoreText(roundedHalfUp(it)) } ?: stringResource(R.string.statistics_no_mean_score_value),
+            value = mean?.let { meanScoreText(it) } ?: stringResource(R.string.statistics_no_mean_score_value),
             caption = stringResource(R.string.statistics_mean_score),
             spokenValue = if (mean == null) stringResource(R.string.statistics_no_mean_score) else null,
             horizontalAlignment = centre,
@@ -255,8 +212,4 @@ private fun ScoreNumbers(statistics: UserStatistics) {
     }
 }
 
-// The mean to two decimals, half up from the value as written in decimals, as MAL rounds its profile's numbers.
-internal fun roundedHalfUp(mean: Double): Double = BigDecimal.valueOf(mean).setScale(MEAN_DIGITS, RoundingMode.HALF_UP).toDouble()
-
 private const val HIGHEST_SCORE = 10
-private const val MEAN_DIGITS = 2

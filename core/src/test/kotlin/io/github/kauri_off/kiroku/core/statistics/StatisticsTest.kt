@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.StatusCounts
 import io.github.kauri_off.kiroku.core.model.Titles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Duration
 import java.time.Instant
@@ -77,8 +78,12 @@ class StatisticsTest {
             )
 
         assertEquals(StatusCounts(watching = 1, completed = 2, onHold = 1, dropped = 1, planned = 1), statistics.statuses)
+        assertEquals(6, statistics.titleCount)
+        assertEquals(5, statistics.scored)
+        assertEquals(1, statistics.unscored)
         // 12 × 24 + 1 × 120 + 6 × 24 + 1 × 30 + 0 × 24 + 4 × 15 = 642 minutes, a day being 1440.
         assertEquals(642.0 / 1440, statistics.daysWatched, 0.0)
+        assertEquals(12 + 1 + 6 + 1 + 0 + 4, statistics.episodesWatched)
         // (8 + 10 + 3 + 4 + 6) / 5: the Planned entry's score is in, the one entry without a score is left out.
         assertEquals(6.2, statistics.meanScore!!, 0.0)
         assertEquals(mapOf(3 to 1, 4 to 1, 6 to 1, 8 to 1, 10 to 1), statistics.scores)
@@ -91,9 +96,6 @@ class StatisticsTest {
         )
         assertEquals(mapOf(2015 to 1, 2019 to 1, 2020 to 3, 2021 to 1), statistics.years)
         assertEquals(listOf(Counted(2020, 4), Counted(2010, 2)), statistics.decades)
-        assertEquals(6, statistics.titleCount)
-        assertEquals(5, statistics.scored)
-        assertEquals(1, statistics.unscored)
     }
 
     @Test
@@ -102,15 +104,16 @@ class StatisticsTest {
 
         assertEquals(none, statistics.statuses)
         assertEquals(0.0, statistics.daysWatched, 0.0)
+        assertEquals(0, statistics.episodesWatched)
+        assertEquals(0, statistics.titleCount)
+        assertEquals(0, statistics.scored)
+        assertEquals(0, statistics.unscored)
         assertNull(statistics.meanScore)
         assertEquals(emptyMap<Int, Int>(), statistics.scores)
         assertEquals(emptyList<Counted<Genre>>(), statistics.genres)
         assertEquals(emptyList<Counted<MediaType>>(), statistics.mediaTypes)
         assertEquals(emptyMap<Int, Int>(), statistics.years)
         assertEquals(emptyList<Counted<Int>>(), statistics.decades)
-        assertEquals(0, statistics.titleCount)
-        assertEquals(0, statistics.scored)
-        assertEquals(0, statistics.unscored)
     }
 
     @Test
@@ -121,6 +124,7 @@ class StatisticsTest {
         assertEquals(2, scored.statuses.completed)
         assertEquals(12.0 * 24 / 1440, scored.daysWatched, 0.0)
 
+        assertEquals(2, scored.titleCount)
         assertEquals(1, scored.scored)
         assertEquals(1, scored.unscored)
 
@@ -137,6 +141,7 @@ class StatisticsTest {
             statisticsOf(listOf(entry(anime(minutes = null), watched = 10, score = 9), entry(anime(minutes = 24), watched = 5)))
 
         assertEquals(5.0 * 24 / 1440, statistics.daysWatched, 0.0)
+        assertEquals(15, statistics.episodesWatched)
         assertEquals(2, statistics.statuses.completed)
         assertEquals(mapOf(9 to 1), statistics.scores)
         assertEquals(listOf(Counted(MediaType.Tv, 2)), statistics.mediaTypes)
@@ -220,14 +225,17 @@ class StatisticsTest {
 
         assertEquals(StatusCounts(watching = 1, completed = 0, onHold = 0, dropped = 0, planned = 0), statistics.statuses)
         assertEquals((100.0 + 2 * 24) / 1440, statistics.daysWatched, 0.0)
+        assertEquals(3, statistics.episodesWatched)
+        // Counted in the titles as in the scores, so the titles scored are never more than the titles.
+        assertEquals(2, statistics.titleCount)
+        assertEquals(2, statistics.scored)
+        assertEquals(0, statistics.unscored)
+        assertTrue(statistics.scored <= statistics.titleCount)
         assertEquals(7.0, statistics.meanScore!!, 0.0)
         assertEquals(mapOf(5 to 1, 9 to 1), statistics.scores)
         assertEquals(listOf(Counted(comedy, 1), Counted(drama, 1)), statistics.genres)
         assertEquals(listOf(Counted(MediaType.Tv, 1), Counted(MediaType.Movie, 1)), statistics.mediaTypes)
         assertEquals(mapOf(1999 to 1, 2020 to 1), statistics.years)
-        assertEquals(2, statistics.titleCount)
-        assertEquals(2, statistics.scored)
-        assertEquals(0, statistics.unscored)
     }
 
     @Test
@@ -243,6 +251,7 @@ class StatisticsTest {
     fun `episodes are counted as the entry gives them, above the total too and below it when completed`() {
         val above = statisticsOf(listOf(entry(anime(minutes = 24, episodes = 12), ListStatus.Watching, 30)))
         assertEquals(30.0 * 24 / 1440, above.daysWatched, 0.0)
+        assertEquals(30, above.episodesWatched)
 
         val unknownTotal = statisticsOf(listOf(entry(anime(minutes = 24, episodes = null), ListStatus.Watching, 1100)))
         assertEquals(1100.0 * 24 / 1440, unknownTotal.daysWatched, 0.0)

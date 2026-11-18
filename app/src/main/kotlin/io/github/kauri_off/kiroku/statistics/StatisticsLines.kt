@@ -3,21 +3,16 @@ package io.github.kauri_off.kiroku.statistics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -27,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.LineOrStack
+import io.github.kauri_off.kiroku.design.component.PageBlock
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.title.countText
@@ -85,61 +81,30 @@ internal fun barColumns(
 // The least share of a line's width a bar keeps beside its label.
 private const val BAR_SHARE = 0.4f
 
-internal class PageMetrics(
-    // The blank room above a section header's title, and under it.
-    val heading: Dp,
-)
-
-@Composable
-internal fun pageMetrics(): PageMetrics {
-    val title =
-        with(LocalDensity.current) {
-            MaterialTheme.typography.titleMedium.lineHeight
-                .toDp()
-        }
-    return PageMetrics(maxOf((LocalMinimumInteractiveComponentSize.current - title) / 2, Dp.Hairline))
-}
-
-// A line of a page: [gap] is the room from the last line above to its first line, none for the next row of a
-// distribution; [lead] and [trail] are the blank room it carries above its first line and under its last one.
-internal class Line(
-    val gap: Dp?,
-    val lead: Dp,
-    val trail: Dp,
-    val content: @Composable () -> Unit,
-)
-
-// A new group and every heading are Spacing.xl under the line above, a heading's first line Spacing.m above its own.
-internal fun Group.lines(
+// A heading and a group are Spacing.xl under the line above, a group's first line Spacing.m under its heading, and
+// the lines of a distribution follow one another with the room each carries. Each part is keyed by its group and place.
+internal fun Group.blocks(
     columns: BarColumns,
-    metrics: PageMetrics,
-): List<Line> =
+    heading: Dp,
+): List<PageBlock> =
     buildList {
-        numbers?.let { add(Line(Spacing.xl, Dp.Hairline, Dp.Hairline, it)) }
-        heading?.let { add(Line(Spacing.xl, metrics.heading, metrics.heading) { SectionHeader(it) }) }
-        val first = if (heading == null) Spacing.xl else Spacing.m
+        numbers?.let { add(PageBlock(key to NUMBERS, Spacing.xl, content = it)) }
+        this@blocks.heading?.let { add(PageBlock(key to HEADING, Spacing.xl, lead = heading, trail = heading) { SectionHeader(it) }) }
+        val first = if (this@blocks.heading == null) Spacing.xl else Spacing.m
         if (bars.isEmpty()) {
-            nothing?.let { add(Line(first, Dp.Hairline, Dp.Hairline) { NothingLine(it) }) }
+            nothing?.let { add(PageBlock(key to NOTHING, first) { NothingLine(it) }) }
         } else {
             val lengths = barLengths(bars.map { it.count })
+            val inset = columns.inset
             bars.forEachIndexed { index, bar ->
-                add(Line(if (index == 0) first else null, columns.inset, columns.inset) { BarLine(bar, lengths[index], columns) })
+                add(PageBlock(key to index, if (index == 0) first else inset * 2, inset, inset) { BarLine(bar, lengths[index], columns) })
             }
         }
     }
 
-// The page's first line stands where the page starts, whatever room it carries above it.
-internal fun LazyListScope.lines(lines: List<Line>) {
-    lines.forEachIndexed { index, line ->
-        val space =
-            when {
-                index == 0 -> -line.lead
-                line.gap == null -> Dp.Hairline
-                else -> line.gap - lines[index - 1].trail - line.lead
-            }
-        item { Spaced(space, line.content) }
-    }
-}
+private const val NUMBERS = -1
+private const val HEADING = -2
+private const val NOTHING = -3
 
 // A bar measured against the largest value of its distribution, read out as the label and the count of titles.
 @Composable
@@ -199,27 +164,3 @@ private fun NothingLine(text: String) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
     )
 }
-
-// A space below zero lays the line over the blank room above its own first line.
-@Composable
-private fun Spaced(
-    space: Dp,
-    content: @Composable () -> Unit,
-) {
-    if (space >= Dp.Hairline) {
-        Column {
-            Spacer(Modifier.height(space))
-            content()
-        }
-    } else {
-        Column(Modifier.trimTop(-space)) { content() }
-    }
-}
-
-// Leaves out the top [amount] of the content's own room.
-private fun Modifier.trimTop(amount: Dp) =
-    layout { measurable, constraints ->
-        val trim = amount.roundToPx()
-        val placeable = measurable.measure(constraints)
-        layout(placeable.width, (placeable.height - trim).coerceAtLeast(0)) { placeable.place(0, -trim) }
-    }

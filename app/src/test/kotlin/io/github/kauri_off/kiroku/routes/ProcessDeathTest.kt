@@ -16,9 +16,11 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModelStore
@@ -34,6 +36,7 @@ import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.text.named
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -122,7 +125,8 @@ class ProcessDeathTest {
         }
         val other = Fixtures.reference.otherUserName
         compose.onNode(hasText("Profile") and hasClickAction()).performClick()
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNode(hasSetTextAction()).performTextReplacement(other)
         compose.onNode(hasText("Open") and hasClickAction()).performClick()
         compose.waitForIdle()
@@ -152,11 +156,13 @@ class ProcessDeathTest {
         val first = statistics.genres.first()
         val line = "${genreName(first.value)}:\u00A0${NumberFormat.getIntegerInstance(Locale.ENGLISH).format(first.count)}\u00A0titles"
         compose.onNode(hasText("Profile") and hasClickAction()).performClick()
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNode(hasSetTextAction()).performTextReplacement(other)
         compose.onNode(hasText("Open") and hasClickAction()).performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Genres").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasContentDescription("Genres", substring = true))
+        compose.onNodeWithContentDescription("Genres", substring = true).performClick()
         compose.waitForIdle()
         compose.onNodeWithContentDescription(line).assertExists()
 

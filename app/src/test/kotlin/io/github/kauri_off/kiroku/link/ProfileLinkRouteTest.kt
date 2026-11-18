@@ -5,13 +5,16 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.profile.ProfileTags
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -123,19 +126,22 @@ class ProfileLinkRouteTest {
     @Test
     fun `over another profile and the open dialog, a link opens its profile over the own Profile alone`() {
         click("Profile")
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
         click("Open another profile")
         assertTrue(compose.onAllNodes(isDialog()).fetchSemanticsNodes().isNotEmpty())
         link(set.privateUserName)
         assertTrue(compose.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty())
         link(other)
         onProfileOf(other)
-        assertTheOwnProfileAndTheListAreBeneath()
+        // The own Profile keeps its scroll, at its end.
+        assertTheOwnProfileAndTheListAreBeneath(ownProfile = "Open another profile")
     }
 
     // A configuration change keeps the open dialog and its text; only a link that leaves the screen closes it.
     @Test
     fun `the open dialog and its text survive a recreated activity`() {
         click("Profile")
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
         click("Open another profile")
         compose.onNode(hasSetTextAction()).performTextReplacement("sample_vie")
         recreate()

@@ -21,6 +21,7 @@ row. The owner is the final authority on the Russian column.
 | Undo | Undo | Отменить | Only for Undo. A dialog is dismissed with Cancel / «Отмена»; unsaved changes with Discard / Keep editing, «Не сохранять» / «Вернуться» |
 | Edit | Edit / Change | Изменить | A row's long press and its spoken action; the action of the "Added" snackbar |
 | The user's score | Your score / Not scored / Rate | Ваша оценка / Без оценки / Оценить | |
+| Titles with a score, counted | Scored / Not scored / 7 of 31 scored / Nothing scored | Оценено / Без оценки / Оценено 7 из 31 / Оценок нет | A profile's count: "scored" as in "Not scored", never "rated" |
 | MAL's score and rank | MAL score / #12, Rank | Оценка MAL / №12, Место | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). The title page's header captions `#12` with Rank |
 | MAL's score distribution | MAL scores / Score 10 | Оценки MAL / Оценка 10 | One score of it is spoken with the word, "Score 10" / «Оценка 10», never as the bare number |
 | The default sort | Up next | На очереди | |
@@ -61,12 +62,8 @@ Wording decided before its feature exists. A row leaves this table when its reso
 
 | Concept | English | Russian | Notes |
 |---|---|---|---|
-| Notification channel | New episodes | Новые серии | |
-| Notification text | Episode 16 aired / Episode 16 aired · 3 to watch | Вышла серия 16 / Вышла серия 16 · к просмотру: 3 | The second when several are unwatched |
-| Notification action | Mark ep. 14 watched | Отметить серию 14 | |
 | Action failed | Could not save · Open | Не удалось сохранить · Открыть | |
 | Progress, Android 11 and earlier | Saving… on the channel "Saving changes" | Сохранение… / Сохранение изменений | |
-| Notification summary | 3 new episodes | %d новая серия, новые серии, новых серий | |
 | Status panel | Upcoming / Recently sent | Ближайшие / Недавно отправленные | |
 | Sign out | Sign out | Выйти | |
 

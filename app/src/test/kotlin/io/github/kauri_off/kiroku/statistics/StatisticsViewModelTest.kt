@@ -78,7 +78,7 @@ class StatisticsViewModelTest {
             background,
             SavedStateHandle(),
             ShellMessages(foregroundScope(), list),
-            OpenedProfiles(),
+            OpenedProfiles(preferences),
         )
     }
 

@@ -20,18 +20,20 @@ fun StatNumber(
     spokenValue: String? = null,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
 ) {
+    // A caption that wraps keeps to the number's axis.
+    val align =
+        when (horizontalAlignment) {
+            Alignment.CenterHorizontally -> TextAlign.Center
+            Alignment.End -> TextAlign.End
+            else -> TextAlign.Start
+        }
     Column(modifier.semantics(mergeDescendants = true) {}, horizontalAlignment = horizontalAlignment) {
         Text(
             value,
             style = MaterialTheme.typography.titleLargeEmphasized,
+            textAlign = align,
             modifier = if (spokenValue == null) Modifier else Modifier.semantics { contentDescription = spokenValue },
         )
-        Text(
-            caption,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            // A caption that wraps stands on its number's axis.
-            textAlign = if (horizontalAlignment == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start,
-        )
+        Text(caption, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = align)
     }
 }

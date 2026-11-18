@@ -6,15 +6,19 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferencesFileSerializer
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.kauri_off.kiroku.core.link.isAcceptedUserName
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.notify.NotificationDelay
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.data.db.Codes
 import io.github.kauri_off.kiroku.data.db.listStatuses
@@ -84,19 +88,70 @@ class StoredPreferences internal constructor(
         }
     }
 
-    // The list's sorts are its owner's and go with them (S9); every other choice stays. A disk that fails this throws.
-    suspend fun forgetListSorts() {
+    override fun observeOpenedProfiles(): Flow<List<String>> = data.map(::openedOf).distinctUntilChanged()
+
+    override suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>) {
+        try {
+            store.edit { stored ->
+                val names = change(openedOf(stored))
+                if (names.isEmpty()) stored.remove(OPENED) else stored[OPENED] = names.joinToString(NAMES_APART)
+            }
+        } catch (e: IOException) {
+            unexpected(PreferencesFailure(e))
+        }
+    }
+
+    // The list's sorts and the profiles opened are the user's and go with them (S9); every other choice stays. A disk
+    // that fails this throws.
+    suspend fun forgetUsersChoices() {
         try {
             store.edit { stored ->
                 stored
                     .asMap()
                     .keys
-                    .filter { it.name.startsWith(SORT) || it.name.startsWith(DIRECTION) }
+                    .filter { it.name.startsWith(SORT) || it.name.startsWith(DIRECTION) || it == OPENED }
                     .forEach { stored -= it }
             }
         } catch (e: IOException) {
             throw PreferencesFailure(e)
         }
+    }
+
+    // Each of the three settings on its own: one that cannot be read is its default, reported once.
+    fun observeNotificationSettings(): Flow<NotificationSettings> =
+        data
+            .map { stored ->
+                val defaults = NotificationSettings()
+                NotificationSettings(
+                    on = choiceOf(stored, NOTIFY_ON, defaults.on) { it as? Boolean },
+                    alsoPlanned = choiceOf(stored, NOTIFY_ALSO_PLANNED, defaults.alsoPlanned) { it as? Boolean },
+                    delay = choiceOf(stored, NOTIFY_DELAY, defaults.delay) { (it as? String)?.let(delays.values::get) },
+                )
+            }.distinctUntilChanged()
+
+    // All three at once; a disk that fails this throws.
+    suspend fun writeNotificationSettings(settings: NotificationSettings) {
+        try {
+            store.edit { stored ->
+                stored[NOTIFY_ON] = settings.on
+                stored[NOTIFY_ALSO_PLANNED] = settings.alsoPlanned
+                stored[NOTIFY_DELAY] = delays.toColumn(settings.delay)
+            }
+        } catch (e: IOException) {
+            throw PreferencesFailure(e)
+        }
+    }
+
+    private fun <T> choiceOf(
+        stored: Preferences,
+        key: Preferences.Key<*>,
+        default: T,
+        read: (Any) -> T?,
+    ): T {
+        val value = stored.asMap()[key] ?: return default
+        val chosen = read(value)
+        if (chosen == null) unreadable(listOf(key.name to value))
+        return chosen ?: default
     }
 
     private fun sortOf(
@@ -127,6 +182,14 @@ class StoredPreferences internal constructor(
         return if ((towards == null) == (chosen.defaultDirection == null)) TabSort(chosen, towards) else null
     }
 
+    // Names the app would not open are not a list of opened profiles.
+    private fun openedOf(stored: Preferences): List<String> {
+        val value = stored.asMap()[OPENED] ?: return emptyList()
+        val names = (value as? String)?.split(NAMES_APART)?.takeIf { it.all(::isAcceptedUserName) }
+        if (names == null) unreadable(listOf(OPENED.name to value))
+        return names.orEmpty()
+    }
+
     private fun unreadable(stored: List<Pair<String, Any?>>) {
         val first = synchronized(reported) { reported.addAll(stored) }
         if (first) unexpected(PreferencesFailure(UnreadableChoice()))
@@ -137,6 +200,23 @@ class StoredPreferences internal constructor(
     private companion object {
         const val SORT = "list_sort_"
         const val DIRECTION = "list_direction_"
+        const val NAMES_APART = "\n"
+
+        val OPENED = stringPreferencesKey("opened_profiles")
+
+        val NOTIFY_ON = booleanPreferencesKey("notify_on")
+        val NOTIFY_ALSO_PLANNED = booleanPreferencesKey("notify_also_planned")
+        val NOTIFY_DELAY = stringPreferencesKey("notify_delay")
+
+        val delays =
+            Codes(NotificationDelay.entries) {
+                when (it) {
+                    NotificationDelay.None -> "none"
+                    NotificationDelay.HalfHour -> "half_hour"
+                    NotificationDelay.Hour -> "hour"
+                    NotificationDelay.ThreeHours -> "three_hours"
+                }
+            }
 
         fun sortKey(status: ListStatus) = stringPreferencesKey("$SORT${listStatuses.toColumn(status)}")
 

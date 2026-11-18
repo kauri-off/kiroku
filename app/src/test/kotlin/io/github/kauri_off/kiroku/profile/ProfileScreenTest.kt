@@ -17,7 +17,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.text.TextLayoutResult
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.title.roundedHalfUp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -35,6 +36,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.abs
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -60,17 +62,24 @@ class ProfileScreenTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("kiroku_demo").assertExists()
         compose.onNodeWithText("Joined\u00A02019").assertExists()
-        for (caption in listOf("Completed", "Days watched", "Mean score")) {
+        for (caption in listOf("Completed", "Days watched", "Mean score", "Titles", "Episodes", "Scored")) {
             compose.onAllNodesWithText(caption, useUnmergedTree = true).onFirst().assertExists()
         }
-        compose.onNodeWithText("24.4", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("7.43", useUnmergedTree = true).assertExists()
+        for (number in listOf("24.4", "7.43", "31", "1,468", "7")) compose.onNodeWithText(number, useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("By status").assertExists()
         for (status in listOf("Watching", "On hold", "Dropped", "Planned")) {
             compose.onNodeWithContentDescription(status, substring = true).assertExists()
         }
-        for (row in listOf("Score distribution", "Genres", "Formats and years")) compose.onNodeWithContentDescription(row).assertExists()
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
-        compose.onNodeWithContentDescription("View list").assertDoesNotExist()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        val rows =
+            listOf(
+                "Score distribution, 7\u00A0of\u00A031 scored",
+                "Genres, Fantasy, Comedy, Drama",
+                "Formats and years, TV\u00A023\u00A0· 2004–2027",
+            )
+        for (row in rows) compose.onNodeWithContentDescription(row).assertExists()
+        compose.onNodeWithText("Open another profile").performClick()
+        compose.onNodeWithText("View list").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").assertDoesNotExist()
         assertEquals(listOf(ProfileEvent.OpenSettings, ProfileEvent.StartOpenProfile()), events)
     }
@@ -82,19 +91,49 @@ class ProfileScreenTest {
         compose.onNodeWithTag(ProfileTags.avatar, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("Joined", substring = true, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Open another profile").assertDoesNotExist()
+        compose.onNodeWithText("Open another profile").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithContentDescription("Genres").performScrollTo().performClick()
-        compose.onNodeWithContentDescription("View list").performScrollTo().performClick()
-        assertEquals(listOf(ProfileEvent.Back, ProfileEvent.OpenStatistics(ProfileStatistics.Genres), ProfileEvent.ViewList), events)
+        compose.onNodeWithText("View list").performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasContentDescription("Genres", substring = true))
+        compose.onNodeWithContentDescription("Genres", substring = true).performClick()
+        assertEquals(listOf(ProfileEvent.Back, ProfileEvent.ViewList, ProfileEvent.OpenStatistics(ProfileStatistics.Genres)), events)
     }
 
     @Test
-    fun aListWithNothingOnItHasNoMeanScore() {
+    fun aListWithNothingOnItHasNoMeanScoreAndNothingToOpenButAnotherProfile() {
         show(fixtures.me(ProfileContent.Shown(fixtures.set.user, fixtures.nothing)))
         compose.onAllNodesWithText("0", useUnmergedTree = true).onFirst().assertExists()
         compose.onNodeWithText("0.0", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("No mean score", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Nothing on the list yet").assertExists()
+        compose.onNodeWithText("By status").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Genres", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Open another profile").assertExists()
+    }
+
+    @Test
+    fun aListWithNothingScoredSaysSo() {
+        show(fixtures.me(fixtures.nothingScored))
+        compose.onNodeWithContentDescription("No mean score", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Score distribution, Nothing scored").assertExists()
+    }
+
+    // A caption that wraps under a centred number keeps to the number's axis.
+    @Test
+    @Config(qualifiers = "ru-w360dp-h640dp-xhdpi", fontScale = 1.3f)
+    fun aWrappedCaptionUnderACentredNumberIsCentred() {
+        show(fixtures.of(fixtures.otherName, fixtures.otherFew))
+        val results = mutableListOf<TextLayoutResult>()
+        compose
+            .onNodeWithText("Дней просмотра", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult]
+            .action!!
+            .invoke(results)
+        val layout = results.single()
+        assertTrue(layout.lineCount > 1)
+        val centres = (0 until layout.lineCount).map { (layout.getLineLeft(it) + layout.getLineRight(it)) / 2 }
+        assertTrue("$centres", centres.all { abs(it - centres[0]) < 1f })
     }
 
     // The first node with [text]: the summary's, above the status bar of the same name.
@@ -140,7 +179,7 @@ class ProfileScreenTest {
     @Config(qualifiers = "ru-w360dp-h640dp-xhdpi", fontScale = 1.3f)
     fun noCaptionInTheRowBreaksInsideAWord() {
         show(fixtures.me())
-        for (caption in listOf("Просмотрено", "Дней просмотра", "Средняя оценка")) {
+        for (caption in listOf("Просмотрено", "Дней просмотра", "Средняя оценка", "Тайтлы", "Серии", "Оценено")) {
             val results = mutableListOf<TextLayoutResult>()
             compose
                 .onAllNodesWithText(caption, useUnmergedTree = true)

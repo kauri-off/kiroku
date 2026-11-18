@@ -217,35 +217,9 @@ missing from it; there are no duplicates.
 
 - [x] **M4-06 [O] An emulator of Android 8 to 11.**
 
-- [ ] **M4-07 Database: the record and the settings.** M4-02's store of the record in the database, as a real
-  migration (section 7.1) to the version after M6-05's, M4's only one; its settings in the source's preferences file.
-  The record is in tables of its own, which no download, refresh or list write touches, and from now on every
-  migration test starts from a database that holds announced episodes (N10).
-  **Needs:** M4-02.
-  **Check:** `./gradlew :data:testDebugUnitTest`: M4-02's contract passes over the store; the migration test takes a
-  database of each earlier version that holds a list, titles and airing data to the new version and finds every row
-  as it was; a test fails for a schema version whose migration is not run over announced episodes; a list download,
-  an airing refresh and a record write made together lose nothing; a setting written is read by a new store over the
-  same file, and one that cannot be read counts as never made and is reported. `./gradlew
-  :data:connectedDebugAndroidTest` passes on an emulator.
+- [x] **M4-07 Database: the record and the settings.**
 
-- [ ] **M4-08 The notification on the device.** M4-02's port for the notifications shown, on Android's own: an
-  episode's notification in its channel, one per title, grouped with the others; a tap opens the title page with
-  the List beneath it (section 6.3), also when the app was not running; the action is delivered to this app alone
-  and carries its title and the episode it marks; a later post for a title replaces the earlier one without
-  alerting again; a withdrawal removes it, and the group's summary with the last one. Its text comes from the
-  resources in the language in effect at the post, with the title in the preferred title language. What it says,
-  its icon and how the group reads are built once and shown to the owner (section 9): a tool of the debug menu
-  posts samples through the real channel, for one title, for several and for a title with more than one episode
-  unwatched. Read first, on developer.android.com: `develop/ui/compose/notifications/create-notification` and
-  `…/channels`, `develop/ui/views/notifications/group` and `…/navigation`.
-  **Needs:** M4-02, M4-06.
-  **Check:** tests: after posts, a replacement and withdrawals the notifications shown are exactly those the engine
-  asked for, and the summary exists only while one does; the tap's stack is List, then Title; the action's intent
-  names its title and episode and no other app can send or read it; under a Russian locale the text is Russian,
-  with its plural forms. On an emulator of the current Android and on M4-06's: the samples are in the shade as the
-  hand-off's screenshots show them, in both languages, and a tap on one with the app stopped opens the title page,
-  from which Back reaches the List.
+- [x] **M4-08 The notification on the device.**
 
 - [ ] **M4-09 [A] The alarm and the moments the app runs.** In `:app`: M4-02's alarm port on the system's alarm
   service, and everything that starts a run without a screen. The alarm is one-shot and is set so that it may fire
@@ -454,17 +428,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   **Needs:** nothing.
   **Check:** one composition is chosen; M6-12, M6-13 and M6-14 start from its prototype.
 
-- [ ] **M6-12 The Profile as chosen.** The Profile's stateless screen in the chosen composition, for the signed-in
-  user and for another, on fixture states with its screenshot registry, and drawn from M6-09's state in the app.
-  It is built once, on real state, and shown to the owner (section 9), within sections 6.2, 7.2, 8 and 10; Settings
-  still opens from it (section 6.3). Names opened earlier, where it offers them, are kept across restarts with the
-  person's other choices and forgotten at a sign-out. Its strings are in the Profile's file in both languages, and
-  a term it introduces enters the glossary.
-  **Needs:** M6-09, M6-11.
-  **Check:** the screen's screenshots are rendered in every variant, with a case for each state M6-09 can give:
-  loading, a list being read with and without a total, a private list, an unknown name, each failure, signed out,
-  the session expired, nothing on the list, a list of several thousand; the render's accessibility check passes;
-  `StringRulesTest` and M6-09's tests pass. The owner looks at it on his phone, on the demo and on his account.
+- [x] **M6-12 The Profile as chosen.**
 
 - [x] **M6-13 Statistics views.**
 

@@ -18,10 +18,9 @@ private val verbBefore =
         "list_progress",
         "list_progress_unknown_total",
         "gallery_progress",
-        "profile_loading_list",
-        "profile_loading_list_unknown_total",
-    ) +
-        setOf("statistics_loading_list", "statistics_loading_list_unknown_total")
+        "design_list_loading",
+        "design_list_loading_unknown_total",
+    )
 
 // An ordinary space between a number and the word, slash or colon next to it, where a line could break.
 fun numberSpaceProblems(

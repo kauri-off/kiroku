@@ -107,7 +107,7 @@ internal class LiveGraph(
     private val built = lazy { liveSession(parts) }
     private val account by built
     override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }) }
-    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetListSorts() } }
+    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
     override val scores by lazy { parts.scores }
