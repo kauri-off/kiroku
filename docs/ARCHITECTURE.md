@@ -636,7 +636,9 @@ only when rendered on the same machine.
   available" would fail the build whenever a library publishes a release.
 - **CI** (GitHub Actions, repository `kauri-off/kiroku`) runs on every pull request and push to `main` that changes
   more than documents, and checks every pull request's title as a conventional commit; its workflow files say what
-  it runs and keeps. What it builds for a pull request is built without any secret.
+  it runs and keeps. What it builds for a pull request is built without any secret. A pull request builds only the
+  debug variant; the release and preview builds, with R8 and their lint, run on the push to `main`, where a failure
+  is fixed forward.
 - **Release and distribution.** A version tag builds the release APK, with code and resource shrinking and with
   the MAL client id (section 3.3) taken from the repository secret `MAL_CLIENT_ID`, which is not a signing
   secret, and attaches it to a GitHub Release, where Obtainium can install it and keep it up to date. The build

@@ -13,26 +13,21 @@ concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The jobs run side by side and share compiled work through the build cache in the Gradle home that main saves.
 jobs:
-  build:
+  tools:
+    name: Queue self-test
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 15
     permissions:
       contents: read
-      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
 
-      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      # A pull request's checkout is the merge commit, whose first parent is its base; a push is compared with main
-      # before it, and when that commit is not in the checkout the self-test runs.
+      # A pull request is compared with its base, a push with main before it; with no such commit the self-test runs.
       - name: Whether the queue tools changed
         id: tools
         env:
@@ -58,6 +53,28 @@ jobs:
         env:
           KIROKU_SELFTEST_REQUIRE_Q: "1"
 
+      - name: Test the screenshot comparison and the check of the jobs' results
+        if: github.event_name == 'pull_request'
+        run: |
+          .github/scripts/changed-screenshots-test
+          .github/scripts/jobs-passed-test
+
+  tests:
+    name: Tests and the checks hung on them
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Install the SDK platform
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
 
@@ -65,16 +82,17 @@ jobs:
         with:
           cache-disabled: true
 
-      # The newest state main saved; only main saves.
+      # The newest state this job saved on main; only main saves.
       - name: Restore the Gradle home
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+          key: gradle-${{ runner.os }}-tests-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
           restore-keys: |
-            gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-
+            gradle-${{ runner.os }}-tests-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-
+            gradle-${{ runner.os }}-tests-
             gradle-${{ runner.os }}-
 
       # Robolectric fetches its Android jars from Maven Central while the tests run; main's newest set is restored.
@@ -86,20 +104,106 @@ jobs:
           key: robolectric-${{ runner.os }}-${{ github.sha }}
           restore-keys: robolectric-${{ runner.os }}-
 
-      # A push's debug build carries the client id, so it is built on its own; the release and preview builds run
-      # after the tests, which share the runner's cores with nothing. The summary names the memory in use at its peak.
-      - name: Format, Lint, tests and screenshots
+      # `test` also runs the release classes, dependencies and manifest checks, which need no R8.
+      - name: Tests
+        run: .github/scripts/gradle --continue test
+
+      - name: Test time by class
+        if: success() || failure()
+        run: .github/scripts/test-times . >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the test results
+        if: success() || failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          path: "*/build/test-results/*/TEST-*.xml"
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Keep the reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-tests
+          path: "*/build/reports/"
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Name Robolectric's Android jars
+        id: jars
+        if: github.event_name == 'push'
+        run: |
+          jars=~/.m2/repository/org/robolectric/android-all-instrumented
+          if [ -d "$jars" ]; then
+            echo "key=robolectric-$RUNNER_OS-$(ls "$jars" | sha256sum | cut -c 1-16)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Robolectric's Android jars
+        if: steps.jars.outputs.key != '' && steps.jars.outputs.key != steps.robolectric.outputs.cache-matched-key
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: ${{ steps.jars.outputs.key }}
+
+      - name: Save the Gradle home
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-tests-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+
+  screenshots:
+    name: Format, lint, screenshots and the debug build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install the SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-disabled: true
+
+      - name: Restore the Gradle home
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-screenshots-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+          restore-keys: |
+            gradle-${{ runner.os }}-screenshots-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-
+            gradle-${{ runner.os }}-screenshots-
+            gradle-${{ runner.os }}-
+
+      - name: Restore Robolectric's Android jars
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ github.sha }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      # Only the registries render here; the tests job runs every other class. On a push the release job builds debug.
+      - name: Format, lint, the screenshots and the debug build
         env:
           DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug' || '' }}
-        run: |
-          memory="$RUNNER_TEMP/memory"
-          while sleep 2; do awk '/^MemTotal/ { t = $2 } /^MemAvailable/ { a = $2 } END { print int((t - a) / 1024) }' /proc/meminfo; done > "$memory" &
-          sampler=$!
-          status=0
-          ./gradlew --continue ktlintCheck lint test recordRoborazziDebug $DEBUG_BUILD || status=$?
-          kill "$sampler"
-          echo "Memory in use at its peak: $(sort -n "$memory" | tail -n 1) of $(awk '/^MemTotal/ { print int($2 / 1024) }' /proc/meminfo) MiB" | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "$status"
+        run: .github/scripts/gradle --continue ktlintCheck lint $DEBUG_BUILD :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*Screenshots'
 
       - name: Name the runner image of the screenshots
         if: success() || failure()
@@ -117,9 +221,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Test the screenshot comparison
-        if: github.event_name == 'pull_request'
-        run: .github/scripts/changed-screenshots-test
+      - name: Render time by class
+        if: success() || failure()
+        run: .github/scripts/test-times . >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the render's test results
+        if: success() || failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshot-results
+          path: "*/build/test-results/*/TEST-*.xml"
+          if-no-files-found: ignore
+          retention-days: 14
 
       # A report, not a check: main's set is that of the run for the base commit, else main's newest green run.
       - name: Screenshots that differ from main's
@@ -147,30 +260,23 @@ jobs:
             echo "Main's screenshots are missing or expired, so none were compared." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Debug build with the client id
-        if: github.event_name == 'push'
-        env:
-          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
-        run: ./gradlew assembleDebug
-
-      - name: Release build with R8 and its guards, and the preview build
-        run: ./gradlew assembleRelease assemblePreview
-
-      - name: Name Robolectric's Android jars
-        id: jars
-        if: github.event_name == 'push'
-        run: |
-          jars=~/.m2/repository/org/robolectric/android-all-instrumented
-          if [ -d "$jars" ]; then
-            echo "key=robolectric-$RUNNER_OS-$(ls "$jars" | sha256sum | cut -c 1-16)" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Save Robolectric's Android jars
-        if: steps.jars.outputs.key != '' && steps.jars.outputs.key != steps.robolectric.outputs.cache-matched-key
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Keep the debug APK
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: ~/.m2/repository/org/robolectric
-          key: ${{ steps.jars.outputs.key }}
+          name: kiroku-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Keep the reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-screenshots
+          path: "*/build/reports/"
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Save the Gradle home
         if: github.event_name == 'push'
@@ -179,7 +285,54 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+          key: gradle-${{ runner.os }}-screenshots-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+
+  # A pull request builds only the debug variant; the release and preview builds run after the merge.
+  release:
+    name: Release, preview and debug builds
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install the SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-disabled: true
+
+      # The tests job's home holds the release compile; this job saves none of its own.
+      - name: Restore the Gradle home
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-tests-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-${{ github.sha }}
+          restore-keys: |
+            gradle-${{ runner.os }}-tests-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', '**/*.gradle.kts') }}-
+            gradle-${{ runner.os }}-tests-
+            gradle-${{ runner.os }}-
+
+      - name: Release build with R8 and its guards, and the preview build
+        run: .github/scripts/gradle assembleRelease assemblePreview
+
+      # Only this step sees the client id.
+      - name: Debug build with the client id
+        env:
+          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+        run: .github/scripts/gradle assembleDebug
 
       - name: Keep the debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -203,9 +356,55 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports
-          path: |
-            */build/reports/
-            */build/test-results/
+          name: reports-release
+          path: "*/build/reports/"
           if-no-files-found: ignore
           retention-days: 14
+
+  # The required check. It runs whatever the others ended in, since a skipped required check counts as passed.
+  build:
+    if: always()
+    needs: [tools, tests, screenshots, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github
+
+      - name: Every other job is one this job waits for
+        run: yq -o=json 'explode(.)' .github/workflows/ci.yml | jq -e '(.jobs | keys - ["build"] | sort) == (.jobs.build.needs | sort)'
+
+      - name: Every job passed
+        id: passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          status=0
+          failed=$(.github/scripts/jobs-passed "$GITHUB_EVENT_NAME" <<< "$NEEDS") || status=$?
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          if [ "$status" != 0 ]; then echo "::error::Not passed: ${failed:-the jobs' results could not be read}"; fi
+          exit "$status"
+
+      # An open issue with this title says main fails; the next run of main that passes closes it.
+      - name: Say whether main passes
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PASSED: ${{ steps.passed.outcome }}
+          FAILED: ${{ steps.passed.outputs.failed }}
+        run: |
+          title="CI fails on main"
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          open=$(gh issue list --state open --limit 100 --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ "$PASSED" != success ]; then
+            body="[The run]($run) of $GITHUB_SHA did not pass: ${FAILED:-see the run}."
+            if [ -n "$open" ]; then gh issue comment "$open" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "[The run]($run) of $GITHUB_SHA passes."
+          fi
