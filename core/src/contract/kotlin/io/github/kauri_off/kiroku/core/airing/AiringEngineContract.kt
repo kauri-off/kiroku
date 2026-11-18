@@ -1317,7 +1317,7 @@ abstract class AiringEngineContract {
             runCurrent()
 
             assertTrue(refresh.isCompleted)
-            assertTrue(waiting is IllegalStateException)
+            assertTrue("$waiting", waiting is IllegalStateException && waiting !is CancellationException)
             val refused = runCatching { s.engine.refresh() }.exceptionOrNull()
             assertTrue(refused is IllegalStateException)
             assertSame(null, s.unexpected.firstOrNull())

@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -2056,6 +2058,35 @@ abstract class ListEngineContract {
 
             assertEquals(Outcome.Success(Unit), first.await())
             assertEquals(20, s.shownWatched(anime))
+        }
+
+    // The scope's end reaches its children one at a time: the sync a caller of the same scope joined may end first.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a sync in the engine's own scope ends cancelled with it, also when the sync it waits for has ended first`() =
+        runTest {
+            val scope = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]))
+            val s = subject(scope = scope)
+            val before =
+                scope.coroutineContext.job.children
+                    .toSet()
+            var work = emptyList<Job>()
+            scope.coroutineContext.job.invokeOnCompletion(onCancelling = true) {
+                work.forEach { it.cancel() }
+                testScheduler.runCurrent()
+            }
+            val sync = scope.async { s.list.sync() }
+            runCurrent()
+            work =
+                scope.coroutineContext.job.children
+                    .filter { it !in before && it !== sync }
+                    .toList()
+            assertTrue(work.isNotEmpty())
+
+            scope.cancel()
+            runCurrent()
+
+            assertTrue("${sync.getCompletionExceptionOrNull()}", sync.getCompletionExceptionOrNull() is CancellationException)
         }
 
     @Test
