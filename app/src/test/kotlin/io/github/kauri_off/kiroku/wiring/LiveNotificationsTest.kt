@@ -17,7 +17,6 @@ import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.session.HeldBack
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -169,25 +168,6 @@ class LiveNotificationsTest {
             assertEquals(RunEnd.Done, report.end)
             assertEquals(listOf(BROKEN), unexpected.map { it.message })
             scope.coroutineContext.job.cancelAndJoin()
-        }
-
-    // A test ends its app's scope while work of that scope may still be asking for an area.
-    @Test
-    fun `an area first asked for once the source's scope has ended ends its caller as cancelled, and nothing is reported`() =
-        runBlocking {
-            val scope = CoroutineScope(SupervisorJob())
-            val graph = graph(scope)
-            scope.coroutineContext.job.cancelAndJoin()
-
-            for (ask in listOf<suspend () -> Unit>(
-                { graph.notifications.observeSettings().first() },
-                { graph.airing.observeSchedules().first() },
-            )) {
-                val asked = async { ask() }
-                asked.join()
-                assertTrue("${asked.getCompletionExceptionOrNull()}", asked.getCompletionExceptionOrNull() is CancellationException)
-            }
-            assertEquals(emptyList<Throwable>(), unexpected.toList())
         }
 
     private companion object {

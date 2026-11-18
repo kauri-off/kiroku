@@ -24,7 +24,6 @@ import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import okhttp3.Interceptor
@@ -97,15 +96,6 @@ internal class LiveParts(
 
     // The source's own database, named after it; built on its first use, which is off the main thread.
     val database by lazy { KirokuDatabase.open(context, notShown("${source.name}.db")) }
-
-    // An area at its first use. One that cannot be built because the scope has ended is that end, to whoever asked for it.
-    fun <T> built(area: Lazy<T>): T =
-        try {
-            area.value
-        } catch (e: IllegalStateException) {
-            scope.ensureActive()
-            throw e
-        }
 
     private companion object {
         val ANILIST_BLOCK = notShown("anilist.block")

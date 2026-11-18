@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 // The record and the settings of a live source's notifications: its own database's, and the choices in its one preferences file.
 internal fun liveNotificationStore(
@@ -68,8 +67,7 @@ internal class LiveNotifications(
             )
         }
 
-    private suspend fun engine(): NotificationEngine =
-        if (built.isInitialized()) built.value else withContext(Dispatchers.IO) { parts.built(built) }
+    private suspend fun engine(): NotificationEngine = built.onFirstUse(parts.scope)
 
     // The tokens are renewed beside the run, which calls MAL for nothing and so waits for nothing of it.
     override suspend fun run(trigger: RunTrigger): RunReport =

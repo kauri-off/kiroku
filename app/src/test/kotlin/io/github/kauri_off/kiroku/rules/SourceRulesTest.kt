@@ -582,6 +582,24 @@ class SourceRulesTest {
     }
 
     @Test
+    fun everyPartBuiltAtItsFirstUseIsBuiltByOnFirstUse() {
+        val shipped = shippedKotlinSources()
+        assertTrue(shipped.any { relative(it) == FIRST_USE_SOURCE })
+        assertEquals(emptyList<String>(), shipped.flatMap { firstUseProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun aPlantedFirstUseBuildFails() {
+        for (planted in listOf("withContext(Dispatchers.IO) { built.value }", "withContext(io) { part.value }")) {
+            assertEquals(planted, 1, firstUseProblems("A.kt", "val a = $planted\n").size)
+        }
+        for (allowed in listOf("built.onFirstUse(scope)", "withContext(Dispatchers.IO) { sandbox.reset() }")) {
+            assertEquals(allowed, emptyList<String>(), firstUseProblems("A.kt", "val a = $allowed\n"))
+        }
+        assertEquals(emptyList<String>(), firstUseProblems(FIRST_USE_SOURCE, "withContext(Dispatchers.IO) { value }\n"))
+    }
+
+    @Test
     fun everyTestThatStartsTheAppEndsIt() {
         val sources = appTestSources()
         val starting = sources.flatMap { classesStartingTheApp(it.readText()) }

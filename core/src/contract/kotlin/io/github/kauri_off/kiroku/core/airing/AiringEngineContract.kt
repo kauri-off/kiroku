@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -1283,13 +1284,19 @@ abstract class AiringEngineContract {
             val s = subject(scope = process)
             s.source.latency = 1.seconds
             s.clock.advance(20.minutes)
-            process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) { testScheduler.runCurrent() }
-            val refresh = process.async { s.engine.refresh() }
+            lateinit var refresh: Deferred<Outcome<Unit>>
+            var raced = false
+            process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) {
+                testScheduler.runCurrent()
+                raced = refresh.isCompleted
+            }
+            refresh = process.async { s.engine.refresh() }
             runCurrent()
 
             process.cancel()
             runCurrent()
 
+            assertTrue("the refresh ended before the scope's end reached it", raced)
             assertTrue(refresh.isCancelled)
             assertTrue("${refresh.getCompletionExceptionOrNull()}", refresh.getCompletionExceptionOrNull() is CancellationException)
             assertSame(null, s.unexpected.firstOrNull())
@@ -1317,7 +1324,7 @@ abstract class AiringEngineContract {
             runCurrent()
 
             assertTrue(refresh.isCompleted)
-            assertTrue(waiting is IllegalStateException)
+            assertTrue("$waiting", waiting is IllegalStateException && waiting !is CancellationException)
             val refused = runCatching { s.engine.refresh() }.exceptionOrNull()
             assertTrue(refused is IllegalStateException)
             assertSame(null, s.unexpected.firstOrNull())

@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import java.time.Instant
 
 // What the airing of a live source is built from: its source of episode times, its store and its list.
@@ -60,12 +59,9 @@ internal class LiveAiring(
     @Volatile
     private var opened = false
 
-    private suspend fun <T> onFirstUse(part: Lazy<T>): T =
-        if (part.isInitialized()) part.value else withContext(Dispatchers.IO) { parts.built(part) }
-
     // S9: the store is emptied at its first use while nobody is signed in, for a sign-out the process did not finish.
     private suspend fun store(): SignedInStore {
-        val store = onFirstUse(store)
+        val store = store.onFirstUse(parts.scope)
         if (!opened) {
             opening.withLock {
                 if (!opened) reported { store.forget() }
@@ -77,7 +73,7 @@ internal class LiveAiring(
 
     private suspend fun airing(): AiringRepository {
         store()
-        return onFirstUse(built)
+        return built.onFirstUse(parts.scope)
     }
 
     override fun observeAiring(): Flow<Map<AnimeId, Airing>> = flow { emitAll(airing().observeAiring()) }

@@ -39,6 +39,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -54,6 +55,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -1129,6 +1131,42 @@ abstract class NotificationEngineContract {
             assertEquals(listOf(false, true), w.sent().map { it.shown })
         }
 
+    // The scope's end reaches its children one at a time: the run's work in the scope may end before its caller hears of it.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a run asked in the engine's own scope ends cancelled with it, also when its work has ended first`() =
+        runTest {
+            val w = world()
+            w.source.latency = 30.seconds
+            w.clock.now = week(0)
+            w.alarm.gone()
+            val process = checkNotNull(w.process.scope)
+            val before =
+                process.coroutineContext.job.children
+                    .toSet()
+            var work = emptyList<Job>()
+            lateinit var run: Deferred<RunReport>
+            var raced = false
+            process.coroutineContext.job.invokeOnCompletion(onCancelling = true) {
+                work.forEach { it.cancel() }
+                testScheduler.runCurrent()
+                raced = run.isCompleted
+            }
+            run = process.async { w.engine.run(RunTrigger.Alarm) }
+            runCurrent()
+            work =
+                process.coroutineContext.job.children
+                    .filter { it !in before && it !== run }
+                    .toList()
+            assertTrue(work.isNotEmpty())
+
+            process.cancel()
+            runCurrent()
+
+            assertTrue("the run ended before the scope's end reached it", raced)
+            assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
+        }
+
     @Test
     fun `a changed setting is stored and given at once while a run is under way, and is followed when that run has ended`() =
         runTest {
@@ -1826,36 +1864,35 @@ abstract class NotificationEngineContract {
             assertEquals(listOf(title.id to 1), w.alerts)
         }
 
-    // The scope's end reaches its children one at a time, and work of that scope may run between two of them.
+    // The work of a run asked for once the scope is ending is cancelled as it is made, before its caller hears of the end.
     @OptIn(InternalCoroutinesApi::class)
     @Test
-    fun `a run asked for in the engine's own scope ends cancelled with it, also when asked for before the end has reached its caller`() =
+    fun `a run asked for in the engine's own scope while that scope is ending ends cancelled with it`() =
         runTest {
-            // The run is under way before the end, or asked for as another child hears of the end.
-            for (underWay in listOf(true, false)) {
-                val w = world()
-                w.source.latency = 30.seconds
-                w.clock.now = week(0)
-                val process = checkNotNull(w.process.scope)
-                val heard = CompletableDeferred<Unit>()
-                process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) {
-                    heard.complete(Unit)
-                    testScheduler.runCurrent()
-                }
-                val run =
-                    process.async {
-                        if (!underWay) heard.await()
-                        w.engine.run(RunTrigger.Alarm)
-                    }
-                runCurrent()
-
-                process.cancel()
-                runCurrent()
-
-                assertTrue(run.isCancelled)
-                assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
-                assertEquals(emptyList<Throwable>(), w.unexpected.toList())
+            val w = world()
+            w.clock.now = week(0)
+            val process = checkNotNull(w.process.scope)
+            val ending = CompletableDeferred<Unit>()
+            lateinit var run: Deferred<RunReport>
+            var raced = false
+            process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) {
+                ending.complete(Unit)
+                testScheduler.runCurrent()
+                raced = run.isCompleted
             }
+            run =
+                process.async {
+                    ending.await()
+                    w.engine.run(RunTrigger.Alarm)
+                }
+            runCurrent()
+
+            process.cancel()
+            runCurrent()
+
+            assertTrue("the run ended before the scope's end reached it", raced)
+            assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
+            assertEquals(emptyList<Throwable>(), w.unexpected.toList())
         }
 
     private companion object {

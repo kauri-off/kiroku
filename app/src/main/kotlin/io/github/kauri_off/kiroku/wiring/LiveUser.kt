@@ -16,7 +16,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
 import java.time.Instant
 
 // The profiles of a live source: the signed-in user's in its own database, other users' lists read with the client id alone.
@@ -38,14 +37,14 @@ internal fun ownProfileOf(
 // The own profile and its database are built at their first use, off the main thread; telling two names apart builds nothing.
 internal class LiveUser(
     lists: RemoteUserLists,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     private val unexpected: (Throwable) -> Unit,
     own: () -> MalOwnProfile,
 ) : UserRepository {
     private val keeper = UserListKeeper(lists, scope, unexpected)
     private val built = lazy(own)
 
-    private suspend fun own(): MalOwnProfile = if (built.isInitialized()) built.value else withContext(Dispatchers.IO) { built.value }
+    private suspend fun own(): MalOwnProfile = built.onFirstUse(scope)
 
     override fun observeOwnProfile(): Flow<UserProfile?> = flow { emitAll(own().observeOwnProfile()) }
 
