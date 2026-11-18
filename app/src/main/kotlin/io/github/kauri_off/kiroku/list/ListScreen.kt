@@ -336,8 +336,8 @@ private fun subtitleOf(state: ListState): String? {
         state.readingAgain && reading.loaded == 0 -> stringResource(R.string.list_reading_again)
         state.readingAgain && total != null -> stringResource(R.string.list_reading_again_count, loaded, countText(total))
         state.readingAgain -> stringResource(R.string.list_reading_again_so_far, loaded)
-        total != null -> stringResource(R.string.list_reading, loaded, countText(total))
-        else -> pluralStringResource(R.plurals.list_reading_unknown_total, reading.loaded, loaded)
+        total != null -> stringResource(R.string.design_list_loading, loaded, countText(total))
+        else -> pluralStringResource(R.plurals.design_list_loading_unknown_total, reading.loaded, loaded)
     }
 }
 

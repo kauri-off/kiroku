@@ -31,6 +31,8 @@ import io.github.kauri_off.kiroku.signin.SignInRoute
 import io.github.kauri_off.kiroku.signin.SignInTurns
 import io.github.kauri_off.kiroku.signin.browse
 import io.github.kauri_off.kiroku.signin.signedIn
+import io.github.kauri_off.kiroku.statistics.StatisticsRoute
+import io.github.kauri_off.kiroku.statistics.statisticsPage
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -157,18 +159,20 @@ fun appEntries(
         }
         entry<ProfileNotBuiltKey> { key ->
             val name = key.name
-            if (key.screen == ProfileNotBuilt.UserList && name != null) {
-                UserListRoute(
-                    name,
-                    graph,
-                    onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
-                    snackbars,
-                    openTitle,
-                    onBack = { back() },
-                    onSignIn = signIn,
-                )
-            } else {
-                ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
+            val page = key.statisticsPage
+            when {
+                key.screen == ProfileNotBuilt.UserList && name != null ->
+                    UserListRoute(
+                        name,
+                        graph,
+                        onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                        snackbars,
+                        openTitle,
+                        onBack = { back() },
+                        onSignIn = signIn,
+                    )
+                page != null -> StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
+                else -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
             }
         }
         entry<TitleKey> { key ->
