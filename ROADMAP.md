@@ -428,17 +428,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   **Needs:** nothing.
   **Check:** one composition is chosen; M6-12, M6-13 and M6-14 start from its prototype.
 
-- [ ] **M6-12 The Profile as chosen.** The Profile's stateless screen in the chosen composition, for the signed-in
-  user and for another, on fixture states with its screenshot registry, and drawn from M6-09's state in the app.
-  It is built once, on real state, and shown to the owner (section 9), within sections 6.2, 7.2, 8 and 10; Settings
-  still opens from it (section 6.3). Names opened earlier, where it offers them, are kept across restarts with the
-  person's other choices and forgotten at a sign-out. Its strings are in the Profile's file in both languages, and
-  a term it introduces enters the glossary.
-  **Needs:** M6-09, M6-11.
-  **Check:** the screen's screenshots are rendered in every variant, with a case for each state M6-09 can give:
-  loading, a list being read with and without a total, a private list, an unknown name, each failure, signed out,
-  the session expired, nothing on the list, a list of several thousand; the render's accessibility check passes;
-  `StringRulesTest` and M6-09's tests pass. The owner looks at it on his phone, on the demo and on his account.
+- [x] **M6-12 The Profile as chosen.**
 
 - [ ] **M6-13 Statistics views.** What the chosen composition shows of the statistics beyond the Profile's own
   page, for the signed-in user and for another: stateless, on fixture states, each with its screenshot registry,

@@ -26,7 +26,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
@@ -405,11 +404,12 @@ class AppRouteTest {
         app()
         click("Profile")
         shows("kiroku_demo")
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
         click("Open")
         shows("sample_viewer")
-        compose.onNodeWithContentDescription("View list").performScrollTo().performClick()
+        compose.onNodeWithText("View list").performClick()
         shows("sample_viewer's list")
         shows("Not available in this build yet")
         back()
@@ -424,12 +424,14 @@ class AppRouteTest {
     fun `a sign-out forgets the names opened earlier`() {
         app()
         click("Profile")
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
         click("Open")
         shows("Completed")
         back()
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         shows("Recent")
         click("Cancel")
         runBlocking { graph.session.signOut() }
@@ -443,7 +445,8 @@ class AppRouteTest {
     fun `opening the own name shows the own profile`() {
         app()
         click("Profile")
-        compose.onNodeWithContentDescription("Open another profile").performScrollTo().performClick()
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput("KIROKU_DEMO")
         click("Open")
         assertEquals(listOf<NavKey>(Destination.Profile.root), navigator.stackOf(Destination.Profile))
