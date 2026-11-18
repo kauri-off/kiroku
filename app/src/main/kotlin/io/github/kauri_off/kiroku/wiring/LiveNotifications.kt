@@ -26,12 +26,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 // The record and the settings of a live source's notifications: its own database's, and the choices in its one preferences file.
 internal fun liveNotificationStore(
     parts: LiveParts,
     preferences: StoredPreferences,
 ): NotificationStore = RoomNotificationStore(parts.database, preferences, Dispatchers.IO, parts.unexpected)
+
+// What a debug or preview build keeps of the engine's runs for its menu; a release build keeps nothing.
+interface KeptRuns {
+    fun keep(report: RunReport)
+
+    // A run asked for at [at] whose engine could not be built, so that it did nothing.
+    fun notBuilt(
+        trigger: RunTrigger,
+        at: Instant,
+    )
+
+    // S9: what was kept goes with the sign-in.
+    fun forget()
+}
 
 // A live source's notifications: the engine over its record, the system's alarm and the device's own, built at its first call.
 internal class LiveNotifications(
@@ -44,6 +59,8 @@ internal class LiveNotifications(
     store: () -> NotificationStore,
     // S7: renews the tokens that are due, by MAL's way in for work without a screen.
     private val renew: suspend () -> Unit,
+    // Hears of every run as it ends, and of a run whose engine could not be built.
+    private val reports: KeptRuns? = null,
 ) : NotificationsRepository,
     NotificationRuns {
     // A run has ended in this process: before one, what is stored may be of a sign-out its process did not finish (S9).
@@ -62,7 +79,10 @@ internal class LiveNotifications(
                 connection(),
                 parts.clock,
                 parts.scope,
-                reports = { ran = true },
+                reports = {
+                    ran = true
+                    reports?.keep(it)
+                },
                 unexpected = parts.unexpected,
             )
         }
@@ -74,7 +94,16 @@ internal class LiveNotifications(
         coroutineScope {
             val renewal = if (trigger == RunTrigger.AppOpened) launch { reported { renew() } } else null
             try {
-                engine().run(trigger)
+                val engine =
+                    try {
+                        engine()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        reports?.notBuilt(trigger, parts.clock.instant())
+                        throw e
+                    }
+                engine.run(trigger)
             } catch (e: Exception) {
                 // An engine that cannot be built or run does not take the renewal with it.
                 renewal?.join()
