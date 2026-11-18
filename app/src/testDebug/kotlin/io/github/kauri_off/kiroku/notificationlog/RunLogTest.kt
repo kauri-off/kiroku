@@ -67,7 +67,7 @@ class RunLogTest {
                 report(RunTrigger.Changed, AT.plusSeconds(60)),
             )
         val first = log()
-        reports.forEach(first)
+        reports.forEach(first::keep)
         val expected = reports.map(LoggedRun::of).asReversed()
         assertEquals(expected, first.runs.value)
         assertEquals(Duration.ofSeconds(3), expected[1].posted[0].delay)
@@ -81,10 +81,10 @@ class RunLogTest {
 
     @Test
     fun `runs of the new process come before those of the file, which is read before anything is written to it`() {
-        log().apply { this(report(RunTrigger.Alarm, AT)) }
+        log().apply { keep(report(RunTrigger.Alarm, AT)) }
         val queued = mutableListOf<Runnable>()
         val next = log(files = Executor(queued::add))
-        next(report(RunTrigger.AppOpened, AT.plusSeconds(60)))
+        next.keep(report(RunTrigger.AppOpened, AT.plusSeconds(60)))
         assertEquals(listOf(RunTrigger.AppOpened), next.runs.value.map { it.trigger })
 
         queued.forEach(Runnable::run)
@@ -96,7 +96,7 @@ class RunLogTest {
     @Test
     fun `the file is bounded at twice the limit, and the log holds the latest runs`() {
         val log = log(limit = 3)
-        repeat(20) { log(report(RunTrigger.entries[it % RunTrigger.entries.size], AT.plusSeconds(it * 60L))) }
+        repeat(20) { log.keep(report(RunTrigger.entries[it % RunTrigger.entries.size], AT.plusSeconds(it * 60L))) }
 
         assertEquals(3, log.runs.value.size)
         val inFile = file.readLines().count { it.startsWith("run ") }
@@ -106,10 +106,83 @@ class RunLogTest {
     }
 
     @Test
+    fun `the file stays bounded when each of many processes writes one run`() {
+        repeat(40) { log(limit = 3).keep(report(RunTrigger.entries[it % RunTrigger.entries.size], AT.plusSeconds(it * 60L))) }
+
+        val inFile = file.readLines().count { it.startsWith("run ") }
+        assertTrue("$inFile", inFile in 3..6)
+        assertEquals((37 until 40).map { AT.plusSeconds(it * 60L) }.reversed(), log(limit = 3).runs.value.map { it.began })
+    }
+
+    @Test
+    fun `a file over the bound is cut back when it is read, also with runs that cannot be read`() {
+        log(limit = 100).apply { repeat(10) { keep(report(RunTrigger.Alarm, AT.plusSeconds(it * 60L))) } }
+        file.appendText("run Sundial\n".repeat(10))
+
+        val runs = log(limit = 3).runs.value
+
+        assertEquals((7 until 10).map { AT.plusSeconds(it * 60L) }.reversed(), runs.map { it.began })
+        assertEquals(3, file.readLines().count { it.startsWith("run ") })
+    }
+
+    @Test
+    fun `forgotten, nothing it kept is shown or in the file, also what the file held before it was read`() {
+        log().keep(report(RunTrigger.Alarm, AT, listOf(sent(FixtureAnime.exactToWatch, 4, Duration.ofSeconds(3)))))
+        val queued = mutableListOf<Runnable>()
+        val next = log(files = Executor(queued::add))
+
+        next.forget()
+        next.keep(
+            RunReport(
+                RunTrigger.Changed,
+                AT.plusSeconds(60),
+                AT.plusSeconds(60),
+                RunEnd.SignedOut,
+                withdrawn = setOf(FixtureAnime.exactToWatch.id),
+            ),
+        )
+        queued.forEach(Runnable::run)
+
+        val kept =
+            listOf(
+                LoggedRun(
+                    RunTrigger.Changed,
+                    AT.plusSeconds(60),
+                    AT.plusSeconds(60),
+                    RunEnd.SignedOut,
+                    Recheck.NotAsked,
+                    emptyList(),
+                    emptyList(),
+                    null,
+                    false,
+                    forgotten = 1,
+                ),
+            )
+        assertEquals(kept, next.runs.value)
+        assertEquals(kept, log().runs.value)
+        assertFalse(file.readText(), "${FixtureAnime.exactToWatch.id.value}" in file.readText())
+        assertFalse(file.readText(), FixtureAnime.exactToWatch.titles.romaji in file.readText())
+    }
+
+    @Test
+    fun `a run whose engine could not be built is kept and read back as such`() {
+        log().notBuilt(RunTrigger.AppOpened, AT)
+
+        assertEquals(listOf(LoggedRun.notBuilt(RunTrigger.AppOpened, AT)), log().runs.value)
+        assertFalse(
+            log()
+                .runs.value
+                .single()
+                .built,
+        )
+        assertTrue(lines.single(), "not built" in lines.single())
+    }
+
+    @Test
     fun `a run the file holds that cannot be read is left out, and the rest are read`() {
         log().apply {
-            this(report(RunTrigger.Alarm, AT))
-            this(report(RunTrigger.AppOpened, AT.plusSeconds(60)))
+            keep(report(RunTrigger.Alarm, AT))
+            keep(report(RunTrigger.AppOpened, AT.plusSeconds(60)))
         }
         file.writeText(file.readText().replace("run Alarm", "run Sundial") + "run AppOpened yesterday\npost 1 2\n")
 
@@ -118,7 +191,7 @@ class RunLogTest {
 
     @Test
     fun `each run is one line of the device's log, with its trigger and each post's delay, and no title's name`() {
-        log()(report(RunTrigger.Alarm, posted = listOf(sent(FixtureAnime.exactToWatch, 4, Duration.ofMillis(1500), shown = false))))
+        log().keep(report(RunTrigger.Alarm, posted = listOf(sent(FixtureAnime.exactToWatch, 4, Duration.ofMillis(1500), shown = false))))
 
         val line = lines.single()
         assertTrue(line, "Alarm" in line)

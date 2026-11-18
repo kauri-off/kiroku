@@ -50,7 +50,7 @@ class NotificationLogSectionTest {
     // The runs of an earlier process, as the next one reads them from the file.
     private fun keptRuns(reports: List<RunReport>): List<LoggedRun> {
         val file = File(folder.root, "account.runs")
-        RunLog(file, files = Executor(Runnable::run), log = {}).apply { reports.forEach(this) }
+        RunLog(file, files = Executor(Runnable::run), log = {}).apply { reports.forEach(::keep) }
         return RunLog(file, files = Executor(Runnable::run), log = {}).runs.value
     }
 
@@ -69,8 +69,8 @@ class NotificationLogSectionTest {
             ),
             RunReport(
                 RunTrigger.DeviceRestarted,
-                AT.plusSeconds(7200),
-                AT.plusSeconds(7201),
+                AT.plusSeconds(7380),
+                AT.plusSeconds(7385),
                 RunEnd.Done,
                 posted =
                     listOf(
@@ -112,6 +112,47 @@ class NotificationLogSectionTest {
     }
 
     @Test
+    fun `a post before its notification time, by a clock set back between the two, says so`() {
+        val early = SentNotification(FixtureAnime.exactToWatch, 4, AT, AT, AT.minusSeconds(90), Recheck.NotAsked)
+        show(
+            NotificationLogState(
+                keptRuns(
+                    listOf(RunReport(RunTrigger.AppOpened, AT.minusSeconds(91), AT.minusSeconds(89), RunEnd.Done, posted = listOf(early))),
+                ),
+            ),
+        )
+
+        compose
+            .onNodeWithText(
+                "Sent: $title, episode\u00A04, 1\u00A0min\u00A030\u00A0s before its notification time",
+                substring = true,
+            ).assertExists()
+    }
+
+    @Test
+    fun `a run that found nobody signed in counts what it withdrew, and a run whose engine was not built says so`() {
+        val signedOut =
+            RunReport(
+                RunTrigger.Changed,
+                AT,
+                AT,
+                RunEnd.SignedOut,
+                withdrawn = setOf(FixtureAnime.exactToWatch.id, FixtureAnime.longTitle.id),
+            )
+        val file = File(folder.root, "account.runs")
+        RunLog(file, files = Executor(Runnable::run), log = {}).apply {
+            keep(signedOut)
+            notBuilt(RunTrigger.Alarm, AT.plusSeconds(60))
+        }
+        show(NotificationLogState(RunLog(file, files = Executor(Runnable::run), log = {}).runs.value))
+
+        compose.onNodeWithText("Withdrawn:\u00A02\u00A0titles", substring = true).assertExists()
+        compose.onNodeWithText("Nobody is signed in: everything was forgotten", substring = true).assertExists()
+        compose.onNodeWithText("The notification engine could not be built: nothing was done", substring = true).assertExists()
+        compose.onNodeWithText("The run failed", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `the latest runs are shown, and earlier ones on request`() {
         val runs = (0 until 31).map { LoggedRun.of(RunReport(RunTrigger.Changed, AT.minusSeconds(it * 60L), AT, RunEnd.Done)) }
         show(NotificationLogState(runs, shown = 30))
@@ -123,19 +164,19 @@ class NotificationLogSectionTest {
 
     @Test
     fun `on the sandbox an episode is planted the minutes typed ahead, and postponed only once one is planted`() {
-        show(NotificationLogState(emptyList(), plant = PlantState("Koori no Jouheki 2nd Season", null), minutes = "15"))
+        show(NotificationLogState(emptyList(), plant = PlantState(title, null), minutes = "15"))
 
         compose.onNodeWithText("Postpone at AniList").assertIsNotEnabled()
         compose.onNodeWithText("Plant an episode").performClick()
 
         assertEquals(listOf<NotificationLogEvent>(NotificationLogEvent.Plant), events)
-        compose.onNodeWithText("Plants the next episode of Koori no Jouheki 2nd Season", substring = true).assertExists()
+        compose.onNodeWithText("Plants the next episode of $title", substring = true).assertExists()
     }
 
     @Test
     fun `a postponed episode says its time at AniList and the time it was planted for`() {
         val planted = Planted(4, AT, AT.plus(Duration.ofMinutes(15)))
-        show(NotificationLogState(emptyList(), plant = PlantState("Koori no Jouheki 2nd Season", planted, PlantRefusal.Aired)))
+        show(NotificationLogState(emptyList(), plant = PlantState(title, planted, PlantRefusal.Aired)))
 
         compose.onNodeWithText("Episode\u00A04\u00A0airs", substring = true).assertExists()
         compose.onNodeWithText("at AniList, planted for", substring = true).assertExists()

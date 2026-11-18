@@ -12,7 +12,7 @@ import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
-import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -83,7 +83,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     runs =
                         NotificationLogState(
                             RUNS,
-                            plant = PlantState(SOON_TITLE, Planted(5, AT.plusSeconds(600), AT.plusSeconds(1500)), PlantRefusal.NoneLeft),
+                            plant = PlantState(PLANTED_TITLE, Planted(5, AT.plusSeconds(600), AT.plusSeconds(1500)), PlantRefusal.NoneLeft),
                             minutes = "15",
                         ),
                 )
@@ -104,7 +104,11 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     recorder = RecorderState(Recording.Running(TITLE, 12, 47), "1"),
                     airingCounts = AiringCountsState.Unreadable,
                     samples = NotificationSamplesState(shown = false),
-                    runs = NotificationLogState(RUNS.take(1), plant = PlantState(SOON_TITLE, Planted(4, AT.plusSeconds(300)))),
+                    runs =
+                        NotificationLogState(
+                            listOf(LoggedRun.notBuilt(RunTrigger.AppOpened, AT.plusSeconds(60))) + RUNS.take(1),
+                            plant = PlantState(PLANTED_TITLE, Planted(4, AT.plusSeconds(300))),
+                        ),
                 )
             },
             case("recorder-stopped-left") {
@@ -143,27 +147,29 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 )
             }
         val AT: Instant = Instant.parse("2026-11-12T09:30:00Z")
-        const val SOON_TITLE = "Koori no Jouheki 2nd Season"
-        val SOON_POST = LoggedPost(AnimeId(64534), SOON_TITLE, 4, AT, AT, AT.plusMillis(240), shown = true)
+        val PLANTED_TITLE = FixtureAnime.exactToWatch.titles.romaji
+
+        private fun post(
+            anime: Anime,
+            episode: Int,
+            notifyAt: Instant,
+            postedAt: Instant,
+            shown: Boolean = true,
+            delay: Duration = Duration.ZERO,
+        ) = LoggedPost(anime.id, anime.titles.romaji, episode, notifyAt.minus(delay), notifyAt, postedAt, shown)
+
+        // Runs the engine could have made, newest first: each post inside its run, after its notification time.
         val RUNS =
             listOf(
                 LoggedRun(
                     RunTrigger.Alarm,
-                    AT.plusMillis(10),
+                    AT,
                     AT.plusMillis(5400),
                     RunEnd.Done,
                     Recheck.Late,
                     listOf(
-                        SOON_POST,
-                        LoggedPost(
-                            AnimeId(61987),
-                            "Kusuriya no Hitorigoto 3rd Season",
-                            7,
-                            AT,
-                            AT.plusSeconds(1800),
-                            AT.plusSeconds(1803),
-                            false,
-                        ),
+                        post(FixtureAnime.exactToWatch, 4, AT, AT.plusMillis(5300)),
+                        post(FixtureAnime.longTitle, 7, AT, AT.plusMillis(5350), shown = false, delay = Duration.ofMinutes(30)),
                     ),
                     emptyList(),
                     AT.plusSeconds(604800),
@@ -176,7 +182,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     RunEnd.Done,
                     Recheck.NotAsked,
                     emptyList(),
-                    listOf(AnimeId(64534), AnimeId(21)),
+                    listOf(FixtureAnime.exactOnBreak.id, FixtureAnime.estimatedToWatch.id),
                     AT,
                     false,
                 ),
@@ -186,7 +192,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     AT.minusSeconds(3999),
                     RunEnd.Failed,
                     Recheck.NotAsked,
-                    listOf(SOON_POST.copy(postedAt = AT.plusSeconds(7384))),
+                    listOf(post(FixtureAnime.exactOnBreak, 2, AT.minusSeconds(4000 + 7380), AT.minusSeconds(4000).plusMillis(500))),
                     emptyList(),
                     null,
                     true,
@@ -203,7 +209,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     false,
                 ),
                 LoggedRun(
-                    RunTrigger.AppOpened,
+                    RunTrigger.Changed,
                     AT.minusSeconds(9000),
                     AT.minusSeconds(8999),
                     RunEnd.SignedOut,
@@ -212,6 +218,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     emptyList(),
                     null,
                     false,
+                    forgotten = 2,
                 ),
             )
 

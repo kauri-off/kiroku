@@ -34,6 +34,11 @@
     <string name="notification_log_recheck_offline">Re-check: no connection, stored data used</string>
     <string name="notification_log_signed_out">Nobody is signed in: everything was forgotten</string>
     <string name="notification_log_failed">The run failed</string>
+    <string name="notification_log_not_built">The notification engine could not be built: nothing was done</string>
+    <plurals name="notification_log_withdrawn_count">
+        <item quantity="one">Withdrawn:\u00A0%d\u00A0title</item>
+        <item quantity="other">Withdrawn:\u00A0%d\u00A0titles</item>
+    </plurals>
     <string name="notification_log_alarm">Next alarm %1$s</string>
     <string name="notification_log_no_alarm">No alarm set</string>
     <string name="notification_log_alarm_failed">The alarm could not be set</string>

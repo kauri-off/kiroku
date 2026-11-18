@@ -457,6 +457,32 @@ class SandboxNotificationsTest {
         assertEquals(emptyMap<AnimeId, Shown>(), shown())
     }
 
+    @Test
+    fun `a sign-out forgets the run log before its own run, which is the first kept, with no title of the sign-in before it (S9)`() {
+        val graph = started()
+        val aired = graph.announced()
+        assertTrue(
+            graph.runLog.runs.value
+                .any { run -> run.posted.any { it.anime == soon } },
+        )
+
+        waited { graph.session.signOut() }
+
+        val kept =
+            started()
+                .runLog
+                .also { it.stored() }
+                .runs.value
+        val first = kept.last()
+        assertEquals(RunTrigger.Changed, first.trigger)
+        assertEquals(RunEnd.SignedOut, first.end)
+        assertTrue("${first.forgotten}", first.forgotten >= 1)
+        assertTrue("$kept", kept.all { it.end == RunEnd.SignedOut && it.posted.isEmpty() && it.withdrawn.isEmpty() })
+        val file = File(context.noBackupFilesDir, "sandbox.runs").readText()
+        assertTrue(file, file.lines().filter { it.isNotEmpty() }.all { it.startsWith("run ") })
+        assertTrue(file, aired.anime.titles.romaji !in file)
+    }
+
     // What the app holds of the soon title's next notification, once it holds [at].
     private fun SandboxGraph.comingAt(at: Instant): Coming =
         waited { notifications.observeComing().first { coming -> coming?.any { it.anime.id == soon && it.notifyAt == at } == true } }!!

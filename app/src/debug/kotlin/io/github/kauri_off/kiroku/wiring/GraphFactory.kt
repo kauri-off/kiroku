@@ -65,7 +65,11 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
             val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
             // Gone with its process, as the demo is.
             val runs = RunLog(null)
-            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown, runs), scope, runs).also {
+            DemoGraph(
+                Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown, runs::keep),
+                scope,
+                runs,
+            ).also {
                 graph = it
             }
         }

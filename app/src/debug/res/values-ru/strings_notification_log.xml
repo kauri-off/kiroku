@@ -34,6 +34,13 @@
     <string name="notification_log_recheck_offline">Повторная проверка: нет соединения, использованы сохранённые данные</string>
     <string name="notification_log_signed_out">Никто не вошёл в аккаунт: всё забыто</string>
     <string name="notification_log_failed">Запуск не удался</string>
+    <string name="notification_log_not_built">Уведомления не удалось запустить: ничего не сделано</string>
+    <plurals name="notification_log_withdrawn_count">
+        <item quantity="one">Убрано:\u00A0%d\u00A0тайтл</item>
+        <item quantity="few">Убрано:\u00A0%d\u00A0тайтла</item>
+        <item quantity="many">Убрано:\u00A0%d\u00A0тайтлов</item>
+        <item quantity="other">Убрано:\u00A0%d\u00A0тайтла</item>
+    </plurals>
     <string name="notification_log_alarm">Следующий будильник %1$s</string>
     <string name="notification_log_no_alarm">Будильник не установлен</string>
     <string name="notification_log_alarm_failed">Будильник установить не удалось</string>

@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -243,10 +244,12 @@ private fun Run(
                         .joinToString(stringResource(R.string.notification_log_between))
                 add(stringResource(R.string.notification_log_withdrawn, titles))
             }
+            if (run.forgotten > 0) add(pluralStringResource(R.plurals.notification_log_withdrawn_count, run.forgotten, run.forgotten))
             recheck(run.recheck)?.let { add(it) }
-            end(run.end)?.let { add(it) }
+            if (run.built) end(run.end)?.let { add(it) }
             add(
                 when {
+                    !run.built -> stringResource(R.string.notification_log_not_built)
                     run.alarmFailed -> stringResource(R.string.notification_log_alarm_failed)
                     run.alarm != null -> stringResource(R.string.notification_log_alarm, time(run.alarm))
                     else -> stringResource(R.string.notification_log_no_alarm)

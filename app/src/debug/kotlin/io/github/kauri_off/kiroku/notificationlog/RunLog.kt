@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunReport
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.wiring.KeptRuns
 import io.github.kauri_off.kiroku.wiring.LOG_TAG
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,10 +48,15 @@ data class LoggedRun(
     val withdrawn: List<AnimeId>,
     val alarm: Instant?,
     val alarmFailed: Boolean,
+    // S9: how many titles a run that found nobody signed in withdrew, whose ids are not kept.
+    val forgotten: Int = 0,
+    // False for a run asked for whose engine could not be built, which did nothing.
+    val built: Boolean = true,
 ) {
     companion object {
-        fun of(report: RunReport) =
-            LoggedRun(
+        fun of(report: RunReport): LoggedRun {
+            val signedOut = report.end == RunEnd.SignedOut
+            return LoggedRun(
                 report.trigger,
                 report.began,
                 report.ended,
@@ -59,10 +65,17 @@ data class LoggedRun(
                 report.posted.map {
                     LoggedPost(it.anime.id, it.anime.titles.romaji, it.episode, it.airedAt, it.notifyAt, it.postedAt, it.shown)
                 },
-                report.withdrawn.sortedBy { it.value },
+                if (signedOut) emptyList() else report.withdrawn.sortedBy { it.value },
                 report.alarm,
                 report.alarmFailed,
+                forgotten = if (signedOut) report.withdrawn.size else 0,
             )
+        }
+
+        fun notBuilt(
+            trigger: RunTrigger,
+            at: Instant,
+        ) = LoggedRun(trigger, at, at, RunEnd.Failed, Recheck.NotAsked, emptyList(), emptyList(), null, false, built = false)
     }
 }
 
@@ -73,25 +86,48 @@ class RunLog(
     private val files: Executor = shared,
     // Each run as one line of the device's log as well, where a build that cannot be debugged is read from.
     private val log: (String) -> Unit = { Log.i(LOG_TAG, it) },
-) : (RunReport) -> Unit {
+) : KeptRuns {
     private val kept = MutableStateFlow(emptyList<LoggedRun>())
     val runs: StateFlow<List<LoggedRun>> = kept.asStateFlow()
 
-    // Runs in the file, which grows by appending until it holds twice the limit.
+    // Runs in the file, every one counted, also one that cannot be read; it grows by appending until it holds twice the limit.
     private var inFile = 0
+
+    // Forgotten since it was made: what the file held before is not shown again.
+    private var forgot = false
 
     init {
         if (file != null) {
             files.execute {
-                val stored = read(file)
-                synchronized(this) { kept.value = (kept.value + stored.asReversed()).take(limit) }
-                inFile = stored.size
+                val (stored, blocks) = read(file)
+                synchronized(this) { if (!forgot) kept.value = (kept.value + stored.asReversed()).take(limit) }
+                inFile = blocks
+                if (inFile > limit * 2) cut(file, stored)
             }
         }
     }
 
-    override fun invoke(report: RunReport) {
-        val run = LoggedRun.of(report)
+    override fun keep(report: RunReport) = add(LoggedRun.of(report))
+
+    override fun notBuilt(
+        trigger: RunTrigger,
+        at: Instant,
+    ) = add(LoggedRun.notBuilt(trigger, at))
+
+    override fun forget() {
+        synchronized(this) {
+            forgot = true
+            kept.value = emptyList()
+        }
+        if (file != null) {
+            files.execute {
+                file.delete()
+                inFile = 0
+            }
+        }
+    }
+
+    private fun add(run: LoggedRun) {
         synchronized(this) { kept.value = (listOf(run) + kept.value).take(limit) }
         log(line(run))
         if (file != null) files.execute { store(run, file) }
@@ -111,30 +147,35 @@ class RunLog(
     ) {
         try {
             file.appendText(written(run))
-            if (++inFile > limit * 2) {
-                val runs = read(file)
-                val next = File(file.path + NEXT)
-                next.writeText(runs.joinToString("", transform = ::written))
-                if (next.renameTo(file)) inFile = runs.size else next.delete()
-            }
+            if (++inFile > limit * 2) cut(file, read(file).first)
         } catch (_: IOException) {
         }
     }
 
-    // A file or a run that cannot be read gives no run; the device's log still has each one.
-    private fun read(file: File): List<LoggedRun> =
+    // The file cut back to the latest [runs] it holds.
+    private fun cut(
+        file: File,
+        runs: List<LoggedRun>,
+    ) {
+        try {
+            val next = File(file.path + NEXT)
+            next.writeText(runs.joinToString("", transform = ::written))
+            if (next.renameTo(file)) inFile = runs.size else next.delete()
+        } catch (_: IOException) {
+        }
+    }
+
+    // The latest runs the file holds and how many it holds; a file or a run that cannot be read gives no run.
+    private fun read(file: File): Pair<List<LoggedRun>, Int> =
         try {
             if (!file.exists()) {
-                emptyList()
+                emptyList<LoggedRun>() to 0
             } else {
-                (LINE + file.readText())
-                    .split(LINE + RUN)
-                    .drop(1)
-                    .mapNotNull(::parsed)
-                    .takeLast(limit)
+                val blocks = (LINE + file.readText()).split(LINE + RUN).drop(1)
+                blocks.mapNotNull(::parsed).takeLast(limit) to blocks.size
             }
         } catch (_: IOException) {
-            emptyList()
+            emptyList<LoggedRun>() to 0
         }
 
     companion object {
@@ -156,13 +197,28 @@ class RunLog(
         private val WITHDRAWN = notShown("withdrawn ")
         private val FAILED = notShown(" failed")
         private val NOT_SHOWN = notShown(" not shown")
+        private val NOT_BUILT = notShown(", the engine not built")
 
         // A run as lines of words: the run, each title it withdrew, then each post with the title's name ending its line.
         private fun written(run: LoggedRun): String =
             buildString {
-                with(
-                    run,
-                ) { append(RUN + listOf(trigger, began, ended, end, recheck, alarm ?: NONE, alarmFailed).joinToString(SPACE) + LINE) }
+                with(run) {
+                    append(
+                        RUN +
+                            listOf(
+                                trigger,
+                                began,
+                                ended,
+                                end,
+                                recheck,
+                                alarm ?: NONE,
+                                alarmFailed,
+                                forgotten,
+                                built,
+                            ).joinToString(SPACE) +
+                            LINE,
+                    )
+                }
                 run.withdrawn.forEach { append(WITHDRAWN + it.value + LINE) }
                 run.posted.forEach {
                     val words =
@@ -193,6 +249,8 @@ class RunLog(
                     lines.filter { it.startsWith(WITHDRAWN) }.map { AnimeId(it.removePrefix(WITHDRAWN).toLong()) },
                     words[5].takeIf { it != NONE }?.let(Instant::parse),
                     words[6].toBooleanStrict(),
+                    words[7].toInt(),
+                    words[8].toBooleanStrict(),
                 )
             } catch (_: IllegalArgumentException) {
                 null
@@ -229,9 +287,9 @@ class RunLog(
                 }
             val withdrawn = run.withdrawn.map { it.value }
             val alarm = (run.alarm ?: NONE).toString() + (if (run.alarmFailed) FAILED else "")
-            return notShown(
-                "Notification run: ${run.trigger} ${run.began} $took ms ${run.end} re-check ${run.recheck}; posted $posted; withdrawn $withdrawn; alarm $alarm",
-            )
+            val built = if (run.built) "" else NOT_BUILT
+            val head = notShown("Notification run: ${run.trigger} ${run.began} $took ms ${run.end}$built re-check ${run.recheck}")
+            return head + notShown("; posted $posted; withdrawn $withdrawn and ${run.forgotten} forgotten; alarm $alarm")
         }
     }
 }
