@@ -220,21 +220,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-12 "Mark watched" from the notification.**
 
-- [ ] **M4-13 Notification settings in the app.** M4-05's screen over M4-02's surface: its route and view model,
-  opened from Profile's settings. The device's states (the notification permission, exact alarms, the battery
-  restriction) are read when the screen is shown and again whenever the user comes back to it; each has a link to
-  its system screen, opened only by the user's tap, and none asks for a battery exemption (section 5.1). A changed
-  setting is followed at once (N5, N8). The test notification goes through the real channel. The screen says what
-  the system delays or drops, as M4-09 found it. Read first, on developer.android.com:
-  `develop/ui/compose/notifications/notification-permission`, the exact-alarm access in
-  `develop/background-work/services/alarms`, and the restricted bucket in `topic/performance/appstandby`.
-  **Needs:** M4-05, M4-10.
-  **Check:** tests: turning notifications off withdraws what is posted and clears the alarm, and turning them on
-  announces nothing from before; a changed delay moves the alarm; the states shown are the device's after the
-  screen is shown again; no system screen opens without a tap; the screen's screenshots are rendered. On an
-  emulator of the current Android: with the notification permission taken away the screen says so, its link opens
-  the system's screen for this app's notifications, and after a grant there and a return the state is updated and
-  the test notification arrives; the same for the exact-alarm access.
+- [x] **M4-13 Notification settings in the app.**
 
 - [ ] **M4-14 The permission prompt.** On Android 13 and later the app asks for the notification permission with
   the system's own prompt, with no dialog of its own before it. When and on which screen it asks is built once and

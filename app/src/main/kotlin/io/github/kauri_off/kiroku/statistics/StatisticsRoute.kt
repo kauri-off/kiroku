@@ -43,5 +43,5 @@ val ProfileNotBuiltKey.statisticsPage: StatisticsPage?
             ProfileNotBuilt.ScoreDistribution -> StatisticsPage.Scores
             ProfileNotBuilt.Genres -> StatisticsPage.Genres
             ProfileNotBuilt.FormatsAndYears -> StatisticsPage.FormatsAndYears
-            ProfileNotBuilt.Settings, ProfileNotBuilt.UserList -> null
+            ProfileNotBuilt.UserList -> null
         }

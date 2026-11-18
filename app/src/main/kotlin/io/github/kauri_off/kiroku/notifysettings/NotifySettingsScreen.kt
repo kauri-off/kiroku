@@ -87,6 +87,11 @@ fun NotifySettingsScreen(
         when (val content = state.content) {
             NotifySettingsContent.Loading -> ScreenState(ScreenState.Loading, Modifier.padding(padding))
             is NotifySettingsContent.Shown -> Shown(content, rememberAirTimeText(state.now), onEvent, padding)
+            is NotifySettingsContent.Failed ->
+                ScreenState(
+                    ScreenState.Error(stringResource(R.string.notify_settings_could_not_load)) { onEvent(NotifySettingsEvent.Retry) },
+                    Modifier.padding(padding),
+                )
         }
     }
 }
@@ -255,12 +260,13 @@ private fun LazyListScope.upcoming(
             )
             when {
                 !on -> Message(R.string.notify_settings_off)
+                record.upcoming == null -> Message(R.string.notify_settings_upcoming_unknown)
                 record.upcoming.isEmpty() -> Message(R.string.notify_settings_upcoming_none)
             }
         }
     }
     if (on) {
-        items(record.upcoming) { coming ->
+        items(record.upcoming.orEmpty()) { coming ->
             TitleRow(coming.title, listOf(times.nextEpisode(coming.episode, coming.notifyAt))) {
                 onEvent(NotifySettingsEvent.OpenTitle(coming.id))
             }
@@ -269,7 +275,7 @@ private fun LazyListScope.upcoming(
 }
 
 private fun LazyListScope.sent(
-    sent: List<SentNotification>,
+    sent: List<SentEntry>,
     times: AirTimeText,
     onEvent: (NotifySettingsEvent) -> Unit,
 ) {
@@ -286,7 +292,7 @@ private fun LazyListScope.sent(
                 stringResource(R.string.notify_settings_sent_episode, one.episode, times.pastTime(one.airedAt)),
                 one.recheck.text()?.let { stringResource(R.string.notify_settings_sent_at_checked, sentAt, stringResource(it)) }
                     ?: stringResource(R.string.notify_settings_sent_at, sentAt),
-            )
+            ) + listOfNotNull(stringResource(R.string.notify_settings_sent_not_shown).takeUnless { one.shown })
         TitleRow(one.title, lines) { onEvent(NotifySettingsEvent.OpenTitle(one.id)) }
     }
 }
@@ -377,19 +383,10 @@ private fun ExactAlarms.health(): Health = if (this == ExactAlarms.NotAllowed) H
 private fun ExactAlarms.text(): Int =
     if (this == ExactAlarms.NotAllowed) R.string.notify_settings_exact_alarms_not_allowed else R.string.notify_settings_exact_alarms_allowed
 
-private fun BatteryUse.health(): Health =
-    when (this) {
-        BatteryUse.Unrestricted -> Health.Fine
-        BatteryUse.RarelyUsed -> Health.Late
-        BatteryUse.Restricted -> Health.Broken
-    }
+private fun BatteryUse.health(): Health = if (this == BatteryUse.Restricted) Health.Late else Health.Fine
 
 private fun BatteryUse.text(): Int =
-    when (this) {
-        BatteryUse.Unrestricted -> R.string.notify_settings_battery_unrestricted
-        BatteryUse.RarelyUsed -> R.string.notify_settings_battery_rarely_used
-        BatteryUse.Restricted -> R.string.notify_settings_battery_restricted
-    }
+    if (this == BatteryUse.Restricted) R.string.notify_settings_battery_restricted else R.string.notify_settings_battery_unrestricted
 
 private fun NotificationDelay.label(): Int =
     when (this) {

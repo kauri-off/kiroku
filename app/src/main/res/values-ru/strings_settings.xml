@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Настройки</string>
+    <string name="settings_notifications">Уведомления</string>
+    <string name="settings_notifications_detail">Новые серии и что разрешает это устройство</string>
+</resources>

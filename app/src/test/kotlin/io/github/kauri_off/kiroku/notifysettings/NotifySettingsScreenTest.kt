@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.Recheck
 import io.github.kauri_off.kiroku.design.composeRule
@@ -75,8 +76,8 @@ class NotifySettingsScreenTest {
         show(fixtures.state(device = DeviceState(NotificationAccess.Blocked, ExactAlarms.NotAllowed, BatteryUse.Restricted)))
         assertEquals(emptyList<NotifySettingsEvent>(), events)
         compose.onNodeWithContentDescription("Blocked in Android settings", substring = true).performClick()
-        compose.onNodeWithContentDescription("Not allowed: notifications may come late", substring = true).performClick()
-        compose.onNodeWithContentDescription("Restricted: notifications may not come", substring = true).performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Not allowed: notifications may come up to an hour late", substring = true).performClick()
+        compose.onNodeWithContentDescription("Restricted in Android settings", substring = true).performScrollTo().performClick()
         compose.onNodeWithText("Send a test notification").performScrollTo().performClick()
         assertEquals(
             DeviceSetting.entries.map { NotifySettingsEvent.OpenSetting(it) } + NotifySettingsEvent.SendTest,
@@ -115,5 +116,28 @@ class NotifySettingsScreenTest {
             ).assertExists()
         compose.onNodeWithContentDescription("not checked: offline", substring = true).performClick()
         assertEquals(listOf<NotifySettingsEvent>(NotifySettingsEvent.OpenTitle(sent.id)), events)
+    }
+
+    @Test
+    fun aSentNotificationTheDeviceDidNotShowSaysSo() {
+        val sent = fixtures.sent.first()
+        show(fixtures.state(record = fixtures.record.copy(sent = listOf(sent.copy(shown = false)))))
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Not shown: notifications were turned off"))
+        compose.onNodeWithContentDescription("Not shown: notifications were turned off", substring = true).assertExists()
+    }
+
+    @Test
+    fun whatComesNextBeforeTheEngineHasWorkedItOutIsNotKnownYet() {
+        show(fixtures.state(record = fixtures.record.copy(upcoming = null)))
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Not known yet"))
+        compose.onNodeWithText("No title on your list has a known next episode").assertDoesNotExist()
+    }
+
+    @Test
+    fun settingsThatCannotBeReadOfferRetry() {
+        show(fixtures.state(NotifySettingsContent.Failed(DataError.StorageError)))
+        compose.onNodeWithText("Could not read the notification settings").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        assertEquals(listOf<NotifySettingsEvent>(NotifySettingsEvent.Retry), events)
     }
 }

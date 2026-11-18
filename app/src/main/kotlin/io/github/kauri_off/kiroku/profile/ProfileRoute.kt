@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.settings.SettingsKey
 import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.NotBuiltScreen
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -26,7 +27,7 @@ data class OtherProfileKey(
 ) : NavKey
 
 // A screen the Profile leads to that a later task builds.
-enum class ProfileNotBuilt { Settings, ScoreDistribution, Genres, FormatsAndYears, UserList }
+enum class ProfileNotBuilt { ScoreDistribution, Genres, FormatsAndYears, UserList }
 
 @Serializable
 data class ProfileNotBuiltKey(
@@ -77,7 +78,7 @@ fun ProfileRoute(
         profile.onEvent(event)
         when (event) {
             ProfileEvent.Back -> navigator.back()
-            ProfileEvent.OpenSettings -> navigator.open(ProfileNotBuiltKey(ProfileNotBuilt.Settings))
+            ProfileEvent.OpenSettings -> navigator.open(SettingsKey)
             ProfileEvent.SignIn -> onSignIn()
             is ProfileEvent.OpenStatistics -> navigator.open(ProfileNotBuiltKey(event.screen.notBuilt(), name))
             ProfileEvent.ViewList -> navigator.open(ProfileNotBuiltKey(ProfileNotBuilt.UserList, name))
@@ -103,7 +104,6 @@ internal fun ProfileNotBuiltScreen(
 ) {
     val title =
         when (key.screen) {
-            ProfileNotBuilt.Settings -> stringResource(R.string.profile_settings)
             ProfileNotBuilt.ScoreDistribution -> stringResource(ProfileStatistics.ScoreDistribution.label())
             ProfileNotBuilt.Genres -> stringResource(ProfileStatistics.Genres.label())
             ProfileNotBuilt.FormatsAndYears -> stringResource(ProfileStatistics.FormatsAndYears.label())

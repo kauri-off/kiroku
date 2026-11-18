@@ -16,6 +16,8 @@ import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.list.UserListRoute
+import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
+import io.github.kauri_off.kiroku.notifysettings.NotifySettingsRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuilt
@@ -26,6 +28,9 @@ import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
 import io.github.kauri_off.kiroku.search.searchStandIn
+import io.github.kauri_off.kiroku.settings.SettingsEvent
+import io.github.kauri_off.kiroku.settings.SettingsKey
+import io.github.kauri_off.kiroku.settings.SettingsScreen
 import io.github.kauri_off.kiroku.signin.SignInKey
 import io.github.kauri_off.kiroku.signin.SignInRoute
 import io.github.kauri_off.kiroku.signin.SignInTurns
@@ -161,6 +166,20 @@ fun appEntries(
                 page != null -> StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
                 else -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
             }
+        }
+        entry<SettingsKey> {
+            SettingsScreen(
+                onEvent = {
+                    when (it) {
+                        SettingsEvent.Back -> back()
+                        SettingsEvent.OpenNotifications -> navigator.open(NotifySettingsKey)
+                    }
+                },
+                snackbars,
+            )
+        }
+        entry<NotifySettingsKey> {
+            NotifySettingsRoute(graph, messages, snackbars, onBack = { back() }, onOpenTitle = { openTitle(it, null) }, onSignIn = signIn)
         }
         entry<TitleKey> { key ->
             TitleRoute(
