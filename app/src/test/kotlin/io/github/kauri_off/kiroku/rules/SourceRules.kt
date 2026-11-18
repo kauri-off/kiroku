@@ -446,7 +446,7 @@ private val pastWithoutScreen =
         """\b\w*(AppGraph|appGraph)\w*\b|""" +
             """\b\w*(ListRepository|ListEngine|ListSource|AnimeRepository|SearchRepository|UserRepository|OwnProfile|UserLists)\w*\b|""" +
             """\b(SignIn|SignInOwner|MalHttp|MalSession|MalBackground|MalRemoteList)\b|""" +
-            """\.\s*(sync|send|write|refresh\w*)\s*\(""",
+            """(\b|::\s*)(sync|send|write|refresh\w*)\s*\(|::\s*(sync|send|write|refresh\w*)\b""",
     )
 
 fun withoutScreenProblems(

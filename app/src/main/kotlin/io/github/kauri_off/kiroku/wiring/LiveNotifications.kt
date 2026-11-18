@@ -72,9 +72,14 @@ internal class LiveNotifications(
     // S7: only the opening renews, beside its run. A broadcast's run is let go by its hold, and a renewal cut there loses the session.
     override suspend fun run(trigger: RunTrigger): RunReport =
         coroutineScope {
-            val engine = engine()
-            if (trigger == RunTrigger.AppOpened) launch { reported { renew() } }
-            engine.run(trigger)
+            val renewal = if (trigger == RunTrigger.AppOpened) launch { reported { renew() } } else null
+            try {
+                engine().run(trigger)
+            } catch (e: Exception) {
+                // An engine that cannot be built or run does not take the renewal with it.
+                renewal?.join()
+                throw e
+            }
         }
 
     override fun observeSettings(): Flow<NotificationSettings> = flow { emitAll(engine().observeSettings()) }

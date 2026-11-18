@@ -2456,7 +2456,7 @@ abstract class ListEngineContract {
 
     // Section 2.3: a sync the engine starts itself is work nobody asked for, in a process with no screen too.
     @Test
-    fun `W5 the sync a start owes waits for the end of MAL's refusal, and is not made after a sync that was asked for`() =
+    fun `W5 the sync a start owes waits for the end of MAL's refusal, extended or not, and is not made after one that was asked for`() =
         runTest {
             for (asked in listOf(false, true)) {
                 val process = childScope()
@@ -2483,11 +2483,15 @@ abstract class ListEngineContract {
                 runCurrent()
                 assertEquals(before, s.server.listDownloads)
                 assertNull(restarted.observeSyncedAt().first())
+                // MAL refused again meanwhile: the end the sync first waited for passes with nothing sent.
+                advanceTimeBy(2.minutes)
+                runCurrent()
+                assertEquals(before, s.server.listDownloads)
 
                 // What a screen asks for is sent during the refusal, and ends what was owed.
                 if (asked) assertEquals(Outcome.Success(Unit), restarted.sync())
                 s.server.leftAloneFor = Duration.ZERO
-                advanceTimeBy(2.minutes)
+                advanceTimeBy(10.minutes)
                 settle()
                 assertEquals(before + 1, s.server.listDownloads)
                 assertTrue(restarted.observeSyncedAt().first() != null)

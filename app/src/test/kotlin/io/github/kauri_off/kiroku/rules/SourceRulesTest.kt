@@ -570,6 +570,10 @@ class SourceRulesTest {
                 "$receiver        scope.launch { context.ownList().sync() }\n    }\n}\n",
                 "$receiver        scope.launch { context.ownList().send(write) }\n    }\n}\n",
                 "$receiver        scope.launch { titles.refresh(id) }\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().run { sync() } }\n    }\n}\n",
+                "$receiver        scope.launch { context.ownList().apply { send(write) } }\n    }\n}\n",
+                "$receiver        val download = context.ownList()::sync\n    }\n}\n",
+                "$receiver        scope.launch { with(context.titles()) { refreshStale(id) } }\n    }\n}\n",
                 "val a = registerReceiver(object : BroadcastReceiver() {\n" +
                     "    override fun onReceive(c: Context, i: Intent) = run { c.appGraph.list.sync() }\n})\n",
                 "$receiver        (context.appGraph.withoutScreen { it } as BackgroundRun.Ran).value.sync()\n    }\n}\n",

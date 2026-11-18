@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.NotificationStore
 import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.notify.SentNotification
@@ -138,6 +139,7 @@ class LiveNotificationsTest {
 
     private fun notifications(
         scope: CoroutineScope,
+        store: () -> NotificationStore = { InMemoryNotificationStore() },
         renew: suspend () -> Unit,
     ): LiveNotifications {
         val demo = Demo(Fixtures.reference, scope)
@@ -148,10 +150,26 @@ class LiveNotificationsTest {
             { demo.airing },
             { demo.connection },
             { TitleLanguage.Romaji },
-            { InMemoryNotificationStore() },
+            store,
             renew,
         )
     }
+
+    // The renewal is the session's matter, and the opening is where it is made: a record that cannot be opened is another.
+    @Test
+    fun `the opening renews the tokens also when the notification engine cannot be built`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob())
+            val renewals = AtomicInteger()
+            val notifications = notifications(scope, store = { throw IllegalStateException(BROKEN) }) { renewals.incrementAndGet() }
+
+            val run = async { runCatching { notifications.run(RunTrigger.AppOpened) } }
+
+            assertEquals(BROKEN, withTimeout(WAIT) { run.await() }.exceptionOrNull()?.message)
+            assertEquals(1, renewals.get())
+            assertEquals(emptyList<Throwable>(), unexpected.toList())
+            scope.coroutineContext.job.cancelAndJoin()
+        }
 
     // MAL revokes the old tokens as it answers a renewal, and a broadcast's hold lets its process go before a slow answer.
     @Test
