@@ -400,7 +400,7 @@ class AppRouteTest {
     }
 
     @Test
-    fun `Profile opens another user by name, whose rows lead to screens not built yet`() {
+    fun `Profile opens another user by name, and their list`() {
         app()
         click("Profile")
         shows("kiroku_demo")
@@ -411,7 +411,7 @@ class AppRouteTest {
         shows("sample_viewer")
         compose.onNodeWithText("View list").performClick()
         shows("sample_viewer's list")
-        shows("Not available in this build yet")
+        shows(FixtureAnime.longTitle.titles.romaji)
         back()
         back()
         shows("kiroku_demo")

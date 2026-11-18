@@ -29,12 +29,39 @@ class SourceRulesTest {
                 "StatisticsViewModel.kt",
                 "SubScreenViewModels.kt",
                 "TitleViewModel.kt",
+                "UserListViewModel.kt",
             ),
             sources.filter { declaresViewModel(it.readText()) }.map { it.name }.toSet(),
         )
         assertTrue(sources.any { relative(it) == SHELL_VIEW_MODEL_SOURCE })
         assertEquals(emptyList<String>(), sources.flatMap { viewModelProblems(relative(it), it.readText()) })
         assertEquals(emptyList<String>(), sources.flatMap { collectionProblems(relative(it), it.readText()) })
+    }
+
+    @Test
+    fun anotherUsersListNamesNoWriterAndNoAiring() {
+        val sources = appSources().filter { it.name in USER_LIST_SOURCES }
+        assertEquals(USER_LIST_SOURCES, sources.map { it.name }.toSet())
+        assertEquals(emptyList<String>(), sources.flatMap { readOnlyListProblems(relative(it), it.readText()) })
+        val planted =
+            listOf(
+                "class A(private val messages: ShellMessages) : ViewModel()\n",
+                "val editor = editSheetViewModel(graph, messages)\n",
+                "fun a(list: ListRepository) = Unit\n",
+                "fun a() = write(ListWrite.MarkNextWatched(anime))\n",
+                "val airing = graph.airing\n",
+                "class A(private val airing: AiringRepository) : ViewModel()\n",
+                "fun a() = viewModelScope.launch { own.sync() }\n",
+                "fun a() = graph.list.write(step)\n",
+                "fun a() = post(ShellMessage(text, ShellMessage.Action.Change(id)))\n",
+                "val list = graph.list\n",
+                "class A(private val own: ListSource) : ViewModel()\n",
+            )
+        for (source in planted) assertEquals(source, 1, readOnlyListProblems("A.kt", source).size)
+        val clean =
+            "class A(private val own: Flow<List<ListEntry>>, private val failed: (DataError) -> Unit)\n" +
+                "val a = graph.list.observeEntries()\n"
+        assertEquals(0, readOnlyListProblems("A.kt", clean).size)
     }
 
     @Test

@@ -335,6 +335,24 @@ private val writerOrGraph = Regex("""\b\w*(Graph|ListRepository|ListEngine)\w*\b
 
 private val initBlock = Regex("""\binit\s*\{""")
 
+// Another user's list holds nothing that writes or downloads the person's list, posts a message that can act on it, or
+// asks the airing source; of the graph's list it takes the entries alone.
+val USER_LIST_SOURCES = setOf("UserListRoute.kt", "UserListViewModel.kt")
+
+private val writerOrAiring =
+    Regex(
+        """\b\w*(ListRepository|ListEngine|ListSource|ListWrite|ShellMessage|EditSheet|editSheet|Airing(Repository|Source))\w*\b""" +
+            """|\.airing\b|\.(sync|write)\s*\(|\bgraph\.list\b(?!\.observeEntries\(\))""",
+    )
+
+fun readOnlyListProblems(
+    name: String,
+    source: String,
+): List<String> =
+    KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        writerOrAiring.find(line)?.let { "$name:${index + 1}: another user's list names ${it.value}: ${line.trim()}" }
+    }
+
 private val aliasOfWriterOrGraph = Regex("""\btypealias\s+\w+(\s*<[^>]*>)?\s*=\s*[\w.]*(AppGraph|ListRepository|ListEngine)\b""")
 
 fun viewModelProblems(

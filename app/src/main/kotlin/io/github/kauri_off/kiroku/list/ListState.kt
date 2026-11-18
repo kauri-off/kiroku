@@ -14,6 +14,8 @@ import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.user.UserListProgress
+import io.github.kauri_off.kiroku.notShown
 import java.time.Instant
 
 data class ListState(
@@ -29,7 +31,19 @@ data class ListState(
     val now: Instant,
     // The filter field's own text, which the rows follow a moment later; when absent the field shows [filter].
     val typed: Typed? = null,
+    // How far the read of another user's list is, the first one or one again; null while none is under way.
+    val reading: UserListProgress? = null,
+    // The read is one again, under a list read before that stays shown.
+    val readingAgain: Boolean = false,
+    // How many titles another user's whole list has, when one is held.
+    val listSize: Int? = null,
 ) {
+    init {
+        require(reading == null || owner is ListOwner.Other)
+        require(listSize == null || owner is ListOwner.Other)
+        require(!readingAgain || reading != null)
+    }
+
     val page: ListPage? get() = (content as? ListContent.Tabs)?.pages?.get(tab)
 
     // What the filter field shows; null while it is closed.
@@ -74,6 +88,18 @@ sealed interface ListContent {
 internal fun tabOrder(statuses: Collection<EntryStatus>): List<EntryStatus> =
     ListStatus.entries + statuses.filterIsInstance<EntryStatus.Unrecognized>().distinct().sortedBy { it.malCode }
 
+// A tab as a saved state holds it; a status the app does not know by MAL's code.
+internal fun savedTab(status: EntryStatus): String =
+    when (status) {
+        is ListStatus -> status.name
+        is EntryStatus.Unrecognized -> UNRECOGNIZED_TAB + status.malCode
+    }
+
+internal fun tabOf(saved: String): EntryStatus =
+    if (saved.startsWith(UNRECOGNIZED_TAB)) EntryStatus.Unrecognized(saved.removePrefix(UNRECOGNIZED_TAB)) else ListStatus.valueOf(saved)
+
+private val UNRECOGNIZED_TAB = notShown("?")
+
 // One tab: its rows, filtered when a filter is typed, in the order last computed for [sort] and [direction].
 data class ListPage(
     val sort: ListSort,
@@ -84,7 +110,8 @@ data class ListPage(
     val direction: SortDirection? = sort.defaultDirection,
 )
 
-enum class ListFailure { NoConnection, Refused, Other }
+// The last two are another user's list's: their own answer about it.
+enum class ListFailure { NoConnection, Refused, Other, PrivateList, UnknownUser }
 
 data class ListRow(
     val id: AnimeId,
