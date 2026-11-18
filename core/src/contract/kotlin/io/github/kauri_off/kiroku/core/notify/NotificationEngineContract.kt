@@ -38,6 +38,7 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -1143,11 +1144,14 @@ abstract class NotificationEngineContract {
                 process.coroutineContext.job.children
                     .toSet()
             var work = emptyList<Job>()
+            lateinit var run: Deferred<RunReport>
+            var raced = false
             process.coroutineContext.job.invokeOnCompletion(onCancelling = true) {
                 work.forEach { it.cancel() }
                 testScheduler.runCurrent()
+                raced = run.isCompleted
             }
-            val run = process.async { w.engine.run(RunTrigger.Alarm) }
+            run = process.async { w.engine.run(RunTrigger.Alarm) }
             runCurrent()
             work =
                 process.coroutineContext.job.children
@@ -1158,6 +1162,7 @@ abstract class NotificationEngineContract {
             process.cancel()
             runCurrent()
 
+            assertTrue("the run ended before the scope's end reached it", raced)
             assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
         }
 

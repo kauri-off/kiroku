@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.Untouched
@@ -26,6 +27,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -356,6 +358,19 @@ abstract class ListEngineContract {
     }
 
     // A store that takes its time, as a database does.
+    // A store whose writes run in the engine's scope, as a database's on the app's scope do, so that the scope's end cuts them.
+    private class ScopedLocalList(
+        private val inner: LocalList,
+        private val scope: CoroutineScope,
+    ) : LocalList by inner {
+        override suspend fun write(entries: Map<AnimeId, StoredEntry?>) =
+            scope
+                .async {
+                    delay(STORE_TIME)
+                    inner.write(entries)
+                }.await()
+    }
+
     private class SlowLocalList(
         private val inner: LocalList,
     ) : LocalList by inner {
@@ -375,6 +390,7 @@ abstract class ListEngineContract {
         latency: Duration = 1.seconds,
         scope: CoroutineScope = backgroundScope,
         slowStore: Boolean = false,
+        scopedStore: Boolean = false,
         serverClock: Clock = fixtures.clock,
         session: Session? = a,
         checks: Int = ListEngine.CHECKS_PER_SYNC,
@@ -386,7 +402,12 @@ abstract class ListEngineContract {
             fixtures.entries.associate { it.anime.id to StoredEntry.settled(it.record) },
             seededAt,
         )
-        val store = if (slowStore) SlowLocalList(local) else local
+        val store =
+            when {
+                slowStore -> SlowLocalList(local)
+                scopedStore -> ScopedLocalList(local, scope)
+                else -> local
+            }
         return Subject(DemoServer(fixtures.entries, serverClock, latency), store, scope, session, checks).also { runCurrent() }
     }
 
@@ -2071,11 +2092,14 @@ abstract class ListEngineContract {
                 scope.coroutineContext.job.children
                     .toSet()
             var work = emptyList<Job>()
+            lateinit var sync: Deferred<Outcome<Unit>>
+            var raced = false
             scope.coroutineContext.job.invokeOnCompletion(onCancelling = true) {
                 work.forEach { it.cancel() }
                 testScheduler.runCurrent()
+                raced = sync.isCompleted
             }
-            val sync = scope.async { s.list.sync() }
+            sync = scope.async { s.list.sync() }
             runCurrent()
             work =
                 scope.coroutineContext.job.children
@@ -2086,7 +2110,41 @@ abstract class ListEngineContract {
             scope.cancel()
             runCurrent()
 
+            assertTrue("the sync ended before the scope's end reached it", raced)
             assertTrue("${sync.getCompletionExceptionOrNull()}", sync.getCompletionExceptionOrNull() is CancellationException)
+        }
+
+    // The same for a write, whose store call the scope's end cuts while the write still waits for it.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a write in the engine's own scope ends cancelled with it, also when its store call has ended first`() =
+        runTest {
+            val scope = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]))
+            val s = subject(scope = scope, scopedStore = true)
+            val before =
+                scope.coroutineContext.job.children
+                    .toSet()
+            var work = emptyList<Job>()
+            lateinit var write: Deferred<ListChange?>
+            var raced = false
+            scope.coroutineContext.job.invokeOnCompletion(onCancelling = true) {
+                work.forEach { it.cancel() }
+                testScheduler.runCurrent()
+                raced = write.isCompleted
+            }
+            write = scope.async { s.list.write(ListWrite.MarkNextWatched(FixtureAnime.exactToWatch)) }
+            runCurrent()
+            work =
+                scope.coroutineContext.job.children
+                    .filter { it !in before && it !== write }
+                    .toList()
+            assertTrue(work.isNotEmpty())
+
+            scope.cancel()
+            runCurrent()
+
+            assertTrue("the write ended before the scope's end reached it", raced)
+            assertTrue("${write.getCompletionExceptionOrNull()}", write.getCompletionExceptionOrNull() is CancellationException)
         }
 
     @Test

@@ -91,6 +91,8 @@ class AiringEngine(
 
     // Of the titles asked for, those a page asked for.
     private val forPages = mutableSetOf<AnimeId>()
+
+    @Volatile
     private var stopped = false
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
@@ -268,7 +270,8 @@ class AiringEngine(
                 return Outcome.Failure(DataError.StorageError)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                if (!scope.isActive) scope.endedCall(e)
+                if (stopped && e is IllegalStateException) scope.endedCall(e)
+                if (!scope.isActive) throw e
                 unexpected(e)
                 return Outcome.Failure(DataError.ServerError)
             }
