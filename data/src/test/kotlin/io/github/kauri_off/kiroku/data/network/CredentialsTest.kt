@@ -135,6 +135,7 @@ class CredentialsTest {
         assertEquals("Bearer $TOKEN", asUser.headers[AUTHORIZATION])
         assertNull(asUser.headers[CLIENT_ID_HEADER])
         assertEquals(1, network.api.requestCount)
+        assertEquals(1, network.signIn.requestCount)
         assertTrue(imageFailure.exceptionOrNull() is NoClientId)
         assertEquals(Duration.ZERO, runBlocking { network.http.refusedFor() })
         assertTrue(network.log.first(), network.log.first().contains("/v2/thing NoClientId"))
