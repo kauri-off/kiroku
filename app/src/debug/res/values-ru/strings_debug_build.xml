@@ -7,4 +7,7 @@
     <string name="debug_menu_commit_dirty">%1$s, с незакоммиченными изменениями</string>
     <string name="debug_menu_built">Собрана</string>
     <string name="debug_menu_not_known">Неизвестно</string>
+    <string name="debug_menu_client_id">Идентификатор клиента MyAnimeList</string>
+    <string name="debug_menu_client_id_included">Есть</string>
+    <string name="debug_menu_client_id_missing">Нет: MyAnimeList получает запросы только с\u00A0токеном</string>
 </resources>

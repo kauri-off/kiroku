@@ -72,6 +72,7 @@ fun text(text: ShellMessage.Text): String =
                 when (text.error) {
                     DataError.NoConnection -> R.string.common_no_connection
                     DataError.Refused -> R.string.common_refused
+                    DataError.NoClientId -> R.string.common_no_client_id
                     else -> R.string.common_could_not_refresh
                 },
             )

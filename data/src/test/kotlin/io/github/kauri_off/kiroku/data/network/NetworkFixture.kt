@@ -112,6 +112,7 @@ internal class NetworkFixture : ExternalResource() {
     val log = CopyOnWriteArrayList<String>()
     val unexpected = CopyOnWriteArrayList<Throwable>()
     var online = true
+    var clientId = CLIENT_ID
     var repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds)
     private val mainThread = Thread.currentThread()
     private val directory by lazy { Files.createTempDirectory("mal").toFile() }
@@ -125,7 +126,7 @@ internal class NetworkFixture : ExternalResource() {
     fun newProcess(): MalHttp =
         MalHttp(
             hosts = MalHosts(api = api.url("/v2/").toString(), signIn = signIn.url("/v1/oauth2/").toString()),
-            clientId = CLIENT_ID,
+            clientId = clientId,
             appVersion = "1.2.3",
             device =
                 object : Device {

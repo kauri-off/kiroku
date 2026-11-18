@@ -7,4 +7,7 @@
     <string name="debug_menu_commit_dirty">%1$s, with uncommitted changes</string>
     <string name="debug_menu_built">Built</string>
     <string name="debug_menu_not_known">Not known</string>
+    <string name="debug_menu_client_id">MyAnimeList client id</string>
+    <string name="debug_menu_client_id_included">Included</string>
+    <string name="debug_menu_client_id_missing">Missing: MyAnimeList is asked only with a token</string>
 </resources>

@@ -53,7 +53,7 @@ private class Form(
 private fun SignInState.form(): Form =
     when (this) {
         SignInState.Ready -> Form(R.string.signin_sentence, canSignIn = true)
-        SignInState.NoClientId -> Form(R.string.signin_no_client_id, canSignIn = false)
+        SignInState.NoClientId -> Form(R.string.common_no_client_id, canSignIn = false)
         SignInState.NoAccount -> Form(R.string.signin_no_account, canSignIn = false)
         SignInState.Completing -> Form(R.string.signin_signing_in, canSignIn = false, announced = true)
         SignInState.Failed -> Form(R.string.signin_failed, canSignIn = true, announced = true, isError = true)
