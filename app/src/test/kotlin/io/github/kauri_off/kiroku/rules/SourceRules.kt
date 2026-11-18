@@ -416,6 +416,36 @@ fun scopeProblems(
     }
 }
 
+// Code that runs with no screen asking for it: the notify package, and whatever declares a receiver, a service or scheduled work.
+private val componentWithoutAScreen = Regex("""(\)|\bclass\s+\w+)\s*:\s*[\w.]*(BroadcastReceiver|Service|Worker)\s*\(""")
+
+fun runsWithoutAScreen(
+    name: String,
+    source: String,
+): Boolean = "/notify/" in name || componentWithoutAScreen.containsMatchIn(KotlinSource(source).code)
+
+// What calls MAL when asked: the graph's areas that do, and their types. Such code is given the list by the graph's
+// withoutScreen alone, as its block's parameter, so it names none of them.
+private val reachesMal =
+    Regex(
+        """\b\w*(ListRepository|ListEngine|ListSource|AnimeRepository|SearchRepository|UserRepository|OwnProfile|UserLists)\w*\b|""" +
+            """\b(SignIn|SignInOwner|MalHttp|MalSession|MalBackground|MalRemoteList)\b|""" +
+            """\.\s*(list|search|user|signIn)\b(?!\s*\()|\.\s*anime\s*\.\s*refresh\b""",
+    )
+
+fun withoutScreenProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (!runsWithoutAScreen(name, source)) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        reachesMal
+            .find(
+                line,
+            )?.let { "$name:${index + 1}: work without a screen names ${it.value}, not the graph's withoutScreen: ${line.trim()}" }
+    }
+}
+
 // The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
 fun shippedKotlinSources(): List<File> =
     projectSources().filter { source ->

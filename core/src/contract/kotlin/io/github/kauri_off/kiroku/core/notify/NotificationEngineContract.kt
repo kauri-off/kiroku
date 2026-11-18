@@ -37,8 +37,10 @@ import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -1822,6 +1824,38 @@ abstract class NotificationEngineContract {
             assertEquals(RunEnd.Done, w.engine.run(RunTrigger.AppOpened).end)
             assertEquals(week(1), w.alarm.at.value)
             assertEquals(listOf(title.id to 1), w.alerts)
+        }
+
+    // The scope's end reaches its children one at a time, and work of that scope may run between two of them.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a run asked for in the engine's own scope ends cancelled with it, also when asked for before the end has reached its caller`() =
+        runTest {
+            // The run is under way before the end, or asked for as another child hears of the end.
+            for (underWay in listOf(true, false)) {
+                val w = world()
+                w.source.latency = 30.seconds
+                w.clock.now = week(0)
+                val process = checkNotNull(w.process.scope)
+                val heard = CompletableDeferred<Unit>()
+                process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) {
+                    heard.complete(Unit)
+                    testScheduler.runCurrent()
+                }
+                val run =
+                    process.async {
+                        if (!underWay) heard.await()
+                        w.engine.run(RunTrigger.Alarm)
+                    }
+                runCurrent()
+
+                process.cancel()
+                runCurrent()
+
+                assertTrue(run.isCancelled)
+                assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
+                assertEquals(emptyList<Throwable>(), w.unexpected.toList())
+            }
         }
 
     private companion object {

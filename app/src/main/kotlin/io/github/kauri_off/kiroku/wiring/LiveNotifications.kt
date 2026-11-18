@@ -1,0 +1,109 @@
+package io.github.kauri_off.kiroku.wiring
+
+import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.notify.Coming
+import io.github.kauri_off.kiroku.core.notify.NotificationEngine
+import io.github.kauri_off.kiroku.core.notify.NotificationRuns
+import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.notify.NotificationStore
+import io.github.kauri_off.kiroku.core.notify.RunReport
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.core.notify.SentNotification
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.core.repository.ListSource
+import io.github.kauri_off.kiroku.core.repository.NotificationsRepository
+import io.github.kauri_off.kiroku.data.db.RoomNotificationStore
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
+import io.github.kauri_off.kiroku.notify.EpisodeNotifications
+import io.github.kauri_off.kiroku.notify.SystemAlarm
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+// The record and the settings of a live source's notifications: its own database's, and the choices in its one preferences file.
+internal fun liveNotificationStore(
+    parts: LiveParts,
+    preferences: StoredPreferences,
+): NotificationStore = RoomNotificationStore(parts.database, preferences, Dispatchers.IO, parts.unexpected)
+
+// The notifications of a live source: the engine over the source's record, the system's alarm and the device's notifications,
+// built at its first call, off the main thread.
+internal class LiveNotifications(
+    private val parts: LiveParts,
+    session: Flow<Session>,
+    list: () -> ListSource,
+    airing: () -> AiringRepository,
+    connection: () -> Connection,
+    language: () -> TitleLanguage,
+    store: () -> NotificationStore,
+    // S7: renews the tokens that are due, by MAL's way in for work without a screen.
+    private val renew: suspend () -> Unit,
+) : NotificationsRepository,
+    NotificationRuns {
+    // A run has ended in this process: before one, what is stored may be of a sign-out its process did not finish (S9).
+    @Volatile
+    private var ran = false
+
+    private val built =
+        lazy {
+            NotificationEngine(
+                store(),
+                SystemAlarm(parts.context),
+                EpisodeNotifications(parts.context, language),
+                list(),
+                airing(),
+                session,
+                connection(),
+                parts.clock,
+                parts.scope,
+                reports = { ran = true },
+                unexpected = parts.unexpected,
+            )
+        }
+
+    private suspend fun engine(): NotificationEngine =
+        if (built.isInitialized()) built.value else withContext(Dispatchers.IO) { parts.built(built) }
+
+    // The tokens are renewed beside the run, which calls MAL for nothing and so waits for nothing of it.
+    override suspend fun run(trigger: RunTrigger): RunReport =
+        coroutineScope {
+            val engine = engine()
+            launch { reported { renew() } }
+            engine.run(trigger)
+        }
+
+    override fun observeSettings(): Flow<NotificationSettings> = flow { emitAll(engine().observeSettings()) }
+
+    override suspend fun changeSettings(change: (NotificationSettings) -> NotificationSettings): Outcome<Unit> =
+        engine().changeSettings(change)
+
+    override fun observeComing(): Flow<List<Coming>?> = flow { emitAll(engine().observeComing()) }
+
+    // Nothing reads what was sent before a run of this process has ended, so none of it is another sign-in's.
+    override fun observeSent(): Flow<List<SentNotification>> =
+        flow {
+            if (!ran) run(RunTrigger.AppOpened)
+            emitAll(engine().observeSent())
+        }
+
+    // S9, after the session is signed out: what is shown, the alarm and the record go; the next start makes a run that failed.
+    suspend fun forget() = reported { engine().run(RunTrigger.Changed) }
+
+    private suspend fun reported(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            parts.unexpected(e)
+        }
+    }
+}

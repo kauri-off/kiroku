@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -209,9 +210,13 @@ class NotificationEngine(
             return result.await().getOrThrow()
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
+            // The scope's end is a caller's own cancellation when it runs in that scope, also before the end has reached it.
+            if (!scope.isActive && scope.coroutineContext.job.holds(currentCoroutineContext().job)) throw e
             throw IllegalStateException(STOPPED, e)
         }
     }
+
+    private fun Job.holds(job: Job): Boolean = children.any { it === job || it.holds(job) }
 
     // N8: while the process lives, a change of the session, the list, the airing data or a setting is followed by a run.
     private fun follow() {

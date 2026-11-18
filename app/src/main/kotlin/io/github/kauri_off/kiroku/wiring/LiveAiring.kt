@@ -61,7 +61,7 @@ internal class LiveAiring(
     private var opened = false
 
     private suspend fun <T> onFirstUse(part: Lazy<T>): T =
-        if (part.isInitialized()) part.value else withContext(Dispatchers.IO) { part.value }
+        if (part.isInitialized()) part.value else withContext(Dispatchers.IO) { parts.built(part) }
 
     // S9: the store is emptied at its first use while nobody is signed in, for a sign-out the process did not finish.
     private suspend fun store(): SignedInStore {
