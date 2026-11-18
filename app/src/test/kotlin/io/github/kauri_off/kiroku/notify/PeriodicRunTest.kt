@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.notify
 
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.notify.RunReport
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
@@ -47,6 +50,12 @@ class PeriodicRunTest {
             steps += "airing"
             return airing()
         }
+
+        override suspend fun titleOnList(id: AnimeId): Anime? = error("A periodic run marks nothing")
+
+        override suspend fun session(): Session = error("A periodic run reads no session of its own")
+
+        override val notSaved: NotSavedNotice? = null
     }
 
     @Test

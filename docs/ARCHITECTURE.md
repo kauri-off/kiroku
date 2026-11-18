@@ -272,9 +272,9 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
 - **N9. The action counts once.** "Mark watched" marks the next unwatched episode and never jumps the count over
   episodes the user has not seen. A second tap, a retry after the server already accepted it, or a sync that
   already brought the change do not raise the count again. Without a network it waits and retries; if it finally
-  fails, the notification is replaced by "Could not save · Open". It works on every supported Android version: on
-  Android 8 to 11 the system runs such work as a foreground service, which shows "Saving…" on its own
-  low-importance channel "Saving changes"; on Android 12 and later no foreground service starts or is declared.
+  fails, the title's notification says so and opens the title. It works on every supported Android version: on
+  Android 8 to 11 the system runs such work as a foreground service, which shows its own notification on a
+  low-importance channel of its own; on Android 12 and later no foreground service starts or is enabled.
 - **N10. The record of announced episodes survives** app updates and database changes (section 7.1).
 
 Tests demonstrate each of these without a device, with every dailyAL failure case among them. Before a release,

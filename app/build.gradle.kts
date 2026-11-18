@@ -1002,18 +1002,41 @@ object DeclarationRule {
         }
     }
 
+    // A component the manifest enables on some Android versions alone, by a resource that differs between them.
+    fun enabledBy(
+        name: String,
+        bool: String,
+    ) = "$name enabled by $bool"
+
+    // A permission asked for up to an Android version alone.
+    fun upTo(
+        name: String,
+        api: Int,
+    ) = "$name up to API $api"
+
     // Components and initializers by name, a permission of the package's own as ".NAME", a query by its whole element.
     private fun found(manifest: org.w3c.dom.Document): Map<String, Set<String>> {
         val root = manifest.documentElement
         val own = root.getAttribute("package") + "."
         val declared = root.children("application").flatMap { it.children() }.filter { it.tagName in components }
         return mapOf(
-            COMPONENTS to declared.mapTo(mutableSetOf()) { it.name().ifEmpty { "<${it.tagName}> without a name" } },
+            COMPONENTS to
+                declared.mapTo(mutableSetOf()) { component ->
+                    val name = component.name().ifEmpty { "<${component.tagName}> without a name" }
+                    component
+                        .getAttributeNS(
+                            RedirectRule.ANDROID,
+                            "enabled",
+                        ).takeIf { it.startsWith("@bool/") }
+                        ?.let { enabledBy(name, it) }
+                        ?: name
+                },
             INITIALIZERS to
                 declared.filter { it.name() == STARTUP }.flatMap { it.children("meta-data") }.mapTo(mutableSetOf()) { it.name() },
             PERMISSIONS to
                 root.children().filter { it.tagName in permissions }.mapTo(mutableSetOf()) {
-                    if (it.name().startsWith(own)) "." + it.name().removePrefix(own) else it.name()
+                    val name = if (it.name().startsWith(own)) "." + it.name().removePrefix(own) else it.name()
+                    it.getAttributeNS(RedirectRule.ANDROID, "maxSdkVersion").toIntOrNull()?.let { api -> upTo(name, api) } ?: name
                 },
             QUERIES to root.children("queries").flatMap { it.children() }.mapTo(mutableSetOf()) { it.described() },
         )
@@ -1085,6 +1108,10 @@ abstract class VerifyDeclarations : DefaultTask() {
                 "a library adds a permission from Android 6" to
                     (DeclarationRule.PERMISSIONS to { it.added("manifest", "uses-permission-sdk-23") }),
                 "a named permission is gone" to (DeclarationRule.PERMISSIONS to { it.removed(permissions.get().first()) }),
+                "a permission is asked for on more Android versions" to
+                    (DeclarationRule.PERMISSIONS to { it.widened("uses-permission", "maxSdkVersion") }),
+                "a component is enabled on more Android versions" to
+                    (DeclarationRule.COMPONENTS to { it.widened("service", "enabled") }),
                 "a library adds a query for a package" to (DeclarationRule.QUERIES to { it.query().appendChild(it.planted("package")) }),
                 "a library adds a query for a provider, which is no component" to
                     (
@@ -1102,7 +1129,7 @@ abstract class VerifyDeclarations : DefaultTask() {
                     ),
             )
         val missed =
-            wrong.filter { (_, case) -> problems(case.second).map { it.substringBefore(" the build") } != listOf(case.first) }.keys
+            wrong.filter { (_, case) -> problems(case.second).map { it.substringBefore(" the build") }.toSet() != setOf(case.first) }.keys
         check(missed.isEmpty()) { "The declaration check does not fail with the kind alone for these wrong manifests: $missed" }
         report.get().asFile.writeText(
             named.entries.joinToString("") { (kind, names) -> "$kind: ${names.sorted()}\n" } +
@@ -1121,8 +1148,23 @@ abstract class VerifyDeclarations : DefaultTask() {
     // The first element of the manifest that names [name], taken out.
     private fun org.w3c.dom.Document.removed(name: String) {
         val all = getElementsByTagName("*")
-        val element = (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.first { it.name() == name }
+        val element = (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.first { it.name() == name.substringBefore(" ") }
         element.parentNode.removeChild(element)
+    }
+
+    // The first [tag] that holds [attribute] to some Android versions, holding it no longer.
+    private fun org.w3c.dom.Document.widened(
+        tag: String,
+        attribute: String,
+    ) {
+        val all = getElementsByTagName(tag)
+        val element =
+            (0 until all.length).map { all.item(it) as org.w3c.dom.Element }.first {
+                it.getAttributeNS(RedirectRule.ANDROID, attribute).let { value ->
+                    value.startsWith("@bool/") || value.toIntOrNull() != null
+                }
+            }
+        element.removeAttributeNS(RedirectRule.ANDROID, attribute)
     }
 
     private fun org.w3c.dom.Document.startUp(): org.w3c.dom.Element {
@@ -1150,6 +1192,10 @@ val composePreview = "androidx.compose.ui.tooling.PreviewActivity"
 
 // Scheduled work's service, which the system's job scheduler alone may bind.
 val scheduledWork = "androidx.work.impl.background.systemjob.SystemJobService"
+
+// N9: the foreground service the system runs expedited work as before Android 12, and what it asks for there.
+val savingInTheForeground = "androidx.work.impl.foreground.SystemForegroundService"
+val savingUpTo = 30
 val exportedBesidesTheRedirect =
     mapOf(
         "release" to setOf(launcherActivity, profileInstaller, scheduledWork),
@@ -1162,13 +1208,14 @@ val releaseComponents =
     setOf(
         launcherActivity,
         RedirectRule.ACTIVITY,
-        RedirectRule.LINK,
+        DeclarationRule.enabledBy(RedirectRule.LINK, RedirectRule.LINK_ENABLED),
         DeclarationRule.STARTUP,
         profileInstaller,
         "androidx.room.MultiInstanceInvalidationService",
         "io.github.kauri_off.kiroku.notify.MarkWatchedReceiver",
         "io.github.kauri_off.kiroku.notify.RunReceiver",
-        scheduledWork,
+        DeclarationRule.enabledBy(scheduledWork, "@bool/enable_system_job_service_default"),
+        DeclarationRule.enabledBy(savingInTheForeground, "@bool/saving_in_the_foreground"),
         "androidx.work.impl.utils.ForceStopRunnable\$BroadcastReceiver",
         "androidx.work.impl.background.systemalarm.RescheduleReceiver",
     )
@@ -1190,7 +1237,8 @@ val startUpInitializers =
         "androidx.profileinstaller.ProfileInstallerInitializer",
     )
 
-// The network, the offline check (section 2.3), notifications, androidx.core's guard of unexported receivers, exact alarms (section 5.1), the restart.
+// The network, the offline check (section 2.3), notifications, androidx.core's guard of unexported receivers, exact alarms (section 5.1), the restart,
+// and N9's foreground service with its wake lock before Android 12.
 val releasePermissions =
     setOf(
         "android.permission.INTERNET",
@@ -1199,6 +1247,8 @@ val releasePermissions =
         ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.RECEIVE_BOOT_COMPLETED",
+        DeclarationRule.upTo("android.permission.FOREGROUND_SERVICE", savingUpTo),
+        DeclarationRule.upTo("android.permission.WAKE_LOCK", savingUpTo),
     )
 val declaredPermissions =
     mapOf(

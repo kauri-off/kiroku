@@ -69,6 +69,7 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
                 Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown, runs::keep),
                 scope,
                 runs,
+                shown,
             ).also {
                 graph = it
             }
@@ -109,6 +110,8 @@ class DemoGraph(
     scope: CoroutineScope,
     // What the demo's notification engine did in this process.
     val runLog: RunLog = RunLog(null),
+    // The demo's notifications on the device, which none has outside a process that shows them.
+    shown: EpisodeNotifications? = null,
 ) : AppGraph,
     ScenariosOwner {
     override val scenarios = Scenarios(demo, scope)
@@ -124,6 +127,6 @@ class DemoGraph(
     override val connection = demo.connection
     override val preferences = demo.preferences
     override val notifications get() = demo.notifications
-    override val withoutScreen = WorkAtOnce({ list }, { airing }, { demo.notifications })
+    override val withoutScreen = WorkAtOnce({ list }, { airing }, { demo.notifications }, { session }, shown)
     override val madeUp = true
 }

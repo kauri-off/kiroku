@@ -2,7 +2,6 @@ package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
-import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.NotificationEngine
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
@@ -55,7 +54,7 @@ internal class LiveNotifications(
     list: () -> ListSource,
     airing: () -> AiringRepository,
     connection: () -> Connection,
-    language: () -> TitleLanguage,
+    shown: () -> EpisodeNotifications,
     store: () -> NotificationStore,
     // S7: renews the tokens that are due, by MAL's way in for work without a screen.
     private val renew: suspend () -> Unit,
@@ -72,7 +71,7 @@ internal class LiveNotifications(
             NotificationEngine(
                 store(),
                 SystemAlarm(parts.context),
-                EpisodeNotifications(parts.context, parts.source.name, language),
+                shown(),
                 list(),
                 airing(),
                 session,

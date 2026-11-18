@@ -2,10 +2,16 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.notify.NotSavedNotice
+import kotlinx.coroutines.flow.first
 import java.time.Duration
 
 // What came of work on the list that no screen asked for.
@@ -44,6 +50,15 @@ interface WithoutScreen {
 
     // Asks the airing source again for the tracked titles whose airing data is stale; the list's service has no part in it.
     suspend fun updateAiring(): Outcome<Unit>
+
+    // The title as the list on the device has it, with nothing sent; null when it is not on the list. Throws a DataException when the list cannot be read.
+    suspend fun titleOnList(id: AnimeId): Anime?
+
+    // The session as stored, with nothing sent; it waits while the store cannot be read.
+    suspend fun session(): Session
+
+    // What may tell, in a title's notification, that marking an episode watched could not be saved; none in a graph that posts none.
+    val notSaved: NotSavedNotice?
 }
 
 // A process that runs work without a screen: the application.
@@ -58,6 +73,8 @@ class WorkAtOnce(
     private val list: () -> ListRepository,
     private val airing: () -> AiringRepository,
     private val runs: () -> NotificationRuns?,
+    private val sessions: () -> SessionRepository,
+    override val notSaved: NotSavedNotice? = null,
 ) : WithoutScreen {
     override val notificationRuns: NotificationRuns? get() = runs()
 
@@ -66,4 +83,8 @@ class WorkAtOnce(
     override suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>> = ListWork.Done(list().send(write))
 
     override suspend fun updateAiring(): Outcome<Unit> = airing().refreshStale()
+
+    override suspend fun titleOnList(id: AnimeId): Anime? = list().observeEntry(id).first()?.anime
+
+    override suspend fun session(): Session = sessions().observeSession().first()
 }

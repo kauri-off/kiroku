@@ -55,6 +55,8 @@ sealed interface ListWrite {
     data class MarkWatched(
         override val anime: Anime,
         val episode: Int,
+        // A notification's action marks in the list it was made in alone; a screen's, in the list it shows.
+        val madeIn: SignInId? = null,
     ) : ListWrite {
         init {
             require(episode > 0)
@@ -99,14 +101,15 @@ sealed interface ListWrite {
     val steps: Boolean
         get() = this is MarkWatched || this is MarkNextWatched || this is StepWatched || (this is Retry && failure.write.steps)
 
-    // An Undo and a Retry belong to the list they were made in, and no other list takes them.
-    val bound: Boolean get() = this is Undo || this is Retry
+    // An Undo, a Retry and a notification's "Mark watched" belong to the list they were made in, and no other list takes them.
+    val bound: Boolean get() = this is Undo || this is Retry || (this is MarkWatched && madeIn != null)
 
     val list: SignInId?
         get() =
             when (this) {
                 is Undo -> change.list
                 is Retry -> failure.list
+                is MarkWatched -> madeIn
                 else -> null
             }
 

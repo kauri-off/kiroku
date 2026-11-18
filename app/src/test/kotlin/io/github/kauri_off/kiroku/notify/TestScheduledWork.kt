@@ -10,21 +10,26 @@ import androidx.work.WorkQuery
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
+import java.util.concurrent.Executor
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 // Scheduled work for one test's application, gone at the test's end (AppEnds): a real WorkManager would outlive it, bound to
 // that application, for every later test of the JVM.
 object TestScheduledWork {
-    fun install(context: Context) =
-        WorkManagerTestInitHelper.initializeTestWorkManager(
-            context,
-            Configuration
-                .Builder()
-                .setExecutor(SynchronousExecutor())
-                .setMinimumLoggingLevel(Log.WARN)
-                .build(),
-        )
+    // [tasks] runs scheduled work's own tasks (its records), for a test that holds them; by default they run at once.
+    fun install(
+        context: Context,
+        tasks: Executor? = null,
+    ) = WorkManagerTestInitHelper.initializeTestWorkManager(
+        context,
+        Configuration
+            .Builder()
+            .setExecutor(SynchronousExecutor())
+            .apply { tasks?.let(::setTaskExecutor) }
+            .setMinimumLoggingLevel(Log.WARN)
+            .build(),
+    )
 
     // The periodic work under [name] as scheduled now.
     fun periodic(
@@ -51,6 +56,18 @@ object TestScheduledWork {
             Thread.sleep(PAUSE)
         }
         WorkManagerImpl.setDelegate(null)
+    }
+
+    // Scheduled work on the system's job scheduler, as the app sets it up, for a test of what the system does to its jobs; the
+    // test ends it with [died].
+    fun onTheSystem(context: Context) = WorkManager.initialize(context, Configuration.Builder().setMinimumLoggingLevel(Log.WARN).build())
+
+    // The process's scheduled work gone with it: its store closed, and nothing of it left for the next to find.
+    @SuppressLint("RestrictedApi")
+    fun died() {
+        if (!WorkManager.isInitialized()) return
+        WorkManagerImpl.getInstance()?.closeDatabase()
+        forgetLeaked()
     }
 
     // A WorkManager the app made for itself is a static nothing clears: cleared here, so that only the test that made it fails.

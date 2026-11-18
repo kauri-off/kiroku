@@ -32,8 +32,15 @@ class HeldRuns(
         done: () -> Unit = {},
     ): Job {
         if (trigger in SCHEDULING) scope.launch { schedule() }
-        return scope.launch { withTimeoutOrNull(heldFor) { runs()?.run(trigger) } }.also { it.invokeOnCompletion { done() } }
+        return held(heldFor, done) { runs()?.run(trigger) }
     }
+
+    // Other work a broadcast's receiver holds the process for, in the application's scope, let go as a run is.
+    fun held(
+        heldFor: Duration,
+        done: () -> Unit,
+        work: suspend () -> Unit,
+    ): Job = scope.launch { withTimeoutOrNull(heldFor) { work() } }.also { it.invokeOnCompletion { done() } }
 
     // A run each time the app comes to the foreground, which is also the first moment after a force-stop.
     fun atEachOpening(app: Lifecycle) {

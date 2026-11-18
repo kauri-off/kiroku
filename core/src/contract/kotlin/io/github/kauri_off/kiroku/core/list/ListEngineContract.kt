@@ -1617,6 +1617,31 @@ abstract class ListEngineContract {
         }
 
     @Test
+    fun `N9 a mark watched made in one sign-in's list is refused under another, and sends and changes nothing`() =
+        runTest {
+            val s = subject()
+            val failures = failures(s)
+            val anime = FixtureAnime.exactToWatch
+            val made = ListWrite.MarkWatched(anime, 13, a.signIn)
+            s.session.value = Session.SignedOut
+            runCurrent()
+            assertEquals(Outcome.Failure(DataError.ListEnded), s.list.send(made))
+            s.session.value = b
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            val synced = s.server.requests.toList()
+
+            assertEquals(Outcome.Failure(DataError.ListEnded), s.list.send(made))
+            settle()
+
+            assertEquals(synced, s.server.requests)
+            assertEquals(12, s.shownWatched(anime))
+            assertEquals(emptyList<WriteFailure>(), failures)
+            // In its own list it is sent as any other.
+            assertEquals(Outcome.Success(Unit), s.list.send(made.copy(madeIn = b.signIn)))
+            assertEquals(13, s.shownWatched(anime))
+        }
+
+    @Test
     fun `N9 send reports a failure and changes nothing`() =
         runTest {
             val s = subject()

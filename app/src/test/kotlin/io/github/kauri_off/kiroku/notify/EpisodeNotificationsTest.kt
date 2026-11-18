@@ -302,12 +302,17 @@ class EpisodeNotificationsTest {
     fun `the action carries its title and the episode it marks, to this app's receiver alone`() =
         runBlocking {
             val shown = notifications()
-            shown.post(announcement(kagerou, 5, toWatch = 3, marks = 3), alert = true)
-            shown.post(announcement(shiokaze, 8, toWatch = 1, marks = 8), alert = true)
+            val first = announcement(kagerou, 5, toWatch = 3, marks = 3)
+            val second = announcement(shiokaze, 8, toWatch = 1, marks = 8)
+            shown.post(first, alert = true)
+            shown.post(second, alert = true)
             val kagerouAction = episode(kagerou)!!.actions.single().actionIntent
             val shiokazeAction = episode(shiokaze)!!.actions.single().actionIntent
             assertNotEquals(kagerouAction, shiokazeAction)
-            for ((intent, mark) in listOf(kagerouAction to MarkWatched(kagerou.id, 3), shiokazeAction to MarkWatched(shiokaze.id, 8))) {
+            for ((intent, mark) in listOf(
+                kagerouAction to MarkWatched(SOURCE, kagerou.id, 3, first.second),
+                shiokazeAction to MarkWatched(SOURCE, shiokaze.id, 8, second.second),
+            )) {
                 val action = shadowOf(intent)
                 assertTrue(action.isBroadcast)
                 assertTrue(action.isImmutable)
@@ -315,8 +320,12 @@ class EpisodeNotificationsTest {
                 assertEquals(mark, action.savedIntent.markWatched())
             }
             // A replacement's action marks what the replacement says.
-            shown.post(announcement(kagerou, 5, toWatch = 2, marks = 4), alert = false)
-            assertEquals(MarkWatched(kagerou.id, 4), shadowOf(episode(kagerou)!!.actions.single().actionIntent).savedIntent.markWatched())
+            val replaced = announcement(kagerou, 5, toWatch = 2, marks = 4)
+            shown.post(replaced, alert = false)
+            assertEquals(
+                MarkWatched(SOURCE, kagerou.id, 4, replaced.second),
+                shadowOf(episode(kagerou)!!.actions.single().actionIntent).savedIntent.markWatched(),
+            )
             // The receiver is not exported: no other app can send it a broadcast.
             val receiver =
                 app.packageManager.getReceiverInfo(
@@ -348,6 +357,114 @@ class EpisodeNotificationsTest {
             assertEquals(emptyMap<AnimeId, Shown>(), other.shown())
             assertEquals(mapOf(anime.id to said), own.shown())
             assertShownExactly(kagerou)
+        }
+
+    // N9: "Mark watched" that could not be saved says so in the title's notification, which the engine still takes for its own.
+    @Test
+    fun `could not save replaces a title's notification in place, keeping what the engine posted it with`() =
+        runBlocking {
+            val shown = notifications()
+            val (anime, said) = announcement(kagerou, 5, toWatch = 3, marks = 3)
+            shown.post(anime, said, alert = true)
+            shown.post(announcement(shiokaze, 8), alert = true)
+            val was = episode(kagerou)!!
+
+            assertTrue(shown.couldNotSave(kagerou.id, 3, kagerou, said.copy(marks = 1)))
+
+            val failed = episode(kagerou)!!
+            assertEquals(kagerou.titles.romaji, failed.title)
+            assertEquals("Could not save: episode\u00A03\u00A0watched", failed.text)
+            assertEquals(said, shown.shown()[kagerou.id])
+            assertShownExactly(kagerou, shiokaze)
+            // In the stack where it was, at its time, silent, and with no action: a tap opens the title.
+            assertEquals(was.`when`, failed.`when`)
+            assertEquals(was.group, failed.group)
+            assertEquals(EpisodeNotifications.CHANNEL, failed.channelId)
+            assertTrue(failed.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+            assertTrue(failed.flags and Notification.FLAG_AUTO_CANCEL != 0)
+            assertEquals(0, failed.actions.orEmpty().size)
+            assertEquals(kagerou.id, shadowOf(failed.contentIntent).savedIntent.tappedTitle())
+            // The engine's next post for the title turns it back into an episode's notification.
+            shown.post(anime, said.copy(marks = 4), alert = false)
+            assertEquals("Episode\u00A05\u00A0aired · 3\u00A0to watch", episode(kagerou)!!.text)
+        }
+
+    // It replaces a notification the person has seen alert already: it makes no sound or vibration of its own.
+    @Test
+    fun `could not save in place of a shown notification does not alert again`() =
+        runBlocking {
+            val shown = notifications()
+            val (anime, said) = announcement(kagerou, 5)
+            shown.post(anime, said, alert = true)
+
+            shown.couldNotSave(kagerou.id, 5, kagerou, said)
+
+            assertTrue(episode(kagerou)!!.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+        }
+
+    // The person had dismissed it: what the tapped notification said makes it the engine's again, which withdraws it with the rest.
+    @Test
+    fun `could not save for a title whose notification is gone says so with what the tapped one said, and goes as the engine's does`() =
+        runBlocking {
+            val shown = notifications()
+            val (_, said) = announcement(gekkou, 2)
+
+            assertTrue(shown.couldNotSave(gekkou.id, 2, gekkou, said))
+
+            assertEquals(gekkou.titles.romaji, episode(gekkou)!!.title)
+            assertEquals("Could not save: episode\u00A02\u00A0watched", episode(gekkou)!!.text)
+            assertEquals(said.airedAt.toEpochMilli(), episode(gekkou)!!.`when`)
+            assertEquals(mapOf(gekkou.id to said), shown.shown())
+            assertShownExactly(gekkou)
+            shown.withdraw(setOf(gekkou.id))
+            assertShownExactly()
+        }
+
+    @Test
+    fun `could not save without a title to name posts nothing`() =
+        runBlocking {
+            val shown = notifications()
+
+            assertFalse(shown.couldNotSave(gekkou.id, 2, null, announcement(gekkou, 2).second))
+
+            assertShownExactly()
+        }
+
+    @Test
+    @Config(qualifiers = "ru")
+    fun `could not save is Russian under a Russian locale`() =
+        runBlocking {
+            val shown = notifications()
+            val (anime, said) = announcement(kagerou, 16)
+            shown.post(anime, said, alert = true)
+            shown.couldNotSave(kagerou.id, 16, null, said)
+            assertEquals("Не удалось сохранить: серия\u00A016\u00A0просмотрена", episode(kagerou)!!.text)
+            assertEquals(kagerou.titles.romaji, episode(kagerou)!!.title)
+        }
+
+    // A debug build's sources share the device: the action of each is its own pending intent, which names its source.
+    @Test
+    fun `two sources' actions for one title are two pending intents, each naming its source`() =
+        runBlocking {
+            val other = EpisodeNotifications(app, "another", { language }, Duration.ZERO)
+            val own = announcement(kagerou, 5, marks = 4)
+            val others = announcement(kagerou, 7, marks = 6)
+            notifications().post(own, alert = true)
+            other.post(others, alert = true)
+            val actions =
+                active()
+                    .filter { it.id == EpisodeNotifications.EPISODE_ID }
+                    .map {
+                        shadowOf(
+                            it.notification.actions
+                                .single()
+                                .actionIntent,
+                        ).savedIntent.markWatched()
+                    }.toSet()
+            assertEquals(
+                setOf(MarkWatched(SOURCE, kagerou.id, 4, own.second), MarkWatched("another", kagerou.id, 6, others.second)),
+                actions,
+            )
         }
 
     private companion object {
