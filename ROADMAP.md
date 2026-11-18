@@ -277,17 +277,7 @@ missing from it; there are no duplicates.
   later: deny at the prompt, see in the notification settings that the system blocks them, grant in the system's
   settings, return, see the state updated, receive the test notification.
 
-- [ ] **M4-15 Notifications in the debug menu.** What the emulator run and the seven days are read from. A section
-  of the debug menu keeps the engine's reports of its runs across restarts and shows them: the trigger, the time,
-  what was posted or withdrawn, the delay from a notification time to its post, and whether the re-check reached
-  AniList. On the sandbox it plants an episode a chosen number of minutes ahead, kept in the sandbox's own files,
-  so that it survives a restart of the device and every refresh brings it back unchanged, and it postpones a
-  planted episode at the sandbox's AniList. No release build holds any of it.
-  **Needs:** M4-10, M3-11.
-  **Check:** tests: a planted episode is in the sandbox's answer at the same time after a new process and after a
-  refresh, and at its new time once postponed; the section lists one line per run with its trigger and delay, also
-  after a new process; its strings exist in both languages. The debug menu's screenshots are rendered with the
-  section.
+- [x] **M4-15 Notifications in the debug menu.**
 
 - [ ] **M4-16 [O] Emulator run.** The orchestrator runs the preview build once on the emulator against the sandbox,
   signed in; the demo cannot serve, as its data does not survive a restart. With episodes planted by M4-15: the

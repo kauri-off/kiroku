@@ -14,8 +14,10 @@ import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
 import io.github.kauri_off.kiroku.core.notify.RunEnd
+import io.github.kauri_off.kiroku.core.notify.RunReport
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.notify.SentNotification
+import io.github.kauri_off.kiroku.core.notify.StoredNotifications
 import io.github.kauri_off.kiroku.data.network.Device
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +45,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import java.time.Clock
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
@@ -140,6 +143,7 @@ class LiveNotificationsTest {
     private fun notifications(
         scope: CoroutineScope,
         store: () -> NotificationStore = { InMemoryNotificationStore() },
+        runs: KeptRuns? = null,
         renew: suspend () -> Unit,
     ): LiveNotifications {
         val demo = Demo(Fixtures.reference, scope)
@@ -152,8 +156,52 @@ class LiveNotificationsTest {
             { TitleLanguage.Romaji },
             store,
             renew,
+            runs,
         )
     }
+
+    // What a debug build's log is told.
+    private class Told : KeptRuns {
+        val reports = CopyOnWriteArrayList<RunReport>()
+        val notBuilt = CopyOnWriteArrayList<RunTrigger>()
+
+        override fun keep(report: RunReport) {
+            reports += report
+        }
+
+        override fun notBuilt(
+            trigger: RunTrigger,
+            at: Instant,
+        ) {
+            notBuilt += trigger
+        }
+
+        override fun forget() = Unit
+    }
+
+    // The seven days are read from the log: a run that failed is the one it must hold.
+    @Test
+    fun `a run that failed reaches the log as it ended, and one whose engine could not be built leaves its line`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob())
+            val told = Told()
+            val unreadable =
+                object : NotificationStore by InMemoryNotificationStore() {
+                    override suspend fun read(): StoredNotifications = throw IllegalStateException(BROKEN)
+                }
+            val failing = notifications(scope, store = { unreadable }, runs = told) {}
+
+            val report = withTimeout(WAIT) { failing.run(RunTrigger.Alarm) }
+
+            assertEquals(RunEnd.Failed, report.end)
+            assertEquals(report, told.reports.first())
+            assertEquals(BROKEN, unexpected.first().message)
+
+            val unbuilt = notifications(scope, store = { throw IllegalStateException(BROKEN) }, runs = told) {}
+            withTimeout(WAIT) { runCatching { unbuilt.run(RunTrigger.DeviceRestarted) } }
+            assertEquals(listOf(RunTrigger.DeviceRestarted), told.notBuilt.toList())
+            scope.coroutineContext.job.cancelAndJoin()
+        }
 
     // The renewal is the session's matter, and the opening is where it is made: a record that cannot be opened is another.
     @Test
