@@ -389,6 +389,19 @@ class EpisodeNotificationsTest {
             assertEquals("Episode\u00A05\u00A0aired · 3\u00A0to watch", episode(kagerou)!!.text)
         }
 
+    // It replaces a notification the person has seen alert already: it makes no sound or vibration of its own.
+    @Test
+    fun `could not save in place of a shown notification does not alert again`() =
+        runBlocking {
+            val shown = notifications()
+            val (anime, said) = announcement(kagerou, 5)
+            shown.post(anime, said, alert = true)
+
+            shown.couldNotSave(kagerou.id, 5, kagerou, said)
+
+            assertTrue(episode(kagerou)!!.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+        }
+
     // The person had dismissed it: what the tapped notification said makes it the engine's again, which withdraws it with the rest.
     @Test
     fun `could not save for a title whose notification is gone says so with what the tapped one said, and goes as the engine's does`() =

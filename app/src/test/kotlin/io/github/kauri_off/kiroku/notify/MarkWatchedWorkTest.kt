@@ -8,6 +8,7 @@ import android.os.Looper
 import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.await
 import androidx.work.testing.TestListenableWorkerBuilder
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -24,9 +25,11 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.wiring.ListWork
 import io.github.kauri_off.kiroku.wiring.WithoutScreen
 import io.github.kauri_off.kiroku.wiring.WithoutScreenOwner
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -155,7 +158,7 @@ class MarkWatchedWorkTest {
         assertEquals(WorkInfo.State.ENQUEUED, first.state)
         assertEquals(NetworkType.CONNECTED, first.constraints.requiredNetworkType)
         assertEquals(0L, first.initialDelayMillis)
-        assertTrue(MarkWatchedWork.tryOf(Tap(mark, NOW), Duration.ZERO).workSpec.expedited)
+        assertTrue(MarkWatchedWork.tryOf(Tap(mark, NOW, signIn), Duration.ZERO).workSpec.expedited)
         val waitingEnds = ends().single()
         assertEquals(WorkInfo.State.ENQUEUED, waitingEnds.state)
         assertEquals(NetworkType.NOT_REQUIRED, waitingEnds.constraints.requiredNetworkType)
@@ -191,7 +194,7 @@ class MarkWatchedWorkTest {
         val next = tries().single { !it.state.isFinished }
         assertEquals(Duration.ofMinutes(15).toMillis(), next.initialDelayMillis)
         assertEquals(NetworkType.CONNECTED, next.constraints.requiredNetworkType)
-        assertFalse(MarkWatchedWork.tryOf(Tap(mark, NOW), Duration.ofMinutes(15)).workSpec.expedited)
+        assertFalse(MarkWatchedWork.tryOf(Tap(mark, NOW, signIn), Duration.ofMinutes(15)).workSpec.expedited)
         ran(next.id)
         val third = tries().single { !it.state.isFinished }
         assertEquals(MarkWatchedTries.waitAfter(1).toMillis(), third.initialDelayMillis)
@@ -260,7 +263,8 @@ class MarkWatchedWorkTest {
     @Test
     fun `a sign-out ends every tap of its source and leaves nothing of them in scheduled work`() {
         tapped()
-        tapped(mark.copy(source = OTHER))
+        // Another source's tap, as that source's process keeps it.
+        runBlocking { MarkWatchedWork.tapped(application, Tap(mark.copy(source = OTHER), Instant.now(), signIn)).forEach { it.await() } }
         val ended = all()
         assertEquals(2, ended.size)
 
@@ -279,8 +283,8 @@ class MarkWatchedWorkTest {
         val notification = shown()
 
         app.session = Session.SignedOut
-        assertEquals(Tried.Dropped, runBlocking { tries.attempt(mark, Instant.now(), 0) })
-        runBlocking { tries.gaveUp(mark) }
+        assertEquals(Tried.Dropped, runBlocking { tries.attempt(mark, Instant.now(), 0, signIn) })
+        runBlocking { tries.gaveUp(mark, signIn) }
         app.session = Session.SignedIn(signIn)
         assertEquals(Tried.Dropped, runBlocking { tries.attempt(mark, Instant.now(), 1, SignInId("b")) })
         runBlocking { tries.gaveUp(mark, SignInId("b")) }
@@ -288,8 +292,75 @@ class MarkWatchedWorkTest {
         assertEquals(emptyList<ListWrite>(), app.sent.toList())
         // A sign-out that comes between the try's look at the session and its write.
         app.answers += ListWork.SignedOut
-        assertEquals(Tried.Dropped, runBlocking { tries.attempt(mark, Instant.now(), 0) })
+        assertEquals(Tried.Dropped, runBlocking { tries.attempt(mark, Instant.now(), 0, signIn) })
         assertEquals(notification?.text(), shown()?.text())
+    }
+
+    // A sign-in from the "Session expired" banner never goes through the sign-out: the tap is still the list's it was made in.
+    @Test
+    fun `a tap is neither written nor said under a sign-in made after it, also one made after an expiry`() {
+        for (at in listOf(Session.SignedIn(signIn), Session.Expired(signIn))) {
+            app.sent.clear()
+            app.session = at
+            runBlocking { application.shown.post(title, said, alert = true) }
+            val notification = shown()?.text()
+            tapped()
+            app.session = Session.SignedIn(SignInId("b"))
+
+            // The end of the waiting while the try still waits, then the try.
+            ran(ends().single { !it.state.isFinished }.id)
+            assertEquals("$at", notification, shown()?.text())
+            assertEquals("$at", WorkInfo.State.SUCCEEDED, ran(tries().single { !it.state.isFinished }.id).state)
+
+            assertEquals("$at", emptyList<ListWrite>(), app.sent.toList())
+            assertEquals("$at", notification, shown()?.text())
+        }
+    }
+
+    @Test
+    fun `a tap with nobody signed in or of another source is refused and kept nowhere, and one whose session cannot be read says so`() {
+        runBlocking { application.shown.post(title, said, alert = true) }
+        val notification = shown()?.text()
+        app.session = Session.SignedOut
+
+        tapped()
+
+        assertEquals(emptyList<WorkInfo>(), all())
+        assertEquals(notification, shown()?.text())
+        // A tap on another source's notification, whose list this process does not have, is refused as well.
+        app.session = Session.SignedIn(signIn)
+        tapped(mark.copy(source = OTHER))
+        assertEquals(emptyList<WorkInfo>(), all(OTHER))
+
+        app.unreadable = true
+        tapped()
+
+        assertEquals(emptyList<WorkInfo>(), all())
+        assertEquals("Could not save: episode\u00A04\u00A0watched", shown()?.text())
+        assertEquals(emptyList<ListWrite>(), app.sent.toList())
+    }
+
+    // A try that starts just before the day ends may still save: its end says nothing over it.
+    @Test
+    fun `the end of the waiting says nothing while a try of its tap runs`() {
+        val answer = CompletableDeferred<Unit>()
+        app.holding = answer
+        tapped()
+        val trying = tries().single()
+        TestScheduledWork.run(application, trying)
+        until { work.getWorkInfoById(trying.id).get()!!.state == WorkInfo.State.RUNNING }
+
+        assertEquals(WorkInfo.State.SUCCEEDED, ran(ends().single().id).state)
+
+        assertNull(shown())
+        answer.complete(Unit)
+        until {
+            work
+                .getWorkInfoById(trying.id)
+                .get()!!
+                .state.isFinished
+        }
+        assertNull(shown())
     }
 
     @Test
@@ -297,7 +368,7 @@ class MarkWatchedWorkTest {
         app.thrown = IllegalStateException(BROKEN)
         val unexpected = CopyOnWriteArrayList<Throwable>()
 
-        val tried = runBlocking { MarkWatchedTries(app, Clock.systemUTC(), unexpected::add).attempt(mark, Instant.now(), 0) }
+        val tried = runBlocking { MarkWatchedTries(app, Clock.systemUTC(), unexpected::add).attempt(mark, Instant.now(), 0, signIn) }
 
         assertEquals(Tried.NotSaved, tried)
         assertEquals(listOf(BROKEN), unexpected.map { it.message })
@@ -330,7 +401,7 @@ class MarkWatchedWorkTest {
         const val OTHER = "other"
         const val END = "mark-watched-end:"
         const val BROKEN = "broken"
-        const val WAIT_SECONDS = 10L
+        const val WAIT_SECONDS = 15L
         const val POLL = 10L
 
         // Long enough for a broadcast let go too early to show it.
@@ -385,6 +456,14 @@ class ScriptedList(
     @Volatile
     var session: Session = Session.SignedIn(SignInId("a"))
 
+    // The session's store cannot be read: its read never ends.
+    @Volatile
+    var unreadable = false
+
+    // What a write waits for before it is answered.
+    @Volatile
+    var holding: CompletableDeferred<Unit>? = null
+
     val runs = RecordedRuns()
     override val notificationRuns get() = runs
 
@@ -394,6 +473,7 @@ class ScriptedList(
 
     override suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>> {
         thrown?.let { throw it }
+        holding?.await()
         sent += write
         // As the list's engine refuses a write bound to a list that is not the session's.
         if (write.list != null &&
@@ -406,5 +486,5 @@ class ScriptedList(
 
     override suspend fun titleOnList(id: AnimeId): Anime? = listOf(FixtureAnime.exactToWatch).firstOrNull { it.id == id }
 
-    override suspend fun session(): Session = session
+    override suspend fun session(): Session = if (unreadable) awaitCancellation() else session
 }

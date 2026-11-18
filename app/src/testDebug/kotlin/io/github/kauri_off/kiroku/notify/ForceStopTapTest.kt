@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import androidx.work.await
 import io.github.kauri_off.kiroku.KirokuApplication
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.notify.Shown
 import io.github.kauri_off.kiroku.source.DataSource
@@ -58,7 +59,12 @@ class ForceStopTapTest {
         try {
             TestScheduledWork.onTheSystem(application)
             // A try that waits for its time, as one after MAL refused.
-            val tap = Tap(MarkWatched(DataSource.Demo.key, AnimeId(TITLE), 2, Shown(2, 1, 2, Instant.now(), Instant.now())), Instant.now())
+            val tap =
+                Tap(
+                    MarkWatched(DataSource.Demo.key, AnimeId(TITLE), 2, Shown(2, 1, 2, Instant.now(), Instant.now())),
+                    Instant.now(),
+                    SignInId("a"),
+                )
             runBlocking { MarkWatchedWork.next(application, tap, Duration.ofHours(1)).await() }
             val tries =
                 WorkManager
@@ -81,6 +87,28 @@ class ForceStopTapTest {
 
             assertEquals(1, jobsOf(tries).size)
             assertTrue(jobsOf(tries).single().minLatencyMillis > 0)
+        } finally {
+            TestScheduledWork.died()
+        }
+    }
+
+    // S9: a sign-out in a process where nothing has set scheduled work up yet still ends the taps an earlier process left.
+    @Test
+    fun `a sign-out in a process that has not set scheduled work up ends the taps an earlier one left`() {
+        try {
+            TestScheduledWork.onTheSystem(application)
+            val tap =
+                Tap(
+                    MarkWatched(DataSource.Demo.key, AnimeId(TITLE), 2, Shown(2, 1, 2, Instant.now(), Instant.now())),
+                    Instant.now(),
+                    SignInId("a"),
+                )
+            runBlocking { MarkWatchedWork.next(application, tap, Duration.ofHours(1)).await() }
+            TestScheduledWork.died()
+
+            runBlocking { withTimeout(WAIT) { MarkWatchedWork.forget(application, DataSource.Demo.key) } }
+
+            assertEquals(emptyList<Any>(), WorkManager.getInstance(application).getWorkInfosByTag(MarkWatchedWork.tapTag(tap)).get())
         } finally {
             TestScheduledWork.died()
         }

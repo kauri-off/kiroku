@@ -42,10 +42,9 @@ sealed interface Tried {
     // It cannot be saved, and the title's notification says so.
     data object NotSaved : Tried
 
-    // To be tried again this much later, which is within the waiting, in the list of [madeIn].
+    // To be tried again this much later, which is within the waiting.
     data class Again(
         val after: Duration,
-        val madeIn: SignInId,
     ) : Tried
 
     // The list the tap was made on is not this process's (another source, a sign-out, another sign-in): nothing was sent or shown.
@@ -58,17 +57,26 @@ class MarkWatchedTries(
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
 ) {
-    // [madeIn] is the sign-in whose list the tap was made on, as the first try found it; [tried], how many tries came before.
+    // The sign-in whose list a tap is made in, read as it is taken: every try and its end of the waiting must find it again.
+    // Null refuses the tap: nobody signed in leaves nothing to say, and a session that cannot be read says it could not be saved.
+    suspend fun madeIn(mark: MarkWatched): SignInId? {
+        val notice = notice(mark) ?: return null
+        val session = session() ?: return null.also { notSaved(notice, mark, null) }
+        return session.owner
+    }
+
+    // [madeIn] is the sign-in whose list the tap was made in; [tried], how many tries came before.
     suspend fun attempt(
         mark: MarkWatched,
         tappedAt: Instant,
         tried: Int,
-        madeIn: SignInId? = null,
+        madeIn: SignInId,
     ): Tried {
         val notice = notice(mark) ?: return Tried.Dropped
         // S8: a session that cannot be read ends the waiting at once.
         val session = session() ?: return notSaved(notice, mark, null)
-        val owner = session.owner?.takeIf { madeIn == null || it == madeIn } ?: return Tried.Dropped
+        // Signed out since, or signed in again (a new sign-in, also of the same user after an expiry): the tap's list has ended.
+        val owner = session.owner?.takeIf { it == madeIn } ?: return Tried.Dropped
         val ends = tappedAt + WAITED_AT_MOST
         // A try that starts once the waiting has ended sends nothing, however late the system ran it.
         if (!clock.instant().isBefore(ends)) return notSaved(notice, mark, null)
@@ -76,7 +84,7 @@ class MarkWatchedTries(
             try {
                 app.titleOnList(mark.title)
             } catch (_: DataException) {
-                return again(notice, mark, null, waitAfter(tried), ends, owner)
+                return again(notice, mark, null, waitAfter(tried), ends)
             } ?: return notSaved(notice, mark, null)
         val work =
             try {
@@ -93,11 +101,11 @@ class MarkWatchedTries(
                     null -> saved()
                     // Another sign-in's list now, or none: the tap is not its user's to save there.
                     DataError.ListEnded -> Tried.Dropped
-                    in passing -> again(notice, mark, anime, waitAfter(tried), ends, owner)
+                    in passing -> again(notice, mark, anime, waitAfter(tried), ends)
                     else -> notSaved(notice, mark, anime)
                 }
             // Section 2.3: the next try comes when the refusal has ended, and nothing is sent before.
-            is ListWork.Refused -> again(notice, mark, anime, work.remaining, ends, owner)
+            is ListWork.Refused -> again(notice, mark, anime, work.remaining, ends)
             ListWork.SignedOut -> Tried.Dropped
             ListWork.SessionExpired, ListWork.SessionUnread -> notSaved(notice, mark, anime)
         }
@@ -106,11 +114,10 @@ class MarkWatchedTries(
     // The waiting ended with nothing saved, without another try: what the tap's notification is to say, if it is still its user's.
     suspend fun gaveUp(
         mark: MarkWatched,
-        madeIn: SignInId? = null,
+        madeIn: SignInId,
     ) {
         val notice = notice(mark) ?: return
-        val owner = session()?.owner
-        if (owner == null || (madeIn != null && owner != madeIn)) return
+        if (session()?.owner != madeIn) return
         val anime =
             try {
                 app.titleOnList(mark.title)
@@ -143,8 +150,7 @@ class MarkWatchedTries(
         anime: Anime?,
         wait: Duration,
         ends: Instant,
-        owner: SignInId,
-    ): Tried = if (clock.instant().plus(wait).isBefore(ends)) Tried.Again(wait, owner) else notSaved(notice, mark, anime)
+    ): Tried = if (clock.instant().plus(wait).isBefore(ends)) Tried.Again(wait) else notSaved(notice, mark, anime)
 
     private suspend fun notSaved(
         notice: NotSavedNotice,

@@ -32,13 +32,13 @@ import java.io.File
 import java.time.Duration
 import java.time.Instant
 
-// A tap on "Mark watched", as its tries carry it: what it marks, when it was tapped, how many tries came before, and the
-// sign-in whose list the first try found, which every later try must find again.
+// A tap on "Mark watched", as its tries carry it: what it marks, when it was tapped and in which sign-in's list, and how
+// many tries came before.
 data class Tap(
     val mark: MarkWatched,
     val tappedAt: Instant,
+    val madeIn: SignInId,
     val tried: Int = 0,
-    val madeIn: SignInId? = null,
 )
 
 // Scheduled work keeps a tap across the death of its process: a try under way when the process dies is made again, and
@@ -110,7 +110,7 @@ object MarkWatchedWork {
             .putInt(EPISODE, mark.episode)
             .putLong(TAPPED_AT, tappedAt.toEpochMilli())
             .putInt(TRIED, tried)
-            .apply { madeIn?.let { putString(MADE_IN, it.value) } }
+            .putString(MADE_IN, madeIn.value)
             .putInt(SAID_EPISODE, said.episode)
             .apply { said.toWatch?.let { putInt(SAID_TO_WATCH, it) } }
             .putInt(SAID_MARKS, said.marks)
@@ -134,7 +134,8 @@ object MarkWatchedWork {
                 Instant.ofEpochMilli(getLong(SAID_NOTIFY_AT, -1).takeIf { it >= 0 } ?: return null),
             )
         val mark = MarkWatched(source, AnimeId(title), episode, said)
-        return Tap(mark, Instant.ofEpochMilli(tappedAt), getInt(TRIED, 0), getString(MADE_IN)?.let(::SignInId))
+        val madeIn = getString(MADE_IN)?.let(::SignInId) ?: return null
+        return Tap(mark, Instant.ofEpochMilli(tappedAt), madeIn, getInt(TRIED, 0))
     }
 
     private val WORK_DATABASE = notShown("androidx.work.workdb")
@@ -160,9 +161,7 @@ class MarkWatchedWorker(
         val tap = with(MarkWatchedWork) { inputData.tap() } ?: return Result.success()
         val app = applicationContext.withoutScreen ?: return Result.success()
         val tried = MarkWatchedTries(app, DeviceClock, reportUnexpected).attempt(tap.mark, tap.tappedAt, tap.tried, tap.madeIn)
-        if (tried is Tried.Again) {
-            MarkWatchedWork.next(applicationContext, tap.copy(tried = tap.tried + 1, madeIn = tried.madeIn), tried.after).await()
-        }
+        if (tried is Tried.Again) MarkWatchedWork.next(applicationContext, tap.copy(tried = tap.tried + 1), tried.after).await()
         return Result.success()
     }
 
@@ -188,7 +187,7 @@ class WaitingEndWorker(
         val waiting = tries.filterNot { it.state.isFinished }
         if (waiting.isEmpty() || waiting.any { it.state == WorkInfo.State.RUNNING }) return Result.success()
         val app = applicationContext.withoutScreen ?: return Result.success()
-        MarkWatchedTries(app, DeviceClock, reportUnexpected).gaveUp(tap.mark)
+        MarkWatchedTries(app, DeviceClock, reportUnexpected).gaveUp(tap.mark, tap.madeIn)
         return Result.success()
     }
 }

@@ -156,7 +156,7 @@ class SandboxMarkWatchedTest {
         tappedAt: Instant = now(),
         tried: Int = 0,
         madeIn: SignInId? = null,
-    ): Tried = waited { tries().attempt(markOf(title, episode), tappedAt, tried, madeIn) }
+    ): Tried = waited { tries().attempt(markOf(title, episode), tappedAt, tried, madeIn ?: signIn()) }
 
     // The action of [title]'s notification as it is shown, or as one for [episode] would be.
     private fun markOf(
@@ -284,7 +284,7 @@ class SandboxMarkWatchedTest {
 
         val waited = graph.tried(title.anime.id, next)
 
-        assertEquals(Tried.Again(MarkWatchedTries.waitAfter(0), graph.signIn()), waited)
+        assertEquals(Tried.Again(MarkWatchedTries.waitAfter(0)), waited)
         assertEquals(emptyList<String>(), graph.writes(before))
         graph.scenarios.set(Scenario())
         assertEquals(Tried.Saved, graph.tried(title.anime.id, next, tried = 1))
@@ -371,7 +371,8 @@ class SandboxMarkWatchedTest {
     // A try in a thread of its own, as scheduled work makes it, which the test can end as the process's death would.
     private fun SandboxGraph.tryingAside(mark: MarkWatched): Job {
         val trying = Job()
-        thread { runBlocking(trying) { tries().attempt(mark, now(), 0) } }
+        val madeIn = signIn()
+        thread { runBlocking(trying) { tries().attempt(mark, now(), 0, madeIn) } }
         return trying
     }
 
@@ -404,7 +405,8 @@ class SandboxMarkWatchedTest {
         val title = graph.watching()
         val before = graph.asked()
 
-        val tried = waited { graph.tries().attempt(markOf(title.anime.id, title.values.watchedEpisodes + 1, "account"), now(), 0) }
+        val tried =
+            waited { graph.tries().attempt(markOf(title.anime.id, title.values.watchedEpisodes + 1, "account"), now(), 0, graph.signIn()) }
 
         assertEquals(Tried.Dropped, tried)
         assertEquals(emptyList<String>(), graph.requests(before))
@@ -426,7 +428,7 @@ class SandboxMarkWatchedTest {
         val next = graph.entry(soon).values.watchedEpisodes + 1
         val madeIn = graph.signIn()
         graph.scenarios.set(Scenario(offline = true))
-        val tap = Tap(markOf(soon, next), now())
+        val tap = Tap(markOf(soon, next), now(), madeIn)
         waited { MarkWatchedWork.tapped(context, tap).forEach { it.await() } }
         assertTrue(graph.tried(soon, next, madeIn = madeIn) is Tried.Again)
         assertEquals(
@@ -484,7 +486,7 @@ class SandboxMarkWatchedTest {
                     NotificationManager::class.java,
                 ).cancel(EpisodeNotifications.tag(SOURCE, soon), EpisodeNotifications.EPISODE_ID)
 
-            assertEquals(Tried.NotSaved, waited { graph.tries().attempt(mark, now(), 0) })
+            assertEquals(Tried.NotSaved, waited { graph.tries().attempt(mark, now(), 0, graph.signIn()) })
             assertEquals(COULD_NOT_SAVE.format(mark.episode), posted(soon)?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString())
             assertEquals(announced, shown().getValue(soon))
 

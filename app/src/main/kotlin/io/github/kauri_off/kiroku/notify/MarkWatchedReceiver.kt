@@ -20,16 +20,20 @@ class MarkWatchedReceiver : BroadcastReceiver() {
         val mark = intent.markWatched() ?: return
         val runs = context.heldRuns ?: return
         val app = context.applicationContext
+        val tappedAt = DeviceClock.instant()
         val pending = goAsync()
         runs.held(HELD_FOR_FOREGROUND, pending::finish) {
+            val tries = app.withoutScreen?.let { MarkWatchedTries(it, DeviceClock, reportUnexpected) } ?: return@held
+            // The tap is the list's it was made in, whatever sign-in comes after it.
+            val madeIn = tries.madeIn(mark) ?: return@held
             try {
-                MarkWatchedWork.tapped(app, Tap(mark, DeviceClock.instant())).forEach { it.await() }
+                MarkWatchedWork.tapped(app, Tap(mark, tappedAt, madeIn)).forEach { it.await() }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // Scheduled work's own store failed, which is the device's state and not the app's fault: it is logged.
                 logTypes(e)
-                app.withoutScreen?.let { MarkWatchedTries(it, DeviceClock, reportUnexpected).gaveUp(mark) }
+                tries.gaveUp(mark, madeIn)
             }
         }
     }
