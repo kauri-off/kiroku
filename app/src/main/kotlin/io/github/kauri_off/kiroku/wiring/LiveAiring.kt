@@ -113,15 +113,21 @@ internal class SignedInSource(
     private val source: AiringSource,
     private val session: Flow<Session>,
 ) : AiringSource {
+    override suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         session
             .map { it == Session.SignedOut }
             .distinctUntilChanged()
-            .transformLatest { signedOut -> emit(if (signedOut) null else source.fetch(titles, since)) }
+            .transformLatest { signedOut -> emit(if (signedOut) null else source.fetch(titles, since, whole)) }
             .first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
 }
 

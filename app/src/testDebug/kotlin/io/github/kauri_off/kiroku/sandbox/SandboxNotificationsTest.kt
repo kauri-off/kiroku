@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.notificationlog.LoggedPost
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
+import io.github.kauri_off.kiroku.notify.periodicRun
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.wiring.AppEnds
@@ -41,6 +42,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -96,11 +98,11 @@ class SandboxNotificationsTest {
     private fun <T> waited(block: suspend () -> T): T = runBlocking { withTimeout(WAIT) { block() } }
 
     // A new process of the app on the sandbox, over the files the one before it left; that one has ended.
-    private fun started(): SandboxGraph {
+    private fun started(device: Device = Online): SandboxGraph {
         ended()
         val scope = applicationScope(unexpected::add)
         val graph =
-            SandboxGraph.create(context, Clock.systemUTC(), Online) { source, device, clock ->
+            SandboxGraph.create(context, Clock.systemUTC(), device) { source, device, clock ->
                 LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, unexpected::add, device = device)
             }
         process = Process(graph, scope)
@@ -366,6 +368,180 @@ class SandboxNotificationsTest {
         val refused = asked()
         assertTrue(waited { graph.withoutScreen.sendToList(write) } is ListWork.Refused)
         assertEquals(emptyList<String>(), requests(refused).filter { MAL in it })
+    }
+
+    // The sandbox's MAL changed as its website changes it, with no process of the app running: only a download tells the app.
+    private fun onWebsite(
+        title: AnimeId,
+        status: String,
+    ) {
+        val file = File(context.noBackupFilesDir, "sandbox.mal.list")
+        val kept = JSONObject(file.readText())
+        kept
+            .getJSONObject("entries")
+            .getJSONObject(title.value.toString())
+            .put("status", status)
+            .put("updated", now().epochSecond)
+        file.writeText(kept.toString())
+    }
+
+    private fun aniListAsked(): Int =
+        process!!
+            .graph.sandbox.aniList.asked.size
+
+    // N2, S7: the periodic work is the one background renewal, and what it downloads is read before the engine's run.
+    @Test
+    fun `a periodic run renews due tokens, downloads the list once, updates stale airing data and skips a title dropped on the website`() {
+        val first = started()
+        first.signedIn()
+        first.synced()
+        val pages = requests(0).count { it == LIST }
+        first.run(RunTrigger.AppOpened)
+        assertTrue("${first.coming()}", first.coming().any { it.anime.id == soon })
+        ended()
+        onWebsite(soon, "dropped")
+        // A week on: the soon title's next episode aired an hour ago, and every title's airing data is stale.
+        time.ahead = DUE
+
+        val later = started()
+        val before = asked()
+        val aniList = aniListAsked()
+        val report = waited { periodicRun(later.withoutScreen) }
+
+        assertEquals(ListWork.Done(Outcome.Success(Unit)), report.list)
+        assertEquals(Outcome.Success(Unit), report.airing)
+        val mal = requests(before).filter { MAL in it }
+        assertEquals(listOf(TOKEN) + List(pages) { LIST }, mal)
+        assertTrue(aniListAsked() > aniList)
+        // In nanoseconds, as the database keeps an instant.
+        assertEquals(0L, rows("airing", "fetched_at < ${now().minusSeconds(60).epochSecond}000000000"))
+        assertTrue(rows("airing") > 0)
+        assertEquals(RunEnd.Done, report.notifications!!.end)
+        assertEquals(emptyList<Int>(), report.notifications.posted.ofSoon())
+        assertTrue(soon !in shown())
+    }
+
+    @Test
+    fun `a periodic run with no connection announces what is overdue from stored data and sends no request`() {
+        val first = started()
+        first.signedIn()
+        first.synced()
+        first.run(RunTrigger.AppOpened)
+        ended()
+        // A week on, with the tokens due and every title's airing data stale.
+        time.ahead = DUE
+        val later = started()
+        val due =
+            waited { later.airing.observeSchedules().first() }
+                .getValue(
+                    soon,
+                ).episodes
+                .filter { it.airsAt <= now() }
+                .maxOf { it.number }
+        later.scenarios.set(Scenario(offline = true))
+        val before = asked()
+
+        val report = waited { periodicRun(later.withoutScreen) }
+
+        assertEquals(ListWork.Done(Outcome.Failure(DataError.NoConnection)), report.list)
+        assertEquals(Outcome.Failure(DataError.NoConnection), report.airing)
+        assertEquals(listOf(due), report.notifications!!.posted.ofSoon())
+        assertEquals(due, shown().getValue(soon).episode)
+        // A write without a screen is not sent either, and waits for a connection.
+        val watching = waited { later.list.observeEntries().first() }.first { it.status == ListStatus.Watching }
+        val write = ListWrite.MarkNextWatched(watching.anime)
+        assertEquals(ListWork.Done(Outcome.Failure(DataError.NoConnection)), waited { later.withoutScreen.sendToList(write) })
+        assertEquals(emptyList<String>(), requests(before))
+    }
+
+    // An episode AniList moved since is known to the engine's run: the airing data is updated before it.
+    @Test
+    fun `a periodic run announces from the airing data it has just updated, so an episode postponed since is not announced`() {
+        val graph = started()
+        graph.signedIn()
+        graph.synced()
+        graph.run(RunTrigger.AppOpened)
+        val stored = graph.coming().single { it.anime.id == soon }
+        val postponed = checkNotNull(waited { withContext(Dispatchers.IO) { graph.sandbox.plant(now().plus(Duration.ofMinutes(30))) } })
+        assertEquals(stored.episode, postponed.episode)
+        // Past the stored time and the airing data's freshness; before the new time.
+        time.ahead = time.ahead + Duration.ofMinutes(16)
+
+        val report = waited { periodicRun(graph.withoutScreen) }
+
+        assertEquals(Outcome.Success(Unit), report.airing)
+        assertEquals(emptyList<Int>(), report.notifications!!.posted.ofSoon())
+        assertEquals(postponed.at, graph.coming().single { it.anime.id == soon }.notifyAt)
+    }
+
+    // A device that cannot tell its connection is offline to work without a screen: waited out, never a failed write.
+    @Test
+    fun `a connection check that throws sends nothing without a screen, answers no connection and is reported`() {
+        val thrown = IllegalStateException("The connectivity service is gone")
+        val device =
+            object : Device by Online {
+                @Volatile
+                var throwing = false
+
+                override fun isOnline(): Boolean = if (throwing) throw thrown else true
+            }
+        val graph = started(device)
+        graph.signedIn()
+        graph.synced()
+        val watching = waited { graph.list.observeEntries().first() }.first { it.status == ListStatus.Watching }
+        device.throwing = true
+        val before = asked()
+
+        assertEquals(ListWork.Done(Outcome.Failure(DataError.NoConnection)), waited { graph.withoutScreen.syncList() })
+        assertEquals(
+            ListWork.Done(Outcome.Failure(DataError.NoConnection)),
+            waited { graph.withoutScreen.sendToList(ListWrite.MarkNextWatched(watching.anime)) },
+        )
+        assertEquals(Outcome.Failure(DataError.NoConnection), waited { graph.withoutScreen.updateAiring() })
+
+        assertEquals(emptyList<String>(), requests(before))
+        assertEquals(List(3) { thrown }, unexpected.filter { it === thrown })
+        unexpected.removeAll { it === thrown }
+        device.throwing = false
+    }
+
+    @Test
+    fun `with MAL's back-off set or the session expired, a periodic run sends MAL nothing and still updates the airing data`() {
+        for (expired in listOf(true, false)) {
+            val graph = started()
+            graph.signedIn()
+            graph.synced()
+            graph.run(RunTrigger.AppOpened)
+            // The refusal comes late enough that the airing data is stale while its back-off lasts.
+            time.ahead = time.ahead + Duration.ofMinutes(14)
+            if (expired) {
+                graph.scenarios.set(Scenario(sessionExpired = true))
+                waited { graph.list.sync() }
+                assertTrue(waited { graph.session.observeSession().first() } is Session.Expired)
+            } else {
+                graph.refused()
+            }
+            time.ahead = time.ahead + Duration.ofMinutes(2)
+            val before = asked()
+            val aniList = aniListAsked()
+
+            val report = waited { periodicRun(graph.withoutScreen) }
+
+            if (expired) {
+                assertEquals(
+                    ListWork.SessionExpired,
+                    report.list,
+                )
+            } else {
+                assertTrue("${report.list}", report.list is ListWork.Refused)
+            }
+            assertEquals("$expired", emptyList<String>(), requests(before).filter { MAL in it })
+            assertEquals("$expired", Outcome.Success(Unit), report.airing)
+            assertTrue("$expired", aniListAsked() > aniList)
+            assertEquals("$expired", RunEnd.Done, report.notifications!!.end)
+            graph.scenarios.set(Scenario())
+            waited { graph.session.signOut() }
+        }
     }
 
     // A debug or preview build's sources share the device: each has its own notifications there, as it has its own files.

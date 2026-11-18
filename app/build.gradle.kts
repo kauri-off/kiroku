@@ -178,6 +178,7 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.coil.test)
     testImplementation(libs.okhttp.mockwebserver3)
+    testImplementation(libs.work.testing)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)

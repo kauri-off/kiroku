@@ -20,6 +20,8 @@ val HELD_FOR_FOREGROUND = 8.seconds
 // Starts the notification engine's runs where no screen asks for one, and at the app's opening.
 class HeldRuns(
     private val scope: CoroutineScope,
+    // Schedules the periodic work off the main thread at the moments below: after a force-stop nothing else sets it up again.
+    private val schedule: () -> Unit = {},
     // The engine, built at its first use and off the main thread; none in a graph without notifications.
     private val runs: () -> NotificationRuns?,
 ) {
@@ -28,7 +30,10 @@ class HeldRuns(
         trigger: RunTrigger,
         heldFor: Duration = HELD_FOR,
         done: () -> Unit = {},
-    ): Job = scope.launch { withTimeoutOrNull(heldFor) { runs()?.run(trigger) } }.also { it.invokeOnCompletion { done() } }
+    ): Job {
+        if (trigger in SCHEDULING) scope.launch { schedule() }
+        return scope.launch { withTimeoutOrNull(heldFor) { runs()?.run(trigger) } }.also { it.invokeOnCompletion { done() } }
+    }
 
     // A run each time the app comes to the foreground, which is also the first moment after a force-stop.
     fun atEachOpening(app: Lifecycle) {
@@ -41,6 +46,8 @@ class HeldRuns(
         )
     }
 }
+
+private val SCHEDULING = setOf(RunTrigger.DeviceRestarted, RunTrigger.AppUpdated, RunTrigger.AlarmAccessChanged, RunTrigger.AppOpened)
 
 // A process that runs the notification engine: the application.
 interface HeldRunsOwner {

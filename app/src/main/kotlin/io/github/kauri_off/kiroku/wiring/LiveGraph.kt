@@ -2,6 +2,8 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
 import io.github.kauri_off.kiroku.BuildConfig
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
@@ -146,6 +148,20 @@ internal class LiveGraph(
             reports = runLog,
         )
     }
+
+    // Work without a screen sends nothing while the device is offline, so a run then reads only what is stored.
+    private val device = parts.device
+    private val unexpected = parts.unexpected
+
+    // A device that cannot say is offline, which a caller waits out, never a failure of the work itself.
+    private fun online(): Boolean =
+        try {
+            device.isOnline()
+        } catch (e: Exception) {
+            unexpected(e)
+            false
+        }
+
     override val withoutScreen: WithoutScreen =
         object : WithoutScreen {
             override val notificationRuns: NotificationRuns get() = notifications
@@ -153,17 +169,23 @@ internal class LiveGraph(
             override suspend fun syncList() = inBackground { list.sync() }
 
             override suspend fun sendToList(write: ListWrite) = inBackground { list.send(write) }
+
+            // AniList's own pace and refusal hold it back, never MAL's session or back-off.
+            override suspend fun updateAiring(): Outcome<Unit> =
+                if (online()) airing.refreshStale() else Outcome.Failure(DataError.NoConnection)
         }
 
-    // The work behind MAL's way in, with what held it back told by its role.
-    private suspend fun <T> inBackground(work: suspend () -> T): ListWork<T> =
-        when (val run = wayIn.run(work)) {
+    // The work behind MAL's way in, with what held it back told by its role; offline the tokens are not renewed either.
+    private suspend fun inBackground(work: suspend () -> Outcome<Unit>): ListWork<Outcome<Unit>> {
+        if (!online()) return ListWork.Done(Outcome.Failure(DataError.NoConnection))
+        return when (val run = wayIn.run(work)) {
             is BackgroundRun.Ran -> ListWork.Done(run.value)
             HeldBack.SignedOut -> ListWork.SignedOut
             HeldBack.Expired -> ListWork.SessionExpired
             HeldBack.TokensUnread -> ListWork.SessionUnread
             is HeldBack.Refused -> ListWork.Refused(run.remaining)
         }
+    }
 
     override val images = parts.http.callFactory
 

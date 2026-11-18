@@ -41,16 +41,24 @@ class AniListAiring(
     // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking.
     private val failures = mutableMapOf<Int, Pair<ComparableTimeMark, DataError>>()
 
-    // Whole schedules: every title's pages of episodes are followed to the last, so nothing is left out.
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct()).run() }
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+
+    // Whole schedules: every title's pages of episodes are followed to the last, and each title handed over once it is final.
+    override suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct(), whole).run() }
 
     private inner class Fetch(
         ids: List<AnimeId>,
+        private val whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ) {
         private val results = mutableMapOf<AnimeId, Outcome<FetchedAiring?>>()
+        private val handed = mutableSetOf<AnimeId>()
         private val asked = mutableMapOf<Int, AnimeId>()
 
         // Each title's entries, in AniList's order, with the pages of their schedules read so far.
@@ -86,7 +94,10 @@ class AniListAiring(
         }
 
         private suspend fun fetched() {
-            firstPages(asked.keys.toList(), last = false).chunked(AniListSchedule.TITLES_PER_PAGE).forEach { firstPages(it, last = true) }
+            firstPages(asked.keys.toList(), last = false).also { handOver() }.chunked(AniListSchedule.TITLES_PER_PAGE).forEach {
+                firstPages(it, last = true)
+                handOver()
+            }
             for (schedulePage in 2..Int.MAX_VALUE) {
                 val more = gathered.filterValues { entries -> entries.any { it.moreEpisodes } }.keys.toList()
                 if (more.isEmpty()) break
@@ -95,14 +106,26 @@ class AniListAiring(
                     break
                 }
                 laterPages(more, schedulePage)
+                handOver()
             }
+            handOver()
+        }
+
+        // Each title not handed over yet whose answer is final: a failure, an unknown id, or a schedule read to its last page.
+        private suspend fun handOver() {
             val now = clock.instant()
             for ((malId, entries) in gathered) {
+                val id = asked.getValue(malId)
+                if (id in results || entries.any { it.moreEpisodes }) continue
                 val entry = chosen(entries, now)
                 val episodes = entry.episodes.sortedWith(compareBy({ it.number }, { it.airsAt }))
                 val schedule = AiringSchedule(episodes, entry.total, doubtedOver(entry, entries, now))
-                results[asked.getValue(malId)] = Outcome.Success(FetchedAiring(schedule))
+                results[id] = Outcome.Success(FetchedAiring(schedule))
             }
+            val part = results.filterKeys { it !in handed }
+            if (part.isEmpty()) return
+            handed += part.keys
+            whole(part)
         }
 
         // First pages of episodes; only one page of titles settles an id, and after a failed page more ids than fill one are asked again.

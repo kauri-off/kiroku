@@ -225,22 +225,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-10 Live notifications.**
 
-- [ ] **M4-11 Periodic background work.** Scheduled work keeps the app right while nobody opens it. Without a
-  network it runs the engine (N2). With one it also renews the tokens (S7), downloads the list through M4-04's way
-  in and refreshes the airing data of the tracked titles (sections 4 and 7.1), so that a status changed on the
-  website and an episode AniList scheduled since are known before their notification time. It is scheduled once,
-  survives a restart and an update, and scheduling it again does not double it. The hand-off states its interval
-  for the owner's approval, and what the system does to it in Doze and for an app the user rarely opens, from the
-  documentation and the emulator. Read first, on developer.android.com:
-  `develop/background-work/background-tasks/persistent` with its `…/getting-started/define-work` and
-  `…/how-to/manage-work`, and the two pages on Doze and on power restrictions that M4-09 names.
-  **Needs:** M4-04, M4-10.
-  **Check:** tests: one run with the sandbox online renews tokens that are due, downloads the list once and
-  refreshes the stale airing data, and a title dropped at the sandbox's MAL since the last download is not
-  announced; offline it announces what is overdue from stored data and sends no request; with MAL's back-off set,
-  or the session expired, it sends MAL nothing and still refreshes the airing data; scheduled twice, it is there
-  once. On an emulator: the work is scheduled after the app was opened once and again after a restart of the
-  device, and made to run with the network off it posts the sandbox's overdue episode.
+- [x] **M4-11 Periodic background work.**
 
 - [ ] **M4-12 "Mark watched" from the notification.** The action of M4-08's notification writes through
   `ListRepository.send` and M4-04's way in: it marks the episode its notification named, and only while that is the

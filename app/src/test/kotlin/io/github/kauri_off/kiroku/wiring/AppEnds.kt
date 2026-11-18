@@ -1,11 +1,14 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.os.Looper
+import androidx.work.WorkManager
 import io.github.kauri_off.kiroku.KirokuApplication
+import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.reports.reportLog
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.rules.ExternalResource
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -20,6 +23,10 @@ class AppEnds : ExternalResource() {
         shadowOf(Looper.getMainLooper()).idle()
         val clockSet = shadowOf(app).registeredReceivers.filter { receiver -> CLOCK_SET.any(receiver.intentFilter::hasAction) }
         assertEquals(emptyList<Any>(), clockSet)
+        TestScheduledWork.end()
+        val leaked = WorkManager.isInitialized()
+        if (leaked) TestScheduledWork.forgetLeaked()
+        assertFalse("the app set up scheduled work of its own: give the test TestScheduledWork", leaked)
     }
 
     companion object {

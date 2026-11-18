@@ -124,6 +124,6 @@ class DemoGraph(
     override val connection = demo.connection
     override val preferences = demo.preferences
     override val notifications get() = demo.notifications
-    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications })
+    override val withoutScreen = WorkAtOnce({ list }, { airing }, { demo.notifications })
     override val madeUp = true
 }

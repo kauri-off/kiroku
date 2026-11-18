@@ -43,6 +43,10 @@ class ScriptedAiringSource(
     @Volatile
     var answering: (Map<AnimeId, Outcome<FetchedAiring?>>) -> Map<AnimeId, Outcome<FetchedAiring?>> = { it }
 
+    // Of each call, these titles are handed over whole before the call's latency, as a source whose pages come one by one.
+    @Volatile
+    var handedFirst: Set<AnimeId> = emptySet()
+
     // The calls received: the ids each asked for, the titles as handed over, and the instant.
     val calls = CopyOnWriteArrayList<Set<AnimeId>>()
     val handed = CopyOnWriteArrayList<Anime>()
@@ -57,6 +61,12 @@ class ScriptedAiringSource(
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+
+    override suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> {
         val ids = titles.mapTo(LinkedHashSet()) { it.id }
         calls += ids
@@ -64,6 +74,7 @@ class ScriptedAiringSource(
         asked += since
         most.accumulateAndGet(running.incrementAndGet(), ::maxOf)
         try {
+            ids.filter { it in handedFirst }.takeIf { it.isNotEmpty() }?.let { first -> whole(answering(answer(first.toSet(), since))) }
             delay(latency)
             throwing?.let { throw it }
             return answering(answer(ids, since))
