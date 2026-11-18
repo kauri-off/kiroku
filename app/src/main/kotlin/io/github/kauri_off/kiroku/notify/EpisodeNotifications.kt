@@ -27,7 +27,7 @@ import kotlin.time.Duration.Companion.nanoseconds
 class EpisodeNotifications(
     context: Context,
     // Whose list they are of: a debug build's sources share the device, and each sees and removes its own alone.
-    private val source: String,
+    val source: String,
     private val language: () -> TitleLanguage,
     private val gap: Duration = ENQUEUE_GAP,
 ) : ShownNotifications {
@@ -121,9 +121,38 @@ class EpisodeNotifications(
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setAutoCancel(true)
             .setContentIntent(context.tap(anime.id))
-            .addAction(0, context.getString(R.string.notify_mark_watched, marks), context.markWatched(MarkWatched(anime.id, marks)))
+            .addAction(0, context.getString(R.string.notify_mark_watched, marks), context.markWatched(MarkWatched(source, anime.id, marks)))
             .addExtras(extras)
             .build()
+    }
+
+    // N9: the title's notification says that marking [episode] watched could not be saved, and a tap opens the title. In place
+    // of a shown one it keeps what that was posted with, so the engine still takes it for its own: it goes, or turns back into
+    // an episode's notification, as the list asks (N7).
+    suspend fun couldNotSave(
+        title: AnimeId,
+        episode: Int,
+        anime: Anime?,
+    ) = lock.withLock {
+        val was = episodes()[title]?.notification
+        val name = anime?.titles?.preferred(language()) ?: was?.extras?.getCharSequence(Notification.EXTRA_TITLE)
+        val failed =
+            NotificationCompat
+                .Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(name)
+                .setContentText(context.getString(R.string.notify_could_not_save, episode))
+                .setWhen(was?.`when` ?: System.currentTimeMillis())
+                .setOnlyAlertOnce(true)
+                .setGroup(group(source))
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+                .setAutoCancel(true)
+                .setContentIntent(context.tap(title))
+                .addExtras(was?.extras?.ownValues() ?: Bundle())
+                .build()
+        channel()
+        enqueue { system.notify(tag(source, title), EPISODE_ID, failed) }
+        summary(true)
     }
 
     // The group's summary while one of its notifications is [shown]; it holds no count, so only a new language posts it again.
@@ -170,6 +199,13 @@ class EpisodeNotifications(
         val notifyAt = extras.getString(NOTIFY_AT)?.let(Instant::parse) ?: return null
         return Shown(extras.getInt(EPISODE), toWatch, extras.getInt(MARKS), airedAt, notifyAt)
     }
+
+    // What an episode's notification was posted with, and nothing the system added.
+    private fun Bundle.ownValues() =
+        Bundle().also { kept ->
+            for (key in listOf(EPISODE, TO_WATCH, MARKS)) if (containsKey(key)) kept.putInt(key, getInt(key))
+            for (key in listOf(AIRED_AT, NOTIFY_AT)) getString(key)?.let { kept.putString(key, it) }
+        }
 
     companion object {
         val CHANNEL = notShown("episodes")

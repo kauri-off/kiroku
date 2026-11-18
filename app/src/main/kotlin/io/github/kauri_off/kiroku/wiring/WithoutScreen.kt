@@ -2,9 +2,13 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.notify.EpisodeNotifications
+import kotlinx.coroutines.flow.first
 import java.time.Duration
 
 // What came of work on the list that no screen asked for.
@@ -40,6 +44,12 @@ interface WithoutScreen {
 
     // Writes to the list and waits for the service's answer (N9), with the tokens renewed first as for a download.
     suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>>
+
+    // The title as the list on the device has it, with nothing sent; null when it is not on the list. Throws a DataException when the list cannot be read.
+    suspend fun titleOnList(id: AnimeId): Anime?
+
+    // The device's notifications of this graph's titles; none in a graph that posts none.
+    val shown: EpisodeNotifications?
 }
 
 // A process that runs work without a screen: the application.
@@ -53,10 +63,13 @@ val Context.withoutScreen: WithoutScreen? get() = (applicationContext as? Withou
 class WorkAtOnce(
     private val list: () -> ListRepository,
     private val runs: () -> NotificationRuns?,
+    override val shown: EpisodeNotifications? = null,
 ) : WithoutScreen {
     override val notificationRuns: NotificationRuns? get() = runs()
 
     override suspend fun syncList(): ListWork<Outcome<Unit>> = ListWork.Done(list().sync())
 
     override suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>> = ListWork.Done(list().send(write))
+
+    override suspend fun titleOnList(id: AnimeId): Anime? = list().observeEntry(id).first()?.anime
 }

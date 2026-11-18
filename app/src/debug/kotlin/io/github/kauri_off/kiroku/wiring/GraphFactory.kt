@@ -62,7 +62,10 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
             lateinit var graph: DemoGraph
             val alarm = DemoAlarm(scope) { graph.demo }
             val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
-            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown), scope).also { graph = it }
+            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown), scope, shown).also {
+                graph =
+                    it
+            }
         }
         DataSource.Sandbox ->
             SandboxGraph.create(context, clock) { source, device, sandboxClock ->
@@ -98,6 +101,8 @@ internal class DemoAlarm(
 class DemoGraph(
     val demo: Demo,
     scope: CoroutineScope,
+    // The demo's notifications on the device, which none has outside a process that shows them.
+    shown: EpisodeNotifications? = null,
 ) : AppGraph,
     ScenariosOwner {
     override val scenarios = Scenarios(demo, scope)
@@ -113,6 +118,6 @@ class DemoGraph(
     override val connection = demo.connection
     override val preferences = demo.preferences
     override val notifications get() = demo.notifications
-    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications })
+    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications }, shown)
     override val madeUp = true
 }

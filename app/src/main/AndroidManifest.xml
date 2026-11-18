@@ -7,13 +7,13 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- The alarm and scheduled work are set again after a restart of the device. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- N9: scheduled work starts no foreground service, which alone would hold a wake lock. -->
+    <!-- N9: before Android 12 the system runs "Mark watched" as a foreground service, which holds a wake lock; from 12 neither is asked for. -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE"
-        tools:node="remove" />
+        android:maxSdkVersion="30" />
     <uses-permission
         android:name="android.permission.WAKE_LOCK"
-        tools:node="remove" />
+        android:maxSdkVersion="30" />
 
     <application
         android:name=".KirokuApplication"
@@ -51,9 +51,11 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 tools:node="remove" />
         </provider>
+        <!-- N9: the foreground service is there before Android 12 alone. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
-            tools:node="remove" />
+            android:enabled="@bool/saving_in_the_foreground"
+            tools:replace="android:enabled" />
         <!-- No other app asks scheduled work for its state. -->
         <receiver
             android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"

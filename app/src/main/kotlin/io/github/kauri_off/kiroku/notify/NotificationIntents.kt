@@ -8,8 +8,9 @@ import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.notShown
 
-// "Mark watched" from a title's notification: the title and the episode the action marks.
+// "Mark watched" from a title's notification: whose list the notification is of, the title and the episode the action marks.
 data class MarkWatched(
+    val source: String,
     val title: AnimeId,
     val episode: Int,
 )
@@ -35,8 +36,13 @@ fun markWatchedIntent(
 ): Intent =
     Intent(context, MarkWatchedReceiver::class.java)
         .setAction(MARK_WATCHED)
-        .setData(address(mark.title))
-        .putExtra(EPISODE, mark.episode)
+        // The source is in the address too, so that two sources' actions for one title are two pending intents.
+        .setData(
+            address(mark.title)
+                .buildUpon()
+                .appendQueryParameter(SOURCE, mark.source)
+                .build(),
+        ).putExtra(EPISODE, mark.episode)
 
 // The title a tap on its notification opens; null for any other start, and for one the system replays from the recent tasks.
 fun Intent.tappedTitle(): AnimeId? = if (flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) null else data?.let(::titleOf)
@@ -44,8 +50,9 @@ fun Intent.tappedTitle(): AnimeId? = if (flags and Intent.FLAG_ACTIVITY_LAUNCHED
 fun Intent.markWatched(): MarkWatched? {
     if (action != MARK_WATCHED) return null
     val title = data?.let(::titleOf) ?: return null
+    val source = data?.getQueryParameter(SOURCE)?.takeIf { it.isNotEmpty() } ?: return null
     val episode = getIntExtra(EPISODE, 0).takeIf { it > 0 } ?: return null
-    return MarkWatched(title, episode)
+    return MarkWatched(source, title, episode)
 }
 
 // Both are immutable: no app that is handed one can change where it goes or what it carries.
@@ -81,3 +88,4 @@ private val SCHEME = notShown("kiroku")
 private val TITLE = notShown("title")
 private val MARK_WATCHED = notShown("io.github.kauri_off.kiroku.notify.MARK_WATCHED")
 private val EPISODE = notShown("episode")
+private val SOURCE = notShown("source")

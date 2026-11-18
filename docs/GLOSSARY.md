@@ -62,8 +62,6 @@ Wording decided before its feature exists. A row leaves this table when its reso
 
 | Concept | English | Russian | Notes |
 |---|---|---|---|
-| Action failed | Could not save · Open | Не удалось сохранить · Открыть | |
-| Progress, Android 11 and earlier | Saving… on the channel "Saving changes" | Сохранение… / Сохранение изменений | |
 | Status panel | Upcoming / Recently sent | Ближайшие / Недавно отправленные | |
 | Sign out | Sign out | Выйти | |
 

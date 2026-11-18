@@ -242,27 +242,7 @@ missing from it; there are no duplicates.
   once. On an emulator: the work is scheduled after the app was opened once and again after a restart of the
   device, and made to run with the network off it posts the sandbox's overdue episode.
 
-- [ ] **M4-12 "Mark watched" from the notification.** The action of M4-08's notification writes through
-  `ListRepository.send` and M4-04's way in: it marks the episode its notification named, and only while that is the
-  next unwatched one (N9). The write does not need the app to be open. Without a network, and during MAL's
-  back-off, it waits and is tried again; when it cannot succeed, the notification is replaced by one that says so
-  and opens the title. A `send` that throws counts as failed. After a success the title's notification follows the
-  list (N7): it goes, or names the next episode to mark without alerting again. On Android 8 to 11 the work runs as
-  the foreground service the system asks for there, which shows its own notification in a low-importance channel of
-  its own; on Android 12 and later no foreground service starts and none is declared. The hand-off states, for the
-  owner's approval, which answers end the waiting and after how long. Read first, on developer.android.com: the
-  expedited work of `develop/background-work/background-tasks/persistent/getting-started/define-work`,
-  `…/persistent/how-to/long-running`, `develop/background-work/services/fgs/restrictions-bg-start` and
-  `…/fgs/service-types`, and how long a receiver may run in `develop/background-work/background-tasks/broadcasts`.
-  **Needs:** M4-04, M4-06, M4-10.
-  **Check:** tests: two taps, a tap after a sync brought the change, and a second try after MAL accepted the first
-  raise the count once; a tap for an episode that is not the next unwatched one changes nothing; offline the write
-  waits and is sent when the connection returns; during the back-off no request is sent before its end; tokens that
-  are due are renewed before the write; a write that cannot succeed replaces the notification, and one that
-  succeeded leaves the notification the list asks for. On an emulator of the current Android: the action tapped in
-  the shade with the app stopped raises the sandbox's count by one, no foreground service of the app runs
-  meanwhile, and the installed package has none enabled. On M4-06's emulator: the same tap raises the count, and
-  the saving notification is there while the write runs and gone after it.
+- [x] **M4-12 "Mark watched" from the notification.**
 
 - [ ] **M4-13 Notification settings in the app.** M4-05's screen over M4-02's surface: its route and view model,
   opened from Profile's settings. The device's states (the notification permission, exact alarms, the battery

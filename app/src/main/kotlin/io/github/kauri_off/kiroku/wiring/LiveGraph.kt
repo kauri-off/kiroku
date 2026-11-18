@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.wiring
 import android.content.Context
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
 import io.github.kauri_off.kiroku.core.repository.ListSource
@@ -23,6 +24,7 @@ import io.github.kauri_off.kiroku.data.session.MalBackground
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -130,6 +132,9 @@ internal class LiveGraph(
 
     // MAL's one way in for work without a screen; it holds nothing of its own.
     private val wayIn by lazy { MalBackground(parts.http, account) }
+
+    // The source's notifications on the device; making it posts and reads nothing.
+    private val shown by lazy { EpisodeNotifications(parts.context, parts.source.name, { titleLanguage }) }
     override val notifications by lazy {
         LiveNotifications(
             parts,
@@ -137,7 +142,7 @@ internal class LiveGraph(
             { list },
             { airing },
             { connection },
-            { titleLanguage },
+            { shown },
             { notificationStore(parts, preferences) },
             renew = { wayIn.run { } },
         )
@@ -149,6 +154,10 @@ internal class LiveGraph(
             override suspend fun syncList() = inBackground { list.sync() }
 
             override suspend fun sendToList(write: ListWrite) = inBackground { list.send(write) }
+
+            override suspend fun titleOnList(id: AnimeId) = list.observeEntry(id).first()?.anime
+
+            override val shown get() = this@LiveGraph.shown
         }
 
     // The work behind MAL's way in, with what held it back told by its role.

@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.data.network.Device
+import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -149,7 +150,7 @@ class LiveNotificationsTest {
             { demo.list },
             { demo.airing },
             { demo.connection },
-            { TitleLanguage.Romaji },
+            { EpisodeNotifications(context, LiveSource.Account.name, { TitleLanguage.Romaji }) },
             store,
             renew,
         )

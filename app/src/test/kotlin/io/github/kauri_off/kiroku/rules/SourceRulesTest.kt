@@ -552,11 +552,12 @@ class SourceRulesTest {
         assertTrue("$without", without.containsAll(known))
         assertTrue("$without", "LiveGraph.kt" !in without && "ListRoute.kt" !in without && "KirokuApplication.kt" !in without)
         assertEquals(emptyList<String>(), sources.flatMap { withoutScreenProblems(relative(it), it.readText()) })
-        // The type hands out neither the list nor the graph: its members are the runs and the two calls.
+        // The type hands out neither the list nor the graph: its members are the runs, the two calls, a read of the list on the device
+        // and the device's notifications.
         val seam = sources.single { it.name == "WithoutScreen.kt" }.readText()
         val members = Regex("""interface WithoutScreen \{(.*?)\n\}""", RegexOption.DOT_MATCHES_ALL).find(KotlinSource(seam).code)
         val declared = Regex("""\b(val|fun)\s+(\w+)""").findAll(checkNotNull(members).groupValues[1]).map { it.groupValues[2] }.toList()
-        assertEquals(listOf("notificationRuns", "syncList", "sendToList"), declared)
+        assertEquals(listOf("notificationRuns", "syncList", "sendToList", "titleOnList", "shown"), declared)
     }
 
     @Test
