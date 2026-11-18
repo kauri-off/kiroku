@@ -284,6 +284,38 @@ class LiveAiringTest {
         }
 
     @Test
+    fun `a title the source hands over whole while signed in reaches the engine before the call ends`() =
+        runTest {
+            val fetched = mapOf(anime.id to Outcome.Success(FetchedAiring(schedule)))
+            val handing =
+                object : AiringSource {
+                    override suspend fun fetch(
+                        titles: Collection<Anime>,
+                        since: Instant,
+                    ): Map<AnimeId, Outcome<FetchedAiring?>> = error("The whole call alone")
+
+                    override suspend fun fetch(
+                        titles: Collection<Anime>,
+                        since: Instant,
+                        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+                    ): Map<AnimeId, Outcome<FetchedAiring?>> {
+                        whole(fetched)
+                        return fetched
+                    }
+                }
+            val handed = mutableListOf<Map<AnimeId, Outcome<FetchedAiring?>>>()
+
+            val answer =
+                SignedInSource(handing, flowOf(Session.SignedIn(SignInId(signIn)))).fetch(listOf(anime), Instant.now()) {
+                    handed +=
+                        it
+                }
+
+            assertEquals(listOf(fetched), handed)
+            assertEquals(fetched, answer)
+        }
+
+    @Test
     fun `while signed out the store only forgets, and an answer that comes in after a sign-out is not stored`() =
         runTest {
             val session = MutableStateFlow<Session>(Session.SignedIn(SignInId(signIn)))

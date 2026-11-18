@@ -6,12 +6,16 @@ import android.os.Looper
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
+import io.github.kauri_off.kiroku.notify.PeriodicWork
 import io.github.kauri_off.kiroku.notify.RunReceiver
+import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.notify.heldRuns
+import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
@@ -89,8 +93,8 @@ class SandboxRunsTest {
 
     private fun shown() = waited { EpisodeNotifications(context, "sandbox", { TitleLanguage.Romaji }).shown() }
 
-    @Test
-    fun `the alarm the engine set starts the run that posts the episode, and each moment the app is started at sets the alarm again`() {
+    // Signed in, synced and opened once; the soon title's episode that comes next.
+    private fun opened(): Coming {
         waited {
             graph.signIn.start { error("The sandbox opened a browser") }
             assertEquals(SignInStep.SignedIn, graph.signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
@@ -98,7 +102,14 @@ class SandboxRunsTest {
             assertEquals(Outcome.Success(Unit), graph.airing.refresh())
             graph.withoutScreen.notificationRuns!!.run(RunTrigger.AppOpened)
         }
-        val aired = waited { graph.notifications.observeComing().first { it != null } }!!.single { it.anime.id == soon }
+        return waited { graph.notifications.observeComing().first { it != null } }!!.single { it.anime.id == soon }
+    }
+
+    @Test
+    fun `the alarm the engine set starts the run that posts the episode, and each moment the app is started at sets the alarm again`() {
+        // Each moment schedules the periodic work too.
+        TestScheduledWork.install(context)
+        val aired = opened()
         time.ahead = Duration.between(Instant.now(), aired.notifyAt).plusSeconds(1)
 
         // The system's alarm fires: its broadcast, as the system holds it, is sent.
@@ -131,6 +142,38 @@ class SandboxRunsTest {
         checkNotNull(context.heldRuns).start(RunTrigger.AppOpened)
         until("the opening") { alarm() == next }
         assertEquals(setOf(soon), shown().keys.filter { it == soon }.toSet())
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
+
+    @Test
+    fun `the periodic work is there once however often it is scheduled, and run with no connection it posts what is overdue`() {
+        TestScheduledWork.install(context)
+        val aired = opened()
+        time.ahead = Duration.between(Instant.now(), aired.notifyAt).plusSeconds(1)
+        graph.scenarios.set(Scenario(offline = true))
+        val asked = graph.sandbox.mal.asked.size
+
+        val scheduled = System.currentTimeMillis()
+        PeriodicWork.schedule(context)
+        val first = TestScheduledWork.periodic(context).single()
+        assertTrue(
+            "${first.nextScheduleTimeMillis - scheduled}",
+            first.nextScheduleTimeMillis >= scheduled + PeriodicWork.INTERVAL.toMillis(),
+        )
+        Thread.sleep(PAUSE)
+        repeat(2) { PeriodicWork.schedule(context) }
+        val again = TestScheduledWork.periodic(context).single()
+        assertEquals(first.id, again.id)
+        assertEquals(first.nextScheduleTimeMillis, again.nextScheduleTimeMillis)
+        assertEquals(PeriodicWork.INTERVAL.toMillis(), again.periodicityInfo!!.repeatIntervalMillis)
+
+        TestScheduledWork.run(context, again)
+        until("the episode is posted") { shown()[soon]?.episode == aired.episode }
+        assertEquals(
+            emptyList<String>(),
+            graph.sandbox.mal.asked
+                .drop(asked),
+        )
         assertEquals(emptyList<URI>(), connections.asked)
     }
 

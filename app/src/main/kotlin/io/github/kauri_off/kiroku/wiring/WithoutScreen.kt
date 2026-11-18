@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.wiring
 import android.content.Context
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import java.time.Duration
@@ -40,6 +41,9 @@ interface WithoutScreen {
 
     // Writes to the list and waits for the service's answer (N9), with the tokens renewed first as for a download.
     suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>>
+
+    // Asks the airing source again for the tracked titles whose airing data is stale; the list's service has no part in it.
+    suspend fun updateAiring(): Outcome<Unit>
 }
 
 // A process that runs work without a screen: the application.
@@ -52,6 +56,7 @@ val Context.withoutScreen: WithoutScreen? get() = (applicationContext as? Withou
 // For a graph whose list reaches no service that could hold the work back: the work at once.
 class WorkAtOnce(
     private val list: () -> ListRepository,
+    private val airing: () -> AiringRepository,
     private val runs: () -> NotificationRuns?,
 ) : WithoutScreen {
     override val notificationRuns: NotificationRuns? get() = runs()
@@ -59,4 +64,6 @@ class WorkAtOnce(
     override suspend fun syncList(): ListWork<Outcome<Unit>> = ListWork.Done(list().sync())
 
     override suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>> = ListWork.Done(list().send(write))
+
+    override suspend fun updateAiring(): Outcome<Unit> = airing().refreshStale()
 }

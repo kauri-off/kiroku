@@ -7,6 +7,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.startup.InitializationProvider
 import androidx.work.Configuration
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.source.DataSource
@@ -51,15 +52,17 @@ class RunsOfTheAppTest {
     private fun alarms() = shadowOf(application.getSystemService(AlarmManager::class.java)).scheduledAlarms
 
     @Test
-    fun `the app's opening starts a run of its graph's engine, and the demo's alarm is not the system's`() {
+    fun `the app's opening starts a run of its graph's engine and schedules the periodic work, and the demo's alarm is not the system's`() {
+        TestScheduledWork.install(application)
         runBlocking { assertNull("a run before the app is opened", demo.notifications.observeComing().first()) }
+        assertEquals(emptyList<WorkInfo>(), TestScheduledWork.periodic(application))
         // A device runs the start-up provider, which tells the app's lifecycle, before the application; a test has to ask for it.
         Robolectric.setupContentProvider(InitializationProvider::class.java, application.packageName + STARTUP)
         val opened = Robolectric.buildActivity(Activity::class.java).setup()
         val coming = MutableStateFlow<List<Coming>?>(null)
         val read = CoroutineScope(Dispatchers.Default).launch { coming.value = demo.notifications.observeComing().first { it != null } }
         val limit = TimeSource.Monotonic.markNow() + WITHIN
-        while (coming.value == null && limit.hasNotPassedNow()) {
+        while ((coming.value == null || TestScheduledWork.periodic(application).isEmpty()) && limit.hasNotPassedNow()) {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(PAUSE)
         }
@@ -69,6 +72,7 @@ class RunsOfTheAppTest {
         shadowOf(Looper.getMainLooper()).idleFor(LEFT)
         assertEquals(Lifecycle.State.CREATED, ProcessLifecycleOwner.get().lifecycle.currentState)
         assertTrue(checkNotNull(coming.value) { "no run has ended" }.isNotEmpty())
+        assertEquals(1, TestScheduledWork.periodic(application).size)
         // The demo is gone with its process, and so is its alarm: none is left to start a process whose demo has nothing due.
         assertEquals(0, alarms().size)
     }

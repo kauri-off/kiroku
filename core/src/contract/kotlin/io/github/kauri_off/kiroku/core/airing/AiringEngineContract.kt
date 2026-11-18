@@ -848,6 +848,34 @@ abstract class AiringEngineContract {
             assertEquals(listOf(tracked), s.source.calls.toList())
         }
 
+    // A process that never lives through a whole call, as one a broadcast starts, still keeps the titles answered in it.
+    @Test
+    fun `A10 a title the source hands over whole is stored and answered while its call goes on, and stays when the call is cut`() =
+        runTest {
+            val process = childScope()
+            val s = subject(seeded = false, scope = process)
+            val first = FixtureAnime.exactToWatch
+            s.source.handedFirst = setOf(first.id)
+            s.source.latency = 1.minutes
+
+            val all = process.async { s.engine.refreshStale() }
+            val named = process.async { s.engine.refresh(setOf(first.id)) }
+            runCurrent()
+
+            assertEquals(listOf(tracked), s.source.calls.toList())
+            assertTrue("the named title waits for the whole call", named.isCompleted)
+            assertEquals(Outcome.Success(Unit), named.await())
+            assertFalse(all.isCompleted)
+            val kept = mapOf(first.id to StoredAiring(fixtures.schedules[first.id], fixtures.now))
+            assertEquals(kept, s.stored())
+
+            process.cancel()
+            runCurrent()
+
+            assertEquals(kept, s.stored())
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
     @Test
     fun `A13 a title MAL has marked finished keeps its data while its last episode can be announced, and is not asked for`() =
         runTest {
