@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.error.StoreCalls
 import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.endedCall
 import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
@@ -23,9 +24,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -92,6 +91,8 @@ class AiringEngine(
 
     // Of the titles asked for, those a page asked for.
     private val forPages = mutableSetOf<AnimeId>()
+
+    @Volatile
     private var stopped = false
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
@@ -268,21 +269,18 @@ class AiringEngine(
             } catch (_: StoreFailure) {
                 return Outcome.Failure(DataError.StorageError)
             } catch (e: Exception) {
-                if (e is CancellationException || !scope.isActive) throw e
+                if (e is CancellationException) throw e
+                if (stopped && e is IllegalStateException) scope.endedCall(e)
+                if (!scope.isActive) throw e
                 unexpected(e)
                 return Outcome.Failure(DataError.ServerError)
             }
         return try {
             answers.awaitAll().firstNotNullOfOrNull { it }?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
         } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            // The scope's end is a caller's own cancellation when it runs in that scope, also before the end has reached it.
-            if (!scope.isActive && scope.coroutineContext.job.holds(currentCoroutineContext().job)) throw e
-            throw IllegalStateException(STOPPED, e)
+            scope.endedCall(IllegalStateException(STOPPED, e))
         }
     }
-
-    private fun Job.holds(job: Job): Boolean = children.any { it === job || it.holds(job) }
 
     // A title already asked for shares that answer, so no title is asked for twice at once.
     private fun want(titles: Collection<Anime>): List<Deferred<DataError?>> {

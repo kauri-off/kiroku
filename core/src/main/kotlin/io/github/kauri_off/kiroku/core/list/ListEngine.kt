@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.error.StoreCalls
 import io.github.kauri_off.kiroku.core.error.StoreFailure
+import io.github.kauri_off.kiroku.core.error.endedCall
 import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -28,8 +29,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -348,8 +347,7 @@ class ListEngine(
         return try {
             sync.await()
         } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException(STOPPED, e)
+            scope.endedCall(IllegalStateException(STOPPED, e))
         }
     }
 
@@ -360,23 +358,31 @@ class ListEngine(
             hold(it)
             return null
         }
-        return try {
-            withContext(NonCancellable) {
-                try {
-                    locked {
-                        check(!stopped) { STOPPED }
-                        val refused = refused(write, checkNotNull(settled))
-                        if (refused == null) edit(write) else null.also { hold(refused) }
+        var stoppedFirst = false
+        val change =
+            try {
+                withContext(NonCancellable) {
+                    try {
+                        locked {
+                            stoppedFirst = stopped
+                            if (stoppedFirst) {
+                                null
+                            } else {
+                                val refused = refused(write, checkNotNull(settled))
+                                if (refused == null) edit(write) else null.also { hold(refused) }
+                            }
+                        }
+                    } catch (_: StoreFailure) {
+                        hold(write.failed(DataError.StorageError, write.list ?: session.owner))
+                        null
                     }
-                } catch (_: StoreFailure) {
-                    hold(write.failed(DataError.StorageError, write.list ?: session.owner))
-                    null
                 }
+            } catch (e: CancellationException) {
+                scope.endedCall(IllegalStateException(STOPPED, e))
             }
-        } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException(STOPPED, e)
-        }
+        // Out of the NonCancellable block, so that a caller cancelled while it waited behind the end hears its cancellation.
+        if (stoppedFirst) scope.endedCall(IllegalStateException(STOPPED))
+        return change
     }
 
     // An Undo or a Retry of another sign-in's list is for no list at all; any other write needs a signed-in session.

@@ -416,6 +416,21 @@ fun scopeProblems(
     }
 }
 
+// The one place a part built at its first use is reached off the main thread, so that a build meeting its scope's end ends as that end does.
+const val FIRST_USE_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/wiring/OnFirstUse.kt"
+
+private val firstUseBuild = Regex("""\bwithContext\s*\([^)]*\)\s*\{\s*[\w.]*\bvalue\s*\}""")
+
+fun firstUseProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (name == FIRST_USE_SOURCE) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        if (firstUseBuild.containsMatchIn(line)) "$name:${index + 1}: build it with onFirstUse: ${line.trim()}" else null
+    }
+}
+
 // The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
 fun shippedKotlinSources(): List<File> =
     projectSources().filter { source ->

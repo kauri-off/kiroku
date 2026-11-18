@@ -38,7 +38,9 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -52,6 +54,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -1125,6 +1128,42 @@ abstract class NotificationEngineContract {
             w.pass(week(1))
             assertEquals(mapOf(title.id to Says(2, toWatch = 2, marks = 1)), w.showing)
             assertEquals(listOf(false, true), w.sent().map { it.shown })
+        }
+
+    // The scope's end reaches its children one at a time: the run's work in the scope may end before its caller hears of it.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a run asked in the engine's own scope ends cancelled with it, also when its work has ended first`() =
+        runTest {
+            val w = world()
+            w.source.latency = 30.seconds
+            w.clock.now = week(0)
+            w.alarm.gone()
+            val process = checkNotNull(w.process.scope)
+            val before =
+                process.coroutineContext.job.children
+                    .toSet()
+            var work = emptyList<Job>()
+            lateinit var run: Deferred<RunReport>
+            var raced = false
+            process.coroutineContext.job.invokeOnCompletion(onCancelling = true) {
+                work.forEach { it.cancel() }
+                testScheduler.runCurrent()
+                raced = run.isCompleted
+            }
+            run = process.async { w.engine.run(RunTrigger.Alarm) }
+            runCurrent()
+            work =
+                process.coroutineContext.job.children
+                    .filter { it !in before && it !== run }
+                    .toList()
+            assertTrue(work.isNotEmpty())
+
+            process.cancel()
+            runCurrent()
+
+            assertTrue("the run ended before the scope's end reached it", raced)
+            assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
         }
 
     @Test
