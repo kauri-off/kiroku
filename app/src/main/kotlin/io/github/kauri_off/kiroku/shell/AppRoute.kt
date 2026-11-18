@@ -29,6 +29,8 @@ import io.github.kauri_off.kiroku.signin.SignInRoute
 import io.github.kauri_off.kiroku.signin.SignInTurns
 import io.github.kauri_off.kiroku.signin.browse
 import io.github.kauri_off.kiroku.signin.signedIn
+import io.github.kauri_off.kiroku.statistics.StatisticsRoute
+import io.github.kauri_off.kiroku.statistics.statisticsPage
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleLinks
 import io.github.kauri_off.kiroku.title.TitleRoute
@@ -140,7 +142,14 @@ fun appEntries(
         }
         entry<ProfileRoot> { ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars) }
         entry<OtherProfileKey> { key -> ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars) }
-        entry<ProfileNotBuiltKey> { key -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars) }
+        entry<ProfileNotBuiltKey> { key ->
+            val page = key.statisticsPage
+            if (page == null) {
+                ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
+            } else {
+                StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
+            }
+        }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,

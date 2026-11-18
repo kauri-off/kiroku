@@ -20,4 +20,11 @@
     <string name="design_episode_plus">Плюс одна серия</string>
     <string name="design_episode_total">" /\u00A0%d"</string>
     <string name="design_mal_score">Оценка MAL %1$s</string>
+    <string name="design_list_loading">Загружено %1$s\u00A0из\u00A0%2$s</string>
+    <plurals name="design_list_loading_unknown_total">
+        <item quantity="one">Загружен %1$s\u00A0тайтл</item>
+        <item quantity="few">Загружено %1$s\u00A0тайтла</item>
+        <item quantity="many">Загружено %1$s\u00A0тайтлов</item>
+        <item quantity="other">Загружено %1$s\u00A0тайтла</item>
+    </plurals>
 </resources>
