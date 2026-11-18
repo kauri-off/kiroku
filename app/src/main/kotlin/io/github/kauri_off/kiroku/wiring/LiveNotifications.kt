@@ -44,6 +44,8 @@ internal class LiveNotifications(
     store: () -> NotificationStore,
     // S7: renews the tokens that are due, by MAL's way in for work without a screen.
     private val renew: suspend () -> Unit,
+    // Hears of every run as it ends.
+    private val reports: ((RunReport) -> Unit)? = null,
 ) : NotificationsRepository,
     NotificationRuns {
     // A run has ended in this process: before one, what is stored may be of a sign-out its process did not finish (S9).
@@ -62,7 +64,10 @@ internal class LiveNotifications(
                 connection(),
                 parts.clock,
                 parts.scope,
-                reports = { ran = true },
+                reports = {
+                    ran = true
+                    reports?.invoke(it)
+                },
                 unexpected = parts.unexpected,
             )
         }

@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
+import io.github.kauri_off.kiroku.notificationlog.LoggedPost
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
@@ -454,6 +455,60 @@ class SandboxNotificationsTest {
 
         assertEquals(0L, rows("notification_sent"))
         assertEquals(emptyMap<AnimeId, Shown>(), shown())
+    }
+
+    // What the app holds of the soon title's next notification, once it holds [at].
+    private fun SandboxGraph.comingAt(at: Instant): Coming =
+        waited { notifications.observeComing().first { coming -> coming?.any { it.anime.id == soon && it.notifyAt == at } == true } }!!
+            .single { it.anime.id == soon }
+
+    @Test
+    fun `a planted episode is the app's at its time after a new process and a refresh, and once postponed is announced only then (N3)`() {
+        val first = started()
+        first.signedIn()
+        waited { withContext(Dispatchers.IO) { first.sandbox.reset() } }
+        first.synced()
+        first.run(RunTrigger.AppOpened)
+
+        val planted = checkNotNull(waited { first.plant(Duration.ofMinutes(20)) })
+        val coming = first.comingAt(planted.at)
+        assertEquals(planted.episode, coming.episode)
+        assertTrue(Duration.between(now(), planted.at) in Duration.ofMinutes(19)..Duration.ofMinutes(20))
+
+        // A new process, and every refresh it makes, brings it back unchanged.
+        val later = started()
+        assertEquals(listOf(planted), later.sandbox.planted)
+        later.synced()
+        later.run(RunTrigger.AppOpened)
+        assertEquals(coming, later.comingAt(planted.at))
+
+        // Postponed at AniList, which the app learns only by asking.
+        val postponed = checkNotNull(waited { later.postpone(Duration.ofMinutes(15)) })
+        assertEquals(planted.at.plus(Duration.ofMinutes(15)), postponed.at)
+        assertEquals(coming, later.comingAt(planted.at))
+        time.ahead = time.ahead + Duration.between(now(), planted.at).plusSeconds(1)
+        val held = later.run(RunTrigger.Alarm)
+        assertEquals(Recheck.Answered, held.recheck)
+        assertEquals(emptyList<Int>(), held.posted.ofSoon())
+        assertEquals(planted.episode, later.comingAt(postponed.at).episode)
+
+        time.ahead = time.ahead + Duration.between(now(), postponed.at).plusSeconds(1)
+        val announced = later.run(RunTrigger.Alarm)
+        assertEquals(listOf(planted.episode), announced.posted.ofSoon())
+
+        // The log of the runs, with each delay, is there in the next process too.
+        val logged =
+            started()
+                .runLog
+                .also { it.stored() }
+                .runs.value
+        val alarms = logged.filter { it.trigger == RunTrigger.Alarm }.take(2)
+        assertEquals(listOf(announced.began, held.began), alarms.map { it.began })
+        val post = alarms.first().posted.single { it.anime == soon }
+        assertEquals(postponed.at, post.notifyAt)
+        assertTrue("${post.delay}", post.delay >= Duration.ofSeconds(1) && post.delay < Duration.ofSeconds(WAIT / 1000))
+        assertEquals(Recheck.Answered, alarms.last().recheck)
+        assertEquals(emptyList<LoggedPost>(), alarms.last().posted.filter { it.anime == soon })
     }
 
     // A device with a connection, which a test's has not: the alarm's run asks the airing source only with one.

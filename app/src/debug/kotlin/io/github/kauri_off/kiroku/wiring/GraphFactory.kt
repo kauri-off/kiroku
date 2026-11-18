@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.notificationlog.RunLog
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.reports.ReportLog
 import io.github.kauri_off.kiroku.reports.reportLog
@@ -62,7 +63,11 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
             lateinit var graph: DemoGraph
             val alarm = DemoAlarm(scope) { graph.demo }
             val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
-            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown), scope).also { graph = it }
+            // Gone with its process, as the demo is.
+            val runs = RunLog(null)
+            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown, runs), scope, runs).also {
+                graph = it
+            }
         }
         DataSource.Sandbox ->
             SandboxGraph.create(context, clock) { source, device, sandboxClock ->
@@ -98,6 +103,8 @@ internal class DemoAlarm(
 class DemoGraph(
     val demo: Demo,
     scope: CoroutineScope,
+    // What the demo's notification engine did in this process.
+    val runLog: RunLog = RunLog(null),
 ) : AppGraph,
     ScenariosOwner {
     override val scenarios = Scenarios(demo, scope)

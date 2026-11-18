@@ -34,20 +34,66 @@ data class AniListEntry(
     val schedule: List<Aired>,
 )
 
-// How the sandbox's titles air, laid out around the moment it started, which [file] keeps and a reset moves to now.
+// An episode of [SandboxAiring.SOON] planted to air at [plantedFor], which AniList now gives as [at].
+data class Planted(
+    val episode: Int,
+    val plantedFor: Instant,
+    val at: Instant = plantedFor,
+)
+
+// How the sandbox's titles air, laid out around the moment it started, which [file] keeps with every planted episode;
+// a reset moves the moment to now and forgets what was planted.
 class SandboxAiring(
     val titles: Map<Long, JsonObject>,
     private val clock: Clock,
     private val file: File? = null,
 ) {
-    @Volatile
-    var since: Instant = read() ?: started()
-        private set
+    private class Kept(
+        val since: Instant,
+        val planted: List<Planted>,
+    )
 
-    // Every schedule laid out again around now, as when the sandbox first started.
+    @Volatile
+    private var kept: Kept = read() ?: Kept(clock.instant().truncatedTo(ChronoUnit.SECONDS), emptyList()).also(::keep)
+
+    val since: Instant get() = kept.since
+
+    // What was planted since the last reset, in the order it was planted; a later one replaces an earlier one's episodes.
+    val planted: List<Planted> get() = kept.planted
+
+    // Every schedule laid out again around now, as when the sandbox first started, with nothing planted.
+    @Synchronized
     fun reset() {
-        since = started()
+        kept = Kept(clock.instant().truncatedTo(ChronoUnit.SECONDS), emptyList()).also(::keep)
     }
+
+    // SOON's next episode that has not aired airs at [at], and each later one a week after the one before; null when none is left.
+    @Synchronized
+    fun plant(at: Instant): Planted? {
+        val now = clock.instant()
+        if (!at.isAfter(now)) return null
+        val next = soonSchedule().firstOrNull { it.at.isAfter(now) } ?: return null
+        val planted = Planted(next.episode, at.truncatedTo(ChronoUnit.SECONDS))
+        kept = Kept(since, kept.planted + planted).also(::keep)
+        return planted
+    }
+
+    // The episode planted last airs [by] later at AniList, with every later one; null when it has aired.
+    @Synchronized
+    fun postpone(by: Duration): Planted? {
+        val last = kept.planted.lastOrNull()?.takeIf { it.at.isAfter(clock.instant()) } ?: return null
+        val postponed = last.copy(at = last.at.plus(by).truncatedTo(ChronoUnit.SECONDS))
+        kept = Kept(since, kept.planted.dropLast(1) + postponed).also(::keep)
+        return postponed
+    }
+
+    private fun soonSchedule(): List<Aired> =
+        titles[SOON]
+            ?.let { plan(SOON, it) }
+            ?.entries
+            ?.single()
+            ?.schedule
+            .orEmpty()
 
     // AniList's entries for a MAL title as of now; none for a title AniList does not know.
     fun entries(id: Long): List<AniListEntry> {
@@ -128,7 +174,11 @@ class SandboxAiring(
             }
             SOON -> {
                 val soon = Slot.of(since.plus(SOON_AFTER).truncatedTo(ChronoUnit.MINUTES))
-                laid(Laid(id, total, weekly(4, soon.after(since), 1..total!!), starts = true, ends = true), slot = soon)
+                val laid =
+                    planted.fold(weekly(4, soon.after(since), 1..total!!)) { schedule, plant ->
+                        schedule.map { if (it.episode < plant.episode) it else weeklyFrom(plant, it.episode) }
+                    }
+                laid(Laid(id, total, laid, starts = true, ends = true), slot = soon)
             }
             ON_A_BREAK -> {
                 val aired = weekly(BREAK_LAST, next!!.minus(WEEK.multipliedBy(3)), BREAK_FIRST..BREAK_LAST)
@@ -184,26 +234,35 @@ class SandboxAiring(
         slot: Slot? = null,
     ) = Plan(listOf(entry), start = japanDate(entry.schedule.first().at).toString(), slot = slot)
 
-    private fun started(): Instant = clock.instant().truncatedTo(ChronoUnit.SECONDS).also(::kept)
-
-    private fun kept(since: Instant) {
+    // The moment on the first line, then one line a planted episode: its number, the time it was planted for and AniList's.
+    private fun keep(kept: Kept) {
         val file = file ?: return
         val next = File(file.path + ".next")
-        next.writeText(since.epochSecond.toString())
+        val lines =
+            listOf(kept.since.epochSecond.toString()) +
+                kept.planted.map { "${it.episode} ${it.plantedFor.epochSecond} ${it.at.epochSecond}" }
+        next.writeText(lines.joinToString("\n"))
         check(next.renameTo(file)) { "The sandbox's airing was not kept" }
     }
 
-    private fun read(): Instant? =
+    private fun read(): Kept? =
         try {
-            file
-                ?.takeIf { it.isFile }
-                ?.readText()
-                ?.trim()
-                ?.toLongOrNull()
-                ?.let(Instant::ofEpochSecond)
+            val lines =
+                file
+                    ?.takeIf { it.isFile }
+                    ?.readLines()
+                    ?.map(String::trim)
+                    ?.filter(String::isNotEmpty)
+            val since = lines?.firstOrNull()?.toLongOrNull()?.let(Instant::ofEpochSecond)
+            since?.let { Kept(it, lines.drop(1).mapNotNull(::planted)) }
         } catch (_: IOException) {
             null
         }
+
+    private fun planted(line: String): Planted? {
+        val (episode, plantedFor, at) = line.split(' ').map { it.toLongOrNull() ?: return null }.takeIf { it.size == 3 } ?: return null
+        return Planted(episode.toInt(), Instant.ofEpochSecond(plantedFor), Instant.ofEpochSecond(at))
+    }
 
     companion object {
         // The sandbox's titles that air, one case each.
@@ -264,6 +323,11 @@ class SandboxAiring(
         ): List<Aired> = episodes.map { Aired(it, anchorAt.plus(WEEK.multipliedBy((it - anchor).toLong()))) }
 
         private fun Aired.later(from: Int) = if (episode >= from) copy(at = at.plus(WEEK)) else this
+
+        private fun weeklyFrom(
+            planted: Planted,
+            episode: Int,
+        ) = Aired(episode, planted.at.plus(WEEK.multipliedBy((episode - planted.episode).toLong())))
 
         fun japanDate(at: Instant): LocalDate = at.atZone(JAPAN).toLocalDate()
 

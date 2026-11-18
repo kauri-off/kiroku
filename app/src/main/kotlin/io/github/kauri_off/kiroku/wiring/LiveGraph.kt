@@ -130,6 +130,9 @@ internal class LiveGraph(
 
     // MAL's one way in for work without a screen; it holds nothing of its own.
     private val wayIn by lazy { MalBackground(parts.http, account) }
+
+    // What debug and preview builds keep of the notification engine's runs, for the debug menu; a release build keeps none.
+    val runLog = liveRunLog(parts)
     override val notifications by lazy {
         LiveNotifications(
             parts,
@@ -140,6 +143,7 @@ internal class LiveGraph(
             { titleLanguage },
             { notificationStore(parts, preferences) },
             renew = { wayIn.run { } },
+            reports = runLog,
         )
     }
     override val withoutScreen: WithoutScreen =

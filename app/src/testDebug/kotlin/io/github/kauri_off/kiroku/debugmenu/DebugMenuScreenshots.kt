@@ -12,15 +12,26 @@ import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.notify.Recheck
+import io.github.kauri_off.kiroku.core.notify.RunEnd
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
+import io.github.kauri_off.kiroku.data.sandbox.Planted
 import io.github.kauri_off.kiroku.list.FixtureListScreen
 import io.github.kauri_off.kiroku.list.ListFixtureStates
+import io.github.kauri_off.kiroku.notificationlog.LoggedPost
+import io.github.kauri_off.kiroku.notificationlog.LoggedRun
+import io.github.kauri_off.kiroku.notificationlog.NotificationLogSection
+import io.github.kauri_off.kiroku.notificationlog.NotificationLogState
+import io.github.kauri_off.kiroku.notificationlog.PlantRefusal
+import io.github.kauri_off.kiroku.notificationlog.PlantState
 import io.github.kauri_off.kiroku.notificationsamples.NotificationSamplesSection
 import io.github.kauri_off.kiroku.notificationsamples.NotificationSamplesState
 import io.github.kauri_off.kiroku.recorder.RecorderSection
@@ -69,6 +80,12 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     source = SourceState(DataSource.Sandbox, DataSource.Sandbox),
                     signOut = SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))),
                     recorder = RecorderState(null),
+                    runs =
+                        NotificationLogState(
+                            RUNS,
+                            plant = PlantState(SOON_TITLE, Planted(5, AT.plusSeconds(600), AT.plusSeconds(1500)), PlantRefusal.NoneLeft),
+                            minutes = "15",
+                        ),
                 )
             },
             case("real-account") {
@@ -77,6 +94,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     BUILD.copy(commit = Commit(HASH, dirty = true)),
                     source = SourceState(DataSource.Account, chosen = DataSource.Demo),
                     reports = REPORTS,
+                    runs = NotificationLogState(MANY_RUNS),
                 )
             },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
@@ -86,6 +104,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     recorder = RecorderState(Recording.Running(TITLE, 12, 47), "1"),
                     airingCounts = AiringCountsState.Unreadable,
                     samples = NotificationSamplesState(shown = false),
+                    runs = NotificationLogState(RUNS.take(1), plant = PlantState(SOON_TITLE, Planted(4, AT.plusSeconds(300)))),
                 )
             },
             case("recorder-stopped-left") {
@@ -121,6 +140,94 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                         FIXTURES.schedules + (anime.id to schedule),
                         TitleLanguage.Romaji,
                     ),
+                )
+            }
+        val AT: Instant = Instant.parse("2026-11-12T09:30:00Z")
+        const val SOON_TITLE = "Koori no Jouheki 2nd Season"
+        val SOON_POST = LoggedPost(AnimeId(64534), SOON_TITLE, 4, AT, AT, AT.plusMillis(240), shown = true)
+        val RUNS =
+            listOf(
+                LoggedRun(
+                    RunTrigger.Alarm,
+                    AT.plusMillis(10),
+                    AT.plusMillis(5400),
+                    RunEnd.Done,
+                    Recheck.Late,
+                    listOf(
+                        SOON_POST,
+                        LoggedPost(
+                            AnimeId(61987),
+                            "Kusuriya no Hitorigoto 3rd Season",
+                            7,
+                            AT,
+                            AT.plusSeconds(1800),
+                            AT.plusSeconds(1803),
+                            false,
+                        ),
+                    ),
+                    emptyList(),
+                    AT.plusSeconds(604800),
+                    alarmFailed = false,
+                ),
+                LoggedRun(
+                    RunTrigger.Changed,
+                    AT.minusSeconds(40),
+                    AT.minusSeconds(40),
+                    RunEnd.Done,
+                    Recheck.NotAsked,
+                    emptyList(),
+                    listOf(AnimeId(64534), AnimeId(21)),
+                    AT,
+                    false,
+                ),
+                LoggedRun(
+                    RunTrigger.DeviceRestarted,
+                    AT.minusSeconds(4000),
+                    AT.minusSeconds(3999),
+                    RunEnd.Failed,
+                    Recheck.NotAsked,
+                    listOf(SOON_POST.copy(postedAt = AT.plusSeconds(7384))),
+                    emptyList(),
+                    null,
+                    true,
+                ),
+                LoggedRun(
+                    RunTrigger.Alarm,
+                    AT.minusSeconds(7000),
+                    AT.minusSeconds(6997),
+                    RunEnd.Done,
+                    Recheck.Answered,
+                    emptyList(),
+                    emptyList(),
+                    AT,
+                    false,
+                ),
+                LoggedRun(
+                    RunTrigger.AppOpened,
+                    AT.minusSeconds(9000),
+                    AT.minusSeconds(8999),
+                    RunEnd.SignedOut,
+                    Recheck.NotAsked,
+                    emptyList(),
+                    emptyList(),
+                    null,
+                    false,
+                ),
+            )
+
+        // More runs than are shown at once, as days of use leave them.
+        val MANY_RUNS =
+            (0 until 34).map { i ->
+                LoggedRun(
+                    RunTrigger.entries[i % RunTrigger.entries.size],
+                    AT.minusSeconds(3600L * i),
+                    AT.minusSeconds(3600L * i).plusMillis(120),
+                    RunEnd.Done,
+                    if (i % RunTrigger.entries.size == 0) Recheck.Offline else Recheck.NotAsked,
+                    emptyList(),
+                    emptyList(),
+                    AT.plusSeconds(3600),
+                    false,
                 )
             }
         val RUN = File("/storage/emulated/0/Android/data/io.github.kauri_off.kiroku.debug/files/account.recorded-run")
@@ -168,6 +275,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
         reports: List<Report> = emptyList(),
         airingCounts: AiringCountsState = COUNTS,
         samples: NotificationSamplesState = NotificationSamplesState(),
+        runs: NotificationLogState = NotificationLogState(emptyList()),
     ) = DebugMenuScreen(
         listOf(
             { ScenarioSection(scenarios, onEvent = {}) },
@@ -176,6 +284,7 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             { RecorderSection(recorder, onEvent = {}) },
             { AiringCountsSection(airingCounts, onEvent = {}) },
             { NotificationSamplesSection(samples, onEvent = {}) },
+            { NotificationLogSection(runs, onEvent = {}) },
             { BuildSection(build) },
             { DesignSection(onGallery = {}) },
             { ReportsSection(reports, renamed = false) },

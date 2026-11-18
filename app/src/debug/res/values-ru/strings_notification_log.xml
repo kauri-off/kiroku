@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_log_title">Уведомления</string>
+    <string name="notification_log_detail">Каждый запуск уведомлений, сначала новые, сохраняются после перезапуска. Задержка — от времени уведомления до его показа, по часам устройства</string>
+    <string name="notification_log_none">Запусков ещё не было. Они сохраняются после перезапуска</string>
+    <string name="notification_log_earlier">Показать более ранние запуски</string>
+    <string name="notification_log_plant_detail">Добавляет в AniList следующую серию тайтла %1$s и хранит её в файлах песочницы до сброса</string>
+    <string name="notification_log_minutes">Через сколько минут</string>
+    <string name="notification_log_plant">Добавить серию</string>
+    <string name="notification_log_postpone">Перенести в AniList</string>
+    <string name="notification_log_planted">Серия\u00A0%1$d\u00A0выходит %2$s</string>
+    <string name="notification_log_planted_postponed">Серия\u00A0%1$d\u00A0выходит в AniList %2$s, добавлена на %3$s</string>
+    <string name="notification_log_none_left">Серий этого тайтла больше не осталось: сбросьте песочницу</string>
+    <string name="notification_log_aired">Добавленная серия уже вышла: переносить нечего</string>
+    <string name="notification_log_when">%1$s · заняло\u00A0%2$s</string>
+    <string name="notification_log_trigger_alarm">Будильник</string>
+    <string name="notification_log_trigger_restarted">Перезагрузка устройства</string>
+    <string name="notification_log_trigger_updated">Обновление приложения</string>
+    <string name="notification_log_trigger_access">Разрешены точные будильники</string>
+    <string name="notification_log_trigger_opened">Открытие приложения</string>
+    <string name="notification_log_trigger_periodic">Периодическая работа</string>
+    <string name="notification_log_trigger_marked">Отмечено как просмотренное</string>
+    <string name="notification_log_trigger_changed">Изменились список, расписание или настройки</string>
+    <string name="notification_log_posted">Отправлено: %1$s, серия\u00A0%2$d, %3$s</string>
+    <string name="notification_log_posted_hidden">Отправлено: %1$s, серия\u00A0%2$d, %3$s; устройство его не показало</string>
+    <string name="notification_log_late">через\u00A0%1$s после времени уведомления</string>
+    <string name="notification_log_early">за\u00A0%1$s до времени уведомления</string>
+    <string name="notification_log_between">", "</string>
+    <string name="notification_log_title_id">тайтл\u00A0%1$d</string>
+    <string name="notification_log_withdrawn">Убрано: %1$s</string>
+    <string name="notification_log_recheck_answered">Повторная проверка: AniList ответил</string>
+    <string name="notification_log_recheck_failed">Повторная проверка: ошибка AniList, использованы сохранённые данные</string>
+    <string name="notification_log_recheck_late">Повторная проверка: AniList ответил слишком поздно, использованы сохранённые данные</string>
+    <string name="notification_log_recheck_offline">Повторная проверка: нет соединения, использованы сохранённые данные</string>
+    <string name="notification_log_signed_out">Никто не вошёл в аккаунт: всё забыто</string>
+    <string name="notification_log_failed">Запуск не удался</string>
+    <string name="notification_log_alarm">Следующий будильник %1$s</string>
+    <string name="notification_log_no_alarm">Будильник не установлен</string>
+    <string name="notification_log_alarm_failed">Будильник установить не удалось</string>
+    <string name="notification_log_seconds">%1$s\u00A0с</string>
+    <string name="notification_log_minutes_seconds">%1$d\u00A0мин\u00A0%2$d\u00A0с</string>
+    <string name="notification_log_hours_minutes">%1$d\u00A0ч\u00A0%2$d\u00A0мин</string>
+</resources>

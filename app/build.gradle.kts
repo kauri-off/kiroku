@@ -518,6 +518,7 @@ val verifyReleaseClasses =
                 "io/github/kauri_off/kiroku/debugmenu/",
                 "io/github/kauri_off/kiroku/design/gallery/",
                 "io/github/kauri_off/kiroku/recorder/",
+                "io/github/kauri_off/kiroku/notificationlog/",
                 "io/github/kauri_off/kiroku/data/recorder/",
                 "io/github/kauri_off/kiroku/data/sandbox/",
                 "io/github/kauri_off/kiroku/sandbox/",
