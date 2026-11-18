@@ -12,6 +12,8 @@ import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.profile.MalOwnProfile
+import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.signin.SignInOwner
@@ -100,6 +102,7 @@ internal class LiveParts(
 internal class LiveGraph(
     parts: LiveParts,
     listStore: (LiveParts) -> LocalList = ::liveListStore,
+    ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
     airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
@@ -112,7 +115,7 @@ internal class LiveGraph(
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
     override val scores by lazy { parts.scores }
     override val search by lazy { liveSearch(parts) }
-    override val user: LiveUser by lazy { liveUser(parts, account) }
+    override val user: LiveUser by lazy { liveUser(parts, account, ownProfile) }
     override val connection by lazy { liveConnection(parts) }
     override val preferences by lazy { livePreferences(parts) }
     override val signIn by lazy { liveSignIn(parts, account) }

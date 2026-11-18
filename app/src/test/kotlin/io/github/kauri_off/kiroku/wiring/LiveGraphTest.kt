@@ -145,14 +145,21 @@ class LiveGraphTest {
                         .build()
                 }
             val source = LiveSource("profiles", MalHosts("http://127.0.0.1:1/v2/", "http://127.0.0.1:1/v1/oauth2/"), notFound)
-            val graph = LiveGraph(parts(backgroundScope, source), listStore = { store() })
+            val built = CopyOnWriteArrayList<Thread>()
+            val graph =
+                LiveGraph(parts(backgroundScope, source), listStore = { store() }, ownProfile = { p, session ->
+                    built += Thread.currentThread()
+                    ownProfileOf(p, session)
+                })
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
             assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
-            assertFalse(context.getDatabasePath("profiles.db").exists())
 
             assertSame(Looper.getMainLooper().thread, Thread.currentThread())
             assertTrue(graph.user.sameUser("Someone", "someone"))
+            assertEquals(emptyList<Thread>(), built)
+            assertFalse(context.getDatabasePath("profiles.db").exists())
             assertNull(graph.user.observeOwnProfile().first())
+            assertNotSame(Looper.getMainLooper().thread, built.single())
             assertEquals(0, device.clientBuilds.get())
 
             assertEquals(UserListState.None(DataError.NotFound), graph.user.observeList("Someone").first { it is UserListState.None })
@@ -184,6 +191,36 @@ class LiveGraphTest {
             graph.session.signOut()
             assertEquals(0L, profiles())
             assertEquals(0, device.clientBuilds.get())
+            assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    // S9: the signed-in user's own profile goes too, so it is forgotten once the session no longer names its owner.
+    @Test
+    fun `a sign-out of an expired session leaves no profile of its own sign-in in the database`() =
+        runTest {
+            val parts = parts(backgroundScope)
+            val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
+            parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
+            val graph = LiveGraph(parts, listStore = { store() })
+            assertEquals(Session.Expired(SignInId(signIn)), graph.session.observeSession().first())
+            graph.anime.observeAnime(AnimeId(1)).first()
+            val file = context.getDatabasePath("account.db").path
+            SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("INSERT INTO own_profile (owner, name, fetched_at) VALUES ('$signIn', 'Someone', 0)")
+            }
+            val profiles = {
+                SQLiteDatabase
+                    .openDatabase(
+                        file,
+                        null,
+                        SQLiteDatabase.OPEN_READONLY,
+                    ).use { DatabaseUtils.queryNumEntries(it, "own_profile") }
+            }
+            assertEquals(1L, profiles())
+
+            graph.session.signOut()
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(0L, profiles())
             assertEquals(emptyList<Throwable>(), unexpected)
         }
 
