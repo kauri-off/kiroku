@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertAll
@@ -26,6 +27,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
@@ -33,6 +35,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -43,6 +46,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
@@ -52,9 +57,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -118,8 +126,93 @@ class ListScreenTest {
     fun `no other tab and no other user's list has plus one`() {
         show(ListFixtureStates.planned)
         noneShown(plusOne)
-        show(ListFixtureStates.readOnly)
+        show(UserListFixtureStates.watching)
         compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
+    }
+
+    // The bar's subtitle alone says a read goes on: no indicator over the tabs or the rows, and the tabs stay put.
+    @Test
+    fun `another user's list being read says how far it is in the bar alone, and the page does not move`() {
+        show(UserListFixtureStates.watching)
+        compose.onNodeWithText("6\u00A0titles").assertIsDisplayed()
+        val tabs = tabTop()
+        val indicators = progressIndicators()
+        val said =
+            listOf(
+                UserListFixtureStates.reading to "40\u00A0titles loaded",
+                UserListFixtureStates.readingWithTotal to "Loading 40\u00A0of\u00A0100",
+                UserListFixtureStates.readAgain to "Loading the list again",
+                UserListFixtureStates.readAgainPart to "Loading the list again:\u00A040\u00A0so far",
+            )
+        for ((state, text) in said) {
+            show(state)
+            compose.onNodeWithText(text).assertIsDisplayed()
+            assertEquals(text, indicators, progressIndicators())
+            assertEquals(text, tabs, tabTop())
+        }
+        show(UserListFixtureStates.watching)
+        compose.onNodeWithText("Loading", substring = true).assertDoesNotExist()
+    }
+
+    // Those the page always has, the pull's at rest among them.
+    private fun progressIndicators() =
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNodes().size
+
+    private fun tabTop() = compose.onNode(hasText("Watching") and isSelectable()).getUnclippedBoundsInRoot().top
+
+    // The order computed when a read ends replaces the arrival order in place: the first visible row keeps its place.
+    @Test
+    fun `when another user's list is ordered at the read's end the first visible row stays where it is`() {
+        val set = Fixtures.reference
+        val entries = set.otherUserList.take(ORDERED_AT_END)
+        val status = ListStatus.Completed
+        val arrived =
+            entries
+                .filter { it.status == status }
+                .map { listRow(it, null, set.now, TitleLanguage.Romaji, readOnly = true, sort = ListSort.LastUpdated) }
+        val sorted = ListFixtureStates.rows(status, ListSort.LastUpdated, entries, readOnly = true)
+
+        fun state(rows: List<ListRow>) =
+            ListState(
+                owner = ListOwner.Other(set.otherUserName),
+                content =
+                    ListFixtureStates.tabs(
+                        entries,
+                        readOnly = true,
+                        override = mapOf(status to ListPage(ListSort.LastUpdated, sortsFor(status, withAiring = false), rows)),
+                    ),
+                tab = status,
+                now = set.now,
+            )
+        show(state(arrived))
+
+        // The tab's own list, found by a row it shows: the first before the scroll, the one scrolled to after it.
+        fun list(title: String) =
+            compose
+                .onAllNodes(
+                    SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex) and
+                        SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange),
+                ).filter(hasAnyDescendant(hasText(title)))[0]
+        list(arrived.first().title).performScrollToIndex(FIRST_SHOWN)
+        list(arrived[FIRST_SHOWN].title).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, PART_OF_A_ROW) }
+        compose.waitForIdle()
+        val first = arrived[FIRST_SHOWN].title
+        val top = compose.onNode(hasText(first) and hasClickAction()).getUnclippedBoundsInRoot().top
+        assertTrue(sorted.indexOfFirst { it.title == first } != FIRST_SHOWN)
+        show(state(sorted))
+        compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
+        compose.waitForIdle()
+        assertEquals(top, compose.onNode(hasText(first) and hasClickAction()).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun `another user's private list and an unknown name each say so, with nothing to retry`() {
+        show(UserListFixtureStates.privateList)
+        compose.onNodeWithText("This list is private").assertIsDisplayed()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        show(UserListFixtureStates.unknownUser)
+        compose.onNodeWithText("MyAnimeList has no user with this name").assertIsDisplayed()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
     }
 
     @Test
@@ -268,7 +361,7 @@ class ListScreenTest {
 
     @Test
     fun `the sort sheet offers the tab's sorts and sends the chosen one`() {
-        show(ListFixtureStates.readOnly.copy(sortSheetOpen = true))
+        show(UserListFixtureStates.watching.copy(sortSheetOpen = true))
         compose.onNodeWithText("Up next").assertDoesNotExist()
         compose.onNodeWithText("Start date").performClick()
         assertEquals(listOf(ListEvent.SelectSort(ListSort.StartDate)), events)
@@ -358,9 +451,9 @@ class ListScreenTest {
 
     @Test
     fun `another user's rows offer no edit`() {
-        show(ListFixtureStates.readOnly)
+        show(UserListFixtureStates.watching)
         val title =
-            ListFixtureStates.readOnly.page!!
+            UserListFixtureStates.watching.page!!
                 .rows
                 .first()
                 .title
@@ -828,3 +921,8 @@ class ListMotionOffTest {
 // With animations off, a change that shows within these frames of the state changing is complete at once.
 private const val OFF_FRAMES = 3
 private const val OFF_SETTLED = 2_000L
+
+// The list of another user ordered at the read's end, and the row shown first, a little scrolled.
+private const val ORDERED_AT_END = 600
+private const val FIRST_SHOWN = 40
+private const val PART_OF_A_ROW = 37f

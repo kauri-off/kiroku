@@ -70,9 +70,18 @@ internal class DemoAnimeRepository(
     )
 
     private val anime = fixtures.anime.associateBy { it.id }
+
+    // The made-up titles of the public user's list: each has a page, with nothing beyond what the list gave.
+    private val madeUp by lazy {
+        fixtures.otherUserList
+            .map { it.anime }
+            .filter { it.id !in anime }
+            .associateBy { it.id }
+    }
+
     private val cached = MutableStateFlow(emptyMap<AnimeId, Fetched>())
 
-    override fun observeAnime(id: AnimeId): Flow<Anime?> = flowOf(anime[id])
+    override fun observeAnime(id: AnimeId): Flow<Anime?> = flowOf(anime[id] ?: madeUp[id])
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> = cached.map { it[id]?.details }.distinctUntilChanged()
 
@@ -85,7 +94,7 @@ internal class DemoAnimeRepository(
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
-        val details = fixtures.details[id] ?: return Outcome.Failure(DataError.NotFound)
+        val details = fixtures.details[id] ?: madeUp[id]?.let { bare(it.id) } ?: return Outcome.Failure(DataError.NotFound)
         cached.value += id to Fetched(details, clock.instant())
         return Outcome.Success(Unit)
     }
@@ -93,6 +102,8 @@ internal class DemoAnimeRepository(
     fun forget() {
         cached.value = emptyMap()
     }
+
+    private fun bare(id: AnimeId) = AnimeDetails(id, null, null, null, null, emptyList(), null, null, emptyList(), emptyList())
 }
 
 // The scenario panel's "offline" is the demo's connection.

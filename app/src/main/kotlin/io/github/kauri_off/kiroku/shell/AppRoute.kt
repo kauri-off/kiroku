@@ -15,8 +15,10 @@ import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
+import io.github.kauri_off.kiroku.list.UserListRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
+import io.github.kauri_off.kiroku.profile.ProfileNotBuilt
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltKey
 import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
 import io.github.kauri_off.kiroku.profile.ProfileRoute
@@ -143,11 +145,21 @@ fun appEntries(
         entry<ProfileRoot> { ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars) }
         entry<OtherProfileKey> { key -> ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars) }
         entry<ProfileNotBuiltKey> { key ->
+            val name = key.name
             val page = key.statisticsPage
-            if (page == null) {
-                ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
-            } else {
-                StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
+            when {
+                key.screen == ProfileNotBuilt.UserList && name != null ->
+                    UserListRoute(
+                        name,
+                        graph,
+                        onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                        snackbars,
+                        openTitle,
+                        onBack = { back() },
+                        onSignIn = signIn,
+                    )
+                page != null -> StatisticsRoute(page, key.name, graph, onBack = { back() }, onSignIn = signIn, snackbars)
+                else -> ProfileNotBuiltScreen(key, onBack = { back() }, snackbars)
             }
         }
         entry<TitleKey> { key ->

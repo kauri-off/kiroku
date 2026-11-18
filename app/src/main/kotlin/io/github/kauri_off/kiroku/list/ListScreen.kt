@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -47,6 +48,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -60,7 +62,9 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.offset
@@ -86,6 +90,7 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
 import io.github.kauri_off.kiroku.text.statusName
+import io.github.kauri_off.kiroku.title.countText
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 
@@ -108,7 +113,7 @@ fun ListScreen(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
             Column {
-                TopBar(state.filterText, state.owner, showActions = tabs != null, onEvent = onEvent)
+                TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
                 if (tabs != null) ListTabs(motion, tabs.statuses, onEvent)
                 if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
             }
@@ -126,8 +131,7 @@ fun ListScreen(
                     ),
                     body,
                 )
-            is ListContent.Failed ->
-                ScreenState(ScreenState.Error(stringResource(content.failure.messageRes())) { onEvent(ListEvent.Retry) }, body)
+            is ListContent.Failed -> ScreenState(failedState(content.failure, onEvent), body)
             is ListContent.Tabs ->
                 RefreshBox(
                     isRefreshing = state.refreshing,
@@ -303,46 +307,89 @@ private fun emptyState(
         ScreenState.Empty(stringResource(R.string.list_no_matches))
     }
 
-private fun ListFailure.messageRes(): Int =
-    when (this) {
-        ListFailure.NoConnection -> R.string.common_no_connection
-        ListFailure.Refused -> R.string.common_refused
-        ListFailure.Other -> R.string.list_failed
+// Another user's own answer about their list is no failure to retry.
+@Composable
+private fun failedState(
+    failure: ListFailure,
+    onEvent: (ListEvent) -> Unit,
+): ScreenState {
+    val retry = { onEvent(ListEvent.Retry) }
+    return when (failure) {
+        ListFailure.NoConnection -> ScreenState.Error(stringResource(R.string.common_no_connection), retry)
+        ListFailure.Refused -> ScreenState.Error(stringResource(R.string.common_refused), retry)
+        ListFailure.Other -> ScreenState.Error(stringResource(R.string.list_failed), retry)
+        ListFailure.PrivateList -> ScreenState.Empty(stringResource(R.string.list_private))
+        ListFailure.UnknownUser -> ScreenState.Empty(stringResource(R.string.list_unknown_user))
     }
+}
+
+// Under another user's name while the rows show, the only sign of a read: how far it is ("Loading 1,200 of 4,306",
+// "1,200 titles loaded"; a read again says so from its start, apart from the list it will replace), else the list's
+// size. None on the own List, before the rows and while filtering.
+@Composable
+private fun subtitleOf(state: ListState): String? {
+    if (state.owner !is ListOwner.Other || state.content !is ListContent.Tabs || state.filterText != null) return null
+    val reading = state.reading ?: return state.listSize?.let { pluralStringResource(R.plurals.list_size, it, countText(it)) }.orEmpty()
+    val loaded = countText(reading.loaded)
+    val total = reading.total?.takeIf { it > 0 }
+    return when {
+        state.readingAgain && reading.loaded == 0 -> stringResource(R.string.list_reading_again)
+        state.readingAgain && total != null -> stringResource(R.string.list_reading_again_count, loaded, countText(total))
+        state.readingAgain -> stringResource(R.string.list_reading_again_so_far, loaded)
+        total != null -> stringResource(R.string.design_list_loading, loaded, countText(total))
+        else -> pluralStringResource(R.plurals.design_list_loading_unknown_total, reading.loaded, loaded)
+    }
+}
+
+// The subtitle keeps the room of its longest form, so the rows never move when a read starts or ends.
+@Composable
+private fun Subtitle(text: String) {
+    val longest = stringResource(R.string.list_reading_again_count, countText(LONGEST_COUNT), countText(LONGEST_COUNT))
+    Box {
+        Text(longest, Modifier.alpha(0f).clearAndSetSemantics {})
+        Text(text)
+    }
+}
+
+private const val LONGEST_COUNT = 99_999
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(
     filter: String?,
     owner: ListOwner,
+    subtitle: String?,
     showActions: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
-    TopAppBar(
-        title = {
-            when {
-                filter != null -> FilterField(filter, onEvent)
-                owner is ListOwner.Other -> Text(stringResource(R.string.list_title_other, owner.name))
-                else -> Text(stringResource(R.string.list_title))
+    val title: @Composable () -> Unit = {
+        when {
+            filter != null -> FilterField(filter, onEvent)
+            owner is ListOwner.Other -> Text(stringResource(R.string.list_title_other, owner.name))
+            else -> Text(stringResource(R.string.list_title))
+        }
+    }
+    val navigationIcon: @Composable () -> Unit = {
+        when {
+            filter != null -> BackButton { onEvent(ListEvent.EndFilter) }
+            owner is ListOwner.Other -> BackButton { onEvent(ListEvent.Back) }
+        }
+    }
+    val actions: @Composable RowScope.() -> Unit = {
+        if (showActions && filter == null) {
+            IconButton(onClick = { onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
+                Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))
             }
-        },
-        navigationIcon = {
-            when {
-                filter != null -> BackButton { onEvent(ListEvent.EndFilter) }
-                owner is ListOwner.Other -> BackButton { onEvent(ListEvent.Back) }
+            IconButton(onClick = { onEvent(ListEvent.OpenSort) }, shapes = IconButtonDefaults.shapes()) {
+                Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.list_sort))
             }
-        },
-        actions = {
-            if (showActions && filter == null) {
-                IconButton(onClick = { onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
-                    Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))
-                }
-                IconButton(onClick = { onEvent(ListEvent.OpenSort) }, shapes = IconButtonDefaults.shapes()) {
-                    Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.list_sort))
-                }
-            }
-        },
-    )
+        }
+    }
+    if (subtitle != null) {
+        TopAppBar(title = title, subtitle = { Subtitle(subtitle) }, navigationIcon = navigationIcon, actions = actions)
+    } else {
+        TopAppBar(title = title, navigationIcon = navigationIcon, actions = actions)
+    }
 }
 
 @Composable

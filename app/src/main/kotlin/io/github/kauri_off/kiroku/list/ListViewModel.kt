@@ -674,7 +674,6 @@ class ListViewModel(
 
         val TAB = notShown("tab")
         val FILTER = notShown("filter")
-        val UNRECOGNIZED = notShown("?")
         val NOBODY_YET = Any()
 
         val Session.owner: SignInId?
@@ -685,15 +684,6 @@ class ListViewModel(
                     is Session.Expired -> signIn
                 }
 
-        fun savedTab(status: EntryStatus): String =
-            when (status) {
-                is ListStatus -> status.name
-                is EntryStatus.Unrecognized -> UNRECOGNIZED + status.malCode
-            }
-
-        fun tabOf(saved: String): EntryStatus =
-            if (saved.startsWith(UNRECOGNIZED)) EntryStatus.Unrecognized(saved.removePrefix(UNRECOGNIZED)) else ListStatus.valueOf(saved)
-
         fun Map<EntryStatus, TabSort>.of(status: EntryStatus): TabSort = get(status) ?: TabSort.defaultFor(status)
     }
 }
@@ -702,5 +692,7 @@ internal fun DataError.toListFailure(): ListFailure =
     when (this) {
         DataError.NoConnection -> ListFailure.NoConnection
         DataError.Refused -> ListFailure.Refused
+        DataError.PrivateList -> ListFailure.PrivateList
+        DataError.UnknownUser -> ListFailure.UnknownUser
         else -> ListFailure.Other
     }
