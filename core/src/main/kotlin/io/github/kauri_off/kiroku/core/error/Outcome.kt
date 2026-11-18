@@ -12,6 +12,9 @@ sealed interface DataError {
 
     data object InvalidRequest : DataError
 
+    // Not asked: the build lacks the client id a request without a token needs.
+    data object NoClientId : DataError
+
     data object SessionExpired : DataError
 
     // An Undo, a Retry, or a title's or the profile's refresh of a list that has ended: its sign-in is no longer the session's.

@@ -34,12 +34,30 @@ internal class ClientId(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url
-        val toApi = url.scheme == api.scheme && url.host == api.host && url.port == api.port
-        if (value.isEmpty() || !toApi || request.header(AUTHORIZATION) != null) return chain.proceed(request)
+        if (!request.needsClientId(api)) return chain.proceed(request)
+        if (value.isBlank()) throw NoClientId()
         return chain.proceed(request.newBuilder().header(CLIENT_ID_HEADER, value).build())
     }
 }
+
+// MAL refuses a request to its API with neither a token nor the client id, for a cause that is the build's: none is sent.
+internal class WithoutClientId(
+    private val api: HttpUrl,
+    private val value: String,
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (value.isBlank() && request.needsClientId(api)) throw NoClientId()
+        return chain.proceed(request)
+    }
+}
+
+// A request to MAL's API that carries no token.
+private fun Request.needsClientId(api: HttpUrl): Boolean =
+    url.scheme == api.scheme && url.host == api.host && url.port == api.port && header(AUTHORIZATION) == null
+
+// A request that was not sent because the build has no client id; OkHttp tries it no other way.
+internal class NoClientId : ProtocolException()
 
 // What the requests of one [MalHttp.call] put on the network, over all its tries.
 internal class Sends(

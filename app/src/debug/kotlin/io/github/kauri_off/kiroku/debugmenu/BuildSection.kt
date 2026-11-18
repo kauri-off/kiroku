@@ -32,6 +32,10 @@ fun BuildSection(build: BuildInfo) {
             FactRow(stringResource(R.string.debug_menu_version), build.version)
             FactRow(stringResource(R.string.debug_menu_commit), commit)
             FactRow(stringResource(R.string.debug_menu_built), build.built?.let { dateTime(it) } ?: notKnown)
+            FactRow(
+                stringResource(R.string.debug_menu_client_id),
+                stringResource(if (build.hasClientId) R.string.debug_menu_client_id_included else R.string.debug_menu_client_id_missing),
+            )
         }
     }
 }

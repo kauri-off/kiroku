@@ -82,6 +82,7 @@ internal fun DataError.message(
     when (this) {
         DataError.NoConnection -> R.string.common_no_connection
         DataError.Refused -> R.string.common_refused
+        DataError.NoClientId -> R.string.common_no_client_id
         else -> otherwise
     }
 

@@ -51,5 +51,6 @@
     <string name="common_moved_to_completed">Moved to Completed</string>
     <string name="common_no_connection">No connection</string>
     <string name="common_refused">MyAnimeList is refusing requests, try again later</string>
+    <string name="common_no_client_id">This build has no MyAnimeList client id</string>
     <string name="common_could_not_refresh">Could not refresh</string>
 </resources>

@@ -53,6 +53,8 @@ internal class MalTokenEndpoint(
 
     // An answer that is not a success leaves as the exception Retrofit throws, so a refusal starts the back-off.
     override suspend fun post(grant: Map<String, String>): TokenReply {
+        // MAL would reject a grant without the client id and so end the session, for a cause that is the build's.
+        if (http.clientId.isBlank()) return TokenReply.NoAnswer(DataError.NoClientId)
         var answered: TokenReply.Answer? = null
         val answer =
             http.call {

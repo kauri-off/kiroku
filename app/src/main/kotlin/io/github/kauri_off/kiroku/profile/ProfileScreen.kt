@@ -163,6 +163,7 @@ private fun failedState(
         DataError.UnknownUser -> ScreenState.Empty(stringResource(R.string.profile_unknown_user), retype)
         DataError.NoConnection -> ScreenState.Error(stringResource(R.string.common_no_connection)) { onEvent(ProfileEvent.Retry) }
         DataError.Refused -> ScreenState.Error(stringResource(R.string.common_refused)) { onEvent(ProfileEvent.Retry) }
+        DataError.NoClientId -> ScreenState.Error(stringResource(R.string.common_no_client_id)) { onEvent(ProfileEvent.Retry) }
         else -> ScreenState.Error(stringResource(R.string.profile_could_not_load)) { onEvent(ProfileEvent.Retry) }
     }
 }

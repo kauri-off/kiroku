@@ -1,9 +1,13 @@
 package io.github.kauri_off.kiroku.data.network
 
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.CLIENT_ID
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.TOKEN
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.dropped
+import io.github.kauri_off.kiroku.data.session.MalTokenEndpoint
+import io.github.kauri_off.kiroku.data.session.TokenReply
+import io.github.kauri_off.kiroku.data.session.refreshGrant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -15,6 +19,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Duration
 
 // Section 6.4: every request names Kiroku; the token and the client id reach MAL and no log.
 class CredentialsTest {
@@ -97,6 +102,64 @@ class CredentialsTest {
         assertEquals(MalAnswer.Success(Thing(7)), call { things.read() })
         assertEquals(CLIENT_ID, network.api.received().headers[CLIENT_ID_HEADER])
         assertNull(network.signIn.received().headers[CLIENT_ID_HEADER])
+    }
+
+    @Test
+    fun `a build without a client id sends MAL's API no request without a token, and is not held back for it`() {
+        network.clientId = " "
+        network.api.enqueue(answer())
+        network.signIn.enqueue(
+            MockResponse
+                .Builder()
+                .code(302)
+                .setHeader("Location", network.api.url("/v2/thing"))
+                .build(),
+        )
+
+        assertEquals(MalAnswer.Failed(DataError.NoClientId), call { things.read() })
+        assertEquals(MalAnswer.Failed(DataError.NoClientId), call { signInThings.read() })
+        val image = Request.Builder().url(network.api.url("/v2/picture.jpg")).build()
+        val imageFailure =
+            runBlocking {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        network.http.callFactory
+                            .newCall(image)
+                            .execute()
+                    }
+                }
+            }
+        assertEquals(MalAnswer.Success(Thing(7)), call { things.readAs(bearer(TOKEN)) })
+
+        val asUser = network.api.received()
+        assertEquals("Bearer $TOKEN", asUser.headers[AUTHORIZATION])
+        assertNull(asUser.headers[CLIENT_ID_HEADER])
+        assertEquals(1, network.api.requestCount)
+        assertEquals(1, network.signIn.requestCount)
+        assertTrue(imageFailure.exceptionOrNull() is NoClientId)
+        assertEquals(Duration.ZERO, runBlocking { network.http.refusedFor() })
+        assertTrue(network.log.first(), network.log.first().contains("/v2/thing NoClientId"))
+        assertEquals(emptyList<Throwable>(), network.unexpected.toList())
+    }
+
+    @Test
+    fun `a build without a client id answers before it opens a connection`() {
+        network.clientId = ""
+        network.api.close()
+        network.online = false
+
+        assertEquals(MalAnswer.Failed(DataError.NoClientId), call { things.read() })
+    }
+
+    @Test
+    fun `a build without a client id asks for no token, so MAL cannot end the session for it`() {
+        network.clientId = ""
+        network.signIn.enqueue(answer(401, body = """{"error":"invalid_client"}"""))
+
+        val reply = runBlocking { MalTokenEndpoint(network.http).post(refreshGrant(TOKEN)) }
+
+        assertEquals(TokenReply.NoAnswer(DataError.NoClientId), reply)
+        assertEquals(0, network.signIn.requestCount)
     }
 
     @Test

@@ -761,6 +761,7 @@ internal fun DataError.message(): Int =
     when (this) {
         DataError.NoConnection -> R.string.common_no_connection
         DataError.Refused -> R.string.common_refused
+        DataError.NoClientId -> R.string.common_no_client_id
         DataError.NotFound -> R.string.title_not_found
         else -> R.string.title_could_not_load
     }
