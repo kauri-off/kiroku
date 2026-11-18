@@ -15,7 +15,6 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
 import androidx.lifecycle.Lifecycle
-import io.github.kauri_off.kiroku.KirokuApplication
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.airing.Airing
@@ -50,16 +49,12 @@ import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.source.runningSource
 import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.KeysInMemory
-import io.github.kauri_off.kiroku.wiring.LiveParts
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -84,7 +79,6 @@ import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
 import java.text.NumberFormat
-import java.time.Clock
 import java.time.Duration
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
@@ -614,9 +608,9 @@ class SandboxAppTest {
 
     private fun readList(name: String) = state { graph.user.observeList(name).first { it !is UserListState.Reading } }
 
-    // Offline the own profile shows from the database, and a new graph over the same files shows it unasked.
+    // Offline the own profile shows from the database; SandboxProfileTest shows it from a new graph over the same files.
     @Test
-    fun `signed in and synced, the own profile's completed count and mean score are the sandbox's own, offline and anew too`() {
+    fun `signed in and synced, the own profile's completed count and mean score are the sandbox's own, offline too`() {
         signIn()
         assertEquals(Outcome.Success(Unit), waited { graph.list.sync() })
         profileTab()
@@ -634,23 +628,6 @@ class SandboxAppTest {
         shows(SandboxMal.USER_NAME)
         graph.scenarios.set(Scenario())
 
-        // The process ends, so that another graph may open the session's files.
-        runBlocking { (context as KirokuApplication).endWork() }
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        try {
-            val again =
-                SandboxGraph.create(context, Clock.systemUTC()) { source, device, clock ->
-                    LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, { throw it }, device = device)
-                }
-            assertEquals(profile, waited { again.user.observeOwnProfile().first { it != null } })
-            assertEquals(
-                emptyList<String>(),
-                again.sandbox.mal.asked
-                    .toList(),
-            )
-        } finally {
-            runBlocking { scope.coroutineContext.job.cancelAndJoin() }
-        }
         assertEquals(emptyList<URI>(), connections.asked)
     }
 
