@@ -195,6 +195,7 @@ class LiveListTest {
             graph.signInOnce()
             assertEquals(Outcome.Success(Unit), graph.list.sync())
             graph.preferences.setListSort(ListStatus.Completed, TabSort(ListSort.Score, SortDirection.Ascending))
+            graph.preferences.updateOpenedProfiles { listOf("sample_viewer") }
             val first = graph.list.observeEntries().first()
             assertTrue(parts.tokenFile.length() > 0)
             // A List screen stays open through the sign-out and the next sign-in, as the debug menu leaves it.
@@ -220,6 +221,7 @@ class LiveListTest {
             val titles = TitleStore(parts.database, Dispatchers.IO) {}
             first.forEach { assertNull(titles.observeAnime(it.anime.id).first()) }
             assertEquals(defaults, graph.preferences.observeListSorts().first())
+            assertEquals(emptyList<String>(), graph.preferences.observeOpenedProfiles().first())
             val asked = mal.asked.size
             assertEquals(Outcome.Failure(DataError.SessionExpired), graph.list.sync())
             assertEquals(asked, mal.asked.size)

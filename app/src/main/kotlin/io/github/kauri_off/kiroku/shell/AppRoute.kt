@@ -52,10 +52,7 @@ fun AppRoute(
     links: AppLinks? = null,
 ) {
     val messages = viewModel { ShellViewModel(graph.list) }.messages
-    val profiles = viewModel { OpenedProfiles() }
-    // Which profiles were opened is the signed-in user's, so a sign-out forgets it (S9).
-    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
-    LaunchedEffect(session) { if (session == Session.SignedOut) profiles.forget() }
+    val profiles = viewModel { OpenedProfiles(graph.preferences) }
     val covers = remember { MessageCovers() }
     ShownMessages(messages, snackbars, covers)
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.

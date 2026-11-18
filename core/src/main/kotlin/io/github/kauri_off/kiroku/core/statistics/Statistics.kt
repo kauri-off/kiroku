@@ -12,8 +12,10 @@ import java.time.Duration
 fun statisticsOf(entries: Collection<ListEntry>): UserStatistics {
     val scores = entries.mapNotNull { it.values.score }
     return UserStatistics(
+        titleCount = entries.size,
         statuses = StatusCounts.of(entries.map { it.status }),
         daysWatched = entries.fold(Duration.ZERO) { sum, entry -> sum + entry.timeWatched }.toMillis() / DAY_MILLIS,
+        episodesWatched = entries.sumOf { it.values.watchedEpisodes },
         meanScore = if (scores.isEmpty()) null else scores.sum().toDouble() / scores.size,
         scores = scores.groupingBy { it }.eachCount().toSortedMap(),
         genres = genresOf(entries),

@@ -21,9 +21,18 @@ import io.github.kauri_off.kiroku.core.list.StoredTitle
 import io.github.kauri_off.kiroku.core.list.record
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.StatedFigures
 import io.github.kauri_off.kiroku.core.model.UserProfile
+import io.github.kauri_off.kiroku.core.notify.Announced
+import io.github.kauri_off.kiroku.core.notify.Followed
+import io.github.kauri_off.kiroku.core.notify.NotificationRecord
+import io.github.kauri_off.kiroku.core.notify.Recheck
+import io.github.kauri_off.kiroku.core.notify.SentNotification
+import io.github.kauri_off.kiroku.core.notify.StoredNotifications
+import io.github.kauri_off.kiroku.core.notify.TitleRecord
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -50,6 +59,86 @@ class KirokuDatabaseTest {
     private val anime = FixtureAnime.exactToWatch
     private val details = Fixtures.reference.details.getValue(anime.id)
     private val fetchedAt = Instant.parse("2026-01-11T21:40:00.123456789Z")
+
+    private val airing =
+        mapOf(
+            AiringRow.TABLE to
+                listOf(
+                    mapOf("title_id" to 7L, "fetched_at" to fetchedAt.toColumn(), "known" to 0L, "total_episodes" to null),
+                    mapOf("title_id" to anime.id.value, "fetched_at" to fetchedAt.toColumn(), "known" to 1L, "total_episodes" to 24L),
+                    // A schedule in doubt, from version 3 on; an earlier version has no column for it.
+                    mapOf(
+                        "title_id" to 8L,
+                        "fetched_at" to fetchedAt.toColumn(),
+                        "known" to 1L,
+                        "total_episodes" to 12L,
+                        "doubted_over" to 13L,
+                    ),
+                ),
+            AiringEpisodeRow.TABLE to
+                listOf(1L, 2L).map {
+                    mapOf("title_id" to anime.id.value, "number" to it, "airs_at" to fetchedAt.plusSeconds(it).toColumn())
+                },
+        )
+
+    private val profile =
+        mapOf(
+            ProfileRow.TABLE to
+                listOf(
+                    mapOf(
+                        "owner" to "owner",
+                        "name" to "someone",
+                        "joined" to "2020-03-04",
+                        "fetched_at" to fetchedAt.toColumn(),
+                        "stated_watching" to 3L,
+                        "stated_mean_score" to 7.5,
+                    ),
+                ),
+        )
+
+    // The record of a signed-in list: a title announced and followed, one announced and no longer followed, one followed only.
+    private val record =
+        mapOf(
+            NotificationStateRow.TABLE to
+                listOf(mapOf("id" to 0L, "owner" to "owner", "since" to fetchedAt.toColumn(), "planned_since" to null)),
+            NotificationTitleRow.TABLE to
+                listOf(
+                    mapOf(
+                        "title_id" to anime.id.value,
+                        "followed_status" to "watching",
+                        "followed_since" to fetchedAt.toColumn(),
+                        "announced_episode" to 3L,
+                        "announced_aired_at" to fetchedAt.plusSeconds(3).toColumn(),
+                        "taken_back_to" to 2L,
+                        "standing" to 1L,
+                    ),
+                    mapOf(
+                        "title_id" to 7L,
+                        "announced_episode" to 12L,
+                        "announced_aired_at" to fetchedAt.plusSeconds(12).toColumn(),
+                        "standing" to 0L,
+                    ),
+                    mapOf(
+                        "title_id" to 8L,
+                        "followed_status" to "plan_to_watch",
+                        "followed_since" to fetchedAt.toColumn(),
+                        "standing" to 0L,
+                    ),
+                ),
+            SentRow.TABLE to
+                listOf(3L, 12L).mapIndexed { index, episode ->
+                    mapOf(
+                        "id" to index + 1L,
+                        "title_id" to if (episode == 3L) anime.id.value else 7L,
+                        "episode" to episode,
+                        "aired_at" to fetchedAt.plusSeconds(episode).toColumn(),
+                        "notify_at" to fetchedAt.plusSeconds(episode).toColumn(),
+                        "posted_at" to fetchedAt.plusSeconds(episode + 60).toColumn(),
+                        "recheck" to "answered",
+                        "shown" to index.toLong(),
+                    )
+                },
+        )
 
     @get:Rule
     val helper =
@@ -229,54 +318,41 @@ class KirokuDatabaseTest {
         }
     }
 
-    // N10, section 7.1: a list, its titles and airing data, in a database of each earlier version, are each row as they were.
+    // N10, section 7.1: a database of each version, every table of it holding rows, the record's announced episodes among them,
+    // is each row as it was in the current version, and a table it did not have is empty there.
     @Test
-    fun `a database of each earlier version keeps every row of its list, titles and airing data through the migrations`() {
+    fun `a database of each version keeps every row of its list, titles, airing data, profile and record through the migrations`() {
         val list =
             AndroidSQLiteDriver().open(writtenByVersionOne("written-1.db").path).use { connection ->
                 connection.tables().associateWith { connection.named(it) }
             }
-        val airing =
-            mapOf(
-                AiringRow.TABLE to
-                    listOf(
-                        mapOf("title_id" to 7L, "fetched_at" to fetchedAt.toColumn(), "known" to 0L, "total_episodes" to null),
-                        mapOf("title_id" to anime.id.value, "fetched_at" to fetchedAt.toColumn(), "known" to 1L, "total_episodes" to 24L),
-                        // A schedule in doubt, from version 3 on; an earlier version has no column for it.
-                        mapOf(
-                            "title_id" to 8L,
-                            "fetched_at" to fetchedAt.toColumn(),
-                            "known" to 1L,
-                            "total_episodes" to 12L,
-                            "doubted_over" to 13L,
-                        ),
-                    ),
-                AiringEpisodeRow.TABLE to
-                    listOf(1L, 2L).map {
-                        mapOf("title_id" to anime.id.value, "number" to it, "airs_at" to fetchedAt.plusSeconds(it).toColumn())
-                    },
-            )
         assertTrue(list.keys.containsAll(TABLES))
         assertTrue(list.values.all { it.isNotEmpty() })
-        for (version in 1 until KirokuDatabase.VERSION) {
+        val fixture = list + airing + profile + record
+        for (version in 1..KirokuDatabase.VERSION) {
             context.deleteDatabase(name)
             val written =
                 helper.createDatabase(version).use { connection ->
                     val tables = connection.tables()
-                    for ((table, rows) in (list + airing).entries.sortedBy { it.key != TitleRow.TABLE && it.key != AiringRow.TABLE }) {
+                    for ((table, rows) in fixture.entries.sortedBy { it.key != TitleRow.TABLE && it.key != AiringRow.TABLE }) {
                         if (table in tables) connection.insertNamed(table, rows)
                     }
                     tables.associateWith { connection.named(it) }
                 }
-            val held = if (version >= AIRING_VERSION) list.keys + airing.keys else list.keys
-            assertEquals("$version", held, written.filterValues { it.isNotEmpty() }.keys)
+            assertEquals("$version: every table holds rows", written.keys, written.filterValues { it.isNotEmpty() }.keys)
+            if (NotificationTitleRow.TABLE in written) {
+                assertTrue(
+                    "$version: announced episodes",
+                    written.getValue(NotificationTitleRow.TABLE).count { it["announced_episode"] != null } >= 2,
+                )
+            }
 
             helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
                 for ((table, rows) in written) {
-                    val kept = connection.named(table).map { row -> row.filterKeys { it in rows.firstOrNull().orEmpty() } }
+                    val kept = connection.named(table).map { row -> row.filterKeys { it in rows.first() } }
                     assertEquals("$version: $table", rows, kept)
                 }
-                assertEquals("$version", 0, connection.rows(ProfileRow.TABLE).size)
+                for (table in connection.tables() - written.keys) assertEquals("$version: $table", 0, connection.rows(table).size)
             }
         }
     }
@@ -325,6 +401,32 @@ class KirokuDatabaseTest {
                 val profile = StoredProfile(SignInId("owner"), UserProfile("someone", null, null, stated), fetchedAt)
                 assertTrue(profiles.replace(profile) { true })
                 assertEquals(profile, profiles.observe().first())
+
+                val preferences = StoredPreferences(File(context.filesDir, "opened-1.preferences_pb"), scope) { unexpected += it }
+                val notifications = RoomNotificationStore(database, preferences, Dispatchers.IO) { unexpected += it }
+                assertEquals(StoredNotifications(null, NotificationRecord()), notifications.read())
+                assertEquals(emptyList<SentNotification>(), notifications.observeSent().first())
+                val announced =
+                    NotificationRecord(
+                        since = fetchedAt,
+                        titles =
+                            mapOf(
+                                anime.id to TitleRecord(Followed(ListStatus.Watching, fetchedAt), Announced(3, fetchedAt), standing = true),
+                            ),
+                    )
+                val sent =
+                    SentNotification(
+                        checkNotNull(titles.observeAnime(anime.id).first()),
+                        3,
+                        fetchedAt,
+                        fetchedAt,
+                        fetchedAt.plusSeconds(1),
+                        Recheck.Answered,
+                    )
+                notifications.clear(SignInId("owner"))
+                notifications.write(announced, listOf(sent), fetchedAt)
+                assertEquals(StoredNotifications(SignInId("owner"), announced), notifications.read())
+                assertEquals(listOf(sent), notifications.observeSent().first())
             }
             scope.cancel()
 
@@ -433,9 +535,6 @@ class KirokuDatabaseTest {
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
 
-        // The first version with airing data.
-        const val AIRING_VERSION = 2
-
         // Every version that may be on a device, as exported: a changed entity is a new version, never a new identity here.
         val IDENTITIES =
             mapOf(
@@ -443,6 +542,7 @@ class KirokuDatabaseTest {
                 2 to "569924a95101271cd2502ea512c63260",
                 3 to "bf46dac8cbf593d04a1acac52b0f3c99",
                 4 to "7e5f8a37c34960ccc7f6550ea8aae3f2",
+                5 to "2ec16b4ab274d6bfa0ed4f5d94531644",
             )
     }
 }

@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.lastDay
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
 // A4: the episodes by which a schedule that begins after episode 1 may count past MAL's total, which a recap explains.
@@ -102,7 +103,7 @@ private fun numberedDifferently(
             ?.lastDay()
             ?.atStartOfDay(JAPAN)
             ?.toInstant() ?: return false
-    val weeks = Duration.between(start, first.airsAt).dividedBy(WEEK).coerceAtLeast(0)
+    val weeks = weeksBetween(start, first.airsAt).coerceAtLeast(0)
     return first.number > 1 + weeks + EPISODES_AHEAD + weeks / WEEKS_PER_EPISODE_AHEAD
 }
 
@@ -170,7 +171,7 @@ private fun estimated(
         return Airing(count, total, null, null, reason, wake)
     }
     if (now.isBefore(first)) return Airing(AiredCount.Estimated(0), total, null, null, reason, earliest(first, wake))
-    val slots = Duration.between(first, now).dividedBy(WEEK) + 1
+    val slots = weeksBetween(first, now) + 1
     val count = if (total == null) slots else minOf(slots, total.toLong())
     val nextSlot = first.plus(WEEK.multipliedBy(slots)).takeIf { total == null || slots < total }
     return Airing(
@@ -200,3 +201,9 @@ private fun firstSlot(anime: Anime): Instant? {
 }
 
 private fun earliest(vararg instants: Instant?): Instant? = instants.filterNotNull().minOrNull()
+
+// The whole weeks from [start] to [end], truncated towards zero; Duration.dividedBy(Duration) is API 31.
+private fun weeksBetween(
+    start: Instant,
+    end: Instant,
+): Long = ChronoUnit.SECONDS.between(start, end) / WEEK.seconds

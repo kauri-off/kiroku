@@ -377,7 +377,9 @@ was chosen against, and why:
 - **Wiring** is done by hand. Not Hilt: a plugin and an annotation processor in every module for a graph of roughly
   fifteen objects.
 - **Tests and checks:** JUnit 4, Robolectric, Roborazzi (Paparazzi's current line is alpha), ktlint, Android Lint
-  (detekt's current line is alpha).
+  (detekt's current line is alpha), and for `:core`, which Lint's API check skips, Animal Sniffer's checker against
+  Gummy Bears' signature of the minSdk (not their Gradle plugins: one uses an API Gradle 10 removes, the other
+  breaks the configuration cache).
 - **Not used at all:** a chart library, AppCompat, `kotlinx-datetime`, a paging library, Google Play Services,
   Firebase, any closed-source dependency (which keeps F-Droid possible).
 - **Demo mode:** a debug or preview build chooses between the demo, the sandbox and the real account, each with its
@@ -627,7 +629,8 @@ only when rendered on the same machine.
 ## 12. Build, platform and distribution
 
 - **`minSdk` 26** (Android 8.0): `java.time` without desugaring, notification channels and adaptive icons
-  everywhere. The compile SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
+  everywhere. Shipped code calls only what Android 8.0 has, and the build fails for a call it lacks. The compile
+  SDK is the one current Compose and `androidx.core` require, and the target SDK is the same.
 - **Checks.** ktlint with its default rules and two exceptions: the package-name rule is off, because it rejects
   the underscore in the base package, and composable functions are exempt from the function-naming rule. Android
   Lint with the translation checks as errors; other warnings are not errors, because checks such as "newer version
@@ -665,8 +668,8 @@ Each of these could change a decision above.
    apply, is not measured.
 4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
    fires in Doze (N3), and the real delay of inexact alarms.
-5. **Sources beyond MAL and AniList.** Jikan's public API shut down on 1 October 2026: the score distribution comes
-   from Tenrai, and characters, videos, reviews and other users' avatars have no source. Tenrai is in beta and does
+5. **Sources beyond MAL and AniList.** The score distribution comes from Tenrai; characters, videos, reviews and
+   other users' avatars have no source. Tenrai is in beta and does
    not say who runs it. Like every source of MAL's score distribution it serves what it reads from MAL's website,
    which clause 4(i) of MAL's API agreement rules out for an app's own requests; the owner accepts that risk, and the
    app itself scrapes nothing. AniList's links and characters and Shikimori are unchecked.

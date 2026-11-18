@@ -217,17 +217,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-06 [O] An emulator of Android 8 to 11.**
 
-- [ ] **M4-07 Database: the record and the settings.** M4-02's store of the record in the database, as a real
-  migration (section 7.1) to the version after M6-05's, M4's only one; its settings in the source's preferences file.
-  The record is in tables of its own, which no download, refresh or list write touches, and from now on every
-  migration test starts from a database that holds announced episodes (N10).
-  **Needs:** M4-02.
-  **Check:** `./gradlew :data:testDebugUnitTest`: M4-02's contract passes over the store; the migration test takes a
-  database of each earlier version that holds a list, titles and airing data to the new version and finds every row
-  as it was; a test fails for a schema version whose migration is not run over announced episodes; a list download,
-  an airing refresh and a record write made together lose nothing; a setting written is read by a new store over the
-  same file, and one that cannot be read counts as never made and is reported. `./gradlew
-  :data:connectedDebugAndroidTest` passes on an emulator.
+- [x] **M4-07 Database: the record and the settings.**
 
 - [x] **M4-08 The notification on the device.**
 
@@ -438,17 +428,7 @@ owner's findings on the Russian strings of M3 to M6 are fixed.
   **Needs:** nothing.
   **Check:** one composition is chosen; M6-12, M6-13 and M6-14 start from its prototype.
 
-- [ ] **M6-12 The Profile as chosen.** The Profile's stateless screen in the chosen composition, for the signed-in
-  user and for another, on fixture states with its screenshot registry, and drawn from M6-09's state in the app.
-  It is built once, on real state, and shown to the owner (section 9), within sections 6.2, 7.2, 8 and 10; Settings
-  still opens from it (section 6.3). Names opened earlier, where it offers them, are kept across restarts with the
-  person's other choices and forgotten at a sign-out. Its strings are in the Profile's file in both languages, and
-  a term it introduces enters the glossary.
-  **Needs:** M6-09, M6-11.
-  **Check:** the screen's screenshots are rendered in every variant, with a case for each state M6-09 can give:
-  loading, a list being read with and without a total, a private list, an unknown name, each failure, signed out,
-  the session expired, nothing on the list, a list of several thousand; the render's accessibility check passes;
-  `StringRulesTest` and M6-09's tests pass. The owner looks at it on his phone, on the demo and on his account.
+- [x] **M6-12 The Profile as chosen.**
 
 - [ ] **M6-13 Statistics views.** What the chosen composition shows of the statistics beyond the Profile's own
   page, for the signed-in user and for another: stateless, on fixture states, each with its screenshot registry,
