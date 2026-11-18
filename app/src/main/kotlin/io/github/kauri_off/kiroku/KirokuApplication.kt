@@ -2,11 +2,15 @@ package io.github.kauri_off.kiroku
 
 import android.app.Application
 import androidx.annotation.VisibleForTesting
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.link.LinksOwner
+import io.github.kauri_off.kiroku.notify.HeldRuns
+import io.github.kauri_off.kiroku.notify.HeldRunsOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.DeviceClock
@@ -23,6 +27,8 @@ class KirokuApplication :
     Application(),
     AppGraphOwner,
     LinksOwner,
+    HeldRunsOwner,
+    Configuration.Provider,
     SingletonImageLoader.Factory {
     private val scope = applicationScope(reportUnexpected)
 
@@ -34,9 +40,15 @@ class KirokuApplication :
 
     override val links = AppLinks()
 
+    override val heldRuns = HeldRuns(scope) { graph.notificationRuns }
+
+    // Scheduled work is set up when it is first asked for, never when the process starts.
+    override val workManagerConfiguration: Configuration get() = Configuration.Builder().build()
+
     override fun onCreate() {
         super.onCreate()
         debugTools?.invoke(this)
+        heldRuns.atEachOpening(ProcessLifecycleOwner.get().lifecycle)
     }
 
     // The debug build draws its fixture titles' posters; the release build has no stand-ins.

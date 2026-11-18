@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -40,6 +41,9 @@ interface AppGraph {
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
+
+    // What the alarm, the moments the system starts the app at and its opening run; a graph without notifications has none.
+    val notificationRuns: NotificationRuns? get() = null
 
     // True for made-up titles and users, as the demo and the sandbox have, which a screen not built yet may stand in with.
     val madeUp: Boolean get() = false

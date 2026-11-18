@@ -3,6 +3,17 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Section 5.1: the alarm is exact only where the system lets the app set exact alarms. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- The alarm and scheduled work are set again after a restart of the device. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- N9: scheduled work starts no foreground service, which alone would hold a wake lock. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.WAKE_LOCK"
+        tools:node="remove" />
 
     <application
         android:name=".KirokuApplication"
@@ -23,7 +34,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- Nothing of the network runs when the process starts: OkHttp finds its platform at the first request, and emoji are drawn with the system's font, not one Google Play services downloads. -->
+        <!-- Nothing of the network or a database runs when the process starts: OkHttp finds its platform at the first request, emoji are drawn with the system's font, not one Google Play services downloads, and scheduled work is set up at its first use. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -36,7 +47,27 @@
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"
                 tools:node="remove" />
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
         </provider>
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:node="remove" />
+        <!-- No other app asks scheduled work for its state. -->
+        <receiver
+            android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
+            tools:node="remove" />
+        <!-- The alarm, and the moments the system starts the app at; only the system and the app itself reach it. -->
+        <receiver
+            android:name=".notify.RunReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".signin.RedirectActivity"
             android:exported="true"
