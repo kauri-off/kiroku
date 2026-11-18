@@ -310,7 +310,7 @@ class StoredPreferencesTest {
         process {
             it.writeNotificationSettings(chosen)
             it.setListSort(ListStatus.Completed, TabSort(ListSort.Score))
-            it.forgetListSorts()
+            it.forgetUsersChoices()
         }
         process { assertEquals(chosen, it.observeNotificationSettings().first()) }
         assertEquals(emptyList<Throwable>(), reports)
