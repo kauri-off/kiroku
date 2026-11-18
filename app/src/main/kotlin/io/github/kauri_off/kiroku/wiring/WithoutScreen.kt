@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
+import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -47,6 +48,9 @@ interface WithoutScreen {
     // Writes to the list and waits for the service's answer (N9), with the tokens renewed first as for a download.
     suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>>
 
+    // Asks the airing source again for the tracked titles whose airing data is stale; the list's service has no part in it.
+    suspend fun updateAiring(): Outcome<Unit>
+
     // The title as the list on the device has it, with nothing sent; null when it is not on the list. Throws a DataException when the list cannot be read.
     suspend fun titleOnList(id: AnimeId): Anime?
 
@@ -67,6 +71,7 @@ val Context.withoutScreen: WithoutScreen? get() = (applicationContext as? Withou
 // For a graph whose list reaches no service that could hold the work back: the work at once.
 class WorkAtOnce(
     private val list: () -> ListRepository,
+    private val airing: () -> AiringRepository,
     private val runs: () -> NotificationRuns?,
     private val sessions: () -> SessionRepository,
     override val notSaved: NotSavedNotice? = null,
@@ -76,6 +81,8 @@ class WorkAtOnce(
     override suspend fun syncList(): ListWork<Outcome<Unit>> = ListWork.Done(list().sync())
 
     override suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>> = ListWork.Done(list().send(write))
+
+    override suspend fun updateAiring(): Outcome<Unit> = airing().refreshStale()
 
     override suspend fun titleOnList(id: AnimeId): Anime? = list().observeEntry(id).first()?.anime
 

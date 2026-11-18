@@ -548,16 +548,17 @@ class SourceRulesTest {
     fun workWithoutAScreenIsGivenTheAppAsWithoutScreenAlone() {
         val sources = appSources()
         val without = sources.filter { runsWithoutAScreen(relative(it), it.readText()) }.map { it.name }.toSet()
-        val known = listOf("RunReceiver.kt", "HeldRuns.kt", "MarkWatchedReceiver.kt", "ScenarioTile.kt", "DeviceClock.kt")
+        val known =
+            listOf("RunReceiver.kt", "HeldRuns.kt", "MarkWatchedReceiver.kt", "PeriodicWork.kt", "ScenarioTile.kt", "DeviceClock.kt")
         assertTrue("$without", without.containsAll(known))
         assertTrue("$without", "LiveGraph.kt" !in without && "ListRoute.kt" !in without && "KirokuApplication.kt" !in without)
         assertEquals(emptyList<String>(), sources.flatMap { withoutScreenProblems(relative(it), it.readText()) })
-        // The type hands out neither the list nor the graph: its members are the runs, the two calls, reads of the list and the
-        // session on the device, and the notice that a write could not be saved.
+        // The type hands out neither the list nor the graph: its members are the runs, the list's two calls and the airing's,
+        // reads of the list and the session on the device, and the notice that a write could not be saved.
         val seam = sources.single { it.name == "WithoutScreen.kt" }.readText()
         val members = Regex("""interface WithoutScreen \{(.*?)\n\}""", RegexOption.DOT_MATCHES_ALL).find(KotlinSource(seam).code)
         val declared = Regex("""\b(val|fun)\s+(\w+)""").findAll(checkNotNull(members).groupValues[1]).map { it.groupValues[2] }.toList()
-        assertEquals(listOf("notificationRuns", "syncList", "sendToList", "titleOnList", "session", "notSaved"), declared)
+        assertEquals(listOf("notificationRuns", "syncList", "sendToList", "updateAiring", "titleOnList", "session", "notSaved"), declared)
     }
 
     @Test

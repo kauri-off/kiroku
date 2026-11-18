@@ -3,12 +3,9 @@ package io.github.kauri_off.kiroku.sandbox
 import android.app.Notification
 import android.app.NotificationManager
 import android.os.Looper
-import androidx.work.Configuration
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.await
-import androidx.work.impl.WorkManagerImpl
-import androidx.work.testing.SynchronousExecutor
-import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -29,7 +26,10 @@ import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.notify.MarkWatched
 import io.github.kauri_off.kiroku.notify.MarkWatchedTries
 import io.github.kauri_off.kiroku.notify.MarkWatchedWork
+import io.github.kauri_off.kiroku.notify.PeriodicWork
+import io.github.kauri_off.kiroku.notify.PeriodicWorker
 import io.github.kauri_off.kiroku.notify.Tap
+import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.notify.Tried
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
@@ -421,38 +421,41 @@ class SandboxMarkWatchedTest {
     // S9: a sign-out takes the user's taps with it.
     @Test
     fun `a tap waiting at a sign-out ends with it, sends and shows nothing, and leaves no work`() {
-        WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().setExecutor(SynchronousExecutor()).build())
-        try {
-            val graph = announced()
-            val next = graph.entry(soon).values.watchedEpisodes + 1
-            val madeIn = graph.signIn()
-            graph.scenarios.set(Scenario(offline = true))
-            val tap = Tap(markOf(soon, next), now())
-            waited { MarkWatchedWork.tapped(context, tap).forEach { it.await() } }
-            assertTrue(graph.tried(soon, next, madeIn = madeIn) is Tried.Again)
-            assertEquals(
-                2,
-                WorkManager
-                    .getInstance(context)
-                    .getWorkInfosByTag(MarkWatchedWork.sourceTag(SOURCE))
-                    .get()
-                    .size,
-            )
-            graph.scenarios.set(Scenario())
-            val before = graph.asked()
+        TestScheduledWork.install(context)
+        val graph = announced()
+        val next = graph.entry(soon).values.watchedEpisodes + 1
+        val madeIn = graph.signIn()
+        graph.scenarios.set(Scenario(offline = true))
+        val tap = Tap(markOf(soon, next), now())
+        waited { MarkWatchedWork.tapped(context, tap).forEach { it.await() } }
+        assertTrue(graph.tried(soon, next, madeIn = madeIn) is Tried.Again)
+        assertEquals(
+            2,
+            WorkManager
+                .getInstance(context)
+                .getWorkInfosByTag(MarkWatchedWork.sourceTag(SOURCE))
+                .get()
+                .size,
+        )
+        graph.scenarios.set(Scenario())
+        PeriodicWork.schedule(context)
+        val periodic = listOf(PeriodicWork.ONLINE, PeriodicWork.STORED).associateWith { TestScheduledWork.periodic(context, it).single() }
+        val before = graph.asked()
 
-            waited { graph.session.signOut() }
+        waited { graph.session.signOut() }
 
-            assertEquals(emptyList<Any>(), WorkManager.getInstance(context).getWorkInfosByTag(MarkWatchedWork.sourceTag(SOURCE)).get())
-            // A try that a failed cancel would have left finds nobody signed in.
-            assertEquals(Tried.Dropped, graph.tried(soon, next, madeIn = madeIn))
-            waited { graph.tries().gaveUp(tap.mark, madeIn) }
-            assertEquals(emptyList<String>(), graph.writes(before))
-            assertEquals(emptyList<Any>(), ours())
-        } finally {
-            WorkManagerTestInitHelper.closeWorkDatabase()
-            WorkManagerImpl.setDelegate(null)
+        assertEquals(emptyList<Any>(), WorkManager.getInstance(context).getWorkInfosByTag(MarkWatchedWork.sourceTag(SOURCE)).get())
+        // The periodic works are nobody's: they stay as they were, named by their worker alone, and run signed out as the app does.
+        for ((name, was) in periodic) {
+            val now = TestScheduledWork.periodic(context, name).single()
+            assertEquals(was.id to WorkInfo.State.ENQUEUED, now.id to now.state)
+            assertEquals(setOf(PeriodicWorker::class.java.name), now.tags)
         }
+        // A try that a failed cancel would have left finds nobody signed in.
+        assertEquals(Tried.Dropped, graph.tried(soon, next, madeIn = madeIn))
+        waited { graph.tries().gaveUp(tap.mark, madeIn) }
+        assertEquals(emptyList<String>(), graph.writes(before))
+        assertEquals(emptyList<Any>(), ours())
     }
 
     // As an Undo and a Retry are, a tap is bound to the sign-in whose list it was made in.

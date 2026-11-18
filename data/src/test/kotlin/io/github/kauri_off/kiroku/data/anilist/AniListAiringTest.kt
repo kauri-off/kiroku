@@ -117,6 +117,30 @@ class AniListAiringTest {
         }
 
     @Test
+    fun `a title is handed over whole as soon as its last page is read, before the pages of a longer schedule asked with it`() =
+        runTest {
+            val long = pagesOf("hundreds_of_episodes")
+            aniList.answer = { asked ->
+                if (asked.ids.size == 2) {
+                    val both = mediaOf(json("airing_weekly")) + mediaOf(json(long.first()))
+                    reply(200, json("airing_weekly").edited(MEDIA, JsonArray(both)).toString())
+                } else {
+                    aniList.recorded(asked)
+                }
+            }
+            val handed = mutableListOf<Pair<Map<AnimeId, Outcome<FetchedAiring?>>, Int>>()
+
+            val answers =
+                aniList.client(this).fetch(listOf(61987, 235).map(::titleWithId), since) { part -> handed += part to aniList.requests.size }
+
+            assertEquals(listOf(setOf(AnimeId(61987)) to 1, setOf(AnimeId(235)) to long.size), handed.map { (part, at) -> part.keys to at })
+            assertEquals(answers, handed.fold(emptyMap<AnimeId, Outcome<FetchedAiring?>>()) { all, (part, _) -> all + part })
+            assertEquals(whole("airing_weekly", 61987, 12), answers.of(61987))
+            assertEquals(whole("hundreds_of_episodes", 235, null), answers.of(235))
+            assertEquals(emptyList<Asked>(), aniList.unrecorded)
+        }
+
+    @Test
     fun `every episode at or after the instant asked for and the latest aired one are in the answer, complete from the start`() =
         runTest {
             val schedule = (fetch(listOf(21)).of(21) as Outcome.Success).value!!

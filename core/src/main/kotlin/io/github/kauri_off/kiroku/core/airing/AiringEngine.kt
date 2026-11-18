@@ -296,33 +296,49 @@ class AiringEngine(
         return answers
     }
 
-    // One call to the source. A10: a title is stored only when its answer is whole, and any other stays as it was.
+    // One call to the source. A10: a title is stored only when its answer is whole, as soon as it is; any other stays as it was.
     private suspend fun answer(titles: Map<AnimeId, Anime>) {
-        val errors =
-            try {
-                val began = clock.instant()
-                // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
-                val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
-                keep(titles.keys, fetch(titles, since), began, since)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                unexpected(e)
-                titles.keys.associateWith { DataError.ServerError }
+        val told = mutableSetOf<AnimeId>()
+
+        // Answers [ids], each with its error in [errors] or none.
+        suspend fun tell(
+            ids: Set<AnimeId>,
+            errors: Map<AnimeId, DataError?>,
+        ) {
+            mutex.withLock {
+                forPages -= ids
+                for (id in ids) asked.remove(id)?.complete(errors[id])
             }
-        mutex.withLock {
-            forPages -= titles.keys
-            for (id in titles.keys) asked.remove(id)?.complete(errors[id])
+            told += ids
+        }
+        try {
+            val began = clock.instant()
+            // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
+            val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
+            val answers =
+                fetch(titles, since) { part ->
+                    val ids = part.keys.filterTo(mutableSetOf()) { it in titles && it !in told }
+                    if (ids.isNotEmpty()) tell(ids, keep(ids, part, began, since))
+                }
+            val rest = titles.keys - told
+            tell(rest, keep(rest, answers, began, since))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            unexpected(e)
+            val rest = titles.keys - told
+            tell(rest, rest.associateWith { DataError.ServerError })
         }
     }
 
-    // The source throwing fails every title of the call: an IOException as no connection, anything else reported.
+    // The source throwing fails every title of the call not answered yet: an IOException as no connection, anything else reported.
     private suspend fun fetch(
         titles: Map<AnimeId, Anime>,
         since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         try {
-            source.fetch(titles.values, since)
+            source.fetch(titles.values, since, whole)
         } catch (e: Exception) {
             stores.ended(e)
             val error = if (e is IOException) DataError.NoConnection else DataError.ServerError.also { unexpected(e) }

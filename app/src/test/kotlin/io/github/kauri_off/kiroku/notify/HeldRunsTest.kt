@@ -29,7 +29,7 @@ class HeldRunsTest {
         engine: () -> NotificationRuns? = {
             runs
         },
-    ) = HeldRuns(CoroutineScope(StandardTestDispatcher(testScheduler)), engine)
+    ) = HeldRuns(CoroutineScope(StandardTestDispatcher(testScheduler)), runs = engine)
 
     @Test
     fun `each trigger starts one run and is held until that run has ended`() =
@@ -113,6 +113,24 @@ class HeldRunsTest {
             assertEquals("built by the caller", 0, asked)
             runCurrent()
             assertEquals(1, asked)
+        }
+
+    // After a force-stop only the app's own call sets scheduled work up again; the alarm's run has the work there already.
+    @Test
+    fun `a restart, an update, the exact-alarm access and the opening schedule the periodic work, off the caller's thread`() =
+        runTest {
+            val scheduled = mutableListOf<RunTrigger>()
+            var trigger = RunTrigger.Alarm
+            val held = HeldRuns(CoroutineScope(StandardTestDispatcher(testScheduler)), { scheduled += trigger }) { runs }
+            for (each in RunTrigger.entries) {
+                trigger = each
+                held.start(each)
+                assertEquals("$each scheduled by the caller", emptyList<RunTrigger>(), scheduled.filter { it == each })
+                runCurrent()
+            }
+            val moments = listOf(RunTrigger.DeviceRestarted, RunTrigger.AppUpdated, RunTrigger.AlarmAccessChanged, RunTrigger.AppOpened)
+            assertEquals(moments, scheduled)
+            assertEquals(RunTrigger.entries, runs.started.toList())
         }
 
     @Test

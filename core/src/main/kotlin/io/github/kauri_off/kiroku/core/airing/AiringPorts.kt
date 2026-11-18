@@ -13,6 +13,13 @@ interface AiringSource {
         titles: Collection<Anime>,
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>>
+
+    // The same, handing [whole] each title once its answer is final, before the call returns: a call cut short keeps those.
+    suspend fun fetch(
+        titles: Collection<Anime>,
+        since: Instant,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since)
 }
 
 // A title the source knows, with no episode time too; null stands only for a title it has no record of.

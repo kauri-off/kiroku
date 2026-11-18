@@ -23,6 +23,7 @@ import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -133,6 +134,10 @@ abstract class AiringEngineContract {
         @Volatile
         var writesToFail = 0
 
+        // Every write waits for it, while it is there.
+        @Volatile
+        var writesHeld: CompletableDeferred<Unit>? = null
+
         val writes = CopyOnWriteArrayList<Map<AnimeId, StoredAiring?>>()
 
         @Volatile
@@ -153,6 +158,7 @@ abstract class AiringEngineContract {
         }
 
         override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
+            writesHeld?.await()
             fault()
             if (failingWrites || (failingForgets && null in titles.values)) throw IOException("The disk is full")
             if (writesToFail > 0) {
@@ -846,6 +852,39 @@ abstract class AiringEngineContract {
 
             for (refresh in others + first) assertEquals(Outcome.Success(Unit), refresh.await())
             assertEquals(listOf(tracked), s.source.calls.toList())
+        }
+
+    // A process that never lives through a whole call, as one a broadcast starts, still keeps the titles answered in it.
+    @Test
+    fun `A10 a title the source hands over whole is stored and answered while its call goes on, and stays when the call is cut`() =
+        runTest {
+            val process = childScope()
+            val s = subject(seeded = false, scope = process)
+            val first = FixtureAnime.exactToWatch
+            s.source.handedFirst = setOf(first.id)
+            s.source.latency = 1.minutes
+
+            val held = CompletableDeferred<Unit>().also { s.store.writesHeld = it }
+            val all = process.async { s.engine.refreshStale() }
+            val named = process.async { s.engine.refresh(setOf(first.id)) }
+            runCurrent()
+
+            assertFalse("the title is answered before it is stored", named.isCompleted)
+            held.complete(Unit)
+            s.store.writesHeld = null
+            runCurrent()
+            assertEquals(listOf(tracked), s.source.calls.toList())
+            assertTrue("the named title waits for the whole call", named.isCompleted)
+            assertEquals(Outcome.Success(Unit), named.await())
+            assertFalse(all.isCompleted)
+            val kept = mapOf(first.id to StoredAiring(fixtures.schedules[first.id], fixtures.now))
+            assertEquals(kept, s.stored())
+
+            process.cancel()
+            runCurrent()
+
+            assertEquals(kept, s.stored())
+            assertEquals(emptyList<Throwable>(), s.unexpected)
         }
 
     @Test

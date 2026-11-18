@@ -5,15 +5,10 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.os.Build
 import android.os.Looper
-import android.util.Log
-import androidx.work.Configuration
 import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.work.impl.WorkManagerImpl
-import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.TestListenableWorkerBuilder
-import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -52,6 +47,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 // The tap kept by scheduled work (N9): the receiver hands it over, each try schedules the next while it waits, each tap's
@@ -63,7 +59,6 @@ class MarkWatchedWorkTest {
     private val application = RuntimeEnvironment.getApplication() as TapsApplication
     private val app get() = application.app
     private val work get() = WorkManager.getInstance(application)
-    private val driver get() = checkNotNull(WorkManagerTestInitHelper.getTestDriver(application))
 
     // Scheduled work's own tasks (its records), which a test may hold to see what waits for them.
     private val tasks = SteppedExecutor()
@@ -74,24 +69,14 @@ class MarkWatchedWorkTest {
     private val signIn = SignInId("a")
 
     @Before
-    fun scheduledWork() {
-        val configuration =
-            Configuration
-                .Builder()
-                .setMinimumLoggingLevel(Log.ERROR)
-                .setExecutor(SynchronousExecutor())
-                .setTaskExecutor(tasks)
-                .build()
-        WorkManagerTestInitHelper.initializeTestWorkManager(application, configuration)
-    }
+    fun scheduledWork() = TestScheduledWork.install(application, tasks)
 
-    // Scheduled work is one for the JVM: left set up, a later test would find it set up before its app asked for it.
     @After
     fun noScheduledWork() {
-        // A test that failed while holding them would leave the close waiting for them.
+        // A test that failed while holding them would leave the end waiting for them.
+        tasks.refusing = false
         tasks.release()
-        WorkManagerTestInitHelper.closeWorkDatabase()
-        WorkManagerImpl.setDelegate(null)
+        TestScheduledWork.end()
     }
 
     private fun receiver() =
@@ -133,8 +118,7 @@ class MarkWatchedWorkTest {
 
     // Runs work whose constraints and time have come, and waits for it to end.
     private fun ran(id: UUID): WorkInfo {
-        driver.setAllConstraintsMet(id)
-        driver.setInitialDelayMet(id)
+        TestScheduledWork.run(application, work.getWorkInfoById(id).get()!!)
         lateinit var info: WorkInfo
         until {
             work
@@ -188,7 +172,7 @@ class MarkWatchedWorkTest {
     // Scheduled work's own records could not be written: the tap is not lost without a word.
     @Test
     fun `a tap that scheduled work cannot keep says at once that it could not be saved`() {
-        WorkManagerTestInitHelper.closeWorkDatabase()
+        tasks.refusing = true
 
         tapped()
 
@@ -355,14 +339,18 @@ class MarkWatchedWorkTest {
     }
 }
 
-// Runs a task at once, or, while held, when released.
+// Runs a task at once, or, while held, when released; while refusing, takes none, as a store that cannot be written.
 class SteppedExecutor : Executor {
     @Volatile
     var held = false
 
+    @Volatile
+    var refusing = false
+
     private val waiting = ConcurrentLinkedQueue<Runnable>()
 
     override fun execute(command: Runnable) {
+        if (refusing) throw RejectedExecutionException("Scheduled work's store takes nothing")
         if (held) waiting += command else command.run()
     }
 
@@ -401,6 +389,8 @@ class ScriptedList(
     override val notificationRuns get() = runs
 
     override suspend fun syncList(): ListWork<Outcome<Unit>> = error("Not asked")
+
+    override suspend fun updateAiring(): Outcome<Unit> = error("Not asked")
 
     override suspend fun sendToList(write: ListWrite): ListWork<Outcome<Unit>> {
         thrown?.let { throw it }
