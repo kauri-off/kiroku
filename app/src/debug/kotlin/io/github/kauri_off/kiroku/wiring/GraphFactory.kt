@@ -7,12 +7,13 @@ import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
+import io.github.kauri_off.kiroku.core.notify.RunTrigger
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import io.github.kauri_off.kiroku.notShown
-import io.github.kauri_off.kiroku.notify.SystemAlarm
+import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.reports.ReportLog
 import io.github.kauri_off.kiroku.reports.reportLog
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
@@ -22,9 +23,12 @@ import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import kotlinx.coroutines.CoroutineScope
-import java.time.Clock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
+import kotlin.time.toKotlinDuration
 
 private val UNEXPECTED = notShown("An exception the app did not expect")
 
@@ -54,8 +58,11 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
     when (SourceChoice(context).startsOn(clientId)) {
         DataSource.Account -> null
         DataSource.Demo -> {
-            val alarm = DemoAlarm(clock, SystemAlarm(context))
-            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm).also { alarm.demo = it.clock }, scope)
+            // Neither is asked for anything before the graph is there: the engine starts no run of its own.
+            lateinit var graph: DemoGraph
+            val alarm = DemoAlarm(scope) { graph.demo }
+            val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
+            DemoGraph(Demo.startingAt(clock, scope, reportUnexpected, deviceClockSet(context), alarm, shown), scope).also { graph = it }
         }
         DataSource.Sandbox ->
             SandboxGraph.create(context, clock) { source, device, sandboxClock ->
@@ -66,14 +73,26 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
 
 internal val standInPosters: Interceptor? = StandInPosters
 
-// The demo keeps a time of its own: the system's alarm is set as far ahead of the device's clock as the demo's is of its own.
-private class DemoAlarm(
-    private val device: Clock,
-    private val system: NotificationAlarm,
+// The demo is gone with its process, so its alarm is a wait in that process, by the demo's own time, and not the system's.
+internal class DemoAlarm(
+    private val scope: CoroutineScope,
+    private val demo: () -> Demo,
 ) : NotificationAlarm {
-    lateinit var demo: Clock
+    private var waiting: Job? = null
 
-    override suspend fun set(at: Instant?) = system.set(at?.plus(Duration.between(demo.instant(), device.instant())))
+    override suspend fun set(at: Instant?) {
+        synchronized(this) {
+            waiting?.cancel()
+            waiting =
+                at?.let {
+                    scope.launch {
+                        delay(Duration.between(demo().clock.instant(), it).toKotlinDuration())
+                        // Apart from the wait, which the run's own next alarm ends.
+                        scope.launch { demo().notifications.run(RunTrigger.Alarm) }
+                    }
+                }
+        }
+    }
 }
 
 class DemoGraph(
@@ -93,6 +112,7 @@ class DemoGraph(
     override val user = demo.user
     override val connection = demo.connection
     override val preferences = demo.preferences
-    override val notificationRuns get() = demo.notifications
+    override val notifications get() = demo.notifications
+    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications })
     override val madeUp = true
 }

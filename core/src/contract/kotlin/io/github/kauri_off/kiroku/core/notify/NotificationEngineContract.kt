@@ -37,6 +37,7 @@ import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -1861,6 +1862,37 @@ abstract class NotificationEngineContract {
             assertEquals(RunEnd.Done, w.engine.run(RunTrigger.AppOpened).end)
             assertEquals(week(1), w.alarm.at.value)
             assertEquals(listOf(title.id to 1), w.alerts)
+        }
+
+    // The work of a run asked for once the scope is ending is cancelled as it is made, before its caller hears of the end.
+    @OptIn(InternalCoroutinesApi::class)
+    @Test
+    fun `a run asked for in the engine's own scope while that scope is ending ends cancelled with it`() =
+        runTest {
+            val w = world()
+            w.clock.now = week(0)
+            val process = checkNotNull(w.process.scope)
+            val ending = CompletableDeferred<Unit>()
+            lateinit var run: Deferred<RunReport>
+            var raced = false
+            process.launch { awaitCancellation() }.invokeOnCompletion(onCancelling = true) {
+                ending.complete(Unit)
+                testScheduler.runCurrent()
+                raced = run.isCompleted
+            }
+            run =
+                process.async {
+                    ending.await()
+                    w.engine.run(RunTrigger.Alarm)
+                }
+            runCurrent()
+
+            process.cancel()
+            runCurrent()
+
+            assertTrue("the run ended before the scope's end reached it", raced)
+            assertTrue("${run.getCompletionExceptionOrNull()}", run.getCompletionExceptionOrNull() is CancellationException)
+            assertEquals(emptyList<Throwable>(), w.unexpected.toList())
         }
 
     private companion object {

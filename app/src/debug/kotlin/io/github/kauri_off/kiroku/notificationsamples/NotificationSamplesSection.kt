@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.flow.first
@@ -38,12 +39,15 @@ data class NotificationSamplesState(
 
 enum class NotificationSamplesEvent { OneTitle, SeveralTitles, SeveralToWatch, Remove }
 
+// The samples are no source's: no run reads them as its own or removes them.
+private val SAMPLES = notShown("samples")
+
 // Posts samples through the real channel, so that what a notification says and how the group reads can be looked at.
 @Composable
 fun NotificationSamplesRoute() {
     val context = LocalContext.current
     val graph = context.appGraph
-    val notifications = remember(graph) { EpisodeNotifications(context, { graph.titleLanguage }) }
+    val notifications = remember(graph) { EpisodeNotifications(context, SAMPLES, { graph.titleLanguage }) }
     var state by remember { mutableStateOf(NotificationSamplesState()) }
     val scope = rememberCoroutineScope()
     NotificationSamplesSection(state) { event ->

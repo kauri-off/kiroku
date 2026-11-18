@@ -33,6 +33,8 @@ import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.Path
 import retrofit2.http.Query
+import kotlin.time.Duration
+import kotlin.time.toKotlinDuration
 
 // The signed-in user's list on MAL, as the engine uses it.
 class MalRemoteList(
@@ -43,6 +45,8 @@ class MalRemoteList(
     private val api by http.api(EntryApi::class)
 
     override suspend fun fetch(): Outcome<List<ListEntry>> = lists.list(ListUser.SignedIn(session))
+
+    override suspend fun refusedFor(): Duration = http.refusedFor().toKotlinDuration()
 
     // A title MAL does not know is not found; one it knows gives no list values when it is not on the list.
     override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {

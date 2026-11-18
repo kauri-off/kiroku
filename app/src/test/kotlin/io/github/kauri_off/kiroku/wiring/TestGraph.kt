@@ -140,6 +140,8 @@ class TestGraph(
     override val airing: AiringRepository = CountedAiring(demo.airing, counter)
     override val search = demo.search
     override val user = demo.user
+    override val notifications get() = demo.notifications
+    override val withoutScreen = WorkAtOnce({ list }, { demo.notifications })
     override val madeUp = true
 
     // The test's main dispatcher, so that the state a view model builds is built within the test's scheduler.

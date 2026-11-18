@@ -29,6 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -46,6 +47,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.random.Random
+import kotlin.time.Duration
 
 // The user's list over a store and MAL: the one place with the rules of a write and of a sync (section 7.3, N9).
 class ListEngine(
@@ -102,6 +104,17 @@ class ListEngine(
                 anime: Anime,
                 values: SentValues?,
             ) = remoteCall { remote.put(anime, values) }.about(anime.id)
+
+            // A refusal that cannot be asked about is none: the sync is made.
+            override suspend fun refusedFor(): Duration =
+                try {
+                    remote.refusedFor()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    unexpected(e)
+                    Duration.ZERO
+                }
 
             // An answer about another title is the engine's own exception, and nothing of it is stored.
             private fun Outcome<ListEntry?>.about(id: AnimeId) =
@@ -446,6 +459,20 @@ class ListEngine(
         queue.trySend(request)
     }
 
+    // A sync nobody asked for waits for the end of MAL's refusal (section 2.3), and is left when a download came meanwhile.
+    private fun syncUnasked() {
+        scope.launch {
+            var waited = false
+            while (true) {
+                val wait = mal.refusedFor()
+                if (wait <= Duration.ZERO) break
+                waited = true
+                delay(wait)
+            }
+            if (!waited || syncedAt.value == null) sync()
+        }
+    }
+
     // W4: a title edited since the download began keeps its values; every other one becomes what MAL has.
     private suspend fun download(): Outcome<Unit> =
         try {
@@ -570,7 +597,7 @@ class ListEngine(
             }
         if (failure != null) {
             hold(failure)
-            if (failure.error.unsure) scope.launch { sync() }
+            if (failure.error.unsure) syncUnasked()
         }
     }
 
@@ -623,7 +650,7 @@ class ListEngine(
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
         hold(WriteFailure(error, retry, owner, untouched))
-        scope.launch { sync() }
+        syncUnasked()
     }
 
     // N9: the write is applied to the entry as MAL has it now, and nothing is sent when that changes nothing.
@@ -697,7 +724,7 @@ class ListEngine(
                 unexpected(e)
                 true
             }
-        if (owes) scope.launch { sync() }
+        if (owes) syncUnasked()
     }
 
     private fun Outcome<ListEntry?>.recorded(): Outcome<ListRecord?> =
@@ -764,7 +791,7 @@ class ListEngine(
         if (restored) return
         val returned = returnToConfirmed()
         restored = true
-        if (returned) scope.launch { sync() }
+        if (returned) syncUnasked()
     }
 
     // The requests of these titles were cut off, so what MAL has of them is not known: a sync is owed.

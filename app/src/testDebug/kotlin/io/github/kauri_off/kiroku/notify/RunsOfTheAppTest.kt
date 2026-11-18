@@ -33,7 +33,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import java.time.Duration
-import java.time.Instant
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -52,9 +51,8 @@ class RunsOfTheAppTest {
     private fun alarms() = shadowOf(application.getSystemService(AlarmManager::class.java)).scheduledAlarms
 
     @Test
-    fun `the app's opening starts a run of its graph's engine, which leaves the system's alarm at what comes next`() {
+    fun `the app's opening starts a run of its graph's engine, and the demo's alarm is not the system's`() {
         runBlocking { assertNull("a run before the app is opened", demo.notifications.observeComing().first()) }
-        assertEquals(0, alarms().size)
         // A device runs the start-up provider, which tells the app's lifecycle, before the application; a test has to ask for it.
         Robolectric.setupContentProvider(InitializationProvider::class.java, application.packageName + STARTUP)
         val opened = Robolectric.buildActivity(Activity::class.java).setup()
@@ -70,11 +68,9 @@ class RunsOfTheAppTest {
         opened.pause().stop().destroy()
         shadowOf(Looper.getMainLooper()).idleFor(LEFT)
         assertEquals(Lifecycle.State.CREATED, ProcessLifecycleOwner.get().lifecycle.currentState)
-        val next = checkNotNull(coming.value) { "no run has ended" }.minOf { it.notifyAt }
-        // The demo's time is not the device's: the alarm is as far ahead of the one as the notification is of the other.
-        val ahead = Duration.between(demo.clock.instant(), next)
-        val set = Duration.between(Instant.now(), Instant.ofEpochMilli(alarms().single().triggerAtMs))
-        assertTrue("the alarm is $set ahead, the notification $ahead", (set - ahead).abs() < Duration.ofSeconds(WITHIN.inWholeSeconds))
+        assertTrue(checkNotNull(coming.value) { "no run has ended" }.isNotEmpty())
+        // The demo is gone with its process, and so is its alarm: none is left to start a process whose demo has nothing due.
+        assertEquals(0, alarms().size)
     }
 
     @Test

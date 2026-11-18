@@ -431,6 +431,37 @@ fun firstUseProblems(
     }
 }
 
+// Code that runs with no screen asking for it: the notify package, and whatever declares a receiver, a service or scheduled work.
+private val componentWithoutAScreen = Regex("""(\)|\bclass\s+\w+|\bobject)\s*:\s*[\w.]*(BroadcastReceiver|Service|Worker)\s*\(""")
+
+fun runsWithoutAScreen(
+    name: String,
+    source: String,
+): Boolean = "/notify/" in name || componentWithoutAScreen.containsMatchIn(KotlinSource(source).code)
+
+// Such code has the app as WithoutScreen alone, which hands out no list. What that type cannot hold: the graph reached
+// another way, and a list or a call of one handed to it from a file that is not held to this.
+private val pastWithoutScreen =
+    Regex(
+        """\b\w*(AppGraph|appGraph)\w*\b|""" +
+            """\b\w*(ListRepository|ListEngine|ListSource|AnimeRepository|SearchRepository|UserRepository|OwnProfile|UserLists)\w*\b|""" +
+            """\b(SignIn|SignInOwner|MalHttp|MalSession|MalBackground|MalRemoteList)\b|""" +
+            """(\b|::\s*)(sync|send|write|refresh\w*)\s*\(|::\s*(sync|send|write|refresh\w*)\b""",
+    )
+
+fun withoutScreenProblems(
+    name: String,
+    source: String,
+): List<String> {
+    if (!runsWithoutAScreen(name, source)) return emptyList()
+    return KotlinSource(source).code.lines().mapIndexedNotNull { index, line ->
+        pastWithoutScreen
+            .find(
+                line,
+            )?.let { "$name:${index + 1}: work without a screen names ${it.value}, past WithoutScreen: ${line.trim()}" }
+    }
+}
+
 // The Kotlin sources of every module that ship in some build: no test's, the demo's fixtures included.
 fun shippedKotlinSources(): List<File> =
     projectSources().filter { source ->

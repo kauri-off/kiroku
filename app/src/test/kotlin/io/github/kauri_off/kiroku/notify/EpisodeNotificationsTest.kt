@@ -10,6 +10,7 @@ import android.service.notification.StatusBarNotification
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Shown
 import kotlinx.coroutines.runBlocking
@@ -37,7 +38,7 @@ class EpisodeNotificationsTest {
     private var airedAt = Instant.parse("2026-11-12T09:00:00.123456789Z")
     private var language = TitleLanguage.Romaji
 
-    private fun notifications(gap: Duration = Duration.ZERO) = EpisodeNotifications(app, { language }, gap)
+    private fun notifications(gap: Duration = Duration.ZERO) = EpisodeNotifications(app, SOURCE, { language }, gap)
 
     private val kagerou = FixtureAnime.exactToWatch
     private val shiokaze = FixtureAnime.exactCaughtUp
@@ -59,15 +60,30 @@ class EpisodeNotificationsTest {
     private fun active(): List<StatusBarNotification> = system.activeNotifications.toList()
 
     private fun episode(anime: Anime): Notification? =
-        active().singleOrNull { it.tag == EpisodeNotifications.tag(anime.id) && it.id == EpisodeNotifications.EPISODE_ID }?.notification
+        active()
+            .singleOrNull {
+                it.tag ==
+                    EpisodeNotifications.tag(
+                        SOURCE,
+                        anime.id,
+                    ) &&
+                    it.id == EpisodeNotifications.EPISODE_ID
+            }?.notification
 
     private fun summary(): Notification? =
-        active().singleOrNull { it.id == EpisodeNotifications.SUMMARY_ID && it.tag == EpisodeNotifications.SUMMARY_TAG }?.notification
+        active()
+            .singleOrNull {
+                it.id == EpisodeNotifications.SUMMARY_ID &&
+                    it.tag ==
+                    EpisodeNotifications.summaryTag(
+                        SOURCE,
+                    )
+            }?.notification
 
     // Each episode notification shown, by its title, and nothing else of the app's but the summary while one is.
     private fun assertShownExactly(vararg titles: Anime) {
         val episodes = active().filter { it.id == EpisodeNotifications.EPISODE_ID }.map { it.tag }.toSet()
-        assertEquals(titles.map { EpisodeNotifications.tag(it.id) }.toSet(), episodes)
+        assertEquals(titles.map { EpisodeNotifications.tag(SOURCE, it.id) }.toSet(), episodes)
         assertEquals(if (titles.isEmpty()) 0 else 1, active().count { it.id == EpisodeNotifications.SUMMARY_ID })
         assertEquals(active().size, episodes.size + if (titles.isEmpty()) 0 else 1)
         summary()?.let { summary ->
@@ -125,7 +141,7 @@ class EpisodeNotificationsTest {
                     .Builder(app, EpisodeNotifications.CHANNEL)
                     .setSmallIcon(io.github.kauri_off.kiroku.R.drawable.ic_notification)
                     .build()
-            system.notify(EpisodeNotifications.tag(kagerou.id), OTHER_ID, other)
+            system.notify(EpisodeNotifications.tag(SOURCE, kagerou.id), OTHER_ID, other)
             system.notify(OTHER_ID, other)
             val posted = announcement(shiokaze, 5)
             shown.post(posted, alert = true)
@@ -142,10 +158,10 @@ class EpisodeNotificationsTest {
             val shown = notifications()
             shown.post(announcement(kagerou, 3), alert = true)
             shown.post(announcement(shiokaze, 5), alert = true)
-            system.cancel(EpisodeNotifications.tag(kagerou.id), EpisodeNotifications.EPISODE_ID)
+            system.cancel(EpisodeNotifications.tag(SOURCE, kagerou.id), EpisodeNotifications.EPISODE_ID)
             assertEquals(setOf(shiokaze.id), shown.shown().keys)
             assertTrue(summary() != null)
-            system.cancel(EpisodeNotifications.tag(shiokaze.id), EpisodeNotifications.EPISODE_ID)
+            system.cancel(EpisodeNotifications.tag(SOURCE, shiokaze.id), EpisodeNotifications.EPISODE_ID)
             assertEquals(emptyMap<Any, Any>(), shown.shown())
             assertShownExactly()
         }
@@ -175,7 +191,7 @@ class EpisodeNotificationsTest {
             assertEquals(0, again.flags and Notification.FLAG_ONLY_ALERT_ONCE)
             assertEquals(airedAt.toEpochMilli(), again.`when`)
 
-            system.cancel(EpisodeNotifications.tag(kagerou.id), EpisodeNotifications.EPISODE_ID)
+            system.cancel(EpisodeNotifications.tag(SOURCE, kagerou.id), EpisodeNotifications.EPISODE_ID)
             // Dismissed while another title's notification is still shown, it does not come back.
             shown.post(announcement(kagerou, 4, toWatch = 2, marks = 3), alert = false)
             assertNull(episode(kagerou))
@@ -189,7 +205,7 @@ class EpisodeNotificationsTest {
             shown.post(announcement(kagerou, 3), alert = true)
             shown.post(announcement(shiokaze, 5), alert = true)
             for (notification in listOf(episode(kagerou)!!, episode(shiokaze)!!, summary()!!)) {
-                assertEquals(EpisodeNotifications.GROUP, notification.group)
+                assertEquals(EpisodeNotifications.group(SOURCE), notification.group)
                 assertEquals(EpisodeNotifications.CHANNEL, notification.channelId)
                 assertEquals(Notification.GROUP_ALERT_CHILDREN, notification.groupAlertBehavior)
             }
@@ -310,7 +326,33 @@ class EpisodeNotificationsTest {
             assertFalse(receiver.exported)
         }
 
+    // A debug or preview build's sources share the device, and a title can be on the lists of two of them.
+    @Test
+    fun `the notifications of one source are neither shown, replaced nor withdrawn as another's`() =
+        runBlocking {
+            val own = notifications()
+            val other = EpisodeNotifications(app, "another", { language }, Duration.ZERO)
+            val (anime, said) = announcement(kagerou, 13)
+            val others = said.copy(episode = 20, marks = 20)
+            own.post(anime, said, alert = true)
+            other.post(anime, others, alert = true)
+
+            assertEquals(mapOf(anime.id to said), own.shown())
+            assertEquals(mapOf(anime.id to others), other.shown())
+            assertEquals(2, active().count { it.id == EpisodeNotifications.EPISODE_ID })
+            assertEquals(2, active().count { it.id == EpisodeNotifications.SUMMARY_ID })
+            assertEquals(2, active().map { it.notification.group }.toSet().size)
+
+            // What one source takes away is its own, its summary with it.
+            other.withdraw(setOf(anime.id))
+            assertEquals(emptyMap<AnimeId, Shown>(), other.shown())
+            assertEquals(mapOf(anime.id to said), own.shown())
+            assertShownExactly(kagerou)
+        }
+
     private companion object {
+        const val SOURCE = "account"
+
         // A notification of another kind, as "Mark watched" will post.
         const val OTHER_ID = 3
     }

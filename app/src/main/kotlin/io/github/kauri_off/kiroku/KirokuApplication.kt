@@ -14,6 +14,8 @@ import io.github.kauri_off.kiroku.notify.HeldRunsOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.AppGraphOwner
 import io.github.kauri_off.kiroku.wiring.DeviceClock
+import io.github.kauri_off.kiroku.wiring.WithoutScreen
+import io.github.kauri_off.kiroku.wiring.WithoutScreenOwner
 import io.github.kauri_off.kiroku.wiring.applicationScope
 import io.github.kauri_off.kiroku.wiring.createGraph
 import io.github.kauri_off.kiroku.wiring.debugTools
@@ -28,6 +30,7 @@ class KirokuApplication :
     AppGraphOwner,
     LinksOwner,
     HeldRunsOwner,
+    WithoutScreenOwner,
     Configuration.Provider,
     SingletonImageLoader.Factory {
     private val scope = applicationScope(reportUnexpected)
@@ -40,7 +43,9 @@ class KirokuApplication :
 
     override val links = AppLinks()
 
-    override val heldRuns = HeldRuns(scope) { graph.notificationRuns }
+    override val withoutScreen: WithoutScreen get() = graph.withoutScreen
+
+    override val heldRuns = HeldRuns(scope) { withoutScreen.notificationRuns }
 
     // Scheduled work is set up when it is first asked for, never when the process starts.
     override val workManagerConfiguration: Configuration get() = Configuration.Builder().build()

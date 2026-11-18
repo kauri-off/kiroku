@@ -3,7 +3,10 @@ package io.github.kauri_off.kiroku.wiring
 import android.content.Context
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.notify.NotificationRuns
+import io.github.kauri_off.kiroku.core.notify.NotificationStore
 import io.github.kauri_off.kiroku.core.repository.ListSource
+import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
 import io.github.kauri_off.kiroku.data.anilist.AniListAiring
@@ -12,7 +15,11 @@ import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import io.github.kauri_off.kiroku.data.profile.MalOwnProfile
+import io.github.kauri_off.kiroku.data.session.BackgroundRun
+import io.github.kauri_off.kiroku.data.session.HeldBack
+import io.github.kauri_off.kiroku.data.session.MalBackground
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.tenrai.TenraiScores
 import io.github.kauri_off.kiroku.notShown
@@ -103,13 +110,14 @@ internal class LiveGraph(
     parts: LiveParts,
     listStore: (LiveParts) -> LocalList = ::liveListStore,
     ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
+    notificationStore: (LiveParts, StoredPreferences) -> NotificationStore = ::liveNotificationStore,
     airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
-    override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }, { user }) }
+    override val session: SessionRepository by lazy { SignOutForgets(account, { list }, { airing }, { user }, { notifications }) }
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
@@ -119,6 +127,40 @@ internal class LiveGraph(
     override val connection by lazy { liveConnection(parts) }
     override val preferences by lazy { livePreferences(parts) }
     override val signIn by lazy { liveSignIn(parts, account) }
+
+    // MAL's one way in for work without a screen; it holds nothing of its own.
+    private val wayIn by lazy { MalBackground(parts.http, account) }
+    override val notifications by lazy {
+        LiveNotifications(
+            parts,
+            account.observeSession(),
+            { list },
+            { airing },
+            { connection },
+            { titleLanguage },
+            { notificationStore(parts, preferences) },
+            renew = { wayIn.run { } },
+        )
+    }
+    override val withoutScreen: WithoutScreen =
+        object : WithoutScreen {
+            override val notificationRuns: NotificationRuns get() = notifications
+
+            override suspend fun syncList() = inBackground { list.sync() }
+
+            override suspend fun sendToList(write: ListWrite) = inBackground { list.send(write) }
+        }
+
+    // The work behind MAL's way in, with what held it back told by its role.
+    private suspend fun <T> inBackground(work: suspend () -> T): ListWork<T> =
+        when (val run = wayIn.run(work)) {
+            is BackgroundRun.Ran -> ListWork.Done(run.value)
+            HeldBack.SignedOut -> ListWork.SignedOut
+            HeldBack.Expired -> ListWork.SessionExpired
+            HeldBack.TokensUnread -> ListWork.SessionUnread
+            is HeldBack.Refused -> ListWork.Refused(run.remaining)
+        }
+
     override val images = parts.http.callFactory
 
     // What debug and preview builds record MAL's answers with; it looks at once for a title an earlier run left on the list.
@@ -130,15 +172,17 @@ internal class LiveGraph(
     }
 }
 
-// S9: a sign-out takes the user's list, its sorts, its airing data and the profiles with it at once, also when nothing has asked for them yet.
+// S9: a sign-out takes the user's notifications, list, sorts, airing data and profiles with it, also when nothing has asked for them yet.
 private class SignOutForgets(
     private val account: SessionRepository,
     private val list: () -> ListSource,
     private val airing: () -> LiveAiring,
     private val user: () -> LiveUser,
+    private val notifications: () -> LiveNotifications,
 ) : SessionRepository by account {
     override suspend fun signOut() {
         account.signOut()
+        notifications().forget()
         // A read of the list makes its store agree with the session; a store that fails it is cleared at its next use.
         list().observeSyncedAt().first()
         airing().forget()

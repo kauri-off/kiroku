@@ -683,8 +683,9 @@ class MalSessionTest {
             assertEquals(listOf("access-1", "access-2", "access-2"), mal.sent)
         }
 
+    // MAL revokes the old pair as it answers, so a renewal is made only for who asks and stays for its answer.
     @Test
-    fun tokensOlderThanTheSetAgeAreRenewedWhenTheSessionIsFirstRead() =
+    fun tokensOlderThanTheSetAgeAreRenewedWhenAskedAndNotByReadingTheSession() =
         test {
             val id = signedIn().now()
             fixture.clock.advance(RENEW_AFTER - Duration.ofSeconds(1))
@@ -694,16 +695,17 @@ class MalSessionTest {
             assertEquals(Outcome.Success("access-1"), young.authorised(FakeMal("access-1").request))
             assertEquals(emptyList<Map<String, String>>(), fixture.grants)
 
-            // Reading the session is enough: no request has to be rejected first.
+            // Reading the session of a new process sends nothing, and a request goes with the tokens as they are.
             fixture.clock.advance(Duration.ofSeconds(1))
-            val asked = CompletableDeferred<Unit>()
-            fixture.answer = {
-                asked.complete(Unit)
-                granted("access-2", "refresh-2")
-            }
+            fixture.answer = { granted("access-2", "refresh-2") }
             val old = fixture.reopen()
             assertEquals(id, old.now())
-            withTimeout(5_000) { asked.await() }
+            fixture.sessionScope.coroutineContext.job.children
+                .forEach { it.join() }
+            assertEquals(Outcome.Success("access-1"), old.authorised(FakeMal("access-1").request))
+            assertEquals(emptyList<Map<String, String>>(), fixture.grants)
+
+            old.renewIfDue()
             val mal = FakeMal("access-2")
             assertEquals(Outcome.Success("access-2"), old.authorised(mal.request))
             assertEquals(listOf("access-2"), mal.sent)
@@ -757,37 +759,15 @@ class MalSessionTest {
         }
 
     @Test
-    fun oldTokensAreNotRenewedAtTheStartWhileMalIsRefusing() =
+    fun oldTokensThatMalRejectsWhenAskedToRenewThemEndInExpired() =
         test {
             val id = signedIn().now()
             fixture.clock.advance(RENEW_AFTER)
-            val asked = CompletableDeferred<Unit>()
-            fixture.refusing = {
-                asked.complete(Unit)
-                true
-            }
+            fixture.answer = { TokenReply.Answer(400, "") }
             val session = fixture.reopen()
-            assertEquals(id, session.now())
-            withTimeout(5_000) { asked.await() }
-            fixture.sessionScope.coroutineContext.job.children
-                .forEach { it.join() }
-            assertEquals(0, fixture.grants.size)
-            assertEquals(id, session.now())
-        }
-
-    @Test
-    fun oldTokensThatMalRejectsAtTheStartEndInExpired() =
-        test {
-            val id = signedIn().now()
-            fixture.clock.advance(RENEW_AFTER)
-            val seen = CompletableDeferred<Unit>()
-            fixture.answer = {
-                seen.await()
-                TokenReply.Answer(400, "")
-            }
-            fixture.reopen().observeSession().test {
+            session.observeSession().test {
                 assertEquals(id, awaitItem())
-                seen.complete(Unit)
+                session.renewIfDue()
                 assertEquals(Session.Expired((id as Session.SignedIn).signIn), awaitItem())
             }
             assertFalse(stored().contains("refresh-1"))

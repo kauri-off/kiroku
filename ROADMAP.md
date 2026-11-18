@@ -223,22 +223,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-09 [A] The alarm and the moments the app runs.**
 
-- [ ] **M4-10 Live notifications.** The live graph's notifications are M4-02's engine over M4-07's store, M4-08's
-  notifications and M4-09's alarm and triggers, each source with its own record, built at its first use and off the
-  main thread. The sandbox runs on it, and the demo while its process lives, with its record in memory. A run by
-  any trigger renews tokens that are due, through M4-04's way in (S7). A sign-out withdraws what is posted, clears
-  the alarm and leaves no record (S9), also one the process did not finish. The run at the app's opening does not
-  delay its first frame.
-  **Needs:** M4-04, M4-07, M4-08, M4-09.
-  **Check:** tests: reading the session or the list builds nothing of notifications; on the sandbox, signed in and
-  synced, when its clock passes the air time of the title that airs soon after a reset, one notification is posted
-  for that episode and the alarm is at the next coming time; a new graph over the same files posts nothing again
-  (N1, N10); a build with notifications started over the files of one without them announces nothing that aired
-  before (N5); a run started by the alarm renews tokens that are due, and with MAL's back-off set sends MAL
-  nothing; a rule test fails when code that runs without a screen calls MAL other than through M4-04's way in;
-  after a sign-out the database holds no record, nothing is posted and no alarm is set; started signed out, nothing
-  builds an HTTP client; the tests of the app's start pass as before. The debug build passes the emulator's smoke
-  run.
+- [x] **M4-10 Live notifications.**
 
 - [ ] **M4-11 Periodic background work.** Scheduled work keeps the app right while nobody opens it. Without a
   network it runs the engine (N2). With one it also renews the tokens (S7), downloads the list through M4-04's way
