@@ -33,6 +33,7 @@ row. The owner is the final authority on the Russian column.
 | Genres | as MAL names them, in sentence case | the names Russian anime sites use, as Shikimori has them | An exception: MAL keeps Mystery and Detective apart, so Mystery is «Тайна» and Detective «Детектив» |
 | Super power genre | Super power | Суперсила | An exception: Shikimori writes «Супер сила», but «супер-» is a prefix and is written together |
 | MAL, AniList, MyAnimeList | | | Written in Latin letters in both languages |
+| Android's own settings | Alarms and reminders, Force stop, a notification category | Будильники и напоминания, «Остановить», категория уведомлений | As Android names them, so that the user finds them there; never "exact alarms" or "channel" |
 
 ## Forms
 
@@ -48,6 +49,7 @@ setting decide.
 | A score after a star | `★ 8.71` / `Watched 12 of 24 · ★ 10` | `★ 8,71` / `Просмотрено 12 из 24 · ★ 10` | MAL's score in a row, and the user's in a List tab sorted by score. The star never parts from its number and is spoken as the score's name: "MAL score 8.71", "Score 10". A wrap falls before the score's «·» |
 | Episodes to watch | `2 to watch` / `~2 to watch` | `К просмотру: 2` / `К просмотру: ~2` | The colon avoids a plural. Lower case after «·»: `· к просмотру: 2` |
 | Next episode | `Episode 15 · Sat 17:30` | `Серия 15 · сб 17:30` | One form everywhere. The time is "today" / «сегодня», "tomorrow" / «завтра», the weekday within six days, then the date (`14 Nov, 17:30` / `14 нояб., 17:30`), in lower case, because an air time always follows other text. A wrap falls before «·» |
+| A past time | `today 17:30` / `yesterday 17:30` / `Mon 17:30` / `7 Jan, 17:30` | `сегодня 17:30` / `вчера 17:30` / `пн 17:30` / `7 янв., 17:30` | As an air time, counted back from today: the weekday within six days, then the date |
 | Premiere, time known | `Premieres Sat 17:30` | `Премьера сб 17:30` | Time as for the next episode. No colon |
 | Premiere, date known | `Premieres 4 Jan` / `Premieres 4 Jan 2027` / `Premieres January 2027` / `Premieres 2027` | `Премьера 4 янв.` / `Премьера 4 янв. 2027 г.` / `Премьера в январе 2027 г.` / `Премьера в 2027 г.` | By the precision of MAL's date. A full date has no year in the list row and has it on the title page |
 | A message with its action | `Episode 13 watched · Undo` | `Серия 13 просмотрена · Отменить` | The message, «·», the action |
@@ -63,7 +65,6 @@ Wording decided before its feature exists. A row leaves this table when its reso
 
 | Concept | English | Russian | Notes |
 |---|---|---|---|
-| Status panel | Upcoming / Recently sent | Ближайшие / Недавно отправленные | |
 | Sign out | Sign out | Выйти | |
 
 ## Rules

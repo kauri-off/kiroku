@@ -204,16 +204,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-04 [A] One way in to MAL for background work.**
 
-- [ ] **M4-05 Notification settings screen.** The stateless screen on fixture states, with its screenshot registry.
-  It serves two needs: choosing (notifications on or off, also for planned titles, the delay), and finding out
-  which link broke when a notification did not come, from what M4-02 and the device can tell; the record of what
-  was sent, from which M4's acceptance is read, is on it. What it shows of that and how it is arranged is built
-  once and shown to the owner (section 9). Its strings are in its own file in both languages, and a term it
-  introduces enters the glossary.
-  **Needs:** nothing.
-  **Check:** the screen's screenshots are rendered in every variant, with cases for each state the device can be
-  in, for nothing sent yet and for a long record; the render's accessibility check passes; `StringRulesTest`
-  passes.
+- [x] **M4-05 Notification settings screen.**
 
 - [x] **M4-06 [O] An emulator of Android 8 to 11.**
 

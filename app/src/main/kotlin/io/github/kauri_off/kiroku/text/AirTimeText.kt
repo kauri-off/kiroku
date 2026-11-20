@@ -27,12 +27,28 @@ class AirTimeText(
         }
     }
 
+    // A time that has passed: "today 17:30", "yesterday 17:30", "Sat 17:30" within six days, "14 Nov, 17:30" before.
+    fun pastTime(instant: Instant): String {
+        val at = instant.atZone(zone)
+        val time = clockTime(context, at)
+        return when (ChronoUnit.DAYS.between(at.toLocalDate(), now.atZone(zone).toLocalDate())) {
+            0L -> context.getString(R.string.air_time_today, time)
+            1L -> context.getString(R.string.air_time_yesterday, time)
+            in 2L..LAST_WEEKDAY -> context.getString(R.string.air_time_weekday, pattern(WEEKDAY).format(at), time)
+            else -> context.getString(R.string.air_time_date, pattern(DAY_MONTH).format(at), time)
+        }
+    }
+
     // "Premieres Sat 17:30", a premiere whose first episode's time is known.
     fun premiere(instant: Instant): String = context.getString(R.string.common_premieres_on, airTime(instant))
 
     // "Episode 15 · Sat 17:30"; a wrap falls before the dot.
-    fun nextEpisode(episode: ScheduledEpisode): String =
-        context.getString(R.string.air_time_next_episode, episode.number, airTime(episode.airsAt))
+    fun nextEpisode(episode: ScheduledEpisode): String = nextEpisode(episode.number, episode.airsAt)
+
+    fun nextEpisode(
+        number: Int,
+        at: Instant,
+    ): String = context.getString(R.string.air_time_next_episode, number, airTime(at))
 
     private fun pattern(skeleton: String): DateTimeFormatter = skeletonFormat(context.resources.configuration.locales[0], skeleton)
 

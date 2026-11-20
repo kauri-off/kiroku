@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_settings_title">Уведомления</string>
+    <string name="notify_settings_on">Новые серии</string>
+    <string name="notify_settings_on_detail">Уведомление, когда выходит серия тайтла, который вы смотрите</string>
+    <string name="notify_settings_also_planned">Также для запланированных</string>
+    <string name="notify_settings_delay">Когда уведомлять</string>
+    <string name="notify_settings_delay_detail">После выхода серии в Японии</string>
+    <string name="notify_settings_delay_none">Сразу</string>
+    <string name="notify_settings_delay_half_hour">Через\u00A030\u00A0мин</string>
+    <string name="notify_settings_delay_hour">Через\u00A01\u00A0час</string>
+    <string name="notify_settings_delay_three_hours">Через\u00A03\u00A0часа</string>
+
+    <string name="notify_settings_device">На этом устройстве</string>
+    <string name="notify_settings_open_setting">Открыть в настройках Android</string>
+    <string name="notify_settings_notifications">Уведомления</string>
+    <string name="notify_settings_notifications_allowed">Разрешены</string>
+    <string name="notify_settings_notifications_blocked">Заблокированы в настройках Android</string>
+    <string name="notify_settings_notifications_channel_off">Категория «%1$s» отключена</string>
+    <string name="notify_settings_exact_alarms">Будильники и напоминания</string>
+    <string name="notify_settings_exact_alarms_allowed">Разрешены: уведомления приходят вовремя</string>
+    <string name="notify_settings_exact_alarms_not_allowed">Не разрешены: уведомления могут опаздывать</string>
+    <string name="notify_settings_battery">Батарея</string>
+    <string name="notify_settings_battery_unrestricted">Без ограничений</string>
+    <string name="notify_settings_battery_rarely_used">Kiroku открывают редко, поэтому Android может задерживать его уведомления</string>
+    <string name="notify_settings_battery_restricted">Ограничено: уведомления могут не приходить</string>
+    <string name="notify_settings_send_test">Отправить пробное уведомление</string>
+    <string name="notify_settings_limits">Android может задерживать уведомления приложений, которые редко открывают. После «Остановить» уведомления не приходят, пока вы снова не откроете Kiroku.</string>
+
+    <string name="notify_settings_upcoming">Ближайшие</string>
+    <string name="notify_settings_list_synced">Список синхронизирован %1$s</string>
+    <string name="notify_settings_list_not_synced">Список ещё не синхронизирован</string>
+    <string name="notify_settings_upcoming_none">Ни у одного тайтла в списке не известна следующая серия</string>
+    <string name="notify_settings_off">Уведомления выключены</string>
+    <string name="notify_settings_signed_out">Войдите, чтобы получать уведомления о новых сериях</string>
+    <string name="notify_settings_sign_in">Войти</string>
+
+    <string name="notify_settings_sent">Недавно отправленные</string>
+    <string name="notify_settings_sent_none">Пока ничего не отправлено</string>
+    <string name="notify_settings_sent_episode">Серия\u00A0%1$d ·\u00A0вышла %2$s</string>
+    <string name="notify_settings_sent_at">Отправлено %1$s</string>
+    <string name="notify_settings_sent_at_checked">Отправлено %1$s ·\u00A0%2$s</string>
+    <string name="notify_settings_recheck_confirmed">проверено в AniList</string>
+    <string name="notify_settings_recheck_failed">без проверки: ошибка AniList</string>
+    <string name="notify_settings_recheck_too_slow">без проверки: AniList не успел ответить</string>
+    <string name="notify_settings_recheck_offline">без проверки: нет сети</string>
+</resources>
