@@ -75,7 +75,7 @@ class SignInScreenTest {
     private fun mark() = compose.onNodeWithTag(SignInTags.mark, useUnmergedTree = true).fetchSemanticsNode()
 
     @Test
-    fun theScreenShowsItsBudgetAndNothingElse() {
+    fun theScreenShowsItsMarkAndSentenceAndNothingElse() {
         show(SignInState.Ready)
         assertEquals(expected(SENTENCE), shown())
         assertEquals(null, liveRegion(SENTENCE))

@@ -131,7 +131,10 @@ class AniListAiringTest {
             val handed = mutableListOf<Pair<Map<AnimeId, Outcome<FetchedAiring?>>, Int>>()
 
             val answers =
-                aniList.client(this).fetch(listOf(61987, 235).map(::titleWithId), since) { part -> handed += part to aniList.requests.size }
+                aniList.client(this).fetch(listOf(61987, 235).map(::titleWithId), since, emptySet()) { part ->
+                    handed +=
+                        part to aniList.requests.size
+                }
 
             assertEquals(listOf(setOf(AnimeId(61987)) to 1, setOf(AnimeId(235)) to long.size), handed.map { (part, at) -> part.keys to at })
             assertEquals(answers, handed.fold(emptyMap<AnimeId, Outcome<FetchedAiring?>>()) { all, (part, _) -> all + part })

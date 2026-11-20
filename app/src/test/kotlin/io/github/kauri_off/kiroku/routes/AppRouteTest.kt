@@ -42,13 +42,17 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileTags
+import io.github.kauri_off.kiroku.search.BrowseKey
+import io.github.kauri_off.kiroku.search.SearchFixtureStates
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.OpenedPage
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -185,7 +189,7 @@ class AppRouteTest {
         shows("My list")
     }
 
-    // Section 9.4: opened from a row, the page has the summary on its first frame, however late the store answers.
+    // Section 6.2: opened from a row, the page has the summary on its first frame, however late the store answers.
     @Test
     fun `a title page opened from a row shows its summary on its first frame, before the store answers`() {
         app()
@@ -419,15 +423,28 @@ class AppRouteTest {
         shows("My list")
     }
 
+    private fun openProfile(name: String) {
+        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
+        compose.onNodeWithText("Open another profile").performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput(name)
+        click("Open")
+    }
+
+    private fun stacks() = Destination.entries.map { navigator.stackOf(it).toList() }
+
+    // Where a start without a session leaves the app: the List shown, alone on its stack, and every other stack at its root.
+    private fun atStart() {
+        assertEquals(Destination.List, navigator.current)
+        assertEquals(Destination.entries.map { listOf(it.root) }, stacks())
+        shows("Sign in with MyAnimeList to see your list here")
+    }
+
     // Which profiles were opened is the signed-in user's: the next user to sign in does not see them.
     @Test
     fun `a sign-out forgets the names opened earlier`() {
         app()
         click("Profile")
-        compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
-        compose.onNodeWithText("Open another profile").performClick()
-        compose.onNodeWithTag(ProfileTags.nameField).performTextInput("sample_viewer")
-        click("Open")
+        openProfile("sample_viewer")
         shows("Completed")
         back()
         compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
@@ -436,8 +453,94 @@ class AppRouteTest {
         click("Cancel")
         runBlocking { graph.session.signOut() }
         compose.waitForIdle()
+        click("Profile")
         click("Open another profile")
         compose.onNodeWithText("Recent").assertDoesNotExist()
+    }
+
+    // Signing out closes every screen, another user's profile included, and keeps no screen's state.
+    @Test
+    fun `a sign-out closes every screen and leaves the app where a start without a session does`() {
+        app()
+        click("Profile")
+        openProfile("sample_viewer")
+        compose.onNodeWithText("View list").performClick()
+        shows("sample_viewer's list")
+        click("Search")
+        val searched = SearchFixtureStates.recent[3]
+        compose.onNodeWithText(searched).performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText(searched)).assertExists()
+        compose.runOnUiThread {
+            navigator.open(BrowseKey(BrowseList.ThisSeason))
+            navigator.select(Destination.List)
+        }
+        compose.waitForIdle()
+        openKagerou()
+        repeat(12) { plusOnTitlePage() }
+        compose.waitForIdle()
+        shows("Moved to Completed")
+        runBlocking { graph.session.signOut() }
+        compose.waitForIdle()
+        atStart()
+        hides("Moved to Completed")
+        hides("sample_viewer's list")
+        click("Search")
+        shows("Recent searches")
+        compose.onNode(hasSetTextAction() and hasText(searched)).assertDoesNotExist()
+        click("Profile")
+        shows("Sign in with MyAnimeList to see your profile here")
+    }
+
+    // A start without a session is not a sign-out: a title a link opened stays.
+    @Test
+    fun `a start signed out keeps the page it opened on`() {
+        runBlocking { graph.session.signOut() }
+        val page = TitleKey(kagerou.id.value)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                navigator = rememberShellNavigator(OpenedPage(Destination.List, page))
+                AppRoute(graph, navigator, snackbars)
+            }
+        }
+        compose.waitForIdle()
+        assertEquals(listOf(Destination.List.root, page), navigator.stackOf(Destination.List))
+        assertTrue(displayed(kagerou.titles.romaji).isNotEmpty())
+    }
+
+    // S6: a session that ends is not a sign-out; a sign-out from the expired session is one.
+    @Test
+    fun `an expired session keeps every screen open with the banner, and signing out of it closes them`() {
+        app()
+        openKagerou()
+        compose.runOnUiThread { navigator.select(Destination.Profile) }
+        compose.waitForIdle()
+        openProfile("sample_viewer")
+        shows("sample_viewer")
+        val open = stacks()
+        graph.demo.server.sessionExpired.value = true
+        compose.waitForIdle()
+        shows("Session expired")
+        shows("sample_viewer")
+        assertEquals(Destination.Profile, navigator.current)
+        assertEquals(open, stacks())
+        runBlocking { graph.session.signOut() }
+        compose.waitForIdle()
+        atStart()
+    }
+
+    // A sign-out made in another window, as the debug menu's, is found when the app comes back.
+    @Test
+    fun `a sign-out made while the app is stopped leaves it at its start when it returns`() {
+        app()
+        click("Profile")
+        openProfile("sample_viewer")
+        shows("sample_viewer")
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        runBlocking { graph.session.signOut() }
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+        atStart()
     }
 
     // The own name, typed in any letter case or opened as another user's page, is the own Profile at its root.
@@ -781,7 +884,7 @@ class AppRouteTest {
                     0f
             }.sortedBy { it.second }
 
-    // 9.3: coming back from a title page keeps the order and the scroll position, even after an edit there.
+    // Section 6.2: coming back from a title page keeps the order and the scroll position, even after an edit there.
     @Test
     fun `back from a title page edited there keeps the List's order and scroll position`() {
         app()

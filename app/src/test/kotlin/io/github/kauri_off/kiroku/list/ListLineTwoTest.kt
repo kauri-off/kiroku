@@ -28,7 +28,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-// ARCHITECTURE 9.3: line 2 with the value a tab is sorted by is one line on a 411 dp phone, "+1" and line 3 present.
+// Line 2 with the value a tab is sorted by is one line on a 411 dp phone, "+1" and line 3 present.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ListLineTwoTest {

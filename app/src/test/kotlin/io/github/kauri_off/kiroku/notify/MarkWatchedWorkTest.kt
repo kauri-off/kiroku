@@ -222,7 +222,7 @@ class MarkWatchedWorkTest {
         assertEquals(listOf<ListWrite>(ListWrite.MarkWatched(title, 4, signIn), ListWrite.MarkWatched(title, 5, signIn)), app.sent.toList())
     }
 
-    // A-L4: each tap's waiting ends a day after it, whatever taps come later.
+    // N9: each tap's waiting ends a day after it, whatever taps come later.
     @Test
     fun `at the end of a tap's waiting its tries still waiting for a connection say so and are left, and a later tap keeps its own day`() {
         runBlocking { application.shown.post(title, said, alert = true) }

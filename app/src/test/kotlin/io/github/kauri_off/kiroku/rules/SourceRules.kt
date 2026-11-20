@@ -226,7 +226,7 @@ fun webViewProblems(
     }
 }
 
-// ARCHITECTURE 8.5: app code never reads the back gesture; one file hands it to NavDisplay's back handler alone.
+// App code never reads the back gesture; one file hands it to NavDisplay's back handler alone.
 private val backGesture =
     Regex(
         """(?i)\w*navigationEvent\w*|\b(PredictiveBackHandler|NavigationBackHandler|OnBackAnimationCallback|""" +

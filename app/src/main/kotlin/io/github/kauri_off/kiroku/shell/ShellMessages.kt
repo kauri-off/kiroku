@@ -214,6 +214,14 @@ class ShellMessages(
         requested.compareAndSet(id, null)
     }
 
+    // No message shown, waiting or asking for an edit sheet, as at a start.
+    fun clear() {
+        waiting.forEach { it.watch?.cancel() }
+        waiting.clear()
+        requested.value = null
+        show(null)
+    }
+
     internal companion object {
         // Past the engine's own read attempts and within a Long snackbar, so a waiting message is read before its turn.
         val REREAD = 5.seconds

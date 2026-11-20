@@ -1,6 +1,6 @@
 package io.github.kauri_off.kiroku.signin
 
-// What the sign-in screen shows (ARCHITECTURE 9.2).
+// What the sign-in screen shows.
 sealed interface SignInState {
     data object Ready : SignInState
 

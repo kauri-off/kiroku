@@ -92,17 +92,14 @@ class MalErrorsTest {
     }
 
     @Test
-    fun `any other refusal of another user's list is a refusal and background work backs off`() {
+    fun `MAL's own refusal on another user's list, other than a private list, is a refusal and background work backs off`() {
         val private = recorded("list_private")
         val others =
             listOf(
-                "",
-                NetworkFixture.THING,
+                NetworkFixture.MalsRefusal,
                 """{"error":"forbidden"}""",
                 """{"error":"NOT_PERMITTED"}""",
-                """{"error":{"code":"not_permitted"}}""",
                 private.replace("not_permitted", "not_found"),
-                "<html>$private</html>",
             )
         for (body in others) {
             network.http.backOff.answered(network.http.backOff.mark())
@@ -116,8 +113,36 @@ class MalErrorsTest {
 
     @Test
     fun `a refusal anywhere else is a refusal and background work backs off`() {
-        assertEquals(failed(DataError.Refused), readAnswered(403))
+        assertEquals(failed(DataError.Refused), readAnswered(403, body = NetworkFixture.MalsRefusal))
         assertEquals(MalBackOff.First, network.http.backOff.remaining())
+        assertEquals(1, network.api.requestCount)
+    }
+
+    @Test
+    fun `a 403 that MAL did not write is a server error, asked again as one is, and nothing backs off`() {
+        val notMals =
+            listOf(
+                answer(403, "<html><body>Sign in to this network</body></html>", type = "text/html"),
+                answer(403, "<html>${NetworkFixture.MalsRefusal}</html>", type = "text/html"),
+                answer(403, "", type = "text/plain"),
+                answer(403, NetworkFixture.THING),
+                answer(403, """{"error":{"code":"forbidden"}}"""),
+                answer(403, """["error","forbidden"]"""),
+            )
+        for (anotherUsersList in listOf(false, true)) {
+            for (response in notMals) {
+                val asked = network.api.requestCount
+                network.always(response)
+                assertEquals(failed(DataError.ServerError), read(anotherUsersList))
+                assertEquals(1 + network.repeatReadsAfter.size, network.api.requestCount - asked)
+                assertEquals(Duration.ZERO, network.http.backOff.remaining())
+            }
+        }
+        val asked = network.api.requestCount
+        assertEquals(failed(DataError.ServerError), runBlocking { network.http.call { things.write(1) } })
+        assertEquals(1, network.api.requestCount - asked)
+        assertEquals(Duration.ZERO, network.http.backOff.remaining())
+        assertTrue(network.unexpected.isEmpty())
     }
 
     @Test
@@ -144,6 +169,7 @@ class MalErrorsTest {
                 .Builder()
                 .code(403)
                 .setHeader("Retry-After", DateTimeFormatter.RFC_1123_DATE_TIME.format(until))
+                .body(NetworkFixture.MalsRefusal)
                 .build(),
         )
         assertEquals(failed(DataError.Refused), read())
@@ -152,15 +178,17 @@ class MalErrorsTest {
 
     @Test
     fun `an answer after a refusal lets background work call again`() {
-        readAnswered(403)
+        readAnswered(403, body = NetworkFixture.MalsRefusal)
+        assertEquals(MalBackOff.First, network.http.backOff.remaining())
         assertEquals(MalAnswer.Success(Thing(7)), readAnswered(200))
         assertEquals(Duration.ZERO, network.http.backOff.remaining())
     }
 
     @Test
     fun `a refused write is a refusal`() {
-        network.api.enqueue(answer(403))
+        network.api.enqueue(answer(403, NetworkFixture.MalsRefusal))
         assertEquals(failed(DataError.Refused), runBlocking { network.http.call { things.write(1) } })
+        assertEquals(MalBackOff.First, network.http.backOff.remaining())
     }
 
     @Test

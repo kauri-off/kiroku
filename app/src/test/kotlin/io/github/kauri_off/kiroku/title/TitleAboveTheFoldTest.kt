@@ -33,7 +33,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 // On a 411 × 891 dp screen with its system bars, the header, the list block and the airing block of
-// a title of up to two lines end above the gesture bar, in both languages of the base variants.
+// a title of up to two lines end above the gesture bar, in both languages at the default font scale.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TitleAboveTheFoldTest {

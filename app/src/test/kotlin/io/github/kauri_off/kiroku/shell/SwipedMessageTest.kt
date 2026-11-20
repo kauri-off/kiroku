@@ -347,7 +347,7 @@ class SwipedMessageWideTest {
         }
 }
 
-// ARCHITECTURE 8.5: a message swiped away leaves the window whole, its shadow too.
+// A message swiped away leaves the window whole, its shadow too.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")

@@ -21,10 +21,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
 // A card of a horizontal strip. The title always takes its two lines, so the captions start at one height on every
-// card; every card reserves the room of its full line caps (caption 1 takes [caption1Lines]), so all cards of a strip
-// have one height whatever their text. It is as wide as its poster, which grows with the font scale. A card with no
-// [onClick] opens nothing; [caption2Marked] draws caption 2 in the primary colour. [spoken] is the card's one sentence,
-// said in place of its texts.
+// card; every card reserves the room of the most lines its captions may take (caption 1 takes [caption1Lines]), so all
+// cards of a strip have one height whatever their text. It is as wide as its poster, which grows with the font scale. A
+// card with no [onClick] opens nothing; [caption2Marked] draws caption 2 in the primary colour. [spoken] is the card's
+// one sentence, said in place of its texts.
 @Composable
 fun PosterCard(
     title: String,

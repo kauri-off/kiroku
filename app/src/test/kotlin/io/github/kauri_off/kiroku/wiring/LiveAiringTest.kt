@@ -284,9 +284,10 @@ class LiveAiringTest {
         }
 
     @Test
-    fun `a title the source hands over whole while signed in reaches the engine before the call ends`() =
+    fun `a title the source hands over whole while signed in reaches the engine before the call ends, and a pull reaches the source`() =
         runTest {
             val fetched = mapOf(anime.id to Outcome.Success(FetchedAiring(schedule)))
+            val pulls = mutableListOf<Set<AnimeId>>()
             val handing =
                 object : AiringSource {
                     override suspend fun fetch(
@@ -297,8 +298,10 @@ class LiveAiringTest {
                     override suspend fun fetch(
                         titles: Collection<Anime>,
                         since: Instant,
+                        pulled: Set<AnimeId>,
                         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
                     ): Map<AnimeId, Outcome<FetchedAiring?>> {
+                        pulls += pulled
                         whole(fetched)
                         return fetched
                     }
@@ -306,11 +309,12 @@ class LiveAiringTest {
             val handed = mutableListOf<Map<AnimeId, Outcome<FetchedAiring?>>>()
 
             val answer =
-                SignedInSource(handing, flowOf(Session.SignedIn(SignInId(signIn)))).fetch(listOf(anime), Instant.now()) {
+                SignedInSource(handing, flowOf(Session.SignedIn(SignInId(signIn)))).fetch(listOf(anime), Instant.now(), setOf(anime.id)) {
                     handed +=
                         it
                 }
 
+            assertEquals(listOf(setOf(anime.id)), pulls)
             assertEquals(listOf(fetched), handed)
             assertEquals(fetched, answer)
         }

@@ -244,7 +244,10 @@ class SignInAgainstServerTest {
     @Test
     fun aTokenEndpointThatRefusesStartsTheBackOffLikeAnyRefusal() =
         test {
-            assertEquals(DataError.Refused.toString(), reply(answer(403, "no")))
+            val blocked = "<html><body>Blocked by your network</body></html>"
+            assertEquals("403 $blocked", reply(answer(403, blocked, type = "text/html")))
+            assertEquals(Duration.ZERO, network.http.backOff.remaining())
+            assertEquals(DataError.Refused.toString(), reply(answer(403, NetworkFixture.MalsRefusal)))
             assertEquals(MalBackOff.First, network.http.backOff.remaining())
             assertEquals("400 bad", reply(answer(400, "bad")))
             assertEquals(MalBackOff.First, network.http.backOff.remaining())
@@ -264,7 +267,7 @@ class SignInAgainstServerTest {
     @Test
     fun aSignInThatMalRefusesOrRejectsSignsNobodyInAndIsSentOnce() =
         test {
-            network.signIn.enqueue(answer(403, "no"))
+            network.signIn.enqueue(answer(403, NetworkFixture.MalsRefusal))
             signIn.start(browser)
             signIn.redirected(redirectOf(browser.opened.last()))
             assertEquals(SignInStep.Failed(SignInFailure.NoTokens), signIn.ended())

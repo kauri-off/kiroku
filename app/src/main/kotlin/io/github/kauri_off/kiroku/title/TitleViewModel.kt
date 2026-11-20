@@ -297,7 +297,7 @@ class TitleViewModel(
         airingAsk = viewModelScope.launch { if (asked == Asked.Pull) airing.refresh(page) else airing.refreshStale(page) }
     }
 
-    // A wait the person asked for shows at once; one the page started only after a second (section 9.4).
+    // A wait the person asked for shows at once; one the page started only after a second.
     private fun refresh(asked: Asked) {
         load?.cancel()
         walking?.cancel()

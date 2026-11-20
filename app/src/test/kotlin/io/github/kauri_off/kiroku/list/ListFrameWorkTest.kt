@@ -249,7 +249,7 @@ class ListFrameWorkTest {
         compose.onNode(hasText("Dropped") and isSelectable()).assertIsSelected()
     }
 
-    // B2's M1: a drag made before every page is composed composes none inside the pager's scroll, and turns the page.
+    // A drag made before every page is composed composes none inside the pager's scroll, and turns the page.
     @Test
     fun `a drag before every page is composed composes no page inside the pager's scroll and still turns the page`() {
         Composer.setTracer(tracer)
@@ -280,7 +280,7 @@ class ListFrameWorkTest {
         compose.onNode(hasText("Planned") and isSelectable()).assertIsSelected()
     }
 
-    // B3's probe: down, six moves and up handled in one go, in the frame that composes the first page.
+    // Down, six moves and up handled in one go, in the frame that composes the first page.
     @Test
     fun `a quick swipe handled in one go before the rows are composed composes nothing inside the scroll and rests on a page`() {
         startApp()
@@ -316,7 +316,7 @@ class ListFrameWorkTest {
         return indicatorLeft()
     }
 
-    // B3's m1: an accessibility service turning the page as the List appears.
+    // An accessibility service turning the page as the List appears.
     @Test
     fun `an accessibility page turn before the rows are composed composes nothing inside the scroll`() {
         val accessibility = compose.activity.getSystemService(AccessibilityManager::class.java)

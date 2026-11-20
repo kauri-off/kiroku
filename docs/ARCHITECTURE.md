@@ -102,9 +102,9 @@ Tenrai (from its documentation and recorded answers):
 |---|---|---|
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
 | MAL | Answered as a private list when reading another user's list | "This list is private". Not treated as rate limiting. |
-| MAL | Refused otherwise | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
+| MAL | Refused otherwise: a 429, or a 403 whose body is MAL's JSON error (any other 403 counts as a server error) | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
-| AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
+| AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. A person's pull asks AniList again at once; AniList's own refusal holds it too. |
 | An optional source (Tenrai's score distribution; others after 1.0) | Any failure, refusal or rate limit | Its part of the app says so and offers Retry, and never blocks or delays the page it belongs to. |
 
 The app holds the permission `ACCESS_NETWORK_STATE`, and "offline" means the device has no network that reaches the
@@ -158,7 +158,8 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
   cannot be read never crash the app and never clear what is stored: the session is expired for that run. A store
   whose sign-in cannot be read either means signed out. A file that cannot be read at all signs nobody out: the
   session has no value until it is read.
-- **S9.** Signing out removes the tokens and everything stored about the user.
+- **S9.** Signing out removes the tokens and everything stored about the user. Signing out closes every screen and
+  leaves the app where a start without a session does; a session that expires does not (S6).
 
 ### 3.3 The client id
 

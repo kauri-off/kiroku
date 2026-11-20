@@ -1,8 +1,10 @@
 package io.github.kauri_off.kiroku.shell
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,6 +17,7 @@ import io.github.kauri_off.kiroku.notShown
 class ShellNavigator(
     private val stacks: Map<Destination, MutableList<NavKey>>,
     private val selected: MutableState<Destination> = mutableStateOf(Destination.List),
+    private val restartCount: MutableIntState = mutableIntStateOf(0),
 ) {
     init {
         require(Destination.entries.all { stacks[it]?.firstOrNull() == it.root }) { notShown("Every stack starts at its root") }
@@ -27,6 +30,9 @@ class ShellNavigator(
         private set
 
     val stack: List<NavKey> get() = stackOf(current)
+
+    // Part of every screen's identity, so a restart keeps no screen's state, a root's included.
+    val restarts: Int get() = restartCount.intValue
 
     fun stackOf(destination: Destination): List<NavKey> = stacks.getValue(destination)
 
@@ -57,6 +63,14 @@ class ShellNavigator(
         way = if (destination == current) Way.Up else Way.Across
         selected.value = destination
         stacks.getValue(destination).popTo(1)
+    }
+
+    // Where a start without a session leaves the app: the List shown, every stack at its root, no screen's state kept.
+    fun restart() {
+        way = Way.Across
+        selected.value = Destination.List
+        stacks.values.forEach { it.popTo(1) }
+        restartCount.intValue++
     }
 
     // Back pops the current stack; from the root of Search or Profile it goes to List. False: leave the app.
@@ -98,7 +112,7 @@ data class OpenedPage(
     val key: NavKey,
 )
 
-// Survives recreation and process death: the stacks are saved with their keys, the selection by name.
+// Survives recreation and process death: the stacks are saved with their keys, the selection by name, the restarts by count.
 @Composable
 fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator {
     fun over(destination: Destination) = listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray()
@@ -106,10 +120,12 @@ fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator {
     val search = rememberNavBackStack(Destination.Search.root, *over(Destination.Search))
     val profile = rememberNavBackStack(Destination.Profile.root, *over(Destination.Profile))
     val selected = rememberSaveable { mutableStateOf(start?.destination ?: Destination.List) }
-    return remember(list, search, profile, selected) {
+    val restarts = rememberSaveable { mutableIntStateOf(0) }
+    return remember(list, search, profile, selected, restarts) {
         ShellNavigator(
             mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
             selected,
+            restarts,
         )
     }
 }

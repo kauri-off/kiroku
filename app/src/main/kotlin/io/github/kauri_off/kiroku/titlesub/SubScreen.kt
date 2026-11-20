@@ -34,7 +34,7 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.title.message
 
-// What a sub-screen of section 9.9 shows under its top app bar: a state of the shared component, or its one list.
+// What a sub-screen shows under its top app bar: a state of the shared component, or its one list.
 internal sealed interface SubScreenBody {
     data class State(
         val state: ScreenState,

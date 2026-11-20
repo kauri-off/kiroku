@@ -854,6 +854,50 @@ abstract class AiringEngineContract {
             assertEquals(listOf(tracked), s.source.calls.toList())
         }
 
+    @Test
+    fun `a pull on the list or a page tells the source its titles are pulled, and a refresh nobody asked for tells it none`() =
+        runTest {
+            val page = FixtureAnime.notOnListAiring
+            val s = subject()
+            s.clock.advance(1.days)
+
+            for (refresh in listOf<suspend () -> Outcome<Unit>>(
+                { s.engine.refreshStale() },
+                { s.engine.refresh(setOf(FixtureAnime.exactToWatch.id)) },
+                { s.engine.refreshStale(page) },
+                { s.engine.refresh() },
+                { s.engine.refresh(page) },
+                { s.engine.refresh(FixtureAnime.exactToWatch) },
+            )) {
+                assertEquals(Outcome.Success(Unit), refresh())
+            }
+
+            val one = setOf(FixtureAnime.exactToWatch.id)
+            assertEquals(listOf(tracked, one, setOf(page.id), tracked, setOf(page.id), one), s.source.calls.toList())
+            assertEquals(listOf(emptySet(), emptySet(), emptySet(), tracked, setOf(page.id), one), s.source.pulls.toList())
+        }
+
+    @Test
+    fun `a pull makes a title waiting behind a running call pulled, and shares the answer of one already on its way`() =
+        runTest {
+            val first = FixtureAnime.exactToWatch.id
+            val s = subject()
+            s.source.latency = 1.seconds
+            s.clock.advance(1.days)
+
+            val running = async { s.engine.refresh(setOf(first)) }
+            runCurrent()
+            val stale = async { s.engine.refreshStale() }
+            runCurrent()
+            val pull = async { s.engine.refresh() }
+            advanceTimeBy(5.seconds)
+            runCurrent()
+
+            for (refresh in listOf(running, stale, pull)) assertEquals(Outcome.Success(Unit), refresh.await())
+            assertEquals(listOf(setOf(first), tracked - first), s.source.calls.toList())
+            assertEquals(listOf(emptySet(), tracked - first), s.source.pulls.toList())
+        }
+
     // A process that never lives through a whole call, as one a broadcast starts, still keeps the titles answered in it.
     @Test
     fun `A10 a title the source hands over whole is stored and answered while its call goes on, and stays when the call is cut`() =
