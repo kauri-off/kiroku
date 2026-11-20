@@ -85,7 +85,7 @@ class RecorderSectionTest {
         show(Recording.Stopped(title, "score_set", Halt.Refused(429), 31, folder, ListAfter.Left))
 
         compose.onNodeWithText("The recording stopped at the request score_set").assertExists()
-        compose.onNodeWithText("MyAnimeList is refusing requests (answer\u00A0429). Try again later").assertExists()
+        compose.onNodeWithText("MyAnimeList is refusing requests (answer\u00A0429), try again later").assertExists()
         compose.onNodeWithText("Answers so far:\u00A031. They replaced no earlier recording").assertExists()
         compose.onNodeWithText("Folder: ${folder.path}").assertExists()
         compose.onNodeWithText("myanimelist.net/anime/1", substring = true).assertExists()
