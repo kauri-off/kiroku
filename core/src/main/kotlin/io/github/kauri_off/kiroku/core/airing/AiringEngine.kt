@@ -116,9 +116,12 @@ class AiringEngine(
             try {
                 for (signal in wake) {
                     while (true) {
-                        // A re-check waits for no whole schedule it did not ask for.
+                        // A re-check goes before every whole schedule still waiting.
                         val coming = mutex.withLock { comingWaiting.toMap().also { comingWaiting.clear() } }
-                        if (coming.isNotEmpty()) answer(coming, emptySet(), coming = true)
+                        if (coming.isNotEmpty()) {
+                            answer(coming, emptySet(), coming = true)
+                            continue
+                        }
                         val (titles, byPull) =
                             mutex.withLock {
                                 (waiting.toMap() to pulled.toSet()).also {
@@ -126,8 +129,8 @@ class AiringEngine(
                                     pulled.clear()
                                 }
                             }
-                        if (titles.isNotEmpty()) answer(titles, byPull, coming = false)
-                        if (coming.isEmpty() && titles.isEmpty()) break
+                        if (titles.isEmpty()) break
+                        answer(titles, byPull, coming = false)
                     }
                 }
             } finally {
