@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.scenario
 
+import android.Manifest
 import android.os.Looper
 import android.os.SystemClock
 import android.view.InputDevice
@@ -28,6 +29,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.ExternalResource
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
@@ -47,7 +49,14 @@ class ScenarioOverlayTest {
     @get:Rule(order = 0)
     val source = StartsOn(DataSource.Demo)
 
+    // Granted, so that the start's permission prompt is not among the activities a tap is checked to start.
     @get:Rule(order = 1)
+    val notifications =
+        object : ExternalResource() {
+            override fun before() = shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+    @get:Rule(order = 2)
     val compose = createAndroidComposeRule<MainActivity>()
 
     private val scenarios get() = checkNotNull(RuntimeEnvironment.getApplication().scenarios)

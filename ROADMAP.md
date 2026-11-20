@@ -222,17 +222,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-13 Notification settings in the app.**
 
-- [ ] **M4-14 The permission prompt.** On Android 13 and later the app asks for the notification permission with
-  the system's own prompt, with no dialog of its own before it. When and on which screen it asks is built once and
-  shown to the owner (section 9). A denial stops nothing but the showing: the record, the alarm and the runs go on,
-  so that a later grant needs no further step. The hand-off says, from
-  `develop/ui/compose/notifications/notification-permission` on developer.android.com and from the emulator, how
-  often the system lets the prompt appear and what an install over an earlier build does.
-  **Needs:** M4-13.
-  **Check:** tests: below Android 13 nothing is asked; after a denial the alarm stays set, and a grant alone makes
-  the next due notification appear; a later start does not ask again. By hand on an emulator of Android 13 or
-  later: deny at the prompt, see in the notification settings that the system blocks them, grant in the system's
-  settings, return, see the state updated, receive the test notification.
+- [x] **M4-14 The permission prompt.**
 
 - [x] **M4-15 Notifications in the debug menu.**
 
