@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -145,7 +146,7 @@ class ShellMessages(
                 try {
                     list.observeEntry(id).map { it?.values }.first { values ->
                         val from = start ?: Start(values).also { start = it }
-                        failure?.ends(from, values) ?: (values != from.values)
+                        failure?.ends(from, values) ?: !values.sameAsWritten(from.values)
                     }
                     break
                 } catch (_: DataException) {
@@ -163,7 +164,7 @@ class ShellMessages(
     private fun WriteFailure.ends(
         start: Start,
         now: ListValues?,
-    ): Boolean = left(now) == null || now != start.values && settledBy(now)
+    ): Boolean = left(now) == null || !now.sameAsWritten(start.values) && settledBy(now)
 
     // The snackbar ended by itself, by a swipe or by its action; not when a newer message or a recreation cut it short.
     fun ended(

@@ -41,7 +41,8 @@ class SandboxUsersTest {
         name: String,
         query: String = "limit=10",
         bearer: String? = null,
-    ) = sandbox.ask("GET", "users/$name/animelist?fields=${MalFields.LIST_ENTRY}&nsfw=true&sort=anime_title&$query", bearer = bearer)
+        fields: String = MalFields.LIST_ENTRY,
+    ) = sandbox.ask("GET", "users/$name/animelist?fields=$fields&nsfw=true&sort=anime_title&$query", bearer = bearer)
 
     private fun read(name: String): Outcome<List<ListEntry>> = runBlocking { lists.list(ListUser.Named(name)) }
 
@@ -60,8 +61,10 @@ class SandboxUsersTest {
                 titles[node.id!!] = node
                 node.id!! to listed(item.getValue("list_status").jsonObject)
             }
+        // Asked as the recorder asked MAL, which its links repeat.
+        val fields = query(pages.first().getValue("paging").jsonObject, "next")!!.getValue("fields")
         pages.forEachIndexed { i, page ->
-            val (status, body) = pageOf(SandboxUsers.PUBLIC, "limit=10&offset=${i * 10}")
+            val (status, body) = pageOf(SandboxUsers.PUBLIC, "limit=10&offset=${i * 10}", fields = fields)
             assertEquals(200, status)
             val given = parse(body).jsonObject
             assertEquals("page ${i + 1}", page.getValue("data"), given.getValue("data"))

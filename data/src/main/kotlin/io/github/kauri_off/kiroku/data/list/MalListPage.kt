@@ -80,6 +80,7 @@ internal fun listEntryOf(
             score = read("score", fields.number("score")?.takeIf { it in 0..10 })?.takeIf { it > 0 },
             startDate = read("start_date", fields.text("start_date")?.let(::dateOf)),
             finishDate = read("finish_date", fields.text("finish_date")?.let(::dateOf)),
+            timesRewatched = read("num_times_rewatched", fields.number("num_times_rewatched")?.takeIf { it >= 0 }) ?: 0,
         ),
         read("updated_at", fields.text("updated_at")?.let(::updatedAtOf)) ?: NEVER_UPDATED,
     )

@@ -266,10 +266,10 @@ Not to forget:
 
 Goal: the owner's profile, another user's profile and list, and the statistics sub-screens.
 
-Acceptance: the owner's completed count and mean score equal those on their MAL profile page ("Days watched" may
-differ, because MAL counts rewatches); another user's profile opens by name and by a `myanimelist.net/profile/…`
-link, also for a list of several thousand entries; a private list and an unknown name each say what they are. The
-owner's findings on the Russian strings of M3 to M6 are fixed.
+Acceptance: the owner's completed count, mean score, days and episodes watched equal those on their MAL profile page;
+another user's profile opens by name and by a `myanimelist.net/profile/…` link, also for a list of several thousand
+entries; a private list and an unknown name each say what they are. The owner's findings on the Russian strings of M3 to
+M6 are fixed.
 
 - [x] **M6-01 Profile screen.**
 

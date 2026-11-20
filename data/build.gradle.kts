@@ -42,7 +42,7 @@ android {
         assets.directories += "schemas"
     }
 
-    // The database the app's version 1 wrote, for the migration on a device's own SQLite.
+    // The databases the app's earlier versions wrote, for the migration on a device's own SQLite.
     sourceSets.named("androidTest") {
         assets.directories += "src/test/resources/databases"
     }

@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
+import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.SentNotification
@@ -45,7 +46,8 @@ sealed interface ListWrite {
             require(only == null || only.isNotEmpty())
         }
 
-        fun over(current: ListValues?): ListValues = if (only == null || current == null) values else values.over(current, only)
+        fun over(current: ListValues?): ListValues =
+            if (current == null) values else values.over(current, only ?: ListField.entries.toSet())
     }
 
     data class Remove(
@@ -173,7 +175,7 @@ data class ListChange(
             } else {
                 back { it.watchedEpisodes }
             }
-        return ListValues(back { it.status }, watched, back { it.score }, back { it.startDate }, back { it.finishDate })
+        return ListValues(back { it.status }, watched, back { it.score }, back { it.startDate }, back { it.finishDate }, now.timesRewatched)
     }
 }
 
@@ -207,7 +209,7 @@ data class WriteFailure(
                     else -> write.copy(only = kept)
                 }
             }
-            is ListWrite.Remove -> write.takeIf { current == null || current in untouched.values }
+            is ListWrite.Remove -> write.takeIf { current == null || untouched.values.any { it.sameAsWritten(current) } }
             else -> write
         }
     }

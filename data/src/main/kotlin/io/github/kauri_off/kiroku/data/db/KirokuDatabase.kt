@@ -42,7 +42,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 5
+        const val VERSION = 6
 
         val migrations: List<Migration> =
             listOf(
@@ -88,6 +88,13 @@ abstract class KirokuDatabase : RoomDatabase() {
                             "`title_id` INTEGER NOT NULL, `episode` INTEGER NOT NULL, `aired_at` INTEGER NOT NULL, " +
                             "`notify_at` INTEGER NOT NULL, `posted_at` INTEGER NOT NULL, `recheck` TEXT NOT NULL, `shown` INTEGER NOT NULL)",
                     )
+                },
+                // An entry's rewatch count, 0 for a stored entry until the next download.
+                migration(5, 6) {
+                    for (record in listOf("shown", "confirmed")) {
+                        execSQL("ALTER TABLE `list_entry` ADD COLUMN `${record}_times_rewatched` INTEGER")
+                        execSQL("UPDATE `list_entry` SET `${record}_times_rewatched` = 0 WHERE `${record}_status` IS NOT NULL")
+                    }
                 },
             )
 

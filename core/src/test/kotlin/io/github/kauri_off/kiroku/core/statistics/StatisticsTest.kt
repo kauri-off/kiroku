@@ -59,7 +59,8 @@ class StatisticsTest {
         status: EntryStatus = ListStatus.Completed,
         watched: Int = 0,
         score: Int? = null,
-    ) = ListEntry(anime, ListValues(status, watched, score, null, null), Instant.EPOCH)
+        rewatched: Int = 0,
+    ) = ListEntry(anime, ListValues(status, watched, score, null, null, rewatched), Instant.EPOCH)
 
     private val none = StatusCounts(0, 0, 0, 0, 0)
 
@@ -153,6 +154,42 @@ class StatisticsTest {
         val statistics = statisticsOf(listOf(entry(anime(minutes = null, seconds = 1_435), watched = 3)))
 
         assertEquals(4_305.0 / 86_400, statistics.daysWatched, 0.0)
+    }
+
+    // As MAL counts them, for anyone's list: each rewatch is the title's episodes again.
+    @Test
+    fun `days and episodes watched count each rewatch as all the title's episodes, and none of a title whose count is unknown`() {
+        val statistics =
+            statisticsOf(
+                listOf(
+                    entry(anime(minutes = 24, episodes = 12), watched = 12, rewatched = 2),
+                    entry(anime(minutes = 30, episodes = 10), ListStatus.Watching, watched = 5, rewatched = 1),
+                    entry(anime(minutes = 24, episodes = null), ListStatus.Watching, watched = 7, rewatched = 3),
+                    entry(anime(minutes = null, episodes = 12), watched = 12, rewatched = 4),
+                ),
+            )
+
+        assertEquals(((12 + 2 * 12) * 24.0 + (5 + 10) * 30 + 7 * 24) / 1440, statistics.daysWatched, 0.0)
+        assertEquals(12 + 2 * 12 + 5 + 10 + 7 + 12 + 4 * 12, statistics.episodesWatched)
+    }
+
+    // MAL gives the count as a plain integer with no bound; the largest one neither throws nor turns a figure negative.
+    @Test
+    fun `the largest rewatch count on the largest titles counts episodes and days at their bounds, never below zero`() {
+        val most = Int.MAX_VALUE
+        val statistics =
+            statisticsOf(
+                listOf(
+                    entry(anime(minutes = 24, episodes = most), watched = most, rewatched = most),
+                    entry(anime(minutes = 24, episodes = most), ListStatus.Watching, watched = most, rewatched = most),
+                ),
+            )
+
+        assertEquals(most, statistics.episodesWatched)
+        assertEquals(Long.MAX_VALUE / 86_400_000.0, statistics.daysWatched, 0.0)
+        val one = statisticsOf(listOf(entry(anime(minutes = 24, episodes = 12), watched = 12, rewatched = most)))
+        assertEquals(most, one.episodesWatched)
+        assertEquals((12 + 12L * most) * 24.0 / 1440, one.daysWatched, 1e-3)
     }
 
     @Test

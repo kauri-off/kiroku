@@ -6,7 +6,6 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.MediaType
 import io.github.kauri_off.kiroku.core.model.StatusCounts
 import io.github.kauri_off.kiroku.core.model.UserStatistics
-import java.time.Duration
 
 // The statistics of a list's entries, whoever's list it is and however it was read.
 fun statisticsOf(entries: Collection<ListEntry>): UserStatistics {
@@ -14,8 +13,14 @@ fun statisticsOf(entries: Collection<ListEntry>): UserStatistics {
     return UserStatistics(
         titleCount = entries.size,
         statuses = StatusCounts.of(entries.map { it.status }),
-        daysWatched = entries.fold(Duration.ZERO) { sum, entry -> sum + entry.timeWatched }.toMillis() / DAY_MILLIS,
-        episodesWatched = entries.sumOf { it.values.watchedEpisodes },
+        daysWatched = entries.fold(0L) { sum, entry -> sum.plusAtMost(entry.millisWatched) } / DAY_MILLIS,
+        episodesWatched =
+            entries
+                .fold(
+                    0L,
+                ) { sum, entry -> sum.plusAtMost(entry.episodesWatched) }
+                .coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt(),
         meanScore = if (scores.isEmpty()) null else scores.sum().toDouble() / scores.size,
         scores = scores.groupingBy { it }.eachCount().toSortedMap(),
         genres = genresOf(entries),
@@ -37,9 +42,20 @@ fun statisticsOf(entries: Collection<ListEntry>): UserStatistics {
 
 private const val DAY_MILLIS = 86_400_000.0
 
+// As MAL counts them: the watched episodes, and each rewatch as all the title's episodes; none where their number is unknown.
+private val ListEntry.episodesWatched: Long
+    get() = values.watchedEpisodes + values.timesRewatched.toLong() * (anime.malEpisodes ?: 0)
+
 // The episodes the entry counts, each of the title's average length; nothing where the length is not known.
-private val ListEntry.timeWatched: Duration
-    get() = anime.averageEpisodeDuration?.multipliedBy(values.watchedEpisodes.toLong()) ?: Duration.ZERO
+private val ListEntry.millisWatched: Long
+    get() {
+        val millis = anime.averageEpisodeDuration?.toMillis() ?: return 0
+        val episodes = episodesWatched
+        return if (episodes != 0L && millis > Long.MAX_VALUE / episodes) Long.MAX_VALUE else millis * episodes
+    }
+
+// Both are never negative; a sum past the largest Long stays at it, so no count makes a statistic overflow.
+private fun Long.plusAtMost(other: Long): Long = if (this > Long.MAX_VALUE - other) Long.MAX_VALUE else this + other
 
 // A genre is one by its id, named as the first entry that has it names it, and counted once per title.
 private fun genresOf(entries: Collection<ListEntry>): List<Counted<Genre>> =
