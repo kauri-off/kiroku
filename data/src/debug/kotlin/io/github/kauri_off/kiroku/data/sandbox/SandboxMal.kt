@@ -34,6 +34,8 @@ class SandboxMal(
     private val tokens: SandboxTokens,
     private val aniList: SandboxAniList? = null,
     private val tenrai: SandboxTenrai? = null,
+    // The device's own network; without one no request is answered, as none would reach a host.
+    private val online: () -> Boolean = { true },
 ) : Interceptor {
     // No request gets an answer, as with no connection.
     @Volatile
@@ -84,7 +86,7 @@ class SandboxMal(
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         asked += "${request.method} ${request.url.host}${request.url.encodedPath}"
-        if (offline) throw UnknownHostException(request.url.host)
+        if (offline || !online()) throw UnknownHostException(request.url.host)
         if (delayMillis > 0) Thread.sleep(delayMillis)
         val answer =
             aniList?.takeIf { it.answers(request.url) }?.answer(chain)

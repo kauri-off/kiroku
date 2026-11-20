@@ -44,6 +44,9 @@ class SandboxProfileTest {
     @get:Rule(order = 1)
     val connections = SandboxAppTest.NoConnection()
 
+    @get:Rule(order = 1)
+    val network = DeviceOnline()
+
     // The app's own graph is the demo's, which opens none of the sandbox's files.
     @get:Rule(order = 2)
     val source = StartsOn(DataSource.Demo)

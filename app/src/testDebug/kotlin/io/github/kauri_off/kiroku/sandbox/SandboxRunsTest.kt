@@ -2,8 +2,6 @@ package io.github.kauri_off.kiroku.sandbox
 
 import android.app.AlarmManager
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.Looper
 import androidx.work.NetworkType
 import androidx.work.WorkInfo
@@ -36,7 +34,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.shadows.ShadowNetworkCapabilities
 import java.net.URI
 import java.time.Duration
 import java.time.Instant
@@ -60,6 +57,9 @@ class SandboxRunsTest {
 
     @get:Rule(order = 1)
     val connections = SandboxAppTest.NoConnection()
+
+    @get:Rule(order = 1)
+    val network = DeviceOnline()
 
     @get:Rule(order = 2)
     val source = StartsOn(DataSource.Sandbox)
@@ -200,6 +200,7 @@ class SandboxRunsTest {
     fun `run by the system, the work that needs no network posts what is overdue from stored data alone, and the other downloads`() {
         TestScheduledWork.install(context)
         val aired = opened()
+        network.online(false)
         time.ahead = Duration.between(Instant.now(), aired.notifyAt).plusSeconds(1)
         PeriodicWork.schedule(context)
         val asked = graph.sandbox.mal.asked.size
@@ -214,14 +215,7 @@ class SandboxRunsTest {
         )
 
         // The test's device has a connection now, as the system gives the work that requires one.
-        val connectivity = context.getSystemService(ConnectivityManager::class.java)
-        val internet =
-            ShadowNetworkCapabilities.newInstance().also {
-                shadowOf(
-                    it,
-                ).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            }
-        shadowOf(connectivity).setNetworkCapabilities(connectivity.activeNetwork, internet)
+        network.online(true)
         ran(PeriodicWork.ONLINE)
 
         assertTrue(
