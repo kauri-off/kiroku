@@ -203,6 +203,16 @@ class ListWriteTest {
         for (write in writes) assertEquals("$write", 3, write.applyTo(rewatched, today)?.timesRewatched)
     }
 
+    // W2: MAL's count changes with no edit, as at the first download that brings it.
+    @Test
+    fun `a removal's Retry survives a change of the rewatch count alone, and not a change of a value a write sets`() {
+        val confirmed = watching(9)
+        val failure = WriteFailure(DataError.ServerError, ListWrite.Remove(anime), list, Untouched(setOf(confirmed)))
+        assertEquals(ListWrite.Remove(anime), failure.left(confirmed.copy(timesRewatched = 3)))
+        assertTrue(!failure.settledBy(confirmed.copy(timesRewatched = 3)))
+        assertNull(failure.left(confirmed.copy(score = 2, timesRewatched = 3)))
+    }
+
     @Test
     fun `only plus one, the stepper and mark watched are steps`() {
         assertEquals(

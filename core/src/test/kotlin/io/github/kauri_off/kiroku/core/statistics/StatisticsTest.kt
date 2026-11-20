@@ -173,6 +173,25 @@ class StatisticsTest {
         assertEquals(12 + 2 * 12 + 5 + 10 + 7 + 12 + 4 * 12, statistics.episodesWatched)
     }
 
+    // MAL gives the count as a plain integer with no bound; the largest one neither throws nor turns a figure negative.
+    @Test
+    fun `the largest rewatch count on the largest titles counts episodes and days at their bounds, never below zero`() {
+        val most = Int.MAX_VALUE
+        val statistics =
+            statisticsOf(
+                listOf(
+                    entry(anime(minutes = 24, episodes = most), watched = most, rewatched = most),
+                    entry(anime(minutes = 24, episodes = most), ListStatus.Watching, watched = most, rewatched = most),
+                ),
+            )
+
+        assertEquals(most, statistics.episodesWatched)
+        assertEquals(Long.MAX_VALUE / 86_400_000.0, statistics.daysWatched, 0.0)
+        val one = statisticsOf(listOf(entry(anime(minutes = 24, episodes = 12), watched = 12, rewatched = most)))
+        assertEquals(most, one.episodesWatched)
+        assertEquals((12 + 12L * most) * 24.0 / 1440, one.daysWatched, 1e-3)
+    }
+
     @Test
     fun `a title without a start date is in no year, and counts everywhere else`() {
         val statistics = statisticsOf(listOf(entry(anime(year = null), score = 5), entry(anime(year = 2004))))

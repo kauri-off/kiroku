@@ -74,11 +74,13 @@ class OwnerStatisticsTest {
                 }
             }
         assumeTrue("Skipped: the recorded pages hold no rewatch counts; record them again from the debug menu (section 11.1)", carried)
-        val days = stated("num_days_watched").toDouble()
         val episodes = stated("num_episodes").toInt()
+        val watched = stated("num_days_watched").toDouble()
+        // MAL defines this one as the sum of its four status days, each given to two decimals.
+        val summed = stated("num_days").toDouble()
 
         assertTrue("the episodes watched differ from the profile's", statistics.episodesWatched == episodes)
-        // MAL gives the days to two decimals.
-        assertTrue("the days watched to two decimals differ from the profile's", abs(statistics.daysWatched - days) < 0.01)
+        val days = statistics.daysWatched
+        assertTrue("the days watched to two decimals differ from the profile's", abs(days - watched) < 0.01 || abs(days - summed) <= 0.025)
     }
 }

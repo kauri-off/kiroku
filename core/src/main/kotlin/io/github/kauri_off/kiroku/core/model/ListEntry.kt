@@ -83,6 +83,10 @@ enum class ListField(
 
 fun ListValues.changedFrom(other: ListValues): Set<ListField> = ListField.entries.filterTo(mutableSetOf()) { it.of(this) != it.of(other) }
 
+// Both no entry, or the same in every value a write sets: a change of MAL's rewatch count alone is no edit.
+fun ListValues?.sameAsWritten(other: ListValues?): Boolean =
+    if (this == null || other == null) this == other else changedFrom(other).isEmpty()
+
 // These values' [fields], and [base]'s for the rest, its rewatch count among them.
 fun ListValues.over(
     base: ListValues,

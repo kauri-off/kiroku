@@ -443,7 +443,25 @@ class KirokuDatabaseTest {
         checkNotNull(javaClass.getResourceAsStream("/databases/kiroku-5.db")).use { input ->
             written.outputStream().use { input.copyTo(it) }
         }
+        // Beside its rows, a title added on the device that MAL never confirmed: a shown record and no confirmed one.
+        AndroidSQLiteDriver().open(written.path).use { connection ->
+            val title =
+                connection.prepare("SELECT id FROM title WHERE id NOT IN (SELECT title_id FROM list_entry) LIMIT 1").use {
+                    check(it.step())
+                    it.getLong(0)
+                }
+            val added =
+                mapOf(
+                    "title_id" to title,
+                    "unconfirmed" to 1L,
+                    "shown_status" to "plan_to_watch",
+                    "shown_watched" to 0L,
+                    "shown_updated_at" to fetchedAt.toColumn(),
+                )
+            connection.insertNamed(ListEntryRow.TABLE, listOf(added))
+        }
         val before = rowsOf(written)
+        assertTrue(before.getValue(ListEntryRow.TABLE).any { it[1] == 1L && it[8] == null && it[2] != null })
         val id = FixtureAnime.exactToWatch.id
 
         val stored = listIn(written.name) { it.readAll() }

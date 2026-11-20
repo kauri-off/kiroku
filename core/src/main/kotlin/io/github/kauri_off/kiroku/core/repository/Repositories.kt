@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
+import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.notify.Coming
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.SentNotification
@@ -208,7 +209,7 @@ data class WriteFailure(
                     else -> write.copy(only = kept)
                 }
             }
-            is ListWrite.Remove -> write.takeIf { current == null || current in untouched.values }
+            is ListWrite.Remove -> write.takeIf { current == null || untouched.values.any { it.sameAsWritten(current) } }
             else -> write
         }
     }

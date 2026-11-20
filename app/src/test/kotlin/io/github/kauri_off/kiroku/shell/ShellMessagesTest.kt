@@ -472,6 +472,20 @@ class ShellMessagesTest {
         assertEquals(listOf(failed(1), moved), shownInTurn())
     }
 
+    // MAL's rewatch count is no edit, so a download that brings only a new count leaves the Undo standing.
+    @Test
+    fun `a waiting Undo stays when only its title's rewatch count changes`() {
+        compose.runOnUiThread { listOf(failed(1), moved).forEach(messages::post) }
+        runMainLooper()
+        val before = graph.demo.server.entry(anime.id)!!
+        graph.demo.server.editOnWebsite(before.anime, before.values.copy(timesRewatched = before.values.timesRewatched + 2))
+        scope.launch { graph.list.sync() }
+        runMainLooper()
+        val after = runBlocking { graph.list.observeEntry(anime.id).first() }!!
+        assertEquals(before.values.timesRewatched + 2, after.values.timesRewatched)
+        assertEquals(listOf(failed(1), moved), shownInTurn())
+    }
+
     @Test
     fun `an Undo that adds nothing back, as an episode watched, does not have to stay`() {
         assertEquals(false, watched(1).mustStay)
@@ -629,6 +643,16 @@ class ShellMessagesTest {
         compose.runOnUiThread { scope.launch { graph.list.sync() } }
         compose.waitForIdle()
         compose.onNodeWithText("Could not save").assertExists()
+
+        val rolledBack = runBlocking { graph.list.observeEntry(anime.id).first()!! }
+        graph.demo.server.editOnWebsite(anime, rolledBack.values.copy(timesRewatched = rolledBack.values.timesRewatched + 2))
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        assertEquals(
+            rolledBack.values.timesRewatched + 2,
+            runBlocking { graph.list.observeEntry(anime.id).first()!! }.values.timesRewatched,
+        )
+        compose.onNodeWithText("Could not save").assertExists()
     }
 
     private fun shellShown(): ShellViewModel {
@@ -749,6 +773,32 @@ class ShellMessagesTest {
                 ?.values
                 ?.watchedEpisodes,
         )
+    }
+
+    // W2: a download that brings only MAL's rewatch count changes nothing the user edited, so the removal is still owed.
+    @Test
+    fun `a failed removal keeps its message through a download that changed only the rewatch count, and its Retry removes`() {
+        val shell = shellShown()
+        graph.demo.server.failingWrites.value = true
+        runBlocking { graph.list.write(ListWrite.Remove(anime)) }
+        compose.waitForIdle()
+        graph.demo.server.failingWrites.value = false
+        val posted = checkNotNull(shell.messages.current.value)
+
+        val confirmed =
+            graph.demo.server
+                .entry(anime.id)!!
+                .values
+        graph.demo.server.editOnWebsite(anime, confirmed.copy(timesRewatched = confirmed.timesRewatched + 3))
+        compose.runOnUiThread { scope.launch { graph.list.sync() } }
+        compose.waitForIdle()
+        assertEquals(confirmed.timesRewatched + 3, runBlocking { graph.list.observeEntry(anime.id).first() }?.values?.timesRewatched)
+        compose.onNodeWithText("Could not save").assertExists()
+
+        compose.runOnUiThread { shell.messages.ended(posted, actionPerformed = true) }
+        compose.waitForIdle()
+        assertNull(graph.demo.server.entry(anime.id))
+        assertNull(runBlocking { graph.list.observeEntry(anime.id).first() })
     }
 
     // A message never offers a Retry that would do nothing, also when that was so before it showed.
