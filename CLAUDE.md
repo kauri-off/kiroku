@@ -94,7 +94,7 @@ place of the commands above. `tools/` holds the maintainer's job queue; the buil
 - "Aired", "to watch" and what is notifiable are computed only in `:core`.
 - Versions are written only in `gradle/libs.versions.toml`. Adding a dependency needs a reason in the pull request.
 - Never commit secrets: no client id, no tokens, no signing keys.
-- Tests of MAL mappers use recorded responses only (ARCHITECTURE section 11.1). Never call the MAL API by hand and
+- Tests of a service's mappers use recorded responses only (ARCHITECTURE section 11.1). Never call the MAL API by hand and
   never write a response from memory. Responses that need the owner's sign-in are recorded by the owner.
 
 ## Interface tasks

@@ -49,13 +49,19 @@ without affecting its page (section 2.3).
 | A title's score distribution (MAL's votes per score) | Tenrai, keyed by MAL id | No |
 | Characters, videos, reviews, other users' avatar and "about" | None chosen (section 13); not in 1.0 | |
 
-- Kiroku has no server of its own, scrapes no HTML and loads no remote configuration.
+- Kiroku has no server of its own, scrapes no HTML, loads no remote configuration and asks no other app or service
+  to download anything for it (no downloadable fonts).
 - AniList is chosen for airing times because it is a documented public API that knows real episode times, breaks
   and delays, and covers long-running shows regardless of season (dailyAL issue #8). MAL's own `broadcast` field (a
   weekday and a Japan-time slot) knows none of that and only feeds the estimate of section 4.
 - **Privacy.** AniList receives the MAL ids of the unfinished titles on the user's list and of an airing title whose
   page is open, and nothing else about the user. Tenrai receives the device's IP address, the app's name and version, and
   the MAL id of each title whose MAL scores are opened. There is no analytics and no crash reporting.
+- Kiroku is a MAL client today and is not bound to stay only that. A title's identity is its MAL id; code outside
+  the clients of `:data` and the link code treats it as an opaque key, and it is persisted only in database
+  columns. `:core` and the state of the screens name roles (the list, the airing source), never a service: a
+  service's wire shape, vocabulary, limits and credentials stay inside its client in `:data`. No abstraction is
+  built for a source that does not exist.
 
 ### 2.2 External constraints and their consequences
 
@@ -144,7 +150,9 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
   stays readable, every screen shows the banner "Session expired · Sign in", and background work stops calling
   MAL. Any temporary failure, a success without tokens included, keeps the tokens and the session.
 - **S7.** A user who only receives notifications and never opens the app keeps their session: the tokens are
-  renewed in the background well inside the refresh token's month.
+  renewed in the background well inside the refresh token's month. Tokens nobody asked for are renewed only at the
+  app's opening and in scheduled work, never in a run a broadcast started, because MAL revokes the old pair when it
+  answers; a token MAL rejects is refreshed where the request was made (S5).
 - **S8.** Tokens are stored encrypted with a key from the Android Keystore, written so that an interrupted write
   cannot lose the session, and excluded, like the settings, from cloud backup and device transfer. Tokens that
   cannot be read never crash the app and never clear what is stored: the session is expired for that run. A store
@@ -161,6 +169,8 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
 - A build without a client id succeeds. A **debug** or preview build without one starts in demo mode unless
   another source was chosen (section 6.4); a **release** build without one says so on the sign-in screen and starts
   no sign-in. Tests never need the id.
+- A request to MAL that would carry neither a token nor the client id is not sent: it fails as "This build has no
+  MyAnimeList client id" and starts no back-off.
 
 ## 4. Episodes aired
 
@@ -274,7 +284,8 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
   already brought the change do not raise the count again. Without a network it waits and retries; if it finally
   fails, the title's notification says so and opens the title. It works on every supported Android version: on
   Android 8 to 11 the system runs such work as a foreground service, which shows its own notification on a
-  low-importance channel of its own; on Android 12 and later no foreground service starts or is enabled.
+  low-importance channel of its own; on Android 12 and later no foreground service starts or is enabled. The
+  waiting ends a day after the tap; an answer that cannot change ends it at once.
 - **N10. The record of announced episodes survives** app updates and database changes (section 7.1).
 
 Tests demonstrate each of these without a device, with every dailyAL failure case among them. Before a release,
@@ -282,22 +293,20 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 ### 5.3 What the user gets
 
-- **A notification** is one a title, in the preferred title language, in the language in effect when it is posted,
-  with one action that marks the episode it names. Tapping it opens the title page with the List beneath it; a
-  tapped notification goes and is not shown again.
-- **Grouping.** All episode notifications share one group with a summary, so an evening with several shows is one
-  stack. **Channel:** default importance.
+- **A notification** names one title, in the preferred title language and in the language in effect when it is
+  posted, with one action that marks the episode it names. Tapping it opens the title page with the List beneath
+  it; a tapped notification goes and is not shown again.
+- **Grouping.** All episode notifications share one group with a summary. **Channel:** default importance.
 - **First run.** Notifications are on by default. On Android 13 and later the system permission prompt appears
-  once, on the List, right after the first successful sign-in, with no custom dialog before it. If the user
-  denies, the setting shows "Blocked in system settings" with a button, and nothing else in the app mentions it.
-  Planning continues either way, so a later grant needs no further step.
-- **Delay.** A setting "Notify": "when the episode airs in Japan" (the default), "30 minutes later", "1 hour
-  later", "3 hours later".
-- **Limits the app cannot remove.** The system may defer the alarms and background work of an app the user rarely
-  opens, and a force-stopped app receives nothing until it is opened. The notification settings say so and show
-  which link broke when a notification is missing: the permission, exact alarms and the battery restriction, each
-  with a link to the system screen, the last successful sync, the notifications coming next and those recently
-  sent. They post a test notification through the real channel. This is what the owner checks during acceptance.
+  once, right after the first successful sign-in, with no custom dialog before it. A denial is shown only in the
+  notification settings. Planning continues either way, so a later grant needs no further step.
+- **Delay.** A notification comes when the episode airs in Japan (the default), or 30 minutes, 1 hour or 3 hours
+  later.
+- **Limits the app cannot remove.** A force-stopped app receives nothing until it is opened, and without the
+  exact-alarm access a notification can come up to an hour late. The notification settings show which link broke
+  when a notification is missing (the permission, exact alarms, the battery restriction, each with a link to its
+  system screen), the last sync, the notifications coming next and those recently sent, and post a test
+  notification through the real channel. This is what the owner checks during acceptance.
 
 ## 6. Structure and stack
 
@@ -443,6 +452,8 @@ edit changed, so a value changed on the website since the last download, or one 
 MAL has. A step is written at once. The edit sheet writes nothing before Save, and is not dismissed with unsaved
 changes without asking. "+1" on a row offers Undo, and so does a change on the title page that completes the title
 (W7).
+
+The score from 1 to 10 and the five statuses are the app's own model, which today equals MAL's.
 
 - **W1. In order.** Quick successive edits of one entry never overtake each other, and the server ends with the
   last value shown for each of the values they changed.
