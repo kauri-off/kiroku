@@ -9,6 +9,7 @@ import androidx.compose.runtime.CompositionTracer
 import androidx.compose.runtime.InternalComposeTracingApi
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import coil3.memory.MemoryCache
 import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.design.component.Poster
@@ -36,6 +38,7 @@ import io.github.kauri_off.kiroku.wiring.Pictures.Companion.LARGE_WIDTH
 import io.github.kauri_off.kiroku.wiring.Pictures.Companion.RED
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -46,7 +49,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 // A picture fetched from the network fades in over what the poster showed, on the theme's fast effects spring
-// (ARCHITECTURE 8.5).
+// (ARCHITECTURE 8.5); one in memory is drawn in its first frame.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -88,6 +91,22 @@ class PosterFadeTest {
     }
 
     @Test
+    fun `a picture already in memory is drawn in its first frame, with nothing to animate`() {
+        val url = pictures.picture("/medium/1.png", RED)
+        var again by mutableStateOf(false)
+        compose.setContent { Themed { key(again) { Poster(url, PosterSize.Row, Modifier.testTag(POSTER)) } } }
+        arrive(url)
+        assertInMemory(url)
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnUiThread { applied { again = true } }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(RED, centre())
+        assertIdle()
+        assertEquals(1, pictures.received.size)
+    }
+
+    @Test
     fun `the header's large picture fades in over the row's, cropped in the same place`() {
         val medium = pictures.picture("/medium/1.png", RED, band = GREEN)
         val large = pictures.picture("/large/1.png", BLUE, LARGE_WIDTH, LARGE_HEIGHT, held = true, band = GREEN)
@@ -101,8 +120,8 @@ class PosterFadeTest {
                 }
             }
         }
-        compose.waitUntil(5_000) { pictures.hasEnded(medium) }
-        compose.waitForIdle()
+        arrive(medium)
+        assertInMemory(medium)
 
         compose.mainClock.autoAdvance = false
         compose.runOnUiThread { applied { header = true } }
@@ -177,8 +196,7 @@ class PosterFadeTest {
             // Every request the rows started; OkHttp sends only five to one host at a time.
             val asked = pictures.asked.size
             pictures.release()
-            compose.waitUntil(5_000) { pictures.ended.size >= asked }
-            compose.waitForIdle()
+            pictures.await(compose) { pictures.ended.size >= asked }
             compose.mainClock.advanceTimeBy(MotionBounds.CHANGE)
             counting = false
         } finally {
@@ -189,10 +207,9 @@ class PosterFadeTest {
         assertIdle()
     }
 
-    private fun arrive(url: String) {
-        compose.waitUntil(5_000) { pictures.hasEnded(url) }
-        compose.waitForIdle()
-    }
+    private fun arrive(url: String) = pictures.await(compose, url)
+
+    private fun assertInMemory(url: String) = assertNotNull(pictures.loader.memoryCache?.get(MemoryCache.Key(url)))
 
     private fun applied(change: () -> Unit) {
         change()
@@ -251,8 +268,7 @@ class PosterFadeOffTest {
             KirokuTheme(dark = false, dynamicColor = false) { Poster(url, PosterSize.Row, Modifier.testTag(PosterFadeTest.POSTER)) }
         }
         compose.mainClock.advanceTimeByFrame()
-        compose.waitUntil(5_000) { pictures.hasEnded(url) }
-        compose.waitForIdle()
+        pictures.await(compose, url)
         val image = compose.onNodeWithTag(PosterFadeTest.POSTER).captureToImage().asAndroidBitmap()
         assertEquals(RED, image.getPixel(image.width / 2, image.height / 2))
         assertTrue(Recomposer.runningRecomposers.value.none { it.hasPendingWork })

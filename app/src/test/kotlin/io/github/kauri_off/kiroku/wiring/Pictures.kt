@@ -3,6 +3,8 @@ package io.github.kauri_off.kiroku.wiring
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.Looper
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.annotation.DelicateCoilApi
@@ -19,7 +21,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.withContext
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -33,6 +37,7 @@ import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.ContinuationInterceptor
 
 // A local server answering with pictures drawn here, and the app's loader over the live graph's client installed as
 // the singleton, telling the test the size each request asked for and how it ended. The server speaks http, which the
@@ -46,6 +51,7 @@ class Pictures : ExternalResource() {
     val asked = CopyOnWriteArrayList<Pair<String, Size>>()
     private val answers = mutableMapOf<String, () -> MockResponse>()
     private val release = CountDownLatch(1)
+    private val offMain = CopyOnWriteArrayList<String>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     lateinit var calls: Call.Factory
     lateinit var loader: ImageLoader
@@ -75,6 +81,7 @@ class Pictures : ExternalResource() {
     }
 
     override fun after() {
+        checkOnMain()
         release.countDown()
         SingletonImageLoader.reset()
         scope.cancel()
@@ -99,17 +106,17 @@ class Pictures : ExternalResource() {
                     request: ImageRequest,
                     result: SuccessResult,
                 ) {
-                    ended += request.data.toString() to result
+                    ended(request, result)
                 }
 
                 override fun onError(
                     request: ImageRequest,
                     result: ErrorResult,
                 ) {
-                    ended += request.data.toString() to result
+                    ended(request, result)
                 }
             }
-        return imageLoader(context, calls, standIn, schemes)
+        return imageLoader(context, calls, MainHandover(standIn), schemes)
             .newBuilder()
             .eventListener(listener)
             .imageDecoderEnabled(false)
@@ -148,11 +155,47 @@ class Pictures : ExternalResource() {
         return server.url(path).toString()
     }
 
+    private fun ended(
+        request: ImageRequest,
+        result: ImageResult,
+    ) {
+        if (Looper.myLooper() != Looper.getMainLooper()) offMain += "${request.data}"
+        ended += request.data.toString() to result
+    }
+
+    private fun checkOnMain() = check(offMain.isEmpty()) { "Ended off the main thread, before the screen had them: $offMain" }
+
     fun release() = release.countDown()
 
     fun hasEnded(url: String) = ended.any { it.first == url }
 
+    // Waits for [done] while the main looper runs, where a result reaches the screen and the test in one task.
+    fun await(
+        compose: ComposeTestRule,
+        done: () -> Boolean,
+    ) = compose.waitUntil(5_000) {
+        compose.waitForIdle()
+        checkOnMain()
+        done()
+    }
+
+    fun await(
+        compose: ComposeTestRule,
+        url: String,
+    ) = await(compose) { hasEnded(url) }
+
     fun result(url: String) = ended.single { it.first == url }.second
+
+    // Coil runs a poster unconfined under Compose's test interceptor; its result returns to the main thread, as in the app.
+    private class MainHandover(
+        private val standIn: Interceptor?,
+    ) : Interceptor {
+        override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
+            val result = standIn?.intercept(chain) ?: chain.proceed()
+            if (currentCoroutineContext()[ContinuationInterceptor] != Dispatchers.Unconfined) return result
+            return withContext(Dispatchers.Main.immediate) { result }
+        }
+    }
 
     companion object {
         const val CLIENT_ID = "the-client-id-5d2b"
