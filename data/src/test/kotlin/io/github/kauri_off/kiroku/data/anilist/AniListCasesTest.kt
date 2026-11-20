@@ -62,6 +62,6 @@ class AniListCasesTest {
     fun `every case with MAL's page is read here`() {
         val names = cases.map { it.aniList }.toSet()
 
-        assertEquals(AniListRequests.filter { it.withMalPages && it.ids.size == 1 }.map { it.name }.toSet(), names)
+        assertEquals(AniListRequests.filter { it.withMalPages && it.ids.size == 1 && !it.recheck }.map { it.name }.toSet(), names)
     }
 }

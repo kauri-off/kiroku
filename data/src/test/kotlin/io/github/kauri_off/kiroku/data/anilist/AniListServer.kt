@@ -31,19 +31,22 @@ import java.nio.file.Files
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
-// What one request asks: its MAL ids, its page of titles and its page of each title's episodes.
+// What one request asks: its MAL ids, its page of titles and its page of each title's episodes, and whether it is N3's re-check.
 internal data class Asked(
     val ids: List<Int>,
     val page: Int,
     val schedulePage: Int,
+    val recheck: Boolean = false,
 ) {
     companion object {
         fun of(request: RecordedRequest): Asked {
-            val variables = Json.parseToJsonElement(request.body!!.utf8()).jsonObject["variables"]!!.jsonObject
+            val body = Json.parseToJsonElement(request.body!!.utf8()).jsonObject
+            val variables = body["variables"]!!.jsonObject
             return Asked(
                 variables["ids"]!!.jsonArray.map { it.jsonPrimitive.int },
                 variables["page"]!!.jsonPrimitive.int,
                 variables["schedulePage"]!!.jsonPrimitive.int,
+                body["query"]!!.jsonPrimitive.content == AniListSchedule.RECHECK,
             )
         }
     }
@@ -53,6 +56,9 @@ internal data class Asked(
 internal object AniListRecordings {
     // The day of the recording, at noon in UTC: the moment the cases are read at.
     val RecordedAt: Instant = Instant.parse("2026-11-16T12:00:00Z")
+
+    // The re-check's answers came after the latest episode they leave out had aired: the moment they are read at.
+    val RecheckedAt: Instant = Instant.parse("2026-11-20T19:00:00Z")
 
     private val directory = File(checkNotNull(javaClass.getResource("/anilist/recorded")).toURI())
 
@@ -77,11 +83,11 @@ internal object AniListRecordings {
                 var number = 1
                 while (true) {
                     val file = if (number == 1) ask.name else "${ask.name}_$number"
-                    put(Asked(ask.ids.sorted(), page, schedulePage), file)
+                    put(Asked(ask.ids.sorted(), page, schedulePage, ask.recheck), file)
                     val answer = json(file)
                     when {
                         answer.more("Page") -> page++
-                        ask.ids.size == 1 && answer.more("airingSchedule") -> schedulePage++
+                        !ask.recheck && ask.ids.size == 1 && answer.more("airingSchedule") -> schedulePage++
                         else -> break
                     }
                     number++

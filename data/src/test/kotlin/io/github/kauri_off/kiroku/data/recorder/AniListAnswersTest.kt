@@ -35,9 +35,11 @@ class AniListAnswersTest {
 
     @Test
     fun `no file holds a field the requests do not ask for, nor an address`() {
-        val asked = answerTo(AniListSchedule.QUERY)
-
         for (file in answers) {
+            val asked =
+                answerTo(
+                    if (AniListRequests.single { it.name == pageOf(file.name) }.recheck) AniListSchedule.RECHECK else AniListSchedule.QUERY,
+                )
             assertEquals(file.name, emptyList<String>(), asked.unasked(Json.parseToJsonElement(file.readText())))
         }
         for (file in files) {
@@ -87,6 +89,15 @@ class AniListAnswersTest {
         assertEquals(
             listOf("/data/Page/media/coverImage", "/data/Page/media/status", "/data/Page/media/airingSchedule", "/errors"),
             asked.unasked(planted),
+        )
+        val coming = """{"data":{"Page":{"media":[{"idMal":1,"coming":{"nodes":[{"episode":1}]},"airingSchedule":{"coming":{}}}]}}}"""
+        assertEquals(
+            listOf("/data/Page/media/coming", "/data/Page/media/airingSchedule/coming"),
+            asked.unasked(Json.parseToJsonElement(coming)),
+        )
+        assertEquals(
+            listOf("/data/Page/media/airingSchedule/coming"),
+            answerTo(AniListSchedule.RECHECK).unasked(Json.parseToJsonElement(coming)),
         )
     }
 }

@@ -19,6 +19,9 @@ internal data class AniListEntry(
     val status: String?,
     val episodes: List<ScheduledEpisode>,
     val moreEpisodes: Boolean,
+    // The re-check's episodes AniList has not seen air yet, with whether more follow; null when not asked.
+    val coming: List<ScheduledEpisode>? = null,
+    val moreComing: Boolean = false,
 )
 
 // One page of titles: each entry read on its own, the MAL ids of entries that could not be read, and whether more follow.
@@ -75,13 +78,17 @@ private fun JsonElement.entry(): AniListEntry? {
         malId = media.idMal,
         total = media.episodes?.takeIf { it > 0 },
         status = media.status,
-        episodes =
-            media.airingSchedule.nodes
-                .filter { it.episode > 0 }
-                .map { ScheduledEpisode(it.episode, Instant.ofEpochSecond(it.airingAt.takeIf { at -> at in Readable } ?: return null)) },
+        episodes = media.airingSchedule.episodes() ?: return null,
         moreEpisodes = media.airingSchedule.pageInfo.hasNextPage,
+        coming = media.coming?.let { it.episodes() ?: return null },
+        moreComing = media.coming?.pageInfo?.hasNextPage == true,
     )
 }
+
+private fun Schedule.episodes(): List<ScheduledEpisode>? =
+    nodes
+        .filter { it.episode > 0 }
+        .map { ScheduledEpisode(it.episode, Instant.ofEpochSecond(it.airingAt.takeIf { at -> at in Readable } ?: return null)) }
 
 private fun <T> JsonElement.decodedOrNull(serializer: KSerializer<T>): T? =
     try {
@@ -124,6 +131,7 @@ private class Media(
     val episodes: Int? = null,
     val status: String? = null,
     val airingSchedule: Schedule,
+    @SerialName(AniListSchedule.COMING) val coming: Schedule? = null,
 )
 
 @Serializable

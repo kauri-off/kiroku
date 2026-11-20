@@ -37,7 +37,7 @@ class SandboxAnswer(
 
 enum class SandboxAniListFault { None, Fails, NoAnswer }
 
-// AniList on the device: the shared query answered from [airing] as AniList answers it, its paging and its limit included.
+// AniList on the device: the shared query and the re-check's answered from [airing] as AniList answers them, paging and limit included.
 class SandboxAniList(
     private val airing: () -> SandboxAiring,
     private val clock: Clock,
@@ -89,7 +89,7 @@ class SandboxAniList(
                 putJsonObject("data") {
                     putJsonObject("Page") {
                         putJsonObject("pageInfo") { put("hasNextPage", variables.page * AniListSchedule.TITLES_PER_PAGE < all.size) }
-                        put("media", JsonArray(titles.map { media(it, variables.schedulePage) }))
+                        put("media", JsonArray(titles.map { media(it, variables.schedulePage, variables.recheck) }))
                     }
                 }
             }
@@ -99,28 +99,38 @@ class SandboxAniList(
     private fun media(
         entry: AniListEntry,
         page: Int,
+        recheck: Boolean,
     ): JsonObject {
-        val nodes = entry.schedule.drop((page - 1) * AniListSchedule.EPISODES_PER_PAGE).take(AniListSchedule.EPISODES_PER_PAGE)
+        val now = clock.instant().epochSecond
         return buildJsonObject {
             put("idMal", entry.idMal)
             put("episodes", entry.episodes?.let(::JsonPrimitive) ?: JsonNull)
             put("status", entry.status)
-            putJsonObject("airingSchedule") {
-                putJsonObject("pageInfo") { put("hasNextPage", page * AniListSchedule.EPISODES_PER_PAGE < entry.schedule.size) }
-                put(
-                    "nodes",
-                    buildJsonArray {
-                        for (node in nodes) {
-                            add(
-                                buildJsonObject {
-                                    put("episode", node.episode)
-                                    put("airingAt", node.at.epochSecond)
-                                },
-                            )
-                        }
-                    },
-                )
-            }
+            put("airingSchedule", schedule(entry.schedule, page))
+            if (recheck) put(AniListSchedule.COMING, schedule(entry.schedule.filter { it.at.epochSecond > now }, 1))
+        }
+    }
+
+    private fun schedule(
+        schedule: List<Aired>,
+        page: Int,
+    ): JsonObject {
+        val nodes = schedule.drop((page - 1) * AniListSchedule.EPISODES_PER_PAGE).take(AniListSchedule.EPISODES_PER_PAGE)
+        return buildJsonObject {
+            putJsonObject("pageInfo") { put("hasNextPage", page * AniListSchedule.EPISODES_PER_PAGE < schedule.size) }
+            put(
+                "nodes",
+                buildJsonArray {
+                    for (node in nodes) {
+                        add(
+                            buildJsonObject {
+                                put("episode", node.episode)
+                                put("airingAt", node.at.epochSecond)
+                            },
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -128,9 +138,10 @@ class SandboxAniList(
         val ids: List<Long>,
         val page: Int,
         val schedulePage: Int,
+        val recheck: Boolean,
     )
 
-    // The shared query's variables; null for another query or a body that cannot be read.
+    // The variables of the shared query or the re-check's; null for another query or a body that cannot be read.
     private fun variables(request: Request): Variables? {
         if (request.method != "POST") return null
         val body =
@@ -139,12 +150,13 @@ class SandboxAniList(
                     Buffer().also { request.body?.writeTo(it) }.readUtf8(),
                 )
             }.getOrNull() as? JsonObject
-        if ((body?.get("query") as? JsonPrimitive)?.contentOrNull != AniListSchedule.QUERY) return null
+        val query = (body?.get("query") as? JsonPrimitive)?.contentOrNull
+        if (body == null || (query != AniListSchedule.QUERY && query != AniListSchedule.RECHECK)) return null
         val variables = body["variables"] as? JsonObject ?: return null
         val ids = (variables["ids"] as? JsonArray)?.map { (it as? JsonPrimitive)?.longOrNull ?: return null } ?: return null
 
         fun page(name: String) = ((variables[name] as? JsonPrimitive)?.intOrNull ?: 1).coerceAtLeast(1)
-        return Variables(ids, page("page"), page("schedulePage"))
+        return Variables(ids, page("page"), page("schedulePage"), query == AniListSchedule.RECHECK)
     }
 
     // AniList's limit a minute: a request over it is refused until the oldest of the minute is a minute old.

@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.RecheckedAt
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.RecordedAt
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.idsOf
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.json
@@ -42,8 +43,12 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 // The client against a local AniList that answers M3-01's recordings: what the port obliges, the paging, the pace.
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -154,6 +159,74 @@ class AniListAiringTest {
             assertTrue(schedule.schedule.episodes.containsAll(recorded.filter { it.airsAt >= since }))
             assertTrue(latestAired in schedule.schedule.episodes)
             assertTrue(latestAired.airsAt < since)
+        }
+
+    // The episodes still to air that the re-check's recording of [id] holds, in order.
+    private fun recordedComing(
+        case: String,
+        id: Int,
+    ): List<ScheduledEpisode> = recordedEntry(case, id).coming!!
+
+    @Test
+    fun `N3 a re-check is one request however long the schedule, a long one answered from now on and a short one whole`() =
+        runTest {
+            network.clock.now = RecheckedAt
+
+            val long = aniList.client(this).fetchComing(listOf(titleWithId(235)), since).of(235)
+            assertEquals(1, aniList.requests.size)
+            val short = aniList.client(this).fetchComing(listOf(titleWithId(61987)), since).of(61987)
+            assertEquals(2, aniList.requests.size)
+
+            val coming = recordedComing("recheck_hundreds_of_episodes", 235)
+            assertEquals(listOf(1221, 1222), coming.map { it.number })
+            assertEquals(Outcome.Success(FetchedAiring(AiringSchedule(coming, null), RecheckedAt + ClockMargin.toJavaDuration())), long)
+            assertEquals(
+                Outcome.Success(FetchedAiring(AiringSchedule(recordedEntry("recheck_weekly", 61987).episodes, 12))),
+                short,
+            )
+            assertEquals(listOf(true, true), aniList.asked().map { it.recheck })
+            assertEquals(emptyList<Asked>(), aniList.unrecorded)
+        }
+
+    @Test
+    fun `A9 a re-check's answer is whole from a minute past the later of the device's clock and the one AniList answered by`() =
+        runTest {
+            network.clock.now = RecheckedAt
+            for (aniListAhead in listOf(5L, -5L)) {
+                val aniListNow = RecheckedAt.plus(Duration.ofMinutes(aniListAhead))
+                aniList.answer = {
+                    val date = DateTimeFormatter.RFC_1123_DATE_TIME.format(aniListNow.atOffset(ZoneOffset.UTC))
+                    reply(200, AniListRecordings.body("recheck_hundreds_of_episodes"), headers = mapOf("Date" to date))
+                }
+                advanceTimeBy(1.minutes)
+
+                val answer = aniList.client(this).fetchComing(listOf(titleWithId(235)), since).of(235)
+
+                val from = maxOf(aniListNow, RecheckedAt) + ClockMargin.toJavaDuration()
+                assertEquals("AniList ahead by $aniListAhead minutes", from, (answer as Outcome.Success).value!!.completeFrom)
+            }
+        }
+
+    @Test
+    fun `N3 a long title the re-check's one request cannot settle is asked whole, of two entries or with more to air than a page`() =
+        runTest {
+            val recheck = json("recheck_hundreds_of_episodes")
+            val media = mediaOf(recheck).single().jsonObject
+            val moreComing = media.edited(listOf(AniListSchedule.COMING, "pageInfo", "hasNextPage"), JsonPrimitive(true))
+            for (answered in listOf(listOf(media, media), listOf(moreComing))) {
+                aniList.requests.clear()
+                aniList.answer = { asked ->
+                    if (asked.recheck) reply(200, recheck.edited(MEDIA, JsonArray(answered)).toString()) else aniList.recorded(asked)
+                }
+                advanceTimeBy(1.minutes)
+
+                val answer = aniList.client(this).fetchComing(listOf(titleWithId(235)), since).of(235)
+
+                assertEquals(whole("hundreds_of_episodes", 235, null), answer)
+                assertEquals(1 + pagesOf("hundreds_of_episodes").size, aniList.requests.size)
+                assertEquals(listOf(true) + List(pagesOf("hundreds_of_episodes").size) { false }, aniList.asked().map { it.recheck })
+            }
+            assertEquals(emptyList<Asked>(), aniList.unrecorded)
         }
 
     @Test

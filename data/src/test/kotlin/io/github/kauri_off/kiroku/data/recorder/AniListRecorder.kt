@@ -44,6 +44,7 @@ internal class AniListRecorder(
     private val pause: () -> Unit,
 ) {
     private val asked = answerTo(AniListSchedule.QUERY)
+    private val rechecked = answerTo(AniListSchedule.RECHECK)
     private val limits = sortedSetOf<String>()
 
     var sent = 0
@@ -69,10 +70,10 @@ internal class AniListRecorder(
         var schedulePage = 1
         for (number in 1..ANILIST_MOST_PAGES) {
             val file = if (number == 1) ask.name else "${ask.name}_$number"
-            val answer = store(file, AniListSchedule.body(ask.ids, page, schedulePage))
+            val answer = store(file, AniListSchedule.body(ask.ids, page, schedulePage, ask.recheck), if (ask.recheck) rechecked else asked)
             when {
                 answer.more("Page") -> page++
-                ask.ids.size == 1 && answer.more("airingSchedule") -> schedulePage++
+                !ask.recheck && ask.ids.size == 1 && answer.more("airingSchedule") -> schedulePage++
                 else -> return
             }
         }
@@ -82,6 +83,7 @@ internal class AniListRecorder(
     private fun store(
         file: String,
         body: String,
+        selection: Selection,
     ): JsonElement {
         val request =
             Request
@@ -107,7 +109,7 @@ internal class AniListRecorder(
             } catch (_: SerializationException) {
                 throw RecorderStop("$file: the answer is not JSON, stopped")
             }
-        val unasked = asked.unasked(json)
+        val unasked = selection.unasked(json)
         if (unasked.isNotEmpty()) throw RecorderStop("$file: the answer holds what was not asked (${unasked.distinct()}), stopped")
         File(staging, "$file.$status.json").writeText(Pretty.encodeToString(JsonElement.serializer(), json) + "\n")
         say("$file: $status, ${text.length} characters")

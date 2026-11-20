@@ -215,8 +215,11 @@ the background.
   through has ordinary progress.
 - **A9. A refresh loses nothing still needed.** After a refresh, an episode that aired on time still has its air
   time for as long as a notification or the "Up next" order can need it; an episode AniList moved has its new
-  time; one AniList removed is gone, even when its old time is in the past. A small difference between the
-  device's clock and AniList's never makes an episode fall between "future" and "aired".
+  time; one AniList removed is gone, even when its old time is in the past. N3's re-check of a title whose schedule
+  fills more than one page asks only for the coming episodes, so until the next whole refresh an episode AniList
+  removed or moved to a time already past keeps its stored time if that has passed, and is otherwise dropped. A
+  small difference between the device's clock and AniList's never makes an episode fall between "future" and
+  "aired".
 - **A10. A failed refresh changes nothing.** When any part of a title's data could not be fetched, that title's
   stored data stays exactly as it was.
 - **A11. A newly tracked title does not wait.** A title that enters the tracked set (added, or moved back from
@@ -262,7 +265,8 @@ dropped, completed and unlisted titles, on wrong days, and none for long-running
   gets to run: the alarm, a device restart, an app update, the app being opened, or periodic background work that
   needs no network. A notification that would come more than three days late is not shown.
 - **N3. Re-checked.** When the alarm fires and a network is available, the air time is checked again within a few
-  seconds: a postponed episode is rescheduled instead of announced. When the check fails or takes too long, the
+  seconds: a postponed episode is rescheduled instead of announced (on a schedule of more than one page, only when
+  AniList gives it a new time; A9). When the check fails or takes too long, the
   stored data is used. An answer that comes after that and postpones the episode takes its notification back; if
   the airing source then puts the episode back at its first time, it is not announced again.
 - **N4. Never for anything else.** No notification for a title that is dropped, completed, on hold, removed or not

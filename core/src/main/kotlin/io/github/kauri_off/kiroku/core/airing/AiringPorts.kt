@@ -22,12 +22,18 @@ interface AiringSource {
         pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since)
+
+    // N3: the same at once, however long a schedule: a title may be answered from a later instant on, without the latest aired.
+    suspend fun fetchComing(
+        titles: Collection<Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since)
 }
 
 // A title the source knows, with no episode time too; null stands only for a title it has no record of.
 data class FetchedAiring(
     val schedule: AiringSchedule,
-    // Null: nothing is left out. Else only episodes before it are, never the latest aired, and it is no later than asked.
+    // Null: nothing is left out. Else only episodes before it are; but for fetchComing, never the latest aired, and no later than asked.
     val completeFrom: Instant? = null,
 )
 

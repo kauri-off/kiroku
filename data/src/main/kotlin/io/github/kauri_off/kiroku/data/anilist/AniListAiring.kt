@@ -24,6 +24,7 @@ import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeSource
+import kotlin.time.toJavaDuration
 
 // AniList's episode times of titles by MAL id (section 2.2), asked over the one HTTP client with the MAL ids alone.
 class AniListAiring(
@@ -52,14 +53,32 @@ class AniListAiring(
         since: Instant,
         pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct(), pulled, whole).run() }
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct(), pulled, false, whole).run() }
+
+    // N3: one request however long a schedule: a title with later pages of episodes is answered with those still to air alone.
+    override suspend fun fetchComing(
+        titles: Collection<Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> =
+        turns.withLock {
+            val recheck = Fetch(titles.map { it.id }.distinct(), emptySet(), true) {}
+            val results = recheck.run()
+            if (recheck.askedWhole.isEmpty()) results else results + Fetch(recheck.askedWhole, emptySet(), false) {}.run()
+        }
 
     private inner class Fetch(
         ids: List<AnimeId>,
         pulled: Set<AnimeId>,
+        private val recheck: Boolean,
         private val whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ) {
         private val results = mutableMapOf<AnimeId, Outcome<FetchedAiring?>>()
+
+        // Of a re-check, the titles its one request could not settle: several entries, or more episodes to air than a page holds.
+        val askedWhole = mutableListOf<AnimeId>()
+
+        // The later of the device's clock and AniList's at the last answer.
+        private var answeredAt: Instant? = null
         private val handed = mutableSetOf<AnimeId>()
         private val asked = mutableMapOf<Int, AnimeId>()
 
@@ -87,6 +106,7 @@ class AniListAiring(
             handOver()
             fetched()
             for ((malId, id) in asked) {
+                if (id in askedWhole) continue
                 val result = results.getValue(id)
                 val error = (result as? Outcome.Failure)?.error
                 if (error == null || error == DataError.NoConnection || error == DataError.Refused) {
@@ -103,6 +123,7 @@ class AniListAiring(
                 firstPages(it, last = true)
                 handOver()
             }
+            if (recheck) return coming()
             for (schedulePage in 2..Int.MAX_VALUE) {
                 val more = gathered.filterValues { entries -> entries.any { it.moreEpisodes } }.keys.toList()
                 if (more.isEmpty()) break
@@ -112,6 +133,25 @@ class AniListAiring(
                 }
                 laterPages(more, schedulePage)
                 handOver()
+            }
+            handOver()
+        }
+
+        // A9: AniList leaves out what has aired by its own clock, so what is still to air is whole only from past either clock.
+        private suspend fun coming() {
+            val from = (answeredAt ?: clock.instant()) + ClockMargin.toJavaDuration()
+            for ((malId, entries) in gathered.toList()) {
+                val id = asked.getValue(malId)
+                if (id in results || entries.none { it.moreEpisodes }) continue
+                gathered.remove(malId)
+                val entry = entries.singleOrNull()?.takeIf { !it.moreComing }
+                val coming = entry?.coming
+                if (coming == null) {
+                    askedWhole += id
+                    continue
+                }
+                val episodes = coming.sortedWith(compareBy({ it.number }, { it.airsAt }))
+                results[id] = Outcome.Success(FetchedAiring(AiringSchedule(episodes, entry.total), from))
             }
             handOver()
         }
@@ -218,7 +258,7 @@ class AniListAiring(
         ): Read {
             stopped?.let { return Read.Failed(it) }
             if (!pace.turn()) return stop(DataError.Refused)
-            val body = AniListSchedule.body(ids, page, schedulePage).toRequestBody(JsonType)
+            val body = AniListSchedule.body(ids, page, schedulePage, recheck).toRequestBody(JsonType)
             val sent =
                 http.send(
                     Request
@@ -243,6 +283,7 @@ class AniListAiring(
                 return Read.Failed(if (sent.status in 400..499 && sent.status != 408) DataError.InvalidRequest else DataError.ServerError)
             }
             pace.answered(sent.headers[LIMIT]?.trim()?.toIntOrNull())
+            answeredAt = listOfNotNull(answeredAt, clock.instant(), sent.headers.getInstant("Date")).max()
             return Read.Page(read)
         }
 
@@ -288,6 +329,9 @@ class AniListAiring(
         const val MOST_EXTRA_PAGES = 4
     }
 }
+
+// Past the later clock at AniList's answer, by more than the answer's time is rounded to and the time it takes.
+internal val ClockMargin: Duration = 1.minutes
 
 // How long a title whose fetch failed is answered with that failure without a request; offline, refused and pulled excepted.
 internal val FailureCoolDown: Duration = 15.minutes

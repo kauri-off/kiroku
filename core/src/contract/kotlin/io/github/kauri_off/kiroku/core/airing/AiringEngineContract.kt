@@ -380,9 +380,12 @@ abstract class AiringEngineContract {
                     .at(15, early)
                     .moved(16, 1.days)
             s.source.partial = true
+            s.clock.advance(1.minutes)
 
             assertEquals(Outcome.Success(Unit), s.engine.refresh())
 
+            // Complete from no later than asked: a whole answer, as fresh as any.
+            assertEquals(s.clock.now, s.stored(anime)?.fetchedAt)
             val after = s.schedule(anime)
             assertEquals((1..12).map { before.episode(it) }, (1..12).map { after.episode(it) })
             assertEquals(ScheduledEpisode(13, late), after.episode(13))
@@ -586,6 +589,90 @@ abstract class AiringEngineContract {
             runCurrent()
             assertEquals(listOf(setOf(added.id), setOf(back.id)), s.source.calls.toList())
             assertEquals(StoredAiring(schedule, s.clock.now), s.stored(back))
+        }
+
+    @Test
+    fun `N3 a re-check answered from now on goes over what is stored, which keeps what aired before and its age`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            val stored = s.schedule(due)
+            val latest = stored.episodes.last { it.airsAt <= s.clock.now }
+            val next = stored.episodes.first { it.airsAt > s.clock.now }
+            val first = stored.episodes.first()
+            s.clock.advance(1.minutes)
+            // The latest aired is postponed a week, the next is no longer scheduled, and the source forgot the first.
+            s.source.schedules += due.id to stored.moved(latest.number, 7.days).without(next.number, first.number)
+            s.source.onlyComing = true
+
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(setOf(due.id)))
+
+            assertEquals(listOf(setOf(due.id)), s.source.rechecks.toList())
+            assertEquals(StoredAiring(stored.moved(latest.number, 7.days).without(next.number), fixtures.now), s.stored(due))
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
+    @Test
+    fun `N3 a re-check answered from now on is stored over no schedule, which stays as it was`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            s.store.write(mapOf(due.id to StoredAiring(null, fixtures.now)))
+            s.clock.advance(1.minutes)
+            s.source.onlyComing = true
+
+            assertEquals(Outcome.Failure(DataError.ServerError), s.engine.refresh(setOf(due.id)))
+
+            assertEquals(StoredAiring(null, fixtures.now), s.stored(due))
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
+    @Test
+    fun `N3 a re-check shares a whole answer on its way, and a refresh asked while a re-check is on its way is answered whole`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            s.source.onlyComing = true
+            s.source.latency = 1.seconds
+            s.clock.advance(1.minutes)
+
+            val recheck = async { s.engine.refresh(setOf(due.id)) }
+            runCurrent()
+            val whole = async { s.engine.refresh() }
+            assertEquals(Outcome.Success(Unit), recheck.await())
+            assertEquals(Outcome.Success(Unit), whole.await())
+
+            assertEquals(listOf(setOf(due.id), tracked), s.source.calls.toList())
+            assertEquals(StoredAiring(fixtures.schedules.getValue(due.id), s.clock.now), s.stored(due))
+
+            val refresh = async { s.engine.refresh() }
+            runCurrent()
+            val shared = async { s.engine.refresh(setOf(due.id)) }
+            assertEquals(Outcome.Success(Unit), refresh.await())
+            assertEquals(Outcome.Success(Unit), shared.await())
+
+            assertEquals(listOf(setOf(due.id)), s.source.rechecks.toList())
+            assertEquals(3, s.source.calls.size)
+        }
+
+    @Test
+    fun `N3 a re-check waiting with a refresh behind a running call goes first, and is not answered by the refresh it waits with`() =
+        runTest {
+            val running = FixtureAnime.exactCaughtUp
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            s.source.latency = 1.seconds
+            s.clock.advance(1.days)
+
+            val first = async { s.engine.refreshStale(running) }
+            runCurrent()
+            val stale = async { s.engine.refreshStale() }
+            runCurrent()
+            val recheck = async { s.engine.refresh(setOf(due.id)) }
+            for (asked in listOf(first, stale, recheck)) assertEquals(Outcome.Success(Unit), asked.await())
+
+            assertEquals(listOf(setOf(running.id), setOf(due.id), tracked - running.id), s.source.calls.toList())
+            assertEquals(listOf(setOf(due.id)), s.source.rechecks.toList())
         }
 
     @Test
@@ -885,7 +972,7 @@ abstract class AiringEngineContract {
             s.source.latency = 1.seconds
             s.clock.advance(1.days)
 
-            val running = async { s.engine.refresh(setOf(first)) }
+            val running = async { s.engine.refreshStale(FixtureAnime.exactToWatch) }
             runCurrent()
             val stale = async { s.engine.refreshStale() }
             runCurrent()
@@ -910,6 +997,8 @@ abstract class AiringEngineContract {
 
             val held = CompletableDeferred<Unit>().also { s.store.writesHeld = it }
             val all = process.async { s.engine.refreshStale() }
+            // A re-check asked once the call is on its way shares it.
+            runCurrent()
             val named = process.async { s.engine.refresh(setOf(first.id)) }
             runCurrent()
 
@@ -918,6 +1007,7 @@ abstract class AiringEngineContract {
             s.store.writesHeld = null
             runCurrent()
             assertEquals(listOf(tracked), s.source.calls.toList())
+            assertEquals(emptyList<Set<AnimeId>>(), s.source.rechecks.toList())
             assertTrue("the named title waits for the whole call", named.isCompleted)
             assertEquals(Outcome.Success(Unit), named.await())
             assertFalse(all.isCompleted)
