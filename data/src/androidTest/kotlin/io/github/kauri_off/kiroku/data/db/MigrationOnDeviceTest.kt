@@ -160,7 +160,7 @@ class MigrationOnDeviceTest {
 
         raw(file) { migrated ->
             assertEquals(KirokuDatabase.VERSION, migrated.version)
-            for ((table, rows) in before) assertEquals(table, rows, migrated.rows(table))
+            for ((table, rows) in before) assertEquals(table, rows, migrated.rows(table).map { it.take(rows.firstOrNull()?.size ?: 0) })
         }
         Log.i(TAG, "Every row of ${before.size} tables kept: ${before.mapValues { it.value.size }}")
     }
@@ -197,7 +197,7 @@ class MigrationOnDeviceTest {
 
         raw(file) { migrated ->
             assertEquals(KirokuDatabase.VERSION, migrated.version)
-            for ((table, rows) in before) assertEquals(table, rows, migrated.rows(table))
+            for ((table, rows) in before) assertEquals(table, rows, migrated.rows(table).map { it.take(rows.firstOrNull()?.size ?: 0) })
         }
     }
 

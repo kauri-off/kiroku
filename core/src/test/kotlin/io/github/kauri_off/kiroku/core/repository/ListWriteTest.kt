@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.core.repository
 
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.list.sent
 import io.github.kauri_off.kiroku.core.model.EntryStatus
@@ -181,6 +182,25 @@ class ListWriteTest {
         assertEquals(watching(4), undo(removed, null))
         assertEquals(watching(1), undo(removed, watching(1)))
         assertNull(undo(completing, null))
+    }
+
+    // MAL's to set: every write takes it from the entry as it is when applied.
+    @Test
+    fun `every write keeps the entry's rewatch count as it is when applied`() {
+        val rewatched = entry(watching(9).copy(timesRewatched = 3))
+        val writes =
+            listOf(
+                ListWrite.Save(anime, watching(4)),
+                ListWrite.Save(anime, watching(4), setOf(ListField.Score)),
+                ListWrite.MarkWatched(anime, 10),
+                ListWrite.MarkNextWatched(anime),
+                ListWrite.SetWatched(anime, 12),
+                ListWrite.StepWatched(anime, -1),
+                ListChange(entry(watching(8)), entry(watching(9)), stepped = true, list).undo!!,
+                ListChange(entry(watching(8).copy(score = 5)), entry(watching(9)), stepped = false, list).undo!!,
+                WriteFailure(DataError.ServerError, ListWrite.Save(anime, watching(4)), list).retry,
+            )
+        for (write in writes) assertEquals("$write", 3, write.applyTo(rewatched, today)?.timesRewatched)
     }
 
     @Test

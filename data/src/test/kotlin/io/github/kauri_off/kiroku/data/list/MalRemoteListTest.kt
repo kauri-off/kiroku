@@ -125,7 +125,7 @@ class MalRemoteListTest {
 
     @Test
     fun `a change is one PATCH of the title's list status as the user, and answers with the entry as MAL has it then`() {
-        val entry = runBlocking { client.put(anime, values.sent) }
+        val entry = runBlocking { client.put(anime, values.copy(timesRewatched = 2).sent) }
 
         assertEquals(Outcome.Success(ListEntry(anime, values, OffsetDateTime.parse(CHANGED_AT).toInstant())), entry)
         val request = requests.single()

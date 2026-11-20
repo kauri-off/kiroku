@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.ListRecord
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.StoredTitle
 import io.github.kauri_off.kiroku.core.list.record
@@ -432,8 +433,65 @@ class KirokuDatabaseTest {
 
             assertEquals(emptyList<Throwable>(), unexpected)
             val after = rowsOf(written)
-            for ((table, rows) in before) assertEquals(table, rows, after.getValue(table))
+            for ((table, rows) in before) assertEquals(table, rows, after.getValue(table).map { it.take(rows.first().size) })
         }
+
+    // The app's version 5 wrote it: version 1's list opened by version 5, with airing data, a profile and announced episodes.
+    @Test
+    fun `a version 5 database the app wrote keeps every row, counts no rewatch until MAL gives one and keeps a count stored`() {
+        val written = context.getDatabasePath("opened-5.db")
+        checkNotNull(javaClass.getResourceAsStream("/databases/kiroku-5.db")).use { input ->
+            written.outputStream().use { input.copyTo(it) }
+        }
+        val before = rowsOf(written)
+        val id = FixtureAnime.exactToWatch.id
+
+        val stored = listIn(written.name) { it.readAll() }
+
+        assertEquals(before.getValue(ListEntryRow.TABLE).size, stored.size)
+        val records = stored.values.flatMap { listOfNotNull(it.shown, it.confirmed) }
+        assertEquals(setOf(0), records.map { it.values.timesRewatched }.toSet())
+        val after = rowsOf(written)
+        for ((table, rows) in before) assertEquals(table, rows, after.getValue(table).map { it.take(rows.firstOrNull()?.size ?: 0) })
+        val entries = AndroidSQLiteDriver().open(written.path).use { it.named(ListEntryRow.TABLE) }
+        for (record in listOf("shown", "confirmed")) {
+            assertEquals(
+                record,
+                entries.map { if (it["${record}_status"] == null) null else 0L },
+                entries.map { it["${record}_times_rewatched"] },
+            )
+        }
+
+        val edited = stored.getValue(id)
+        val rewatched = StoredEntry(edited.shown?.rewatched(2), edited.confirmed?.rewatched(1), unconfirmed = true)
+        val read =
+            listIn(written.name) {
+                it.write(mapOf(id to rewatched))
+                it.readAll().getValue(id) to
+                    it
+                        .observeEntry(id)
+                        .first()
+                        ?.values
+                        ?.timesRewatched
+            }
+        assertEquals(rewatched to 2, read)
+    }
+
+    private fun ListRecord.rewatched(times: Int) = copy(values = values.copy(timesRewatched = times))
+
+    private fun <T> listIn(
+        name: String,
+        block: suspend (RoomLocalList) -> T,
+    ): T {
+        val database = KirokuDatabase.open(context, name)
+        val scope = CoroutineScope(Dispatchers.IO)
+        return try {
+            runBlocking { block(RoomLocalList(database, scope, Dispatchers.IO) { throw it }) }
+        } finally {
+            scope.cancel()
+            database.close()
+        }
+    }
 
     @Test
     fun `a version 2 database keeps its airing data through the migrations, with no schedule in doubt`() {
@@ -543,6 +601,7 @@ class KirokuDatabaseTest {
                 3 to "bf46dac8cbf593d04a1acac52b0f3c99",
                 4 to "7e5f8a37c34960ccc7f6550ea8aae3f2",
                 5 to "2ec16b4ab274d6bfa0ed4f5d94531644",
+                6 to "0225027f282ee667b6e073930642ad78",
             )
     }
 }

@@ -110,6 +110,45 @@ class MalListPageTest {
         assertEquals(40, firstWith("num_episodes_watched", JsonPrimitive(40)).values.watchedEpisodes)
     }
 
+    // The first entry's list status with a rewatch count added, which no recorded page was asked for.
+    private fun rewatched(
+        value: JsonElement,
+        repairs: Repairs = Repairs(),
+    ): ListEntry {
+        val values =
+            page
+                .getValue("data")
+                .jsonArray[0]
+                .jsonObject
+                .getValue("list_status")
+                .jsonObject
+        val added = JsonObject(values + ("num_times_rewatched" to value))
+        return page
+            .edited(listOf("data", "0", "list_status"), added)
+            .toListPage(repairs)
+            .entries
+            .first()
+    }
+
+    // The shape is the API reference's: an integer in every entry's list status.
+    @Test
+    fun `a rewatch count is MAL's, one missing or MAL's empty value is none, and an unreadable one is none and noted`() {
+        assertEquals(0, first.values.timesRewatched)
+        assertEquals(first.values.copy(timesRewatched = 3), rewatched(JsonPrimitive(3)).values)
+        assertEquals(2, rewatched(JsonPrimitive("2")).values.timesRewatched)
+        for (value in listOf(JsonNull, JsonPrimitive(""))) {
+            val repairs = Repairs()
+            assertEquals("$value", 0, rewatched(value, repairs).values.timesRewatched)
+            assertEquals("$value", emptySet<String>(), repairs.fields)
+        }
+        val unreadable = listOf(JsonPrimitive("twice"), JsonPrimitive(1.5), JsonPrimitive(-1), JsonPrimitive(true), JsonArray(emptyList()))
+        for (value in unreadable) {
+            val repairs = Repairs()
+            assertEquals("$value", 0, rewatched(value, repairs).values.timesRewatched)
+            assertEquals("$value", setOf("list_status.num_times_rewatched"), repairs.fields)
+        }
+    }
+
     @Test
     fun `a date that is missing, of another type or does not parse is no date`() {
         val absent =

@@ -85,6 +85,6 @@ internal abstract class ListDao {
     private companion object {
         const val LISTED =
             "SELECT t.*, e.shown_status, e.shown_watched, e.shown_score, e.shown_start_date, e.shown_finish_date, " +
-                "e.shown_updated_at FROM list_entry e JOIN title t ON t.id = e.title_id WHERE e.shown_status IS NOT NULL"
+                "e.shown_updated_at, e.shown_times_rewatched FROM list_entry e JOIN title t ON t.id = e.title_id WHERE e.shown_status IS NOT NULL"
     }
 }

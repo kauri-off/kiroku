@@ -21,10 +21,18 @@ internal data class RecordColumns(
     @ColumnInfo(name = "start_date") val startDate: String?,
     @ColumnInfo(name = "finish_date") val finishDate: String?,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "times_rewatched") val timesRewatched: Int,
 ) {
     fun toRecord(): ListRecord =
         ListRecord(
-            ListValues(listStatuses.of(status), watched, score, startDate?.let(::partialDateOf), finishDate?.let(::partialDateOf)),
+            ListValues(
+                listStatuses.of(status),
+                watched,
+                score,
+                startDate?.let(::partialDateOf),
+                finishDate?.let(::partialDateOf),
+                timesRewatched,
+            ),
             instantOf(updatedAt),
         )
 }
@@ -37,6 +45,7 @@ internal fun ListRecord.toColumns(): RecordColumns =
         startDate = values.startDate?.toColumn(),
         finishDate = values.finishDate?.toColumn(),
         updatedAt = updatedAt.toColumn(),
+        timesRewatched = values.timesRewatched,
     )
 
 // A title's entry on the user's list. A title that has one cannot be deleted.

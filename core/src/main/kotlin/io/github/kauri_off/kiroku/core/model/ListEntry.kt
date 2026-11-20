@@ -27,10 +27,13 @@ data class ListValues(
     val score: Int?,
     val startDate: PartialDate?,
     val finishDate: PartialDate?,
+    // How many times the title was watched again after completing it; MAL's to set, never a write's.
+    val timesRewatched: Int = 0,
 ) {
     init {
         require(watchedEpisodes >= 0)
         require(score == null || score in 1..10)
+        require(timesRewatched >= 0)
     }
 
     fun withWatched(
@@ -80,7 +83,7 @@ enum class ListField(
 
 fun ListValues.changedFrom(other: ListValues): Set<ListField> = ListField.entries.filterTo(mutableSetOf()) { it.of(this) != it.of(other) }
 
-// These values' [fields], and [base]'s for the rest.
+// These values' [fields], and [base]'s for the rest, its rewatch count among them.
 fun ListValues.over(
     base: ListValues,
     fields: Set<ListField>,
@@ -95,6 +98,7 @@ fun ListValues.over(
         pick(ListField.Score) { it.score },
         pick(ListField.StartDate) { it.startDate },
         pick(ListField.FinishDate) { it.finishDate },
+        base.timesRewatched,
     )
 }
 

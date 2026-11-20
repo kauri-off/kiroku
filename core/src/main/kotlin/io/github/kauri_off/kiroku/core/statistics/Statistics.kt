@@ -15,7 +15,7 @@ fun statisticsOf(entries: Collection<ListEntry>): UserStatistics {
         titleCount = entries.size,
         statuses = StatusCounts.of(entries.map { it.status }),
         daysWatched = entries.fold(Duration.ZERO) { sum, entry -> sum + entry.timeWatched }.toMillis() / DAY_MILLIS,
-        episodesWatched = entries.sumOf { it.values.watchedEpisodes },
+        episodesWatched = entries.sumOf { it.episodesWatched },
         meanScore = if (scores.isEmpty()) null else scores.sum().toDouble() / scores.size,
         scores = scores.groupingBy { it }.eachCount().toSortedMap(),
         genres = genresOf(entries),
@@ -37,9 +37,12 @@ fun statisticsOf(entries: Collection<ListEntry>): UserStatistics {
 
 private const val DAY_MILLIS = 86_400_000.0
 
+// As MAL counts them: the watched episodes, and each rewatch as all the title's episodes; none where their number is unknown.
+private val ListEntry.episodesWatched: Int get() = values.watchedEpisodes + values.timesRewatched * (anime.malEpisodes ?: 0)
+
 // The episodes the entry counts, each of the title's average length; nothing where the length is not known.
 private val ListEntry.timeWatched: Duration
-    get() = anime.averageEpisodeDuration?.multipliedBy(values.watchedEpisodes.toLong()) ?: Duration.ZERO
+    get() = anime.averageEpisodeDuration?.multipliedBy(episodesWatched.toLong()) ?: Duration.ZERO
 
 // A genre is one by its id, named as the first entry that has it names it, and counted once per title.
 private fun genresOf(entries: Collection<ListEntry>): List<Counted<Genre>> =
