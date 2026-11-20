@@ -30,7 +30,7 @@ sealed interface DetailsState {
         override val session: Session?,
     ) : DetailsState
 
-    // Facts in the order of ARCHITECTURE section 9.9; a fact MAL does not give is absent.
+    // Facts in the order SubScreenStateTest holds; a fact MAL does not give is absent.
     data class Shown(
         val facts: List<Fact>,
         override val session: Session?,

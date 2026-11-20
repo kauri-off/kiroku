@@ -261,7 +261,7 @@ internal fun ImageBitmap.differences(other: ImageBitmap): String? {
     return "${differing.size} pixels differ in x ${xs.min()}..${xs.max()}, y ${ys.min()}..${ys.max()}"
 }
 
-// ARCHITECTURE 8.5: the screen transitions, and the back gesture that shows nothing until it commits.
+// The screen transitions, and the back gesture that shows nothing until it commits.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h891dp")

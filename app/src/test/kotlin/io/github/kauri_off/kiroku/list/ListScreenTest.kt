@@ -546,7 +546,7 @@ class ListScreenTest {
     }
 }
 
-// The row a "+1" completes leaves with the list's item animation, a change inside the list (ARCHITECTURE 8.5); a
+// The row a "+1" completes leaves with the list's item animation, a change inside the list; a
 // new order or a filter replaces the rows at once; another tab's page slides in, an entrance.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -662,7 +662,7 @@ class ListMotionTest {
         )
     }
 
-    // A2's Q1: the finger aims at the row below the completed one, which has moved up; the row now there is not hit.
+    // The finger aims at the row below the completed one, which has moved up; the row now there is not hit.
     @Test
     fun `a quick tap aimed at the row below a completed row reaches no other title`() {
         val anime = FixtureAnime.oneShortOfTotal
@@ -688,7 +688,7 @@ class ListMotionTest {
         assertEquals(listOf(ListEvent.PlusOne(anime.id)), events)
     }
 
-    // A3's Q1b: the rows have stopped, but the tap aimed at the row below comes at an ordinary pace after the first.
+    // The rows have stopped, but the tap aimed at the row below comes at an ordinary pace after the first.
     @Test
     fun `a tap aimed at the row below a completed row at an ordinary pace reaches no other title`() {
         val anime = FixtureAnime.oneShortOfTotal
@@ -847,10 +847,10 @@ class ListMotionTest {
         // Between two taps of a burst.
         const val TAP_GAP_MS = 100L
 
-        // The second tap of A2's pair, measured on the emulator.
+        // The second tap of a quick pair, measured on the emulator.
         const val PAIR_MS = 300L
 
-        // A3's Q1b: the second tap of a pair at an ordinary pace, after the rows have stopped.
+        // The second tap of a pair at an ordinary pace, after the rows have stopped.
         const val ORDINARY_PACE_MS = 900L
     }
 }

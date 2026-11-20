@@ -12,7 +12,7 @@ import androidx.navigation3.scene.rememberNavigationEventState
 import androidx.navigation3.scene.rememberSceneState
 import androidx.navigation3.ui.NavDisplay
 
-// ARCHITECTURE 8.5: the back gesture feeds the handler's state only, so a commit is an ordinary pop with [transition].
+// The back gesture feeds the handler's state only, so a commit is an ordinary pop with [transition].
 @Composable
 internal fun NavDisplayWithoutPreview(
     entries: List<NavEntry<NavKey>>,

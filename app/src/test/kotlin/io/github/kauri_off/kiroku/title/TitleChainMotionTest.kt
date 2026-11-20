@@ -170,7 +170,7 @@ class TitleChainMotionTest {
         }
     }
 
-    // A refresh that shortens the synopsis changes the height above Related, and is not animated (section 8.5).
+    // A refresh that shortens the synopsis changes the height above Related, and is not animated.
     @Test
     fun `a refresh that changes a section's height moves the sections below it at once`() {
         showAndSettle(TitleFixtures.chainOfFour)

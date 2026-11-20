@@ -846,7 +846,7 @@ class ListViewModelTest {
     fun `offline the List shown asks nothing of AniList, and asks for its stale airing once the connection is back`() =
         staleAiringIsAskedAfterAFailedSync(offline = true) { it.server.offline.value = true }
 
-    // N2's bound: the pull ends as MAL's failure says, whatever AniList does with the ask that follows it.
+    // The pull ends as MAL's failure says, whatever AniList does with the ask that follows it.
     @Test
     fun `a pull that MAL fails ends and says so without waiting for the airing it asks for`() {
         val clock = MovingClock(set.now, FixtureTime.zone)

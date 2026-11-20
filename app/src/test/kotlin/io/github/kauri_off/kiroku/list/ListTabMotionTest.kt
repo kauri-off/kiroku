@@ -61,7 +61,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sign
 
-// The tab row is drawn from the pager's position: through a drag, its settle and a tap (ARCHITECTURE 8.5).
+// The tab row is drawn from the pager's position: through a drag, its settle and a tap.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "en-w411dp-h2000dp")
@@ -413,7 +413,7 @@ class ListTabMotionTest {
         assertTrue("a flick settles in $flick frames, a still release in $still", flick * FRAME <= FLICK_SETTLE_MS && still > flick + 2)
     }
 
-    // A2's T1: the stock row's own scroll to a newly selected tab never runs against the finger.
+    // The stock row's own scroll to a newly selected tab never runs against the finger.
     @Test
     fun `a drag held just past half-way leaves the row still, and on release the row moves one way only`() {
         show(ListFixtureStates.completed)
@@ -451,7 +451,7 @@ class ListTabMotionTest {
         assertIdle()
     }
 
-    // A2's T2: a tap that interrupts a settle glides the header from where it is, and it arrives with the page.
+    // A tap that interrupts a settle glides the header from where it is, and it arrives with the page.
     @Test
     fun `a tap during a settle glides the header from where it is and arrives with the page`() {
         show(ListFixtureStates.watching)
@@ -575,7 +575,7 @@ class ListTabMotionTest {
         }
     }
 
-    // B2's m5: a drag that takes over from a tap sends no tab but the tapped one and the one the drag settles on.
+    // A drag that takes over from a tap sends no tab but the tapped one and the one the drag settles on.
     private fun dragAfterTap(
         drag: Float,
         settles: ListStatus,
@@ -642,7 +642,7 @@ class ListTabMotionTest {
         }
     }
 
-    // A2's mA: a row scrolled by hand goes back to the pager's scroll over the page's own move, not in one frame.
+    // A row scrolled by hand goes back to the pager's scroll over the page's own move, not in one frame.
     @Test
     fun `the row scrolls by hand and goes back to the pager's scroll as the page moves`() {
         show(ListFixtureStates.completed)
@@ -959,7 +959,7 @@ class ListTabMotionOffTest {
     @get:Rule
     val rule: TestRule = registered(compose)
 
-    // A2's T1 with animations off: the row was scrolled a frame after the indicator was placed.
+    // With animations off, the row was scrolled a frame after the indicator was placed.
     @Test
     fun `a far tap never shows the indicator off the row`() {
         compose.mainClock.autoAdvance = false
@@ -1047,8 +1047,8 @@ class ListTabFollowTest {
     @get:Rule
     val rule: TestRule = registered(compose)
 
-    // B3's m3: a fling starts a moment after the drag that threw it ends, so the pager can rest on a page in between.
-    // B3's m2: a tap that waits for the pages to be laid out does not move the pager once a later tap has.
+    // A fling starts a moment after the drag that threw it ends, so the pager can rest on a page in between.
+    // A tap that waits for the pages to be laid out does not move the pager once a later tap has.
     @Test
     fun `of two taps before every page is laid out only the later one moves the pager`() {
         var laidOut by mutableStateOf(false)

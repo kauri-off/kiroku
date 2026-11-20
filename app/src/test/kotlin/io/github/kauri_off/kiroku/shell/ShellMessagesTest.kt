@@ -269,7 +269,7 @@ class ShellMessagesTest {
         assertEquals(listOf(failed(1), moved, failed(2)), shownAfter(failed(1), watched(3), moved, failed(2), watched(4)))
     }
 
-    // B3's m1: a stale Undo would take back a step the user had already taken back.
+    // A stale Undo would take back a step the user had already taken back.
     @Test
     fun `a waiting Undo is dropped once its title has been written, and one whose title has not is shown`() {
         val other = FixtureAnime.oneShortOfTotal

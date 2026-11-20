@@ -185,7 +185,7 @@ class AppRouteTest {
         shows("My list")
     }
 
-    // Section 9.4: opened from a row, the page has the summary on its first frame, however late the store answers.
+    // Section 6.2: opened from a row, the page has the summary on its first frame, however late the store answers.
     @Test
     fun `a title page opened from a row shows its summary on its first frame, before the store answers`() {
         app()
@@ -781,7 +781,7 @@ class AppRouteTest {
                     0f
             }.sortedBy { it.second }
 
-    // 9.3: coming back from a title page keeps the order and the scroll position, even after an edit there.
+    // Section 6.2: coming back from a title page keeps the order and the scroll position, even after an edit there.
     @Test
     fun `back from a title page edited there keeps the List's order and scroll position`() {
         app()

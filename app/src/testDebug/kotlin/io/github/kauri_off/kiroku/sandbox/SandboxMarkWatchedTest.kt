@@ -473,7 +473,7 @@ class SandboxMarkWatchedTest {
         assertEquals(shownBefore, posted(soon)?.extras?.getCharSequence(Notification.EXTRA_TEXT))
     }
 
-    // A-F2: the person dismissed the notification before the write failed; the failure is still the engine's to take back.
+    // The person dismissed the notification before the write failed; the failure is still the engine's to take back.
     @Test
     fun `could not save for a dismissed notification goes when the list shows the episode watched, and at a sign-out with its summary`() {
         for (signingOut in listOf(false, true)) {

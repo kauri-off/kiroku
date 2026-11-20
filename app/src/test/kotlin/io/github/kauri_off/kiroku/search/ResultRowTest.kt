@@ -39,7 +39,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// The row of ARCHITECTURE 9.6: the facts line, the list status line where the title is on the list, the MAL score.
+// The result row: the facts line, the list status line where the title is on the list, the MAL score.
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
 class ResultRowTest {

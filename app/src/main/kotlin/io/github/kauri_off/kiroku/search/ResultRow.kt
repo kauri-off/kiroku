@@ -20,7 +20,7 @@ import io.github.kauri_off.kiroku.title.HeaderFacts
 import io.github.kauri_off.kiroku.title.factsLine
 import io.github.kauri_off.kiroku.title.scoreText
 
-// A title as search results, browse lists and recommendations show it (ARCHITECTURE 9.6, 9.9).
+// A title as search results, browse lists and recommendations show it.
 data class ResultRow(
     val id: AnimeId,
     val title: String,

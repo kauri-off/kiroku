@@ -1309,7 +1309,7 @@ class TitleViewModelTest {
             scope.cancel()
         }
 
-    // Section 9.4: opened from a row, the page has the summary before the store answers.
+    // Section 6.2: opened from a row, the page has the summary before the store answers.
     @Test
     fun `a page opened with a summary shows it at once, before the store answers`() =
         runTest(dispatcher) {

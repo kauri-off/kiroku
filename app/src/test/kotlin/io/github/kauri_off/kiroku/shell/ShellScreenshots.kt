@@ -39,7 +39,7 @@ class ShellScreenshots : ScreenshotRegistry() {
             case("search") { Screens(remember { navigatorOf(selected = Destination.Search) }) },
         )
 
-    // ARCHITECTURE 8.5: along a stack and across destinations; Back's gesture moves nothing, which ShellTransitionTest compares.
+    // Along a stack and across destinations; Back's gesture moves nothing, which ShellTransitionTest compares.
     override val transitions =
         listOf(
             navigatorOf().let { navigator ->
