@@ -314,16 +314,17 @@ class MalRemoteListTest {
     @Test
     fun `a refused value, a limit, a server failure and no session are the failures the engine expects, and a write is sent once`() {
         val failures =
-            mapOf(
-                400 to DataError.InvalidRequest,
-                403 to DataError.Refused,
-                429 to DataError.Refused,
-                500 to DataError.ServerError,
+            listOf(
+                Triple(400, "{}", DataError.InvalidRequest),
+                Triple(403, NetworkFixture.MalsRefusal, DataError.Refused),
+                Triple(403, "<html><body>Blocked</body></html>", DataError.ServerError),
+                Triple(429, "{}", DataError.Refused),
+                Triple(500, "{}", DataError.ServerError),
             )
-        for ((status, error) in failures) {
+        for ((status, body, error) in failures) {
             for (write in listOf(values, null)) {
                 requests.clear()
-                mal.instead = { answer(status, "{}") }
+                mal.instead = { answer(status, body) }
                 assertEquals("$status $write", Outcome.Failure(error), runBlocking { client.put(anime, write?.sent) })
                 assertEquals("$status $write", 1, requests.size)
             }

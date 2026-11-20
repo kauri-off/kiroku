@@ -310,6 +310,24 @@ class MalBackgroundTest {
             assertTrue(process.session.observeSession().first() is Session.SignedIn)
         }
 
+    @Test
+    fun `a token endpoint's 403 holds the work back only when MAL wrote it`() =
+        test {
+            val process = signedIn()
+            pass(RENEW_AFTER)
+            token = { answer(403, "<html><body>Blocked by your network</body></html>", type = "text/html") }
+            assertEquals(read, process.inBackground())
+            assertEquals(Duration.ZERO, process.http.refusedFor())
+            assertEquals(listOf("Bearer access-1"), bearers)
+            assertTrue(process.session.observeSession().first() is Session.SignedIn)
+
+            token = { answer(403, NetworkFixture.MalsRefusal) }
+            assertEquals(HeldBack.Refused(MalBackOff.First), newProcess().inBackground())
+            assertEquals(1, ran.get())
+            assertEquals(2, grants.size)
+            assertTrue(process.session.observeSession().first() is Session.SignedIn)
+        }
+
     // An expired session will not come back and a wait will end, so work is told of the session first.
     @Test
     fun `while MAL is refusing, an expired session is still said to be expired and a signed-out one signed out`() =

@@ -149,10 +149,10 @@ class MalHttp(
             currentCoroutineContext().ensureActive()
             unusable(e)
         } catch (e: HttpException) {
-            val body = if (anotherUsersList) e.response()?.errorBody()?.let(::text) else null
-            answered(e.code(), e.response()?.headers(), body?.let { anotherUsersListError(e.code(), it) })
+            val body = if (anotherUsersList || e.code() == 403) e.response()?.errorBody()?.let(::text) else null
+            answered(e.code(), e.response()?.headers(), body, anotherUsersList)
         } catch (e: NotSentAgain) {
-            e.status?.let { answered(it, null, null) } ?: unanswered(e.failure)
+            e.status?.let { answered(it, null, body = null, anotherUsersList = false) } ?: unanswered(e.failure)
         } catch (_: NoClientId) {
             Tried(MalAnswer.Failed(DataError.NoClientId))
         } catch (_: NotAnAnswer) {
@@ -175,13 +175,18 @@ class MalHttp(
     private fun answered(
         status: Int,
         headers: Headers?,
-        // What the answer is when it is MAL's for another user's list it cannot give.
-        ofAnotherUsersList: DataError?,
+        // The failure's body, when it was read.
+        body: String?,
+        anotherUsersList: Boolean,
     ): Tried<Nothing> {
+        // A 403 MAL did not write is the device's network (a portal, a proxy, a block page), not MAL refusing the app.
+        val notMals = status == 403 && body?.let(::errorCode) == null
+        val ofAnotherUsersList = if (anotherUsersList && body != null) anotherUsersListError(status, body) else null
         val error =
             when {
                 ofAnotherUsersList != null -> ofAnotherUsersList
                 status == 401 -> return Tried(MalAnswer.Rejected)
+                notMals -> DataError.ServerError
                 status == 403 || status == 429 -> DataError.Refused
                 status == 404 -> DataError.NotFound
                 status == 408 || status >= 500 -> DataError.ServerError
@@ -189,7 +194,7 @@ class MalHttp(
                 else -> DataError.ServerError
             }
         if (error == DataError.Refused) backOff.refused(headers?.let { retryAfter(it, clock) }?.toJavaDuration())
-        return Tried(MalAnswer.Failed(error), again = status >= 500)
+        return Tried(MalAnswer.Failed(error), again = status >= 500 || notMals)
     }
 
     // Not asked again after a timeout, which the user has waited out, or offline.

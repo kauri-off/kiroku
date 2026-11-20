@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.bearer
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.HttpException
 import retrofit2.Response
 import retrofit2.http.FieldMap
@@ -51,7 +52,7 @@ internal class MalTokenEndpoint(
 ) : TokenEndpoint {
     private val api by http.signIn(TokenApi::class)
 
-    // An answer that is not a success leaves as the exception Retrofit throws, so a refusal starts the back-off.
+    // An answer that is not a success leaves as the exception Retrofit throws, with its body, so a refusal starts the back-off.
     override suspend fun post(grant: Map<String, String>): TokenReply {
         // MAL would reject a grant without the client id and so end the session, for a cause that is the build's.
         if (http.clientId.isBlank()) return TokenReply.NoAnswer(DataError.NoClientId)
@@ -62,7 +63,8 @@ internal class MalTokenEndpoint(
                 val reply = TokenReply.Answer(response.code(), (response.body() ?: response.errorBody())?.string().orEmpty())
                 if (!response.isSuccessful) {
                     answered = reply
-                    throw HttpException(response)
+                    val body = reply.body.toResponseBody(response.errorBody()?.contentType())
+                    throw HttpException(Response.error<ResponseBody>(body, response.raw()))
                 }
                 reply
             }

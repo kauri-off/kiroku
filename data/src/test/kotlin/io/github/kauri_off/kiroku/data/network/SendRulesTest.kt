@@ -156,7 +156,7 @@ class SendRulesTest {
     @Test
     fun `a read with any other answer is asked once`() {
         for (code in listOf(400, 401, 403, 404, 429)) {
-            network.api.enqueue(answer(code))
+            network.api.enqueue(answer(code, NetworkFixture.MalsRefusal))
             call { read() }
         }
         assertEquals(5, network.api.requestCount)
