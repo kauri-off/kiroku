@@ -11,7 +11,7 @@ import io.github.kauri_off.kiroku.design.component.FactRow
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.text.dateText
 
-// "Details" of section 9.9: one FactRow per fact MAL gives.
+// "Details": one FactRow per fact MAL gives.
 @Composable
 fun DetailsScreen(
     state: DetailsState,

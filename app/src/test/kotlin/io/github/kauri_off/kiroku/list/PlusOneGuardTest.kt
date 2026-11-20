@@ -28,7 +28,7 @@ class PlusOneGuardTest {
         assertEquals(true, guard.accept(y, listOf(z, y, w), at = closes))
     }
 
-    // A3's Q1b: the finger aims at the row below the one that left, at an ordinary pace.
+    // The finger aims at the row below the one that left, at an ordinary pace.
     @Test
     fun `a tap on any row that moved up is dropped until the same time`() {
         val guard = leaving()
@@ -37,7 +37,7 @@ class PlusOneGuardTest {
         assertEquals(true, guard.accept(w, listOf(z, y, w), at = closes))
     }
 
-    // B3's m2: a fast run of taps does not keep the window open; the taps after it closes count.
+    // A fast run of taps does not keep the window open; the taps after it closes count.
     @Test
     fun `taps do not extend the time`() {
         val guard = leaving()

@@ -611,7 +611,7 @@ private fun Related(
 // page's own card says so and opens nothing. A card carries its place only once the whole chain is known. A title the
 // walk finds fades in, as content that finishes loading does, once the section is [animated]: it arrives with the
 // rest of the details without a fade. Nothing slides: a move cannot be kept to the frame the walk changes the cards,
-// and every other change of height, a refresh among them, is not animated (section 8.5).
+// and every other change of height, a refresh among them, is not animated (TitleChainMotionTest).
 private fun LazyListScope.watchOrder(
     chain: List<ChainCard>,
     loading: Boolean,

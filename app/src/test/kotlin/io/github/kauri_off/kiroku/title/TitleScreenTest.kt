@@ -138,7 +138,7 @@ class TitleScreenTest {
         compose.onNodeWithContentDescription("Episodes watched").assertDoesNotExist()
     }
 
-    // Decision for M2-24: a score not known yet is left out; "—" is said only once the title's page was read.
+    // The owner's decision: a score not known yet is left out; "—" is said only once the title's page was read.
     @Test
     fun aScoreNotKnownYetIsLeftOutAndOnlyARefreshedPageSaysMalHasNone() {
         show(TitleFixtures.openedFromRelated)
@@ -280,7 +280,7 @@ class TitleScreenTest {
         sends(TitleEvent.OpenRelated(film.id)) { compose.onNode(spokenFirst(film.titles.romaji) and hasClickAction()).performClick() }
     }
 
-    // Review M1: with no related title for the strip, the section is "See all" alone.
+    // With no related title for the strip, the section is "See all" alone.
     @Test
     fun seeAllIsReachableWhenNoRelatedTitleFitsTheStrip() {
         show(TitleFixtures.relatedOutsideTheStrip)

@@ -28,7 +28,7 @@ class SubScreenStateTest {
     private val today = LocalDate.now(set.clock)
 
     @Test
-    fun everyRelatedAnimeIsShownInTheBudgetsGroupOrderAndByStartDateWithinAGroup() {
+    fun everyRelatedAnimeIsShownInTheRelationsOrderAndByStartDateWithinAGroup() {
         val state = SubScreenFixtures.related(FixtureAnime.exactToWatch)
         assertEquals(RelationType.known, state.groups.map { it.relation })
         assertEquals(
@@ -142,7 +142,7 @@ class SubScreenStateTest {
         }
 
     @Test
-    fun theFullFixtureShowsEveryFactInTheBudgetsOrder() {
+    fun theFullFixtureShowsEveryFactInItsFixedOrder() {
         val facts = SubScreenFixtures.details(FixtureAnime.exactToWatch).facts
         assertEquals(
             listOf(

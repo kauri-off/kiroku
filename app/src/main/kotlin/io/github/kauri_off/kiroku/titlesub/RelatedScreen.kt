@@ -16,7 +16,7 @@ import io.github.kauri_off.kiroku.text.relationName
 import io.github.kauri_off.kiroku.text.statusLine
 import io.github.kauri_off.kiroku.text.typeAndYear
 
-// "Related: see all" of section 9.9: every related anime, grouped under its relation's full name.
+// "Related: see all": every related anime, grouped under its relation's full name.
 @Composable
 fun RelatedScreen(
     state: RelatedState,

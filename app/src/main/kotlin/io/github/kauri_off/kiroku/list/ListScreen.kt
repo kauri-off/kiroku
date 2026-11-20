@@ -263,7 +263,7 @@ private fun Modifier.withoutTravelledTaps(): Modifier =
 
 // The unfiltered rows and the filtered ones keep separate scroll positions, so ending the filter returns the user
 // to where they were. A new order or filter text replaces the rows at once, from the top; only rows leaving or
-// returning within one order animate (ARCHITECTURE 8.5).
+// returning within one order animate (ListScreenTest).
 @Composable
 private fun Page(
     status: EntryStatus,

@@ -56,7 +56,7 @@ class ProfileScreenTest {
         }
 
     @Test
-    fun theOwnProfileShowsItsBudget() {
+    fun theOwnProfileShowsItsNameStatisticsAndRows() {
         show(fixtures.me())
         compose.onNodeWithTag(ProfileTags.avatar, useUnmergedTree = true).assertExists()
         compose.onNodeWithContentDescription("Settings").performClick()

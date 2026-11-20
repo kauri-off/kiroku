@@ -65,7 +65,7 @@ import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
-// Search of ARCHITECTURE section 9.6: the stock search bar, which opens the full-screen search view to type in. Both
+// Search: the stock search bar, which opens the full-screen search view to type in. Both
 // show what the state holds for the field's text: the recent searches and the browse lists before a query, then the
 // query's results. Snackbars go to [snackbars], the shell's host.
 @OptIn(ExperimentalMaterial3Api::class)

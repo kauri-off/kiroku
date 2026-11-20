@@ -27,7 +27,7 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 // How a change of screen went: a page opened, back along a stack, or to another destination.
 enum class Way { Deeper, Up, Across }
 
-// ARCHITECTURE 8.5: forward and backward along a stack by [step] pixels, a fade through between destinations.
+// Forward and backward along a stack by [step] pixels, a fade through between destinations.
 internal fun screenChange(
     way: Way,
     motionScheme: MotionScheme,
