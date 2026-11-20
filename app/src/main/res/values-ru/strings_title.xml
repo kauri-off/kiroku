@@ -10,10 +10,10 @@
         <item quantity="other">%d\u00A0серии</item>
     </plurals>
     <string name="title_mal_score">Оценка MAL</string>
-    <string name="title_no_score">Без оценки</string>
+    <string name="title_no_score">Нет оценки</string>
     <string name="title_rank">Место</string>
     <string name="title_rank_value">№%1$s</string>
-    <string name="title_members">Участники</string>
+    <string name="title_members">В списках</string>
     <string name="title_add_to_list">Добавить в список</string>
     <string name="title_rate">Оценить</string>
     <string name="title_your_score_spoken">Ваша оценка:\u00A0%1$d</string>

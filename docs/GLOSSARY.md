@@ -21,18 +21,24 @@ row. The owner is the final authority on the Russian column.
 | Undo | Undo | Отменить | Only for Undo. A dialog is dismissed with Cancel / «Отмена»; unsaved changes with Discard / Keep editing, «Не сохранять» / «Вернуться» |
 | Edit | Edit / Change | Изменить | A row's long press and its spoken action; the action of the "Added" snackbar |
 | The user's score | Your score / Not scored / Rate | Ваша оценка / Без оценки / Оценить | |
+| Score names, 10 down to 1 | Masterpiece, Great, Very good, Good, Fine, Average, Bad, Very bad, Horrible, Appalling | Шедевр, Великолепно, Очень хорошо, Хорошо, Неплохо, Нормально, Слабо, Плохо, Очень плохо, Хуже некуда | The set Russian MAL users know from Shikimori |
 | Titles with a score, counted | Scored / Not scored / 7 of 31 scored / Nothing scored | Оценено / Без оценки / Оценено 7 из 31 / Оценок нет | A profile's count: "scored" as in "Not scored", never "rated" |
-| MAL's score and rank | MAL score / #12, Rank | Оценка MAL / №12, Место | Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). The title page's header captions `#12` with Rank |
+| MAL's score and rank | MAL score / No score / #12, Rank | Оценка MAL / Нет оценки / №12, Место | MAL's missing score is kept apart from the user's Not scored. Never the bare number, except in front of the title in a ranked browse list (`1.`) and after a star (Forms). The title page's header captions `#12` with Rank |
 | MAL's score distribution | MAL scores / Score 10 | Оценки MAL / Оценка 10 | One score of it is spoken with the word, "Score 10" / «Оценка 10», never as the bare number |
 | The default sort | Up next | На очереди | |
 | Synopsis, Related, Details | Synopsis, Related, Details | Описание, Связанное, Подробности | |
+| Details rows | Source, Broadcast | Первоисточник, Время показа | |
+| MAL's members | Members | В списках | The users who have the title on a list; not «Участники» |
 | Airing status | Airing / Finished / Not yet aired | Выходит / Завершено / Ещё не вышло | |
-| Relations | Sequel, Prequel, Side story, Parent story, Full story | Продолжение, Предыстория, Побочная история, Основная история, Полная версия | The two alternative types are shortened only as a strip caption: Alt. setting / Alt. version, «Альт. вселенная» / «Альт. версия» |
+| Relations | Sequel, Prequel, Side story, Parent story, Full story, Spin-off, Summary, Character, Other | Продолжение, Предыстория, Побочная история, Основная история, Полная версия, Спин-офф, Краткое содержание, Общий персонаж, Прочее | The two alternative types are shortened only as a strip caption: Alt. setting / Alt. version, «Альт. вселенная» / «Альт. версия» |
 | The chain of sequels | Watch order / This title | Порядок просмотра / Этот тайтл | The title page's section, and its mark of the page's own title. Not «Хронология»: the order is MAL's sequels, not the story's time |
 | Media types | Movie, Special, Music | Фильм, Спешл, Клип | The rest are kept as MAL writes them (TV / ТВ, OVA, ONA) |
 | Genres | as MAL names them, in sentence case | the names Russian anime sites use, as Shikimori has them | An exception: MAL keeps Mystery and Detective apart, so Mystery is «Тайна» and Detective «Детектив» |
 | Super power genre | Super power | Суперсила | An exception: Shikimori writes «Супер сила», but «супер-» is a prefix and is written together |
 | MAL, AniList, MyAnimeList | | | Written in Latin letters in both languages |
+| An estimate | estimated, ~ | приблизительно, ~ | Never «оценка», which is a score |
+| Units of time | min, s | мин, с | Not «сек» |
+| Try again | Try again later / try again | Попробуйте позже / попробуйте ещё раз | Not «Повторите»; the button is Retry / «Повторить» |
 | Android's own settings | Alarms and reminders, Force stop, a notification category | Будильники и напоминания, «Остановить», категория уведомлений | As Android names them, so that the user finds them there; never "exact alarms" or "channel" |
 
 ## Forms
@@ -55,7 +61,7 @@ setting decide.
 | A message with its action | `Episode 13 watched · Undo` | `Серия 13 просмотрена · Отменить` | The message, «·», the action |
 | "Mark watched" from a notification that failed | `Could not save: episode 13 watched` | `Не удалось сохранить: серия 13 просмотрена` | In the title's notification, in its place; a tap opens the title, so it has no action of its own |
 | Facts line | `TV · 2024 · 24 episodes` | `ТВ · 2024 · 24 серии` | The episode count is a plural |
-| A number with a noun | `1,234,567 members` | `1 234 567 участников` | Plural resources; digits grouped by the locale |
+| A number with a noun | `1,234,567 votes` | `1 234 567 голосов` | Plural resources; digits grouped by the locale |
 | A share under one percent | `<1%` | `<1 %` | Spoken "less than 1 percent" / «менее 1 процента» |
 | A button spoken with its section | `See all: Related` | `Показать все: Связанное` | |
 

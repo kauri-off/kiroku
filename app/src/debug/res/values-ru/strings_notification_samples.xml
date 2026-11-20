@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="notification_samples_title">Образцы уведомлений</string>
-    <string name="notification_samples_detail">Показывает уведомления о сериях тайтлов из списка через собственный канал приложения, вместо показанных</string>
+    <string name="notification_samples_detail">Показывает уведомления о сериях тайтлов из списка через собственную категорию уведомлений приложения, вместо показанных</string>
     <string name="notification_samples_blocked">Устройство не показывает уведомления приложения: разрешите их в настройках системы</string>
     <string name="notification_samples_one">Один тайтл</string>
     <string name="notification_samples_several">Несколько тайтлов</string>

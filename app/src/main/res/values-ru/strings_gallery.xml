@@ -25,7 +25,7 @@
     <string name="gallery_full_story">Полная версия</string>
     <string name="gallery_alt_setting">Альт. вселенная</string>
     <string name="gallery_alt_version">Альт. версия</string>
-    <string name="gallery_summary">Краткое изложение</string>
+    <string name="gallery_summary">Краткое содержание</string>
     <string name="gallery_tv_year">ТВ · %d</string>
     <string name="gallery_movie_year">Фильм · %d</string>
     <string name="gallery_progress">Просмотрено %1$d\u00A0из\u00A0%2$d</string>
@@ -43,9 +43,9 @@
     <string name="gallery_days_watched">Дней просмотра</string>
     <string name="gallery_mean_score">Средняя оценка</string>
     <string name="gallery_alternative_titles">Другие названия</string>
-    <string name="gallery_source">Источник</string>
+    <string name="gallery_source">Первоисточник</string>
     <string name="gallery_light_novel">Ранобэ</string>
-    <string name="gallery_broadcast">Трансляция</string>
+    <string name="gallery_broadcast">Время показа</string>
     <string name="gallery_broadcast_value">По субботам в\u00A017:30</string>
     <string name="gallery_empty">В «Запланировано» нет тайтлов</string>
     <string name="gallery_sign_in">Войти</string>

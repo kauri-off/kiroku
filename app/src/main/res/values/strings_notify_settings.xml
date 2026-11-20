@@ -27,7 +27,7 @@
     <string name="notify_settings_send_test">Send a test notification</string>
     <string name="notify_settings_test_not_shown_blocked">Not shown: all of Kiroku’s notifications are blocked in Android settings</string>
     <string name="notify_settings_test_not_shown_channel_off">Not shown: the category “%1$s” is turned off in Android settings</string>
-    <string name="notify_settings_limits">After Force stop, no notification comes until you open Kiroku again.</string>
+    <string name="notify_settings_limits">After Force stop, no notification comes until you open Kiroku again</string>
 
     <string name="notify_settings_upcoming">Upcoming</string>
     <string name="notify_settings_list_synced">List synced %1$s</string>

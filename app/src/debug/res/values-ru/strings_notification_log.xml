@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="notification_log_title">Уведомления</string>
-    <string name="notification_log_detail">Каждый запуск уведомлений, сначала новые, сохраняются после перезапуска. Задержка — от времени уведомления до его показа, по часам устройства</string>
+    <string name="notification_log_detail">Запуски механизма уведомлений, сначала новые; сохраняются после перезапуска. Задержка — от времени уведомления до его показа, по часам устройства</string>
     <string name="notification_log_none">Запусков ещё не было. Они сохраняются после перезапуска</string>
     <string name="notification_log_earlier">Показать более ранние запуски</string>
     <string name="notification_log_plant_detail">Добавляет в AniList следующую серию тайтла %1$s и хранит её в файлах песочницы до сброса</string>
@@ -16,9 +16,9 @@
     <string name="notification_log_trigger_alarm">Будильник</string>
     <string name="notification_log_trigger_restarted">Перезагрузка устройства</string>
     <string name="notification_log_trigger_updated">Обновление приложения</string>
-    <string name="notification_log_trigger_access">Разрешены точные будильники</string>
+    <string name="notification_log_trigger_access">Разрешены будильники и напоминания</string>
     <string name="notification_log_trigger_opened">Открытие приложения</string>
-    <string name="notification_log_trigger_periodic">Периодическая работа</string>
+    <string name="notification_log_trigger_periodic">Периодическая задача</string>
     <string name="notification_log_trigger_marked">Отмечено как просмотренное</string>
     <string name="notification_log_trigger_changed">Изменились список, расписание или настройки</string>
     <string name="notification_log_posted">Отправлено: %1$s, серия\u00A0%2$d, %3$s</string>
