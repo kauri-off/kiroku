@@ -47,8 +47,9 @@ class ScriptedAiringSource(
     @Volatile
     var handedFirst: Set<AnimeId> = emptySet()
 
-    // The calls received: the ids each asked for, the titles as handed over, and the instant.
+    // The calls received: the ids each asked for, those of them pulled, the titles as handed over, and the instant.
     val calls = CopyOnWriteArrayList<Set<AnimeId>>()
+    val pulls = CopyOnWriteArrayList<Set<AnimeId>>()
     val handed = CopyOnWriteArrayList<Anime>()
     val asked = CopyOnWriteArrayList<Instant>()
 
@@ -61,15 +62,17 @@ class ScriptedAiringSource(
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since, emptySet()) {}
 
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
+        pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> {
         val ids = titles.mapTo(LinkedHashSet()) { it.id }
         calls += ids
+        pulls += pulled
         handed += titles
         asked += since
         most.accumulateAndGet(running.incrementAndGet(), ::maxOf)

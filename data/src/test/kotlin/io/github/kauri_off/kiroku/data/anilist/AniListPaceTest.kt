@@ -44,7 +44,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Duration as KotlinDuration
 
-// When the client asks AniList: the spacing, its refusals and their block across processes, and the cool-down of failures.
+// When the client asks AniList: the spacing, its refusals and their block across processes, the cool-down of failures and pulls.
 @OptIn(ExperimentalCoroutinesApi::class)
 class AniListPaceTest {
     private val network = NetworkFixture()
@@ -55,8 +55,11 @@ class AniListPaceTest {
 
     private val since: Instant = RecordedAt.minus(Duration.ofHours(75))
 
-    private suspend fun TestScope.fetch(vararg ids: Int): Map<AnimeId, Outcome<FetchedAiring?>> =
-        aniList.client(this).fetch(ids.map(::titleWithId), since)
+    private suspend fun TestScope.fetch(
+        vararg ids: Int,
+        pulled: Set<Int> = emptySet(),
+    ): Map<AnimeId, Outcome<FetchedAiring?>> =
+        aniList.client(this).fetch(ids.map(::titleWithId), since, pulled.mapTo(mutableSetOf()) { AnimeId(it.toLong()) }) {}
 
     private val spacing: Long = AniListPace.spacingFor(AniListRecordings.limit).inWholeMilliseconds
 
@@ -65,14 +68,17 @@ class AniListPaceTest {
     private fun refused(retryAfter: String? = null): MockResponse =
         reply(429, "", headers = retryAfter?.let { mapOf("Retry-After" to it) }.orEmpty())
 
-    // After [hold] since the refusal the client asks again, and not a millisecond sooner.
-    private suspend fun TestScope.heldFor(hold: KotlinDuration) {
+    // After [hold] since the refusal the client asks again, and not a millisecond sooner, also for a title pulled.
+    private suspend fun TestScope.heldFor(
+        hold: KotlinDuration,
+        pulled: Set<Int> = emptySet(),
+    ) {
         val sent = aniList.requests.size
         advanceTimeBy(hold - 1.milliseconds)
-        assertEquals(Outcome.Failure(DataError.Refused), fetch(1).of(1))
+        assertEquals(Outcome.Failure(DataError.Refused), fetch(1, pulled = pulled).of(1))
         assertEquals("$hold", sent, aniList.requests.size)
         advanceTimeBy(1.milliseconds)
-        fetch(1)
+        fetch(1, pulled = pulled)
         assertEquals("$hold", sent + 1, aniList.requests.size)
     }
 
@@ -258,6 +264,43 @@ class AniListPaceTest {
             advanceTimeBy(1.milliseconds)
             fetch(1)
             assertEquals(listOf(1), aniList.asked().last().ids)
+        }
+
+    @Test
+    fun `a pulled title is asked again at once after its failure, and the others of the call wait out their cool-down`() =
+        runTest {
+            aniList.answer = { reply(500, "") }
+            fetch(1, 2)
+            aniList.answer = { copiesOf(it) }
+
+            val answers = fetch(1, 2, pulled = setOf(1))
+            assertTrue(answers.of(1) is Outcome.Success)
+            assertEquals(Outcome.Failure(DataError.ServerError), answers.of(2))
+            assertEquals(listOf(listOf(1, 2), listOf(1)), aniList.asked().map { it.ids })
+        }
+
+    @Test
+    fun `a pull sends nothing while AniList's refusal holds, with a Retry-After or without`() =
+        runTest {
+            aniList.answer = { refused() }
+            fetch(1)
+            aniList.answer = { refused("600") }
+            heldFor(AniListPace.FirstRefusal, pulled = setOf(1))
+            heldFor(600.seconds, pulled = setOf(1))
+        }
+
+    @Test
+    fun `a title answered from its cool-down is handed over before the call's first request`() =
+        runTest {
+            aniList.answer = { if (1 in it.ids) reply(500, "") else copiesOf(it) }
+            fetch(1)
+            val handed = mutableListOf<Pair<Set<AnimeId>, Int>>()
+
+            aniList.client(this).fetch(listOf(1, 2).map(::titleWithId), since, emptySet()) { part ->
+                handed += part.keys to aniList.requests.size
+            }
+
+            assertEquals(listOf(setOf(AnimeId(1)) to 1, setOf(AnimeId(2)) to 2), handed)
         }
 
     @Test

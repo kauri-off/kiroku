@@ -89,6 +89,9 @@ class AiringEngine(
     private val asked = mutableMapOf<AnimeId, CompletableDeferred<DataError?>>()
     private val waiting = LinkedHashMap<AnimeId, Anime>()
 
+    // Of the titles waiting, those a person's pull asked for.
+    private val pulled = mutableSetOf<AnimeId>()
+
     // Of the titles asked for, those a page asked for.
     private val forPages = mutableSetOf<AnimeId>()
 
@@ -109,9 +112,15 @@ class AiringEngine(
             try {
                 for (signal in wake) {
                     while (true) {
-                        val titles = mutex.withLock { waiting.toMap().also { waiting.clear() } }
+                        val (titles, byPull) =
+                            mutex.withLock {
+                                (waiting.toMap() to pulled.toSet()).also {
+                                    waiting.clear()
+                                    pulled.clear()
+                                }
+                            }
                         if (titles.isEmpty()) break
-                        answer(titles)
+                        answer(titles, byPull)
                     }
                 }
             } finally {
@@ -121,6 +130,7 @@ class AiringEngine(
                         asked.values.forEach { it.cancel() }
                         asked.clear()
                         waiting.clear()
+                        pulled.clear()
                     }
                 }
             }
@@ -146,7 +156,7 @@ class AiringEngine(
         }
 
     // Asks for every tracked title, as a person's pull does, and returns once each is answered.
-    suspend fun refresh(): Outcome<Unit> = ask { tracking, _ -> tracking.tracked.values }
+    suspend fun refresh(): Outcome<Unit> = ask(pull = true) { tracking, _ -> tracking.tracked.values }
 
     // Asks for the tracked titles whose data is stale, as a shown screen does; the end of a list sync does it by itself.
     suspend fun refreshStale(): Outcome<Unit> =
@@ -156,7 +166,7 @@ class AiringEngine(
         }
 
     // A pull on a title's page: a tracked title is refreshed; any other is fetched and held in memory (A12), unless finished.
-    suspend fun refresh(anime: Anime): Outcome<Unit> = ask { tracking, _ -> listOfNotNull(pageTitle(tracking, anime)) }
+    suspend fun refresh(anime: Anime): Outcome<Unit> = ask(pull = true) { tracking, _ -> listOfNotNull(pageTitle(tracking, anime)) }
 
     // N3: asks for those of [titles] that are tracked and for no other, which a finished title is not.
     suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = ask { tracking, _ -> titles.mapNotNull(tracking.tracked::get) }
@@ -239,7 +249,7 @@ class AiringEngine(
         owed = true
         val now = clock.instant()
         val stored = local.read()
-        want(arrived.filter { it !in stored }.map(tracking.tracked::getValue))
+        want(arrived.filter { it !in stored }.map(tracking.tracked::getValue), pull = false)
         arrived.clear()
         val forgotten =
             stored.filterNot { (id, airing) -> id in tracking.tracked || (id in tracking.finished && airing.announceable(now)) }.keys
@@ -255,14 +265,17 @@ class AiringEngine(
     }
 
     // The list as it is now decides what is asked; the call returns when each of those titles is answered.
-    private suspend fun ask(titles: suspend (Tracking, Map<AnimeId, StoredAiring>) -> Collection<Anime>): Outcome<Unit> {
+    private suspend fun ask(
+        pull: Boolean = false,
+        titles: suspend (Tracking, Map<AnimeId, StoredAiring>) -> Collection<Anime>,
+    ): Outcome<Unit> {
         follow()
         val answers =
             try {
                 mutex.withLock {
                     // Read under the lock, so that no list older than one already settled is settled after it.
                     val tracking = tracking(list.observeEntries().first())
-                    want(titles(tracking, reconcile(tracking)))
+                    want(titles(tracking, reconcile(tracking)), pull)
                 }
             } catch (e: DataException) {
                 return Outcome.Failure(e.error)
@@ -282,8 +295,11 @@ class AiringEngine(
         }
     }
 
-    // A title already asked for shares that answer, so no title is asked for twice at once.
-    private fun want(titles: Collection<Anime>): List<Deferred<DataError?>> {
+    // A title already asked for shares that answer, so no title is asked for twice at once; one still waiting becomes a pull's.
+    private fun want(
+        titles: Collection<Anime>,
+        pull: Boolean,
+    ): List<Deferred<DataError?>> {
         check(!stopped) { STOPPED }
         val answers =
             titles.map { anime ->
@@ -292,12 +308,16 @@ class AiringEngine(
                     CompletableDeferred()
                 }
             }
+        if (pull) titles.filter { it.id in waiting }.mapTo(pulled) { it.id }
         if (waiting.isNotEmpty()) wake.trySend(Unit)
         return answers
     }
 
     // One call to the source. A10: a title is stored only when its answer is whole, as soon as it is; any other stays as it was.
-    private suspend fun answer(titles: Map<AnimeId, Anime>) {
+    private suspend fun answer(
+        titles: Map<AnimeId, Anime>,
+        pulled: Set<AnimeId>,
+    ) {
         val told = mutableSetOf<AnimeId>()
 
         // Answers [ids], each with its error in [errors] or none.
@@ -316,7 +336,7 @@ class AiringEngine(
             // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
             val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
             val answers =
-                fetch(titles, since) { part ->
+                fetch(titles, since, pulled) { part ->
                     val ids = part.keys.filterTo(mutableSetOf()) { it in titles && it !in told }
                     if (ids.isNotEmpty()) tell(ids, keep(ids, part, began, since))
                 }
@@ -335,10 +355,11 @@ class AiringEngine(
     private suspend fun fetch(
         titles: Map<AnimeId, Anime>,
         since: Instant,
+        pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         try {
-            source.fetch(titles.values, since, whole)
+            source.fetch(titles.values, since, pulled, whole)
         } catch (e: Exception) {
             stores.ended(e)
             val error = if (e is IOException) DataError.NoConnection else DataError.ServerError.also { unexpected(e) }

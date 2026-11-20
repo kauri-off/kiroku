@@ -37,7 +37,7 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import java.time.Instant
 
-// The airing engine over the AniList client and M3-01's recordings: what a refresh costs, a refusal, a page behind a refresh.
+// The airing engine over the AniList client and M3-01's recordings: what a refresh costs, a failure, a refusal, a page behind a refresh.
 @OptIn(ExperimentalCoroutinesApi::class)
 class AniListEngineTest {
     private val network = NetworkFixture()
@@ -108,15 +108,37 @@ class AniListEngineTest {
         }
 
     @Test
-    fun `a refusal leaves what is stored as it was, and the next refresh sends nothing while it holds`() =
+    fun `after a failure a pull on the list or a page asks AniList at once, and a refresh nobody asked for waits`() =
         runTest {
-            val engine = engine(idsOf("airing_weekly"))
+            val ids = listOf(1, 2)
+            val engine = engine(ids)
+            aniList.answer = { reply(500, "") }
+            assertEquals(Outcome.Failure(DataError.ServerError), engine.refreshStale())
+            aniList.answer = { copiesOf(it) }
+
+            assertEquals(Outcome.Failure(DataError.ServerError), engine.refreshStale())
+            assertEquals(Outcome.Failure(DataError.ServerError), engine.refresh(ids.map(::id).toSet()))
+            assertEquals(1, aniList.requests.size)
+            assertEquals(emptyMap<AnimeId, Any>(), store.read())
+
+            assertEquals(Outcome.Success(Unit), engine.refresh(titleWithId(1)))
+            assertEquals(Outcome.Success(Unit), engine.refresh())
+            assertEquals(listOf(listOf(1), ids), aniList.asked().drop(1).map { it.ids })
+            assertEquals(ids.map(::id).toSet(), store.read().keys)
+        }
+
+    @Test
+    fun `a refusal leaves what is stored as it was, and a pull on the list or a page sends nothing while it holds`() =
+        runTest {
+            val ids = idsOf("airing_weekly")
+            val engine = engine(ids)
             assertEquals(Outcome.Success(Unit), engine.refresh())
             val before = store.read()
 
             aniList.answer = { reply(429, "", headers = mapOf("Retry-After" to "60")) }
             assertEquals(Outcome.Failure(DataError.Refused), engine.refresh())
             assertEquals(Outcome.Failure(DataError.Refused), engine.refresh())
+            assertEquals(Outcome.Failure(DataError.Refused), engine.refresh(titleWithId(ids.first())))
 
             assertEquals(2, aniList.requests.size)
             assertEquals(before, store.read())

@@ -18,6 +18,8 @@ interface AiringSource {
     suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
+        // Of [titles], those a person pulled: a wait the source sets itself after a failure does not hold them back, a refusal does.
+        pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since)
 }
