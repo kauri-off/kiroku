@@ -38,23 +38,25 @@ class AniListAiring(
     private val pace = AniListPace(time, AniListPace.file(blockFile, clock, http.unexpected))
     private val turns = Mutex()
 
-    // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking.
+    // Each title whose fetch failed, by MAL id: when, and how; within the cool-down it is answered so without asking, unless pulled.
     private val failures = mutableMapOf<Int, Pair<ComparableTimeMark, DataError>>()
 
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since) {}
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since, emptySet()) {}
 
     // Whole schedules: every title's pages of episodes are followed to the last, and each title handed over once it is final.
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
+        pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct(), whole).run() }
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = turns.withLock { Fetch(titles.map { it.id }.distinct(), pulled, whole).run() }
 
     private inner class Fetch(
         ids: List<AnimeId>,
+        pulled: Set<AnimeId>,
         private val whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ) {
         private val results = mutableMapOf<AnimeId, Outcome<FetchedAiring?>>()
@@ -70,7 +72,8 @@ class AniListAiring(
         init {
             for (id in ids) {
                 val malId = id.value.takeIf { it in 1..Int.MAX_VALUE }?.toInt()
-                val failure = malId?.let(failures::get)?.takeIf { (at, _) -> (at + FailureCoolDown).hasNotPassedNow() }
+                val failure =
+                    malId?.let(failures::get)?.takeIf { (at, _) -> id !in pulled && (at + FailureCoolDown).hasNotPassedNow() }
                 when {
                     malId == null -> results[id] = Outcome.Failure(DataError.InvalidRequest)
                     failure != null -> results[id] = Outcome.Failure(failure.second)
@@ -79,7 +82,9 @@ class AniListAiring(
             }
         }
 
+        // What is answered without asking is handed over before the first request, so a pull that comes meanwhile asks it again.
         suspend fun run(): Map<AnimeId, Outcome<FetchedAiring?>> {
+            handOver()
             fetched()
             for ((malId, id) in asked) {
                 val result = results.getValue(id)
@@ -284,7 +289,7 @@ class AniListAiring(
     }
 }
 
-// How long a title whose fetch failed is answered with that failure without a request; offline and refused excepted.
+// How long a title whose fetch failed is answered with that failure without a request; offline, refused and pulled excepted.
 internal val FailureCoolDown: Duration = 15.minutes
 
 // A page of a schedule goes on from the one before: not empty where more were promised, and from the next number.
