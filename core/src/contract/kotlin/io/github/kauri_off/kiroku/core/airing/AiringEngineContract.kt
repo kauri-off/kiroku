@@ -589,6 +589,70 @@ abstract class AiringEngineContract {
         }
 
     @Test
+    fun `N3 a re-check answered from now on goes over what is stored, which keeps what aired before and its age`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            val stored = s.schedule(due)
+            val latest = stored.episodes.last { it.airsAt <= s.clock.now }
+            val next = stored.episodes.first { it.airsAt > s.clock.now }
+            val first = stored.episodes.first()
+            s.clock.advance(1.minutes)
+            // The latest aired is postponed a week, the next is no longer scheduled, and the source forgot the first.
+            s.source.schedules += due.id to stored.moved(latest.number, 7.days).without(next.number, first.number)
+            s.source.onlyComing = true
+
+            assertEquals(Outcome.Success(Unit), s.engine.refresh(setOf(due.id)))
+
+            assertEquals(listOf(setOf(due.id)), s.source.rechecks.toList())
+            assertEquals(StoredAiring(stored.moved(latest.number, 7.days).without(next.number), fixtures.now), s.stored(due))
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
+    @Test
+    fun `N3 a re-check answered from now on is stored over no schedule, which stays as it was`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            s.store.write(mapOf(due.id to StoredAiring(null, fixtures.now)))
+            s.clock.advance(1.minutes)
+            s.source.onlyComing = true
+
+            assertEquals(Outcome.Failure(DataError.ServerError), s.engine.refresh(setOf(due.id)))
+
+            assertEquals(StoredAiring(null, fixtures.now), s.stored(due))
+            assertEquals(emptyList<Throwable>(), s.unexpected)
+        }
+
+    @Test
+    fun `N3 a re-check shares a whole answer on its way, and a refresh asked while a re-check is on its way is answered whole`() =
+        runTest {
+            val due = FixtureAnime.exactToWatch
+            val s = subject()
+            s.source.onlyComing = true
+            s.source.latency = 1.seconds
+            s.clock.advance(1.minutes)
+
+            val recheck = async { s.engine.refresh(setOf(due.id)) }
+            runCurrent()
+            val whole = async { s.engine.refresh() }
+            assertEquals(Outcome.Success(Unit), recheck.await())
+            assertEquals(Outcome.Success(Unit), whole.await())
+
+            assertEquals(listOf(setOf(due.id), tracked), s.source.calls.toList())
+            assertEquals(StoredAiring(fixtures.schedules.getValue(due.id), s.clock.now), s.stored(due))
+
+            val refresh = async { s.engine.refresh() }
+            runCurrent()
+            val shared = async { s.engine.refresh(setOf(due.id)) }
+            assertEquals(Outcome.Success(Unit), refresh.await())
+            assertEquals(Outcome.Success(Unit), shared.await())
+
+            assertEquals(listOf(setOf(due.id)), s.source.rechecks.toList())
+            assertEquals(3, s.source.calls.size)
+        }
+
+    @Test
     fun `N3 a refresh of named titles asks for the tracked ones among them and for no other, and stores what it is answered`() =
         runTest {
             val due = FixtureAnime.exactToWatch
@@ -885,7 +949,7 @@ abstract class AiringEngineContract {
             s.source.latency = 1.seconds
             s.clock.advance(1.days)
 
-            val running = async { s.engine.refresh(setOf(first)) }
+            val running = async { s.engine.refreshStale(FixtureAnime.exactToWatch) }
             runCurrent()
             val stale = async { s.engine.refreshStale() }
             runCurrent()

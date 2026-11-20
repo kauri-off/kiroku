@@ -35,6 +35,10 @@ class ScriptedAiringSource(
     @Volatile
     var partial = false
 
+    // N3: a re-check is answered with what airs from the source's clock on, as a long schedule is.
+    @Volatile
+    var onlyComing = false
+
     // Thrown by every call, as a client that fails to keep the port's word would.
     @Volatile
     var throwing: Exception? = null
@@ -48,7 +52,9 @@ class ScriptedAiringSource(
     var handedFirst: Set<AnimeId> = emptySet()
 
     // The calls received: the ids each asked for, those of them pulled, the titles as handed over, and the instant.
+    // Of them, the ids of each re-check.
     val calls = CopyOnWriteArrayList<Set<AnimeId>>()
+    val rechecks = CopyOnWriteArrayList<Set<AnimeId>>()
     val pulls = CopyOnWriteArrayList<Set<AnimeId>>()
     val handed = CopyOnWriteArrayList<Anime>()
     val asked = CopyOnWriteArrayList<Instant>()
@@ -63,6 +69,20 @@ class ScriptedAiringSource(
         titles: Collection<Anime>,
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since, emptySet()) {}
+
+    override suspend fun fetchComing(
+        titles: Collection<Anime>,
+        since: Instant,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> {
+        rechecks += titles.mapTo(LinkedHashSet()) { it.id }
+        val answers = fetch(titles, since, emptySet()) {}
+        if (!onlyComing) return answers
+        val from = clock.instant()
+        return answers.mapValues { (_, answer) ->
+            val schedule = ((answer as? Outcome.Success)?.value ?: return@mapValues answer).schedule
+            Outcome.Success(FetchedAiring(schedule.copy(episodes = schedule.episodes.filter { it.airsAt >= from }), from))
+        }
+    }
 
     override suspend fun fetch(
         titles: Collection<Anime>,

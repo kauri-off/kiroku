@@ -31,10 +31,10 @@ internal class Selection(
         }
 }
 
-// What [query] selects, without its arguments; aliases and fragments are not read.
+// What [query] selects, without its arguments, an aliased field under its alias; fragments are not read.
 internal fun selection(query: String): Selection {
     val body = query.substring(query.indexOf('{')).replace(Regex("""\([^()]*\)"""), "")
-    val tokens = Regex("""[A-Za-z_]\w*|[{}]""").findAll(body).map { it.value }.toList()
+    val tokens = Regex("""[A-Za-z_]\w*|[{}:]""").findAll(body).map { it.value }.toList()
     var at = 1
 
     // Reads from just after a `{` to just after its `}`.
@@ -42,6 +42,7 @@ internal fun selection(query: String): Selection {
         val fields = linkedMapOf<String, Selection?>()
         while (tokens[at] != "}") {
             val name = tokens[at++]
+            if (tokens[at] == ":") at += 2
             fields[name] =
                 if (tokens[at] == "{") {
                     at++

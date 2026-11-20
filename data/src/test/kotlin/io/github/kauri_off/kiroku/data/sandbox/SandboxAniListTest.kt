@@ -70,14 +70,15 @@ class SandboxAniListTest {
             )
         val client = SandboxClient(sandbox.mal, clock = clock)
 
-        // AniList's answer to the shared query, asked through the app's client by a client that keeps AniList's limit.
+        // AniList's answer to the shared query or the re-check's, asked through the app's client by a client that keeps AniList's limit.
         fun ask(
             ids: List<Long>,
             page: Int = 1,
             schedulePage: Int = 1,
+            recheck: Boolean = false,
         ): JsonObject {
             clock.now += PACE
-            val (status, body) = post(AniListSchedule.body(ids.map(Long::toInt), page, schedulePage))
+            val (status, body) = post(AniListSchedule.body(ids.map(Long::toInt), page, schedulePage, recheck))
             assertEquals(body, 200, status)
             return Json.parseToJsonElement(body).jsonObject
         }
@@ -101,9 +102,12 @@ class SandboxAniListTest {
         // The pages of a request as a client follows them: of titles for several ids, of one title's episodes for one id.
         fun pages(ids: List<Long>): List<JsonObject> = if (ids.size == 1) schedulePages(ids.single()) else titlePages(ids)
 
-        fun titlePages(ids: List<Long>): List<JsonObject> {
-            val pages = mutableListOf(ask(ids))
-            while (pages.last().hasNextPage) pages += ask(ids, page = pages.size + 1)
+        fun titlePages(
+            ids: List<Long>,
+            recheck: Boolean = false,
+        ): List<JsonObject> {
+            val pages = mutableListOf(ask(ids, recheck = recheck))
+            while (pages.last().hasNextPage) pages += ask(ids, page = pages.size + 1, recheck = recheck)
             return pages
         }
 
@@ -217,9 +221,10 @@ class SandboxAniListTest {
                 "unknown_alone" to listOf(UNKNOWN),
                 "unknown_among_others" to listOf(UNKNOWN, WEEKLY, WITHOUT_TIMES),
                 "more_than_one_page" to sandboxTitles.keys.sortedDescending() + NOT_THE_SANDBOX_S,
+                "recheck_weekly" to listOf(WEEKLY),
+                "recheck_hundreds_of_episodes" to listOf(LONG_RUNNING),
             )
         assertEquals(AniListRequests.map { it.name }.toSet(), cases.keys)
-        val asked = answerTo(AniListSchedule.QUERY)
         val statuses =
             cases.keys
                 .flatMap(
@@ -229,8 +234,10 @@ class SandboxAniListTest {
                 .toSet()
         assertEquals(setOf(SandboxAiring.RELEASING, SandboxAiring.FINISHED, SandboxAiring.NOT_YET_RELEASED), statuses)
         for ((case, ids) in cases) {
+            val recheck = AniListRequests.single { it.name == case }.recheck
+            val asked = answerTo(if (recheck) AniListSchedule.RECHECK else AniListSchedule.QUERY)
             val recorded = recordedPages(case).map(::kinds)
-            val answered = device.pages(ids)
+            val answered = if (recheck) device.titlePages(ids, recheck = true) else device.pages(ids)
             for (page in answered) {
                 assertEquals(case, emptyList<String>(), asked.unasked(page))
                 for (media in page.media) {
@@ -240,6 +247,24 @@ class SandboxAniListTest {
                 assertTrue("$case: ${kinds(page) - recorded.flatten().toSet()}", recorded.flatten().containsAll(kinds(page)))
             }
             assertEquals(case, recorded.flatten().toSet(), answered.flatMap(::kinds).toSet())
+        }
+    }
+
+    @Test
+    fun `the re-check's answer holds beside a title's first page of episodes every one still to air by the sandbox's clock`() {
+        val device = OnDevice()
+        for (id in listOf(WEEKLY, LONG_RUNNING)) {
+            val schedule =
+                device
+                    .entries(listOf(id))
+                    .getValue(id)
+                    .single()
+                    .schedule
+            val media = device.ask(listOf(id), recheck = true).media.single()
+
+            assertEquals(schedule.take(AniListSchedule.EPISODES_PER_PAGE), media.nodes)
+            assertEquals(schedule.filter { it.at.isAfter(clock.now) }, media.coming)
+            assertTrue(media.coming.isNotEmpty())
         }
     }
 
@@ -769,13 +794,15 @@ class SandboxAniListTest {
         val JsonObject.media get() = page["media"]!!.jsonArray.map { it.jsonObject }
         val JsonObject.idMal get() = this["idMal"]!!.jsonPrimitive.long
         val JsonObject.scheduleInfo get() = this["airingSchedule"]!!.jsonObject["pageInfo"]!!.jsonObject
-        val JsonObject.nodes
-            get() =
-                this["airingSchedule"]!!.jsonObject["nodes"]!!.jsonArray.map {
-                    Aired(
-                        it.jsonObject["episode"]!!.jsonPrimitive.int,
-                        Instant.ofEpochSecond(it.jsonObject["airingAt"]!!.jsonPrimitive.long),
-                    )
-                }
+        val JsonObject.nodes get() = nodesOf("airingSchedule")
+        val JsonObject.coming get() = nodesOf(AniListSchedule.COMING)
+
+        fun JsonObject.nodesOf(field: String) =
+            this[field]!!.jsonObject["nodes"]!!.jsonArray.map {
+                Aired(
+                    it.jsonObject["episode"]!!.jsonPrimitive.int,
+                    Instant.ofEpochSecond(it.jsonObject["airingAt"]!!.jsonPrimitive.long),
+                )
+            }
     }
 }

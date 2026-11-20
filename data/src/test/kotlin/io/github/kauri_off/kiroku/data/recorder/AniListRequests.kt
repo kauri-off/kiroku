@@ -6,6 +6,8 @@ internal data class AniListAsk(
     val ids: List<Int>,
     // False only where the case is AniList's paging, not a title: then no MAL page is recorded for its titles.
     val withMalPages: Boolean = true,
+    // N3's re-check: one request of the titles' first page of episodes and of those still to air, no later page of episodes.
+    val recheck: Boolean = false,
 )
 
 // The first 60 titles of MAL's top airing chart on the day of recording, five of them unknown to AniList.
@@ -32,4 +34,6 @@ internal val AniListRequests: List<AniListAsk> =
         AniListAsk("unknown_alone", listOf(9874)),
         AniListAsk("unknown_among_others", listOf(9874, 61987, 62734)),
         AniListAsk("more_than_one_page", TopAiring, withMalPages = false),
+        AniListAsk("recheck_weekly", listOf(61987), recheck = true),
+        AniListAsk("recheck_hundreds_of_episodes", listOf(235), recheck = true),
     )

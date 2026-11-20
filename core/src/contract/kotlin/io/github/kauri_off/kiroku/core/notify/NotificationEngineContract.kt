@@ -1068,6 +1068,34 @@ abstract class NotificationEngineContract {
         }
 
     @Test
+    fun `N3 a re-check answered with what is still to air plans a postponed episode again, and announces one that aired`() =
+        runTest {
+            val w = world()
+            w.source.onlyComing = true
+            w.source.schedules = NotifyCases.schedules.moved(title, 1, day.multipliedBy(2))
+            w.clock.now = week(0)
+            w.alarm.gone()
+
+            val report = w.engine.run(RunTrigger.Alarm)
+
+            assertEquals(listOf(setOf(title.id)), w.source.rechecks.toList())
+            assertEquals(Recheck.Answered, report.recheck)
+            assertEquals(emptyList<Pair<AnimeId, Int>>(), w.alerts)
+            assertEquals(week(0).plus(day.multipliedBy(2)), w.alarm.at.value)
+
+            // Episode 2 aired an hour before the alarm's run, so the answer leaves it out and the stored time stands.
+            w.pass(week(0).plus(day.multipliedBy(2)))
+            w.clock.now = week(1).plus(hour)
+            w.alarm.gone()
+            w.engine.run(RunTrigger.Alarm)
+
+            assertEquals(listOf(title.id to 1, title.id to 2), w.alerts)
+            assertEquals(listOf(week(0).plus(day.multipliedBy(2)), week(1)), w.sent().map { it.airedAt })
+            assertEquals(listOf(Recheck.Answered, Recheck.Answered), w.sent().map { it.recheck })
+            assertEquals(emptyList<Throwable>(), w.unexpected)
+        }
+
+    @Test
     fun `N3 a process the alarm starts runs nothing before the alarm's run, so a postponed episode is planned again there too`() =
         runTest {
             val w = world()
