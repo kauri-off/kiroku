@@ -52,6 +52,7 @@ import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.SearchFixtureStates
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.OpenedPage
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -457,7 +458,7 @@ class AppRouteTest {
         compose.onNodeWithText("Recent").assertDoesNotExist()
     }
 
-    // The owner's decision: signing out closes every screen, another user's profile included, and keeps no screen's state.
+    // Signing out closes every screen, another user's profile included, and keeps no screen's state.
     @Test
     fun `a sign-out closes every screen and leaves the app where a start without a session does`() {
         app()
@@ -489,6 +490,22 @@ class AppRouteTest {
         compose.onNode(hasSetTextAction() and hasText(searched)).assertDoesNotExist()
         click("Profile")
         shows("Sign in with MyAnimeList to see your profile here")
+    }
+
+    // A start without a session is not a sign-out: a title a link opened stays.
+    @Test
+    fun `a start signed out keeps the page it opened on`() {
+        runBlocking { graph.session.signOut() }
+        val page = TitleKey(kagerou.id.value)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                navigator = rememberShellNavigator(OpenedPage(Destination.List, page))
+                AppRoute(graph, navigator, snackbars)
+            }
+        }
+        compose.waitForIdle()
+        assertEquals(listOf(Destination.List.root, page), navigator.stackOf(Destination.List))
+        assertTrue(displayed(kagerou.titles.romaji).isNotEmpty())
     }
 
     // S6: a session that ends is not a sign-out; a sign-out from the expired session is one.

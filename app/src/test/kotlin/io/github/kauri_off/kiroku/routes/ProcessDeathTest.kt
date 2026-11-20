@@ -32,11 +32,13 @@ import io.github.kauri_off.kiroku.core.demo.DemoUserLists
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Genre
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.profile.ProfileTags
+import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellNavigator
@@ -216,5 +218,36 @@ class ProcessDeathTest {
         compose.waitForIdle()
         assertEquals(Destination.List, navigator!!.current)
         assertEquals(Destination.entries.map { listOf(it.root) }, Destination.entries.map { navigator!!.stackOf(it).toList() })
+    }
+
+    // Once the sign-out has closed the screens, a window rebuilt while signed out keeps what was opened since.
+    @Test
+    fun `a window rebuilt after a sign-out keeps the screens opened since`() {
+        var owner = Owner()
+        var navigator: ShellNavigator? = null
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    navigator = rememberShellNavigator()
+                    AppRoute(graph, navigator!!)
+                }
+            }
+        }
+        runBlocking { graph.session.signOut() }
+        compose.waitForIdle()
+        assertEquals(1, navigator!!.restarts)
+        val browse = BrowseKey(BrowseList.ThisSeason)
+        compose.runOnUiThread {
+            navigator!!.select(Destination.Search)
+            navigator!!.open(browse)
+        }
+        compose.waitForIdle()
+        owner.viewModelStore.clear()
+        owner = Owner()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        assertEquals(Destination.Search, navigator!!.current)
+        assertEquals(listOf(Destination.Search.root, browse), navigator!!.stackOf(Destination.Search))
     }
 }

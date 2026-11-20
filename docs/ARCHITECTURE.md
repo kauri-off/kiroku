@@ -158,7 +158,8 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
   cannot be read never crash the app and never clear what is stored: the session is expired for that run. A store
   whose sign-in cannot be read either means signed out. A file that cannot be read at all signs nobody out: the
   session has no value until it is read.
-- **S9.** Signing out removes the tokens and everything stored about the user.
+- **S9.** Signing out removes the tokens and everything stored about the user. Signing out closes every screen and
+  leaves the app where a start without a session does; a session that expires does not (S6).
 
 ### 3.3 The client id
 
