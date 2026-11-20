@@ -83,7 +83,7 @@ fun ShellRoute(
     }
 }
 
-// Each entry's saved state and view models belong to its place in one destination's stack, never to its key alone.
+// Each entry's saved state and view models belong to its place in one stack since the last restart, never to its key alone.
 // Only the entry on top draws the snackbar host, also while Back's transition shows the one under it.
 private fun NavEntry<NavKey>.scopedTo(
     key: NavKey,
@@ -92,7 +92,7 @@ private fun NavEntry<NavKey>.scopedTo(
     navigator: ShellNavigator,
 ): NavEntry<NavKey> {
     val entry = this
-    return NavEntry(key, notShown("${destination.name}/$depth/$contentKey"), metadata) {
+    return NavEntry(key, notShown("${navigator.restarts}/${destination.name}/$depth/$contentKey"), metadata) {
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
         val inStack = destination in navigator.visible && navigator.stackOf(destination).getOrNull(depth) == key
         CompositionLocalProvider(LocalOnTop provides onTop) { NoInputWhileLeaving(inStack) { entry.Content() } }

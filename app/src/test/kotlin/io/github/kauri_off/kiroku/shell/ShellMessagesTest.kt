@@ -264,6 +264,23 @@ class ShellMessagesTest {
         assertEquals(listOf(moved), shownAfter(watched(1), moved))
     }
 
+    // A sign-out leaves no message of the user who signed out, shown, waiting or asking for an edit sheet.
+    @Test
+    fun `clearing ends the message shown and drops the waiting ones and the edit request`() {
+        compose.runOnUiThread {
+            messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(anime.id)))
+            messages.ended(messages.current.value!!, actionPerformed = true)
+            listOf(failed(2), moved).forEach(messages::post)
+        }
+        assertEquals(anime.id, messages.editRequest.value)
+        assertEquals(failed(2), messages.current.value?.message)
+        compose.runOnUiThread { messages.clear() }
+        assertNull(messages.current.value)
+        assertNull(messages.editRequest.value)
+        compose.runOnUiThread { messages.post(watched(3)) }
+        assertEquals(listOf(watched(3)), shownInTurn())
+    }
+
     @Test
     fun `two messages that must stay are shown one after the other`() {
         assertEquals(listOf(failed(1), moved, failed(2)), shownAfter(failed(1), watched(3), moved, failed(2), watched(4)))
