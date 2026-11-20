@@ -92,7 +92,7 @@ class MalErrorsTest {
     }
 
     @Test
-    fun `any other refusal of MAL's of another user's list is a refusal and background work backs off`() {
+    fun `MAL's own refusal on another user's list, other than a private list, is a refusal and background work backs off`() {
         val private = recorded("list_private")
         val others =
             listOf(
@@ -123,7 +123,7 @@ class MalErrorsTest {
         val notMals =
             listOf(
                 answer(403, "<html><body>Sign in to this network</body></html>", type = "text/html"),
-                answer(403, "<html>$NetworkFixture.MalsRefusal</html>", type = "text/html"),
+                answer(403, "<html>${NetworkFixture.MalsRefusal}</html>", type = "text/html"),
                 answer(403, "", type = "text/plain"),
                 answer(403, NetworkFixture.THING),
                 answer(403, """{"error":{"code":"forbidden"}}"""),

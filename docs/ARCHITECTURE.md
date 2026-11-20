@@ -102,7 +102,7 @@ Tenrai (from its documentation and recorded answers):
 |---|---|---|
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
 | MAL | Answered as a private list when reading another user's list | "This list is private". Not treated as rate limiting. |
-| MAL | Refused otherwise: a 429, or a 403 whose body is MAL's JSON error (any other 403 is the network's and counts as a server error) | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
+| MAL | Refused otherwise: a 429, or a 403 whose body is MAL's JSON error (any other 403 counts as a server error) | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. |
 | An optional source (Tenrai's score distribution; others after 1.0) | Any failure, refusal or rate limit | Its part of the app says so and offers Retry, and never blocks or delays the page it belongs to. |
