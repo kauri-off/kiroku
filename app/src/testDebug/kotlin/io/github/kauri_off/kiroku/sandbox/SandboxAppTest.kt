@@ -631,7 +631,7 @@ class SandboxAppTest {
         assertEquals(emptyList<URI>(), connections.asked)
     }
 
-    // Section 2.1 and S9: with every token rejected, a read that sent one would end the session; a profile left open reads again.
+    // Section 2.1 and S9: with every token rejected, a read that sent one would end the session; a sign-out closes the profile.
     @Test
     fun `other users' lists are read without a token signed in, expired and signed out, and a sign-out leaves no profile and no list`() {
         signIn()
@@ -668,6 +668,12 @@ class SandboxAppTest {
         val before = reads()
         waited { graph.session.signOut() }
         assertEquals(0L, rows("sandbox.db", "own_profile"))
+        shows("Sign in with MyAnimeList to see your list here")
+        compose.onNodeWithText(SandboxUsers.PUBLIC).assertDoesNotExist()
+        profileTab()
+        compose.onNode(hasText("Open another profile") and hasClickAction()).performClick()
+        compose.onNodeWithTag(ProfileTags.nameField).performTextInput(SandboxUsers.PUBLIC)
+        compose.onNode(hasText("Open") and hasClickAction()).performClick()
         until { reads() > before }
         shows(count(statisticsOf(whole.entries).statuses.completed))
         assertEquals(whole.entries, (readList(SandboxUsers.PUBLIC) as UserListState.Whole).entries)
