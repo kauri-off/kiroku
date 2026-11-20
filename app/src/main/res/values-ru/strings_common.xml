@@ -26,7 +26,7 @@
     <string name="common_relation_spin_off">Спин-офф</string>
     <string name="common_relation_alternative_setting">Альтернативная вселенная</string>
     <string name="common_relation_alternative_version">Альтернативная версия</string>
-    <string name="common_relation_summary">Краткое изложение</string>
+    <string name="common_relation_summary">Краткое содержание</string>
     <string name="common_relation_other">Прочее</string>
     <string name="common_relation_character">Общий персонаж</string>
     <string name="common_premieres_on">Премьера %s</string>
@@ -51,6 +51,6 @@
     <string name="common_moved_to_completed">Перенесено в Просмотрено</string>
     <string name="common_no_connection">Нет соединения</string>
     <string name="common_refused">MyAnimeList отклоняет запросы, попробуйте позже</string>
-    <string name="common_no_client_id">В этой сборке нет идентификатора\u00A0клиента MyAnimeList</string>
+    <string name="common_no_client_id">В этой сборке нет идентификатора клиента MyAnimeList</string>
     <string name="common_could_not_refresh">Не удалось обновить</string>
 </resources>

@@ -16,7 +16,7 @@
     <string name="notification_log_trigger_alarm">Alarm</string>
     <string name="notification_log_trigger_restarted">Device restarted</string>
     <string name="notification_log_trigger_updated">App updated</string>
-    <string name="notification_log_trigger_access">Exact alarms allowed</string>
+    <string name="notification_log_trigger_access">Alarms and reminders allowed</string>
     <string name="notification_log_trigger_opened">App opened</string>
     <string name="notification_log_trigger_periodic">Periodic work</string>
     <string name="notification_log_trigger_marked">Marked watched</string>

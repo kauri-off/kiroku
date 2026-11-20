@@ -3,11 +3,11 @@
     <string name="edit_score">Оценка</string>
     <string name="edit_score_value">%1$d · %2$s</string>
     <string name="edit_score_0">Без оценки</string>
-    <string name="edit_score_1">Отвратительно</string>
-    <string name="edit_score_2">Ужасно</string>
-    <string name="edit_score_3">Очень плохо</string>
-    <string name="edit_score_4">Плохо</string>
-    <string name="edit_score_5">Средне</string>
+    <string name="edit_score_1">Хуже некуда</string>
+    <string name="edit_score_2">Очень плохо</string>
+    <string name="edit_score_3">Плохо</string>
+    <string name="edit_score_4">Слабо</string>
+    <string name="edit_score_5">Нормально</string>
     <string name="edit_score_6">Неплохо</string>
     <string name="edit_score_7">Хорошо</string>
     <string name="edit_score_8">Очень хорошо</string>

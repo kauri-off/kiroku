@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="airing_counts_title">Число вышедших серий</string>
-    <string name="airing_counts_detail">Как известно число вышедших серий каждого отслеживаемого тайтла по данным на этом устройстве, и каждый тайтл, у которого оно не точное. У MAL и AniList ничего не запрашивается</string>
+    <string name="airing_counts_detail">Откуда известно число вышедших серий каждого отслеживаемого тайтла (по данным на этом устройстве) и у каких тайтлов оно неточное. У MAL и AniList ничего не запрашивается</string>
     <string name="airing_counts_unreadable">Не удалось прочитать список или данные о выходе серий</string>
     <string name="airing_counts_retry">Повторить</string>
     <string name="airing_counts_tracked">Отслеживаемые тайтлы</string>
     <string name="airing_counts_exact">Точное</string>
     <string name="airing_counts_numbered_differently">Другая нумерация, не используется (A4)</string>
-    <string name="airing_counts_doubt">Оценка из-за сомнений (A5)</string>
-    <string name="airing_counts_no_schedule">Нет времени серий, оценка по MAL (A6)</string>
+    <string name="airing_counts_doubt">Приблизительно: данные под сомнением (A5)</string>
+    <string name="airing_counts_no_schedule">Нет времени серий, приблизительно по MAL (A6)</string>
     <string name="airing_counts_unknown">Неизвестное</string>
     <string name="airing_counts_aired">Вышло\u00A0%d</string>
     <string name="airing_counts_aired_estimated">Вышло\u00A0~%d</string>
@@ -16,7 +16,7 @@
     <string name="airing_counts_numbered">Сохранены серии\u00A0%1$d–%2$d</string>
     <string name="airing_counts_totals">Всего серий: MAL\u00A0%1$d, AniList\u00A0%2$d</string>
     <string name="airing_counts_stopped">Последняя серия в AniList вышла %s</string>
-    <string name="airing_counts_doubted_over">Другая запись AniList вышла до серии\u00A0%d</string>
+    <string name="airing_counts_doubted_over">Другая запись AniList дошла до серии\u00A0%d</string>
     <string name="airing_counts_no_result">Нет результата</string>
     <string name="airing_counts_separator">" · "</string>
 </resources>

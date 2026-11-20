@@ -20,14 +20,14 @@
     <string name="notify_settings_notifications_channel_off">Категория «%1$s» отключена</string>
     <string name="notify_settings_exact_alarms">Будильники и напоминания</string>
     <string name="notify_settings_exact_alarms_allowed">Разрешены: уведомления приходят вовремя</string>
-    <string name="notify_settings_exact_alarms_not_allowed">Не разрешены: уведомления могут опоздать до часа</string>
+    <string name="notify_settings_exact_alarms_not_allowed">Не разрешены: уведомления могут приходить с опозданием до часа</string>
     <string name="notify_settings_battery">Батарея</string>
     <string name="notify_settings_battery_unrestricted">Без ограничений</string>
     <string name="notify_settings_battery_restricted">Ограничено в настройках Android</string>
     <string name="notify_settings_send_test">Отправить пробное уведомление</string>
     <string name="notify_settings_test_not_shown_blocked">Не показано: все уведомления Kiroku заблокированы в настройках Android</string>
     <string name="notify_settings_test_not_shown_channel_off">Не показано: категория «%1$s» отключена в настройках Android</string>
-    <string name="notify_settings_limits">После «Остановить» уведомления не приходят, пока вы снова не откроете Kiroku.</string>
+    <string name="notify_settings_limits">После «Остановить» уведомления не приходят, пока вы снова не откроете Kiroku</string>
 
     <string name="notify_settings_upcoming">Ближайшие</string>
     <string name="notify_settings_list_synced">Список синхронизирован %1$s</string>

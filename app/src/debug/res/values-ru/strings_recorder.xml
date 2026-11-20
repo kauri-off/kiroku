@@ -16,7 +16,7 @@
     </plurals>
     <string name="recorder_confirm_writes">Kiroku добавит этот тайтл в ваш список на MyAnimeList, изменит его статус, число просмотренных серий, оценку и даты и снова удалит его. Больше в списке ничего не изменится</string>
     <plurals name="recorder_confirm_requests">
-        <item quantity="one">Будет отправлен\u00A0%d\u00A0запрос</item>
+        <item quantity="one">Будет отправлен\u00A0%d\u00A0запрос, по одному в две секунды: это около двух минут</item>
         <item quantity="few">Будет отправлено\u00A0%d\u00A0запроса, по одному в две секунды: это около двух минут</item>
         <item quantity="many">Будет отправлено\u00A0%d\u00A0запросов, по одному в две секунды: это около двух минут</item>
         <item quantity="other">Будет отправлено\u00A0%d\u00A0запроса, по одному в две секунды: это около двух минут</item>
@@ -42,11 +42,11 @@
     <string name="recorder_halt_not_finished">Этот тайтл ещё не завершён</string>
     <string name="recorder_halt_too_few_episodes">В этом тайтле меньше\u00A03\u00A0серий, или MyAnimeList не знает, сколько их</string>
     <string name="recorder_halt_no_such_title">На MyAnimeList нет тайтла с таким номером</string>
-    <string name="recorder_halt_not_signed_in">Вход не выполнен. Войдите и повторите</string>
+    <string name="recorder_halt_not_signed_in">Вход не выполнен. Войдите и попробуйте ещё раз</string>
     <string name="recorder_halt_no_answer">MyAnimeList не ответил</string>
     <string name="recorder_halt_storage">Устройство не смогло сохранить файл</string>
     <string name="recorder_halt_another_account">Вход выполнен в другой аккаунт, а не в тот, с которым шла запись. Войдите в тот аккаунт</string>
     <string name="recorder_halt_still_on_the_list">MyAnimeList ответил на удаление, но всё ещё показывает тайтл в вашем списке</string>
-    <string name="recorder_halt_refused">MyAnimeList отклоняет запросы (ответ\u00A0%1$d). Повторите позже</string>
+    <string name="recorder_halt_refused">MyAnimeList отклоняет запросы (ответ\u00A0%1$d), попробуйте позже</string>
     <string name="recorder_halt_unexpected">MyAnimeList ответил\u00A0%1$d, чего запись не ожидала</string>
 </resources>

@@ -5,7 +5,7 @@
     <string name="debug_menu_version">Версия</string>
     <string name="debug_menu_commit">Коммит</string>
     <string name="debug_menu_commit_dirty">%1$s, с незакоммиченными изменениями</string>
-    <string name="debug_menu_built">Собрана</string>
+    <string name="debug_menu_built">Дата сборки</string>
     <string name="debug_menu_not_known">Неизвестно</string>
     <string name="debug_menu_client_id">Идентификатор клиента MyAnimeList</string>
     <string name="debug_menu_client_id_included">Есть</string>

@@ -35,7 +35,7 @@
     <string name="list_unknown_user">На MyAnimeList нет пользователя с таким именем</string>
     <string name="list_reading_again">Список загружается заново</string>
     <string name="list_reading_again_count">Список загружается заново:\u00A0%1$s\u00A0из\u00A0%2$s</string>
-    <string name="list_reading_again_so_far">Список загружается заново: пока\u00A0%1$s</string>
+    <string name="list_reading_again_so_far">Список загружается заново: уже\u00A0%1$s</string>
     <plurals name="list_size">
         <item quantity="one">%1$s\u00A0тайтл</item>
         <item quantity="few">%1$s\u00A0тайтла</item>

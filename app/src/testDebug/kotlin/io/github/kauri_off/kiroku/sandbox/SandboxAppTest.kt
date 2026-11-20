@@ -129,6 +129,9 @@ class SandboxAppTest {
     @get:Rule(order = 1)
     val connections = NoConnection()
 
+    @get:Rule(order = 1)
+    val network = DeviceOnline()
+
     @get:Rule(order = 2)
     val source = StartsOn(DataSource.Sandbox)
 

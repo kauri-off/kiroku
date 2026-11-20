@@ -38,6 +38,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Clock
 import java.time.Duration
+import kotlin.time.AbstractLongTimeSource
+import kotlin.time.Duration.Companion.days
+import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
 
 // The live graph whole over MAL on the device, which keeps a made-up list in the source's own files.
@@ -45,6 +48,7 @@ class SandboxGraph internal constructor(
     private val parts: LiveParts,
     val sandbox: Sandbox,
     private val device: SandboxDevice,
+    private val aniListTime: SandboxAniListTime,
     private val live: LiveGraph = LiveGraph(parts),
 ) : AppGraph by live,
     SignInOwner,
@@ -102,6 +106,7 @@ class SandboxGraph internal constructor(
         // They are laid out before AniList answers again, so that a request the reset releases sees them.
         override suspend fun reset(off: () -> Unit): Outcome<Unit> {
             withContext(Dispatchers.IO) { this@SandboxGraph.sandbox.reset() }
+            aniListTime.passHolds()
             off()
             return list.sync().also { parts.scope.launch { airing.refresh() } }
         }
@@ -124,10 +129,12 @@ class SandboxGraph internal constructor(
                     poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
                     clock = clock,
                     file = { kind -> File(context.noBackupFilesDir, notShown("$NAME.mal.$kind")) },
+                    online = device::isOnline,
                 )
             val sandboxDevice = SandboxDevice(device)
-            val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = aniListTime)
-            return SandboxGraph(parts(source, sandboxDevice, clock), sandbox, sandboxDevice)
+            val time = SandboxAniListTime(aniListTime)
+            val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = time)
+            return SandboxGraph(parts(source, sandboxDevice, clock), sandbox, sandboxDevice, time)
         }
 
         private val NAME = notShown("sandbox")
@@ -141,6 +148,26 @@ class SandboxGraph internal constructor(
         @VisibleForTesting
         @Volatile
         internal var movedClock: Clock? = null
+    }
+}
+
+// [base], a day on at each [passHolds]: past every cool-down and wait the AniList client keeps after a failure.
+internal class SandboxAniListTime(
+    base: TimeSource.WithComparableMarks,
+) : AbstractLongTimeSource(DurationUnit.NANOSECONDS) {
+    private val start = base.markNow()
+
+    @Volatile
+    private var passed = 0L
+
+    override fun read(): Long = start.elapsedNow().inWholeNanoseconds + passed
+
+    fun passHolds() {
+        passed += Holds.inWholeNanoseconds
+    }
+
+    private companion object {
+        val Holds = 1.days
     }
 }
 
