@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.network
 
+import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.Serializable
 import mockwebserver3.Dispatcher
@@ -171,6 +172,9 @@ internal class NetworkFixture : ExternalResource() {
         const val CLIENT_ID = "the-client-id-0f3a"
         const val TOKEN = "the-token-9c1e"
         const val THING = """{"value":7}"""
+
+        // MAL refusing a request: its recorded error shape, with the code MAL gives for it.
+        val MalsRefusal by lazy { RecordedAnswers.named("list_private").body.replace("not_permitted", "forbidden") }
 
         fun answer(
             code: Int = 200,
