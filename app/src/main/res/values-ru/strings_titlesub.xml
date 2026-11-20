@@ -23,7 +23,7 @@
     <string name="titlesub_minutes">%d\u00A0мин</string>
     <string name="titlesub_hours">%d\u00A0ч</string>
     <string name="titlesub_hours_minutes">%1$d\u00A0ч\u00A0%2$d\u00A0мин</string>
-    <string name="titlesub_seconds">%d\u00A0сек</string>
+    <string name="titlesub_seconds">%d\u00A0с</string>
     <string-array name="titlesub_broadcast_at">
         <item>По понедельникам в\u00A0%s</item>
         <item>По вторникам в\u00A0%s</item>
