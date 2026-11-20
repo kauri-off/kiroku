@@ -226,18 +226,7 @@ missing from it; there are no duplicates.
 
 - [x] **M4-15 Notifications in the debug menu.**
 
-- [ ] **M4-16 [O] Emulator run.** The orchestrator runs the preview build once on the emulator against the sandbox,
-  signed in; the demo cannot serve, as its data does not survive a restart. With episodes planted by M4-15: the
-  device is forced idle before an air time and the notification is posted; the device is restarted before another
-  and the notification is posted without the app being opened; after a force-stop nothing is posted until the app
-  is opened; a planted episode postponed before its time is not announced then; with AniList failing an episode is
-  announced from the stored data; "Mark watched" is tapped with the app closed, on the current Android and on
-  M4-06's; the permission is denied, then granted in the system's settings; the preview build installed over a
-  build of M3 keeps its list and announces nothing that aired before.
-  **Needs:** M4-11, M4-12, M4-14, M4-15, M3-12.
-  **Check:** each observation, with its screenshot or its lines of M4-15's log; item 4 of section 13 is rewritten
-  from the measured delay of the notification in Doze and from whether the re-check reached the network; a
-  difference is filed as a task.
+- [x] **M4-16 [O] Emulator run.**
 
 - [ ] **M4-17 [O] The owner's seven days.** The owner uses the preview build for seven days with notifications on,
   as he uses his phone otherwise. At their end he compares what the app lists as sent with AniList's schedule of

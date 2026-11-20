@@ -690,8 +690,11 @@ Each of these could change a decision above.
    forgotten at sign-out, as a cache rather than the data storage the terms prohibit; he accepts the risk that
    AniList reads its terms otherwise. How often its episode numbering differs from MAL's, and so how often A4 and A5
    apply, is not measured.
-4. **Android behaviour taken from documentation, not measured:** whether the network can be reached when an alarm
-   fires in Doze (N3), and the real delay of inexact alarms.
+4. **Alarms in Doze are measured on emulators only** (Android 16 and 11, deep idle forced by a command). With
+   exact alarms the notification came within a second and the re-check had a network; without them the alarm came
+   at the end of its window (three quarters of its lead time, at most an hour) and the re-check had none, so the
+   stored data was used. A phone idle for hours, a vendor's battery manager and a real request to AniList at that
+   moment are not measured.
 5. **Sources beyond MAL and AniList.** The score distribution comes from Tenrai; characters, videos, reviews and
    other users' avatars have no source. Tenrai is in beta and does
    not say who runs it. Like every source of MAL's score distribution it serves what it reads from MAL's website,
