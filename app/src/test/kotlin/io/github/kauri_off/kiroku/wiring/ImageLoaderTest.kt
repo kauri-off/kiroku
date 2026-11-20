@@ -99,7 +99,7 @@ class ImageLoaderTest {
         Snapshot.sendApplyNotifications()
     }
 
-    private fun waitEnded(url: String) = compose.waitUntil(5_000) { pictures.hasEnded(url) }
+    private fun waitEnded(url: String) = pictures.await(compose, url)
 
     private fun poster(): Bitmap = compose.onNodeWithTag(POSTER).captureToImage().asAndroidBitmap()
 
@@ -125,7 +125,7 @@ class ImageLoaderTest {
                 FixtureListScreen(ListFixtureStates.watching.copy(content = ListFixtureStates.tabs(entries)))
             }
         }
-        compose.waitUntil(5_000) { ended.size >= 3 }
+        pictures.await(compose) { ended.size >= 3 }
 
         assertTrue(received.size >= 3)
         received.forEach { request ->
@@ -232,7 +232,7 @@ class ImageLoaderTest {
         for (index in 10 until urls.size step 10) {
             compose.onNodeWithTag(LIST).performScrollToIndex(index)
         }
-        compose.waitUntil(5_000) { ended.count { it.second is SuccessResult } >= 3 }
+        pictures.await(compose) { ended.count { it.second is SuccessResult } >= 3 }
         compose.waitForIdle()
 
         val width = with(compose.density) { Sizes.posterRow.roundToPx() }
