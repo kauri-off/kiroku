@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.idsOf
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.json
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.pagesOf
 import io.github.kauri_off.kiroku.data.anilist.AniListServer.Companion.reply
+import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -28,6 +29,9 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -39,6 +43,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.time.toJavaDuration
 
 // The airing engine over the AniList client and M3-01's recordings: what a refresh costs, a failure, a refusal, a page behind a refresh.
@@ -143,6 +149,41 @@ class AniListEngineTest {
         }
 
     @Test
+    fun `A9 an episode AniList counts as aired by a clock a little past its answer's Date is not lost by a re-check`() =
+        runTest {
+            val ids = idsOf("hundreds_of_episodes")
+            assertEquals(Outcome.Success(Unit), engine(ids).refresh())
+            val next =
+                store
+                    .read()
+                    .getValue(id(235))
+                    .schedule!!
+                    .episodes
+                    .single { it.number == 1221 }
+            // AniList stamps its answer 10 s before episode 1221 airs and leaves it out as aired; the device is 30 s behind.
+            val recheck = json("recheck_hundreds_of_episodes")
+            val coming = MEDIA + listOf("0", AniListSchedule.COMING, "nodes")
+            val rest = recheck.at(coming).jsonArray.filter { it.jsonObject["episode"]!!.jsonPrimitive.int != 1221 }
+            val date = DateTimeFormatter.RFC_1123_DATE_TIME.format(next.airsAt.minusSeconds(10).atOffset(ZoneOffset.UTC))
+            aniList.answer = { reply(200, recheck.edited(coming, JsonArray(rest)).toString(), headers = mapOf("Date" to date)) }
+            network.clock.now = next.airsAt.minusSeconds(30)
+            val alarm =
+                AiringEngine(aniList.newProcess(this), store, Watching(ids.map(::titleWithId)), network.clock, backgroundScope) { throw it }
+
+            assertEquals(Outcome.Success(Unit), alarm.refresh(setOf(id(235))))
+
+            assertEquals(
+                next,
+                store
+                    .read()
+                    .getValue(id(235))
+                    .schedule!!
+                    .episodes
+                    .single { it.number == 1221 },
+            )
+        }
+
+    @Test
     fun `after a failure a pull on the list or a page asks AniList at once, and a refresh nobody asked for waits`() =
         runTest {
             val ids = listOf(1, 2)
@@ -214,3 +255,9 @@ class AniListEngineTest {
             assertEquals(emptyList<Asked>(), aniList.unrecorded)
         }
 }
+
+// The value at [path] of a recorded answer, an index for an array's element.
+private fun JsonObject.at(path: List<String>): JsonElement =
+    path.fold<String, JsonElement>(this) { element, key ->
+        if (element is JsonArray) element[key.toInt()] else element.jsonObject.getValue(key)
+    }

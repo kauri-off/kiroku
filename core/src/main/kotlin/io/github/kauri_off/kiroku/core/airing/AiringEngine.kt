@@ -307,7 +307,7 @@ class AiringEngine(
     }
 
     // A title already asked for shares that answer, so no title is asked for twice at once; one still waiting becomes a pull's.
-    // A re-check shares a whole answer too, but nothing else shares a re-check's.
+    // A re-check shares a whole answer on its way, not one still waiting behind another call; nothing else shares a re-check's.
     private fun want(
         titles: Collection<Anime>,
         pull: Boolean,
@@ -317,7 +317,7 @@ class AiringEngine(
         val answers =
             titles.map { anime ->
                 if (coming) {
-                    asked[anime.id] ?: comingAsked.getOrPut(anime.id) {
+                    asked[anime.id]?.takeIf { anime.id !in waiting } ?: comingAsked.getOrPut(anime.id) {
                         comingWaiting[anime.id] = anime
                         CompletableDeferred()
                     }

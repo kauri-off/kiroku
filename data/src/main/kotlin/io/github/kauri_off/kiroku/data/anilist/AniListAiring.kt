@@ -106,7 +106,8 @@ class AniListAiring(
             handOver()
             fetched()
             for ((malId, id) in asked) {
-                val result = results[id] ?: continue
+                if (id in askedWhole) continue
+                val result = results.getValue(id)
                 val error = (result as? Outcome.Failure)?.error
                 if (error == null || error == DataError.NoConnection || error == DataError.Refused) {
                     failures.remove(malId)
