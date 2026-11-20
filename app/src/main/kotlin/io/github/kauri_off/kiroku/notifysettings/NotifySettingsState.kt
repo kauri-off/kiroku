@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.notifysettings
 
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
@@ -22,6 +23,12 @@ sealed interface NotifySettingsContent {
         val device: DeviceState,
         // Null while nobody is signed in: nothing is announced and nothing is recorded (S9).
         val record: NotifyRecord?,
+        // The last test notification was not shown, and the device still shows none of the app's.
+        val testNotShown: Boolean = false,
+    ) : NotifySettingsContent
+
+    data class Failed(
+        val error: DataError,
     ) : NotifySettingsContent
 }
 
@@ -42,23 +49,18 @@ enum class ExactAlarms {
     NoSetting,
 }
 
-enum class BatteryUse {
-    Unrestricted,
-
-    // The system's standby bucket for an app the user rarely opens.
-    RarelyUsed,
-    Restricted,
-}
+// Restricted is the user's own restriction of the app's background use, Android 9 and later.
+enum class BatteryUse { Unrestricted, Restricted }
 
 // The system screens a row of the device's states opens.
 enum class DeviceSetting { Notifications, ExactAlarms, Battery }
 
 data class NotifyRecord(
     val listSyncedAt: Instant?,
-    // Soonest first.
-    val upcoming: List<UpcomingNotification>,
+    // Soonest first; null until a run of the engine has worked it out.
+    val upcoming: List<UpcomingNotification>?,
     // Newest first.
-    val sent: List<SentNotification>,
+    val sent: List<SentEntry>,
 )
 
 data class UpcomingNotification(
@@ -68,13 +70,15 @@ data class UpcomingNotification(
     val notifyAt: Instant,
 )
 
-data class SentNotification(
+data class SentEntry(
     val id: AnimeId,
     val title: String,
     val episode: Int,
     val airedAt: Instant,
     val sentAt: Instant,
     val recheck: Recheck,
+    // False when the device showed none of the app's notifications at the time.
+    val shown: Boolean = true,
 )
 
 sealed interface NotifySettingsEvent {
@@ -99,6 +103,8 @@ sealed interface NotifySettingsEvent {
     ) : NotifySettingsEvent
 
     data object SendTest : NotifySettingsEvent
+
+    data object Retry : NotifySettingsEvent
 
     data class OpenTitle(
         val id: AnimeId,

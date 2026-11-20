@@ -7,4 +7,6 @@
     <string name="notify_could_not_save">Не удалось сохранить: серия\u00A0%1$d\u00A0просмотрена</string>
     <string name="notify_saving">Сохранение…</string>
     <string name="notify_saving_changes">Сохранение изменений</string>
+    <string name="notify_test_title">Пробное уведомление</string>
+    <string name="notify_test_text">Так приходят уведомления о новых сериях</string>
 </resources>

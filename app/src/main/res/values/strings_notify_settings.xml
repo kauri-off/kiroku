@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="notify_settings_could_not_load">Could not read the notification settings</string>
     <string name="notify_settings_title">Notifications</string>
     <string name="notify_settings_on">New episodes</string>
     <string name="notify_settings_on_detail">A notification when an episode of a title you are watching airs</string>
@@ -19,18 +20,19 @@
     <string name="notify_settings_notifications_channel_off">The category “%1$s” is turned off</string>
     <string name="notify_settings_exact_alarms">Alarms and reminders</string>
     <string name="notify_settings_exact_alarms_allowed">Allowed: notifications come on time</string>
-    <string name="notify_settings_exact_alarms_not_allowed">Not allowed: notifications may come late</string>
+    <string name="notify_settings_exact_alarms_not_allowed">Not allowed: notifications may come up to an hour late</string>
     <string name="notify_settings_battery">Battery</string>
     <string name="notify_settings_battery_unrestricted">Not restricted</string>
-    <string name="notify_settings_battery_rarely_used">Kiroku is rarely opened, so Android may delay its notifications</string>
-    <string name="notify_settings_battery_restricted">Restricted: notifications may not come</string>
+    <string name="notify_settings_battery_restricted">Restricted in Android settings</string>
     <string name="notify_settings_send_test">Send a test notification</string>
-    <string name="notify_settings_limits">Android may delay the notifications of an app you rarely open. After Force stop, none come until you open Kiroku again.</string>
+    <string name="notify_settings_test_not_shown">Not shown: notifications are turned off on this device</string>
+    <string name="notify_settings_limits">After Force stop, no notification comes until you open Kiroku again.</string>
 
     <string name="notify_settings_upcoming">Upcoming</string>
     <string name="notify_settings_list_synced">List synced %1$s</string>
     <string name="notify_settings_list_not_synced">The list has not been synced yet</string>
     <string name="notify_settings_upcoming_none">No title on your list has a known next episode</string>
+    <string name="notify_settings_upcoming_unknown">Not known yet</string>
     <string name="notify_settings_off">Notifications are off</string>
     <string name="notify_settings_signed_out">Sign in to get notifications about new episodes</string>
     <string name="notify_settings_sign_in">Sign in</string>
@@ -40,6 +42,7 @@
     <string name="notify_settings_sent_episode">Episode\u00A0%1$d ·\u00A0aired %2$s</string>
     <string name="notify_settings_sent_at">Sent %1$s</string>
     <string name="notify_settings_sent_at_checked">Sent %1$s ·\u00A0%2$s</string>
+    <string name="notify_settings_sent_not_shown">Not shown: notifications were turned off</string>
     <string name="notify_settings_recheck_confirmed">checked with AniList</string>
     <string name="notify_settings_recheck_failed">not checked: AniList failed</string>
     <string name="notify_settings_recheck_too_slow">not checked: AniList was too slow</string>

@@ -37,13 +37,13 @@ object NotifySettingsFixtureStates {
             }.sortedBy { it.notifyAt }
 
     // The episode before each upcoming one, a week earlier, where that has passed; newest first.
-    val sent: List<SentNotification> =
+    val sent: List<SentEntry> =
         upcoming
             .filter { it.episode > 1 }
             .map { it.copy(episode = it.episode - 1, notifyAt = it.notifyAt.minus(Duration.ofDays(WEEK_DAYS))) }
             .filter { it.notifyAt.isBefore(now) }
             .mapIndexed { index, it ->
-                SentNotification(
+                SentEntry(
                     it.id,
                     it.title,
                     it.episode,
@@ -54,10 +54,10 @@ object NotifySettingsFixtureStates {
             }.sortedByDescending { it.sentAt }
 
     // Seven days of announcements, several a day, newest first.
-    val longRecord: List<SentNotification> =
+    val longRecord: List<SentEntry> =
         set.anime.take(LONG_RECORD).mapIndexed { index, anime ->
             val aired = now.minus(Duration.ofMinutes(RECORD_STEP_MINUTES * index + RECORD_FIRST_MINUTES))
-            SentNotification(
+            SentEntry(
                 anime.id,
                 anime.titles.romaji,
                 episode = index % EPISODES + 1,
@@ -87,7 +87,9 @@ object NotifySettingsFixtureStates {
         content = NotifySettingsContent.Shown(settings, device, record),
     )
 
-    fun loading() = NotifySettingsState(now.atZone(FixtureTime.zone), NotifySettingsContent.Loading)
+    fun state(content: NotifySettingsContent) = NotifySettingsState(now.atZone(FixtureTime.zone), content)
+
+    fun loading() = state(NotifySettingsContent.Loading)
 
     private const val WEEK_DAYS = 7L
     private const val SYNCED_MINUTES_AGO = 95L

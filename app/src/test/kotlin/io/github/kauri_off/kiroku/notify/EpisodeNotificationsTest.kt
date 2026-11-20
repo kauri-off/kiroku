@@ -359,6 +359,29 @@ class EpisodeNotificationsTest {
             assertShownExactly(kagerou)
         }
 
+    @Test
+    fun `the test notification goes through the channel of new episodes, and no source's run reads it, replaces it or withdraws it`() =
+        runBlocking {
+            val tests = EpisodeNotifications(app, "test", { language }, Duration.ZERO)
+            val own = notifications()
+            assertTrue(tests.test())
+            val test = active().single()
+            assertEquals(EpisodeNotifications.CHANNEL, test.notification.channelId)
+            assertEquals(
+                "Test notification",
+                test.notification.extras
+                    .getCharSequence(Notification.EXTRA_TITLE)
+                    .toString(),
+            )
+            assertEquals(emptyMap<AnimeId, Shown>(), tests.shown())
+            assertEquals(emptyMap<AnimeId, Shown>(), own.shown())
+
+            own.post(announcement(kagerou, 13), alert = true)
+            own.withdraw(setOf(kagerou.id, shiokaze.id))
+            tests.withdraw(setOf(kagerou.id))
+            assertEquals(listOf(test.key), active().map { it.key })
+        }
+
     // N9: "Mark watched" that could not be saved says so in the title's notification, which the engine still takes for its own.
     @Test
     fun `could not save replaces a title's notification in place, keeping what the engine posted it with`() =

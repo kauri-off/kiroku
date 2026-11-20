@@ -71,6 +71,23 @@ class EpisodeNotifications(
             summary(shown.size > gone.size)
         }
 
+    // A notification of no title on the channel of new episodes, under its own id, which no run reads or removes; whether it shows.
+    suspend fun test(): Boolean =
+        lock.withLock {
+            channel()
+            val test =
+                NotificationCompat
+                    .Builder(context, CHANNEL)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle(context.getString(R.string.notify_test_title))
+                    .setContentText(context.getString(R.string.notify_test_text))
+                    .setAutoCancel(true)
+                    .setContentIntent(context.open())
+                    .build()
+            enqueue { system.notify(testTag(source), TEST_ID, test) }
+            enabled()
+        }
+
     // Whether the device shows the app's episode notifications at all: neither the app's nor the channel's are turned off.
     fun enabled(): Boolean =
         NotificationManagerCompat.from(context).areNotificationsEnabled() &&
@@ -200,6 +217,9 @@ class EpisodeNotifications(
         // Every episode notification has this id under its title's tag; the summary has its own.
         const val EPISODE_ID = 1
         const val SUMMARY_ID = 2
+        const val TEST_ID = 4
+
+        fun testTag(source: String): String = notShown("test:$source")
 
         fun group(source: String): String = notShown("episodes:$source")
 
