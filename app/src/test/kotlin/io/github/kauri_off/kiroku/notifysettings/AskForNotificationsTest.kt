@@ -13,7 +13,12 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.core.app.ActivityOptionsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.LocalSplashHold
 import io.github.kauri_off.kiroku.SplashHold
 import io.github.kauri_off.kiroku.core.model.Session
@@ -21,9 +26,12 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -34,6 +42,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.hours
 
 // Section 5.3: the system's prompt, once per install, after a sign-in; never below Android 13.
@@ -78,18 +87,46 @@ class AskForNotificationsTest {
     private var starts by mutableIntStateOf(0)
 
     // Each start of the app is a new composition over the same install's file.
-    private fun app(hold: (View) -> SplashHold? = { null }) {
+    private fun app(
+        lifecycle: LifecycleOwner? = null,
+        hold: (View) -> SplashHold? = { null },
+    ) {
         compose.setContent {
             key(starts) {
                 CompositionLocalProvider(
                     LocalActivityResultRegistryOwner provides registry,
                     LocalSplashHold provides hold(LocalView.current),
+                    LocalLifecycleOwner provides (lifecycle ?: LocalLifecycleOwner.current),
                 ) {
                     AskForNotifications(sessions, AskedOnce(marker, Dispatchers.Unconfined))
                 }
             }
         }
         compose.waitForIdle()
+    }
+
+    // A window whose state the test moves.
+    private class Window : LifecycleOwner {
+        val states = LifecycleRegistry.createUnsafe(this)
+        override val lifecycle: Lifecycle get() = states
+    }
+
+    // Holds what is sent to it until the test runs it, newest first: a read made after a write then runs before it.
+    private class LateDisk : CoroutineDispatcher() {
+        private val tasks = ArrayDeque<Runnable>()
+
+        override fun dispatch(
+            context: CoroutineContext,
+            block: Runnable,
+        ) {
+            synchronized(tasks) { tasks.addLast(block) }
+        }
+
+        // Runs what is queued now; what that sends here waits for the next call.
+        fun runNewestFirst() {
+            val queued = synchronized(tasks) { tasks.toList().also { tasks.clear() } }
+            queued.asReversed().forEach { it.run() }
+        }
     }
 
     private fun laterStart() {
@@ -131,9 +168,54 @@ class AskForNotificationsTest {
     }
 
     @Test
+    fun `an expired session is still the sign-in's, and asks`() {
+        session.value = Session.Expired(SignInId("a"))
+        app()
+        idle()
+        assertEquals(listOf(Manifest.permission.POST_NOTIFICATIONS), asks)
+    }
+
+    @Test
+    fun `nothing is asked until the app is in front`() {
+        val window = Window()
+        window.states.currentState = Lifecycle.State.STARTED
+        app(lifecycle = window)
+        idle()
+        assertEquals(emptyList<Any?>(), asks)
+
+        compose.runOnUiThread { window.states.currentState = Lifecycle.State.RESUMED }
+        idle()
+        assertEquals(listOf(Manifest.permission.POST_NOTIFICATIONS), asks)
+    }
+
+    // A rotation after the launch and before the file is written: the new window does not ask again, and the file is written.
+    @Test
+    fun `a window recreated before the asking is written down asks nothing, and the asking is written all the same`() {
+        val disk = LateDisk()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalActivityResultRegistryOwner provides registry) {
+                AskForNotifications(sessions, AskedOnce(marker, disk))
+            }
+        }
+        idle()
+        disk.runNewestFirst()
+        idle()
+        assertEquals(listOf(Manifest.permission.POST_NOTIFICATIONS), asks)
+        assertFalse(marker.exists())
+
+        restoration.emulateSavedInstanceStateRestore()
+        idle()
+        disk.runNewestFirst()
+        idle()
+        assertEquals(1, asks.size)
+        assertTrue(marker.exists())
+    }
+
+    @Test
     fun `nothing is asked while the splash is held, and the prompt comes once the window has drawn`() {
         var splash: SplashHold? = null
-        app { view -> splash ?: SplashHold(view, atMost = 1.hours).also { it.hold() }.also { splash = it } }
+        app(hold = { view -> splash ?: SplashHold(view, atMost = 1.hours).also { it.hold() }.also { splash = it } })
         idle()
         assertEquals(emptyList<Any?>(), asks)
 

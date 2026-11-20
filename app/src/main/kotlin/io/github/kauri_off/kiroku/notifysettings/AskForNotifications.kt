@@ -9,7 +9,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -21,6 +24,7 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -36,9 +40,9 @@ class AskedOnce(
 
     suspend fun done(): Boolean = withContext(io) { file.exists() }
 
-    // A file that cannot be written means one more prompt at a later start, which the system itself limits.
+    // Written also when the screen that asked is gone; a file that cannot be written means one more prompt at a later start.
     suspend fun mark() {
-        withContext(io) {
+        withContext(NonCancellable + io) {
             try {
                 file.createNewFile()
             } catch (_: IOException) {
@@ -59,13 +63,18 @@ fun AskForNotifications(
     val splash = LocalSplashHold.current
     // What the person answers shows on the notification settings, which read the device; nothing else depends on it.
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // Set with the launch and kept across a recreated window, which may come before the file is written.
+    var launched by rememberSaveable { mutableStateOf(false) }
     val signedIn by remember(session) { session.observeSession().map { it != Session.SignedOut }.distinctUntilChanged() }
         .collectAsScreenState(initial = false)
     LaunchedEffect(signedIn) {
-        if (!signedIn || asked.done()) return@LaunchedEffect
+        if (!signedIn || launched || asked.done()) return@LaunchedEffect
         splash?.awaitDrawn()
         lifecycle.withResumed {
-            if (!context.allowsNotifications()) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            if (!launched && !context.allowsNotifications()) {
+                launched = true
+                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
         asked.mark()
     }
