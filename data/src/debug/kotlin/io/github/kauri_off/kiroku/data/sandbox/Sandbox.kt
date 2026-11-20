@@ -7,13 +7,14 @@ import java.time.Duration
 import java.time.Instant
 
 // A sandbox keeping its list, tokens and airing in [file]s, its titles read from public answers at its first request;
-// [readTenrai] gives one of Tenrai's recorded answers by its file name.
+// [readTenrai] gives one of Tenrai's recorded answers by its file name; [online] is the device's network, which it answers only over.
 class Sandbox(
     read: (String) -> String,
     readTenrai: (String) -> String,
     poster: (Long) -> String,
     clock: Clock,
     file: (String) -> File,
+    online: () -> Boolean = { true },
 ) {
     private val airing = lazy { SandboxAiring(SandboxTitles.read(read, poster), clock, file(AIRING)) }
 
@@ -26,7 +27,7 @@ class Sandbox(
 
     val tenrai = SandboxTenrai(readTenrai)
 
-    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList, tenrai)
+    val mal = SandboxMal(OnFirstRequest(site, airing), SandboxTokens(clock, file(TOKENS)), aniList, tenrai, online)
 
     // The title episodes are planted of, by its name at MAL.
     val plantedTitle: String? get() = airing.value.titles[SandboxAiring.SOON]?.text("title")
