@@ -311,7 +311,7 @@ class NotifySettingsViewModelTest {
         }
 
     @Test
-    fun `a test notification the device does not show is told so, until the device shows the app's notifications`() =
+    fun `a test notification the device does not show is told so, until a read finds the app's notifications allowed, and then for good`() =
         runTest(dispatcher) {
             val checks = MutableSharedFlow<Unit>()
             val app = app(checks = checks, testShows = false)
@@ -323,10 +323,29 @@ class NotifySettingsViewModelTest {
             advanceUntilIdle()
             assertTrue(app.content().testNotShown)
 
+            // Only the category turned off: still not shown.
+            app.device = allowed.copy(notifications = NotificationAccess.ChannelOff)
+            checks.emit(Unit)
+            advanceUntilIdle()
+            assertTrue(app.content().testNotShown)
+
             app.device = allowed
             checks.emit(Unit)
             advanceUntilIdle()
             assertFalse(app.content().testNotShown)
+
+            // Blocked again with no new tap, read by a check and by a return to the screen.
+            app.device = allowed.copy(notifications = NotificationAccess.Blocked)
+            checks.emit(Unit)
+            advanceUntilIdle()
+            assertFalse(app.content().testNotShown)
+            app.model.readDevice()
+            advanceUntilIdle()
+            assertFalse(app.content().testNotShown)
+
+            app.model.onEvent(NotifySettingsEvent.SendTest)
+            advanceUntilIdle()
+            assertTrue(app.content().testNotShown)
         }
 
     private companion object {

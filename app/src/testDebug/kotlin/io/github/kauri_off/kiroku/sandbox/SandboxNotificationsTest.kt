@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.sandbox
 
+import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.database.sqlite.SQLiteDatabase
@@ -242,6 +243,39 @@ class SandboxNotificationsTest {
         // The record is the sandbox's own: nothing of the real account's was made.
         val folders = listOf(context.noBackupFilesDir, context.getDatabasePath("sandbox.db").parentFile!!)
         assertEquals(emptyList<String>(), folders.flatMap { it.list().orEmpty().toList() }.filter { it.startsWith("account.") })
+    }
+
+    // Section 5.3: a denial stops nothing but the showing.
+    @Test
+    fun `with the permission denied the alarm and the record go on, and a grant alone makes the next due notification appear`() {
+        val device = shadowOf(context.getSystemService(NotificationManager::class.java))
+        shadowOf(context).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        device.setNotificationsEnabled(false)
+        val graph = started()
+        graph.signedIn()
+        waited { withContext(Dispatchers.IO) { graph.sandbox.reset() } }
+        graph.synced()
+        graph.run(RunTrigger.AppOpened)
+        assertEquals(graph.coming().minOf { it.notifyAt }, alarm())
+
+        val aired = graph.soonAired()
+        val denied = graph.run(RunTrigger.Alarm)
+        assertEquals(listOf(aired.episode), denied.posted.ofSoon())
+        assertEquals(listOf(false), denied.posted.filter { it.anime.id == soon }.map { it.shown })
+        assertEquals(listOf(false), graph.sent().filter { it.anime.id == soon }.map { it.shown })
+        val next = graph.coming().minOf { it.notifyAt }
+        assertTrue(next.isAfter(now()))
+        assertEquals(next, alarm())
+
+        // Given in Android's settings while the app does nothing; the alarm it set while denied is the one that fires.
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        device.setNotificationsEnabled(true)
+        assertEquals(next, alarm())
+        time.ahead = time.ahead + Duration.between(now(), next).plusSeconds(1)
+        val granted = graph.run(RunTrigger.Alarm)
+        assertTrue("${granted.posted}", granted.posted.isNotEmpty())
+        assertEquals(granted.posted.map { true }, granted.posted.map { it.shown })
+        assertTrue(shown().keys.containsAll(granted.posted.map { it.anime.id }))
     }
 
     @Test

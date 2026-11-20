@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
@@ -55,9 +56,10 @@ class NotifySettingsViewModel(
     private val devices = MutableStateFlow<DeviceState?>(null)
     private val testShown = MutableStateFlow<Boolean?>(null)
 
-    // Every read goes to [devices], so the latest read is the one shown.
+    // Every read goes to [devices], so the latest is shown; one that finds notifications allowed forgets a test not shown.
     private val deviceNow: Flow<DeviceState> =
         merge(devices.filterNotNull(), deviceChecks.transform<Unit, DeviceState> { readDevice() })
+            .onEach { if (it.notifications == NotificationAccess.Allowed) testShown.compareAndSet(false, null) }
 
     // Null while signed out: nothing is announced and nothing is recorded (S9).
     private val record: Flow<NotifyRecord?> =

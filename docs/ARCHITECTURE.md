@@ -298,9 +298,11 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   posted, with one action that marks the episode it names. Tapping it opens the title page with the List beneath
   it; a tapped notification goes and is not shown again.
 - **Grouping.** All episode notifications share one group with a summary. **Channel:** default importance.
-- **First run.** Notifications are on by default. On Android 13 and later the system permission prompt appears
-  once, right after the first successful sign-in, with no custom dialog before it. A denial is shown only in the
-  notification settings. Planning continues either way, so a later grant needs no further step.
+- **First run.** Notifications are on by default. On Android 13 and later, unless they are already allowed, the
+  system permission prompt appears once per install, with no custom dialog before it: right after the first
+  successful sign-in, or, on an install over a build that never asked, at its first start while signed in, over the
+  page that start opens. A dismissed prompt counts as that once. A denial is shown only in the notification
+  settings. Planning continues either way, so a later grant needs no further step.
 - **Delay.** A notification comes when the episode airs in Japan (the default), or 30 minutes, 1 hour or 3 hours
   later.
 - **Limits the app cannot remove.** A force-stopped app receives nothing until it is opened, and without the

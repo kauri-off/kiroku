@@ -217,7 +217,11 @@ private fun Device(
         }
         if (testNotShown) {
             Text(
-                stringResource(R.string.notify_settings_test_not_shown),
+                if (device.notifications == NotificationAccess.ChannelOff) {
+                    stringResource(R.string.notify_settings_test_not_shown_channel_off, stringResource(R.string.notify_new_episodes))
+                } else {
+                    stringResource(R.string.notify_settings_test_not_shown_blocked)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(start = Spacing.l, top = Spacing.s, end = Spacing.l),

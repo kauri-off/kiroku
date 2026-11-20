@@ -145,17 +145,26 @@ class NotifySettingsScreenTest {
     }
 
     @Test
-    fun aTestNotificationTheDeviceDidNotShowIsToldUnderTheButton() {
-        val blocked = fixtures.allowed.copy(notifications = NotificationAccess.Blocked)
+    fun aTestNotificationTheDeviceDidNotShowIsToldUnderTheButtonWithItsCause() {
+        var device by mutableStateOf(fixtures.allowed.copy(notifications = NotificationAccess.Blocked))
         var notShown by mutableStateOf(false)
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                val content = NotifySettingsContent.Shown(fixtures.settings, blocked, fixtures.record, testNotShown = notShown)
+                val content = NotifySettingsContent.Shown(fixtures.settings, device, fixtures.record, testNotShown = notShown)
                 NotifySettingsScreen(fixtures.state(content), { events += it }, SnackbarHostState())
             }
         }
-        compose.onNodeWithText("Not shown: notifications are turned off on this device").assertDoesNotExist()
+        compose.onNodeWithText(BLOCKED).assertDoesNotExist()
         notShown = true
-        compose.onNodeWithText("Not shown: notifications are turned off on this device").assertExists()
+        compose.onNodeWithText(BLOCKED).assertExists()
+        compose.onNodeWithText(CHANNEL_OFF).assertDoesNotExist()
+        device = fixtures.allowed.copy(notifications = NotificationAccess.ChannelOff)
+        compose.onNodeWithText(CHANNEL_OFF).assertExists()
+        compose.onNodeWithText(BLOCKED).assertDoesNotExist()
+    }
+
+    private companion object {
+        const val BLOCKED = "Not shown: all of Kiroku’s notifications are blocked in Android settings"
+        const val CHANNEL_OFF = "Not shown: the category “New episodes” is turned off in Android settings"
     }
 }

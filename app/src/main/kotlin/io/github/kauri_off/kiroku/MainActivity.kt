@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.link.appLinks
 import io.github.kauri_off.kiroku.notify.tappedTitle
+import io.github.kauri_off.kiroku.notifysettings.AskForNotifications
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.linkedPage
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
         setKirokuContent {
             CompositionLocalProvider(LocalSplashHold provides hold) {
                 AppRoute(appGraph, rememberShellNavigator(start?.let { linkedPage(it.link) }), links = links)
+                AskForNotifications(appGraph.session)
             }
         }
     }
