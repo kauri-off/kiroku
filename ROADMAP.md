@@ -322,17 +322,13 @@ Not to forget:
   names its action or value, and the reading order is the visual order.
 - A walk through every screen with the network off, on a slow network and with MAL refusing requests, compared
   with ARCHITECTURE sections 2.3 and 7.2.
-- A privacy statement (what is stored, which servers are contacted and what is sent to each) in which every
-  sentence is backed by code; `CONTRIBUTING.md` with the checks outside the queue; a README from which a clean
-  checkout builds without guessing.
+- [x] Contributor build guide, fork setup and privacy statement.
 - The system's per-app language screen lists English and Russian.
 - The release key exists and its four secrets (`KIROKU_ANDROID_KEYSTORE_B64`, `KIROKU_ANDROID_STORE_PASSWORD`,
   `KIROKU_ANDROID_KEY_ALIAS`, `KIROKU_ANDROID_KEY_PASSWORD`) are in the `release` environment; the release
   workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
 - A changed setting reaches the screens that are open: title language and adult content are read where they are
   shown, not copied when a view model is made.
-- `CONTRIBUTING.md` tells a fork to set its own application id and sign-in redirect beside its own client id: two
-  installed apps that claim one redirect split the sign-ins.
 - Sign-out clears the image caches with everything else stored about the user (S9).
 
 ---
