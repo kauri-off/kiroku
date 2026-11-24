@@ -98,8 +98,28 @@ internal abstract class TitleDao {
             deleteRelations(row.titleId)
             insertRelations(related)
         }
-        if ((stored == null || Unread.Recommendations !in unread) && recommendations(row.titleId) != recommended) {
-            deleteRecommendations(row.titleId)
+        if (stored == null || Unread.Recommendations !in unread) replaceRecommendations(row.titleId, recommended)
+    }
+
+    open suspend fun mergeRecommendations(
+        id: Long,
+        includeAdult: Boolean,
+        named: List<TitleRow>,
+        recommended: List<TitleRecommendationRow>,
+    ): Boolean {
+        val stored = details(id) ?: return false
+        insertIfAbsent(named)
+        if (stored.recommendationsIncludeAdult != includeAdult) update(stored.copy(recommendationsIncludeAdult = includeAdult))
+        replaceRecommendations(id, recommended)
+        return true
+    }
+
+    private suspend fun replaceRecommendations(
+        id: Long,
+        recommended: List<TitleRecommendationRow>,
+    ) {
+        if (recommendations(id) != recommended) {
+            deleteRecommendations(id)
             insertRecommendations(recommended)
         }
     }

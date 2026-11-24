@@ -14,16 +14,20 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.notShown
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -32,7 +36,7 @@ internal class SearchViewModel(
     private val search: SearchRepository,
     connection: Connection,
     saved: SavedStateHandle,
-    private val includeAdult: () -> Boolean = { false },
+    includeAdult: Flow<Boolean> = flowOf(false),
 ) : ViewModel() {
     val query =
         saved
@@ -56,41 +60,62 @@ internal class SearchViewModel(
     private val request = MutableStateFlow<Load?>(null)
     private val loads = ShownLoads(viewModelScope, connection, whenShown = {}, again = ::retry)
 
+    private var adult: Boolean? = null
+
     val shown get() = loads.shown
     val cachedState = results.asStateFlow()
 
     val state =
         flow {
             coroutineScope {
-                launch { snapshotFlow { text }.collect(::changed) }
-                launch { request.collectLatest { load -> if (load != null) read(load) } }
+                val ready = CompletableDeferred<Unit>()
+                launch {
+                    combine(snapshotFlow { text }, includeAdult, ::Pair).collect { (query, enabled) ->
+                        changed(query, enabled)
+                        ready.complete(Unit)
+                    }
+                }
+                ready.await()
+                launch {
+                    var pending: Job? = null
+                    request.collect { load ->
+                        pending?.cancel()
+                        pending = load?.let { launch { read(it) } }
+                    }
+                }
                 emitAll(results)
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), results.value)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), results.value)
 
     fun loadMore() = ask(retry = false)
 
     fun retry() = ask(retry = true)
 
-    private fun changed(query: String) {
-        if (results.value.query == query) return
+    private fun changed(
+        query: String,
+        enabled: Boolean,
+    ) {
+        val queryChanged = results.value.query != query
+        if (!queryChanged && adult == enabled) return
+        adult = enabled
         loads.started()
-        results.value = SearchResults(query, nextOffset = 0, loading = query.isNotEmpty())
-        request.value = if (query.isEmpty()) null else Load(query, offset = 0, waitForTyping = true)
+        results.value = SearchResults(query, nextOffset = 0, loading = query.isNotEmpty(), adult = enabled)
+        request.value = if (query.isEmpty()) null else Load(query, offset = 0, enabled, waitForTyping = queryChanged)
     }
 
     private fun ask(retry: Boolean) {
         val shown = results.value
         if (shown.query != text || shown.query.isEmpty() || shown.loading || (shown.error != null) != retry) return
+        val enabled = adult ?: return
         val offset = shown.nextOffset ?: return
         results.value = shown.copy(loading = true, error = null)
-        request.value = Load(shown.query, offset)
+        request.value = Load(shown.query, offset, enabled)
     }
 
     private suspend fun read(load: Load) {
         if (load.waitForTyping) delay(TYPING_PAUSE)
         loads.started()
-        val answer = search.search(load.query, load.offset, includeAdult())
+        val answer = search.search(load.query, load.offset, load.adult)
         currentCoroutineContext().ensureActive()
         if (load !== request.value) return
         val shown = results.value
@@ -111,6 +136,7 @@ internal class SearchViewModel(
     private class Load(
         val query: String,
         val offset: Int,
+        val adult: Boolean,
         val waitForTyping: Boolean = false,
     )
 
@@ -129,6 +155,7 @@ internal data class SearchResults(
     val nextOffset: Int? = null,
     val loading: Boolean = false,
     val error: DataError? = null,
+    val adult: Boolean? = null,
 ) {
     fun rows(map: (Anime) -> ResultRow): Paged<ResultRow> {
         if (titles.isEmpty() && loading && nextOffset == 0) return Paged.Loading

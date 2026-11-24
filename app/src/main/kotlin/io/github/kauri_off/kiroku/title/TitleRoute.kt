@@ -70,6 +70,7 @@ fun TitleRoute(
                 createSavedStateHandle(),
                 messages,
                 key.opened,
+                adultSearchChoice = graph.adultSearchChoice,
             )
         }
     val editor = editSheetViewModel(graph, messages)

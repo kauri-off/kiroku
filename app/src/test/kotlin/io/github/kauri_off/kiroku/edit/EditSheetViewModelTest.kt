@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -160,11 +161,21 @@ class EditSheetViewModelTest {
                     anime,
                     s.graph.demo.fixtures.airing[anime.id],
                     entry.values,
-                    s.graph.titleLanguage,
+                    s.graph.titleLanguage.first(),
                     ZonedDateTime.now(s.graph.clock),
                 ),
                 s.sheet,
             )
+        }
+
+    @Test
+    fun `an open edit sheet changes title without replacing its draft`() =
+        test { s ->
+            s.editor.onEvent(EditSheetEvent.ScoreChanged(7))
+            val before = s.sheet
+            s.graph.preferences.setTitleLanguage(TitleLanguage.English)
+            advanceUntilIdle()
+            assertEquals(before.copy(title = anime.titles.preferred(TitleLanguage.English)), s.sheet)
         }
 
     @Test

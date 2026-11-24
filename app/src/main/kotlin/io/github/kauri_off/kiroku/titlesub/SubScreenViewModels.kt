@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -21,6 +22,7 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.ScoreDistribution
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
 import io.github.kauri_off.kiroku.readAgainOnRetry
+import io.github.kauri_off.kiroku.recommendationsNeedRefresh
 import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.title.airingOf
@@ -29,12 +31,15 @@ import io.github.kauri_off.kiroku.title.knownAiring
 import io.github.kauri_off.kiroku.title.knownEntries
 import io.github.kauri_off.kiroku.title.withRead
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -50,6 +55,7 @@ abstract class SubScreenViewModel(
     connection: Connection,
     private val clock: Clock,
     private val opened: TitleSummary?,
+    private val adultSearchChoice: Flow<AdultSearchChoice>? = null,
 ) : ViewModel() {
     protected class Title(
         val anime: Anime?,
@@ -71,6 +77,7 @@ abstract class SubScreenViewModel(
     private val failure = MutableStateFlow<DataError?>(null)
     protected val refreshing = MutableStateFlow(false)
     private var load: Job? = null
+    private var replaceObsolete = false
 
     // Retry reads again what could not be read.
     protected val retries = MutableStateFlow(0)
@@ -85,14 +92,45 @@ abstract class SubScreenViewModel(
             Title(stored.anime ?: opened?.anime, stored.details ?: opened?.page?.details, session, failure, stored.failure)
         }
 
-    private val loads = ShownLoads(viewModelScope, connection, ::refreshIfStale, ::refresh)
+    private val loads =
+        ShownLoads(
+            viewModelScope,
+            connection,
+            ::refreshIfStale,
+            ::refresh,
+            shownAgain = ::shownAgain,
+        )
+
+    private fun shownAgain() {
+        if (adultSearchChoice == null) return
+        viewModelScope.launch {
+            val needed = replaceObsolete || recommendationsNeedRefresh()
+            if (needed && loads.isShowing && load?.isActive != true) refresh()
+        }
+    }
+
+    protected var recommendationFilter: AdultSearchChoice? = null
+        private set
+
+    protected fun filterChanged(choice: AdultSearchChoice) {
+        val previous = recommendationFilter
+        recommendationFilter = choice
+        if (previous != null && previous != choice) {
+            failure.value = null
+            if (loads.isShowing) refresh()
+        }
+    }
 
     // Collected while the screen is shown; showing it refreshes stale details.
     val shown: StateFlow<Unit> get() = loads.shown
 
     private suspend fun refreshIfStale() {
-        if (anime.stale(id, opened?.anime, clock.instant()) && load?.isActive != true) refresh()
+        val stale = anime.stale(id, opened?.anime, clock.instant()) || replaceObsolete || recommendationsNeedRefresh()
+        if (stale && load?.isActive != true) refresh()
     }
+
+    private suspend fun recommendationsNeedRefresh(): Boolean =
+        adultSearchChoice?.first()?.let { anime.recommendationsNeedRefresh(id, it.enabled) } == true
 
     protected fun retry() {
         retries.update { it + 1 }
@@ -104,13 +142,32 @@ abstract class SubScreenViewModel(
     // A newer load replaces an older one, so the older one's end never stands for the screen.
     private fun refresh() {
         load?.cancel()
+        replaceObsolete = false
         failure.value = null
         refreshing.value = true
         loads.started()
         load =
             viewModelScope.launch {
+                val choice = adultSearchChoice?.first()
                 val result = anime.refresh(id)
-                val error = (result as? Outcome.Failure)?.error
+                val obsoleteBeforeRead = choice != adultSearchChoice?.first()
+                val error =
+                    when (result) {
+                        is Outcome.Failure -> result.error
+                        is Outcome.Success ->
+                            DataError.ServerError.takeIf {
+                                choice != null && !obsoleteBeforeRead && anime.recommendationsNeedRefresh(id, choice.enabled)
+                            }
+                    }
+                val obsolete = obsoleteBeforeRead || (result is Outcome.Success && choice != adultSearchChoice?.first())
+                currentCoroutineContext().ensureActive()
+                if (obsolete) {
+                    refreshing.value = false
+                    if (error != DataError.ListEnded) {
+                        if (loads.isShowing) refresh() else replaceObsolete = true
+                    }
+                    return@launch
+                }
                 failure.value = error
                 refreshing.value = false
                 if (error != null) refreshFailed(error)
@@ -127,7 +184,7 @@ class RelatedViewModel(
     session: SessionRepository,
     connection: Connection,
     private val clock: Clock,
-    private val titleLanguage: TitleLanguage,
+    titleLanguage: Flow<TitleLanguage>,
     opened: TitleSummary? = null,
 ) : SubScreenViewModel(id, anime, session, connection, clock, opened) {
     private class ListRead(
@@ -162,10 +219,8 @@ class RelatedViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
     val state: StateFlow<RelatedState> =
-        sources
-            .filterNotNull()
-            .map(::build)
-            .stateIn(viewModelScope, WhileShown, sources.value?.let(::build) ?: RelatedState.Loading(null))
+        combine(sources.filterNotNull(), titleLanguage, ::build)
+            .stateIn(viewModelScope, WhileShown, sources.value?.let { build(it, TitleLanguage.Romaji) } ?: RelatedState.Loading(null))
 
     fun onEvent(event: RelatedEvent) {
         if (event == RelatedEvent.Retry) retry()
@@ -185,7 +240,10 @@ class RelatedViewModel(
         return TitleSummary(anime, entry, sources.airing[id], sources.title.session)
     }
 
-    private fun build(sources: Sources): RelatedState {
+    private fun build(
+        sources: Sources,
+        language: TitleLanguage,
+    ): RelatedState {
         val title = sources.title
         val details = title.details
         val failure = title.failure
@@ -197,7 +255,7 @@ class RelatedViewModel(
                     details.related,
                     sources.list.entries.mapValues { it.value.values },
                     sources.airing,
-                    titleLanguage,
+                    language,
                     title.session,
                     clock.instant(),
                 )
@@ -212,27 +270,29 @@ class DetailsViewModel(
     anime: AnimeRepository,
     session: SessionRepository,
     connection: Connection,
-    private val titleLanguage: TitleLanguage,
+    titleLanguage: Flow<TitleLanguage>,
     private val clock: Clock,
     opened: TitleSummary? = null,
 ) : SubScreenViewModel(id, anime, session, connection, clock, opened) {
     val state: StateFlow<DetailsState> =
-        title
-            .map(::build)
-            .stateIn(viewModelScope, WhileShown, opened?.let { build(Title(it)) } ?: DetailsState.Loading(null))
+        combine(title, titleLanguage, ::build)
+            .stateIn(viewModelScope, WhileShown, opened?.let { build(Title(it), TitleLanguage.Romaji) } ?: DetailsState.Loading(null))
 
     fun onEvent(event: DetailsEvent) {
         if (event == DetailsEvent.Retry) retry()
     }
 
-    private fun build(title: Title): DetailsState {
+    private fun build(
+        title: Title,
+        language: TitleLanguage,
+    ): DetailsState {
         val anime = title.anime
         val details = title.details
         val failure = title.failure
         val storeFailure = title.storeFailure
         return when {
             storeFailure != null -> DetailsState.Failed(storeFailure, title.session)
-            anime != null && details != null -> detailsState(anime, details, titleLanguage, title.session, clock)
+            anime != null && details != null -> detailsState(anime, details, language, title.session, clock)
             failure != null -> DetailsState.Failed(failure, title.session)
             else -> DetailsState.Loading(title.session)
         }

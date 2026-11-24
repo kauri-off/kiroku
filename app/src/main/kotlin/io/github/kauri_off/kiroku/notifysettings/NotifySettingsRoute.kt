@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notify.EpisodeNotifications
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -33,7 +34,7 @@ fun NotifySettingsRoute(
 ) {
     val context = LocalContext.current
     val device = remember(context) { DeviceStates(context) }
-    val tests = remember(graph) { EpisodeNotifications(context, TEST, { graph.titleLanguage }) }
+    val tests = remember(graph) { EpisodeNotifications(context, TEST, { graph.titleLanguage.first() }) }
     val model =
         viewModel {
             NotifySettingsViewModel(

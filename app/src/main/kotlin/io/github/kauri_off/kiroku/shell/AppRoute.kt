@@ -27,9 +27,8 @@ import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
 import io.github.kauri_off.kiroku.search.searchStandIn
-import io.github.kauri_off.kiroku.settings.SettingsEvent
 import io.github.kauri_off.kiroku.settings.SettingsKey
-import io.github.kauri_off.kiroku.settings.SettingsScreen
+import io.github.kauri_off.kiroku.settings.SettingsRoute
 import io.github.kauri_off.kiroku.signin.SignInKey
 import io.github.kauri_off.kiroku.signin.SignInRoute
 import io.github.kauri_off.kiroku.signin.SignInTurns
@@ -180,15 +179,7 @@ fun appEntries(
             }
         }
         entry<SettingsKey> {
-            SettingsScreen(
-                onEvent = {
-                    when (it) {
-                        SettingsEvent.Back -> back()
-                        SettingsEvent.OpenNotifications -> navigator.open(NotifySettingsKey)
-                    }
-                },
-                snackbars,
-            )
+            SettingsRoute(graph, messages, snackbars, onBack = { back() }, onNotifications = { navigator.open(NotifySettingsKey) })
         }
         entry<NotifySettingsKey> {
             NotifySettingsRoute(graph, messages, snackbars, onBack = { back() }, onOpenTitle = { openTitle(it, null) }, onSignIn = signIn)

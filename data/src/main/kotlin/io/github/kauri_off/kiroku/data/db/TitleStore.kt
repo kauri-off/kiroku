@@ -84,7 +84,7 @@ class TitleStore(
                 details.related.mapIndexed { position, it ->
                     TitleRelationRow(id, position, it.anime.id.value, relationTypes.toColumn(it.relation))
                 }
-            val recommended = details.recommendations.mapIndexed { position, it -> TitleRecommendationRow(id, position, it.id.value) }
+            val recommended = recommendationsOf(id, details.recommendations)
             database.transaction {
                 if (begun != null && database.list().state().owner != begun.owner) return@transaction false
                 dao.merge(listOf(anime.toRow()), unread)
@@ -94,4 +94,22 @@ class TitleStore(
             }
         }
     }
+
+    internal suspend fun refreshRecommendations(
+        id: AnimeId,
+        titles: List<Anime>,
+        includeAdult: Boolean,
+        begun: Holder,
+    ): Boolean =
+        withContext(dispatcher) {
+            database.transaction {
+                if (database.list().state().owner != begun.owner) return@transaction false
+                dao.mergeRecommendations(id.value, includeAdult, titles.map { it.toRow() }, recommendationsOf(id.value, titles))
+            }
+        }
+
+    private fun recommendationsOf(
+        id: Long,
+        titles: List<Anime>,
+    ) = titles.mapIndexed { position, title -> TitleRecommendationRow(id, position, title.id.value) }
 }

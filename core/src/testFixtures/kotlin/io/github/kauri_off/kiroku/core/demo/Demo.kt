@@ -76,7 +76,9 @@ class Demo(
     val list: ListRepository =
         ListEngine(server, store, session.observeSession(), clock, scope) { if (it !is DemoStoreFault) unexpected(it) }
 
-    private val details = DemoAnimeRepository(fixtures, server, clock)
+    private val choices = DemoPreferences()
+
+    private val details = DemoAnimeRepository(fixtures, server, clock, choices)
 
     val anime: AnimeRepository = details
 
@@ -134,8 +136,6 @@ class Demo(
     private val otherUsers = UserListKeeper(userLists, scope, unexpected)
 
     val user: UserRepository = otherUsers.beside(DemoOwnProfile(fixtures, server, signIn, clock))
-
-    private val choices = DemoPreferences()
 
     val preferences: PreferencesRepository = choices
 

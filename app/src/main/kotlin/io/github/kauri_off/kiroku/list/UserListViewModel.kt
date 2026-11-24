@@ -54,12 +54,13 @@ class UserListViewModel(
     private val session: SessionRepository,
     connection: Connection,
     private val clock: Clock,
-    private val titleLanguage: TitleLanguage,
+    titleLanguage: Flow<TitleLanguage>,
     private val saved: SavedStateHandle,
     private val refreshFailed: (DataError) -> Unit,
     background: CoroutineDispatcher,
 ) : ViewModel() {
     private data class Model(
+        val language: TitleLanguage = TitleLanguage.Romaji,
         val read: UserListState? = null,
         val tab: EntryStatus,
         // Each tab's sort, as chosen here; never stored, since the person's own sorts are his list's.
@@ -72,6 +73,7 @@ class UserListViewModel(
     // Each tab's titles in the order shown: computed when a read ends or a sort is chosen; a part read meanwhile adds
     // its titles at the end (section 6.2).
     private class Orders(
+        val language: TitleLanguage,
         val over: List<ListEntry>,
         val whole: Boolean,
         val sorts: Map<EntryStatus, TabSort>,
@@ -82,6 +84,7 @@ class UserListViewModel(
     private class BuiltRow(
         val entry: ListEntry,
         val sort: TabSort,
+        val language: TitleLanguage,
         val row: ListRow,
     )
 
@@ -111,6 +114,7 @@ class UserListViewModel(
     val state: StateFlow<ListState> =
         flow {
             coroutineScope {
+                launch { titleLanguage.collect { language -> model.update { it.copy(language = language) } } }
                 launch { session.observeSession().collect { session -> model.update { it.copy(session = session) } } }
                 emitAll(combine(model, snapshotFlow { typed.value }, ::build))
             }
@@ -243,7 +247,7 @@ class UserListViewModel(
             ListContent.Tabs(
                 ids.mapValues { (status, tab) ->
                     val sort = sortOf(model, status)
-                    val all = tab.map { id -> row(byId.getValue(id), sort, before, after) }
+                    val all = tab.map { id -> row(byId.getValue(id), sort, model.language, before, after) }
                     val rows = if (filter.isNullOrEmpty()) all else all.filter { it.title.contains(filter, ignoreCase = true) }
                     val page = ListPage(sort.sort, sortsFor(status, withAiring = false), rows, model.orderings[status] ?: 0, sort.direction)
                     shown?.get(status)?.takeIf { it == page } ?: page
@@ -263,10 +267,25 @@ class UserListViewModel(
         val last = orders
         val statuses = tabOrder(entries.map { it.status }.toSet())
         val sorts = statuses.associateWith { sortOf(model, it) }
-        if (last != null && last.over === entries && last.whole == whole && last.sorts == sorts) return last
+        if (last != null &&
+            last.over === entries &&
+            last.whole == whole &&
+            last.sorts == sorts &&
+            last.language == model.language
+        ) {
+            return last
+        }
         val ids =
             when {
-                whole && (last == null || !last.whole || last.over !== entries) -> statuses.associateWith { sorted(entries, it, sorts) }
+                whole && (last == null || !last.whole || last.over !== entries) ->
+                    statuses.associateWith {
+                        sorted(
+                            entries,
+                            it,
+                            sorts,
+                            model.language,
+                        )
+                    }
                 else -> {
                     val known =
                         last
@@ -277,21 +296,22 @@ class UserListViewModel(
                             .orEmpty()
                     val joined = entries.filter { it.anime.id !in known }.groupBy({ it.status }, { it.anime.id })
                     statuses.associateWith { status ->
-                        if (last != null && last.sorts[status] != sorts[status]) {
-                            sorted(entries, status, sorts)
+                        if (last != null && (last.sorts[status] != sorts[status] || last.language != model.language)) {
+                            sorted(entries, status, sorts, model.language)
                         } else {
                             last?.ids?.get(status).orEmpty() + joined[status].orEmpty()
                         }
                     }
                 }
             }
-        return Orders(entries, whole, sorts, ids).also { orders = it }
+        return Orders(model.language, entries, whole, sorts, ids).also { orders = it }
     }
 
     private fun sorted(
         entries: List<ListEntry>,
         status: EntryStatus,
         sorts: Map<EntryStatus, TabSort>,
+        language: TitleLanguage,
     ): List<AnimeId> {
         val sort = sorts.getValue(status)
         return order(
@@ -299,20 +319,21 @@ class UserListViewModel(
             sort.sort,
             { null },
             sort.direction,
-        ) { it.anime.titles.preferred(titleLanguage) }
+        ) { it.anime.titles.preferred(language) }
             .map { it.anime.id }
     }
 
     private fun row(
         entry: ListEntry,
         sort: TabSort,
+        language: TitleLanguage,
         before: Map<AnimeId, BuiltRow>,
         after: MutableMap<AnimeId, BuiltRow>,
     ): ListRow {
         val id = entry.anime.id
         val built =
-            before[id]?.takeIf { it.entry == entry && it.sort == sort }
-                ?: BuiltRow(entry, sort, listRow(entry, null, now, titleLanguage, readOnly = true, sort = sort.sort))
+            before[id]?.takeIf { it.entry == entry && it.sort == sort && it.language == language }
+                ?: BuiltRow(entry, sort, language, listRow(entry, null, now, language, readOnly = true, sort = sort.sort))
         after[id] = built
         return built.row
     }

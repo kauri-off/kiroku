@@ -77,12 +77,13 @@ class ListViewModel(
     connection: Connection,
     private val preferences: PreferencesRepository,
     private val clock: Clock,
-    private val titleLanguage: TitleLanguage,
+    titleLanguage: Flow<TitleLanguage>,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
     background: CoroutineDispatcher,
 ) : ViewModel() {
     private data class Model(
+        val language: TitleLanguage = TitleLanguage.Romaji,
         val entries: Map<AnimeId, ListEntry> = emptyMap(),
         val airing: Map<AnimeId, Airing> = emptyMap(),
         // Each tab's ids in the order last computed, with titles that joined since appended; null until the first order.
@@ -130,6 +131,7 @@ class ListViewModel(
 
     // What the pages are built from; a tab switch, the sort sheet or the refresh indicator changes none of it.
     private data class Shown(
+        val language: TitleLanguage,
         val entries: Map<AnimeId, ListEntry>,
         val airing: Map<AnimeId, Airing>,
         val orders: Map<EntryStatus, List<AnimeId>>?,
@@ -158,6 +160,7 @@ class ListViewModel(
         val airing: Airing?,
         val now: Instant,
         val sort: ListSort,
+        val language: TitleLanguage,
         val row: ListRow,
     )
 
@@ -169,6 +172,13 @@ class ListViewModel(
     val state: StateFlow<ListState> =
         flow {
             coroutineScope {
+                launch {
+                    titleLanguage.collect { language ->
+                        model.update { current ->
+                            if (current.language == language) current else current.copy(language = language).reorderForLanguage()
+                        }
+                    }
+                }
                 launch { reading().collect() }
                 launch { session.observeSession().collect { session -> model.update { it.copy(session = session) } } }
                 launch { anime.observePagesRead().catch { if (it !is DataException) throw it }.collect { pagesRead = it } }
@@ -394,6 +404,7 @@ class ListViewModel(
         val session = model.session
         val shown =
             Shown(
+                model.language,
                 model.entries,
                 model.airing,
                 model.orders,
@@ -433,7 +444,11 @@ class ListViewModel(
         val until = minOf(today.plusDays(1).atStartOfDay(clock.zone).toInstant(), unchangedWithoutResultUntil(now))
         val rowsBefore = rows
         val rowsNow = HashMap<AnimeId, BuiltRow>(rowsBefore.size)
-        val content = content(model, filter) { entry, sort -> row(entry, model.airing[entry.anime.id], now, sort, rowsBefore, rowsNow) }
+        val content =
+            content(
+                model,
+                filter,
+            ) { entry, sort -> row(entry, model.airing[entry.anime.id], now, sort, model.language, rowsBefore, rowsNow) }
         rows = rowsNow
         return Built(shown, content.sharing(built?.content), now, until, clock.zone).also { built = it }
     }
@@ -443,16 +458,23 @@ class ListViewModel(
         airing: Airing?,
         now: Instant,
         sort: ListSort,
+        language: TitleLanguage,
         before: Map<AnimeId, BuiltRow>,
         after: MutableMap<AnimeId, BuiltRow>,
     ): ListRow {
         val id = entry.anime.id
         val last = before[id]
         val built =
-            last?.takeIf { it.entry == entry && it.airing == airing && (airing != null || it.now == now) && it.sort == sort }
+            last?.takeIf {
+                it.entry == entry &&
+                    it.airing == airing &&
+                    (airing != null || it.now == now) &&
+                    it.sort == sort &&
+                    it.language == language
+            }
                 ?: run {
-                    val row = listRow(entry, airing, now, titleLanguage, sort = sort)
-                    BuiltRow(entry, airing, now, sort, last?.row?.takeIf(row::equals) ?: row)
+                    val row = listRow(entry, airing, now, language, sort = sort)
+                    BuiltRow(entry, airing, now, sort, language, last?.row?.takeIf(row::equals) ?: row)
                 }
         after[id] = built
         return built.row
@@ -500,8 +522,13 @@ class ListViewModel(
         sort: TabSort,
     ): List<AnimeId> =
         order(entries.values.filter { it.status == status }, sort.sort, airing::get, sort.direction) {
-            it.anime.titles.preferred(titleLanguage)
+            it.anime.titles.preferred(language)
         }.map { it.anime.id }
+
+    private fun Model.reorderForLanguage(): Model {
+        val sorts = sorts ?: return this
+        return copy(orders = orders?.mapValues { (status, _) -> ordered(status, sorts.of(status)) })
+    }
 
     // A tab that is no longer there gives way to the one now in its place, or to Watching.
     private fun Model.orderedAll(): Model {

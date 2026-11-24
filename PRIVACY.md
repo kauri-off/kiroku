@@ -6,8 +6,9 @@ reporting. [App wiring][KirokuApplication.kt] · [Dependencies][gradle/libs.vers
 ## Network requests
 
 - **MyAnimeList API (`api.myanimelist.net`).** Requests can include search text, title IDs, ranking or season
-  parameters, page parameters, and the username of a public list you open. Live Search sends nonempty text after
-  a pause in typing, even without submitting. Kiroku can also sync your list with MAL and refresh your access
+  parameters, page parameters, and the username of a public list you open. The adult-content preference controls
+  the flag on search, browse and title-detail requests, where it changes recommendations. List reads request
+  adult entries independently. Live Search sends nonempty text after a pause in typing, even without submitting. Kiroku can also sync your list with MAL and refresh your access
   token in the background. Public requests use the build's MAL
   client ID. Reads of your own list and profile and writes to your list use a bearer access token. List changes
   send the title ID and updated fields such as status, score, watched episodes, or dates. Removing an entry sends
@@ -40,9 +41,9 @@ identify the app and version in the `User-Agent` header. [HTTP client][MalHttp.k
 - The app's database keeps title details, related titles and recommendations, your anime list and profile
   (including your name, avatar URL, join date and statistics), tracked airing schedules, and notification tracking
   and history. [Database][KirokuDatabase.kt] · [Profile fields][ProfileRows.kt]
-- App-private files store list sort choices, recently opened profile names, notification preferences, and retry
-  timers. While sign-in is pending, a separate private file holds the OAuth state, verifier and start time.
-  A matching callback consumes the pending sign-in state. Its ten-minute acceptance window does not schedule
+- App-private files store title language, the adult-content preference, list sort choices, recently opened profile
+  names, notification preferences, and retry timers. While sign-in is pending, a separate private file holds the
+  OAuth state, verifier and start time. A matching callback consumes the pending sign-in state. Its ten-minute acceptance window does not schedule
   file deletion. Android Keystore protects the key used to encrypt access and refresh tokens. A queued
   **Mark watched** notification action is stored locally. [Preferences][StoredPreferences.kt] ·
   [Service stores][LiveGraph.kt] · [Pending sign-in][PendingSignIn.kt] · [Callback][MalSignIn.kt] · [Token file][TokenStore.kt] ·
@@ -61,8 +62,8 @@ identify the app and version in the `User-Agent` header. [HTTP client][MalHttp.k
 Debug and Preview offer **Sign out** in the debug menu. It clears the local session and tokens, resets
 navigation, cancels queued **Mark watched** jobs and clears account list, title and profile data, tracked
 airing data, notification tracking and history, cached public lists, list sorts and recently opened profile
-names. Notification preferences stay. If clearing tracked airing data fails, the app retries when the store first
-opens while signed out in a later process. Sign-out retires that sign-in's poster and avatar cache and cancels its
+names. Title language, adult-content and notification preferences stay. If clearing tracked airing data fails,
+the app retries when the store first opens while signed out in a later process. Sign-out retires that sign-in's poster and avatar cache and cancels its
 image requests. Files are removed in the background after outstanding image work ends. If deletion fails,
 remaining files are kept out of use and removal is retried when that source's image cache starts in a later
 process. The app attempts to remove the old shared image cache at startup and retries on later starts.

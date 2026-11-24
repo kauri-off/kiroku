@@ -26,7 +26,7 @@ class EpisodeNotifications(
     context: Context,
     // Whose list they are of: a debug build's sources share the device, and each sees and removes its own alone.
     override val source: String,
-    private val language: () -> TitleLanguage,
+    private val language: suspend () -> TitleLanguage,
     private val gap: Duration = ENQUEUE_GAP,
 ) : ShownNotifications,
     NotSavedNotice {
@@ -105,7 +105,7 @@ class EpisodeNotifications(
             .mapNotNull { posted -> posted.tag?.let { titleOf(source, it) }?.let { it to posted } }
             .toMap()
 
-    private fun episode(
+    private suspend fun episode(
         anime: Anime,
         notification: Shown,
         alert: Boolean,
@@ -200,7 +200,7 @@ class EpisodeNotifications(
     }
 
     // The system drops a replacement when the app posts more than five a second, so posts are spaced.
-    private suspend fun enqueue(post: () -> Unit) {
+    private suspend fun enqueue(post: suspend () -> Unit) {
         val since = enqueuedAt?.let { (System.nanoTime() - it).nanoseconds }
         if (since != null && since < gap) delay(gap - since)
         post()

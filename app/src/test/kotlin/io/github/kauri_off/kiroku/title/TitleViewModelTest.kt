@@ -17,7 +17,9 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessage
@@ -33,7 +35,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -52,6 +56,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -121,6 +126,161 @@ class TitleViewModelTest {
                 s.shown.page.related
                     .isNotEmpty(),
             )
+        }
+
+    @Test
+    fun `the open title relabels itself and related titles without a network refresh`() =
+        test { s ->
+            val before = s.shown.page
+            val asked = s.graph.requested.toList()
+            s.graph.preferences.setTitleLanguage(TitleLanguage.English)
+            advanceUntilIdle()
+            assertEquals(before.anime.titles.preferred(TitleLanguage.English), s.shown.page.title)
+            assertEquals(before.details, s.shown.page.details)
+            assertEquals(
+                before.related.map {
+                    it.related.anime.titles
+                        .preferred(TitleLanguage.English)
+                },
+                s.shown.page.related
+                    .map { it.title },
+            )
+            assertEquals(asked, s.graph.requested)
+        }
+
+    @Test
+    fun `the adult filter revalidates recommendations on the open title while the title and related titles stay visible`() =
+        test { s ->
+            val before = s.shown.page
+            val asked = s.graph.requested.size
+            val airing =
+                s.graph.demo.airingSource.requests
+                    .toList()
+            s.graph.demo.server.latency = 100.milliseconds
+            s.graph.preferences.setAdultInSearch(true)
+            runCurrent()
+            assertEquals(before.title, s.shown.page.title)
+            assertEquals(before.related, s.shown.page.related)
+            assertTrue(
+                s.shown.page.details!!
+                    .recommendations
+                    .isEmpty(),
+            )
+            advanceUntilIdle()
+            assertEquals(
+                before.details!!.recommendations,
+                s.shown.page.details!!
+                    .recommendations,
+            )
+            assertEquals(asked + 1, s.graph.requested.size)
+            assertEquals(airing, s.graph.demo.airingSource.requests)
+        }
+
+    @Test
+    fun `returning to an open title replaces a held refresh from the former recommendation mode`() =
+        test { s ->
+            s.graph.preferences.setAdultInSearch(true)
+            advanceUntilIdle()
+            val before = s.shown.page
+            val requests = s.graph.requested.size
+            s.graph.demo.server.latency = 100.milliseconds
+            s.title.onEvent(TitleEvent.Refresh)
+            runCurrent()
+            s.screen.cancel()
+            runCurrent()
+            s.graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            s.screen = showing(s.title.state, s.title.shown)
+            runCurrent()
+            assertTrue(
+                s.shown.page.details!!
+                    .recommendations
+                    .isEmpty(),
+            )
+            assertEquals(before.related, s.shown.page.related)
+            advanceTimeBy(101)
+            assertEquals(requests + 2, s.graph.requested.size)
+            advanceUntilIdle()
+            assertEquals(
+                before.details!!.recommendations,
+                s.shown.page.details!!
+                    .recommendations,
+            )
+            assertEquals(
+                false,
+                s.shown.page.details!!
+                    .recommendationsIncludeAdult,
+            )
+        }
+
+    @Test
+    fun `a hidden filter change during a title completion read leaves a replacement owed on return`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val id = FixtureAnime.exactToWatch.id
+            graph.preferences.setAdultInSearch(true)
+            graph.anime.refresh(id)
+            val messages = ShellMessages(scope, graph.list)
+            val blocked = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val modes = mutableListOf<Boolean>()
+            var holdRead = false
+            val repository =
+                object : AnimeRepository by graph.anime {
+                    override fun observeDetails(id: AnimeId) =
+                        flow {
+                            if (holdRead) {
+                                holdRead = false
+                                blocked.complete(Unit)
+                                release.await()
+                            }
+                            emitAll(graph.anime.observeDetails(id))
+                        }
+
+                    override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+                        if (id != FixtureAnime.exactToWatch.id) return graph.anime.refresh(id)
+                        val adult = graph.showAdultInSearch.first()
+                        modes += adult
+                        if (adult) {
+                            holdRead = true
+                            return Outcome.Failure(DataError.Refused)
+                        }
+                        return graph.anime.refresh(id)
+                    }
+                }
+            val model = title(graph, id, SavedStateHandle(), messages, repository = repository)
+            showing(model.state)
+            val screen = showing(model.shown)
+            runCurrent()
+            assertTrue(modes.isEmpty())
+            model.onEvent(TitleEvent.Refresh)
+            runCurrent()
+            assertTrue(blocked.isCompleted)
+            screen.cancel()
+            runCurrent()
+            graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            showing(model.shown)
+            runCurrent()
+            assertEquals(listOf(true), modes)
+            val pending = (model.state.value as TitleState.Shown).page
+            assertTrue(pending.details!!.recommendations.isEmpty())
+            assertTrue(pending.related.isNotEmpty())
+
+            release.complete(Unit)
+            runCurrent()
+            assertEquals(listOf(true, false), modes)
+            assertNull(messages.current.value)
+            val current = (model.state.value as TitleState.Shown).page
+            assertTrue(
+                current.details!!
+                    .recommendationsFor(false)
+                    .orEmpty()
+                    .isNotEmpty(),
+            )
+            assertEquals(pending.related, current.related)
+            scope.cancel()
         }
 
     @Test
@@ -1412,9 +1572,10 @@ class TitleViewModelTest {
         saved: SavedStateHandle,
         messages: ShellMessages,
         opened: TitleSummary? = null,
+        repository: AnimeRepository = graph.anime,
     ) = TitleViewModel(
         id,
-        graph.anime,
+        repository,
         graph.list,
         graph.airing,
         graph.session,
@@ -1424,6 +1585,7 @@ class TitleViewModelTest {
         saved,
         messages,
         opened,
+        adultSearchChoice = graph.adultSearchChoice,
     )
 
     private class CountedClock(

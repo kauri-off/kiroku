@@ -21,27 +21,41 @@ import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
+import java.time.Clock
 import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 // The titles of section 7.1 over the store and the client, with recorded pages behind a local server.
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class MalAnimeRepositoryTest {
     @get:Rule
@@ -50,6 +64,9 @@ class MalAnimeRepositoryTest {
     @get:Rule
     val databases = TestDatabases()
 
+    @get:Rule
+    val folder = TemporaryFolder()
+
     private val airing = recordedTitle("title_airing")
     private val id = airing.anime.id
 
@@ -57,19 +74,18 @@ class MalAnimeRepositoryTest {
         val titles: MalAnimeRepository,
         val store: TitleStore,
         val database: KirokuDatabase,
-        val adult: MutableList<Boolean>,
+        val preferences: StoredPreferences,
     )
 
-    private fun TestScope.subject(showAdult: () -> Boolean = { false }): Subject {
+    private fun TestScope.subject(clock: Clock = network.clock): Subject {
         val database = databases.open(this)
         val store = TitleStore(database, dispatcher, network.unexpected::add)
-        val asked = mutableListOf<Boolean>()
-        val adult = suspend { showAdult().also { asked += it } }
+        val preferences = StoredPreferences(File(folder.newFolder(), "title.preferences_pb"), backgroundScope, network.unexpected::add)
         return Subject(
-            MalAnimeRepository(MalTitles(network.http), store, network.clock, adult, network.unexpected::add),
+            MalAnimeRepository(MalTitles(network.http), store, clock, preferences, network.unexpected::add),
             store,
             database,
-            asked,
+            preferences,
         )
     }
 
@@ -266,13 +282,12 @@ class MalAnimeRepositoryTest {
     @Test
     fun `each page refresh reads the current adult setting and updates stored recommendations`() =
         runTest {
-            var showAdult = false
-            val s = subject { showAdult }
+            val s = subject()
             val off = recordedTitle("title_adult_nsfw_unset")
             val on = recordedTitle("title_adult_nsfw_true")
             val title = off.anime.id
             for (adult in listOf(false, true, false)) {
-                showAdult = adult
+                s.preferences.setAdultInSearch(adult)
                 serve(if (adult) "title_adult_nsfw_true" else "title_adult_nsfw_unset")
                 assertEquals(Outcome.Success(Unit), s.titles.refresh(title))
                 assertEquals(
@@ -282,10 +297,249 @@ class MalAnimeRepositoryTest {
                         .url
                         .queryParameter("nsfw"),
                 )
-                assertEquals(if (adult) on.details else off.details, s.titles.observeDetails(title).first())
+                val stored = s.titles.observeDetails(title).first()!!
+                assertEquals((if (adult) on.details else off.details).copy(recommendationsIncludeAdult = adult), stored)
+                assertEquals(stored.recommendations, stored.recommendationsFor(adult))
+                assertNull(stored.recommendationsFor(!adult))
+                assertEquals(off.details.related, stored.related)
                 assertEquals(off.anime, s.titles.observeAnime(title).first())
             }
-            assertEquals(listOf(false, true, false), s.adult)
+        }
+
+    @Test
+    fun `an outstanding opted-in response cannot replace the safe recommendations after opting out`() =
+        runTest {
+            val s = subject()
+            val off = recordedTitle("title_adult_nsfw_unset")
+            val title = off.anime.id
+            serve("title_adult_nsfw_unset")
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(title))
+
+            s.preferences.setAdultInSearch(true)
+            val recorded = RecordedAnswers.named("title_adult_nsfw_true")
+            val arrived = CountDownLatch(1)
+            val optedOut = CountDownLatch(1)
+            network.answers {
+                arrived.countDown()
+                optedOut.await(5, TimeUnit.SECONDS)
+                answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+            }
+            val refresh = async { s.titles.refresh(title) }
+            runCurrent()
+            withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
+            s.preferences.setAdultInSearch(false)
+            optedOut.countDown()
+
+            assertEquals(Outcome.Success(Unit), refresh.await())
+            assertEquals(off.details, s.titles.observeDetails(title).first())
+        }
+
+    @Test
+    fun `a discarded first response keeps title details but establishes no recommendation cache`() =
+        runTest {
+            val s = subject()
+            val adult = recordedTitle("title_adult_nsfw_true")
+            val safe = recordedTitle("title_adult_nsfw_unset")
+            val title = adult.anime.id
+            s.preferences.setAdultInSearch(true)
+            val arrived = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val recorded = RecordedAnswers.named("title_adult_nsfw_true")
+            network.answers {
+                arrived.countDown()
+                release.await(5, TimeUnit.SECONDS)
+                answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+            }
+            val outstanding = async { s.titles.refresh(title) }
+            withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
+            s.preferences.setAdultInSearch(false)
+            release.countDown()
+            assertEquals(Outcome.Success(Unit), outstanding.await())
+            val freshReader = MalAnimeRepository(MalTitles(network.http), s.store, network.clock, s.preferences, network.unexpected::add)
+            val stored = freshReader.observeDetails(title).first()!!
+            assertEquals(adult.details.copy(recommendations = emptyList(), recommendationsIncludeAdult = null), stored)
+            assertEquals(adult.anime, freshReader.observeAnime(title).first())
+            assertNull(stored.recommendationsFor(false))
+            assertNull(stored.recommendationsFor(true))
+
+            network.answers {
+                val response = RecordedAnswers.named("title_adult_nsfw_unset")
+                answer(response.status, response.body, "application/json; charset=UTF-8")
+            }
+            assertEquals(Outcome.Success(Unit), freshReader.refresh(title))
+            assertEquals(safe.details.recommendations, freshReader.observeDetails(title).first()?.recommendationsFor(false))
+        }
+
+    @Test
+    fun `an empty recorded response establishes a valid recommendation cache`() =
+        runTest {
+            val s = subject()
+            val empty = recordedTitle("title_not_yet_aired")
+            serve("title_not_yet_aired")
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(empty.anime.id))
+            assertEquals(
+                emptyList<Any>(),
+                s.titles
+                    .observeDetails(empty.anime.id)
+                    .first()
+                    ?.recommendationsFor(false),
+            )
+        }
+
+    @Test
+    fun `a filter round trip invalidates a request even before any newer publication`() =
+        runTest {
+            val s = subject()
+            val title = recordedTitle("title_adult_nsfw_unset").anime.id
+            val arrived = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val recorded = RecordedAnswers.named("title_adult_nsfw_unset")
+            network.answers {
+                arrived.countDown()
+                release.await(5, TimeUnit.SECONDS)
+                answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+            }
+            val old = async { s.titles.refresh(title) }
+            withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
+            s.preferences.setAdultInSearch(true)
+            s.preferences.setAdultInSearch(false)
+            release.countDown()
+            assertEquals(Outcome.Success(Unit), old.await())
+            assertNotNull(s.titles.observeDetails(title).first())
+            assertNull(
+                s.titles
+                    .observeDetails(title)
+                    .first()
+                    ?.recommendationsFor(false),
+            )
+        }
+
+    @Test
+    fun `unread first recommendations preserve the title and related fields without claiming an empty result`() =
+        runTest {
+            val s = subject()
+            serve(recordedJson("title_airing").edited(listOf("recommendations", "0", "node", "id")))
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+            assertEquals(
+                airing.details.copy(recommendations = emptyList(), recommendationsIncludeAdult = null),
+                s.titles.observeDetails(id).first(),
+            )
+        }
+
+    @Test
+    fun `an older response cannot replace a newer same-mode publication`() =
+        runTest {
+            val s = subject()
+            val page = recordedJson("title_adult_nsfw_unset")
+            val title = recordedTitle("title_adult_nsfw_unset").anime.id
+            val arrived = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val dispatched = AtomicInteger()
+            network.answers {
+                if (dispatched.getAndIncrement() == 0) {
+                    arrived.countDown()
+                    release.await(5, TimeUnit.SECONDS)
+                    answer(200, page.toString(), "application/json; charset=UTF-8")
+                } else {
+                    answer(
+                        200,
+                        page.edited(listOf("recommendations"), JsonArray(emptyList())).toString(),
+                        "application/json; charset=UTF-8",
+                    )
+                }
+            }
+            val old = async { s.titles.refresh(title) }
+            withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(title))
+            val newer = s.titles.observeDetails(title).first()
+            assertEquals(emptyList<Any>(), newer?.recommendationsFor(false))
+            release.countDown()
+            assertEquals(Outcome.Success(Unit), old.await())
+            assertEquals(newer, s.titles.observeDetails(title).first())
+        }
+
+    @Test
+    fun `a readable earlier set fills a gap left by a newer unread response without replacing its details`() =
+        runTest {
+            val s = subject()
+            val older = recordedJson("title_airing")
+            val newer =
+                older
+                    .edited(listOf("synopsis"), JsonPrimitive("A newer synopsis."))
+                    .edited(listOf("related_anime"), JsonArray(emptyList()))
+                    .edited(listOf("recommendations", "0", "node", "id"))
+            val arrived = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val dispatched = AtomicInteger()
+            network.answers {
+                val page =
+                    if (dispatched.getAndIncrement() == 0) {
+                        arrived.countDown()
+                        release.await(5, TimeUnit.SECONDS)
+                        older
+                    } else {
+                        newer
+                    }
+                answer(200, page.toString(), "application/json; charset=UTF-8")
+            }
+            val old = async { s.titles.refresh(id) }
+            withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+            val before = s.stored()
+            assertEquals("A newer synopsis.", before.second?.synopsis)
+            assertEquals(emptyList<Any>(), before.second?.related)
+            assertNull(before.second?.recommendationsFor(false))
+            network.clock.now += Duration.ofSeconds(60)
+            release.countDown()
+            assertEquals(Outcome.Success(Unit), old.await())
+            val after = s.stored()
+            assertEquals(before.first, after.first)
+            assertEquals(before.third, after.third)
+            assertEquals(
+                before.second?.copy(recommendationsIncludeAdult = false, recommendations = airing.details.recommendations),
+                after.second,
+            )
+        }
+
+    @Test
+    fun `changing the filter waits for a validated recommendation publication to commit`() =
+        runTest {
+            val entered = CompletableDeferred<Unit>()
+            val release = CountDownLatch(1)
+            val clock =
+                object : Clock() {
+                    override fun instant(): Instant {
+                        entered.complete(Unit)
+                        check(release.await(5, TimeUnit.SECONDS))
+                        return network.clock.instant()
+                    }
+
+                    override fun getZone(): ZoneId = network.clock.zone
+
+                    override fun withZone(zone: ZoneId): Clock = network.clock.withZone(zone)
+                }
+            val s = subject(clock)
+            val adult = recordedTitle("title_adult_nsfw_true")
+            val title = adult.anime.id
+            s.preferences.setAdultInSearch(true)
+            serve("title_adult_nsfw_true")
+            val refresh = async(Dispatchers.IO) { s.titles.refresh(title) }
+            entered.await()
+            try {
+                val change = async { s.preferences.setAdultInSearch(false) }
+                runCurrent()
+                assertFalse(change.isCompleted)
+                assertTrue(s.preferences.observeAdultInSearch().first())
+                release.countDown()
+                assertEquals(Outcome.Success(Unit), refresh.await())
+                assertEquals(Outcome.Success(Unit), change.await())
+                assertFalse(s.preferences.observeAdultInSearch().first())
+                val stored = s.titles.observeDetails(title).first()!!
+                assertEquals(adult.details.recommendations, stored.recommendationsFor(true))
+                assertNull(stored.recommendationsFor(false))
+            } finally {
+                release.countDown()
+            }
         }
 
     @Test
@@ -319,7 +573,7 @@ class MalAnimeRepositoryTest {
 
                 val refresh = async { s.titles.refresh(id) }
                 runCurrent()
-                assertTrue(arrived.await(5, TimeUnit.SECONDS))
+                withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
                 next.forEach { list.clear(it) }
                 cleared.countDown()
 

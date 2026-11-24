@@ -8,12 +8,18 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.db.TitleStore
+import io.github.kauri_off.kiroku.data.db.Unread
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.time.Instant
 
@@ -23,9 +29,13 @@ class MalAnimeRepository(
     private val store: TitleStore,
     private val clock: Clock,
     // The setting "Show adult content in search", which inside a title changes only its recommendations.
-    private val adult: suspend () -> Boolean,
+    private val preferences: StoredPreferences,
     private val unexpected: (Throwable) -> Unit,
 ) : AnimeRepository {
+    private var sequence = 0L
+    private val publishedDetails = mutableMapOf<AnimeId, Long>()
+    private val publishedRecommendations = mutableMapOf<AnimeId, Long>()
+
     override fun observeAnime(id: AnimeId): Flow<Anime?> = store.observeAnime(id).readable()
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> =
@@ -54,7 +64,8 @@ class MalAnimeRepository(
                 is Outcome.Failure -> return held
                 is Outcome.Success -> held.value
             }
-        val answer = titles.title(id, adult())
+        val (choice, order) = preferences.withAdultChoice { it to ++sequence }
+        val answer = titles.title(id, choice?.enabled == true)
         if (answer !is Outcome.Success) return answer as Outcome.Failure
         val (anime, details, unread) = answer.value
         // A page of another title is not the one asked for, which would otherwise never get its details.
@@ -62,7 +73,42 @@ class MalAnimeRepository(
             unexpected(AnotherTitleAnswer())
             return Outcome.Failure(DataError.ServerError)
         }
-        return when (val stored = stored { store.refresh(anime, details, clock.instant(), unread, begun) }) {
+        val stored =
+            stored {
+                preferences.withAdultChoice { current ->
+                    val newerDetails = order >= publishedDetails.getOrDefault(id, 0L)
+                    val accepted =
+                        choice?.takeIf {
+                            it == current && Unread.Recommendations !in unread && order >= publishedRecommendations.getOrDefault(id, 0L)
+                        }
+                    if (!newerDetails) {
+                        if (accepted == null) return@withAdultChoice store.holder() == begun
+                        currentCoroutineContext().ensureActive()
+                        return@withAdultChoice withContext(NonCancellable) {
+                            store.refreshRecommendations(id, details.recommendations, accepted.enabled, begun).also { written ->
+                                if (written) publishedRecommendations[id] = order
+                            }
+                        }
+                    }
+                    val kept =
+                        if (accepted != null) {
+                            details.copy(recommendationsIncludeAdult = accepted.enabled)
+                        } else {
+                            details.copy(recommendations = emptyList(), recommendationsIncludeAdult = null)
+                        }
+                    val missing = if (accepted != null) unread else unread + Unread.Recommendations
+                    currentCoroutineContext().ensureActive()
+                    withContext(NonCancellable) {
+                        store.refresh(anime, kept, clock.instant(), missing, begun).also { written ->
+                            if (written) {
+                                publishedDetails[id] = order
+                                if (accepted != null) publishedRecommendations[id] = order
+                            }
+                        }
+                    }
+                }
+            }
+        return when (stored) {
             is Outcome.Failure -> stored
             is Outcome.Success -> if (stored.value) Outcome.Success(Unit) else Outcome.Failure(DataError.ListEnded)
         }

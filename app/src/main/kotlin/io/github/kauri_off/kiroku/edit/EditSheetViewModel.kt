@@ -15,6 +15,8 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -26,7 +28,7 @@ class EditSheetViewModel(
     private val animeRepository: AnimeRepository,
     private val airing: AiringRepository,
     private val clock: Clock,
-    private val titleLanguage: TitleLanguage,
+    private val titleLanguage: Flow<TitleLanguage>,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
 ) : ViewModel() {
@@ -35,6 +37,7 @@ class EditSheetViewModel(
     // Compose state, changed synchronously by every event, so the sheet's fields read each keystroke in the same frame.
     val sheet: EditSheetState? get() = shown.value
 
+    private var sheetRead: Job? = null
     private var anime: Anime? = null
     private var loading = false
     private var restored = false
@@ -73,6 +76,7 @@ class EditSheetViewModel(
                 }
             EditSheetEvent.RemoveConfirmed -> if (anime != null && !before.closing && !after.isNew) messages.write(ListWrite.Remove(anime))
             EditSheetEvent.Dismissed -> {
+                sheetRead?.cancel()
                 shown.value = null
                 this.anime = null
                 forget()
@@ -89,34 +93,43 @@ class EditSheetViewModel(
         known: Anime?,
     ) {
         loading = true
-        viewModelScope.launch {
-            val entry =
-                try {
-                    list.observeEntry(id).first()
-                } catch (_: DataException) {
+        sheetRead =
+            viewModelScope.launch {
+                val entry =
+                    try {
+                        list.observeEntry(id).first()
+                    } catch (_: DataException) {
+                        loading = false
+                        forget()
+                        return@launch
+                    }
+                val found = entry?.anime ?: animeRepository.observeAnime(id).first() ?: known
+                if (found == null) {
                     loading = false
                     forget()
                     return@launch
                 }
-            val found = entry?.anime ?: animeRepository.observeAnime(id).first() ?: known
-            loading = false
-            if (found == null) {
-                forget()
-                return@launch
-            }
-            anime = found
-            // One read of what is stored, which asks no source; without it the sheet has MAL's total alone.
-            val known =
-                try {
-                    airing.observeAiring().first()[id]
-                } catch (_: DataException) {
-                    null
+                anime = found
+                // One read of what is stored, which asks no source; without it the sheet has MAL's total alone.
+                val known =
+                    try {
+                        airing.observeAiring().first()[id]
+                    } catch (_: DataException) {
+                        null
+                    }
+                titleLanguage.collect { language ->
+                    val current = shown.value
+                    if (current == null) {
+                        val opened = EditSheetState.of(found, known, entry?.values, language, ZonedDateTime.now(clock))
+                        val sheet = restored?.applyTo(opened) ?: opened
+                        shown.value = sheet
+                        loading = false
+                        SavedSheet.save(saved, sheet)
+                    } else {
+                        shown.value = current.copy(title = found.titles.preferred(language))
+                    }
                 }
-            val opened = EditSheetState.of(found, known, entry?.values, titleLanguage, ZonedDateTime.now(clock))
-            val sheet = restored?.applyTo(opened) ?: opened
-            shown.value = sheet
-            SavedSheet.save(saved, sheet)
-        }
+            }
     }
 
     private fun forget() {

@@ -153,7 +153,7 @@ internal class LiveGraph(
     }
 
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
-    override val anime by lazy { liveTitles(parts) }
+    override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, account::whileOwner, airingOf) }
     override val scores by lazy { parts.scores }
     override val search by lazy { MalSearch(parts.http, parts.clock) }
@@ -169,7 +169,7 @@ internal class LiveGraph(
     val runLog = liveRunLog(parts)
 
     // The source's notifications on the device; making it posts and reads nothing.
-    private val shown by lazy { EpisodeNotifications(parts.context, parts.source.name, { titleLanguage }) }
+    private val shown by lazy { EpisodeNotifications(parts.context, parts.source.name, { titleLanguage.first() }) }
     override val notifications by lazy {
         LiveNotifications(
             parts,

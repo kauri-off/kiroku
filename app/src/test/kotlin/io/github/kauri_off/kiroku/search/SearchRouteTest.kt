@@ -32,6 +32,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -237,6 +238,17 @@ class SearchRouteTest {
         compose.onNode(inView(title) and hasText("Planned")).assertExists()
     }
 
+    @Test
+    fun `an open search changes its title labels when the preference changes`() {
+        search()
+        typeKag()
+        val anime = FixtureAnime.exactToWatch
+        compose.onNode(inView(anime.titles.romaji)).assertExists()
+        scope.launch { graph.preferences.setTitleLanguage(TitleLanguage.English) }
+        settle()
+        compose.onNode(inView(anime.titles.preferred(TitleLanguage.English))).assertExists()
+    }
+
     private val topAiring = SearchFixtureStates.browseRows(BrowseList.TopAiring).first().title
 
     @Test
@@ -249,7 +261,6 @@ class SearchRouteTest {
         val source =
             object : AppGraph by graph {
                 override val madeUp = false
-                override val showAdultInSearch = true
                 override val search =
                     object : SearchRepository by graph.search {
                         override fun openBrowse(list: BrowseList): BrowseSession =
@@ -264,6 +275,8 @@ class SearchRouteTest {
                             }
                     }
             }
+        scope.launch { graph.preferences.setAdultInSearch(true) }
+        settle()
         search(source)
         compose.onNodeWithText("Most popular").performClick()
         settle()

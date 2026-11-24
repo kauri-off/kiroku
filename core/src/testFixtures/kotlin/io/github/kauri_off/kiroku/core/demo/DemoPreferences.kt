@@ -1,7 +1,10 @@
 package io.github.kauri_off.kiroku.core.demo
 
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +14,26 @@ import kotlinx.coroutines.flow.update
 class DemoPreferences : PreferencesRepository {
     private val sorts = MutableStateFlow(ListStatus.entries.associateWith(TabSort::defaultFor))
     private val opened = MutableStateFlow(emptyList<String>())
+
+    private val language = MutableStateFlow(TitleLanguage.Romaji)
+    private val adult = MutableStateFlow(AdultSearchChoice())
+
+    override fun observeTitleLanguage(): Flow<TitleLanguage> = language
+
+    override fun observeAdultSearchChoice(): Flow<AdultSearchChoice> = adult
+
+    override suspend fun setTitleLanguage(language: TitleLanguage): Outcome<Unit> {
+        this.language.value = language
+        return Outcome.Success(Unit)
+    }
+
+    override suspend fun changeAdultInSearch(change: (Boolean) -> Boolean): Outcome<Unit> {
+        adult.update {
+            val enabled = change(it.enabled)
+            if (it.enabled == enabled) it else AdultSearchChoice(enabled, it.revision + 1)
+        }
+        return Outcome.Success(Unit)
+    }
 
     override fun observeListSorts(): Flow<Map<ListStatus, TabSort>> = sorts
 

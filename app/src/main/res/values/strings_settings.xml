@@ -3,4 +3,11 @@
     <string name="settings_title">Settings</string>
     <string name="settings_notifications">Notifications</string>
     <string name="settings_notifications_detail">New episodes and what this device allows</string>
+    <string name="settings_app_language">Language</string>
+    <string name="settings_title_language">Title language</string>
+    <string name="settings_romaji">Romaji</string>
+    <string name="settings_english">English</string>
+    <string name="settings_japanese">Japanese</string>
+    <string name="settings_adult_in_search">Show adult content in search</string>
+    <string name="settings_cancel">Cancel</string>
 </resources>

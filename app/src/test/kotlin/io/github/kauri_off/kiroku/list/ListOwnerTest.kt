@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -122,7 +123,7 @@ class ListOwnerTest {
                 connection,
                 preferences(demo.preferences),
                 set.clock,
-                TitleLanguage.Romaji,
+                flowOf(TitleLanguage.Romaji),
                 SavedStateHandle(),
                 messages,
                 Dispatchers.Main,
