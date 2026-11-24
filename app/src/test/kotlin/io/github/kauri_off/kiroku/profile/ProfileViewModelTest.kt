@@ -701,6 +701,40 @@ class ProfileViewModelTest {
         }
 
     @Test
+    fun `a fresh own profile shown offline keeps its pending reconnect`() =
+        runTest(dispatcher) {
+            val app = opened()
+            assertEquals(Outcome.Success(Unit), app.graph.list.sync())
+            val primingSyncs = app.graph.syncs
+            val user = OwnStore(app.graph.user, stored = fixtures.user, answer = Outcome.Failure(DataError.NoConnection))
+            val me = app.profile(ProfileOwner.Me, user = user)
+            val screen = showing(me.state, me.shown)
+            advanceUntilIdle()
+            app.graph.demo.server.offline.value = true
+            advanceUntilIdle()
+            me.onEvent(ProfileEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
+            assertEquals(primingSyncs + 1, app.graph.syncs)
+            val message = checkNotNull(app.messages.current.value)
+
+            screen.cancel()
+            advanceTimeBy(STOPPED_AFTER)
+            runCurrent()
+            showing(me.state, me.shown)
+            runCurrent()
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
+            assertEquals(primingSyncs + 1, app.graph.syncs)
+            assertEquals(message, app.messages.current.value)
+
+            app.graph.demo.server.offline.value = false
+            advanceUntilIdle()
+            assertEquals(2, user.refreshes)
+            assertEquals(primingSyncs + 2, app.graph.syncs)
+        }
+
+    @Test
     fun `a reconnect repeats only the offline read even if the other read failed differently`() =
         runTest(dispatcher) {
             val offline = DataError.NoConnection

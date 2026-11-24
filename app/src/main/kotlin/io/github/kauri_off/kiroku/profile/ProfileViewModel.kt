@@ -81,13 +81,11 @@ class ProfileViewModel(
         val profile: UserProfile?,
     )
 
-    private class OwnLoad(
+    private class OfflineReads(
         val owner: SignInId,
-        val listError: DataError?,
-        val profileError: DataError?,
-    ) {
-        val wasOffline: Boolean get() = listError == DataError.NoConnection || profileError == DataError.NoConnection
-    }
+        val list: Boolean,
+        val profile: Boolean,
+    )
 
     private val sessions = session.observeSession()
     private val typed = mutableStateOf(saved.get<String>(TYPED))
@@ -97,7 +95,7 @@ class ProfileViewModel(
     private val isOwn = MutableStateFlow(owner == ProfileOwner.Me)
     private val fetchedOwn = MutableStateFlow<Fetched?>(null)
     private var load: Job? = null
-    private var lastOwnLoad: OwnLoad? = null
+    private var offlineReads: OfflineReads? = null
     private var learning: Job? = null
 
     // The signed-in user's name as last read, to tell the own name from another.
@@ -269,37 +267,48 @@ class ProfileViewModel(
             viewModelScope.launch {
                 pulling.value = asked == Asked.Pull
                 loads.started()
-                val own = isOwn.value
-                lastOwnLoad = if (own) refreshOwn(asked) else null
-                val error = if (own) lastOwnLoad?.let { it.listError ?: it.profileError } else refreshList()
+                val error =
+                    if (isOwn.value) {
+                        refreshOwn(asked)
+                    } else {
+                        offlineReads = null
+                        refreshList()
+                    }
                 pulling.value = false
-                loads.ended(if (lastOwnLoad?.wasOffline == true) DataError.NoConnection else error)
+                loads.ended(if (offlineReads != null) DataError.NoConnection else error)
                 if (error != null && held && asked != Asked.Retry && !error.ofUser && error != DataError.SessionExpired) {
                     messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(error)))
                 }
             }
     }
 
-    private suspend fun refreshOwn(asked: Asked): OwnLoad? {
-        val owner = sessions.first().owner ?: return null
+    private suspend fun refreshOwn(asked: Asked): DataError? {
+        val owner = sessions.first().owner
+        val previous = offlineReads?.takeIf { it.owner == owner }
+        offlineReads = null
+        if (owner == null) return null
         val now = clock.instant()
-        val previous = lastOwnLoad?.takeIf { it.owner == owner }
         val syncList =
             when (asked) {
                 Asked.Shown -> list.stale(now)
-                Asked.Reconnect -> previous?.listError == DataError.NoConnection
+                Asked.Reconnect -> previous?.list == true
                 Asked.Pull, Asked.Retry -> true
             }
         val readProfile =
             when (asked) {
                 Asked.Shown -> user.profileStale(now)
-                Asked.Reconnect -> previous?.profileError == DataError.NoConnection
+                Asked.Reconnect -> previous?.profile == true
                 Asked.Pull, Asked.Retry -> true
             }
         return coroutineScope {
             val synced = async { if (syncList) list.sync() as? Outcome.Failure else null }
             val profile = async { if (readProfile) user.refreshOwnProfile() as? Outcome.Failure else null }
-            OwnLoad(owner, synced.await()?.error, profile.await()?.error)
+            val listError = synced.await()?.error
+            val profileError = profile.await()?.error
+            val listOffline = if (syncList) listError == DataError.NoConnection else previous?.list == true
+            val profileOffline = if (readProfile) profileError == DataError.NoConnection else previous?.profile == true
+            if (listOffline || profileOffline) offlineReads = OfflineReads(owner, listOffline, profileOffline)
+            listError ?: profileError
         }
     }
 
