@@ -39,7 +39,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -86,6 +85,7 @@ import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterCard
 import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.RefreshBox
+import io.github.kauri_off.kiroku.design.component.ScreenScaffold
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -119,13 +119,11 @@ fun TitleScreen(
     modifier: Modifier = Modifier,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    Scaffold(
+    ScreenScaffold(
         modifier = modifier,
         topBar = {
-            Column {
-                TitleTopBar(menu = state is TitleState.Shown, onEvent = onEvent, scrollBehavior = scrollBehavior)
-                if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(TitleEvent.SignIn) })
-            }
+            TitleTopBar(menu = state is TitleState.Shown, onEvent = onEvent, scrollBehavior = scrollBehavior)
+            if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(TitleEvent.SignIn) })
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
