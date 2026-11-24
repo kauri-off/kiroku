@@ -94,7 +94,7 @@ android {
             oauthRedirect("io.github.kauri-off.kiroku://oauth")
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         // The release build with the debug menu, profileable: the owner's channel, and the build frames are measured on.
         create("preview") {

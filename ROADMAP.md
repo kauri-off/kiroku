@@ -253,6 +253,8 @@ Not to forget:
 
 - [x] **M5-03 Live browse lists.**
 
+- [x] **M5-04 Recommendations.**
+
 ## M6. Profiles and statistics
 
 Goal: the owner's profile, another user's profile and list, and the statistics sub-screens.

@@ -1,9 +1,17 @@
 package io.github.kauri_off.kiroku.routes
 
 import android.content.Context
+import android.os.BadParcelableException
+import android.os.Bundle
+import android.os.Parcel
+import android.os.Parcelable
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -39,11 +47,17 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.search.BrowseKey
+import io.github.kauri_off.kiroku.shell.ActivityNavigation
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.NotBuilt
+import io.github.kauri_off.kiroku.shell.NotBuiltKey
+import io.github.kauri_off.kiroku.shell.SearchRoot
 import io.github.kauri_off.kiroku.shell.ShellNavigator
+import io.github.kauri_off.kiroku.shell.discardUnreadableComposeState
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.text.named
+import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,11 +65,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.text.NumberFormat
@@ -75,6 +92,204 @@ class ProcessDeathTest {
 
     private class Owner : ViewModelStoreOwner {
         override val viewModelStore = ViewModelStore()
+    }
+
+    @Test
+    fun `restoring legacy recommendation placeholders leaves their titles usable`() {
+        val restoration = StateRestorationTester(compose)
+        val title = TitleKey(FixtureAnime.exactToWatch.id.value)
+        val searchTitle = TitleKey(FixtureAnime.prequel.id.value)
+        val legacy = NotBuiltKey(NotBuilt.Recommendations)
+        assertEquals("io.github.kauri_off.kiroku.shell.NotBuiltKey", legacy.javaClass.name)
+        assertEquals("Recommendations", legacy.screen.name)
+        lateinit var navigator: ShellNavigator
+        var showApp by mutableStateOf(false)
+        var migration: ActivityNavigation? = null
+        var registry = SaveableStateRegistry(restoredValues = null) { true }
+        restoration.setContent {
+            CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                navigator = rememberShellNavigator(null, migration)
+                if (showApp) {
+                    KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph, navigator) }
+                }
+            }
+        }
+        val saved =
+            compose.runOnIdle {
+                navigator.select(Destination.Search)
+                navigator.open(searchTitle)
+                navigator.open(legacy)
+                navigator.select(Destination.List)
+                navigator.open(title)
+                navigator.open(legacy)
+                registry.performSave()
+            }
+        registry = SaveableStateRegistry(saved) { true }
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).create()
+        migration = ActivityNavigation(activity.get().savedStateRegistry)
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(listOf(Destination.List.root, title), navigator.stack)
+            assertEquals(listOf(Destination.Search.root, searchTitle), navigator.stackOf(Destination.Search))
+            val composeValues = registry.performSave().values.flatten()
+            assertTrue(composeValues.all { it == null })
+            showApp = true
+        }
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
+        val migrated = Bundle()
+        activity.saveInstanceState(migrated)
+        val recreated = Robolectric.buildActivity(ComponentActivity::class.java).create(migrated)
+        val dedicated = checkNotNull(ActivityNavigation(recreated.get().savedStateRegistry).restored)
+        assertEquals(listOf(Destination.List.root, title), dedicated.stack)
+        assertEquals(listOf(Destination.Search.root, searchTitle), dedicated.stackOf(Destination.Search))
+        activity.destroy()
+        recreated.destroy()
+    }
+
+    @Test
+    fun `an incompatible serialized type on an inactive stack resets only that stack`() {
+        val restoration = StateRestorationTester(compose)
+        val title = TitleKey(FixtureAnime.exactToWatch.id.value)
+        val searchTitle = TitleKey(FixtureAnime.prequel.id.value)
+        lateinit var navigator: ShellNavigator
+        var registry = SaveableStateRegistry(restoredValues = null) { true }
+        restoration.setContent {
+            CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                navigator = rememberShellNavigator()
+            }
+        }
+        val saved =
+            compose.runOnIdle {
+                navigator.restart()
+                navigator.select(Destination.Search)
+                navigator.open(searchTitle)
+                navigator.select(Destination.List)
+                navigator.open(title)
+                registry.performSave()
+            }
+        val searchStack =
+            saved.values.flatten().filterIsInstance<Bundle>().single {
+                it.getBundle("0")?.getString("type") == SearchRoot::class.java.name
+            }
+        val incompatible = checkNotNull(searchStack.getBundle("1"))
+        assertEquals(TitleKey::class.java.name, incompatible.getString("type"))
+        incompatible.putString("type", "incompatible.PreviewTitle")
+        assertEquals(listOf("List"), saved.values.flatten().filterIsInstance<String>())
+        assertEquals(listOf(1), saved.values.flatten().filterIsInstance<Int>())
+        val legacySelected =
+            saved.mapValues { (_, values) ->
+                values.map {
+                    when (it) {
+                        "List" -> mutableStateOf(Destination.Profile)
+                        1 -> mutableIntStateOf(7)
+                        else -> it
+                    }
+                }
+            }
+        registry = SaveableStateRegistry(legacySelected) { true }
+
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle {
+            assertEquals(Destination.Profile, navigator.current)
+            assertEquals(7, navigator.restarts)
+            assertEquals(listOf(Destination.List.root, title), navigator.stackOf(Destination.List))
+            assertEquals(listOf(Destination.Search.root), navigator.stackOf(Destination.Search))
+            navigator.select(Destination.Search)
+            navigator.open(searchTitle)
+            assertEquals(listOf(Destination.Search.root, searchTitle), navigator.stack)
+        }
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `eager Compose unparcelling cannot erase compatible Activity navigation`() {
+        val registryKey = "androidx.lifecycle.BundlableSavedStateRegistry.key"
+        val composeKey = "SaveableStateRegistry:-1"
+        val navigationKey = "kiroku.shell.navigation"
+        val title = TitleKey(FixtureAnime.exactToWatch.id.value)
+        val searchTitle = TitleKey(FixtureAnime.prequel.id.value)
+        val profileTitle = TitleKey(FixtureAnime.notOnListAiring.id.value)
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).create()
+        val navigation = ActivityNavigation(activity.get().savedStateRegistry)
+        navigation.navigator =
+            ShellNavigator.inMemory().apply {
+                hadSession = true
+                restart()
+                open(title)
+                select(Destination.Search)
+                open(searchTitle)
+                select(Destination.Profile)
+                open(profileTitle)
+                select(Destination.List)
+            }
+        val state = Bundle()
+        activity.saveInstanceState(state)
+        val providers = checkNotNull(state.getBundle(registryKey))
+        val savedNavigation = checkNotNull(providers.getBundle(navigationKey))
+        assertEquals(setOf("List", "Search", "Profile", "selected", "restarts", "hadSession"), savedNavigation.keySet())
+        checkNotNull(savedNavigation.getBundle("Profile")?.getBundle("1")).putString("type", "incompatible.PreviewTitle")
+        providers.putBundle(
+            composeKey,
+            Bundle().apply {
+                putParcelableArrayList("moved-class", arrayListOf(UnreadableSelection()))
+            },
+        )
+
+        val uncleanCompose = checkNotNull(parcelled(state).getBundle(registryKey)?.getBundle(composeKey))
+        assertThrows(BadParcelableException::class.java) { uncleanCompose.keySet() }
+
+        val restoredState = parcelled(state)
+        discardUnreadableComposeState(restoredState)
+        assertNull(restoredState.getBundle(registryKey)?.getBundle(composeKey))
+        val recreated = Robolectric.buildActivity(ComponentActivity::class.java).create(restoredState)
+        val restored = checkNotNull(ActivityNavigation(recreated.get().savedStateRegistry).restored)
+        assertEquals(Destination.List, restored.current)
+        assertEquals(1, restored.restarts)
+        assertEquals(listOf(Destination.List.root, title), restored.stack)
+        assertEquals(listOf(Destination.Search.root, searchTitle), restored.stackOf(Destination.Search))
+        assertEquals(listOf(Destination.Profile.root), restored.stackOf(Destination.Profile))
+
+        runBlocking { graph.session.signOut() }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph, restored) } }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(2, restored.restarts)
+            assertEquals(Destination.List, restored.current)
+            assertEquals(Destination.entries.map { listOf(it.root) }, Destination.entries.map { restored.stackOf(it).toList() })
+        }
+        activity.destroy()
+        recreated.destroy()
+    }
+
+    private fun parcelled(state: Bundle): Bundle =
+        Parcel.obtain().let { parcel ->
+            try {
+                parcel.writeBundle(state)
+                parcel.setDataPosition(0)
+                checkNotNull(parcel.readBundle(javaClass.classLoader))
+            } finally {
+                parcel.recycle()
+            }
+        }
+
+    class UnreadableSelection : Parcelable {
+        override fun describeContents() = 0
+
+        override fun writeToParcel(
+            dest: Parcel,
+            flags: Int,
+        ) = Unit
+
+        companion object {
+            @JvmField
+            val CREATOR =
+                object : Parcelable.Creator<UnreadableSelection> {
+                    override fun createFromParcel(source: Parcel): UnreadableSelection = throw BadParcelableException("Old selection")
+
+                    override fun newArray(size: Int): Array<UnreadableSelection?> = arrayOfNulls(size)
+                }
+        }
     }
 
     @Test

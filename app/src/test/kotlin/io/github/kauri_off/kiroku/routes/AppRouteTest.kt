@@ -58,6 +58,7 @@ import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleTags
 import io.github.kauri_off.kiroku.titlesub.DetailsKey
+import io.github.kauri_off.kiroku.titlesub.RecommendationsKey
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -385,11 +386,40 @@ class AppRouteTest {
         shows("Details")
         showsSubstring("Studio Hanamizuki")
         back()
+        back()
+        shows("My list")
+    }
+
+    @Test
+    fun `Recommendations opens for the current title and a result returns to its list`() {
+        app()
+        openKagerou()
+        val recommended = FixtureAnime.notOnListAiring
+        val before = graph.requested
         scrollTo("Recommendations")
         click("Recommendations")
         compose.waitForIdle()
-        shows("Not available in this build yet")
+        shows("Recommendations")
+        shows(FixtureAnime.exactCaughtUp.titles.romaji)
+        val opened = navigator.stack.last() as RecommendationsKey
+        assertEquals(kagerou.id.value, opened.id)
+        assertEquals(Fixtures.reference.details.getValue(kagerou.id), opened.opened?.page?.details)
+        assertEquals(before, graph.requested)
+
+        compose.onNodeWithText(recommended.titles.romaji).performClick()
+        compose.waitForIdle()
+        val selected = navigator.stack.last() as TitleKey
+        assertEquals(recommended.id.value, selected.id)
+        assertEquals(recommended, selected.opened?.anime)
+        assertEquals(1, graph.requested.drop(before.size).count { it == recommended.id })
+
         back()
+        shows("Recommendations")
+        shows(recommended.titles.romaji)
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+        assertEquals(TitleKey(kagerou.id.value), navigator.stack.last())
+        shows("Recommendations")
         back()
         shows("My list")
     }

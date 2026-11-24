@@ -27,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
@@ -41,6 +42,8 @@ internal sealed interface SubScreenBody {
     ) : SubScreenBody
 
     data class List(
+        val refreshing: Boolean = false,
+        val onRefresh: (() -> Unit)? = null,
         val content: LazyListScope.() -> Unit,
     ) : SubScreenBody
 }
@@ -79,7 +82,30 @@ internal fun SubScreen(
     ) { padding ->
         when (body) {
             is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))
-            is SubScreenBody.List -> CentredList(padding, body.content)
+            is SubScreenBody.List -> SubScreenList(body, padding)
+        }
+    }
+}
+
+@Composable
+private fun SubScreenList(
+    body: SubScreenBody.List,
+    padding: PaddingValues,
+) {
+    val onRefresh = body.onRefresh
+    if (onRefresh == null) {
+        CentredList(padding, body.content)
+    } else {
+        val direction = LocalLayoutDirection.current
+        RefreshBox(body.refreshing, onRefresh, Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+            CentredList(
+                PaddingValues(
+                    start = padding.calculateStartPadding(direction),
+                    end = padding.calculateEndPadding(direction),
+                    bottom = padding.calculateBottomPadding(),
+                ),
+                body.content,
+            )
         }
     }
 }

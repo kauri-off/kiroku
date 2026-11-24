@@ -10,29 +10,13 @@ import io.github.kauri_off.kiroku.titlesub.SubScreen
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
 import kotlinx.serialization.Serializable
 
-// A screen a control leads to that a later milestone builds.
-enum class NotBuilt { Recommendations, }
+enum class NotBuilt { Recommendations }
 
 @Serializable
 data class NotBuiltKey(
     val screen: NotBuilt,
 ) : NavKey
 
-// Its name and Back, and the shared empty state saying it is not in this build.
-@Composable
-fun NotBuiltScreen(
-    screen: NotBuilt,
-    onBack: () -> Unit,
-    snackbars: SnackbarHostState,
-) {
-    val title =
-        when (screen) {
-            NotBuilt.Recommendations -> R.string.title_recommendations
-        }
-    NotBuiltScreen(stringResource(title), onBack, snackbars)
-}
-
-// A not-built screen named by the caller.
 @Composable
 fun NotBuiltScreen(
     title: String,

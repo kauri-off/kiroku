@@ -3,14 +3,18 @@ package io.github.kauri_off.kiroku.shell
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.savedstate.SavedState
+import androidx.savedstate.serialization.encodeToSavedState
 import io.github.kauri_off.kiroku.notShown
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
@@ -33,6 +37,8 @@ class ShellNavigator(
 
     // Part of every screen's identity, so a restart keeps no screen's state, a root's included.
     val restarts: Int get() = restartCount.intValue
+
+    internal var hadSession: Boolean? = null
 
     fun stackOf(destination: Destination): List<NavKey> = stacks.getValue(destination)
 
@@ -112,20 +118,57 @@ data class OpenedPage(
     val key: NavKey,
 )
 
-// Survives recreation and process death: the stacks are saved with their keys, the selection by name, the restarts by count.
 @Composable
-fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator {
-    fun over(destination: Destination) = listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray()
-    val list = rememberNavBackStack(Destination.List.root, *over(Destination.List))
-    val search = rememberNavBackStack(Destination.Search.root, *over(Destination.Search))
-    val profile = rememberNavBackStack(Destination.Profile.root, *over(Destination.Profile))
-    val selected = rememberSaveable { mutableStateOf(start?.destination ?: Destination.List) }
-    val restarts = rememberSaveable { mutableIntStateOf(0) }
-    return remember(list, search, profile, selected, restarts) {
-        ShellNavigator(
-            mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
-            selected,
-            restarts,
-        )
-    }
+fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator = rememberShellNavigator(start, null)
+
+@Composable
+internal fun rememberShellNavigator(
+    start: OpenedPage?,
+    activityNavigation: ActivityNavigation?,
+): ShellNavigator {
+    fun initial(destination: Destination) =
+        NavBackStack(destination.root, *listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray())
+    val saveWithCompose = activityNavigation == null
+    val list = rememberSaveable(saver = stackSaver(ListRoot, saveWithCompose)) { initial(Destination.List) }
+    val search = rememberSaveable(saver = stackSaver(SearchRoot, saveWithCompose)) { initial(Destination.Search) }
+    val profile = rememberSaveable(saver = stackSaver(ProfileRoot, saveWithCompose)) { initial(Destination.Profile) }
+    val selected =
+        rememberSaveable(saver = destinationSaver(saveWithCompose)) { mutableStateOf(start?.destination ?: Destination.List) }
+    val restarts = rememberSaveable(saver = restartSaver(saveWithCompose)) { mutableIntStateOf(0) }
+    val navigator =
+        remember(list, search, profile, selected, restarts, activityNavigation) {
+            activityNavigation?.restored ?: ShellNavigator(
+                mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
+                selected,
+                restarts,
+            )
+        }
+    SideEffect { activityNavigation?.navigator = navigator }
+    return navigator
 }
+
+private fun destinationSaver(save: Boolean) =
+    Saver<MutableState<Destination>, Any>(
+        save = { it.value.name.takeIf { save } },
+        restore = { saved ->
+            val value = if (saved is MutableState<*>) saved.value else saved
+            Destination.entries.firstOrNull { it.name == value || it == value }?.let { mutableStateOf(it) }
+        },
+    )
+
+private fun restartSaver(save: Boolean) =
+    Saver<MutableIntState, Any>(
+        save = { it.intValue.takeIf { save } },
+        restore = { saved ->
+            val value = if (saved is MutableIntState) saved.intValue else saved as? Int
+            value?.let { mutableIntStateOf(it) }
+        },
+    )
+
+private fun stackSaver(
+    root: NavKey,
+    save: Boolean,
+) = Saver<NavBackStack<NavKey>, SavedState>(
+    save = { if (save) encodeToSavedState(navSerializer, it) else null },
+    restore = { decodeStack(it, root) },
+)

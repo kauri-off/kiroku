@@ -38,6 +38,7 @@
     <string name="title_scores_row">Votes for each score</string>
     <string name="title_details">Details</string>
     <string name="title_recommendations">Recommendations</string>
+    <string name="title_recommendations_empty">No recommendations</string>
     <plurals name="title_titles">
         <item quantity="one">%d\u00A0title</item>
         <item quantity="other">%d\u00A0titles</item>
