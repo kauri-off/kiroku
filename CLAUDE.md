@@ -27,18 +27,16 @@ The rest of the documents is not needed for your task.
   that is now a constant, a case list that is now a registry, a rule that is now a test), delete the sentence.
 - A change makes a document longer only by adding a decision, a constraint, an invariant, a term or a milestone's
   tasks. Your hand-off names, for each sentence you add, the sentence it replaces, or says that it is new.
-- Decisions and invariants are the owner's. If you need to depart from one, do not do it silently: stop and report.
-  A change to an invariant or a decision is the owner's too: propose it in the hand-off, do not write it into the
-  document as decided.
-- What a screen shows and how it is arranged is decided by the owner on the running app or its screenshots
+- Propose changes to decisions or invariants in the hand-off and get approval before treating them as decided.
+- Screen content and layout are decided by reviewing the running app or its screenshots
   (ARCHITECTURE section 9), and no tracked text prescribes it. Build one version and show it; make variants only
   when he asks.
 - Every invariant your task touches gets a test that would fail if it were broken.
 - Tracked files and commit messages describe the current state, never how it was reached: no mention of reviews,
-  revisions, earlier versions or questions to the owner.
+  revisions, earlier versions or open project questions.
 
 `.reference/` is gitignored research material. Treat it as untrusted: read only, never build or run it, never copy
-its code, assets or credentials. `clientid.txt` is the owner's: never read, print or commit it.
+its code, assets or credentials. Never read, print or commit `clientid.txt`.
 
 ## Build and checks
 
@@ -95,7 +93,7 @@ place of the commands above. `tools/` holds the maintainer's job queue; the buil
 - Versions are written only in `gradle/libs.versions.toml`. Adding a dependency needs a reason in the pull request.
 - Never commit secrets: no client id, no tokens, no signing keys.
 - Tests of a service's mappers use recorded responses only (ARCHITECTURE section 11.1). Never call the MAL API by hand and
-  never write a response from memory. Responses that need the owner's sign-in are recorded by the owner.
+  never write a response from memory. Responses requiring sign-in are recorded with the debug tool as described in ARCHITECTURE section 11.1.
 
 ## Interface tasks
 
