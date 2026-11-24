@@ -54,7 +54,8 @@ fun SearchRoute(
     val listed by listedEntries(graph)
     val editor = editSheetViewModel(graph, messages)
     val text = search.text
-    val results = if (LocalOnTop.current) search.state.collectAsScreenState().value else search.state.value
+    val resultState = if (LocalOnTop.current) search.state else search.cachedState
+    val results by resultState.collectAsScreenState()
     val shown = results.takeIf { it.query == text }
     val content =
         when {

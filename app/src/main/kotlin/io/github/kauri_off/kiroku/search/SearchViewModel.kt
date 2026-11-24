@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -55,6 +56,7 @@ internal class SearchViewModel(
     private val loads = ShownLoads(viewModelScope, connection, whenShown = {}, again = ::retry)
 
     val shown get() = loads.shown
+    val cachedState = results.asStateFlow()
 
     val state =
         flow {
