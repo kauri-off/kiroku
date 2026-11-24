@@ -150,20 +150,24 @@ abstract class SubScreenViewModel(
             viewModelScope.launch {
                 val choice = adultSearchChoice?.first()
                 val result = anime.refresh(id)
-                if (choice != adultSearchChoice?.first()) {
-                    currentCoroutineContext().ensureActive()
+                val obsoleteBeforeRead = choice != adultSearchChoice?.first()
+                val error =
+                    when (result) {
+                        is Outcome.Failure -> result.error
+                        is Outcome.Success ->
+                            DataError.ServerError.takeIf {
+                                choice != null && !obsoleteBeforeRead && anime.recommendationsNeedRefresh(id, choice.enabled)
+                            }
+                    }
+                val obsolete = obsoleteBeforeRead || (result is Outcome.Success && choice != adultSearchChoice?.first())
+                currentCoroutineContext().ensureActive()
+                if (obsolete) {
                     refreshing.value = false
-                    if ((result as? Outcome.Failure)?.error != DataError.ListEnded) {
+                    if (error != DataError.ListEnded) {
                         if (loads.isShowing) refresh() else replaceObsolete = true
                     }
                     return@launch
                 }
-                val error =
-                    when (result) {
-                        is Outcome.Failure -> result.error
-                        is Outcome.Success -> DataError.ServerError.takeIf { recommendationsNeedRefresh() }
-                    }
-                currentCoroutineContext().ensureActive()
                 failure.value = error
                 refreshing.value = false
                 if (error != null) refreshFailed(error)

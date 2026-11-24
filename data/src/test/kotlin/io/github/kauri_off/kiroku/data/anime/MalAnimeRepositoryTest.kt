@@ -459,6 +459,49 @@ class MalAnimeRepositoryTest {
         }
 
     @Test
+    fun `a readable earlier set fills a gap left by a newer unread response without replacing its details`() =
+        runTest {
+            val s = subject()
+            val older = recordedJson("title_airing")
+            val newer =
+                older
+                    .edited(listOf("synopsis"), JsonPrimitive("A newer synopsis."))
+                    .edited(listOf("related_anime"), JsonArray(emptyList()))
+                    .edited(listOf("recommendations", "0", "node", "id"))
+            val arrived = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val dispatched = AtomicInteger()
+            network.answers {
+                val page =
+                    if (dispatched.getAndIncrement() == 0) {
+                        arrived.countDown()
+                        release.await(5, TimeUnit.SECONDS)
+                        older
+                    } else {
+                        newer
+                    }
+                answer(200, page.toString(), "application/json; charset=UTF-8")
+            }
+            val old = async { s.titles.refresh(id) }
+            withContext(Dispatchers.IO) { assertTrue(arrived.await(5, TimeUnit.SECONDS)) }
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+            val before = s.stored()
+            assertEquals("A newer synopsis.", before.second?.synopsis)
+            assertEquals(emptyList<Any>(), before.second?.related)
+            assertNull(before.second?.recommendationsFor(false))
+            network.clock.now += Duration.ofSeconds(60)
+            release.countDown()
+            assertEquals(Outcome.Success(Unit), old.await())
+            val after = s.stored()
+            assertEquals(before.first, after.first)
+            assertEquals(before.third, after.third)
+            assertEquals(
+                before.second?.copy(recommendationsIncludeAdult = false, recommendations = airing.details.recommendations),
+                after.second,
+            )
+        }
+
+    @Test
     fun `changing the filter waits for a validated recommendation publication to commit`() =
         runTest {
             val entered = CompletableDeferred<Unit>()

@@ -33,7 +33,8 @@ class MalAnimeRepository(
     private val unexpected: (Throwable) -> Unit,
 ) : AnimeRepository {
     private var sequence = 0L
-    private val published = mutableMapOf<AnimeId, Long>()
+    private val publishedDetails = mutableMapOf<AnimeId, Long>()
+    private val publishedRecommendations = mutableMapOf<AnimeId, Long>()
 
     override fun observeAnime(id: AnimeId): Flow<Anime?> = store.observeAnime(id).readable()
 
@@ -75,8 +76,20 @@ class MalAnimeRepository(
         val stored =
             stored {
                 preferences.withAdultChoice { current ->
-                    if (order < published.getOrDefault(id, 0L)) return@withAdultChoice store.holder() == begun
-                    val accepted = choice?.takeIf { it == current && Unread.Recommendations !in unread }
+                    val newerDetails = order >= publishedDetails.getOrDefault(id, 0L)
+                    val accepted =
+                        choice?.takeIf {
+                            it == current && Unread.Recommendations !in unread && order >= publishedRecommendations.getOrDefault(id, 0L)
+                        }
+                    if (!newerDetails) {
+                        if (accepted == null) return@withAdultChoice store.holder() == begun
+                        currentCoroutineContext().ensureActive()
+                        return@withAdultChoice withContext(NonCancellable) {
+                            store.refreshRecommendations(id, details.recommendations, accepted.enabled, begun).also { written ->
+                                if (written) publishedRecommendations[id] = order
+                            }
+                        }
+                    }
                     val kept =
                         if (accepted != null) {
                             details.copy(recommendationsIncludeAdult = accepted.enabled)
@@ -87,7 +100,10 @@ class MalAnimeRepository(
                     currentCoroutineContext().ensureActive()
                     withContext(NonCancellable) {
                         store.refresh(anime, kept, clock.instant(), missing, begun).also { written ->
-                            if (written) published[id] = order
+                            if (written) {
+                                publishedDetails[id] = order
+                                if (accepted != null) publishedRecommendations[id] = order
+                            }
                         }
                     }
                 }

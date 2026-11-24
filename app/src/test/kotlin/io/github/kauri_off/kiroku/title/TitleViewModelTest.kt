@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessage
@@ -34,7 +35,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -208,6 +211,76 @@ class TitleViewModelTest {
                 s.shown.page.details!!
                     .recommendationsIncludeAdult,
             )
+        }
+
+    @Test
+    fun `a hidden filter change during a title completion read leaves a replacement owed on return`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val id = FixtureAnime.exactToWatch.id
+            graph.preferences.setAdultInSearch(true)
+            graph.anime.refresh(id)
+            val messages = ShellMessages(scope, graph.list)
+            val blocked = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val modes = mutableListOf<Boolean>()
+            var holdRead = false
+            val repository =
+                object : AnimeRepository by graph.anime {
+                    override fun observeDetails(id: AnimeId) =
+                        flow {
+                            if (holdRead) {
+                                holdRead = false
+                                blocked.complete(Unit)
+                                release.await()
+                            }
+                            emitAll(graph.anime.observeDetails(id))
+                        }
+
+                    override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+                        if (id != FixtureAnime.exactToWatch.id) return graph.anime.refresh(id)
+                        val adult = graph.showAdultInSearch.first()
+                        modes += adult
+                        if (adult) {
+                            holdRead = true
+                            return Outcome.Failure(DataError.Refused)
+                        }
+                        return graph.anime.refresh(id)
+                    }
+                }
+            val model = title(graph, id, SavedStateHandle(), messages, repository = repository)
+            showing(model.state)
+            val screen = showing(model.shown)
+            runCurrent()
+            assertTrue(modes.isEmpty())
+            model.onEvent(TitleEvent.Refresh)
+            runCurrent()
+            assertTrue(blocked.isCompleted)
+            screen.cancel()
+            runCurrent()
+            graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            showing(model.shown)
+            runCurrent()
+            assertEquals(listOf(true), modes)
+            val pending = (model.state.value as TitleState.Shown).page
+            assertTrue(pending.details!!.recommendations.isEmpty())
+            assertTrue(pending.related.isNotEmpty())
+
+            release.complete(Unit)
+            runCurrent()
+            assertEquals(listOf(true, false), modes)
+            assertNull(messages.current.value)
+            val current = (model.state.value as TitleState.Shown).page
+            assertTrue(
+                current.details!!
+                    .recommendationsFor(false)
+                    .orEmpty()
+                    .isNotEmpty(),
+            )
+            assertEquals(pending.related, current.related)
+            scope.cancel()
         }
 
     @Test
@@ -1499,9 +1572,10 @@ class TitleViewModelTest {
         saved: SavedStateHandle,
         messages: ShellMessages,
         opened: TitleSummary? = null,
+        repository: AnimeRepository = graph.anime,
     ) = TitleViewModel(
         id,
-        graph.anime,
+        repository,
         graph.list,
         graph.airing,
         graph.session,

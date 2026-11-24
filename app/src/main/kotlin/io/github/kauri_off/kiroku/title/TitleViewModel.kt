@@ -368,31 +368,36 @@ class TitleViewModel(
                 }
             val choice = adultSearchChoice.first()
             val result = anime.refresh(id)
-            val obsolete = adultSearchChoice.first() != choice
-            currentCoroutineContext().ensureActive()
             wait?.cancel()
+            val error = (result as? Outcome.Failure)?.error
+            val obsoleteBeforeRead = adultSearchChoice.first() != choice
+            val shown =
+                error != null &&
+                    !obsoleteBeforeRead &&
+                    sources.filterNotNull().first().let { it.list.failure == null && it.storeFailure == null && animeOf(it) != null }
+            val missingDetails = error != null && !obsoleteBeforeRead && storedDetails() == null
+            val obsolete = obsoleteBeforeRead || (error != null && adultSearchChoice.first() != choice)
+            currentCoroutineContext().ensureActive()
             if (obsolete) {
                 waitShown.value = false
                 refreshing.value = false
-                if ((result as? Outcome.Failure)?.error != DataError.ListEnded) {
+                if (error != DataError.ListEnded) {
                     if (loads.isShowing) refresh(Asked.Filter) else replaceObsolete = true
                 }
                 return@coroutineScope false
             }
             waitShown.value = false
             refreshing.value = false
-            loads.ended((result as? Outcome.Failure)?.error)
-            if (result !is Outcome.Failure) {
+            loads.ended(error)
+            if (error == null) {
                 if (asked == Asked.Pull) walked = false
                 walkIfOwed()
                 return@coroutineScope true
             }
-            val shown =
-                sources.filterNotNull().first().let { it.list.failure == null && it.storeFailure == null && animeOf(it) != null }
-            if (storedDetails() == null) failure.value = result.error
+            if (missingDetails) failure.value = error
             // Section 7.2: a Retry fails where it was tapped; any other failure is also said on the first screen.
-            if (shown && asked != Asked.Retry && result.error != DataError.SessionExpired) {
-                messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(result.error)))
+            if (shown && asked != Asked.Retry && error != DataError.SessionExpired) {
+                messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(error)))
             }
             false
         }

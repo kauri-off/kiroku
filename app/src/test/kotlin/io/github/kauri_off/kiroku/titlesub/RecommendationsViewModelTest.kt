@@ -20,7 +20,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -351,6 +355,69 @@ class RecommendationsViewModelTest {
             runCurrent()
             assertEquals(3, responses.size)
             assertEquals(RecommendationsContent.Shown(emptyList()), vm.state.value.content)
+            scope.cancel()
+        }
+
+    @Test
+    fun `a filter change during the completion cache read replaces obsolete success on return`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            graph.preferences.setAdultInSearch(true)
+            val cache = MutableStateFlow(details.copy(recommendationsIncludeAdult = true))
+            val modes = mutableListOf<Boolean>()
+            val failures = mutableListOf<DataError>()
+            val blocked = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            var holdRead = false
+            val repository =
+                object : AnimeRepository by graph.anime {
+                    override fun observeDetails(id: AnimeId) =
+                        flow {
+                            if (holdRead) {
+                                holdRead = false
+                                blocked.complete(Unit)
+                                release.await()
+                            }
+                            emitAll(cache)
+                        }
+
+                    override fun observeRefreshedAt(id: AnimeId) = flowOf(graph.clock.instant())
+
+                    override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+                        val adult = graph.showAdultInSearch.first()
+                        modes += adult
+                        if (adult) {
+                            holdRead = true
+                            return Outcome.Success(Unit)
+                        }
+                        return Outcome.Failure(DataError.Refused)
+                    }
+                }
+            val vm = recommendations(graph, repository = repository, onRefreshFailed = failures::add)
+            val seen = mutableListOf<RecommendationsContent>()
+            showing(vm.state.onEach { seen += it.content })
+            val screen = showing(vm.shown)
+            runCurrent()
+            assertTrue(modes.isEmpty())
+            vm.onEvent(RecommendationsEvent.Reload)
+            runCurrent()
+            assertTrue(blocked.isCompleted)
+            screen.cancel()
+            runCurrent()
+            graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            showing(vm.shown)
+            runCurrent()
+            assertEquals(listOf(true), modes)
+            assertEquals(RecommendationsContent.Loading, vm.state.value.content)
+
+            release.complete(Unit)
+            runCurrent()
+            assertEquals(listOf(true, false), modes)
+            assertEquals(RecommendationsContent.Failed(DataError.Refused), vm.state.value.content)
+            assertFalse(seen.contains(RecommendationsContent.Failed(DataError.ServerError)))
+            assertTrue(failures.isEmpty())
             scope.cancel()
         }
 
