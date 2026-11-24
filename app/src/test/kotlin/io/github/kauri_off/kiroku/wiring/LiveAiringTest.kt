@@ -4,12 +4,13 @@ import android.content.Intent
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
-import io.github.kauri_off.kiroku.core.airing.AiringAnswers
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.AiringStore
+import io.github.kauri_off.kiroku.core.airing.AiringTime
 import io.github.kauri_off.kiroku.core.airing.FetchedAiring
 import io.github.kauri_off.kiroku.core.airing.InMemoryAiringStore
+import io.github.kauri_off.kiroku.core.airing.ListAiring
 import io.github.kauri_off.kiroku.core.airing.ScheduledEpisode
 import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -23,7 +24,9 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.ListSource
+import io.github.kauri_off.kiroku.core.repository.OwnedEntries
 import io.github.kauri_off.kiroku.data.db.RoomAiringStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
@@ -33,6 +36,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -105,6 +109,24 @@ class LiveAiringTest {
     private val schedule = AiringSchedule(listOf(ScheduledEpisode(1, Instant.parse("2026-11-01T15:00:00Z"))), 12)
 
     private val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
+    private val noAccountGate: AiringWriteGuard = { _, write -> write() }
+
+    private class TrackedList(
+        private val snapshots: Flow<OwnedEntries>,
+    ) : ListSource {
+        override fun observeOwnedEntries() = snapshots
+
+        override fun observeEntries() = snapshots.map { it.entries }
+
+        override fun observeEntry(id: AnimeId) = observeEntries().map { all -> all.firstOrNull { it.anime.id == id } }
+
+        override fun observeEntriesOf(ids: Set<AnimeId>) =
+            observeEntries().map { all -> all.filter { it.anime.id in ids }.associateBy { it.anime.id } }
+
+        override fun observeSyncedAt() = flowOf<Instant?>(null)
+
+        override suspend fun sync() = Outcome.Success(Unit)
+    }
 
     // An expired sign-in, as the session writes it: a zero byte and the sign-in's id. Its list stays readable.
     private fun expired(parts: LiveParts) = parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
@@ -308,15 +330,15 @@ class LiveAiringTest {
                     }
                 }
             val owner = SignInId(signIn)
-            val handed = mutableListOf<AiringAnswers>()
+            val handed = mutableListOf<Map<AnimeId, Outcome<FetchedAiring?>>>()
 
             val answer =
                 SignedInSource(handing, flowOf(Session.SignedIn(owner)))
-                    .fetchAnswers(listOf(anime), Instant.now(), setOf(anime.id), coming = false) { handed += it }
+                    .fetchAnswers(owner, listOf(anime), Instant.now(), setOf(anime.id), coming = false) { handed += it }
 
             assertEquals(listOf(setOf(anime.id)), pulls)
-            assertEquals(listOf(AiringAnswers(fetched, owner)), handed)
-            assertEquals(AiringAnswers(fetched, owner), answer)
+            assertEquals(listOf(fetched), handed)
+            assertEquals(fetched, answer)
         }
 
     @Test
@@ -336,22 +358,11 @@ class LiveAiringTest {
                 )
             val parts = parts(backgroundScope, source)
             val session = MutableStateFlow<Session>(Session.SignedIn(SignInId(signIn)))
-            val list =
-                object : ListSource {
-                    override fun observeEntries() = flowOf(watching(title))
-
-                    override fun observeEntry(id: AnimeId) = observeEntries().map { all -> all.firstOrNull { it.anime.id == id } }
-
-                    override fun observeEntriesOf(ids: Set<AnimeId>) = observeEntries().map { all -> all.associateBy { it.anime.id } }
-
-                    override fun observeSyncedAt() = flowOf<Instant?>(null)
-
-                    override suspend fun sync() = Outcome.Success(Unit)
-                }
+            val list = TrackedList(session.map { OwnedEntries(it.owner, watching(title)) })
             val returned = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
             val airing =
-                LiveAiring(parts, session, { list }) { parts, source, store, list ->
+                LiveAiring(parts, session, { list }, noAccountGate) { parts, source, store, list ->
                     val held =
                         object : AiringStore by store {
                             override suspend fun read(): Map<AnimeId, StoredAiring> {
@@ -384,11 +395,78 @@ class LiveAiringTest {
         }
 
     @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `queued A titles are never sent as B and a shared title gets a fresh B answer`() =
+        runTest {
+            for (askBeforeRelease in listOf(false, true)) {
+                val a = SignInId(signIn)
+                val b = SignInId("another-sign-in")
+                val session = MutableStateFlow<Session>(Session.SignedIn(a))
+                val shared = anime.copy(id = AnimeId(21))
+                val aOnly = anime.copy(id = AnimeId(22))
+                val snapshots = MutableStateFlow(OwnedEntries(a, watching(anime, shared, aOnly)))
+                val saved = InMemoryAiringStore()
+                val store = SignedInStore(saved, session, noAccountGate) { saved.clear() }
+                val entered = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val requests = mutableListOf<Set<AnimeId>>()
+                val source =
+                    object : AiringSource {
+                        override suspend fun fetch(
+                            titles: Collection<Anime>,
+                            since: Instant,
+                        ): Map<AnimeId, Outcome<FetchedAiring?>> {
+                            requests += titles.mapTo(mutableSetOf()) { it.id }
+                            if (entered.complete(Unit)) withContext(NonCancellable) { release.await() }
+                            return titles.associate { it.id to Outcome.Success(FetchedAiring(schedule)) }
+                        }
+                    }
+                val airing =
+                    ListAiring(
+                        SignedInSource(source, session),
+                        store,
+                        TrackedList(snapshots),
+                        AiringTime(Clock.systemUTC()),
+                        backgroundScope,
+                    ) { throw it }
+                val active = async { airing.refresh(anime) }
+                entered.await()
+                val stale = async { airing.refresh(setOf(shared.id, aOnly.id)) }
+                val replacement =
+                    try {
+                        runCurrent()
+                        assertFalse(stale.isCompleted)
+                        session.value = Session.SignedOut
+                        store.forget()
+                        session.value = Session.SignedIn(b)
+                        if (askBeforeRelease) {
+                            snapshots.value = OwnedEntries(b, watching(shared))
+                            async { airing.refresh(setOf(shared.id)) }.also { runCurrent() }
+                        } else {
+                            null
+                        }
+                    } finally {
+                        release.complete(Unit)
+                    }
+                assertEquals(Outcome.Failure(DataError.ListEnded), active.await())
+                assertEquals(Outcome.Failure(DataError.ListEnded), stale.await())
+                if (replacement == null) {
+                    assertEquals(listOf(setOf(anime.id)), requests)
+                    assertTrue(saved.read().isEmpty())
+                    snapshots.value = OwnedEntries(b, watching(shared))
+                }
+                assertEquals(Outcome.Success(Unit), replacement?.await() ?: airing.refresh(setOf(shared.id)))
+                assertEquals(listOf(setOf(anime.id), setOf(shared.id)), requests)
+                assertEquals(setOf(shared.id), saved.read().keys)
+            }
+        }
+
+    @Test
     fun `while signed out the store only forgets`() =
         runTest {
             val held = StoredAiring(schedule, Instant.now())
             val inner = InMemoryAiringStore(mapOf(AnimeId(1) to held))
-            val store = SignedInStore(inner, flowOf(Session.SignedOut)) { inner.clear() }
+            val store = SignedInStore(inner, flowOf(Session.SignedOut), noAccountGate) { inner.clear() }
             assertFalse(store.writeAnswers(mapOf(anime.id to held), SignInId(signIn)))
             store.write(mapOf(AnimeId(1) to null))
             assertEquals(emptyMap<AnimeId, StoredAiring>(), inner.read())
@@ -399,7 +477,7 @@ class LiveAiringTest {
         runTest {
             val session = MutableStateFlow<Session>(Session.Expired(SignInId(signIn)))
             val inner = InMemoryAiringStore()
-            val store = SignedInStore(inner, session) { inner.clear() }
+            val store = SignedInStore(inner, session, noAccountGate) { inner.clear() }
             val held = mapOf(anime.id to StoredAiring(schedule, Instant.now()))
 
             assertTrue(store.writeAnswers(held, SignInId(signIn)))
@@ -424,7 +502,7 @@ class LiveAiringTest {
                         inner.write(titles)
                     }
                 }
-            val store = SignedInStore(slow, session) { inner.clear() }
+            val store = SignedInStore(slow, session, noAccountGate) { inner.clear() }
             val writing = launch { store.writeAnswers(mapOf(anime.id to StoredAiring(null, Instant.now())), SignInId(signIn)) }
             runCurrent()
             session.value = Session.SignedOut

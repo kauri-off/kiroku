@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.airing.Airing
-import io.github.kauri_off.kiroku.core.airing.AiringAnswers
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.AiringStore
@@ -49,12 +48,13 @@ internal class LiveAiring(
     private val parts: LiveParts,
     session: Flow<Session>,
     list: () -> ListSource,
+    guard: AiringWriteGuard,
     build: AiringOf = ::listAiring,
 ) : AiringRepository {
     private val store =
         lazy {
             val room = RoomAiringStore(parts.database, Dispatchers.IO, parts.unexpected)
-            SignedInStore(room, session, room::clear)
+            SignedInStore(room, session, guard, room::clear)
         }
     private val built = lazy { build(parts, SignedInSource(parts.aniList, session), store.value, list()) }
     private val opening = Mutex()
@@ -116,6 +116,8 @@ internal class SignedInSource(
     private val source: AiringSource,
     private val session: Flow<Session>,
 ) : AiringSource {
+    override suspend fun isCurrent(owner: SignInId?): Boolean = session.first().owner == owner
+
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
@@ -126,36 +128,36 @@ internal class SignedInSource(
         since: Instant,
         pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetchAnswers(titles, since, pulled, coming = false) { whole(it.results) }.results
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetchAnswers(session.first().owner, titles, since, pulled, coming = false, whole)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun fetchAnswers(
+        owner: SignInId?,
         titles: Collection<Anime>,
         since: Instant,
         pulled: Set<AnimeId>,
         coming: Boolean,
-        whole: suspend (AiringAnswers) -> Unit,
-    ): AiringAnswers {
-        val owner = session.first().owner ?: return AiringAnswers(titles.associate { it.id to Outcome.Failure(DataError.ListEnded) })
-        val results =
-            session
-                .map { it.owner }
-                .distinctUntilChanged()
-                .transformLatest { current ->
-                    if (current == owner) {
-                        emit(source.fetch(titles, since, pulled) { if (!coming) whole(AiringAnswers(it, owner)) })
-                    } else {
-                        emit(null)
-                    }
-                }.first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
-        return AiringAnswers(results, owner)
-    }
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> =
+        session
+            .map { it.owner }
+            .distinctUntilChanged()
+            .transformLatest { current ->
+                if (owner != null && current == owner) {
+                    emit(source.fetch(titles, since, pulled) { if (!coming) whole(it) })
+                } else {
+                    emit(null)
+                }
+            }.first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
 }
+
+internal typealias AiringWriteGuard = suspend (SignInId?, suspend () -> Boolean) -> Boolean
 
 // Stores nothing while nobody is signed in; forgetting goes on.
 internal class SignedInStore(
     private val store: AiringStore,
     private val session: Flow<Session>,
+    private val guard: AiringWriteGuard,
     // Forgets every title, also one the store cannot read.
     private val clear: suspend () -> Unit,
 ) : AiringStore {
@@ -167,20 +169,19 @@ internal class SignedInStore(
     override suspend fun read(): Map<AnimeId, StoredAiring> = store.read()
 
     override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
-        writes.withLock {
-            val removed = titles.filterValues { it == null }
-            if (removed.isNotEmpty()) store.write(removed)
-        }
+        writeAnswers(titles.filterValues { it == null }, session.first().owner)
     }
 
     override suspend fun writeAnswers(
-        titles: Map<AnimeId, StoredAiring>,
+        titles: Map<AnimeId, StoredAiring?>,
         owner: SignInId?,
     ): Boolean =
-        writes.withLock {
-            if (owner == null || session.first().owner != owner) return@withLock false
-            store.write(titles)
-            true
+        guard(owner) {
+            writes.withLock {
+                if (session.first().owner != owner || (owner == null && titles.values.any { it != null })) return@withLock false
+                if (titles.isNotEmpty()) store.write(titles)
+                true
+            }
         }
 
     // Empties the store while nobody is signed in, and only then.

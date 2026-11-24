@@ -23,6 +23,7 @@ import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
 
@@ -237,7 +238,14 @@ data class Untouched(
 )
 
 // The list as a screen sees it: read and synced, never written, so a write can only go through the shell.
+data class OwnedEntries(
+    val owner: SignInId?,
+    val entries: List<ListEntry>,
+)
+
 interface ListSource {
+    fun observeOwnedEntries(): Flow<OwnedEntries> = observeEntries().map { OwnedEntries(null, it) }
+
     // Ends with a DataException when the list cannot be read; a new collection tries again.
     fun observeEntries(): Flow<List<ListEntry>>
 

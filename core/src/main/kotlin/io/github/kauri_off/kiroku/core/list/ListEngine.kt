@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.OwnedEntries
 import io.github.kauri_off.kiroku.core.repository.Untouched
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.CancellationException
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -261,6 +263,9 @@ class ListEngine(
 
     override fun observeEntries(): Flow<List<ListEntry>> = shown(emptyList()) { local.observeEntries() }
 
+    override fun observeOwnedEntries(): Flow<OwnedEntries> =
+        shown(OwnedEntries(null, emptyList())) { session -> local.observeEntries().map { OwnedEntries(session.owner, it) } }
+
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = shown(null) { local.observeEntry(id) }
 
     override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> = shown(emptyMap()) { local.observeEntriesOf(ids) }
@@ -271,7 +276,7 @@ class ListEngine(
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun <T> shown(
         nothing: T,
-        stored: () -> Flow<T>,
+        stored: (Session) -> Flow<T>,
     ): Flow<T> =
         sessions
             .distinctUntilChanged()
@@ -283,8 +288,12 @@ class ListEngine(
                     }
                 }
                 flow {
-                    mutex.withLock { settle() }
-                    emitAll(stored())
+                    val current =
+                        mutex.withLock {
+                            settle()
+                            settled?.owner == session.owner
+                        }
+                    if (current) emitAll(stored(session))
                 }.retriedOverStore()
             }.distinctUntilChanged()
 

@@ -30,22 +30,17 @@ interface AiringSource {
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since)
 
+    suspend fun isCurrent(owner: SignInId?): Boolean = true
+
     suspend fun fetchAnswers(
+        owner: SignInId?,
         titles: Collection<Anime>,
         since: Instant,
         pulled: Set<AnimeId>,
         coming: Boolean,
-        whole: suspend (AiringAnswers) -> Unit,
-    ): AiringAnswers {
-        val results = if (coming) fetchComing(titles, since) else fetch(titles, since, pulled) { whole(AiringAnswers(it)) }
-        return AiringAnswers(results)
-    }
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = if (coming) fetchComing(titles, since) else fetch(titles, since, pulled, whole)
 }
-
-data class AiringAnswers(
-    val results: Map<AnimeId, Outcome<FetchedAiring?>>,
-    val owner: SignInId? = null,
-)
 
 // A title the source knows, with no episode time too; null stands only for a title it has no record of.
 data class FetchedAiring(
@@ -72,7 +67,7 @@ interface AiringStore {
     suspend fun write(titles: Map<AnimeId, StoredAiring?>)
 
     suspend fun writeAnswers(
-        titles: Map<AnimeId, StoredAiring>,
+        titles: Map<AnimeId, StoredAiring?>,
         owner: SignInId?,
     ): Boolean {
         write(titles)

@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -163,6 +164,17 @@ class MalSession internal constructor(
     override suspend fun signOut() {
         guarded(Unit) {
             change { kept(Stored.SignedOut) }
+        }
+    }
+
+    suspend fun whileOwner(
+        owner: SignInId?,
+        run: suspend () -> Boolean,
+    ): Boolean {
+        read.await()
+        return gate.withLock {
+            val session = state.value?.session ?: return@withLock false
+            session.owner == owner && run()
         }
     }
 
