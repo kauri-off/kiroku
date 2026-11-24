@@ -452,13 +452,13 @@ class DemoTest {
             val short = (demo.search.search("ka", 0, false) as Outcome.Success).value
             assertTrue(FixtureAnime.exactToWatch in short.items)
 
-            val first = (demo.search.browse(BrowseList.TopRated, 0, false) as Outcome.Success).value
+            val rated = demo.search.openBrowse(BrowseList.TopRated)
+            val first = (rated.load(0, false) as Outcome.Success).value
             val second =
-                (demo.search.browse(BrowseList.TopRated, checkNotNull(first.nextOffset), false) as Outcome.Success)
-                    .value
+                (rated.load(checkNotNull(first.nextOffset), false) as Outcome.Success).value
             val ranks = (first.items + second.items).map { checkNotNull(it.item.rank) }
             assertEquals(ranks.sorted(), ranks)
-            assertEquals(ranks, (first.items + second.items).map { it.position })
+            assertEquals((1..ranks.size).toList(), (first.items + second.items).map { it.position })
         }
 
     @Test
@@ -469,7 +469,7 @@ class DemoTest {
                 assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.search(query, 0, false))
             }
             assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.search("kagetosho", -1, false))
-            assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.browse(BrowseList.TopRated, -1, false))
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.openBrowse(BrowseList.TopRated).load(-1, false))
         }
 
     @Test

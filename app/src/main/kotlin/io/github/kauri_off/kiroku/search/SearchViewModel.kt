@@ -32,6 +32,7 @@ internal class SearchViewModel(
     private val search: SearchRepository,
     connection: Connection,
     saved: SavedStateHandle,
+    private val includeAdult: () -> Boolean = { false },
 ) : ViewModel() {
     val query =
         saved
@@ -89,7 +90,7 @@ internal class SearchViewModel(
     private suspend fun read(load: Load) {
         if (load.waitForTyping) delay(TYPING_PAUSE)
         loads.started()
-        val answer = search.search(load.query, load.offset, includeAdult = false)
+        val answer = search.search(load.query, load.offset, includeAdult())
         currentCoroutineContext().ensureActive()
         if (load !== request.value) return
         val shown = results.value

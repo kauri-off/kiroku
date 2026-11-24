@@ -215,7 +215,6 @@ private fun LazyListScope.start(
             ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
         }
     }
-    if (!content.showBrowse) return
     item(key = BROWSE, contentType = HEADER) {
         val gap = if (recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
         SectionHeader(stringResource(R.string.search_browse), gap)

@@ -343,8 +343,11 @@ interface SearchRepository {
         includeAdult: Boolean,
     ): Outcome<Page<Anime>>
 
-    suspend fun browse(
-        list: BrowseList,
+    fun openBrowse(list: BrowseList): BrowseSession
+}
+
+fun interface BrowseSession {
+    suspend fun load(
         offset: Int,
         includeAdult: Boolean,
     ): Outcome<Page<Ranked<Anime>>>

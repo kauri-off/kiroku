@@ -46,7 +46,7 @@ fun SearchRoute(
     onBrowse: (BrowseList) -> Unit,
     onSignIn: () -> Unit,
 ) {
-    val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle()) }
+    val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle()) { graph.showAdultInSearch } }
     CountAsShown(search.shown)
     val query = search.query
     var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(standIn?.recent.orEmpty().take(MAX_RECENT_SEARCHES)) }
@@ -59,7 +59,7 @@ fun SearchRoute(
     val shown = results.takeIf { it.query == text }
     val content =
         when {
-            text.isEmpty() -> SearchContent.Start(recent, showBrowse = standIn != null)
+            text.isEmpty() -> SearchContent.Start(recent)
             shown == null -> SearchContent.Results(text, Paged.Loading)
             else -> {
                 val rows =
@@ -100,10 +100,8 @@ fun SearchRoute(
     EditSheetRoute(editor, messages, takes = { false })
 }
 
-// A browse list over the stand-in's titles, all on one page.
 @Composable
 fun BrowseRoute(
-    standIn: SearchStandIn,
     key: BrowseKey,
     graph: AppGraph,
     messages: ShellMessages,
@@ -112,26 +110,34 @@ fun BrowseRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSignIn: () -> Unit,
 ) {
+    val browse = viewModel { BrowseViewModel(key.list, graph.search, graph.connection) { graph.showAdultInSearch } }
+    CountAsShown(browse.shown)
+    val results by browse.state.collectAsScreenState()
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     val listed by listedEntries(graph)
     val editor = editSheetViewModel(graph, messages)
-    val hits = remember(standIn, key) { standIn.browse(key.list) }
-    val rows = Paged.Shown(hits.map { resultRow(it.anime, it.entryIn(listed)?.values, graph.titleLanguage, it.rank) })
+    val language = graph.titleLanguage
+    val rows =
+        remember(results, listed, language) {
+            results.rows { resultRow(it.item, listed?.get(it.item.id)?.values, language, it.position) }
+        }
     BrowseScreen(
         BrowseState(key.list, rows, sessionExpired = session is Session.Expired, editable = session.hasList()),
         onEvent = { event ->
             when (event) {
                 BrowseEvent.Back -> onBack()
                 is BrowseEvent.Open -> {
-                    val hit = hits.firstOrNull { it.anime.id == event.id }
-                    onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entryIn(listed), airing = null, session = session) })
+                    val anime = results.titles.firstOrNull { it.item.id == event.id }?.item
+                    onOpenTitle(event.id, anime?.let { TitleSummary(it, listed?.get(event.id), airing = null, session = session) })
                 }
-                is BrowseEvent.Edit -> editor.open(event.id, hits.firstOrNull { it.anime.id == event.id }?.anime)
-                BrowseEvent.LoadMore, BrowseEvent.Retry -> Unit
+                is BrowseEvent.Edit -> editor.open(event.id, results.titles.firstOrNull { it.item.id == event.id }?.item)
+                BrowseEvent.LoadMore -> browse.loadMore()
+                BrowseEvent.Retry -> browse.retry()
                 BrowseEvent.SignIn -> onSignIn()
             }
         },
         snackbars = snackbars,
+        autoLoadMore = LocalOnTop.current,
     )
     EditSheetRoute(editor, messages, takes = { false })
 }
@@ -148,8 +154,5 @@ private fun listedEntries(graph: AppGraph): State<Map<AnimeId, ListEntry>?> =
             .map<List<ListEntry>, Map<AnimeId, ListEntry>?> { entries -> entries.associateBy { it.anime.id } }
             .catch { emit(null) }
     }.collectAsScreenState(initial = null)
-
-// The title's entry on the user's list once it is read, and the stand-in's until then.
-private fun SearchHit.entryIn(listed: Map<AnimeId, ListEntry>?): ListEntry? = if (listed == null) entry else listed[anime.id]
 
 private val recentSaver = listSaver<MutableState<List<String>>, String>(save = { it.value }, restore = { mutableStateOf(it) })

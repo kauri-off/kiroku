@@ -27,6 +27,10 @@ internal val ClientIdRequests: List<Ask> =
         // M2-14 and M5: rows of a ranking and of a search, with the values a summary may lack.
         Ask("ranking_airing", "anime/ranking?ranking_type=airing&limit=10&fields=$SUMMARY"),
         Ask("ranking_upcoming", "anime/ranking?ranking_type=upcoming&limit=10&fields=$SUMMARY"),
+        Ask("ranking_all", "anime/ranking?ranking_type=all&offset=0&limit=10&fields=$SUMMARY"),
+        Ask("ranking_bypopularity", "anime/ranking?ranking_type=bypopularity&offset=0&limit=10&fields=$SUMMARY"),
+        Ask("season_fall_2026", "anime/season/2026/fall?offset=0&limit=10&fields=$SUMMARY"),
+        Ask("season_fall_2026_next", "anime/season/2026/fall?offset=10&limit=10&fields=$SUMMARY"),
         Ask("search_adult", "anime?q=bible%20black&nsfw=true&limit=10&fields=$SUMMARY"),
         Ask("search_one_char", "anime?q=a&offset=0&limit=10&fields=$SUMMARY"),
         Ask("search_two_chars", "anime?q=an&offset=0&limit=10&fields=$SUMMARY"),
