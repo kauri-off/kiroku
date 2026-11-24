@@ -25,6 +25,7 @@ class SourceRulesTest {
                 "NotifySettingsViewModel.kt",
                 "OpenedProfiles.kt",
                 "ProfileViewModel.kt",
+                "RecommendationsViewModel.kt",
                 "SearchViewModel.kt",
                 "ShellViewModel.kt",
                 "SignInViewModel.kt",

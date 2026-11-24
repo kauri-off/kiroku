@@ -60,11 +60,11 @@ class MalAnimeRepositoryTest {
         val adult: MutableList<Boolean>,
     )
 
-    private fun TestScope.subject(showAdult: Boolean = false): Subject {
+    private fun TestScope.subject(showAdult: () -> Boolean = { false }): Subject {
         val database = databases.open(this)
         val store = TitleStore(database, dispatcher, network.unexpected::add)
         val asked = mutableListOf<Boolean>()
-        val adult = suspend { showAdult.also { asked += it } }
+        val adult = suspend { showAdult().also { asked += it } }
         return Subject(
             MalAnimeRepository(MalTitles(network.http), store, network.clock, adult, network.unexpected::add),
             store,
@@ -264,20 +264,28 @@ class MalAnimeRepositoryTest {
         }
 
     @Test
-    fun `a page is asked with adult recommendations exactly when the setting shows adult content`() =
+    fun `each page refresh reads the current adult setting and updates stored recommendations`() =
         runTest {
-            for (adult in listOf(false, true)) {
-                val s = subject(showAdult = adult)
-                serve("title_airing")
-                s.titles.refresh(id)
-                val nsfw =
+            var showAdult = false
+            val s = subject { showAdult }
+            val off = recordedTitle("title_adult_nsfw_unset")
+            val on = recordedTitle("title_adult_nsfw_true")
+            val title = off.anime.id
+            for (adult in listOf(false, true, false)) {
+                showAdult = adult
+                serve(if (adult) "title_adult_nsfw_true" else "title_adult_nsfw_unset")
+                assertEquals(Outcome.Success(Unit), s.titles.refresh(title))
+                assertEquals(
+                    if (adult) "true" else null,
                     network.api
                         .received()
                         .url
-                        .queryParameter("nsfw")
-                assertEquals(if (adult) "true" else null, nsfw)
-                assertEquals(listOf(adult), s.adult)
+                        .queryParameter("nsfw"),
+                )
+                assertEquals(if (adult) on.details else off.details, s.titles.observeDetails(title).first())
+                assertEquals(off.anime, s.titles.observeAnime(title).first())
             }
+            assertEquals(listOf(false, true, false), s.adult)
         }
 
     @Test

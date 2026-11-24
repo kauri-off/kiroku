@@ -43,7 +43,7 @@ class TitleLinks(
     val seeAllRelated: (AnimeId, TitleSummary?) -> Unit,
     val details: (AnimeId, TitleSummary?) -> Unit,
     val scores: (AnimeId) -> Unit,
-    val recommendations: (AnimeId) -> Unit,
+    val recommendations: (AnimeId, TitleSummary?) -> Unit,
     val signIn: () -> Unit,
 )
 
@@ -94,7 +94,7 @@ fun TitleRoute(
                 TitleEvent.SeeAllRelated -> links.seeAllRelated(id, title.summaryOf(id))
                 TitleEvent.OpenDetails -> links.details(id, title.summaryOf(id))
                 TitleEvent.OpenScores -> links.scores(id)
-                TitleEvent.OpenRecommendations -> links.recommendations(id)
+                TitleEvent.OpenRecommendations -> links.recommendations(id, title.summaryOf(id))
                 TitleEvent.SignIn -> links.signIn()
                 else -> title.onEvent(event)
             }

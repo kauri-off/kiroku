@@ -41,6 +41,7 @@
     <string name="title_scores_row">Голоса за каждую оценку</string>
     <string name="title_details">Подробности</string>
     <string name="title_recommendations">Рекомендации</string>
+    <string name="title_recommendations_empty">Нет рекомендаций</string>
     <plurals name="title_titles">
         <item quantity="one">%d\u00A0тайтл</item>
         <item quantity="few">%d\u00A0тайтла</item>

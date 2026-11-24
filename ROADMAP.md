@@ -251,6 +251,8 @@ Not to forget:
 
 - [x] **M5-02 Live title search.**
 
+- [x] **Recommendations sub-screen.**
+
 ## M6. Profiles and statistics
 
 Goal: the owner's profile, another user's profile and list, and the statistics sub-screens.

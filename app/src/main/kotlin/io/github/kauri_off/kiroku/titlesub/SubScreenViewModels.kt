@@ -69,6 +69,7 @@ abstract class SubScreenViewModel(
     )
 
     private val failure = MutableStateFlow<DataError?>(null)
+    protected val refreshing = MutableStateFlow(false)
     private var load: Job? = null
 
     // Retry reads again what could not be read.
@@ -98,16 +99,21 @@ abstract class SubScreenViewModel(
         refresh()
     }
 
+    protected open fun refreshFailed(error: DataError) = Unit
+
     // A newer load replaces an older one, so the older one's end never stands for the screen.
     private fun refresh() {
         load?.cancel()
         failure.value = null
+        refreshing.value = true
         loads.started()
         load =
             viewModelScope.launch {
                 val result = anime.refresh(id)
                 val error = (result as? Outcome.Failure)?.error
                 failure.value = error
+                refreshing.value = false
+                if (error != null) refreshFailed(error)
                 loads.ended(error)
             }
     }
