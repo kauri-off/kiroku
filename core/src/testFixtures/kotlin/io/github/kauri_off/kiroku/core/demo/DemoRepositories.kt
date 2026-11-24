@@ -229,8 +229,13 @@ internal class DemoOwnProfile(
 
     override fun observeOwnProfileFetchedAt(): Flow<Instant?> = combine(signIn, fetchedAt) { signIn, at -> at.takeIf { signIn != null } }
 
-    override suspend fun refreshOwnProfile(): Outcome<Unit> =
-        server.load(needsSignIn = true).toOutcome().also { if (it is Outcome.Success) fetchedAt.value = clock.instant() }
+    override suspend fun refreshOwnProfile(expectedOwner: SignInId?): Outcome<Unit> {
+        if (expectedOwner != null && signIn.value != expectedOwner) return Outcome.Failure(DataError.ListEnded)
+        val answer = server.load(needsSignIn = true).toOutcome()
+        if (expectedOwner != null && signIn.value != expectedOwner) return Outcome.Failure(DataError.ListEnded)
+        if (answer is Outcome.Success) fetchedAt.value = clock.instant()
+        return answer
+    }
 }
 
 // The demo's other users: one whose public list has several thousand entries, one whose list is private, and nobody else.

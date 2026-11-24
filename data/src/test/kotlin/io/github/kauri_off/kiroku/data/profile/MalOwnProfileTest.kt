@@ -160,6 +160,19 @@ class MalOwnProfileTest {
         }
 
     @Test
+    fun `an own profile refresh for a retired sign-in sends no GET`() =
+        runBlocking {
+            val profile = profile()
+            val owner = (sandbox.session.observeSession().first() as Session.SignedIn).signIn
+            signInAgain()
+
+            assertEquals(Outcome.Failure(DataError.ListEnded), profile.refreshOwnProfile(owner))
+            sandbox.session.signOut()
+            assertEquals(Outcome.Failure(DataError.ListEnded), profile.refreshOwnProfile(owner))
+            assertTrue(ownAsked.isEmpty())
+        }
+
+    @Test
     fun `a sign-out shows no profile, and the list's clearing leaves none in the database`() =
         runBlocking {
             val database = database()

@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListField
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.data.anime.AnimeNode
 import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.anime.toAnime
@@ -44,14 +45,17 @@ class MalRemoteList(
     private val lists = MalLists(http)
     private val api by http.api(EntryApi::class)
 
-    override suspend fun fetch(): Outcome<List<ListEntry>> = lists.list(ListUser.SignedIn(session))
+    override suspend fun fetch(expectedOwner: SignInId?): Outcome<List<ListEntry>> = lists.list(ListUser.SignedIn(session, expectedOwner))
 
     override suspend fun refusedFor(): Duration = http.refusedFor().toKotlinDuration()
 
     // A title MAL does not know is not found; one it knows gives no list values when it is not on the list.
-    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+    override suspend fun fetchEntry(
+        id: AnimeId,
+        expectedOwner: SignInId?,
+    ): Outcome<ListEntry?> {
         if (notMal(id)) return Outcome.Failure(DataError.NotFound)
-        val answer = read { repairs, token -> api.entry(id.value, MalFields.OWN_ENTRY, token).toOwnEntry(repairs) }
+        val answer = read(expectedOwner) { repairs, token -> api.entry(id.value, MalFields.OWN_ENTRY, token).toOwnEntry(repairs) }
         if (answer is Outcome.Success && answer.value.first != id) {
             http.unexpected(AnotherTitleAnswer())
             return Outcome.Failure(DataError.ServerError)
@@ -90,9 +94,12 @@ class MalRemoteList(
     private fun notMal(id: AnimeId) = id.madeUp && http.reachesMal
 
     // An answer read with values left out or filled in is reported once it is read.
-    private suspend fun <T> read(request: suspend (Repairs, authorization: String) -> T): Outcome<T> {
+    private suspend fun <T> read(
+        expectedOwner: SignInId? = null,
+        request: suspend (Repairs, authorization: String) -> T,
+    ): Outcome<T> {
         val repairs = Repairs()
-        val answer = session.authorised(http) { request(repairs, it) }
+        val answer = session.authorised(http, expectedOwner) { request(repairs, it) }
         if (answer is Outcome.Success && repairs.fields.isNotEmpty()) http.unexpected(RepairedAnswer(repairs.fields))
         return answer
     }

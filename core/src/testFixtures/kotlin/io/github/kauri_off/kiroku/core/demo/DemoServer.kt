@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -165,7 +166,7 @@ class DemoServer(
 
     override suspend fun refusedFor(): Duration = leftAloneFor
 
-    override suspend fun fetch(): Outcome<List<ListEntry>> {
+    override suspend fun fetch(expectedOwner: SignInId?): Outcome<List<ListEntry>> {
         load(needsSignIn = true)?.let { return Outcome.Failure(it) }
         synchronized(guard) { downloads++ }
         val answer = reachedThrough?.fetch() ?: Outcome.Success(paged())
@@ -185,7 +186,10 @@ class DemoServer(
         return entries
     }
 
-    override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+    override suspend fun fetchEntry(
+        id: AnimeId,
+        expectedOwner: SignInId?,
+    ): Outcome<ListEntry?> {
         load(needsSignIn = true)?.let { return Outcome.Failure(it) }
         synchronized(guard) { answeredEntryReads++ }
         return reachedThrough?.fetchEntry(id) ?: if (title(id) == null) Outcome.Failure(DataError.NotFound) else Outcome.Success(entry(id))

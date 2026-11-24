@@ -213,15 +213,16 @@ class MalSession internal constructor(
         }
 
     // S5: a rejected token leads to one refresh, shared with every request rejected beside this one, and one retry.
-    internal suspend fun <T> authorised(request: AuthorisedRequest<T>): Outcome<T> =
+    internal suspend fun <T> authorised(request: AuthorisedRequest<T>): Outcome<T> = authorised(null, request)
+
+    internal suspend fun <T> authorised(
+        expectedOwner: SignInId?,
+        request: AuthorisedRequest<T>,
+    ): Outcome<T> =
         guarded(Outcome.Failure(DataError.ServerError)) {
-            val first =
-                when (val stored = stored()) {
-                    is Stored.SignedIn -> stored.tokens
-                    // The file could not be read: nobody is known to be signed out, and nothing is sent.
-                    null -> return unread
-                    else -> return expired
-                }
+            val stored = stored() ?: return unread
+            if (expectedOwner != null && stored.session.owner != expectedOwner) return Outcome.Failure(DataError.ListEnded)
+            val first = (stored as? Stored.SignedIn)?.tokens ?: return expired
             when (val attempt = request.send(first.access)) {
                 is Attempt.Answered -> return attempt.outcome
                 Attempt.Rejected -> Unit

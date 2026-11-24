@@ -165,6 +165,7 @@ class ProfileViewModel(
                 if (isOwn.value) refresh(Asked.Shown) else learnOwn()
             },
             again = { refresh(Asked.Reconnect) },
+            trackOutagesWhileShown = owner == ProfileOwner.Me,
         )
 
     // Collected while the Profile is shown; nothing is read for another user before then.
@@ -301,10 +302,11 @@ class ProfileViewModel(
                 Asked.Pull, Asked.Retry -> true
             }
         return coroutineScope {
-            val synced = async { if (syncList) list.sync() as? Outcome.Failure else null }
-            val profile = async { if (readProfile) user.refreshOwnProfile() as? Outcome.Failure else null }
+            val synced = async { if (syncList) list.sync(owner) as? Outcome.Failure else null }
+            val profile = async { if (readProfile) user.refreshOwnProfile(owner) as? Outcome.Failure else null }
             val listError = synced.await()?.error
             val profileError = profile.await()?.error
+            if (sessions.first().owner != owner) return@coroutineScope null
             val listOffline = if (syncList) listError == DataError.NoConnection else previous?.list == true
             val profileOffline = if (readProfile) profileError == DataError.NoConnection else previous?.profile == true
             if (listOffline || profileOffline) offlineReads = OfflineReads(owner, listOffline, profileOffline)

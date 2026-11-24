@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
@@ -226,7 +227,7 @@ class AiringCountsTest {
 
         override fun observeSyncedAt() = throw UnsupportedOperationException()
 
-        override suspend fun sync() = throw UnsupportedOperationException()
+        override suspend fun sync(expectedOwner: SignInId?) = throw UnsupportedOperationException()
     }
 
     // Answers every read from the fixtures and fails any call that would ask a source.

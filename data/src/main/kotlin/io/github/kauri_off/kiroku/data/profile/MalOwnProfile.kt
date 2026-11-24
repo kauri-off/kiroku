@@ -43,11 +43,12 @@ class MalOwnProfile(
             }
 
     // An answer for a sign-in that is no longer the session's is not stored: its list has ended.
-    override suspend fun refreshOwnProfile(): Outcome<Unit> {
+    override suspend fun refreshOwnProfile(expectedOwner: SignInId?): Outcome<Unit> {
         val owner = sessions.first().signIn
-        val answer = profiles.own()
+        if (expectedOwner != null && owner != expectedOwner) return Outcome.Failure(DataError.ListEnded)
+        if (owner == null) return Outcome.Failure(DataError.SessionExpired)
+        val answer = profiles.own(owner)
         if (answer !is Outcome.Success) return answer as Outcome.Failure
-        if (owner == null) return Outcome.Failure(DataError.ListEnded)
         val stored =
             try {
                 store.replace(StoredProfile(owner, answer.value, clock.instant())) { sessions.first().signIn == owner }

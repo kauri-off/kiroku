@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
@@ -202,7 +203,7 @@ class StatisticsViewModelTest {
 
         override fun observeSyncedAt(): Flow<Instant?> = syncedAt
 
-        override suspend fun sync(): Outcome<Unit> {
+        override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> {
             syncs++
             delay(10.milliseconds)
             if (answer is Outcome.Success) {

@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.PartialDate
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -93,7 +94,7 @@ class ListAiringTest {
 
         override fun observeSyncedAt(): Flow<Instant?> = MutableStateFlow(null)
 
-        override suspend fun sync(): Outcome<Unit> = Outcome.Success(Unit)
+        override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> = Outcome.Success(Unit)
 
         fun put(
             anime: Anime,

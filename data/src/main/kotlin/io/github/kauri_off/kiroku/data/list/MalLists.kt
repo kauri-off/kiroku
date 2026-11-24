@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.list
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.data.anime.Repairs
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
@@ -21,6 +22,7 @@ import retrofit2.http.QueryMap
 sealed interface ListUser {
     class SignedIn(
         val session: MalSession,
+        val expectedOwner: SignInId? = null,
     ) : ListUser
 
     data class Named(
@@ -78,7 +80,7 @@ class MalLists internal constructor(
             return page
         }
         return when (user) {
-            is ListUser.SignedIn -> user.session.authorised(http) { read(it) }
+            is ListUser.SignedIn -> user.session.authorised(http, user.expectedOwner) { read(it) }
             is ListUser.Named -> http.call(anotherUsersList = true) { read(null) }.clientIdOutcome()
         }
     }

@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureUser
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Freshness
@@ -122,7 +123,7 @@ class ProfileViewModelTest {
 
         override fun observeOwnProfileFetchedAt(): Flow<Instant?> = combine(held, fetched) { held, at -> at.takeIf { held != null } }
 
-        override suspend fun refreshOwnProfile(): Outcome<Unit> {
+        override suspend fun refreshOwnProfile(expectedOwner: SignInId?): Outcome<Unit> {
             refreshes++
             delay(latency)
             if (answer is Outcome.Success) {
@@ -672,7 +673,7 @@ class ProfileViewModelTest {
                 object : UserRepository by app.graph.user {
                     override fun observeOwnProfileFetchedAt(): Flow<Instant?> = flowOf(fixtures.now)
 
-                    override suspend fun refreshOwnProfile(): Outcome<Unit> {
+                    override suspend fun refreshOwnProfile(expectedOwner: SignInId?): Outcome<Unit> {
                         profileRequests++
                         return if (offline.value) Outcome.Failure(DataError.NoConnection) else Outcome.Success(Unit)
                     }
@@ -747,7 +748,7 @@ class ProfileViewModelTest {
                     object : ListSource by app.graph.list {
                         override fun observeSyncedAt(): Flow<Instant?> = flowOf(fixtures.now)
 
-                        override suspend fun sync(): Outcome<Unit> {
+                        override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> {
                             syncs++
                             return listError?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
                         }
@@ -802,6 +803,67 @@ class ProfileViewModelTest {
             advanceUntilIdle()
             assertEquals(1, user.refreshes)
             assertEquals(syncs, app.graph.syncs)
+        }
+
+    @Test
+    fun `a second recovery is heard while the sibling read is still finishing`() =
+        runTest(dispatcher) {
+            val app = opened()
+            assertEquals(Outcome.Success(Unit), app.graph.list.sync())
+            val user = OwnStore(app.graph.user, stored = fixtures.user, latency = 1.minutes)
+            val me = app.profile(ProfileOwner.Me, user = user)
+            showing(me.state, me.shown)
+            runCurrent()
+            val offline = app.graph.demo.server.offline
+            offline.value = true
+            runCurrent()
+            me.onEvent(ProfileEvent.Refresh)
+            advanceUntilIdle()
+            offline.value = false
+            advanceUntilIdle()
+            val afterFirstRecovery = app.graph.syncs
+            assertEquals(3, afterFirstRecovery)
+
+            offline.value = true
+            runCurrent()
+            me.onEvent(ProfileEvent.Refresh)
+            runCurrent()
+            assertEquals(afterFirstRecovery + 1, app.graph.syncs)
+            assertTrue(me.state.value.refreshing)
+            offline.value = false
+            runCurrent()
+            assertEquals(afterFirstRecovery + 1, app.graph.syncs)
+            advanceUntilIdle()
+            assertEquals(afterFirstRecovery + 2, app.graph.syncs)
+            assertEquals(2, user.refreshes)
+        }
+
+    @Test
+    fun `an offline answer after the sign-in ends produces no message or reconnect read`() =
+        runTest(dispatcher) {
+            val app = opened()
+            assertEquals(Outcome.Success(Unit), app.graph.list.sync())
+            val user =
+                OwnStore(
+                    app.graph.user,
+                    stored = fixtures.user,
+                    answer = Outcome.Failure(DataError.NoConnection),
+                    latency = 1.minutes,
+                )
+            val me = app.profile(ProfileOwner.Me, user = user)
+            showing(me.state, me.shown)
+            runCurrent()
+            app.graph.connectionSays.value = false
+            me.onEvent(ProfileEvent.Refresh)
+            runCurrent()
+            app.graph.session.signOut()
+            runCurrent()
+            advanceUntilIdle()
+            assertNull(app.messages.current.value)
+            assertEquals(Outcome.Success(Unit), app.graph.demo.reset())
+            app.graph.connectionSays.value = true
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
         }
 
     private companion object {

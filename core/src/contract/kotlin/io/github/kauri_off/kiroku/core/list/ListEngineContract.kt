@@ -174,18 +174,21 @@ abstract class ListEngineContract {
 
         override suspend fun refusedFor() = inner.refusedFor()
 
-        override suspend fun fetch(): Outcome<List<ListEntry>> {
+        override suspend fun fetch(expectedOwner: SignInId?): Outcome<List<ListEntry>> {
             fetchesUnder += session()
             fault()
-            return inner.fetch().also { fault() }
+            return inner.fetch(expectedOwner).also { fault() }
         }
 
-        override suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?> {
+        override suspend fun fetchEntry(
+            id: AnimeId,
+            expectedOwner: SignInId?,
+        ): Outcome<ListEntry?> {
             entryReads++
             readsUnder += session()
             fault()
             failingEntries[id]?.let { return Outcome.Failure(it) }
-            return inner.fetchEntry(id).answered().also { fault() }
+            return inner.fetchEntry(id, expectedOwner).answered().also { fault() }
         }
 
         override suspend fun put(
@@ -3667,6 +3670,43 @@ abstract class ListEngineContract {
                 assertEquals(Outcome.Failure(DataError.SessionExpired), waiting.await())
                 assertEquals("after $ended", 1, s.server.listDownloads)
             }
+        }
+
+    @Test
+    fun `a download queued by one sign-in does not read a replacement sign-in's list`() =
+        runTest {
+            val s = subject()
+            val running = async { s.list.sync() }
+            runCurrent()
+            val waiting = async { s.list.sync() }
+            runCurrent()
+            assertEquals(listOf(a), s.mal.fetchesUnder)
+            s.session.value = b
+            settle()
+
+            running.await()
+            waiting.await()
+            assertEquals(listOf(a), s.mal.fetchesUnder)
+            assertEquals(Outcome.Success(Unit), s.list.sync())
+            assertEquals(listOf(a, b), s.mal.fetchesUnder)
+        }
+
+    @Test
+    fun `a replacement sign-in queues its own download behind an older sign-in's work`() =
+        runTest {
+            val s = subject()
+            val running = async { s.list.sync() }
+            runCurrent()
+            val waiting = async { s.list.sync(a.signIn) }
+            runCurrent()
+            s.session.value = b
+            val replacement = async { s.list.sync(b.signIn) }
+            settle()
+
+            assertEquals(Outcome.Failure(DataError.SessionExpired), running.await())
+            assertEquals(Outcome.Failure(DataError.SessionExpired), waiting.await())
+            assertEquals(Outcome.Success(Unit), replacement.await())
+            assertEquals(listOf(a, b), s.mal.fetchesUnder)
         }
 
     @Test

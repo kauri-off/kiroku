@@ -125,7 +125,7 @@ class LiveAiringTest {
 
         override fun observeSyncedAt() = flowOf<Instant?>(null)
 
-        override suspend fun sync() = Outcome.Success(Unit)
+        override suspend fun sync(expectedOwner: SignInId?) = Outcome.Success(Unit)
     }
 
     // An expired sign-in, as the session writes it: a zero byte and the sign-in's id. Its list stays readable.

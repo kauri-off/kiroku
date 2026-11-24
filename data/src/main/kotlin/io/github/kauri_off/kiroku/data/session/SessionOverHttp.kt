@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.session
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.data.network.MalAnswer
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.bearer
@@ -28,9 +29,10 @@ fun malSession(
 // A request made as the signed-in user: it carries the token the session hands it, and a 401 goes back to the session.
 internal suspend fun <T> MalSession.authorised(
     http: MalHttp,
+    expectedOwner: SignInId? = null,
     request: suspend (authorization: String) -> T,
 ): Outcome<T> =
-    authorised { accessToken ->
+    authorised(expectedOwner) { accessToken ->
         when (val answer = http.call { request(bearer(accessToken)) }) {
             is MalAnswer.Success -> Attempt.Answered(Outcome.Success(answer.value))
             is MalAnswer.Failed -> Attempt.Answered(Outcome.Failure(answer.error))
