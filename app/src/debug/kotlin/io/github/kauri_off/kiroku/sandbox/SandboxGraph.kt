@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.annotation.VisibleForTesting
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.Page
+import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
@@ -23,6 +26,7 @@ import io.github.kauri_off.kiroku.scenario.ScenarioSubject
 import io.github.kauri_off.kiroku.scenario.Scenarios
 import io.github.kauri_off.kiroku.scenario.ScenariosOwner
 import io.github.kauri_off.kiroku.scenario.WriteFault
+import io.github.kauri_off.kiroku.search.SearchFixtureStates
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.DeviceTime
@@ -58,6 +62,17 @@ class SandboxGraph internal constructor(
     override val scenarios = Scenarios(SandboxScenarios(), parts.scope)
 
     override val madeUp = true
+
+    override val search: SearchRepository by lazy {
+        val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))
+        object : SearchRepository by live.search {
+            override suspend fun search(
+                query: String,
+                offset: Int,
+                includeAdult: Boolean,
+            ) = Outcome.Success(Page(fixtures.search(query).drop(offset).map { it.anime }, nextOffset = null))
+        }
+    }
 
     suspend fun writeOwed() = live.writeOwed()
 

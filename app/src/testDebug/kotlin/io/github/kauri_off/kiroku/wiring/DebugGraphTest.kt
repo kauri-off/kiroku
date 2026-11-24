@@ -113,9 +113,8 @@ class DebugGraphTest {
             )
         }
 
-    // Search over the real account shows what a release shows, so no fixture title is edited there; Profile its placeholder.
     @Test
-    fun `the fixture stand-in and the Profile are on the demo and the sandbox, and not on the real account`() =
+    fun `the browse fixtures belong to the demo and the sandbox`() =
         runTest {
             val graphs =
                 DataSource.entries.associateWith { source ->

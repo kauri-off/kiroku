@@ -27,6 +27,7 @@ class SearchScreenshots : ScreenshotRegistry() {
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
             case("start-no-recent", content = screen(SearchFixtureStates.startNoRecent)),
+            case("start-live", content = screen(SearchFixtureStates.state("", SearchContent.Start(emptyList(), showBrowse = false)))),
             case("search-view", content = screen(SearchFixtureStates.searchView)),
             case("typing", keyboard = true, content = screen(SearchFixtureStates.typing)),
             case("digits", content = screen(SearchFixtureStates.digitsQuery)),

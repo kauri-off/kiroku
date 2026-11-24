@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
 import io.github.kauri_off.kiroku.data.anilist.AniListAiring
+import io.github.kauri_off.kiroku.data.anime.MalSearch
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
@@ -138,7 +139,7 @@ internal class LiveGraph(
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
     override val scores by lazy { parts.scores }
-    override val search by lazy { liveSearch(parts) }
+    override val search by lazy { MalSearch(parts.http) }
     override val user: LiveUser by lazy { liveUser(parts, account, ownProfile) }
     override val connection by lazy { liveConnection(parts) }
     override val preferences by lazy { livePreferences(parts) }

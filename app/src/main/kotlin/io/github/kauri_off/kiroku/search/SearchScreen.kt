@@ -190,22 +190,24 @@ private fun Body(
     rows: ListItemColors,
 ) {
     when (content) {
-        is SearchContent.Start -> CentredList(padding) { start(content.recent, onEvent, rows) }
+        is SearchContent.Start -> CentredList(padding) { start(content, onEvent, rows) }
         is SearchContent.Results -> Results(content, editable, onEvent, padding, rows)
     }
 }
 
 private fun LazyListScope.start(
-    recent: List<String>,
+    content: SearchContent.Start,
     onEvent: (SearchEvent) -> Unit,
     rows: ListItemColors,
 ) {
+    val recent = content.recent
     if (recent.isNotEmpty()) {
         item(key = RECENT, contentType = HEADER) { SectionHeader(stringResource(R.string.search_recent)) }
         items(recent, key = { it }, contentType = { LINK }) { query ->
             ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
         }
     }
+    if (!content.showBrowse) return
     item(key = BROWSE, contentType = HEADER) {
         val gap = if (recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
         SectionHeader(stringResource(R.string.search_browse), gap)
@@ -227,7 +229,7 @@ private fun Results(
 ) {
     val openId = content.openId
     val results = content.results
-    if (results is Paged.Shown && results.items.isNotEmpty()) {
+    if (results is Paged.Shown && (results.items.isNotEmpty() || results.more != More.None)) {
         CentredList(padding) {
             if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent, rows) }
             pagedRows(
