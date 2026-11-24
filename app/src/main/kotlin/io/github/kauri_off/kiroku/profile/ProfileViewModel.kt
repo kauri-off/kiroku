@@ -11,8 +11,10 @@ import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.UserStatistics
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -79,6 +81,14 @@ class ProfileViewModel(
         val profile: UserProfile?,
     )
 
+    private class OwnLoad(
+        val owner: SignInId,
+        val listError: DataError?,
+        val profileError: DataError?,
+    ) {
+        val wasOffline: Boolean get() = listError == DataError.NoConnection || profileError == DataError.NoConnection
+    }
+
     private val sessions = session.observeSession()
     private val typed = mutableStateOf(saved.get<String>(TYPED))
     private val retries = MutableStateFlow(0)
@@ -87,6 +97,7 @@ class ProfileViewModel(
     private val isOwn = MutableStateFlow(owner == ProfileOwner.Me)
     private val fetchedOwn = MutableStateFlow<Fetched?>(null)
     private var load: Job? = null
+    private var lastOwnLoad: OwnLoad? = null
     private var learning: Job? = null
 
     // The signed-in user's name as last read, to tell the own name from another.
@@ -155,7 +166,7 @@ class ProfileViewModel(
                 shownOnce.value = true
                 if (isOwn.value) refresh(Asked.Shown) else learnOwn()
             },
-            again = { refresh(Asked.Shown) },
+            again = { refresh(Asked.Reconnect) },
         )
 
     // Collected while the Profile is shown; nothing is read for another user before then.
@@ -258,25 +269,37 @@ class ProfileViewModel(
             viewModelScope.launch {
                 pulling.value = asked == Asked.Pull
                 loads.started()
-                val error = if (isOwn.value) refreshOwn(asked) else refreshList()
+                val own = isOwn.value
+                lastOwnLoad = if (own) refreshOwn(asked) else null
+                val error = if (own) lastOwnLoad?.let { it.listError ?: it.profileError } else refreshList()
                 pulling.value = false
-                loads.ended(error)
+                loads.ended(if (lastOwnLoad?.wasOffline == true) DataError.NoConnection else error)
                 if (error != null && held && asked != Asked.Retry && !error.ofUser && error != DataError.SessionExpired) {
                     messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(error)))
                 }
             }
     }
 
-    // Shown, the list is downloaded and the profile read each when stale by its own rule; a pull and a Retry ask both.
-    private suspend fun refreshOwn(asked: Asked): DataError? {
-        if (sessions.first() == Session.SignedOut) return null
+    private suspend fun refreshOwn(asked: Asked): OwnLoad? {
+        val owner = sessions.first().owner ?: return null
         val now = clock.instant()
-        val listStale = asked != Asked.Shown || list.stale(now)
-        val profileStale = asked != Asked.Shown || user.profileStale(now)
+        val previous = lastOwnLoad?.takeIf { it.owner == owner }
+        val syncList =
+            when (asked) {
+                Asked.Shown -> list.stale(now)
+                Asked.Reconnect -> previous?.listError == DataError.NoConnection
+                Asked.Pull, Asked.Retry -> true
+            }
+        val readProfile =
+            when (asked) {
+                Asked.Shown -> user.profileStale(now)
+                Asked.Reconnect -> previous?.profileError == DataError.NoConnection
+                Asked.Pull, Asked.Retry -> true
+            }
         return coroutineScope {
-            val synced = async { if (listStale) list.sync() else Outcome.Success(Unit) }
-            val profile = async { if (profileStale) user.refreshOwnProfile() else Outcome.Success(Unit) }
-            listOf(synced.await(), profile.await()).firstNotNullOfOrNull { (it as? Outcome.Failure)?.error }
+            val synced = async { if (syncList) list.sync() as? Outcome.Failure else null }
+            val profile = async { if (readProfile) user.refreshOwnProfile() as? Outcome.Failure else null }
+            OwnLoad(owner, synced.await()?.error, profile.await()?.error)
         }
     }
 
@@ -293,7 +316,7 @@ class ProfileViewModel(
             null
         }
 
-    private enum class Asked { Shown, Retry, Pull }
+    private enum class Asked { Shown, Reconnect, Retry, Pull }
 
     private companion object {
         val TYPED = notShown("profileTyped")

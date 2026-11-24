@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Freshness
+import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -84,10 +86,11 @@ class ProfileViewModelTest {
         saved: SavedStateHandle = SavedStateHandle(),
         user: UserRepository = graph.user,
         connection: Connection = graph.connection,
+        list: ListSource = graph.list,
     ) = ProfileViewModel(
         owner,
         graph.session,
-        graph.list,
+        list,
         user,
         connection,
         graph.clock,
@@ -655,6 +658,116 @@ class ProfileViewModelTest {
             app.graph.demo.server.offline.value = false
             advanceUntilIdle()
             assertEquals(2 * wholeRead + 1, app.requests.size)
+        }
+
+    @Test
+    fun `an offline pull on a fresh own profile is repeated when the connection returns`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val offline = app.graph.demo.server.offline
+            assertEquals(Outcome.Success(Unit), app.graph.list.sync())
+            val primingSyncs = app.graph.syncs
+            var profileRequests = 0
+            val user =
+                object : UserRepository by app.graph.user {
+                    override fun observeOwnProfileFetchedAt(): Flow<Instant?> = flowOf(fixtures.now)
+
+                    override suspend fun refreshOwnProfile(): Outcome<Unit> {
+                        profileRequests++
+                        return if (offline.value) Outcome.Failure(DataError.NoConnection) else Outcome.Success(Unit)
+                    }
+                }
+            val me = app.profile(ProfileOwner.Me, user = user)
+            showing(me.state, me.shown)
+            advanceUntilIdle()
+            assertEquals(0, profileRequests)
+            assertEquals(primingSyncs, app.graph.syncs)
+            offline.value = true
+            advanceUntilIdle()
+            me.onEvent(ProfileEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(1, profileRequests)
+            assertEquals(primingSyncs + 1, app.graph.syncs)
+            assertTrue(me.state.value.content is ProfileContent.Shown)
+            assertEquals(
+                ShellMessage(ShellMessage.Text.RefreshFailed(DataError.NoConnection)),
+                app.messages.current.value
+                    ?.message,
+            )
+            offline.value = false
+            advanceUntilIdle()
+            assertEquals(2, profileRequests)
+            assertEquals(primingSyncs + 2, app.graph.syncs)
+        }
+
+    @Test
+    fun `a reconnect repeats only the offline read even if the other read failed differently`() =
+        runTest(dispatcher) {
+            val offline = DataError.NoConnection
+            val refused = DataError.Refused
+            for ((listError, profileError) in listOf(offline to null, null to offline, refused to offline, offline to refused)) {
+                val app = opened()
+                app.graph.connectionSays.value = false
+                var syncs = 0
+                val list =
+                    object : ListSource by app.graph.list {
+                        override fun observeSyncedAt(): Flow<Instant?> = flowOf(fixtures.now)
+
+                        override suspend fun sync(): Outcome<Unit> {
+                            syncs++
+                            return listError?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
+                        }
+                    }
+                val answer = profileError?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
+                val user = OwnStore(app.graph.user, stored = fixtures.user, answer = answer)
+                val me = app.profile(ProfileOwner.Me, user = user, list = list)
+                val screen = showing(me.state, me.shown)
+                runCurrent()
+                assertEquals(0, syncs)
+                assertEquals(0, user.refreshes)
+                me.onEvent(ProfileEvent.Refresh)
+                runCurrent()
+                assertEquals(1, syncs)
+                assertEquals(1, user.refreshes)
+                assertEquals(
+                    ShellMessage(ShellMessage.Text.RefreshFailed(checkNotNull(listError ?: profileError))),
+                    app.messages.current.value
+                        ?.message,
+                )
+
+                app.graph.connectionSays.value = true
+                advanceTimeBy(1.minutes)
+                runCurrent()
+                assertEquals(if (listError == offline) 2 else 1, syncs)
+                assertEquals(if (profileError == offline) 2 else 1, user.refreshes)
+                screen.cancel()
+                me.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a failed own refresh is not repeated for a new sign-in`() =
+        runTest(dispatcher) {
+            val app = opened()
+            assertEquals(Outcome.Success(Unit), app.graph.list.sync())
+            val user = OwnStore(app.graph.user, stored = fixtures.user, answer = Outcome.Failure(DataError.NoConnection))
+            val me = app.profile(ProfileOwner.Me, user = user)
+            showing(me.state, me.shown)
+            advanceUntilIdle()
+            app.graph.connectionSays.value = false
+            app.graph.demo.server.offline.value = true
+            me.onEvent(ProfileEvent.Refresh)
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
+
+            app.graph.session.signOut()
+            assertEquals(Outcome.Success(Unit), app.graph.demo.reset())
+            advanceUntilIdle()
+            val syncs = app.graph.syncs
+            app.graph.connectionSays.value = true
+            advanceUntilIdle()
+            assertEquals(1, user.refreshes)
+            assertEquals(syncs, app.graph.syncs)
         }
 
     private companion object {
