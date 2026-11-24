@@ -44,6 +44,8 @@ sealed interface SettingsEvent {
 
     data object OpenNotifications : SettingsEvent
 
+    data object OpenAbout : SettingsEvent
+
     data object OpenAppLanguage : SettingsEvent
 
     data class SetTitleLanguage(
@@ -105,6 +107,12 @@ fun SettingsScreen(
                         onClick = { onEvent(SettingsEvent.OpenNotifications) },
                         supportingContent = { Text(stringResource(R.string.settings_notifications_detail)) },
                         content = { Text(stringResource(R.string.settings_notifications)) },
+                    )
+                }
+                item {
+                    ListItem(
+                        onClick = { onEvent(SettingsEvent.OpenAbout) },
+                        content = { Text(stringResource(R.string.about_title)) },
                     )
                 }
             },

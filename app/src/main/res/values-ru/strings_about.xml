@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_title">О приложении</string>
+    <string name="about_version">Версия&#160;%1$s</string>
+    <string name="about_description">Неофициальный клиент MyAnimeList</string>
+    <string name="about_project">Проект на GitHub</string>
+    <string name="about_license">Лицензия</string>
+    <string name="about_license_name">GPL-3.0-or-later</string>
+    <string name="about_privacy">Политика конфиденциальности</string>
+    <string name="about_open_link">%1$s, открывается в другом приложении</string>
+    <string name="about_open_link_with_detail">%1$s, %2$s, открывается в другом приложении</string>
+    <string name="about_no_browser">Нет приложения для открытия этой ссылки</string>
+</resources>

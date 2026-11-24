@@ -7,6 +7,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kauri_off.kiroku.about.AboutKey
+import io.github.kauri_off.kiroku.about.AboutRoute
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -179,11 +181,19 @@ fun appEntries(
             }
         }
         entry<SettingsKey> {
-            SettingsRoute(graph, messages, snackbars, onBack = { back() }, onNotifications = { navigator.open(NotifySettingsKey) })
+            SettingsRoute(
+                graph,
+                messages,
+                snackbars,
+                onBack = { back() },
+                onNotifications = { navigator.open(NotifySettingsKey) },
+                onAbout = { navigator.open(AboutKey) },
+            )
         }
         entry<NotifySettingsKey> {
             NotifySettingsRoute(graph, messages, snackbars, onBack = { back() }, onOpenTitle = { openTitle(it, null) }, onSignIn = signIn)
         }
+        entry<AboutKey> { AboutRoute(snackbars, onBack = { back() }) }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,

@@ -327,6 +327,7 @@ Not to forget:
 - [x] Version-tag release workflow.
 - [ ] Configure the release key in the restricted `release` environment.
 - [x] Live title language and adult-content settings.
+- [x] About screen.
 - [x] Clear image caches on sign-out (S9).
 - [x] Restore the idle top bar after a canceled pull-to-refresh.
 
