@@ -67,6 +67,9 @@ distributions and title-page schedules can last until the process ends. [Sign-ou
 [Navigation][SignOutTurns.kt] · [Image cache][Images.kt] · [Score cache][ScoreDistribution.kt] ·
 [Title schedules][AiringEngine.kt]
 
+In-app sign-out leaves pending browser sign-in state in place. A matching callback within the acceptance window
+can still complete sign-in. [Pending browser sign-in][MalSignIn.kt]
+
 In Release, use **Clear storage** for Kiroku in Android settings to remove local app data. This leaves
 your MyAnimeList account and list on MyAnimeList. [Release wiring][DebugTools.kt] · [MAL list writes][MalRemoteList.kt]
 
@@ -87,8 +90,9 @@ test changes to a title absent from your list, and attempts to remove that entry
 behind, the recorder can retry removal for the same account when it starts again or when you select
 **Remove now**. Sign-out leaves the private recovery journal and recorded or staged responses on the device.
 Saved responses can include real profile and list data. The recorder removes the access token and client ID
-from saved response bodies. It writes the files to app-specific external storage or the app's internal files
-directory if external storage is unavailable. [Recorder UI][RecorderSection.kt] ·
+from saved response bodies. The recovery journal stays in app-private internal storage. Recorded and staged
+responses go to app-specific external storage, or the app's internal files directory if external storage is
+unavailable. [Recorder UI][RecorderSection.kt] ·
 [Recovery and saved requests][SignedInRecorder.kt] ·
 [Output directories][app/src/debug/kotlin/io/github/kauri_off/kiroku/wiring/LiveRecorder.kt]
 
