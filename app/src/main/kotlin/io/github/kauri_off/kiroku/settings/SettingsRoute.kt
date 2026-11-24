@@ -28,6 +28,7 @@ fun SettingsRoute(
     snackbars: SnackbarHostState,
     onBack: () -> Unit,
     onNotifications: () -> Unit,
+    onAbout: () -> Unit,
 ) {
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(initial = null)
     val adult by remember(graph) { graph.showAdultInSearch }.collectAsScreenState(initial = null)
@@ -40,6 +41,7 @@ fun SettingsRoute(
             when (event) {
                 SettingsEvent.Back -> onBack()
                 SettingsEvent.OpenNotifications -> onNotifications()
+                SettingsEvent.OpenAbout -> onAbout()
                 SettingsEvent.OpenAppLanguage ->
                     if (appLanguageAvailable) {
                         val packageUri = (notShown("package:") + context.packageName).toUri()

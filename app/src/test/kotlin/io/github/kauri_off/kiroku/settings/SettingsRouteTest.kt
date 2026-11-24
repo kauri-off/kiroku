@@ -92,7 +92,7 @@ class SettingsRouteTest {
     fun `settings store both choices and open Android app language settings for this package`() {
         restoration.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                SettingsRoute(graph, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {})
+                SettingsRoute(graph, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {}, {})
             }
         }
         compose.onNodeWithText("Romaji").assertExists()
@@ -128,7 +128,7 @@ class SettingsRouteTest {
             }
         restoration.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                SettingsRoute(source, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {})
+                SettingsRoute(source, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {}, {})
             }
         }
         val adult = compose.onNodeWithText("Show adult content in search")
@@ -151,7 +151,7 @@ class SettingsRouteTest {
     fun `Android 12 shows the title language but offers no app language destination`() {
         restoration.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                SettingsRoute(graph, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {})
+                SettingsRoute(graph, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {}, {})
             }
         }
         compose.onNodeWithText("Language").assertDoesNotExist()

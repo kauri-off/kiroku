@@ -10,6 +10,9 @@ import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
+import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.ShellScreen
+import io.github.kauri_off.kiroku.shell.ShellState
 
 class AboutScreenshots : ScreenshotRegistry() {
     override val content = contentCase { Screen() }
@@ -19,10 +22,13 @@ class AboutScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
-            case("wide-landscape", window = WindowSize(840, 600), largeText = true) { Screen() },
-            case("wide-portrait", window = WindowSize(600, 960)) { Screen() },
+            case("wide-landscape", window = WindowSize(840, 600), largeText = true) { ScreenInShell() },
+            case("wide-portrait", window = WindowSize(600, 960)) { ScreenInShell() },
         )
 }
+
+@Composable
+private fun ScreenInShell() = ShellScreen(ShellState(Destination.Profile), {}) { Screen() }
 
 @Composable
 private fun Screen() {
