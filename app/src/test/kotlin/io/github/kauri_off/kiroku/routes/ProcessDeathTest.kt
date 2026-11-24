@@ -214,6 +214,7 @@ class ProcessDeathTest {
         val navigation = ActivityNavigation(activity.get().savedStateRegistry)
         navigation.navigator =
             ShellNavigator.inMemory().apply {
+                hadSession = true
                 restart()
                 open(title)
                 select(Destination.Search)
@@ -226,7 +227,7 @@ class ProcessDeathTest {
         activity.saveInstanceState(state)
         val providers = checkNotNull(state.getBundle(registryKey))
         val savedNavigation = checkNotNull(providers.getBundle(navigationKey))
-        assertEquals(setOf("List", "Search", "Profile", "selected", "restarts"), savedNavigation.keySet())
+        assertEquals(setOf("List", "Search", "Profile", "selected", "restarts", "hadSession"), savedNavigation.keySet())
         checkNotNull(savedNavigation.getBundle("Profile")?.getBundle("1")).putString("type", "incompatible.PreviewTitle")
         providers.putBundle(
             composeKey,
@@ -248,6 +249,15 @@ class ProcessDeathTest {
         assertEquals(listOf(Destination.List.root, title), restored.stack)
         assertEquals(listOf(Destination.Search.root, searchTitle), restored.stackOf(Destination.Search))
         assertEquals(listOf(Destination.Profile.root), restored.stackOf(Destination.Profile))
+
+        runBlocking { graph.session.signOut() }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph, restored) } }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(2, restored.restarts)
+            assertEquals(Destination.List, restored.current)
+            assertEquals(Destination.entries.map { listOf(it.root) }, Destination.entries.map { restored.stackOf(it).toList() })
+        }
         activity.destroy()
         recreated.destroy()
     }

@@ -38,6 +38,8 @@ class ShellNavigator(
     // Part of every screen's identity, so a restart keeps no screen's state, a root's included.
     val restarts: Int get() = restartCount.intValue
 
+    internal var hadSession: Boolean? = null
+
     fun stackOf(destination: Destination): List<NavKey> = stacks.getValue(destination)
 
     // Tapping the current destination again pops it to its root.

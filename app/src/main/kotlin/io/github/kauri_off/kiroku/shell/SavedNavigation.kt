@@ -56,6 +56,7 @@ internal fun decodeStack(
 private val navigationKey = notShown("kiroku.shell.navigation")
 private val selectionKey = notShown("selected")
 private val restartsKey = notShown("restarts")
+private val hadSessionKey = notShown("hadSession")
 
 internal class ActivityNavigation(
     registry: SavedStateRegistry,
@@ -64,7 +65,9 @@ internal class ActivityNavigation(
         registry.consumeRestoredStateForKey(navigationKey)?.takeIf { it.containsKey(selectionKey) }?.let { saved ->
             val stacks = Destination.entries.associateWith { decodeStack(saved.getBundle(it.name), it.root) }
             val selected = Destination.entries.firstOrNull { it.name == saved.getString(selectionKey) } ?: Destination.List
-            ShellNavigator(stacks, mutableStateOf(selected), mutableIntStateOf(saved.getInt(restartsKey)))
+            ShellNavigator(stacks, mutableStateOf(selected), mutableIntStateOf(saved.getInt(restartsKey))).apply {
+                if (saved.containsKey(hadSessionKey)) hadSession = saved.getBoolean(hadSessionKey)
+            }
         }
 
     var navigator: ShellNavigator? = restored
@@ -75,6 +78,7 @@ internal class ActivityNavigation(
                 navigator?.let { current ->
                     putString(selectionKey, current.current.name)
                     putInt(restartsKey, current.restarts)
+                    current.hadSession?.let { putBoolean(hadSessionKey, it) }
                     for (destination in Destination.entries) {
                         val stack = NavBackStack(*current.stackOf(destination).toTypedArray())
                         putBundle(destination.name, encodeToSavedState(navSerializer, stack))
