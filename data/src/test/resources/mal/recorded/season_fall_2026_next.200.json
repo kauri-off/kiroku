@@ -1,0 +1,453 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 61990,
+                "title": "Cyberpunk: Edgerunners 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1431/160542.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1431/160542l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Cyberpunk Edgerunners 2"
+                    ],
+                    "en": "Cyberpunk: Edgerunners 2",
+                    "ja": "サイバーパンク エッジランナーズ2"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 10,
+                "start_date": "2026-10-20",
+                "mean": 8.13,
+                "rank": 552,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 58,
+                        "name": "Gore"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    }
+                ],
+                "average_episode_duration": 1705
+            }
+        },
+        {
+            "node": {
+                "id": 63367,
+                "title": "Dragon Ball Super: Beerus",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1624/159991.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1624/159991l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Dragon Ball Super: Beerus",
+                    "ja": "ドラゴンボール超 ビルス"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-10-11",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "23:15"
+                },
+                "mean": 8.12,
+                "rank": 570,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1400
+            }
+        },
+        {
+            "node": {
+                "id": 64445,
+                "title": "Xian Ni Movie: Shi Xian Zhi Zhan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1511/158622.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1511/158622l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Xian Ni Juchang Ban: Shi Xian Zhi Zhan"
+                    ],
+                    "en": "Renegade Immortal Movie: Slaying the Blood Progenitor",
+                    "ja": "仙逆剧场版 弑仙之战"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2026-10-01",
+                "mean": 8.11,
+                "rank": 602,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    }
+                ],
+                "average_episode_duration": 5525
+            }
+        },
+        {
+            "node": {
+                "id": 64505,
+                "title": "Diamond no Ace: Act II Second Season Part 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1296/159929.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1296/159929l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Ace of Diamond Act II Season 2 Part 2",
+                    "ja": "ダイヤのA actⅡ Second Season 第2クール"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-11",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:30"
+                },
+                "mean": 7.93,
+                "rank": 880,
+                "genres": [
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1416
+            }
+        },
+        {
+            "node": {
+                "id": 966,
+                "title": "Crayon Shin-chan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/59897.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/59897l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Shin Chan",
+                    "ja": "クレヨンしんちゃん"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "1992-04-13",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "16:30"
+                },
+                "mean": 7.83,
+                "rank": 1101,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    }
+                ],
+                "average_episode_duration": 1260
+            }
+        },
+        {
+            "node": {
+                "id": 59088,
+                "title": "Tokyo Revengers: Santen Sensou-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1321/159720.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1321/159720l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Tokyo Revengers: War of the Three Titans Arc",
+                    "ja": "東京リベンジャーズ 三天戦争編"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 13,
+                "start_date": "2026-10-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:23"
+                },
+                "mean": 7.82,
+                "rank": 1147,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 55,
+                        "name": "Delinquents"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 78,
+                        "name": "Time Travel"
+                    }
+                ],
+                "average_episode_duration": 1420
+            }
+        },
+        {
+            "node": {
+                "id": 8687,
+                "title": "Doraemon (2005)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/6/23935.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/6/23935l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "",
+                    "ja": "ドラえもん (2005)"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2005-04-22",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "19:00"
+                },
+                "mean": 7.79,
+                "rank": 1207,
+                "genres": [
+                    {
+                        "id": 51,
+                        "name": "Anthropomorphic"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1500
+            }
+        },
+        {
+            "node": {
+                "id": 61578,
+                "title": "Seitokai ni mo Ana wa Aru!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1877/160134.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1877/160134l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "There Is Also a Hole in the Student Organization!"
+                    ],
+                    "en": "Even the Student Council Has Its Holes!",
+                    "ja": "生徒会にも穴はある！"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-04",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:30"
+                },
+                "mean": 7.79,
+                "rank": 1223,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 9,
+                        "name": "Ecchi"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1420
+            }
+        },
+        {
+            "node": {
+                "id": 60597,
+                "title": "Da Wang Rao Ming 3",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1298/158623.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1298/158623l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Spare Me, Great Lord! 3rd Season",
+                        "Master's Mercy 3"
+                    ],
+                    "en": "Spare Me, Great Lord! Season 3",
+                    "ja": "大王饶命 第三季"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 16,
+                "start_date": "2026-10-03",
+                "mean": 7.76,
+                "rank": 1291,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    }
+                ],
+                "average_episode_duration": 1440
+            }
+        },
+        {
+            "node": {
+                "id": 63293,
+                "title": "Hotaru no Yomeiri",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1172/159893.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1172/159893l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Firefly Wedding",
+                    "ja": "ホタルの嫁入り"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-09",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "23:30"
+                },
+                "mean": 7.75,
+                "rank": 1334,
+                "genres": [
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    }
+                ],
+                "average_episode_duration": 1375
+            }
+        }
+    ],
+    "paging": {
+        "previous": "https://api.myanimelist.net/v2/anime/season/2026/fall?offset=0&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration",
+        "next": "https://api.myanimelist.net/v2/anime/season/2026/fall?offset=20&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    },
+    "season": {
+        "year": 2026,
+        "season": "fall"
+    }
+}

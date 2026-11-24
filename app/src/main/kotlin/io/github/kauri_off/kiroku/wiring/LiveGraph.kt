@@ -139,7 +139,7 @@ internal class LiveGraph(
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, airingOf) }
     override val scores by lazy { parts.scores }
-    override val search by lazy { MalSearch(parts.http) }
+    override val search by lazy { MalSearch(parts.http, parts.clock) }
     override val user: LiveUser by lazy { liveUser(parts, account, ownProfile) }
     override val connection by lazy { liveConnection(parts) }
     override val preferences by lazy { livePreferences(parts) }

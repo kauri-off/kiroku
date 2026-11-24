@@ -1,0 +1,582 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 52991,
+                "title": "Sousou no Frieren",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1015/138006.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1015/138006l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Frieren at the Funeral",
+                        "Frieren The Slayer"
+                    ],
+                    "en": "Frieren: Beyond Journey's End",
+                    "ja": "葬送のフリーレン"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 28,
+                "start_date": "2023-09-29",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "23:00"
+                },
+                "mean": 9.24,
+                "rank": 1,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "ranking": {
+                "rank": 1
+            }
+        },
+        {
+            "node": {
+                "id": 5114,
+                "title": "Fullmetal Alchemist: Brotherhood",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1208/94745.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1208/94745l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hagane no Renkinjutsushi: Fullmetal Alchemist",
+                        "Fullmetal Alchemist (2009)",
+                        "FMA",
+                        "FMAB"
+                    ],
+                    "en": "Fullmetal Alchemist: Brotherhood",
+                    "ja": "鋼の錬金術師 FULLMETAL ALCHEMIST"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 64,
+                "start_date": "2009-04-05",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:00"
+                },
+                "mean": 9.11,
+                "rank": 2,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 38,
+                        "name": "Military"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "ranking": {
+                "rank": 2
+            }
+        },
+        {
+            "node": {
+                "id": 9253,
+                "title": "Steins;Gate",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1935/127974.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1935/127974l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Steins;Gate",
+                    "ja": "STEINS;GATE"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2011-04-06",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "02:05"
+                },
+                "mean": 9.07,
+                "rank": 3,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    },
+                    {
+                        "id": 78,
+                        "name": "Time Travel"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "ranking": {
+                "rank": 3
+            }
+        },
+        {
+            "node": {
+                "id": 38524,
+                "title": "Shingeki no Kyojin Season 3 Part 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1517/100633.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1517/100633l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Attack on Titan Season 3 Part 2",
+                    "ja": "進撃の巨人 Season3 Part.2"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 10,
+                "start_date": "2019-04-29",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "00:10"
+                },
+                "mean": 9.06,
+                "rank": 4,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 58,
+                        "name": "Gore"
+                    },
+                    {
+                        "id": 38,
+                        "name": "Military"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 76,
+                        "name": "Survival"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1435
+            },
+            "ranking": {
+                "rank": 4
+            }
+        },
+        {
+            "node": {
+                "id": 57555,
+                "title": "Chainsaw Man Movie: Reze-hen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1763/150638.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1763/150638l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gekijouban Chainsaw Man: Reze-hen"
+                    ],
+                    "en": "Chainsaw Man – The Movie: Reze Arc",
+                    "ja": "劇場版 チェンソーマン レゼ篇"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2025-09-19",
+                "mean": 9.05,
+                "rank": 5,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 58,
+                        "name": "Gore"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 82,
+                        "name": "Urban Fantasy"
+                    }
+                ],
+                "average_episode_duration": 5998
+            },
+            "ranking": {
+                "rank": 5
+            }
+        },
+        {
+            "node": {
+                "id": 39486,
+                "title": "Gintama: The Final",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1245/116760.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1245/116760l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Gintama: The Very Final",
+                    "ja": "銀魂 THE FINAL"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2021-01-08",
+                "mean": 9.05,
+                "rank": 6,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 57,
+                        "name": "Gag Humor"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 21,
+                        "name": "Samurai"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 6240
+            },
+            "ranking": {
+                "rank": 6
+            }
+        },
+        {
+            "node": {
+                "id": 28977,
+                "title": "Gintama°",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/72078.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/72078l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Gintama' (2015)"
+                    ],
+                    "en": "Gintama Season 4",
+                    "ja": "銀魂°"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 51,
+                "start_date": "2015-04-08",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "18:00"
+                },
+                "mean": 9.05,
+                "rank": 7,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 57,
+                        "name": "Gag Humor"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 21,
+                        "name": "Samurai"
+                    },
+                    {
+                        "id": 24,
+                        "name": "Sci-Fi"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "ranking": {
+                "rank": 7
+            }
+        },
+        {
+            "node": {
+                "id": 61316,
+                "title": "Re:Zero kara Hajimeru Isekai Seikatsu 4th Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1540/155824.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1540/155824l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Re: Life in a different world from zero",
+                        "ReZero"
+                    ],
+                    "en": "Re:ZERO -Starting Life in Another World- Season 4",
+                    "ja": "Re:ゼロから始める異世界生活 4th season"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 19,
+                "start_date": "2026-04-08",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "22:00"
+                },
+                "mean": 9.05,
+                "rank": 8,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 62,
+                        "name": "Isekai"
+                    },
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    },
+                    {
+                        "id": 78,
+                        "name": "Time Travel"
+                    }
+                ],
+                "average_episode_duration": 1508
+            },
+            "ranking": {
+                "rank": 8
+            }
+        },
+        {
+            "node": {
+                "id": 11061,
+                "title": "Hunter x Hunter (2011)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1337/99013.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1337/99013l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "HxH (2011)"
+                    ],
+                    "en": "Hunter x Hunter",
+                    "ja": "HUNTER×HUNTER（ハンター×ハンター）"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 148,
+                "start_date": "2011-10-02",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "10:55"
+                },
+                "mean": 9.03,
+                "rank": 9,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1417
+            },
+            "ranking": {
+                "rank": 9
+            }
+        },
+        {
+            "node": {
+                "id": 61469,
+                "title": "Steel Ball Run: JoJo no Kimyou na Bouken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1065/158884.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1065/158884l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "JoJo's Bizarre Adventure Part 7: Steel Ball Run",
+                        "JoJo no Kimyou na Bouken Part 7: Steel Ball Run",
+                        "SBR"
+                    ],
+                    "en": "Steel Ball Run: JoJo's Bizarre Adventure",
+                    "ja": "スティール・ボール・ラン ジョジョの奇妙な冒険"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-03-19",
+                "mean": 9.03,
+                "rank": 10,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 3,
+                        "name": "Racing"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1620
+            },
+            "ranking": {
+                "rank": 10
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/anime/ranking?offset=10&ranking_type=all&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    }
+}

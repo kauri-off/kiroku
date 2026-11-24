@@ -251,7 +251,9 @@ Not to forget:
 
 - [x] **M5-02 Live title search.**
 
-- [x] **Recommendations sub-screen.**
+- [x] **M5-03 Live browse lists.**
+
+- [x] **M5-04 Recommendations.**
 
 ## M6. Profiles and statistics
 

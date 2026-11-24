@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.search
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.case
@@ -22,6 +23,7 @@ class BrowseScreenshots : ScreenshotRegistry() {
             case("this-season", content = screen(SearchFixtureStates.browse(BrowseList.ThisSeason))),
             case("top-rated", content = screen(SearchFixtureStates.browse(BrowseList.TopRated))),
             case("loading-more", content = screen(SearchFixtureStates.browse(BrowseList.MostPopular, More.Loading))),
+            case("more-failed", content = screen(SearchFixtureStates.browse(BrowseList.MostPopular, More.Failed(DataError.NoConnection)))),
             case("session-expired", content = screen(SearchFixtureStates.browse(BrowseList.TopAiring).copy(sessionExpired = true))),
         )
 }

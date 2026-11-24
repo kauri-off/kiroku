@@ -156,9 +156,7 @@ fun appEntries(
             )
         }
         entry<BrowseKey> { key ->
-            standIn?.let {
-                BrowseRoute(it, key, graph, messages, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn)
-            }
+            BrowseRoute(key, graph, messages, snackbars, onBack = { back() }, onOpenTitle = openTitle, onSignIn = signIn)
         }
         entry<ProfileRoot> { ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars) }
         entry<OtherProfileKey> { key -> ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars) }

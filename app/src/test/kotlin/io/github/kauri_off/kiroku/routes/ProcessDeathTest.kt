@@ -152,12 +152,8 @@ class ProcessDeathTest {
         val incompatible = checkNotNull(searchStack.getBundle("1"))
         assertEquals(TitleKey::class.java.name, incompatible.getString("type"))
         incompatible.putString("type", "incompatible.PreviewTitle")
-        val selected =
-            saved.values
-                .flatten()
-                .filterIsInstance<MutableState<*>>()
-                .single { it.value == "List" }
-        assertEquals("List", selected.value)
+        assertEquals(listOf("List"), saved.values.flatten().filterIsInstance<String>())
+        assertEquals(listOf(1), saved.values.flatten().filterIsInstance<Int>())
         val legacySelected =
             saved.mapValues { (_, values) ->
                 values.map {

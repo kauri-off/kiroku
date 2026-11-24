@@ -45,6 +45,7 @@ fun BrowseScreen(
     onEvent: (BrowseEvent) -> Unit,
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
+    autoLoadMore: Boolean = true,
 ) {
     val body =
         when (val rows = state.rows) {
@@ -54,7 +55,7 @@ fun BrowseScreen(
                     ScreenState.Error(stringResource(rows.error.message(R.string.search_browse_failed))) { onEvent(BrowseEvent.Retry) },
                 )
             is Paged.Shown ->
-                if (rows.items.isEmpty()) {
+                if (rows.items.isEmpty() && rows.more == More.None) {
                     SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_browse_empty)))
                 } else {
                     SubScreenBody.List {
@@ -67,6 +68,7 @@ fun BrowseScreen(
                             onEdit = if (state.editable) ({ onEvent(BrowseEvent.Edit(it)) }) else null,
                             onLoadMore = { onEvent(BrowseEvent.LoadMore) },
                             onRetry = { onEvent(BrowseEvent.Retry) },
+                            autoLoadMore = autoLoadMore,
                         )
                     }
                 }

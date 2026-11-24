@@ -1,0 +1,550 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 16498,
+                "title": "Shingeki no Kyojin",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/47347.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/47347l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "AoT",
+                        "SnK"
+                    ],
+                    "en": "Attack on Titan",
+                    "ja": "進撃の巨人"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2013-04-07",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "01:58"
+                },
+                "mean": 8.58,
+                "rank": 129,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 58,
+                        "name": "Gore"
+                    },
+                    {
+                        "id": 38,
+                        "name": "Military"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 76,
+                        "name": "Survival"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1440
+            },
+            "ranking": {
+                "rank": 1
+            }
+        },
+        {
+            "node": {
+                "id": 1535,
+                "title": "Death Note",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1079/138100.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1079/138100l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "DN"
+                    ],
+                    "en": "Death Note",
+                    "ja": "デスノート"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 37,
+                "start_date": "2006-10-04",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "00:56"
+                },
+                "mean": 8.62,
+                "rank": 103,
+                "genres": [
+                    {
+                        "id": 40,
+                        "name": "Psychological"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    }
+                ],
+                "average_episode_duration": 1380
+            },
+            "ranking": {
+                "rank": 2
+            }
+        },
+        {
+            "node": {
+                "id": 5114,
+                "title": "Fullmetal Alchemist: Brotherhood",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1208/94745.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1208/94745l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Hagane no Renkinjutsushi: Fullmetal Alchemist",
+                        "Fullmetal Alchemist (2009)",
+                        "FMA",
+                        "FMAB"
+                    ],
+                    "en": "Fullmetal Alchemist: Brotherhood",
+                    "ja": "鋼の錬金術師 FULLMETAL ALCHEMIST"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 64,
+                "start_date": "2009-04-05",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:00"
+                },
+                "mean": 9.11,
+                "rank": 2,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 38,
+                        "name": "Military"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "ranking": {
+                "rank": 3
+            }
+        },
+        {
+            "node": {
+                "id": 30276,
+                "title": "One Punch Man",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/76049.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/76049l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "One Punch-Man",
+                        "OPM"
+                    ],
+                    "en": "One-Punch Man",
+                    "ja": "ワンパンマン"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2015-10-05",
+                "broadcast": {
+                    "day_of_the_week": "monday",
+                    "start_time": "01:05"
+                },
+                "mean": 8.47,
+                "rank": 181,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 31,
+                        "name": "Super Power"
+                    }
+                ],
+                "average_episode_duration": 1460
+            },
+            "ranking": {
+                "rank": 4
+            }
+        },
+        {
+            "node": {
+                "id": 38000,
+                "title": "Kimetsu no Yaiba",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1286/99889.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1286/99889l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Blade of Demon Destruction"
+                    ],
+                    "en": "Demon Slayer: Kimetsu no Yaiba",
+                    "ja": "鬼滅の刃"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 26,
+                "start_date": "2019-04-06",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "23:30"
+                },
+                "mean": 8.39,
+                "rank": 246,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "ranking": {
+                "rank": 5
+            }
+        },
+        {
+            "node": {
+                "id": 31964,
+                "title": "Boku no Hero Academia",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/78745.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/78745l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "My Hero Academia",
+                    "ja": "僕のヒーローアカデミア"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 13,
+                "start_date": "2016-04-03",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:00"
+                },
+                "mean": 7.82,
+                "rank": 1125,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 31,
+                        "name": "Super Power"
+                    }
+                ],
+                "average_episode_duration": 1470
+            },
+            "ranking": {
+                "rank": 6
+            }
+        },
+        {
+            "node": {
+                "id": 11757,
+                "title": "Sword Art Online",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/11/39717.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/11/39717l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "S.A.O",
+                        "SAO"
+                    ],
+                    "en": "Sword Art Online",
+                    "ja": "ソードアート・オンライン"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 25,
+                "start_date": "2012-07-08",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "00:00"
+                },
+                "mean": 7.23,
+                "rank": 3656,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 79,
+                        "name": "Video Game"
+                    }
+                ],
+                "average_episode_duration": 1420
+            },
+            "ranking": {
+                "rank": 7
+            }
+        },
+        {
+            "node": {
+                "id": 11061,
+                "title": "Hunter x Hunter (2011)",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1337/99013.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1337/99013l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "HxH (2011)"
+                    ],
+                    "en": "Hunter x Hunter",
+                    "ja": "HUNTER×HUNTER（ハンター×ハンター）"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 148,
+                "start_date": "2011-10-02",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "10:55"
+                },
+                "mean": 9.03,
+                "rank": 9,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1417
+            },
+            "ranking": {
+                "rank": 8
+            }
+        },
+        {
+            "node": {
+                "id": 20,
+                "title": "Naruto",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1141/142503.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1141/142503l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "NARUTO"
+                    ],
+                    "en": "Naruto",
+                    "ja": "ナルト"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 220,
+                "start_date": "2002-10-03",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "19:30"
+                },
+                "mean": 8.03,
+                "rank": 726,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1404
+            },
+            "ranking": {
+                "rank": 9
+            }
+        },
+        {
+            "node": {
+                "id": 40748,
+                "title": "Jujutsu Kaisen",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1171/109222.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1171/109222l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Sorcery Fight",
+                        "JJK"
+                    ],
+                    "en": "Jujutsu Kaisen",
+                    "ja": "呪術廻戦"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2020-10-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "01:25"
+                },
+                "mean": 8.48,
+                "rank": 176,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1435
+            },
+            "ranking": {
+                "rank": 10
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/anime/ranking?offset=10&ranking_type=bypopularity&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    }
+}

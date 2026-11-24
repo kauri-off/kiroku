@@ -41,6 +41,7 @@ interface AppGraph {
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
+    val showAdultInSearch: Boolean get() = false
 
     // The notification settings, what comes next and what was sent.
     val notifications: NotificationsRepository

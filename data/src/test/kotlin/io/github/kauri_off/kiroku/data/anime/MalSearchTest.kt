@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.anime
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
@@ -13,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import java.time.Instant
 
 class MalSearchTest {
     @get:Rule
@@ -23,7 +25,7 @@ class MalSearchTest {
         val recorded = RecordedAnswers.named("search_adult")
         network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
 
-        val outcome = runBlocking { MalSearch(network.http).search(" bible black ", offset = 0, includeAdult = true) }
+        val outcome = runBlocking { MalSearch(network.http, network.clock).search(" bible black ", offset = 0, includeAdult = true) }
         val page = (outcome as Outcome.Success).value
         assertEquals(listOf(368L, 972L, 1401L, 2873L, 5347L, 13223L).map(::AnimeId), page.items.map { it.id })
         val first = page.items.first()
@@ -46,7 +48,7 @@ class MalSearchTest {
             val recorded = RecordedAnswers.named(name)
             network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
         }
-        val search = MalSearch(network.http)
+        val search = MalSearch(network.http, network.clock)
         val first = (runBlocking { search.search("naruto", offset = 0, includeAdult = false) } as Outcome.Success).value
         assertEquals(AnimeId(20), first.items.first().id)
         assertEquals(10, first.nextOffset)
@@ -64,7 +66,7 @@ class MalSearchTest {
 
     @Test
     fun `recorded MAL search refuses one and two characters and accepts three`() {
-        val search = MalSearch(network.http)
+        val search = MalSearch(network.http, network.clock)
         for ((query, name) in listOf("a" to "search_one_char", "an" to "search_two_chars", "ani" to "search_three_chars")) {
             val recorded = RecordedAnswers.named(name)
             network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
@@ -78,5 +80,98 @@ class MalSearchTest {
             val request = network.api.received()
             assertEquals(query, request.url.queryParameter("q"))
         }
+    }
+
+    @Test
+    fun `the three rankings keep the returned order and show the ranking position`() {
+        val search = MalSearch(network.http, network.clock)
+        val rankings =
+            listOf(
+                Triple(BrowseList.TopAiring, "airing", listOf(61469L, 61967, 21, 50250, 61987, 55809, 60988, 51039, 64534, 56524)),
+                Triple(BrowseList.TopRated, "all", listOf(52991L, 5114, 9253, 38524, 57555, 39486, 28977, 61316, 11061, 61469)),
+                Triple(BrowseList.MostPopular, "bypopularity", listOf(16498L, 1535, 5114, 30276, 38000, 31964, 11757, 11061, 20, 40748)),
+            )
+        for ((list, type, ids) in rankings) {
+            enqueue("ranking_$type")
+
+            val page = (runBlocking { search.openBrowse(list).load(offset = 0, includeAdult = false) } as Outcome.Success).value
+
+            assertEquals(ids.map(::AnimeId), page.items.map { it.item.id })
+            assertEquals((1..10).toList(), page.items.map { it.position })
+            assertEquals(10, page.nextOffset)
+            val request = network.api.received()
+            assertEquals("/v2/anime/ranking", request.url.encodedPath)
+            assertEquals(type, request.url.queryParameter("ranking_type"))
+            assertEquals("0", request.url.queryParameter("offset"))
+            assertEquals("10", request.url.queryParameter("limit"))
+            assertEquals(MalFields.SUMMARY, request.url.queryParameter("fields"))
+            assertNull(request.url.queryParameter("nsfw"))
+            assertNull(request.headers["Authorization"])
+        }
+    }
+
+    @Test
+    fun `a seasonal session stays unranked and retries its continuation across a quarter boundary`() {
+        network.repeatReadsAfter = emptyList()
+        network.clock.now = Instant.parse("2026-12-31T23:59:59Z")
+        enqueue("season_fall_2026")
+        network.api.enqueue(answer(503, body = ""))
+        network.api.enqueue(answer(503, body = ""))
+        enqueue("season_fall_2026_next")
+        val search = MalSearch(network.http, network.clock)
+
+        val fall = search.openBrowse(BrowseList.ThisSeason)
+        val first = (runBlocking { fall.load(0, includeAdult = false) } as Outcome.Success).value
+        val next = checkNotNull(first.nextOffset)
+
+        network.clock.now = Instant.parse("2027-01-01T00:00:00Z")
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { fall.load(next, includeAdult = true) })
+        val winter = search.openBrowse(BrowseList.ThisSeason)
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { winter.load(0, includeAdult = false) })
+        val second = (runBlocking { fall.load(next, includeAdult = true) } as Outcome.Success).value
+
+        assertEquals(
+            listOf(61469L, 61967, 21, 61987, 61607, 64534, 61603, 62582, 235, 61323).map(::AnimeId),
+            first.items.map { it.item.id },
+        )
+        assertEquals(
+            listOf(61990L, 63367, 64445, 64505, 966, 59088, 8687, 61578, 60597, 63293).map(::AnimeId),
+            second.items.map { it.item.id },
+        )
+        (first.items + second.items).forEach { assertNull(it.position) }
+        assertEquals(10, next)
+        assertEquals(20, second.nextOffset)
+        val requests =
+            listOf(
+                Triple("2026/fall", "0", null),
+                Triple("2026/fall", "10", "true"),
+                Triple("2027/winter", "0", null),
+                Triple("2026/fall", "10", "true"),
+            )
+        for ((period, offset, nsfw) in requests) {
+            val request = network.api.received()
+            assertEquals("/v2/anime/season/$period", request.url.encodedPath)
+            assertEquals(offset, request.url.queryParameter("offset"))
+            assertEquals("10", request.url.queryParameter("limit"))
+            assertEquals(MalFields.SUMMARY, request.url.queryParameter("fields"))
+            assertEquals(nsfw, request.url.queryParameter("nsfw"))
+            assertNull(request.headers["Authorization"])
+        }
+    }
+
+    @Test
+    fun `an adult ranking page requests adult results at its own offset`() {
+        enqueue("ranking_bypopularity")
+        val search = MalSearch(network.http, network.clock)
+        runBlocking { search.openBrowse(BrowseList.MostPopular).load(5, includeAdult = true) }
+        val request = network.api.received()
+        assertEquals("bypopularity", request.url.queryParameter("ranking_type"))
+        assertEquals("5", request.url.queryParameter("offset"))
+        assertEquals("true", request.url.queryParameter("nsfw"))
+    }
+
+    private fun enqueue(name: String) {
+        val recorded = RecordedAnswers.named(name)
+        network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
     }
 }
