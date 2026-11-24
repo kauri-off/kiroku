@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -127,7 +128,17 @@ fun SearchScreen(
         )
     }
     // The field itself moves from the bar into the view, whose own container fades in behind it.
-    ExpandedFullScreenContainedSearchBar(state = bar, inputField = field, colors = colors) {
+    ExpandedFullScreenContainedSearchBar(
+        state = bar,
+        inputField = {
+            Box(
+                Modifier.wrapContentWidth().widthIn(max = Sizes.contentMaxWidth - Spacing.l * 2),
+                propagateMinConstraints = true,
+                content = { field() },
+            )
+        },
+        colors = colors,
+    ) {
         WindowWithoutAutofill()
         // The view is a window over the screen's: it shows the session banner and the shell's messages itself.
         if (state.sessionExpired) SessionBanner(onSignIn = { events(SearchEvent.SignIn) })
