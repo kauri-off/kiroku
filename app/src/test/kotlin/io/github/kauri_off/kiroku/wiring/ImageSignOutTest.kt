@@ -1,26 +1,40 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.graphics.Bitmap
+import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.Lifecycle
+import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.decode.DataSource
+import coil3.decode.DecodeResult
+import coil3.decode.Decoder
 import coil3.imageDecoderEnabled
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import coil3.toBitmap
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
+import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
+import io.github.kauri_off.kiroku.data.sandbox.Sandbox
+import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.design.component.routeImageLoader
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.OtherProfileKey
+import io.github.kauri_off.kiroku.shell.ActivityNavigation
+import io.github.kauri_off.kiroku.shell.AppRoute
+import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ListRoot
 import io.github.kauri_off.kiroku.shell.ProfileRoot
 import io.github.kauri_off.kiroku.shell.SearchRoot
@@ -52,22 +66,26 @@ import okio.Buffer
 import okio.FileSystem
 import okio.ForwardingFileSystem
 import okio.Path
+import okio.Path.Companion.toOkioPath
 import okio.Source
 import okio.Timeout
 import okio.buffer
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.ExternalResource
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.GraphicsMode
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CountDownLatch
@@ -83,22 +101,36 @@ class ImageSignOutTest {
     private val compose = composeRule()
 
     @get:Rule
-    val rule: TestRule = registered(compose)
+    val rule: TestRule = registered(compose) { runBlocking { work.cancelAndJoin() } }
+
+    @get:Rule(order = 0)
+    val keys =
+        object : ExternalResource() {
+            override fun before() = KeysInMemory.install()
+
+            override fun after() = KeysInMemory.uninstall()
+        }
 
     private val context get() = RuntimeEnvironment.getApplication()
     private val work = SupervisorJob()
     private val scope = process()
-    private val png by lazy {
+    private val png by lazy { png(OLD_COLOR) }
+    private val replacement by lazy { png(NEW_COLOR) }
+
+    private fun png(color: Int): ByteArray =
         ByteArrayOutputStream()
-            .also { Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888).compress(Bitmap.CompressFormat.PNG, 100, it) }
-            .toByteArray()
-    }
+            .also {
+                val bitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }.toByteArray()
 
     private fun process() = CoroutineScope(SupervisorJob(work) + Dispatchers.Default)
 
     private fun parts(
         source: String,
         process: CoroutineScope = scope,
+        mal: SandboxMal? = null,
+        unexpected: (Throwable) -> Unit = { throw it },
         answer: (Interceptor.Chain) -> ResponseBody = { png.toResponseBody(PNG) },
     ): LiveParts {
         val device =
@@ -111,7 +143,7 @@ class ImageSignOutTest {
             }
         val standIn =
             Interceptor { chain ->
-                check(chain.request().url.host == "images.invalid")
+                if (chain.request().url.host != "images.invalid") return@Interceptor checkNotNull(mal).intercept(chain)
                 Response
                     .Builder()
                     .request(chain.request())
@@ -122,8 +154,27 @@ class ImageSignOutTest {
                     .body(answer(chain))
                     .build()
             }
-        return LiveParts(context, LiveSource(source, MalHosts.Real, standIn), "", Clock.systemUTC(), process, { throw it }, device = device)
+        val live = LiveSource(source, if (mal == null) MalHosts.Real else SandboxMal.Hosts, standIn)
+        return LiveParts(context, live, SandboxMal.CLIENT_ID, Clock.systemUTC(), process, unexpected, device = device)
     }
+
+    private fun asset(path: String): String = context.assets.open(path).use { it.readBytes().decodeToString() }
+
+    private fun sandbox(source: String) =
+        Sandbox(
+            read = { name -> asset("recorded/$name.200.json") },
+            readTenrai = { name -> asset("tenrai/$name") },
+            poster = { CACHED },
+            clock = Clock.systemUTC(),
+            file = { kind -> File(context.noBackupFilesDir, "$source.fixture.$kind") },
+        ).mal
+
+    private suspend fun LiveGraph.signIn(mal: SandboxMal): Session =
+        withTimeout(5_000) {
+            signIn.start { address -> mal.authorize(address)?.also(signIn::redirected) != null }
+            assertEquals(SignInStep.SignedIn, signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
+            session.observeSession().first { it is Session.SignedIn }
+        }
 
     private fun graph(
         parts: LiveParts,
@@ -140,6 +191,22 @@ class ImageSignOutTest {
 
     private suspend fun ImageLoader.load(url: String): SuccessResult = execute(url) as SuccessResult
 
+    private fun stalledDecode(
+        url: String,
+        decoding: CompletableDeferred<Unit>,
+        release: CountDownLatch,
+    ): ImageRequest =
+        ImageRequest
+            .Builder(context)
+            .data(url)
+            .decoderFactory { _, _, _ ->
+                Decoder {
+                    decoding.complete(Unit)
+                    check(release.await(15, TimeUnit.SECONDS))
+                    DecodeResult(ColorImage(OLD_COLOR), isSampled = false)
+                }
+            }.build()
+
     private fun ImageLoader.closeCache() {
         shutdown()
         diskCache?.shutdown()
@@ -150,9 +217,6 @@ class ImageSignOutTest {
             while (FileSystem.SYSTEM.exists(directory)) delay(10)
         }
     }
-
-    @After
-    fun endWork() = runBlocking { work.cancelAndJoin() }
 
     @Test
     fun `sign-out cancels the streaming call and removes tokens before the old body ends`() =
@@ -353,32 +417,169 @@ class ImageSignOutTest {
         }
 
     @Test
-    fun `overlapping sign-out does not run a second cleanup or retire the fresh loader`() =
+    fun `an orphan sweep delayed across sign-in preserves the replacement disk entry`() =
         runBlocking {
-            val reading = CompletableDeferred<Unit>()
+            val firstProcess = process()
+            val mal = sandbox("sweep")
+            val switched = AtomicBoolean()
+            val parts =
+                parts("sweep", firstProcess, mal) {
+                    (if (switched.get()) replacement else png).toResponseBody(PNG)
+                }
+            parts.seedSession()
+            val root = File(context.cacheDir, "sweep.image-caches").toOkioPath()
+            val orphan = root / "z-orphan"
+            FileSystem.SYSTEM.createDirectories(orphan)
+            val listing = CompletableDeferred<Unit>()
+            val release = CountDownLatch(1)
+            val decoding = CompletableDeferred<Unit>()
+            val releaseDecode = CountDownLatch(1)
+            val swept = CompletableDeferred<Unit>()
+            val files =
+                object : ForwardingFileSystem(FileSystem.SYSTEM) {
+                    override fun listOrNull(dir: Path): List<Path>? {
+                        if (dir == root) {
+                            listing.complete(Unit)
+                            check(release.await(15, TimeUnit.SECONDS))
+                        }
+                        return super.listOrNull(dir)?.sorted()
+                    }
+
+                    override fun delete(
+                        path: Path,
+                        mustExist: Boolean,
+                    ) {
+                        super.delete(path, mustExist)
+                        if (path == orphan) swept.complete(Unit)
+                    }
+                }
+            val graph = graph(parts, files)
+            val original = graph.loader()
+            val held = async { original.execute(stalledDecode(CACHED, decoding, releaseDecode)) }
+            try {
+                withTimeout(5_000) {
+                    listing.await()
+                    decoding.await()
+                    graph.signOut(Session.Expired(SIGN_IN))
+                }
+                val signedIn = graph.signIn(mal)
+                switched.set(true)
+                val fresh = graph.loader()
+                val result = fresh.load(CACHED)
+                assertEquals(DataSource.NETWORK, result.dataSource)
+                assertEquals(NEW_COLOR, result.pixel())
+                assertFalse(held.isCompleted)
+                releaseDecode.countDown()
+                withTimeout(5_000) { held.join() }
+                release.countDown()
+                withTimeout(5_000) { swept.await() }
+                fresh.closeCache()
+                firstProcess.coroutineContext.job.cancelAndJoin()
+
+                val restarted = graph(parts("sweep", mal = mal))
+                assertEquals(signedIn, restarted.session.observeSession().first())
+                restarted.loader().let {
+                    val retained = it.load(CACHED)
+                    assertEquals(DataSource.DISK, retained.dataSource)
+                    assertEquals(NEW_COLOR, retained.pixel())
+                    it.closeCache()
+                }
+            } finally {
+                releaseDecode.countDown()
+                release.countDown()
+            }
+        }
+
+    @Test
+    fun `a retired disk stays quarantined when the token write fails and the old decoder has not drained`() =
+        runBlocking {
+            val firstProcess = process()
+            val parts = parts("owed", firstProcess, unexpected = {})
+            parts.seedSession()
+            val graph = graph(parts)
+            val loader = graph.loader()
+            loader.load(CACHED)
+            val directory = checkNotNull(loader.diskCache).directory
+            val scratch = File(parts.tokenFile.path + ".tmp")
+            check(scratch.mkdir())
+            File(scratch, "held").writeText("fixture")
+            val decoding = CompletableDeferred<Unit>()
+            val release = CountDownLatch(1)
+            val held = async { loader.execute(stalledDecode(HELD, decoding, release)) }
+            val sweep = CountDownLatch(1)
+            try {
+                withTimeout(5_000) {
+                    decoding.await()
+                    graph.session.signOut()
+                }
+                assertEquals(Session.SignedOut, graph.session.observeSession().first())
+                assertTrue(parts.tokenFile.length() > 0)
+                assertFalse(held.isCompleted)
+                firstProcess.coroutineContext.job.cancelAndJoin()
+                assertTrue(FileSystem.SYSTEM.exists(directory))
+
+                val restartedFiles =
+                    object : ForwardingFileSystem(FileSystem.SYSTEM) {
+                        override fun listOrNull(dir: Path): List<Path>? {
+                            if (dir == directory.parent) check(sweep.await(15, TimeUnit.SECONDS))
+                            return super.listOrNull(dir)
+                        }
+                    }
+                val restarted = graph(parts("owed"), restartedFiles)
+                assertEquals(Session.Expired(SIGN_IN), restarted.session.observeSession().first())
+                val fresh = restarted.loader()
+                assertEquals(DataSource.NETWORK, fresh.load(CACHED).dataSource)
+                assertNull(fresh.diskCache)
+                assertTrue(FileSystem.SYSTEM.exists(directory))
+
+                release.countDown()
+                withTimeout(5_000) { held.join() }
+                loader.closeCache()
+                sweep.countDown()
+                awaitMissing(directory)
+                fresh.closeCache()
+            } finally {
+                release.countDown()
+                sweep.countDown()
+            }
+        }
+
+    @Test
+    fun `duplicate A cannot touch B and B can sign out while A cleanup is held`() =
+        runBlocking {
+            val clearing = CompletableDeferred<Unit>()
             val resume = CompletableDeferred<Unit>()
-            val parts = parts("concurrent")
+            val mal = sandbox("concurrent")
+            val parts = parts("concurrent", mal = mal)
             parts.seedSession()
             val store =
                 object : NotificationStore by InMemoryNotificationStore() {
                     override suspend fun clear(owner: SignInId?) {
-                        reading.complete(Unit)
+                        clearing.complete(Unit)
                         resume.await()
                     }
                 }
             val graph = LiveGraph(parts, listStore = { InMemoryLocalList() }, notificationStore = { _, _ -> store })
-            val first = async { graph.session.signOut() }
+            val a = Session.Expired(SIGN_IN)
+            val first = async { graph.signOut(a) }
             try {
-                withTimeout(5_000) { reading.await() }
+                withTimeout(5_000) { clearing.await() }
                 assertEquals(Session.SignedOut, graph.session.observeSession().first())
+                val b = graph.signIn(mal)
                 val fresh = graph.loader()
+                assertEquals(DataSource.NETWORK, fresh.load(CACHED).dataSource)
+                withTimeout(5_000) { graph.signOut(a) }
+                assertEquals(b, graph.session.observeSession().first())
+                assertEquals(DataSource.MEMORY_CACHE, fresh.load(CACHED).dataSource)
+                val second = async { graph.signOut(b) }
                 try {
-                    assertEquals(DataSource.NETWORK, fresh.load(CACHED).dataSource)
-                    withTimeout(5_000) { graph.session.signOut() }
+                    withTimeout(5_000) { graph.session.observeSession().first { it == Session.SignedOut } }
+                    assertEquals(0L, parts.tokenFile.length())
                     assertFalse(first.isCompleted)
-                    assertEquals(DataSource.MEMORY_CACHE, fresh.load(CACHED).dataSource)
+                    assertTrue(graph.imagesRetired(b))
                 } finally {
-                    fresh.closeCache()
+                    resume.complete(Unit)
+                    second.await()
                 }
             } finally {
                 resume.complete(Unit)
@@ -386,10 +587,70 @@ class ImageSignOutTest {
             }
         }
 
+    @Test
+    fun `saved routes of A are removed before the restored shell binds its first B loader`() {
+        val mal = sandbox("restoring")
+        val parts = parts("restoring", mal = mal)
+        parts.seedSession()
+        val graph = graph(parts)
+        val oldKey = OtherProfileKey("fixture_previous")
+        val a = runBlocking { graph.session.observeSession().first() }
+        val first = Robolectric.buildActivity(ComponentActivity::class.java).create()
+        ActivityNavigation(first.get().savedStateRegistry).navigator =
+            ShellNavigator.inMemory().apply {
+                hadSession = true
+                sessionOwner = a.owner
+                select(Destination.Profile)
+                open(oldKey)
+            }
+        val state = Bundle()
+        first.saveInstanceState(state).destroy()
+        val signedIn =
+            runBlocking {
+                graph.signOut(a)
+                graph.signIn(mal)
+            }
+        assertNotEquals(SIGN_IN, signedIn.owner)
+        val second = Robolectric.buildActivity(ComponentActivity::class.java).create(state)
+        try {
+            val restored = checkNotNull(ActivityNavigation(second.get().savedStateRegistry).restored)
+            assertEquals(listOf(Destination.Profile.root, oldKey), restored.stackOf(Destination.Profile))
+            assertEquals(a.owner, restored.sessionOwner)
+            val bound = CompletableDeferred<ImageLoader>()
+            val source =
+                object : AppGraph by graph {
+                    override fun imageLoaderFor(session: Session): ImageLoader =
+                        graph.imageLoaderFor(session).also {
+                            assertEquals(signedIn, session)
+                            assertEquals(listOf(Destination.Profile.root), restored.stackOf(Destination.Profile))
+                            bound.complete(it)
+                        }
+                }
+            compose.setContent {
+                KirokuTheme(dark = false, dynamicColor = false) { AppRoute(source, restored) }
+            }
+            compose.waitUntil(5_000) { bound.isCompleted }
+            assertEquals(Destination.List, restored.current)
+            assertEquals(1, restored.restarts)
+            runBlocking {
+                val loader = bound.await().withFixtureDecoder()
+                assertEquals(DataSource.NETWORK, loader.load(CACHED).dataSource)
+                assertEquals(DataSource.MEMORY_CACHE, loader.load(CACHED).dataSource)
+                loader.closeCache()
+            }
+        } finally {
+            second.destroy()
+        }
+    }
+
+    private fun SuccessResult.pixel(): Int = image.toBitmap().getPixel(0, 0)
+
     private companion object {
         val SIGN_IN = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
         val PNG = "image/png".toMediaType()
         const val CACHED = "https://images.invalid/cached.png"
         const val HELD = "https://images.invalid/held.png"
+        const val OLD_COLOR = 0xffff0000.toInt()
+        const val NEW_COLOR = 0xff0000ff.toInt()
     }
 }

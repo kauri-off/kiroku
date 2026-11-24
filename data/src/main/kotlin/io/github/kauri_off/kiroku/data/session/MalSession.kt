@@ -185,13 +185,14 @@ class MalSession internal constructor(
 
     suspend fun signOutIfCurrent(
         owner: SignInId?,
+        onWriteFailure: suspend () -> Unit = {},
         beforeSignOut: () -> Unit,
     ): Boolean =
         guarded(false) {
             change {
                 if (state.value?.session?.owner != owner) return@change false
                 beforeSignOut()
-                kept(Stored.SignedOut)
+                kept(Stored.SignedOut, onWriteFailure)
                 true
             }
         }
@@ -285,8 +286,12 @@ class MalSession internal constructor(
         }
 
     // The session is [value] from now on; a file that did not take it is written again until it does.
-    private suspend fun kept(value: Stored) {
+    private suspend fun kept(
+        value: Stored,
+        onWriteFailure: suspend () -> Unit = {},
+    ) {
         owed = value.takeUnless { written(it) }
+        if (owed != null) onWriteFailure()
         state.value = value
         if (owed != null) scope.launch { writeAgain(value) }
     }

@@ -15,6 +15,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.SavedState
 import androidx.savedstate.serialization.encodeToSavedState
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.notShown
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
@@ -39,6 +40,8 @@ class ShellNavigator(
     val restarts: Int get() = restartCount.intValue
 
     internal var hadSession: Boolean? = null
+    internal var sessionOwner: SignInId? = null
+    internal var restoredFromActivity = false
 
     fun stackOf(destination: Destination): List<NavKey> = stacks.getValue(destination)
 

@@ -11,6 +11,7 @@ import androidx.navigation3.runtime.serialization.NavKeySerializer
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.serialization.decodeFromSavedState
 import androidx.savedstate.serialization.encodeToSavedState
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.notShown
 
 private val registryKey = notShown("androidx.lifecycle.BundlableSavedStateRegistry.key")
@@ -57,6 +58,7 @@ private val navigationKey = notShown("kiroku.shell.navigation")
 private val selectionKey = notShown("selected")
 private val restartsKey = notShown("restarts")
 private val hadSessionKey = notShown("hadSession")
+private val sessionOwnerKey = notShown("sessionOwner")
 
 internal class ActivityNavigation(
     registry: SavedStateRegistry,
@@ -67,6 +69,8 @@ internal class ActivityNavigation(
             val selected = Destination.entries.firstOrNull { it.name == saved.getString(selectionKey) } ?: Destination.List
             ShellNavigator(stacks, mutableStateOf(selected), mutableIntStateOf(saved.getInt(restartsKey))).apply {
                 if (saved.containsKey(hadSessionKey)) hadSession = saved.getBoolean(hadSessionKey)
+                sessionOwner = saved.getString(sessionOwnerKey)?.let(::SignInId)
+                restoredFromActivity = true
             }
         }
 
@@ -79,6 +83,7 @@ internal class ActivityNavigation(
                     putString(selectionKey, current.current.name)
                     putInt(restartsKey, current.restarts)
                     current.hadSession?.let { putBoolean(hadSessionKey, it) }
+                    current.sessionOwner?.let { putString(sessionOwnerKey, it.value) }
                     for (destination in Destination.entries) {
                         val stack = NavBackStack(*current.stackOf(destination).toTypedArray())
                         putBundle(destination.name, encodeToSavedState(navSerializer, stack))

@@ -26,6 +26,7 @@ import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 
 internal fun imageLoaderBuilder(
@@ -48,6 +49,7 @@ internal fun imageLoaderBuilder(
 internal class LiveImages(
     private val context: PlatformContext,
     source: String,
+    private val retirementDirectory: () -> File,
     private val calls: Call.Factory,
     private val scope: CoroutineScope,
     private val fileSystem: FileSystem,
@@ -57,6 +59,7 @@ internal class LiveImages(
     private val oldDirectory by lazy { File(context.cacheDir, notShown("$source.images")).toOkioPath() }
     private val owners = mutableMapOf<SignInId?, ImageCache>()
     private val retired = mutableSetOf<SignInId>()
+    private val openDisks = mutableSetOf<Path>()
     private var inspected = false
 
     private val closed by lazy {
@@ -69,7 +72,7 @@ internal class LiveImages(
     fun loader(owner: SignInId?): ImageLoader =
         synchronized(owners) {
             if (owner in retired) return closed
-            val cache = owners.getOrPut(owner) { ImageCache(context, { directory(owner) }, calls) { isCurrent(owner) } }
+            val cache = owners.getOrPut(owner) { ImageCache(context, { openDisk(owner) }, calls) { isCurrent(owner) } }
             inspect()
             cache.loader
         }
@@ -78,17 +81,13 @@ internal class LiveImages(
 
     fun retire(owner: SignInId?) {
         synchronized(owners) {
-            if (owner != null) {
-                val old = owners.keys.filterNotNull() + owner
-                retired.addAll(old)
-                old.distinct().forEach { id ->
-                    val cache = owners.remove(id)
-                    cache?.closeAdmission()
-                    scope.launch(Dispatchers.Default) {
-                        cache?.drain()
-                        withContext(Dispatchers.IO) {
-                            tryImageCleanup { fileSystem.deleteRecursively(directory(id)) }
-                        }
+            if (owner != null && retired.add(owner)) {
+                val cache = owners.remove(owner)
+                cache?.closeAdmission()
+                scope.launch(Dispatchers.Default) {
+                    cache?.drain()
+                    withContext(Dispatchers.IO) {
+                        tryImageCleanup { fileSystem.deleteRecursively(directory(owner)) }
                     }
                 }
             }
@@ -96,21 +95,62 @@ internal class LiveImages(
         }
     }
 
+    suspend fun recordRetirement(owner: SignInId?) {
+        if (owner == null) return
+        withContext(Dispatchers.IO) {
+            tryImageCleanup {
+                val file = retirementFile(owner)
+                FileSystem.SYSTEM.createDirectories(checkNotNull(file.parentFile).toOkioPath())
+                FileOutputStream(file).use { it.fd.sync() }
+            }
+        }
+    }
+
+    private fun openDisk(owner: SignInId?): DiskCache? =
+        synchronized(openDisks) {
+            try {
+                if (owner != null && wasRecorded(owner)) return null
+                val path = directory(owner)
+                FileSystem.SYSTEM.createDirectories(path)
+                DiskCache
+                    .Builder()
+                    .directory(path)
+                    .build()
+                    .also { openDisks.add(path) }
+            } catch (e: IOException) {
+                logTypes(e)
+                null
+            } catch (e: SecurityException) {
+                logTypes(e)
+                null
+            }
+        }
+
+    private fun retirementFile(owner: SignInId): File = File(retirementDirectory(), owner.diskName())
+
+    private fun wasRecorded(owner: SignInId): Boolean = FileSystem.SYSTEM.metadataOrNull(retirementFile(owner).toOkioPath()) != null
+
+    private fun SignInId.diskName(): String = value.encodeUtf8().sha256().hex()
+
     private fun directory(owner: SignInId?): Path {
-        val name = owner?.value?.let { it.encodeUtf8().sha256().hex() } ?: notShown("public")
+        val name = owner?.diskName() ?: notShown("public")
         return root / name
     }
 
     private fun inspect() {
         if (inspected) return
         inspected = true
-        val keep = owners.keys + retired + null
+        val requested = owners.keys.toSet()
+        val draining = retired.toSet()
         scope.launch(Dispatchers.IO) {
             tryImageCleanup { fileSystem.deleteRecursively(oldDirectory) }
             tryImageCleanup {
+                val keep = requested.filter { it == null || !wasRecorded(it) } + draining + null
                 val protected = keep.mapTo(mutableSetOf(), ::directory)
                 fileSystem.listOrNull(root).orEmpty().filterNot { it in protected }.forEach { path ->
-                    tryImageCleanup { fileSystem.deleteRecursively(path) }
+                    synchronized(openDisks) {
+                        if (path !in openDisks) tryImageCleanup { fileSystem.deleteRecursively(path) }
+                    }
                 }
             }
         }
@@ -119,19 +159,14 @@ internal class LiveImages(
 
 private class ImageCache(
     context: PlatformContext,
-    directory: () -> Path,
+    openDisk: () -> DiskCache?,
     calls: Call.Factory,
     private val isCurrent: suspend () -> Boolean,
 ) {
     private val loading = mutableMapOf<Job, MutableList<Call>>()
     private val requestCalls = ThreadLocal<MutableList<Call>>()
     private var retired = false
-    private val disk =
-        lazy {
-            val path = directory()
-            FileSystem.SYSTEM.createDirectories(path)
-            DiskCache.Builder().directory(path).build()
-        }
+    private val disk = lazy(openDisk)
     private val built =
         lazy {
             val tracked =
@@ -179,7 +214,7 @@ private class ImageCache(
         if (built.isInitialized()) loader.memoryCache?.clear()
         jobs.joinAll()
         if (built.isInitialized()) loader.shutdown()
-        if (disk.isInitialized()) withContext(Dispatchers.IO) { disk.value.shutdown() }
+        if (disk.isInitialized()) withContext(Dispatchers.IO) { disk.value?.shutdown() }
     }
 }
 

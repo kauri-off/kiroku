@@ -47,6 +47,8 @@ interface AppGraph {
 
     fun imagesRetired(session: Session): Boolean = false
 
+    suspend fun signOut(expected: Session) = session.signOut()
+
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
     val showAdultInSearch: Boolean get() = false

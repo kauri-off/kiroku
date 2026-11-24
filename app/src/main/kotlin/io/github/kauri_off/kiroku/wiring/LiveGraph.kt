@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
@@ -36,7 +37,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
 import okhttp3.Interceptor
 import okio.FileSystem
 import java.io.File
@@ -131,10 +131,10 @@ internal class LiveGraph(
     private val account by built
     override val images = parts.http.callFactory
     private val imageCache =
-        LiveImages(parts.context, parts.source.name, images, parts.scope, imageFiles) { owner ->
+        LiveImages(parts.context, parts.source.name, { parts.file(notShown("retired-images")) }, images, parts.scope, imageFiles) { owner ->
             account.currentSession()?.let { it.owner == owner } == true
         }
-    override val session: SessionRepository by lazy {
+    private val sessionWithCleanup by lazy {
         SignOutForgets(
             account,
             imageCache,
@@ -146,6 +146,12 @@ internal class LiveGraph(
             runLog,
         )
     }
+    override val session: SessionRepository get() = sessionWithCleanup
+
+    override suspend fun signOut(expected: Session) {
+        expected.owner?.let { sessionWithCleanup.signOut(it) }
+    }
+
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, account::whileOwner, airingOf) }
@@ -249,19 +255,20 @@ private class SignOutForgets(
     private val notifications: () -> LiveNotifications,
     private val runs: KeptRuns?,
 ) : SessionRepository by account {
-    private val signingOut = Mutex()
+    private val signingOut = mutableSetOf<SignInId?>()
 
-    override suspend fun signOut() {
-        if (!signingOut.tryLock()) return
+    override suspend fun signOut() = signOut(account.currentSession()?.owner)
+
+    suspend fun signOut(owner: SignInId?) {
+        if (!synchronized(signingOut) { signingOut.add(owner) }) return
         try {
-            forget()
+            if (account.currentSession()?.owner == owner) forget(owner)
         } finally {
-            signingOut.unlock()
+            synchronized(signingOut) { signingOut.remove(owner) }
         }
     }
 
-    private suspend fun forget() {
-        val owner = account.currentSession()?.owner
+    private suspend fun forget(owner: SignInId?) {
         try {
             taps()
         } catch (e: CancellationException) {
@@ -270,7 +277,7 @@ private class SignOutForgets(
             // A try left by a failed cancel finds nobody signed in, and ends sending and showing nothing.
             logTypes(e)
         }
-        if (!account.signOutIfCurrent(owner) { images.retire(owner) }) return
+        if (!account.signOutIfCurrent(owner, onWriteFailure = { images.recordRetirement(owner) }) { images.retire(owner) }) return
         // Before the run that forgets the rest, which is then the first run kept.
         runs?.forget()
         notifications().forget()
