@@ -3,7 +3,7 @@
 Неофициальный клиент [MyAnimeList](https://myanimelist.net) для Android на Kotlin, Jetpack Compose и Material 3.
 
 **Kiroku не связан с MyAnimeList Co., Ltd. и AniList, не одобрен и не поддерживается ими.** «MyAnimeList» — товарный
-знак его владельца. Название Kiroku (記録) по-японски значит «запись».
+знак. Название Kiroku (記録) по-японски значит «запись».
 
 [English version](README.md)
 

@@ -4,10 +4,8 @@ Version 1.0 is milestones M1 to M7; "After 1.0" says what comes next and what is
 be is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); this file says in which order it is built and how each step
 is accepted.
 
-Only the milestone in progress is broken into tasks. A later milestone has a goal, an acceptance (what the owner
-can do when it is finished) and the things its planner must not forget; it becomes tasks when it starts. A screen
-of a later milestone may be built ahead of it, on fixture states. At the end of each milestone work stops and the
-owner looks at the result.
+Only the milestone in progress is broken into tasks. Later milestones define a goal, acceptance criteria and constraints. Break each milestone into tasks when it starts.
+Screens for later milestones may be built early using fixture states. Each milestone ends with an acceptance review.
 
 | Milestone | Result |
 |---|---|
@@ -19,15 +17,15 @@ owner looks at the result.
 | M6 | Profiles and statistics |
 | M7 | Settings, polish and release 1.0 |
 
-M2 to M4 are the daily loop that replaces dailyAL for the owner; search and profiles come after it.
+M2 to M4 are the daily loop that replaces dailyAL; search and profiles come after it.
 
 How to read a task:
 
 - `[ ]` becomes `[x]` in the pull request that completes the task, which also cuts the entry down to its name.
 - **[A]** architectural task: done by the stronger model, because later tasks build on its choices.
-- **[O]** a step done by the orchestrator or the owner, not by a coding agent.
+- **[O]** an orchestration or manual acceptance step.
 - **Needs** lists what must be merged first. Tasks without a common dependency can run in parallel.
-- **Check** is what a reviewer or the owner runs or looks at, and what it shows. How the task is built, and what
+- **Check** is the evidence used to verify the task. How the task is built, and what
   its parts are called, is the author's decision.
 - A section number without a document name refers to `docs/ARCHITECTURE.md`.
 
@@ -35,7 +33,7 @@ How to read a task:
 
 ## M1. An installable app on demo data
 
-Goal: the owner installs a debug APK and sees the List and the title page in the final design, in Russian and
+Goal: install a debug APK and verify the List and the title page in the final design, in Russian and
 English, light and dark, on demo data. No MAL client id is needed.
 
 - [x] **M1-01 [A] Project skeleton.**
@@ -53,16 +51,16 @@ English, light and dark, on demo data. No MAL client id is needed.
 - [x] **M1-13 [A] Wiring and demo mode.**
 - [x] **M1-14 View models, routes and the first APK.**
 
-- [x] **M1-15 [O] Owner's look.**
+- [x] **M1-15 [O] Visual acceptance.**
 
 ## M2. Sign-in, the real list, the real title page
 
-Goal: the owner signs in and uses their real list and real title pages (ARCHITECTURE sections 3 and 7).
+Goal: sign in and use a real list and live title pages (ARCHITECTURE sections 3 and 7).
 
 Acceptance: over three days of use, every list change made in the app is on the website and the reverse; no
-sign-out happened that the owner did not cause; three title pages match myanimelist.net for related titles and
+unexpected sign-out occurs; three title pages match myanimelist.net for related titles and
 statistics; a `myanimelist.net/anime/{id}` link, once allowed in Android's settings, opens the title page with the
-List beneath it; the owner's findings on the Russian strings so far are fixed.
+List beneath it; issues found in the Russian strings are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
@@ -87,7 +85,7 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
 
 - [x] **M2-12 [A] Recorder for answers that need the sign-in.**
 
-- [x] **M2-13 [O] The owner signs in and records.**
+- [x] **M2-13 [O] Sign in and record API responses.**
 
 - [x] **M2-14 Title client and mappers.**
 
@@ -142,10 +140,9 @@ List beneath it; the owner's findings on the Russian strings so far are fixed.
   **Check:** all screenshots rendered before and after, and the differences named in the pull request.
 
 - [ ] **M2-33 [O] Milestone check.** The orchestrator runs the app once on the emulator against the sandbox and
-  measures a list of 3000 entries on the phone. The owner uses the preview build for three days and reviews the
-  Russian strings.
+  measures a list of 3000 entries on the phone. Use the preview build for three days and review the Russian strings.
   **Needs:** M2-18, M2-20, M2-21, M2-23, M2-25, M2-26, M2-28, M2-29, M2-31.
-  **Check:** the acceptance of M2; his findings are filed as tasks and the ones on Russian strings are fixed.
+  **Check:** the acceptance of M2; file findings as tasks and fix the Russian string issues.
 
 ## M3. Episodes aired and episodes to watch
 
@@ -153,8 +150,8 @@ Goal: the List and the title page show aired counts, "to watch" and next episode
 next" (ARCHITECTURE section 4).
 
 Acceptance: at the start, the aired counts of three airing titles, one of them on a break, agree with a source
-other than AniList (the broadcaster's or a streaming service's schedule). Over seven days the owner finds no wrong
-"aired" or "to watch" value on a title with an exact count.
+other than AniList (the broadcaster's or a streaming service's schedule). Over seven days, verify there are no incorrect
+"aired" or "to watch" values on a title with an exact count.
 
 - [x] **M3-01 Recorded answers of AniList.**
 
@@ -180,10 +177,9 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-12 [O] Emulator run.**
 
-- [ ] **M3-13 [O] The owner's seven days.** At the start the owner compares the aired counts of three airing
-  titles of his list, one of them on a break, with the broadcaster's or a streaming service's schedule. He then
-  uses the preview build for seven days. At their end the counts of M3-10 on his phone settle item 3 of section
-  13.
+- [ ] **M3-13 [O] Seven-day airing check.** Compare aired counts for three titles on the test list,
+  including one on a break, against broadcaster or streaming schedules. Use the preview build for seven days,
+  then use the M3-10 counts from the phone to resolve item 3 of section 13.
   **Needs:** M3-12.
   **Check:** the acceptance of M3; item 3 of section 13 holds the counts; a wrong value is filed as a task with
   its reason from M3-10.
@@ -193,7 +189,7 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 Goal: the notifications of ARCHITECTURE section 5 and their settings.
 
 Acceptance: over seven days with notifications on, every entry of "Recently sent" matches an episode that had aired
-by AniList's schedule for a title the owner was watching; no episode of a watched title with an exact count is
+by AniList's schedule for a title in Watching; no episode of a watched title with an exact count is
 missing from it; there are no duplicates.
 
 - [x] **M4-01 [A] What is notifiable.**
@@ -228,9 +224,8 @@ missing from it; there are no duplicates.
 
 - [x] **M4-16 [O] Emulator run.**
 
-- [ ] **M4-17 [O] The owner's seven days.** The owner uses the preview build for seven days with notifications on,
-  as he uses his phone otherwise. At their end he compares what the app lists as sent with AniList's schedule of
-  the titles he was watching.
+- [ ] **M4-17 [O] Seven-day notification check.** Use the preview build for seven days with notifications
+  enabled during normal phone use. Compare the sent notifications with AniList's schedule for titles in Watching.
   **Needs:** M4-16, M3-13.
   **Check:** the acceptance of M4; a missing, a duplicate or a wrong notification is filed as a task with its lines
   of M4-15's log and the states the notification settings showed.
@@ -239,7 +234,7 @@ missing from it; there are no duplicates.
 
 Goal: search, the four browse lists and the Recommendations sub-screen.
 
-Acceptance: the owner finds a title by name and opens it; a title on their list shows its status in the results;
+Acceptance: find a title by name and open it; a title on the signed-in list shows its status in the results;
 each browse list opens and loads further pages; a query of digits offers "Open title #<id>".
 
 Not to forget:
@@ -257,12 +252,11 @@ Not to forget:
 
 ## M6. Profiles and statistics
 
-Goal: the owner's profile, another user's profile and list, and the statistics sub-screens.
+Goal: the signed-in profile, another user's profile and list, and the statistics sub-screens.
 
-Acceptance: the owner's completed count, mean score, days and episodes watched equal those on their MAL profile page;
+Acceptance: completed count, mean score, days and episodes watched match the signed-in MAL profile;
 another user's profile opens by name and by a `myanimelist.net/profile/…` link, also for a list of several thousand
-entries; a private list and an unknown name each say what they are. The owner's findings on the Russian strings of M3 to
-M6 are fixed.
+entries; a private list and an unknown name each say what they are. Issues found in the Russian strings of M3 to M6 are fixed.
 
 - [x] **M6-01 Profile screen.**
 
@@ -284,8 +278,8 @@ M6 are fixed.
 
 - [x] **M6-10 Live profiles.**
 
-- [ ] **M6-11 [O] The owner chooses the Profile.** On his phone, from the prototypes, the owner chooses the
-  composition of the Profile, and with it where the statistics and another user's list are shown.
+- [ ] **M6-11 [O] Profile design review.** Review the prototypes on a phone and choose the Profile layout,
+  including the placement of statistics and the other user's list.
   **Needs:** nothing.
   **Check:** one composition is chosen; M6-12, M6-13 and M6-14 start from its prototype.
 
@@ -297,13 +291,12 @@ M6 are fixed.
 
 - [x] **M6-15 [O] Emulator run.**
 
-- [ ] **M6-16 [O] The owner's check.** With the preview build on his account, the owner compares the Profile's
-  completed count and mean score with his profile page on MAL; opens, by name and then by a link from another app
-  once he has allowed the app's links in Android's settings, a user whose public list has several thousand entries;
-  opens a user whose list is private and a name nobody has; and reviews the Russian strings of M3 to M6.
+- [ ] **M6-16 [O] Live profile acceptance.** In Preview, compare the signed-in Profile's completed count and
+  mean score with the MAL profile. Open a profile with several thousand public list entries by name and by a link
+  from another app after enabling app links in Android. Check private and unknown profiles and review the Russian
+  strings of M3 to M6.
   **Needs:** M6-15.
-  **Check:** the acceptance of M6; a difference is filed as a task with what the screen said, and his findings on
-  the Russian strings are fixed.
+  **Check:** the acceptance of M6; file discrepancies with the displayed text and fix issues found in the Russian strings.
 
 ## M7. Settings, polish and release 1.0
 
@@ -336,7 +329,7 @@ Not to forget:
 ## After 1.0
 
 This section accounts for every other dailyAL feature: it is planned, or it is not built, with the reason. A
-feature the owner wants back moves from "Not built" to a planned milestone. The milestones are built in the order
+feature selected for implementation moves from "Not built" to a planned milestone. The milestones are built in the order
 P1 to P5. The sources other than MAL are unchecked (ARCHITECTURE section 13, item 5).
 
 | Milestone | Goal | Features | Sources |
@@ -373,4 +366,4 @@ P1 to P5. The sources other than MAL are unchecked (ARCHITECTURE section 13, ite
 | Seasonal background photos, accent-colour picker, font choice | Against the design system; dynamic colour is the personalisation. |
 | Backup and restore of settings; cache-frequency setting; remote configuration | The app has few settings and its data lives on MAL; the rest is internal. |
 | Desktop, iOS and web builds | Android only, by decision. |
-| Donation link | The owner's decision; none by default. |
+| Donation link | None by default. |

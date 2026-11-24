@@ -4,7 +4,7 @@ An unofficial Android client for [MyAnimeList](https://myanimelist.net), built w
 Material 3.
 
 **Kiroku is not affiliated with, endorsed by or sponsored by MyAnimeList Co., Ltd. or AniList.** "MyAnimeList" is a
-trademark of its owner. The name Kiroku (記録) is Japanese for "record".
+trademark. The name Kiroku (記録) is Japanese for "record".
 
 [Русская версия](README.ru.md)
 

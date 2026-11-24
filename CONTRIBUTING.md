@@ -5,7 +5,7 @@ Start with the [Demo build](README.md#building). Gradle also accepts `sdk.dir` i
 in place of `$ANDROID_HOME` in the README's `sdkmanager` commands.
 
 Before changing code, read the relevant entries in the [roadmap](ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
-Follow the conventions in [CLAUDE.md](CLAUDE.md), including Conventional Commits for pull request titles.
+Follow the conventions in [AGENTS.md](AGENTS.md), including Conventional Commits for pull request titles.
 Pull requests are squash-merged. For data fixtures, follow the [recording rules](docs/ARCHITECTURE.md#111-tests-and-recorded-responses).
 
 ## Checks

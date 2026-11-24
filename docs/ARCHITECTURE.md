@@ -1,15 +1,14 @@
 # Kiroku architecture
 
 Kiroku (記録, "record") is an unofficial Android client for MyAnimeList (MAL), written from scratch in Kotlin and
-Jetpack Compose with Material 3, licensed GPL-3.0-or-later. It replaces the abandoned Flutter app dailyAL for its
-owner. The four defects of dailyAL that it exists to fix are: too much noise on every page, poor layout, broken or
+Jetpack Compose with Material 3, licensed GPL-3.0-or-later. It replaces the abandoned Flutter app dailyAL. The four defects of dailyAL that it exists to fix are: too much noise on every page, poor layout, broken or
 missing notifications, and home-made components. Layout quality is the first priority.
 
 This document states what has been decided, what constrains the app from outside, and what must be true of the
 result. How to build it is the implementing agent's decision; the code and its tests are the source of truth for
 how things work.
 
-- A **decision** is the owner's. An agent that needs to depart from one stops and reports.
+- A **decision** records an approved project choice. Propose departures for review.
 - An **invariant** is a property of the result that a test must demonstrate. Invariants are labelled (A1, N3, …) so
   that tests and reviews can name them.
 
@@ -19,7 +18,7 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 
 ## 1. Scope
 
-**Version 1.0** is the minimum the owner uses every day, done well:
+**Version 1.0** covers the core daily workflows:
 
 - Sign in with a MAL account; browse without an account.
 - The user's anime list: read, change status, change watched episodes, score, dates, remove.
@@ -313,7 +312,7 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   exact-alarm access a notification can come up to an hour late. The notification settings show which link broke
   when a notification is missing (the permission, exact alarms, the battery restriction, each with a link to its
   system screen), the last sync, the notifications coming next and those recently sent, and post a test
-  notification through the real channel. This is what the owner checks during acceptance.
+  notification through the real channel. Include this in manual acceptance.
 
 ## 6. Structure and stack
 
@@ -536,7 +535,7 @@ from stock ones and rendered in the gallery (section 11.2). No control is drawn 
 Stock components keep their own motion. For what the app animates beyond that:
 
 - **One source.** Every animation the app writes takes its spec from the theme's motion scheme, and only from its
-  effects springs. One value is the owner's exception: the List's pages settle and slide with ViewPager2's snap
+  effects springs. The List is an exception: its pages settle and slide with ViewPager2's snap
   timing, so that the gesture feels as in Droid-ify.
 - **Behaviour.** State changes at once and the animation only smooths it. Every animation can be interrupted and
   reversed mid-flight, ends in the state of the last input, and never blocks a tap. With the system's animations
@@ -551,13 +550,11 @@ that a stock component answers with motion of its own gets the frames image, wit
 
 ## 9. How the interface is decided
 
-What a screen shows and how it is arranged is the owner's decision, and he makes it by looking: at the running app,
-or at the screenshots of section 11.2. No tracked text prescribes it: there is no list of what a screen must show,
+Screen content and layout are decided in a review of the running app or the screenshots of section 11.2. No tracked text prescribes it: there is no list of what a screen must show,
 no limit on it and no scoring of layouts.
 
 An agent that builds or changes a screen builds one version, within the constraints of sections 6.2, 7, 8 and 10,
-and shows it. The owner answers with feedback; variants are made only when he asks for them. How a transition
-feels, and the back gesture under a finger, he judges from the installed app.
+and shows it for review. Prepare variants on request. Evaluate transitions and the back gesture on the installed app.
 
 The code and the screenshots rendered from `main` are the record of what was decided.
 
@@ -565,7 +562,7 @@ The code and the screenshots rendered from `main` are the record of what was dec
 
 - English strings are the default resources, Russian the `ru` ones. Both are written by hand. `docs/GLOSSARY.md`
   fixes the Russian term for every recurring concept and is required reading for any task that touches strings.
-  The owner reviews the Russian text at the end of each milestone.
+  Review the Russian text at the end of each milestone.
 - **No user-visible string exists outside the `:app` resources**, and strings are split into one file per feature,
   so parallel tasks do not edit the same file. Strings of the debug source set live in that source set, in English
   and Russian.
@@ -595,9 +592,9 @@ The code and the screenshots rendered from `main` are the record of what was dec
 - **Tests of MAL mappers run against responses recorded from the real API, never against shapes written from
   memory.** An agent can neither read the client id nor sign in, so responses that need only the client id are
   recorded by a build task that uses the id without printing it or any request header and is not part of any build
-  or check; those needing the user's sign-in, by the owner with a debug tool, as sent less token and client id.
+  or check; responses requiring sign-in are recorded with the debug tool, with the token and client id removed.
 - **No fixture contains a real user's name, another personal value, a token or a client id.** The orchestrator
-  reads recorded files before they are committed. The owner's stay outside all checkouts; tests skip without them.
+  reads recorded files before they are committed. Private recordings stay outside all checkouts. Tests that require them are skipped when they are absent.
 - Nobody calls the MAL API by hand with the client id. AniList and Tenrai need no key, so an agent records their
   responses itself.
 - A debug-only entry point that is started over `adb` exists only in debug builds and cannot be started by another
@@ -685,10 +682,9 @@ Each of these could change a decision above.
    assumes (through the API it changes nothing by itself). In recorded anime searches MAL rejected one and two
    characters and accepted three.
 3. **AniList:** its API terms prohibit its use "within competing, non-complementary services of the same nature",
-   anime list and tracker services included, for all its data. The owner reads Kiroku, which keeps no list at
-   AniList and is open source and non-commercial, as complementary, and the stored schedules of the tracked titles,
-   forgotten at sign-out, as a cache rather than the data storage the terms prohibit; he accepts the risk that
-   AniList reads its terms otherwise. How often its episode numbering differs from MAL's, and so how often A4 and A5
+   anime list and tracker services included, for all its data. Kiroku treats its use as complementary: it is open source and
+   non-commercial and keeps no list at AniList. It treats tracked schedules, cleared at sign-out, as a cache.
+   AniList may interpret these terms differently. How often its episode numbering differs from MAL's, and so how often A4 and A5
    apply, is not measured.
 4. **Alarms in Doze are measured on emulators only** (Android 16 and 11, deep idle forced by a command). With
    exact alarms the notification came within a second and the re-check had a network; without them the alarm came
@@ -698,5 +694,4 @@ Each of these could change a decision above.
 5. **Sources beyond MAL and AniList.** The score distribution comes from Tenrai; characters, videos, reviews and
    other users' avatars have no source. Tenrai is in beta and does
    not say who runs it. Like every source of MAL's score distribution it serves what it reads from MAL's website,
-   which clause 4(i) of MAL's API agreement rules out for an app's own requests; the owner accepts that risk, and the
-   app itself scrapes nothing. AniList's links and characters and Shikimori are unchecked.
+   which clause 4(i) of MAL's API agreement rules out for an app's own requests; Kiroku makes no scraping requests. AniList's links and characters and Shikimori are unchecked.

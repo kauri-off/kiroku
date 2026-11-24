@@ -6,7 +6,7 @@ of grammar that several strings share, the form of a line built from parts, and 
 no resources yet. Read it before writing or reviewing any string.
 
 A row is added only when the next author could plausibly choose differently. A string that merely exists is not a
-row. The owner is the final authority on the Russian column.
+row. Review changes to the Russian column as part of localisation.
 
 ## Terms
 
