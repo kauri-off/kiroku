@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.recalculateWindowInsets
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -280,8 +281,13 @@ private fun Page(
             if (page.rows.isEmpty()) {
                 // A list, so that an empty tab can be pulled to refresh too.
                 val empty = emptyState(filter, owner, status, onEvent)
-                val viewport = if (filter.isEmpty()) Modifier else Modifier.imePadding()
-                LazyColumn(viewport.fillMaxSize()) { item { ScreenState(empty, Modifier.fillParentMaxSize()) } }
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        val viewport = Modifier.fillParentMaxSize()
+                        val inViewport = if (filter.isEmpty()) viewport else viewport.recalculateWindowInsets().imePadding()
+                        ScreenState(empty, inViewport)
+                    }
+                }
             } else {
                 Rows(page.rows, owner, now, padding, onEvent)
             }
