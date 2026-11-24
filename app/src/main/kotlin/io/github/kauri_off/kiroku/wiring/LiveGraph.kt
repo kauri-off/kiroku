@@ -124,9 +124,12 @@ internal class LiveGraph(
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
     private val account by built
+    override val images = parts.http.callFactory
+    private val imageCache = LiveImages(parts.context, parts.source.name, images)
     override val session: SessionRepository by lazy {
         SignOutForgets(
             account,
+            imageCache,
             { MarkWatchedWork.forget(parts.context, parts.source.name) },
             { list },
             { airing },
@@ -211,7 +214,7 @@ internal class LiveGraph(
         }
     }
 
-    override val images = parts.http.callFactory
+    override fun newImageLoader(context: Context) = imageCache.loader()
 
     // What debug and preview builds record MAL's answers with; it looks at once for a title an earlier run left on the list.
     val recorder = liveRecorder(parts, built)
@@ -222,9 +225,9 @@ internal class LiveGraph(
     }
 }
 
-// S9: a sign-out takes the user's notifications, list, sorts, airing data and profiles with it, also when nothing has asked for them yet.
 private class SignOutForgets(
     private val account: SessionRepository,
+    private val images: LiveImages,
     // The waiting "Mark watched" taps, ended before the sign-out so that none is tried in a list that is not its own.
     private val taps: suspend () -> Unit,
     private val list: () -> ListSource,
@@ -242,7 +245,7 @@ private class SignOutForgets(
             // A try left by a failed cancel finds nobody signed in, and ends sending and showing nothing.
             logTypes(e)
         }
-        account.signOut()
+        images.forget(account::signOut)
         // Before the run that forgets the rest, which is then the first run kept.
         runs?.forget()
         notifications().forget()

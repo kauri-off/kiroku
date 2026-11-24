@@ -76,7 +76,7 @@ class Pictures : ExternalResource() {
         // MAL's API is elsewhere, so the image host is not the API's and gets no client id.
         val source = LiveSource("images", MalHosts(api = "http://localhost:9/v2/", signIn = "http://localhost:9/v1/oauth2/"))
         val graph = LiveGraph(LiveParts(context, source, CLIENT_ID, Clock.systemUTC(), scope, { throw it }, device = device))
-        calls = checkNotNull(graph.images)
+        calls = graph.images
         loader = installed(calls)
     }
 
@@ -116,8 +116,7 @@ class Pictures : ExternalResource() {
                     ended(request, result)
                 }
             }
-        return imageLoader(context, calls, MainHandover(standIn), schemes)
-            .newBuilder()
+        return imageLoaderBuilder(context, calls, MainHandover(standIn), schemes)
             .eventListener(listener)
             .imageDecoderEnabled(false)
             .build()
