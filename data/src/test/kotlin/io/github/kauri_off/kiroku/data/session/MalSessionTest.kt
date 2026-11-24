@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.RoomAiringStore
 import io.github.kauri_off.kiroku.data.db.transaction
@@ -82,6 +83,23 @@ class MalSessionTest {
             .store()
             .read()
             .text()
+
+    @Test
+    fun aStaleSignOutDoesNotRetireOrClearTheNewSession() =
+        test {
+            val session = signedIn()
+            val oldOwner = checkNotNull(session.currentSession()?.owner)
+            assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access-2", "refresh-2")))
+            val current = session.currentSession()
+
+            var retired = false
+            assertFalse(session.signOutIfCurrent(oldOwner) { retired = true })
+            assertFalse(retired)
+            assertEquals(current, session.currentSession())
+            assertTrue(session.signOutIfCurrent(checkNotNull(current?.owner)) { retired = true })
+            assertTrue(retired)
+            assertEquals(Session.SignedOut, session.currentSession())
+        }
 
     @Test
     fun theSessionHasNoValueBeforeTheStoreWasRead() =

@@ -19,27 +19,23 @@ fun SignOutTurns(
     graph: AppGraph,
     navigator: ShellNavigator,
     messages: ShellMessages,
-) {
+): Session? {
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
+    var routeSession by remember(graph, navigator) { mutableStateOf<Session?>(null) }
     var legacyHadSession by rememberSaveable(saver = sessionMarkerSaver) { mutableStateOf(false) }
     LaunchedEffect(session, navigator) {
-        when (session) {
-            null -> Unit
-            Session.SignedOut -> {
-                val hadSession = navigator.hadSession ?: legacyHadSession
-                navigator.hadSession = false
-                legacyHadSession = false
-                if (hadSession) {
-                    navigator.restart()
-                    messages.clear()
-                }
-            }
-            is Session.SignedIn, is Session.Expired -> {
-                navigator.hadSession = true
-                legacyHadSession = true
-            }
+        val current = session ?: return@LaunchedEffect
+        val hadSession = navigator.hadSession ?: legacyHadSession
+        val signedOut = current == Session.SignedOut
+        if (hadSession && (signedOut || routeSession?.let(graph::imagesRetired) == true)) {
+            navigator.restart()
+            messages.clear()
         }
+        navigator.hadSession = !signedOut
+        legacyHadSession = !signedOut
+        routeSession = current
     }
+    return routeSession
 }
 
 private val sessionMarkerSaver =

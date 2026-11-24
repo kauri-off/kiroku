@@ -66,6 +66,7 @@ import io.github.kauri_off.kiroku.design.component.StatNumbers
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.headingRoom
 import io.github.kauri_off.kiroku.design.component.pageBlocks
+import io.github.kauri_off.kiroku.design.component.routeImageLoader
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
@@ -282,7 +283,13 @@ private fun Avatar(url: String?) {
         if (url == null) {
             Icon(painterResource(R.drawable.ic_person), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                imageLoader = routeImageLoader(),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

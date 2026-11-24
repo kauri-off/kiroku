@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
 import coil3.ImageLoader
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -41,6 +42,10 @@ interface AppGraph {
     val images: Call.Factory? get() = null
 
     fun newImageLoader(context: Context): ImageLoader = imageLoaderBuilder(context, images, standInPosters).diskCache(null).build()
+
+    fun imageLoaderFor(session: Session): ImageLoader? = null
+
+    fun imagesRetired(session: Session): Boolean = false
 
     // The "Title language" setting, Romaji until Settings exist.
     val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.ComposeTestRule
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.annotation.DelicateCoilApi
+import coil3.disk.DiskCache
 import coil3.imageDecoderEnabled
 import coil3.intercept.Interceptor
 import coil3.request.ErrorResult
@@ -30,9 +31,11 @@ import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
 import okhttp3.Call
 import okio.Buffer
+import okio.Path.Companion.toOkioPath
 import org.junit.rules.ExternalResource
 import org.robolectric.RuntimeEnvironment
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -53,6 +56,7 @@ class Pictures : ExternalResource() {
     private val release = CountDownLatch(1)
     private val offMain = CopyOnWriteArrayList<String>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val disk = lazy { DiskCache.Builder().directory(File(context.cacheDir, "pictures").toOkioPath()).build() }
     lateinit var calls: Call.Factory
     lateinit var loader: ImageLoader
 
@@ -84,6 +88,7 @@ class Pictures : ExternalResource() {
         checkOnMain()
         release.countDown()
         SingletonImageLoader.reset()
+        if (disk.isInitialized()) disk.value.shutdown()
         scope.cancel()
         server.close()
     }
@@ -117,6 +122,7 @@ class Pictures : ExternalResource() {
                 }
             }
         return imageLoaderBuilder(context, calls, MainHandover(standIn), schemes)
+            .diskCache { disk.value }
             .eventListener(listener)
             .imageDecoderEnabled(false)
             .build()

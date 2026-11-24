@@ -15,7 +15,9 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import coil3.ImageLoader
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
+import io.github.kauri_off.kiroku.design.component.LocalRouteImages
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 
@@ -46,6 +48,7 @@ fun ShellRoute(
     navigator: ShellNavigator = rememberShellNavigator(),
     snackbars: SnackbarHostState = remember { SnackbarHostState() },
     entries: ShellEntries = remember { placeholderEntries() },
+    images: ImageLoader? = null,
 ) {
     val decorators =
         listOf(
@@ -60,7 +63,7 @@ fun ShellRoute(
                     depth,
                     key,
                     ->
-                    provider(key).scopedTo(key, destination, depth, navigator)
+                    provider(key).scopedTo(key, destination, depth, navigator, images)
                 }
             rememberDecoratedNavEntries(stack, decorators)
         }
@@ -90,11 +93,14 @@ private fun NavEntry<NavKey>.scopedTo(
     destination: Destination,
     depth: Int,
     navigator: ShellNavigator,
+    images: ImageLoader?,
 ): NavEntry<NavKey> {
     val entry = this
     return NavEntry(key, notShown("${navigator.restarts}/${destination.name}/$depth/$contentKey"), metadata) {
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
         val inStack = destination in navigator.visible && navigator.stackOf(destination).getOrNull(depth) == key
-        CompositionLocalProvider(LocalOnTop provides onTop) { NoInputWhileLeaving(inStack) { entry.Content() } }
+        CompositionLocalProvider(LocalOnTop provides onTop, LocalRouteImages provides images) {
+            NoInputWhileLeaving(inStack) { entry.Content() }
+        }
     }
 }

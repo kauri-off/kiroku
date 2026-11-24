@@ -178,6 +178,24 @@ class MalSession internal constructor(
         }
     }
 
+    suspend fun currentSession(): Session? {
+        read.await()
+        return state.value?.session
+    }
+
+    suspend fun signOutIfCurrent(
+        owner: SignInId?,
+        beforeSignOut: () -> Unit,
+    ): Boolean =
+        guarded(false) {
+            change {
+                if (state.value?.session?.owner != owner) return@change false
+                beforeSignOut()
+                kept(Stored.SignedOut)
+                true
+            }
+        }
+
     // A new sign-in with the tokens MAL granted; nobody is signed in when they cannot be stored.
     internal suspend fun signIn(grant: TokenGrant): Outcome<Unit> =
         guarded(Outcome.Failure(DataError.StorageError)) {

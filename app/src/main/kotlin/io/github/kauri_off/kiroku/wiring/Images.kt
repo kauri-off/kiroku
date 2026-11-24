@@ -1,6 +1,5 @@
 package io.github.kauri_off.kiroku.wiring
 
-import coil3.EventListener
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.Uri
@@ -8,25 +7,26 @@ import coil3.disk.DiskCache
 import coil3.intercept.Interceptor
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ErrorResult
-import coil3.request.ImageRequest
 import coil3.request.ImageResult
 import coil3.serviceLoaderEnabled
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
+import okio.ByteString.Companion.encodeUtf8
 import okio.FileSystem
+import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.io.IOException
-import java.util.IdentityHashMap
 
 internal fun imageLoaderBuilder(
     context: PlatformContext,
@@ -46,104 +46,158 @@ internal fun imageLoaderBuilder(
         }
 
 internal class LiveImages(
-    context: PlatformContext,
+    private val context: PlatformContext,
     source: String,
-    calls: Call.Factory,
+    private val calls: Call.Factory,
+    private val scope: CoroutineScope,
+    private val fileSystem: FileSystem,
+    private val isCurrent: suspend (SignInId?) -> Boolean,
 ) {
-    private val requestsLock = Any()
-    private var activeRequests: MutableSet<Job>? = mutableSetOf()
+    private val root by lazy { File(context.cacheDir, notShown("$source.image-caches")).toOkioPath() }
+    private val oldDirectory by lazy { File(context.cacheDir, notShown("$source.images")).toOkioPath() }
+    private val owners = mutableMapOf<SignInId?, ImageCache>()
+    private val retired = mutableSetOf<SignInId>()
+    private var inspected = false
 
-    // Coil resolves size before the interceptor runs.
-    private val sizing = IdentityHashMap<ImageRequest, MutableSet<Job>?>()
-    private val forgetting = Mutex()
-    private val directory by lazy { File(context.cacheDir, notShown("$source.images")) }
-    private val disk by lazy {
-        directory.mkdirs()
-        DiskCache.Builder().directory(directory.toOkioPath()).build()
+    private val closed by lazy {
+        imageLoaderBuilder(context, null, null, requests = Interceptor { throw CancellationException() })
+            .memoryCache(null)
+            .diskCache(null)
+            .build()
     }
 
-    private val loader =
-        lazy {
-            imageLoaderBuilder(context, calls, standInPosters, requests = Interceptor(::load))
-                .diskCache { disk }
-                .eventListenerFactory { RequestStart(synchronized(requestsLock) { activeRequests }) }
-                .build()
+    fun loader(owner: SignInId?): ImageLoader =
+        synchronized(owners) {
+            if (owner in retired) return closed
+            val cache = owners.getOrPut(owner) { ImageCache(context, { directory(owner) }, calls) { isCurrent(owner) } }
+            inspect()
+            cache.loader
         }
 
-    fun loader(): ImageLoader = loader.value
+    fun wasRetired(owner: SignInId?): Boolean = synchronized(owners) { owner in retired }
 
-    private suspend fun load(chain: Interceptor.Chain): ImageResult =
-        coroutineScope {
-            val job = checkNotNull(coroutineContext[Job])
-            val started =
-                synchronized(requestsLock) {
-                    val session = sizing.remove(chain.request)
-                    if (session == null || session !== activeRequests) throw CancellationException()
-                    session.also { it.add(job) }
-                }
-            try {
-                chain.proceed()
-            } finally {
-                synchronized(requestsLock) { started.remove(job) }
-            }
-        }
-
-    suspend fun forget(signOut: suspend () -> Unit) {
-        forgetting.withLock {
-            withContext(NonCancellable) {
-                val active =
-                    synchronized(requestsLock) {
-                        checkNotNull(activeRequests).toList().also { activeRequests = null }
-                    }
-                try {
-                    active.forEach { it.cancel() }
-                    active.joinAll()
-                    if (loader.isInitialized()) loader.value.memoryCache?.clear()
-                    withContext(Dispatchers.IO) {
-                        forgetDisk {
-                            if (directory.exists()) disk.clear()
-                        }
-                        forgetDisk {
-                            FileSystem.SYSTEM.deleteRecursively(LegacyImageCache)
+    fun retire(owner: SignInId?) {
+        synchronized(owners) {
+            if (owner != null) {
+                val old = owners.keys.filterNotNull() + owner
+                retired.addAll(old)
+                old.distinct().forEach { id ->
+                    val cache = owners.remove(id)
+                    cache?.closeAdmission()
+                    scope.launch(Dispatchers.Default) {
+                        cache?.drain()
+                        withContext(Dispatchers.IO) {
+                            tryImageCleanup { fileSystem.deleteRecursively(directory(id)) }
                         }
                     }
-                    signOut()
-                } finally {
-                    synchronized(requestsLock) { activeRequests = mutableSetOf() }
                 }
             }
+            inspect()
         }
     }
 
-    private inline fun forgetDisk(clear: () -> Unit) {
-        try {
-            clear()
-        } catch (e: IOException) {
-            logTypes(e)
-        }
+    private fun directory(owner: SignInId?): Path {
+        val name = owner?.value?.let { it.encodeUtf8().sha256().hex() } ?: notShown("public")
+        return root / name
     }
 
-    private inner class RequestStart(
-        private val session: MutableSet<Job>?,
-    ) : EventListener() {
-        override fun onStart(request: ImageRequest) {
-            synchronized(requestsLock) { sizing[request] = session }
-        }
-
-        override fun onCancel(request: ImageRequest) {
-            synchronized(requestsLock) { sizing.remove(request) }
-        }
-
-        override fun onError(
-            request: ImageRequest,
-            result: ErrorResult,
-        ) {
-            synchronized(requestsLock) { sizing.remove(request) }
+    private fun inspect() {
+        if (inspected) return
+        inspected = true
+        val keep = owners.keys + retired + null
+        scope.launch(Dispatchers.IO) {
+            tryImageCleanup { fileSystem.deleteRecursively(oldDirectory) }
+            tryImageCleanup {
+                val protected = keep.mapTo(mutableSetOf(), ::directory)
+                fileSystem.listOrNull(root).orEmpty().filterNot { it in protected }.forEach { path ->
+                    tryImageCleanup { fileSystem.deleteRecursively(path) }
+                }
+            }
         }
     }
 }
 
-private val LegacyImageCache = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / notShown("coil3_disk_cache")
+private class ImageCache(
+    context: PlatformContext,
+    directory: () -> Path,
+    calls: Call.Factory,
+    private val isCurrent: suspend () -> Boolean,
+) {
+    private val loading = mutableMapOf<Job, MutableList<Call>>()
+    private val requestCalls = ThreadLocal<MutableList<Call>>()
+    private var retired = false
+    private val disk =
+        lazy {
+            val path = directory()
+            FileSystem.SYSTEM.createDirectories(path)
+            DiskCache.Builder().directory(path).build()
+        }
+    private val built =
+        lazy {
+            val tracked =
+                Call.Factory { request ->
+                    val call = calls.newCall(request)
+                    val cancel =
+                        synchronized(loading) {
+                            if (retired) return@synchronized true
+                            checkNotNull(requestCalls.get()).add(call)
+                            false
+                        }
+                    if (cancel) call.cancel()
+                    call
+                }
+            imageLoaderBuilder(context, tracked, standInPosters, requests = Interceptor(::load))
+                .diskCache { disk.value }
+                .build()
+        }
+    val loader: ImageLoader get() = built.value
+
+    private suspend fun load(chain: Interceptor.Chain): ImageResult =
+        coroutineScope {
+            if (!isCurrent()) throw CancellationException()
+            val job = checkNotNull(coroutineContext[Job])
+            val calls = mutableListOf<Call>()
+            synchronized(loading) {
+                if (retired) throw CancellationException()
+                loading[job] = calls
+            }
+            try {
+                withContext(requestCalls.asContextElement(calls)) { chain.proceed() }
+            } finally {
+                synchronized(loading) { loading.remove(job) }
+            }
+        }
+
+    fun closeAdmission() {
+        synchronized(loading) { retired = true }
+    }
+
+    suspend fun drain() {
+        val (jobs, calls) = synchronized(loading) { loading.keys.toList() to loading.values.flatten() }
+        calls.forEach { it.cancel() }
+        jobs.forEach { it.cancel() }
+        if (built.isInitialized()) loader.memoryCache?.clear()
+        jobs.joinAll()
+        if (built.isInitialized()) loader.shutdown()
+        if (disk.isInitialized()) withContext(Dispatchers.IO) { disk.value.shutdown() }
+    }
+}
+
+internal fun forgetLegacyImages() {
+    tryImageCleanup {
+        FileSystem.SYSTEM.deleteRecursively(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / notShown("coil3_disk_cache"))
+    }
+}
+
+private inline fun tryImageCleanup(clean: () -> Unit) {
+    try {
+        clean()
+    } catch (e: IOException) {
+        logTypes(e)
+    } catch (e: SecurityException) {
+        logTypes(e)
+    }
+}
 
 internal val Https = setOf(notShown("https"))
 

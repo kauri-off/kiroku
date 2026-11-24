@@ -6,6 +6,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.notify.NotificationRuns
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
 import io.github.kauri_off.kiroku.core.repository.ListSource
@@ -34,7 +36,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
 import okhttp3.Interceptor
+import okio.FileSystem
 import java.io.File
 import java.time.Clock
 import kotlin.time.TimeSource
@@ -118,6 +122,7 @@ internal class LiveGraph(
     listStore: (LiveParts) -> LocalList = ::liveListStore,
     ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
     notificationStore: (LiveParts, StoredPreferences) -> NotificationStore = ::liveNotificationStore,
+    imageFiles: FileSystem = FileSystem.SYSTEM,
     airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
@@ -125,7 +130,10 @@ internal class LiveGraph(
     private val built = lazy { liveSession(parts) }
     private val account by built
     override val images = parts.http.callFactory
-    private val imageCache = LiveImages(parts.context, parts.source.name, images)
+    private val imageCache =
+        LiveImages(parts.context, parts.source.name, images, parts.scope, imageFiles) { owner ->
+            account.currentSession()?.let { it.owner == owner } == true
+        }
     override val session: SessionRepository by lazy {
         SignOutForgets(
             account,
@@ -214,7 +222,12 @@ internal class LiveGraph(
         }
     }
 
-    override fun newImageLoader(context: Context) = imageCache.loader()
+    override fun newImageLoader(context: Context) =
+        imageLoaderBuilder(context, images, standInPosters).memoryCache(null).diskCache(null).build()
+
+    override fun imageLoaderFor(session: Session) = imageCache.loader(session.owner)
+
+    override fun imagesRetired(session: Session) = imageCache.wasRetired(session.owner)
 
     // What debug and preview builds record MAL's answers with; it looks at once for a title an earlier run left on the list.
     val recorder = liveRecorder(parts, built)
@@ -226,7 +239,7 @@ internal class LiveGraph(
 }
 
 private class SignOutForgets(
-    private val account: SessionRepository,
+    private val account: MalSession,
     private val images: LiveImages,
     // The waiting "Mark watched" taps, ended before the sign-out so that none is tried in a list that is not its own.
     private val taps: suspend () -> Unit,
@@ -236,7 +249,19 @@ private class SignOutForgets(
     private val notifications: () -> LiveNotifications,
     private val runs: KeptRuns?,
 ) : SessionRepository by account {
+    private val signingOut = Mutex()
+
     override suspend fun signOut() {
+        if (!signingOut.tryLock()) return
+        try {
+            forget()
+        } finally {
+            signingOut.unlock()
+        }
+    }
+
+    private suspend fun forget() {
+        val owner = account.currentSession()?.owner
         try {
             taps()
         } catch (e: CancellationException) {
@@ -245,7 +270,7 @@ private class SignOutForgets(
             // A try left by a failed cancel finds nobody signed in, and ends sending and showing nothing.
             logTypes(e)
         }
-        images.forget(account::signOut)
+        if (!account.signOutIfCurrent(owner) { images.retire(owner) }) return
         // Before the run that forgets the rest, which is then the first run kept.
         runs?.forget()
         notifications().forget()

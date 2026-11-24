@@ -10,12 +10,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
@@ -23,6 +25,11 @@ import coil3.compose.LocalPlatformContext
 import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
 import io.github.kauri_off.kiroku.design.theme.Sizes
+
+internal val LocalRouteImages = staticCompositionLocalOf<ImageLoader?> { null }
+
+@Composable
+internal fun routeImageLoader(): ImageLoader = LocalRouteImages.current ?: SingletonImageLoader.get(LocalPlatformContext.current)
 
 enum class PosterSize(
     val width: Dp,
@@ -64,7 +71,7 @@ fun Poster(
             .clip(MaterialTheme.shapes.medium)
             .background(surface)
     val context = LocalPlatformContext.current
-    val loader = SingletonImageLoader.get(context)
+    val loader = routeImageLoader()
     val scope = rememberCoroutineScope()
     val motionScheme = MaterialTheme.motionScheme
     if (large == null) {
