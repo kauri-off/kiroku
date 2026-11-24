@@ -20,6 +20,7 @@ class SourceRulesTest {
         val sources = appSources()
         assertEquals(
             setOf(
+                "BrowseViewModel.kt",
                 "EditSheetViewModel.kt",
                 "ListViewModel.kt",
                 "NotifySettingsViewModel.kt",

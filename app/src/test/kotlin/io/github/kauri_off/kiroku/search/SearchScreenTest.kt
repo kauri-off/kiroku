@@ -54,6 +54,32 @@ class SearchScreenTest {
 
     private val shown = mutableStateOf<SearchState?>(null)
 
+    @Test
+    fun `browse loads an empty page's continuation only while on top and follows the changing offset`() {
+        val events = mutableListOf<BrowseEvent>()
+        val onTop = mutableStateOf(false)
+        val offset = mutableStateOf(10)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                BrowseScreen(
+                    BrowseState(BrowseList.ThisSeason, Paged.Shown(emptyList(), More.Ready(offset.value))),
+                    { events += it },
+                    SnackbarHostState(),
+                    autoLoadMore = onTop.value,
+                )
+            }
+        }
+        compose.runOnIdle {
+            assertTrue(events.isEmpty())
+            onTop.value = true
+        }
+        compose.runOnIdle {
+            assertEquals(listOf(BrowseEvent.LoadMore), events)
+            offset.value = 20
+        }
+        compose.runOnIdle { assertEquals(listOf(BrowseEvent.LoadMore, BrowseEvent.LoadMore), events) }
+    }
+
     private fun show(state: SearchState) {
         val first = shown.value == null
         shown.value = state

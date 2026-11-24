@@ -27,11 +27,17 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.Page
+import io.github.kauri_off.kiroku.core.repository.Ranked
+import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -152,7 +158,7 @@ class SearchRouteTest {
                 override val madeUp = false
             }
         search(source)
-        compose.onNodeWithText("Top airing").assertDoesNotExist()
+        compose.onNodeWithText("Top airing").assertExists()
         typeKag()
         compose.onNode(inView(watching)).assertExists()
         compose.onNode(inView(anime.titles.romaji) and hasClickAction()).performClick()
@@ -232,6 +238,59 @@ class SearchRouteTest {
     }
 
     private val topAiring = SearchFixtureStates.browseRows(BrowseList.TopAiring).first().title
+
+    @Test
+    fun `browse without fixtures retries the failed page and opens a title with its current entry`() {
+        val anime = FixtureAnime.exactToWatch
+        val title = anime.titles.romaji
+        val requests = mutableListOf<Triple<BrowseList, Int, Boolean>>()
+        graph.titlesUnstored.value = true
+        graph.refreshFails.value = setOf(anime.id)
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val showAdultInSearch = true
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override suspend fun browse(
+                            list: BrowseList,
+                            offset: Int,
+                            includeAdult: Boolean,
+                        ): Outcome<Page<Ranked<Anime>>> {
+                            requests += Triple(list, offset, includeAdult)
+                            return when (requests.size) {
+                                1 -> Outcome.Failure(DataError.ServerError)
+                                2 -> Outcome.Success(Page(listOf(Ranked(4, anime)), 17))
+                                3 -> Outcome.Failure(DataError.ServerError)
+                                else -> Outcome.Success(Page(listOf(Ranked(18, FixtureAnime.film)), null))
+                            }
+                        }
+                    }
+            }
+        search(source)
+        compose.onNodeWithText("Most popular").performClick()
+        settle()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNodeWithText("4.\u00A0$title").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNodeWithText("18.\u00A0${FixtureAnime.film.titles.romaji}").assertExists()
+        assertEquals(listOf(0, 0, 17, 17).map { Triple(BrowseList.MostPopular, it, true) }, requests)
+
+        val row = hasText("4.\u00A0$title") and hasClickAction()
+        compose.onNode(row and hasText(watching)).assertExists()
+        scope.launch { graph.list.write(ListWrite.Remove(anime)) }
+        settle()
+        compose.onNode(row and hasText(watching)).assertDoesNotExist()
+        compose.onNode(row).performClick()
+        settle()
+        compose.onNodeWithText(title).assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNode(row).assertExists()
+        assertEquals(4, requests.size)
+    }
 
     @Test
     fun `a long press on a browse list's row opens the sheet of that row's title`() {

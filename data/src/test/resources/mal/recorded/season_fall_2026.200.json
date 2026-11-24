@@ -1,0 +1,478 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 61469,
+                "title": "Steel Ball Run: JoJo no Kimyou na Bouken",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1065/158884.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1065/158884l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "JoJo's Bizarre Adventure Part 7: Steel Ball Run",
+                        "JoJo no Kimyou na Bouken Part 7: Steel Ball Run",
+                        "SBR"
+                    ],
+                    "en": "Steel Ball Run: JoJo's Bizarre Adventure",
+                    "ja": "スティール・ボール・ラン ジョジョの奇妙な冒険"
+                },
+                "media_type": "ona",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-03-19",
+                "mean": 9.03,
+                "rank": 10,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 3,
+                        "name": "Racing"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 1620
+            }
+        },
+        {
+            "node": {
+                "id": 61967,
+                "title": "Black Clover 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1857/160133.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1857/160133l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Black Clover Season 2",
+                    "ja": "ブラッククローバー 2nd season"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-10-03",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "23:00"
+                },
+                "mean": 8.89,
+                "rank": 26,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1430
+            }
+        },
+        {
+            "node": {
+                "id": 21,
+                "title": "One Piece",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1244/138851.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "OP"
+                    ],
+                    "en": "One Piece",
+                    "ja": "ONE PIECE"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "1999-10-20",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "23:15"
+                },
+                "mean": 8.72,
+                "rank": 62,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            }
+        },
+        {
+            "node": {
+                "id": 61987,
+                "title": "Kusuriya no Hitorigoto 3rd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1028/160277.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1028/160277l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Pharmacist's Monologue",
+                        "Drugstore Soliloquy"
+                    ],
+                    "en": "The Apothecary Diaries Season 3",
+                    "ja": "薬屋のひとりごと 第3期"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-02",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "23:00"
+                },
+                "mean": 8.6,
+                "rank": 117,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 13,
+                        "name": "Historical"
+                    },
+                    {
+                        "id": 67,
+                        "name": "Medical"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    }
+                ],
+                "average_episode_duration": 1440
+            }
+        },
+        {
+            "node": {
+                "id": 61607,
+                "title": "Shiguang Dailiren III",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1559/159496.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1559/159496l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "时光代理人 第三季 Part One",
+                        "Shiguang Dailiren III Part One",
+                        "时光代理人III Part One"
+                    ],
+                    "en": "Link Click Season 3",
+                    "ja": "时光代理人III"
+                },
+                "media_type": "ona",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2026-08-14",
+                "mean": 8.46,
+                "rank": 186,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 31,
+                        "name": "Super Power"
+                    },
+                    {
+                        "id": 41,
+                        "name": "Suspense"
+                    },
+                    {
+                        "id": 78,
+                        "name": "Time Travel"
+                    }
+                ],
+                "average_episode_duration": 1459
+            }
+        },
+        {
+            "node": {
+                "id": 64534,
+                "title": "Koori no Jouheki 2nd Season",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1963/159754.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1963/159754l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "The Ramparts of Ice Season 2",
+                    "ja": "氷の城壁 第2期"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 13,
+                "start_date": "2026-10-02",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "23:56"
+                },
+                "mean": 8.35,
+                "rank": 287,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1435
+            }
+        },
+        {
+            "node": {
+                "id": 61603,
+                "title": "Ao Ashi Season 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1295/158726.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1295/158726l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Aoashi Season 2",
+                    "ja": "アオアシ Season2"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2026-10-04",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:00"
+                },
+                "mean": 8.3,
+                "rank": 330,
+                "genres": [
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1476
+            }
+        },
+        {
+            "node": {
+                "id": 62582,
+                "title": "Seishun Buta Yarou wa Dear Friend no Yume wo Minai",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1286/159781.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1286/159781l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Rascal Does Not Dream of a Dear Friend",
+                    "ja": "青春ブタ野郎はディアフレンドの夢を見ない"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2026-10-16",
+                "mean": 8.3,
+                "rank": 336,
+                "genres": [
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 37,
+                        "name": "Supernatural"
+                    }
+                ],
+                "average_episode_duration": 7080
+            }
+        },
+        {
+            "node": {
+                "id": 235,
+                "title": "Meitantei Conan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/7/75199.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/7/75199l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Detective Conan"
+                    ],
+                    "en": "Case Closed",
+                    "ja": "名探偵コナン"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "1996-01-08",
+                "broadcast": {
+                    "day_of_the_week": "saturday",
+                    "start_time": "18:00"
+                },
+                "mean": 8.18,
+                "rank": 494,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 39,
+                        "name": "Detective"
+                    },
+                    {
+                        "id": 7,
+                        "name": "Mystery"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1482
+            }
+        },
+        {
+            "node": {
+                "id": 61323,
+                "title": "Ao no Hako Season 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1990/160267.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1990/160267l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Blue Box Season 2",
+                    "ja": "アオのハコ Season2"
+                },
+                "media_type": "tv",
+                "status": "currently_airing",
+                "num_episodes": 12,
+                "start_date": "2026-10-04",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "16:30"
+                },
+                "mean": 8.16,
+                "rank": 516,
+                "genres": [
+                    {
+                        "id": 64,
+                        "name": "Love Polygon"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    },
+                    {
+                        "id": 77,
+                        "name": "Team Sports"
+                    }
+                ],
+                "average_episode_duration": 1420
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/anime/season/2026/fall?offset=10&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    },
+    "season": {
+        "year": 2026,
+        "season": "fall"
+    }
+}
