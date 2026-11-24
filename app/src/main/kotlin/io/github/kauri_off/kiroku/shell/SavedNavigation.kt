@@ -2,6 +2,15 @@ package io.github.kauri_off.kiroku.shell
 
 import android.os.Bundle
 import android.os.Parcelable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.navigation3.runtime.NavBackStack
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.serialization.NavBackStackSerializer
+import androidx.navigation3.runtime.serialization.NavKeySerializer
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.serialization.decodeFromSavedState
+import androidx.savedstate.serialization.encodeToSavedState
 import io.github.kauri_off.kiroku.notShown
 
 private val registryKey = notShown("androidx.lifecycle.BundlableSavedStateRegistry.key")
@@ -22,6 +31,56 @@ internal fun discardUnreadableComposeState(activityState: Bundle?) {
             }
         } catch (_: RuntimeException) {
             registry.remove(provider)
+        }
+    }
+}
+
+internal val navSerializer = NavBackStackSerializer(NavKeySerializer<NavKey>())
+
+internal fun decodeStack(
+    saved: Bundle?,
+    root: NavKey,
+): NavBackStack<NavKey> {
+    if (saved == null) return NavBackStack(root)
+    return try {
+        val stack = decodeFromSavedState(navSerializer, saved)
+        if (stack.firstOrNull() != root) return NavBackStack(root)
+        stack.apply { removeAll { it is NotBuiltKey } }
+    } catch (_: Exception) {
+        NavBackStack(root)
+    } catch (_: LinkageError) {
+        NavBackStack(root)
+    }
+}
+
+private val navigationKey = notShown("kiroku.shell.navigation")
+private val selectionKey = notShown("selected")
+private val restartsKey = notShown("restarts")
+
+internal class ActivityNavigation(
+    registry: SavedStateRegistry,
+) {
+    val restored: ShellNavigator? =
+        registry.consumeRestoredStateForKey(navigationKey)?.takeIf { it.containsKey(selectionKey) }?.let { saved ->
+            val stacks = Destination.entries.associateWith { decodeStack(saved.getBundle(it.name), it.root) }
+            val selected = Destination.entries.firstOrNull { it.name == saved.getString(selectionKey) } ?: Destination.List
+            ShellNavigator(stacks, mutableStateOf(selected), mutableIntStateOf(saved.getInt(restartsKey)))
+        }
+
+    var navigator: ShellNavigator? = restored
+
+    init {
+        registry.registerSavedStateProvider(navigationKey) {
+            Bundle().apply {
+                navigator?.let { current ->
+                    putString(selectionKey, current.current.name)
+                    putInt(restartsKey, current.restarts)
+                    for (destination in Destination.entries) {
+                        val stack = NavBackStack(*current.stackOf(destination).toTypedArray())
+                        putBundle(destination.name, encodeToSavedState(navSerializer, stack))
+                    }
+                }
+            }
         }
     }
 }

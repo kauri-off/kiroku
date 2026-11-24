@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.link.appLinks
 import io.github.kauri_off.kiroku.notify.tappedTitle
 import io.github.kauri_off.kiroku.notifysettings.AskForNotifications
+import io.github.kauri_off.kiroku.shell.ActivityNavigation
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.discardUnreadableComposeState
 import io.github.kauri_off.kiroku.shell.linkedPage
@@ -32,9 +33,10 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) intent.tappedTitle()?.let { links?.opened(Link.Title(it)) }
         // A start by a link or a notification opens on its page, so the List never shows first; a restored window keeps its stacks.
         val start = if (savedInstanceState == null) links?.take() else null
+        val navigation = ActivityNavigation(savedStateRegistry)
         setKirokuContent {
             CompositionLocalProvider(LocalSplashHold provides hold) {
-                AppRoute(appGraph, rememberShellNavigator(start?.let { linkedPage(it.link) }), links = links)
+                AppRoute(appGraph, rememberShellNavigator(start?.let { linkedPage(it.link) }, navigation), links = links)
                 AskForNotifications(appGraph.session)
             }
         }
