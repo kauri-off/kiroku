@@ -15,6 +15,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.SavedState
 import androidx.savedstate.serialization.encodeToSavedState
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.notShown
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
@@ -39,6 +40,8 @@ class ShellNavigator(
     val restarts: Int get() = restartCount.intValue
 
     internal var hadSession: Boolean? = null
+    internal var sessionOwner: SignInId? = null
+    internal var restoredNavigation = false
 
     fun stackOf(destination: Destination): List<NavKey> = stacks.getValue(destination)
 
@@ -129,9 +132,11 @@ internal fun rememberShellNavigator(
     fun initial(destination: Destination) =
         NavBackStack(destination.root, *listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray())
     val saveWithCompose = activityNavigation == null
-    val list = rememberSaveable(saver = stackSaver(ListRoot, saveWithCompose)) { initial(Destination.List) }
-    val search = rememberSaveable(saver = stackSaver(SearchRoot, saveWithCompose)) { initial(Destination.Search) }
-    val profile = rememberSaveable(saver = stackSaver(ProfileRoot, saveWithCompose)) { initial(Destination.Profile) }
+    var restoredStack = false
+    val restored = { restoredStack = true }
+    val list = rememberSaveable(saver = stackSaver(ListRoot, saveWithCompose, restored)) { initial(Destination.List) }
+    val search = rememberSaveable(saver = stackSaver(SearchRoot, saveWithCompose, restored)) { initial(Destination.Search) }
+    val profile = rememberSaveable(saver = stackSaver(ProfileRoot, saveWithCompose, restored)) { initial(Destination.Profile) }
     val selected =
         rememberSaveable(saver = destinationSaver(saveWithCompose)) { mutableStateOf(start?.destination ?: Destination.List) }
     val restarts = rememberSaveable(saver = restartSaver(saveWithCompose)) { mutableIntStateOf(0) }
@@ -141,7 +146,7 @@ internal fun rememberShellNavigator(
                 mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
                 selected,
                 restarts,
-            )
+            ).apply { restoredNavigation = restoredStack }
         }
     SideEffect { activityNavigation?.navigator = navigator }
     return navigator
@@ -168,7 +173,8 @@ private fun restartSaver(save: Boolean) =
 private fun stackSaver(
     root: NavKey,
     save: Boolean,
+    restored: () -> Unit,
 ) = Saver<NavBackStack<NavKey>, SavedState>(
     save = { if (save) encodeToSavedState(navSerializer, it) else null },
-    restore = { decodeStack(it, root) },
+    restore = { decodeStack(it, root).also { restored() } },
 )

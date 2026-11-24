@@ -40,10 +40,11 @@ fun SignOutRoute() {
     val graph = LocalContext.current.appGraph
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     val scope = rememberCoroutineScope()
-    val state = if (graph is SignInOwner) SignOutState.Account(session) else SignOutState.Demo
+    val observed = session
+    val state = if (graph is SignInOwner) SignOutState.Account(observed) else SignOutState.Demo
     SignOutSection(state) { event ->
         when (event) {
-            SignOutEvent.SignOut -> scope.launch { graph.session.signOut() }
+            SignOutEvent.SignOut -> observed?.let { scope.launch { graph.signOut(it) } }
         }
     }
 }

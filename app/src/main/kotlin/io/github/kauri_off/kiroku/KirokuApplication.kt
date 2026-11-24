@@ -20,11 +20,12 @@ import io.github.kauri_off.kiroku.wiring.WithoutScreenOwner
 import io.github.kauri_off.kiroku.wiring.applicationScope
 import io.github.kauri_off.kiroku.wiring.createGraph
 import io.github.kauri_off.kiroku.wiring.debugTools
-import io.github.kauri_off.kiroku.wiring.imageLoader
+import io.github.kauri_off.kiroku.wiring.forgetLegacyImages
 import io.github.kauri_off.kiroku.wiring.reportUnexpected
-import io.github.kauri_off.kiroku.wiring.standInPosters
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 
 class KirokuApplication :
     Application(),
@@ -53,10 +54,10 @@ class KirokuApplication :
 
     override fun onCreate() {
         super.onCreate()
+        scope.launch(Dispatchers.IO) { forgetLegacyImages() }
         debugTools?.invoke(this)
         heldRuns.atEachOpening(ProcessLifecycleOwner.get().lifecycle)
     }
 
-    // The debug build draws its fixture titles' posters; the release build has no stand-ins.
-    override fun newImageLoader(context: PlatformContext): ImageLoader = imageLoader(context, graph.images, standInPosters)
+    override fun newImageLoader(context: PlatformContext): ImageLoader = graph.newImageLoader(context)
 }

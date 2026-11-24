@@ -329,7 +329,7 @@ Not to forget:
   workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
 - A changed setting reaches the screens that are open: title language and adult content are read where they are
   shown, not copied when a view model is made.
-- Sign-out clears the image caches with everything else stored about the user (S9).
+- [x] Clear image caches on sign-out (S9).
 
 ---
 

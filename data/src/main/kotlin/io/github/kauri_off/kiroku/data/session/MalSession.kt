@@ -178,6 +178,25 @@ class MalSession internal constructor(
         }
     }
 
+    suspend fun currentSession(): Session? {
+        read.await()
+        return state.value?.session
+    }
+
+    suspend fun signOutIfCurrent(
+        owner: SignInId?,
+        onWriteFailure: suspend () -> Unit = {},
+        beforeSignOut: suspend () -> Unit,
+    ): Boolean =
+        guarded(false) {
+            change {
+                if (state.value?.session?.owner != owner) return@change false
+                beforeSignOut()
+                kept(Stored.SignedOut, onWriteFailure)
+                true
+            }
+        }
+
     // A new sign-in with the tokens MAL granted; nobody is signed in when they cannot be stored.
     internal suspend fun signIn(grant: TokenGrant): Outcome<Unit> =
         guarded(Outcome.Failure(DataError.StorageError)) {
@@ -267,8 +286,12 @@ class MalSession internal constructor(
         }
 
     // The session is [value] from now on; a file that did not take it is written again until it does.
-    private suspend fun kept(value: Stored) {
+    private suspend fun kept(
+        value: Stored,
+        onWriteFailure: suspend () -> Unit = {},
+    ) {
         owed = value.takeUnless { written(it) }
+        if (owed != null) onWriteFailure()
         state.value = value
         if (owed != null) scope.launch { writeAgain(value) }
     }

@@ -69,10 +69,11 @@ fun AppRoute(
         edit?.let { navigator.showEditorOf(it) }
     }
     SignInTurns(graph, navigator)
-    SignOutTurns(graph, navigator, messages)
+    val session = SignOutTurns(graph, navigator, messages)
+    val images = remember(graph, session) { session?.let(graph::imageLoaderFor) }
     if (links != null) LinkTurns(links, navigator)
     CompositionLocalProvider(LocalMessageCovers provides covers) {
-        ShellRoute(navigator, snackbars, remember(graph, messages, profiles) { appEntries(graph, messages, profiles) })
+        ShellRoute(navigator, snackbars, remember(graph, messages, profiles) { appEntries(graph, messages, profiles) }, images)
     }
 }
 

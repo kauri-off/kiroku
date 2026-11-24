@@ -71,7 +71,7 @@ class LiveUserTest {
             runCurrent()
             assertTrue(shown.last() is UserListState.Whole)
 
-            user.forget()
+            user.forgetPublicLists()
             runCurrent()
             assertEquals(UserListState.Reading(emptyList(), null, null), user.observeList("left").first())
             val after = shown.drop(shown.indexOfFirst { it is UserListState.Whole } + 1)

@@ -377,8 +377,8 @@ class LiveAiringTest {
 
             val recheck = async { airing.refresh(setOf(title.id)) }
             returned.await()
+            airing.retire(SignInId(signIn))
             session.value = Session.SignedOut
-            airing.forget()
             assertEquals(emptyMap<AnimeId, StoredAiring>(), room.read())
             session.value = Session.SignedIn(SignInId("another-sign-in"))
             release.complete(Unit)
@@ -487,6 +487,30 @@ class LiveAiringTest {
             session.value = Session.SignedOut
             store.forget()
             assertEquals(emptyMap<AnimeId, StoredAiring>(), inner.read())
+        }
+
+    @Test
+    fun `retirement does not reenter the account gate and blocks writes from the retired owner`() =
+        runTest {
+            val owner = SignInId(signIn)
+            val next = SignInId("next")
+            val session = MutableStateFlow<Session>(Session.SignedIn(owner))
+            val held = mapOf(anime.id to StoredAiring(schedule, Instant.now()))
+            val inner = InMemoryAiringStore(held)
+            var admissions = 0
+            val guard: AiringWriteGuard = { _, write ->
+                admissions++
+                write()
+            }
+            val store = SignedInStore(inner, session, guard) { inner.clear() }
+
+            store.retire(owner)
+            assertEquals(0, admissions)
+            assertTrue(inner.read().isEmpty())
+            assertFalse(store.writeAnswers(held, owner))
+            session.value = Session.SignedIn(next)
+            assertTrue(store.writeAnswers(held, next))
+            assertEquals(held, inner.read())
         }
 
     @Test

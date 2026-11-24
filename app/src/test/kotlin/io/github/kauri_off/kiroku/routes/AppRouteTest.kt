@@ -42,7 +42,10 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -59,11 +62,13 @@ import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleTags
 import io.github.kauri_off.kiroku.titlesub.DetailsKey
 import io.github.kauri_off.kiroku.titlesub.RecommendationsKey
+import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -96,7 +101,7 @@ class AppRouteTest {
 
     private val kagerou = FixtureAnime.exactToWatch
 
-    private fun app() {
+    private fun app(graph: AppGraph = this.graph) {
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
                 navigator = rememberShellNavigator()
@@ -104,6 +109,28 @@ class AppRouteTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    @Test
+    fun `a stopped app resets its old routes when a new session replaces a retired one`() {
+        val old = Session.SignedIn(SignInId("first"))
+        val sessions = MutableStateFlow<Session>(old)
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = sessions
+                    }
+
+                override fun imagesRetired(session: Session) = session == old && sessions.value != old
+            }
+        app(source)
+        compose.runOnUiThread { navigator.select(Destination.Profile) }
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        sessions.value = Session.SignedIn(SignInId("second"))
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitUntil(5_000) { navigator.restarts == 1 }
+        assertEquals(Destination.List, navigator.current)
     }
 
     private fun shows(text: String) = compose.onNodeWithText(text).assertExists()
