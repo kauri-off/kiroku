@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -24,10 +25,12 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Dp
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -115,11 +118,15 @@ class ListFrameWorkTest {
     private fun frame(): Map<String, Int> {
         counts.clear()
         counting = true
+        advanceFrame()
+        counting = false
+        return counts.toMap()
+    }
+
+    private fun advanceFrame() {
         main.scheduler.runCurrent()
         compose.mainClock.advanceTimeByFrame()
         main.scheduler.runCurrent()
-        counting = false
-        return counts.toMap()
     }
 
     // The composables a frame composed that belong to a page: its rows or the page itself.
@@ -338,6 +345,89 @@ class ListFrameWorkTest {
         compose.runOnUiThread { state = ListFixtureStates.dropped }
         assertSettledOnAPage()
         compose.onNode(hasText("Dropped") and isSelectable()).assertIsSelected()
+    }
+
+    @Test
+    fun `a reverse fling on a long tab bounds row composition and composes no rows at landing`() {
+        val completed = ListFixtureStates.completed
+        val page = checkNotNull(completed.page)
+        val row = page.rows.first()
+        val rows = List(400) { index -> row.copy(id = AnimeId(1_000_000L + index), title = "Completed row $index", posterUrl = null) }
+        val tabs = completed.content as ListContent.Tabs
+        val state = completed.copy(content = ListContent.Tabs(tabs.pages + (completed.tab to page.copy(rows = rows))))
+        val events = mutableListOf<ListEvent>()
+        Composer.setTracer(tracer)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                FixtureListScreen(state, onEvent = events::add)
+            }
+        }
+        settle()
+        compose.mainClock.autoAdvance = false
+
+        val rootWidth =
+            compose
+                .onRoot()
+                .fetchSemanticsNode()
+                .size.width
+                .toFloat()
+
+        fun position(): Float =
+            compose
+                .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+                .fetchSemanticsNodes()
+                .single { it.boundsInRoot.left == 0f && it.boundsInRoot.right == rootWidth }
+                .config[SemanticsProperties.VerticalScrollAxisRange]
+                .value()
+
+        assertEquals(0f, position(), 0f)
+        compose.onRoot().performTouchInput { swipeUp(startY = height * 0.8f, endY = height * 0.27f, durationMillis = 650) }
+        repeat(SETTLE_FRAMES) { frame() }
+        val start = position()
+
+        counts.clear()
+        counting = true
+        compose.onRoot().performTouchInput {
+            down(Offset(center.x, height * 0.45f))
+            repeat(5) { moveBy(Offset(0f, height * 0.024f), delayMillis = 10) }
+        }
+        val beforeRelease = position()
+        assertTrue(
+            "drag must move toward the top without reaching it: $start to $beforeRelease",
+            beforeRelease > 0f && beforeRelease < start,
+        )
+        compose.onRoot().performTouchInput { up() }
+        val input = counts.toMap()
+        counting = false
+
+        val samples =
+            List(FIRST_FRAMES) {
+                counts.clear()
+                counting = true
+                advanceFrame()
+                val offset = position()
+                counting = false
+                counts.toMap() to offset
+            }
+        val offsets = samples.map { it.second }
+        assertEquals("the fling settles at the top", 0f, offsets.last(), 0f)
+        val landing = offsets.indexOf(0f)
+        assertTrue("the released fling must travel before landing: $offsets", offsets.take(landing).any { it > 0f && it < beforeRelease })
+        val pageScopes =
+            setOf(
+                PAGE,
+                "io.github.kauri_off.kiroku.list.Rows",
+                "io.github.kauri_off.kiroku.list.Pages",
+                "io.github.kauri_off.kiroku.list.ListScreen",
+            )
+        val work = listOf(input) + samples.map { it.first }
+        work.forEachIndexed { index, sample ->
+            assertEquals("page work in sample $index", emptyMap<String, Int>(), sample.filterKeys { it in pageScopes })
+        }
+        val rowCounts = work.map { it[ROW] ?: 0 }
+        assertTrue("row compositions by sample: $rowCounts", rowCounts.max() <= 2 && rowCounts.sum() in 1..8)
+        assertEquals("row work from landing onward: $rowCounts", 0, rowCounts.drop(landing + 1).sum())
+        assertTrue("no pull to refresh: $events", ListEvent.Refresh !in events)
     }
 
     private fun startApp() {
