@@ -8,11 +8,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.recalculateWindowInsets
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +48,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -59,7 +64,10 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
@@ -95,6 +103,7 @@ import io.github.kauri_off.kiroku.text.statusName
 import io.github.kauri_off.kiroku.title.countText
 import kotlinx.coroutines.flow.first
 import java.time.Instant
+import kotlin.math.roundToInt
 
 // The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -189,11 +198,21 @@ private fun Pages(
         lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
         motion.composeAhead()
     }
+    val belowPager = remember { mutableIntStateOf(0) }
+    val keyboardPadding =
+        WindowInsets.ime
+            .only(WindowInsetsSides.Bottom)
+            .exclude(WindowInsets(bottom = belowPager.intValue))
+            .asPaddingValues()
     HorizontalPager(
         pager,
         Modifier
             .fillMaxSize()
-            .pointerInput(motion) {
+            .onGloballyPositioned { coordinates ->
+                val bottom = coordinates.positionInRoot().y.roundToInt() + coordinates.size.height
+                val windowBottom = coordinates.findRootCoordinates().size.height
+                belowPager.intValue = (windowBottom - bottom).coerceAtLeast(0)
+            }.pointerInput(motion) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     motion.composeAll()
@@ -216,7 +235,16 @@ private fun Pages(
                 snapPositionalThreshold = PAGE_TURN,
             ),
     ) { index ->
-        Page(statuses[index], shown.tabs.pages.getValue(statuses[index]), shown.filter, shown.owner, shown.now, padding, onEvent)
+        Page(
+            statuses[index],
+            shown.tabs.pages.getValue(statuses[index]),
+            shown.filter,
+            shown.owner,
+            shown.now,
+            padding,
+            keyboardPadding,
+            onEvent,
+        )
     }
 }
 
@@ -272,6 +300,7 @@ private fun Page(
     owner: ListOwner,
     now: Instant,
     padding: PaddingValues,
+    keyboardPadding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
     val positions = rememberSaveableStateHolder()
@@ -284,7 +313,7 @@ private fun Page(
                 LazyColumn(Modifier.fillMaxSize()) {
                     item {
                         val viewport = Modifier.fillParentMaxSize()
-                        val inViewport = if (filter.isEmpty()) viewport else viewport.recalculateWindowInsets().imePadding()
+                        val inViewport = if (filter.isEmpty()) viewport else viewport.padding(keyboardPadding)
                         ScreenState(empty, inViewport)
                     }
                 }
