@@ -76,6 +76,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -199,11 +200,12 @@ private fun Pages(
         motion.composeAhead()
     }
     val belowPager = remember { mutableIntStateOf(0) }
-    val keyboardPadding =
-        WindowInsets.ime
-            .only(WindowInsetsSides.Bottom)
-            .exclude(WindowInsets(bottom = belowPager.intValue))
-            .asPaddingValues()
+    val belowPagerInsets =
+        remember {
+            object : WindowInsets by WindowInsets() {
+                override fun getBottom(density: Density): Int = belowPager.intValue
+            }
+        }
     HorizontalPager(
         pager,
         Modifier
@@ -242,7 +244,7 @@ private fun Pages(
             shown.owner,
             shown.now,
             padding,
-            keyboardPadding,
+            belowPagerInsets,
             onEvent,
         )
     }
@@ -300,7 +302,7 @@ private fun Page(
     owner: ListOwner,
     now: Instant,
     padding: PaddingValues,
-    keyboardPadding: PaddingValues,
+    belowPagerInsets: WindowInsets,
     onEvent: (ListEvent) -> Unit,
 ) {
     val positions = rememberSaveableStateHolder()
@@ -313,7 +315,13 @@ private fun Page(
                 LazyColumn(Modifier.fillMaxSize()) {
                     item {
                         val viewport = Modifier.fillParentMaxSize()
-                        val inViewport = if (filter.isEmpty()) viewport else viewport.padding(keyboardPadding)
+                        val inViewport =
+                            if (filter.isEmpty()) {
+                                viewport
+                            } else {
+                                val overlap = WindowInsets.ime.only(WindowInsetsSides.Bottom).exclude(belowPagerInsets)
+                                viewport.padding(overlap.asPaddingValues())
+                            }
                         ScreenState(empty, inViewport)
                     }
                 }
