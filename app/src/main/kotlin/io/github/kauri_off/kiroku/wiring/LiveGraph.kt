@@ -269,6 +269,21 @@ private class SignOutForgets(
     }
 
     private suspend fun forget(owner: SignInId?) {
+        val signedOut =
+            account.signOutIfCurrent(owner, onWriteFailure = { images.recordRetirement(owner) }) {
+                cancelTaps()
+                airing().retire(owner)
+                user().forgetPublicLists()
+                images.retire(owner)
+            }
+        if (!signedOut) return
+        runs?.forget()
+        notifications().forget()
+        list().observeSyncedAt().first()
+        user().forgetOwnProfile()
+    }
+
+    private suspend fun cancelTaps() {
         try {
             taps()
         } catch (e: CancellationException) {
@@ -277,13 +292,5 @@ private class SignOutForgets(
             // A try left by a failed cancel finds nobody signed in, and ends sending and showing nothing.
             logTypes(e)
         }
-        if (!account.signOutIfCurrent(owner, onWriteFailure = { images.recordRetirement(owner) }) { images.retire(owner) }) return
-        // Before the run that forgets the rest, which is then the first run kept.
-        runs?.forget()
-        notifications().forget()
-        // A read of the list makes its store agree with the session; a store that fails it is cleared at its next use.
-        list().observeSyncedAt().first()
-        airing().forget()
-        user().forget()
     }
 }

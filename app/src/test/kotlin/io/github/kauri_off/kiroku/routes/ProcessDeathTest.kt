@@ -7,6 +7,7 @@ import android.os.Parcel
 import android.os.Parcelable
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,11 +41,15 @@ import io.github.kauri_off.kiroku.core.demo.DemoUserLists
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Genre
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.shell.ActivityNavigation
@@ -58,11 +63,13 @@ import io.github.kauri_off.kiroku.shell.discardUnreadableComposeState
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.text.named
 import io.github.kauri_off.kiroku.title.TitleKey
+import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -145,6 +152,64 @@ class ProcessDeathTest {
         assertEquals(listOf(Destination.Search.root, searchTitle), dedicated.stackOf(Destination.Search))
         activity.destroy()
         recreated.destroy()
+    }
+
+    @Test
+    fun `signed-in legacy Compose navigation resets before the first B loader is selected`() {
+        val restoration = StateRestorationTester(compose)
+        val previous = OtherProfileKey("legacy_fixture")
+        val a = SignInId("fixture-a")
+        val b = SignInId("fixture-b")
+        lateinit var navigator: ShellNavigator
+        var migration: ActivityNavigation? = null
+        var showApp by mutableStateOf(true)
+        var checked = false
+        var registry = SaveableStateRegistry(restoredValues = null) { true }
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = flowOf(Session.SignedIn(if (migration == null) a else b))
+                    }
+
+                override fun imageLoaderFor(session: Session): coil3.ImageLoader? {
+                    if (session == Session.SignedIn(b)) {
+                        assertEquals(Destination.List, navigator.current)
+                        assertEquals(listOf(Destination.Profile.root), navigator.stackOf(Destination.Profile))
+                        checked = true
+                    }
+                    return null
+                }
+            }
+        restoration.setContent {
+            CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                navigator = rememberShellNavigator(null, migration)
+                if (showApp) {
+                    KirokuTheme(dark = false, dynamicColor = false) { AppRoute(source, navigator) }
+                }
+            }
+        }
+        compose.waitUntil(5_000) { navigator.sessionOwner == a }
+        compose.runOnIdle {
+            navigator.select(Destination.Profile)
+            navigator.open(previous)
+        }
+        val saved = compose.runOnIdle { registry.performSave().also { showApp = false } }
+        compose.waitForIdle()
+        val legacy = saved.mapValues { (_, values) -> values.filterNot { it == a.value || (it as? MutableState<*>)?.value == a.value } }
+        assertEquals(saved.values.sumOf { it.size } - 1, legacy.values.sumOf { it.size })
+        assertTrue(legacy.values.flatten().contains(true))
+        registry = SaveableStateRegistry(legacy) { true }
+        migration = compose.runOnIdle { ActivityNavigation(compose.activity.savedStateRegistry) }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle {
+            assertTrue(navigator.restoredNavigation)
+            assertEquals(listOf(Destination.Profile.root, previous), navigator.stackOf(Destination.Profile))
+            showApp = true
+        }
+        compose.waitForIdle()
+        compose.waitUntil(5_000) { checked }
+        assertEquals(1, navigator.restarts)
     }
 
     @Test

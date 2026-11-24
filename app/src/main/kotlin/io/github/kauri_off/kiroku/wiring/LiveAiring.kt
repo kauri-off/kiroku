@@ -97,8 +97,7 @@ internal class LiveAiring(
 
     override suspend fun refresh(titles: Set<AnimeId>): Outcome<Unit> = airing().refresh(titles)
 
-    // S9, after the session is signed out; a store that fails it is emptied at the first use of the next process.
-    suspend fun forget() = reported { store().forget() }
+    suspend fun retire(owner: SignInId?) = reported { store.onFirstUse(parts.scope).retire(owner) }
 
     private suspend fun reported(block: suspend () -> Unit) {
         try {
@@ -163,6 +162,7 @@ internal class SignedInStore(
 ) : AiringStore {
     // Held across each write's look at the session, so that nothing a sign-out has forgotten is written after it.
     private val writes = Mutex()
+    private var retiredOwner: SignInId? = null
 
     override fun observe(): Flow<Map<AnimeId, StoredAiring>> = store.observe()
 
@@ -178,7 +178,9 @@ internal class SignedInStore(
     ): Boolean =
         guard(owner) {
             writes.withLock {
-                if (session.first().owner != owner || (owner == null && titles.values.any { it != null })) return@withLock false
+                val retired = owner != null && owner == retiredOwner
+                val writingSignedOut = owner == null && titles.values.any { it != null }
+                if (session.first().owner != owner || retired || writingSignedOut) return@withLock false
                 if (titles.isNotEmpty()) store.write(titles)
                 true
             }
@@ -186,6 +188,20 @@ internal class SignedInStore(
 
     // Empties the store while nobody is signed in, and only then.
     suspend fun forget() {
-        writes.withLock { if (session.first() == Session.SignedOut) clear() }
+        if (session.first() != Session.SignedOut) return
+        guard(null) {
+            writes.withLock {
+                if (session.first() != Session.SignedOut) return@withLock false
+                clear()
+                true
+            }
+        }
+    }
+
+    suspend fun retire(owner: SignInId?) {
+        writes.withLock {
+            retiredOwner = owner
+            clear()
+        }
     }
 }

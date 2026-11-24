@@ -6,6 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.Lifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.await
 import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.decode.DataSource
@@ -15,14 +18,23 @@ import coil3.imageDecoderEnabled
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.toBitmap
+import io.github.kauri_off.kiroku.core.airing.StoredAiring
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
+import io.github.kauri_off.kiroku.core.list.StoredEntry
+import io.github.kauri_off.kiroku.core.list.record
+import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.notify.InMemoryNotificationStore
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.NotificationStore
+import io.github.kauri_off.kiroku.core.notify.Shown
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.core.user.UserListState
+import io.github.kauri_off.kiroku.data.db.RoomAiringStore
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
 import io.github.kauri_off.kiroku.data.sandbox.Sandbox
@@ -31,6 +43,10 @@ import io.github.kauri_off.kiroku.design.component.routeImageLoader
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.notify.MarkWatched
+import io.github.kauri_off.kiroku.notify.MarkWatchedWork
+import io.github.kauri_off.kiroku.notify.Tap
+import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.shell.ActivityNavigation
 import io.github.kauri_off.kiroku.shell.AppRoute
@@ -88,6 +104,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -586,6 +605,77 @@ class ImageSignOutTest {
                 first.await()
             }
         }
+
+    @Test
+    fun `A cleanup removes its tracked airing and queued tap while B keeps its public list and data`() =
+        runBlocking {
+            val clearing = CompletableDeferred<Unit>()
+            val resume = CompletableDeferred<Unit>()
+            val mal = sandbox("downstream")
+            val parts = parts("downstream", mal = mal)
+            parts.seedSession()
+            val store =
+                object : NotificationStore by InMemoryNotificationStore() {
+                    override suspend fun clear(owner: SignInId?) {
+                        clearing.complete(Unit)
+                        resume.await()
+                    }
+                }
+            val aTitle = AnimeId(900001)
+            val bTitle = AnimeId(900002)
+            val fixture = Fixtures.reference.entries.first { it.status == ListStatus.Watching }
+            val entry = fixture.copy(anime = fixture.anime.copy(id = aTitle))
+            val list = InMemoryLocalList(listOf(entry), SIGN_IN)
+            val graph = LiveGraph(parts, listStore = { list }, notificationStore = { _, _ -> store })
+            val airing = RoomAiringStore(parts.database, Dispatchers.IO) { throw it }
+            val schedule = StoredAiring(null, Instant.now())
+            airing.write(mapOf(aTitle to schedule))
+            val a = Session.Expired(SIGN_IN)
+            val publicList = "Sandbox_Public"
+            assertTrue(graph.user.observeList(publicList).first { it !is UserListState.Reading } is UserListState.Whole)
+
+            TestScheduledWork.install(context)
+            val workManager = WorkManager.getInstance(context)
+            val aTap = workManager.queueTap(parts.source.name, aTitle, SIGN_IN)
+            val first = async { graph.signOut(a) }
+            try {
+                withTimeout(5_000) { clearing.await() }
+                val b = graph.signIn(mal)
+                val bTap = workManager.queueTap(parts.source.name, aTitle, checkNotNull(b.owner))
+                assertNull(workManager.getWorkInfoById(aTap).get(5, TimeUnit.SECONDS))
+                assertEquals(emptyMap<AnimeId, StoredAiring>(), airing.read())
+                graph.list.observeEntries().first()
+                list.add(entry.anime.copy(id = bTitle), StoredEntry.settled(entry.record))
+                airing.write(mapOf(bTitle to schedule))
+                val bList = graph.user.observeList(publicList).first { it !is UserListState.Reading }
+                assertTrue(bList is UserListState.Whole)
+
+                withTimeout(5_000) { graph.signOut(a) }
+                resume.complete(Unit)
+                withTimeout(5_000) { first.await() }
+
+                assertEquals(b, graph.session.observeSession().first())
+                assertEquals(bList, graph.user.observeList(publicList).first())
+                assertEquals(mapOf(bTitle to schedule), airing.read())
+                assertEquals(WorkInfo.State.ENQUEUED, workManager.getWorkInfoById(bTap).get(5, TimeUnit.SECONDS)?.state)
+            } finally {
+                resume.complete(Unit)
+                first.join()
+                TestScheduledWork.end()
+            }
+        }
+
+    private suspend fun WorkManager.queueTap(
+        source: String,
+        title: AnimeId,
+        owner: SignInId,
+    ): UUID {
+        val now = Instant.now()
+        val tap = Tap(MarkWatched(source, title, 2, Shown(2, 1, 2, now, now)), now, owner)
+        val request = MarkWatchedWork.tryOf(tap, Duration.ofHours(1))
+        enqueue(request).await()
+        return request.id
+    }
 
     @Test
     fun `saved routes of A are removed before the restored shell binds its first B loader`() {

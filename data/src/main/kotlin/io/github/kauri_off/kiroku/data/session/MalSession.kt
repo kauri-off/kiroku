@@ -186,7 +186,7 @@ class MalSession internal constructor(
     suspend fun signOutIfCurrent(
         owner: SignInId?,
         onWriteFailure: suspend () -> Unit = {},
-        beforeSignOut: () -> Unit,
+        beforeSignOut: suspend () -> Unit,
     ): Boolean =
         guarded(false) {
             change {

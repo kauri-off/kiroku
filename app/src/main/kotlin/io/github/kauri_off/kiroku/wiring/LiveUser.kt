@@ -36,12 +36,13 @@ internal fun ownProfileOf(
 
 // The own profile and its database are built at their first use, off the main thread; telling two names apart builds nothing.
 internal class LiveUser(
-    lists: RemoteUserLists,
+    private val lists: RemoteUserLists,
     private val scope: CoroutineScope,
     private val unexpected: (Throwable) -> Unit,
     own: () -> MalOwnProfile,
 ) : UserRepository {
-    private val keeper = UserListKeeper(lists, scope, unexpected)
+    @Volatile
+    private var keeper = UserListKeeper(lists, scope, unexpected)
     private val built = lazy(own)
 
     private suspend fun own(): MalOwnProfile = built.onFirstUse(scope)
@@ -61,9 +62,13 @@ internal class LiveUser(
         b: String,
     ): Boolean = keeper.sameUser(a, b)
 
-    // S9, once the session is cleared: no list stays held, and no profile stays in the database, asked for or not.
-    suspend fun forget() {
-        keeper.forget()
+    fun forgetPublicLists() {
+        val old = keeper
+        keeper = UserListKeeper(lists, scope, unexpected)
+        old.forget()
+    }
+
+    suspend fun forgetOwnProfile() {
         try {
             own().forget()
         } catch (e: CancellationException) {

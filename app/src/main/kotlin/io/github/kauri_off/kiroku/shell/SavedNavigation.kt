@@ -70,7 +70,7 @@ internal class ActivityNavigation(
             ShellNavigator(stacks, mutableStateOf(selected), mutableIntStateOf(saved.getInt(restartsKey))).apply {
                 if (saved.containsKey(hadSessionKey)) hadSession = saved.getBoolean(hadSessionKey)
                 sessionOwner = saved.getString(sessionOwnerKey)?.let(::SignInId)
-                restoredFromActivity = true
+                restoredNavigation = true
             }
         }
 

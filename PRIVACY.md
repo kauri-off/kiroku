@@ -61,12 +61,14 @@ identify the app and version in the `User-Agent` header. [HTTP client][MalHttp.k
 Debug and Preview offer **Sign out** in the debug menu. It clears the local session and tokens, resets
 navigation, cancels queued **Mark watched** jobs and clears account list, title and profile data, tracked
 airing data, notification tracking and history, cached public lists, list sorts and recently opened profile
-names. Notification preferences stay. Sign-out retires that sign-in's poster and avatar cache and cancels its
+names. Notification preferences stay. If clearing tracked airing data fails, the app retries when the store first
+opens while signed out in a later process. Sign-out retires that sign-in's poster and avatar cache and cancels its
 image requests. Files are removed in the background after outstanding image work ends. If deletion fails,
 remaining files are kept out of use and removal is retried when that source's image cache starts in a later
 process. The app attempts to remove the old shared image cache at startup and retries on later starts.
-Signed-out browsing uses its own image cache. If Android storage prevents both saving the sign-out and recording
-the cache retirement, a restart can restore the previous sign-in and leave its cache readable. In-memory score
+Signed-out browsing uses its own image cache. If saving sign-out fails, a restart can restore the previous
+session. The separately recorded retirement still keeps that session's old image cache out of use. If both
+writes fail, the old cache can remain readable after restart. In-memory score
 distributions and title-page schedules can last until the process ends. [Sign-out action][SignOutSection.kt] ·
 [Cleanup][LiveGraph.kt] · [List store][RoomLocalList.kt] · [Preferences][StoredPreferences.kt] ·
 [Navigation][SignOutTurns.kt] · [Image cache][Images.kt] · [Score cache][ScoreDistribution.kt] ·
