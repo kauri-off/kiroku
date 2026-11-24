@@ -10,55 +10,82 @@ import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 internal class BrowseViewModel(
     list: BrowseList,
     search: SearchRepository,
     connection: Connection,
-    private val includeAdult: () -> Boolean,
+    includeAdult: Flow<Boolean>,
 ) : ViewModel() {
     private val browse by lazy { search.openBrowse(list) }
     private val pages = MutableStateFlow(BrowseResults())
+    private var adult: Boolean? = null
+    private var pending: Job? = null
+
     private val loads =
         ShownLoads(
             viewModelScope,
             connection,
-            whenShown = { if (pages.value.nextOffset == 0) loadMore() },
+            whenShown = ::loadFirst,
+            shownAgain = ::loadFirst,
             again = ::retry,
         )
 
     val shown get() = loads.shown
-    val state = pages.asStateFlow()
+    val state =
+        includeAdult
+            .flatMapLatest { enabled ->
+                if (adult != enabled) {
+                    adult = enabled
+                    pending?.cancel()
+                    pages.value = BrowseResults()
+                    loads.started()
+                    if (loads.isShowing) loadFirst()
+                }
+                pages
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), BrowseResults())
+
+    private fun loadFirst() {
+        if (pages.value.nextOffset == 0) loadMore()
+    }
 
     fun loadMore() = load(retry = false)
 
     fun retry() = load(retry = true)
 
     private fun load(retry: Boolean) {
+        val enabled = adult ?: return
         val page = pages.value
         val offset = page.nextOffset ?: return
         if (page.loading || (page.error != null) != retry) return
         pages.value = page.copy(loading = true, error = null)
         loads.started()
-        viewModelScope.launch {
-            val answer = browse.load(offset, includeAdult())
-            currentCoroutineContext().ensureActive()
-            pages.value =
-                when (answer) {
-                    is Outcome.Success ->
-                        BrowseResults(
-                            titles = (page.titles + answer.value.items).distinctBy { it.item.id },
-                            nextOffset = answer.value.nextOffset,
-                        )
-                    is Outcome.Failure -> page.copy(error = answer.error, loading = false)
-                }
-            loads.ended(pages.value.error)
-        }
+        pending =
+            viewModelScope.launch {
+                val answer = browse.load(offset, enabled)
+                currentCoroutineContext().ensureActive()
+                pages.value =
+                    when (answer) {
+                        is Outcome.Success ->
+                            BrowseResults(
+                                titles = (page.titles + answer.value.items).distinctBy { it.item.id },
+                                nextOffset = answer.value.nextOffset,
+                            )
+                        is Outcome.Failure -> page.copy(error = answer.error, loading = false)
+                    }
+                loads.ended(pages.value.error)
+            }
     }
 }
 

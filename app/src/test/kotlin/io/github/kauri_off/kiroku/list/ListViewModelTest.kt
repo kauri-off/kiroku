@@ -169,6 +169,23 @@ class ListViewModelTest {
         scope.cancel()
     }
 
+    @Test
+    fun `changing the title language rebuilds rows and title order on the open list`() =
+        test { s ->
+            s.list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            advanceUntilIdle()
+            val before = s.page().rows.map { it.title }
+            s.graph.preferences.setTitleLanguage(TitleLanguage.English)
+            advanceUntilIdle()
+            val expected =
+                order(set.entries.filter { it.status == ListStatus.Watching }, ListSort.Title, set.airing::get) {
+                    it.anime.titles.preferred(TitleLanguage.English)
+                }
+            assertEquals(expected.map { it.anime.id }, s.ids())
+            assertEquals(expected.map { it.anime.titles.preferred(TitleLanguage.English) }, s.page().rows.map { it.title })
+            assertTrue(before != s.page().rows.map { it.title })
+        }
+
     private suspend fun Subject.values(anime: Anime) =
         graph.list
             .observeEntry(anime.id)

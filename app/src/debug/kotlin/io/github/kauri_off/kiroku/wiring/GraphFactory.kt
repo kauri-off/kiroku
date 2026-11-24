@@ -26,6 +26,7 @@ import io.github.kauri_off.kiroku.standin.StandInPosters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
@@ -62,7 +63,7 @@ internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
             // Neither is asked for anything before the graph is there: the engine starts no run of its own.
             lateinit var graph: DemoGraph
             val alarm = DemoAlarm(scope) { graph.demo }
-            val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage })
+            val shown = EpisodeNotifications(context, DataSource.Demo.key, { graph.titleLanguage.first() })
             // Gone with its process, as the demo is.
             val runs = RunLog(null)
             DemoGraph(

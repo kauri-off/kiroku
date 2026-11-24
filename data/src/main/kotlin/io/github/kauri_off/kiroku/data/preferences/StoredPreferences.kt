@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.preferences
 import androidx.datastore.core.FileStorage
 import androidx.datastore.core.Serializer
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferencesFileSerializer
@@ -10,6 +11,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.link.isAcceptedUserName
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
@@ -17,6 +20,7 @@ import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
@@ -68,6 +72,28 @@ class StoredPreferences internal constructor(
 
     // The stored values already reported as unreadable, each once per process.
     private val reported = mutableSetOf<Pair<String, Any?>>()
+
+    override fun observeTitleLanguage(): Flow<TitleLanguage> =
+        data
+            .map { choiceOf(it, TITLE_LANGUAGE, TitleLanguage.Romaji) { value -> (value as? String)?.let(languages.values::get) } }
+            .distinctUntilChanged()
+
+    override fun observeAdultInSearch(): Flow<Boolean> =
+        data.map { choiceOf(it, ADULT_IN_SEARCH, false) { value -> value as? Boolean } }.distinctUntilChanged()
+
+    override suspend fun setTitleLanguage(language: TitleLanguage): Outcome<Unit> =
+        save { it[TITLE_LANGUAGE] = languages.toColumn(language) }
+
+    override suspend fun setAdultInSearch(show: Boolean): Outcome<Unit> = save { it[ADULT_IN_SEARCH] = show }
+
+    private suspend fun save(change: (MutablePreferences) -> Unit): Outcome<Unit> =
+        try {
+            store.edit { change(it) }
+            Outcome.Success(Unit)
+        } catch (e: IOException) {
+            unexpected(PreferencesFailure(e))
+            Outcome.Failure(DataError.StorageError)
+        }
 
     override fun observeListSorts(): Flow<Map<ListStatus, TabSort>> =
         data.map { stored -> ListStatus.entries.associateWith { sortOf(stored, it) } }.distinctUntilChanged()
@@ -201,6 +227,17 @@ class StoredPreferences internal constructor(
         const val SORT = "list_sort_"
         const val DIRECTION = "list_direction_"
         const val NAMES_APART = "\n"
+
+        val TITLE_LANGUAGE = stringPreferencesKey("title_language")
+        val ADULT_IN_SEARCH = booleanPreferencesKey("adult_in_search")
+        val languages =
+            Codes(TitleLanguage.entries) {
+                when (it) {
+                    TitleLanguage.Romaji -> "romaji"
+                    TitleLanguage.English -> "english"
+                    TitleLanguage.Japanese -> "japanese"
+                }
+            }
 
         val OPENED = stringPreferencesKey("opened_profiles")
 

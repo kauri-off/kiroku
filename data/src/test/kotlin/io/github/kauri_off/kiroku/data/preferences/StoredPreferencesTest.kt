@@ -8,10 +8,13 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import kotlinx.coroutines.CoroutineScope
@@ -96,6 +99,49 @@ class StoredPreferencesTest {
                 .first()
                 .also { scope.coroutineContext.job.cancelAndJoin() }
         }
+
+    @Test
+    fun `title language and the search filter persist, retain notification choices and stay after sign out`() {
+        val notificationSettings = NotificationSettings(on = false, alsoPlanned = true, delay = NotificationDelay.Hour)
+        process {
+            assertEquals(TitleLanguage.Romaji, it.observeTitleLanguage().first())
+            assertEquals(false, it.observeAdultInSearch().first())
+            it.writeNotificationSettings(notificationSettings)
+            assertEquals(Outcome.Success(Unit), it.setTitleLanguage(TitleLanguage.English))
+            assertEquals(Outcome.Success(Unit), it.setAdultInSearch(true))
+            it.forgetUsersChoices()
+        }
+        process {
+            assertEquals(TitleLanguage.English, it.observeTitleLanguage().first())
+            assertEquals(true, it.observeAdultInSearch().first())
+            assertEquals(notificationSettings, it.observeNotificationSettings().first())
+            writesFail = true
+            assertEquals(Outcome.Failure(DataError.StorageError), it.setTitleLanguage(TitleLanguage.Japanese))
+            assertEquals(Outcome.Failure(DataError.StorageError), it.setAdultInSearch(false))
+            assertEquals(TitleLanguage.English, it.observeTitleLanguage().first())
+            assertEquals(true, it.observeAdultInSearch().first())
+            writesFail = false
+            assertEquals(Outcome.Success(Unit), it.setTitleLanguage(TitleLanguage.Japanese))
+            assertEquals(Outcome.Success(Unit), it.setAdultInSearch(false))
+        }
+        process {
+            assertEquals(TitleLanguage.Japanese, it.observeTitleLanguage().first())
+            assertEquals(false, it.observeAdultInSearch().first())
+            assertEquals(notificationSettings, it.observeNotificationSettings().first())
+        }
+    }
+
+    @Test
+    fun `unreadable settings fall back individually and are reported once`() {
+        written(stringPreferencesKey("title_language") to "unknown", stringPreferencesKey("adult_in_search") to "true")
+        process {
+            repeat(2) { _ ->
+                assertEquals(TitleLanguage.Romaji, it.observeTitleLanguage().first())
+                assertEquals(false, it.observeAdultInSearch().first())
+            }
+        }
+        assertEquals(2, reports.size)
+    }
 
     private val opened = stringPreferencesKey("opened_profiles")
 

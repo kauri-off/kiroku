@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Clock
@@ -64,6 +65,7 @@ internal class DemoAnimeRepository(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
     private val clock: Clock,
+    private val choices: DemoPreferences,
 ) : AnimeRepository {
     private class Fetched(
         val details: AnimeDetails,
@@ -96,7 +98,7 @@ internal class DemoAnimeRepository(
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
         val details = fixtures.details[id] ?: madeUp[id]?.let { bare(it.id) } ?: return Outcome.Failure(DataError.NotFound)
-        cached.value += id to Fetched(details, clock.instant())
+        cached.value += id to Fetched(details.copy(recommendationsIncludeAdult = choices.observeAdultInSearch().first()), clock.instant())
         return Outcome.Success(Unit)
     }
 

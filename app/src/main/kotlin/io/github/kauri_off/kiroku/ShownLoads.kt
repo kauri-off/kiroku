@@ -129,6 +129,11 @@ suspend fun AnimeRepository.stale(
 // The own profile, none shown or read too long ago.
 suspend fun OwnProfile.profileStale(now: Instant): Boolean = ownProfileStale(readOrNull { observeOwnProfileFetchedAt().first() }, now)
 
+suspend fun AnimeRepository.hasOtherRecommendations(
+    id: AnimeId,
+    includeAdult: Boolean,
+): Boolean = readOrNull { observeDetails(id).first() }?.let { it.recommendationsIncludeAdult != includeAdult } == true
+
 private inline fun <T> readOrNull(read: () -> T?): T? =
     try {
         read()

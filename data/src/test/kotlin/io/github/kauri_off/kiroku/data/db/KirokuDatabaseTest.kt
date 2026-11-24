@@ -353,6 +353,9 @@ class KirokuDatabaseTest {
                     val kept = connection.named(table).map { row -> row.filterKeys { it in rows.first() } }
                     assertEquals("$version: $table", rows, kept)
                 }
+                if (version < 7) {
+                    assertTrue(connection.named("title_details").all { it["recommendations_include_adult"] == 0L })
+                }
                 for (table in connection.tables() - written.keys) assertEquals("$version: $table", 0, connection.rows(table).size)
             }
         }
@@ -620,6 +623,7 @@ class KirokuDatabaseTest {
                 4 to "7e5f8a37c34960ccc7f6550ea8aae3f2",
                 5 to "2ec16b4ab274d6bfa0ed4f5d94531644",
                 6 to "0225027f282ee667b6e073930642ad78",
+                7 to "7e05db17dd4fe919c6f60243b7fbace7",
             )
     }
 }

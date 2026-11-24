@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
@@ -27,6 +28,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -240,6 +242,61 @@ class RecommendationsViewModelTest {
             scope.cancel()
         }
 
+    @Test
+    fun `recommendations and their opener switch filters and reject late rows for the former mode`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val safe = FixtureAnime.exactCaughtUp
+            val other = FixtureAnime.exactToWatch
+            val baseline = details.copy(recommendations = listOf(safe))
+            val expanded = details.copy(recommendations = listOf(other), recommendationsIncludeAdult = true)
+            val cached = MutableStateFlow(baseline)
+            val responses = mutableListOf<CompletableDeferred<Outcome<Unit>>>()
+            val repository =
+                object : AnimeRepository by graph.anime {
+                    override fun observeDetails(id: AnimeId) = cached
+
+                    override fun observeRefreshedAt(id: AnimeId) = flowOf(graph.clock.instant())
+
+                    override suspend fun refresh(id: AnimeId): Outcome<Unit> =
+                        CompletableDeferred<Outcome<Unit>>().also { responses += it }.await()
+                }
+            val vm = recommendations(graph, repository = repository)
+            showing(vm.state, vm.shown)
+            runCurrent()
+            assertEquals(listOf(safe.id), shown(vm).rows.map { it.id })
+
+            graph.preferences.setAdultInSearch(true)
+            runCurrent()
+            assertEquals(RecommendationsContent.Loading, vm.state.value.content)
+            assertNull(vm.summaryOf(safe.id))
+            assertEquals(1, responses.size)
+            cached.value = expanded
+            responses.single().complete(Outcome.Success(Unit))
+            runCurrent()
+            assertEquals(listOf(other.id), shown(vm).rows.map { it.id })
+
+            graph.preferences.setTitleLanguage(TitleLanguage.English)
+            runCurrent()
+            assertEquals(other.titles.preferred(TitleLanguage.English), shown(vm).rows.single().title)
+            assertEquals(1, responses.size)
+
+            graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            assertEquals(2, responses.size)
+            assertEquals(RecommendationsContent.Loading, vm.state.value.content)
+            assertNull(vm.summaryOf(other.id))
+            cached.value = expanded.copy(recommendations = listOf(other, safe))
+            runCurrent()
+            assertEquals(RecommendationsContent.Loading, vm.state.value.content)
+            cached.value = baseline
+            responses.last().complete(Outcome.Success(Unit))
+            runCurrent()
+            assertEquals(listOf(safe.id), shown(vm).rows.map { it.id })
+            scope.cancel()
+        }
+
     private fun shown(vm: RecommendationsViewModel): RecommendationsContent.Shown = vm.state.value.content as RecommendationsContent.Shown
 
     private fun recommendations(
@@ -258,6 +315,7 @@ class RecommendationsViewModelTest {
         graph.clock,
         graph.titleLanguage,
         opened,
-        onRefreshFailed,
+        includeAdult = graph.showAdultInSearch,
+        onRefreshFailed = onRefreshFailed,
     )
 }

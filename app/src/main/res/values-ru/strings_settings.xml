@@ -3,4 +3,11 @@
     <string name="settings_title">Настройки</string>
     <string name="settings_notifications">Уведомления</string>
     <string name="settings_notifications_detail">Новые серии и разрешения устройства</string>
+    <string name="settings_app_language">Язык</string>
+    <string name="settings_title_language">Язык названий</string>
+    <string name="settings_romaji">Ромадзи</string>
+    <string name="settings_english">Английский</string>
+    <string name="settings_japanese">Японский</string>
+    <string name="settings_adult_in_search">Показывать контент для взрослых в поиске</string>
+    <string name="settings_cancel">Отмена</string>
 </resources>

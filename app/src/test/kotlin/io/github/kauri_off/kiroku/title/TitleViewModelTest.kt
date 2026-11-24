@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.list.ListViewModel
@@ -52,6 +53,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -121,6 +123,54 @@ class TitleViewModelTest {
                 s.shown.page.related
                     .isNotEmpty(),
             )
+        }
+
+    @Test
+    fun `the open title relabels itself and related titles without a network refresh`() =
+        test { s ->
+            val before = s.shown.page
+            val asked = s.graph.requested.toList()
+            s.graph.preferences.setTitleLanguage(TitleLanguage.English)
+            advanceUntilIdle()
+            assertEquals(before.anime.titles.preferred(TitleLanguage.English), s.shown.page.title)
+            assertEquals(before.details, s.shown.page.details)
+            assertEquals(
+                before.related.map {
+                    it.related.anime.titles
+                        .preferred(TitleLanguage.English)
+                },
+                s.shown.page.related
+                    .map { it.title },
+            )
+            assertEquals(asked, s.graph.requested)
+        }
+
+    @Test
+    fun `the adult filter revalidates recommendations on the open title while the title and related titles stay visible`() =
+        test { s ->
+            val before = s.shown.page
+            val asked = s.graph.requested.size
+            val airing =
+                s.graph.demo.airingSource.requests
+                    .toList()
+            s.graph.demo.server.latency = 100.milliseconds
+            s.graph.preferences.setAdultInSearch(true)
+            runCurrent()
+            assertEquals(before.title, s.shown.page.title)
+            assertEquals(before.related, s.shown.page.related)
+            assertTrue(
+                s.shown.page.details!!
+                    .recommendations
+                    .isEmpty(),
+            )
+            advanceUntilIdle()
+            assertEquals(
+                before.details!!.recommendations,
+                s.shown.page.details!!
+                    .recommendations,
+            )
+            assertEquals(asked + 1, s.graph.requested.size)
+            assertEquals(airing, s.graph.demo.airingSource.requests)
         }
 
     @Test
@@ -1424,6 +1474,7 @@ class TitleViewModelTest {
         saved,
         messages,
         opened,
+        includeAdult = graph.showAdultInSearch,
     )
 
     private class CountedClock(

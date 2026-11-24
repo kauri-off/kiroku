@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.airing.AiredCount
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.debugmenu.SectionDetail
 import io.github.kauri_off.kiroku.debugmenu.dateTime
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -29,8 +30,9 @@ import io.github.kauri_off.kiroku.wiring.appGraph
 fun AiringCountsRoute() {
     val graph = LocalContext.current.appGraph
     var reads by remember { mutableIntStateOf(0) }
-    val state by remember(graph, reads) {
-        airingCountsState(graph.list, graph.airing, graph.titleLanguage)
+    val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
+    val state by remember(graph, reads, language) {
+        airingCountsState(graph.list, graph.airing, language)
     }.collectAsScreenState(AiringCountsState.Reading)
     AiringCountsSection(state) { event ->
         when (event) {

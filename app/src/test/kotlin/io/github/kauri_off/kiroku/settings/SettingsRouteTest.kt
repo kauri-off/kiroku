@@ -1,7 +1,9 @@
 package io.github.kauri_off.kiroku.settings
 
 import android.app.NotificationManager
+import android.provider.Settings
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -11,12 +13,14 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -77,6 +81,42 @@ class SettingsRouteTest {
         compose.waitForIdle()
         assertEquals(listOf(Destination.Profile.root), navigator.stackOf(Destination.Profile))
         compose.onNodeWithContentDescription("Settings").assertExists()
+    }
+
+    @Test
+    @Config(sdk = [34])
+    fun `settings store both choices and open Android app language settings for this package`() {
+        restoration.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SettingsRoute(graph, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {})
+            }
+        }
+        compose.onNodeWithText("Romaji").assertExists()
+        compose.onNodeWithText("Show adult content in search").assertIsOff()
+        compose.onNodeWithText("Title language").performClick()
+        compose.onNodeWithText("Japanese").performClick()
+        compose.onNodeWithText("Japanese").assertExists()
+        compose.onNodeWithText("Show adult content in search").performClick()
+        compose.onNodeWithText("Show adult content in search").assertIsOn()
+        assertEquals(TitleLanguage.Japanese, runBlocking { graph.titleLanguage.first() })
+        assertTrue(runBlocking { graph.showAdultInSearch.first() })
+
+        compose.onNodeWithText("Language").performClick()
+        val intent = shadowOf(compose.activity).nextStartedActivity
+        assertEquals(Settings.ACTION_APP_LOCALE_SETTINGS, intent.action)
+        assertEquals("package:${app.packageName}", intent.dataString)
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun `Android 12 shows the title language but offers no app language destination`() {
+        restoration.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SettingsRoute(graph, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {})
+            }
+        }
+        compose.onNodeWithText("Language").assertDoesNotExist()
+        compose.onNodeWithText("Title language").assertExists()
     }
 
     // A rotation: the composition goes and comes back from its saved state, with the view models kept.

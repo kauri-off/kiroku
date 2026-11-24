@@ -43,7 +43,7 @@ class NotifySettingsViewModel(
     private val notifications: NotificationsRepository,
     private val list: ListSource,
     private val clock: Clock,
-    private val titleLanguage: TitleLanguage,
+    titleLanguage: Flow<TitleLanguage>,
     background: CoroutineDispatcher,
     private val device: () -> DeviceState,
     // Each value asks for the device's states again, as they can change while the screen stays shown.
@@ -70,8 +70,13 @@ class NotifySettingsViewModel(
                 if (signedOut) {
                     flowOf(null)
                 } else {
-                    combine(list.observeSyncedAt(), notifications.observeComing(), notifications.observeSent()) { synced, coming, sent ->
-                        NotifyRecord(synced, coming?.map { it.upcoming() }, sent.map { it.entry() })
+                    combine(list.observeSyncedAt(), notifications.observeComing(), notifications.observeSent(), titleLanguage) {
+                        synced,
+                        coming,
+                        sent,
+                        language,
+                        ->
+                        NotifyRecord(synced, coming?.map { it.upcoming(language) }, sent.map { it.entry(language) })
                     }
                 }
             }
@@ -111,8 +116,9 @@ class NotifySettingsViewModel(
         }
     }
 
-    private fun Coming.upcoming() = UpcomingNotification(anime.id, anime.titles.preferred(titleLanguage), episode, notifyAt)
+    private fun Coming.upcoming(titleLanguage: TitleLanguage) =
+        UpcomingNotification(anime.id, anime.titles.preferred(titleLanguage), episode, notifyAt)
 
-    private fun SentNotification.entry() =
+    private fun SentNotification.entry(titleLanguage: TitleLanguage) =
         SentEntry(anime.id, anime.titles.preferred(titleLanguage), episode, airedAt, postedAt, recheck, shown)
 }

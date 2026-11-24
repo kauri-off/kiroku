@@ -17,16 +17,17 @@ import java.time.Instant
 // The titles of a live source: its database's, refreshed from MAL's pages.
 internal fun liveTitles(
     parts: LiveParts,
-    build: (LiveParts) -> AnimeRepository = ::titlesOf,
+    adult: suspend () -> Boolean = { false },
+    build: (LiveParts) -> AnimeRepository = { titlesOf(it, adult) },
 ): AnimeRepository = TitlesOnFirstUse(parts.scope) { build(parts) }
 
-private fun titlesOf(parts: LiveParts): AnimeRepository {
+private fun titlesOf(
+    parts: LiveParts,
+    adult: suspend () -> Boolean,
+): AnimeRepository {
     val store = TitleStore(parts.database, Dispatchers.IO, parts.unexpected)
-    return MalAnimeRepository(MalTitles(parts.http), store, parts.clock, { SHOW_ADULT }, parts.unexpected)
+    return MalAnimeRepository(MalTitles(parts.http), store, parts.clock, adult, parts.unexpected)
 }
-
-// The setting "Show adult content in search", off until Settings exist.
-private const val SHOW_ADULT = false
 
 // The repository and the database under it are built at its first call, off the main thread.
 private class TitlesOnFirstUse(

@@ -348,10 +348,10 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   and Retry in place of the content, never a message alone. With older content shown: it stays, the failure is a
   message, and the screen can be refreshed by pulling. A failed action of the person: a message with Retry that is
   not lost (section 7.2). A secondary part (a poster, a strip): a placeholder, loaded with the screen's next refresh.
-- **On the List no row moves under a finger.** A tab's order is computed when the app starts, when its sort or
-  direction is changed and on pull-to-refresh; at a start with no airing data stored, at a first download and on a
-  pull it waits for the airing refresh that follows, however that ends, for a bounded time. An edit, a sync, an air
-  time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position,
+- **On the List no row moves under a finger.** A tab's order is computed when the app starts, when its sort,
+  direction or title language changes and on pull-to-refresh. On startup without stored airing data, on a first
+  download and on a pull, ordering waits a bounded time for the airing refresh that follows. An edit, a sync, an
+  air time passing, a tab switch, the filter and coming back from a title page keep the order and the scroll position,
   and update rows in place. A row whose title no longer belongs to the tab leaves at once, and Undo puts it back in
   the same place; a title that joins the tab appears at the end until the order is next computed. After a row leaves,
   a "+1" on a row that moved up is not applied until the rows have stood still a moment. Another user's list, while

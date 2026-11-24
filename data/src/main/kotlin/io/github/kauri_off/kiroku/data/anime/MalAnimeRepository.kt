@@ -8,12 +8,15 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.db.TitleStore
+import io.github.kauri_off.kiroku.data.db.Unread
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Clock
 import java.time.Instant
 
@@ -26,6 +29,8 @@ class MalAnimeRepository(
     private val adult: suspend () -> Boolean,
     private val unexpected: (Throwable) -> Unit,
 ) : AnimeRepository {
+    private val publishing = Mutex()
+
     override fun observeAnime(id: AnimeId): Flow<Anime?> = store.observeAnime(id).readable()
 
     override fun observeDetails(id: AnimeId): Flow<AnimeDetails?> =
@@ -54,7 +59,8 @@ class MalAnimeRepository(
                 is Outcome.Failure -> return held
                 is Outcome.Success -> held.value
             }
-        val answer = titles.title(id, adult())
+        val includeAdult = adult()
+        val answer = titles.title(id, includeAdult)
         if (answer !is Outcome.Success) return answer as Outcome.Failure
         val (anime, details, unread) = answer.value
         // A page of another title is not the one asked for, which would otherwise never get its details.
@@ -62,7 +68,23 @@ class MalAnimeRepository(
             unexpected(AnotherTitleAnswer())
             return Outcome.Failure(DataError.ServerError)
         }
-        return when (val stored = stored { store.refresh(anime, details, clock.instant(), unread, begun) }) {
+        val stored =
+            stored {
+                publishing.withLock {
+                    if (includeAdult == adult()) {
+                        store.refresh(anime, details.copy(recommendationsIncludeAdult = includeAdult), clock.instant(), unread, begun)
+                    } else {
+                        store.refresh(
+                            anime,
+                            details.copy(recommendations = emptyList()),
+                            clock.instant(),
+                            unread + Unread.Recommendations,
+                            begun,
+                        )
+                    }
+                }
+            }
+        return when (stored) {
             is Outcome.Failure -> stored
             is Outcome.Success -> if (stored.value) Outcome.Success(Unit) else Outcome.Failure(DataError.ListEnded)
         }

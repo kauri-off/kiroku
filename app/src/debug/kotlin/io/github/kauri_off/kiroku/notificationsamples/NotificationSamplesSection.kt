@@ -47,7 +47,7 @@ private val SAMPLES = notShown("samples")
 fun NotificationSamplesRoute() {
     val context = LocalContext.current
     val graph = context.appGraph
-    val notifications = remember(graph) { EpisodeNotifications(context, SAMPLES, { graph.titleLanguage }) }
+    val notifications = remember(graph) { EpisodeNotifications(context, SAMPLES, { graph.titleLanguage.first() }) }
     var state by remember { mutableStateOf(NotificationSamplesState()) }
     val scope = rememberCoroutineScope()
     NotificationSamplesSection(state) { event ->

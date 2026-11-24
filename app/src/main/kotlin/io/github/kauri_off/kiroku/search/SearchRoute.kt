@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
@@ -46,7 +47,8 @@ fun SearchRoute(
     onBrowse: (BrowseList) -> Unit,
     onSignIn: () -> Unit,
 ) {
-    val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle()) { graph.showAdultInSearch } }
+    val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
+    val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle(), graph.showAdultInSearch) }
     CountAsShown(search.shown)
     val query = search.query
     var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(standIn?.recent.orEmpty().take(MAX_RECENT_SEARCHES)) }
@@ -56,15 +58,16 @@ fun SearchRoute(
     val text = search.text
     val resultState = if (LocalOnTop.current) search.state else search.cachedState
     val results by resultState.collectAsScreenState()
-    val shown = results.takeIf { it.query == text }
+    val adult by remember(graph) { graph.showAdultInSearch }.collectAsScreenState(initial = null)
+    val shown = results.takeIf { it.query == text && it.adult == adult }
     val content =
         when {
             text.isEmpty() -> SearchContent.Start(recent)
             shown == null -> SearchContent.Results(text, Paged.Loading)
             else -> {
                 val rows =
-                    remember(shown, listed, graph.titleLanguage) {
-                        shown.rows { resultRow(it, listed?.get(it.id)?.values, graph.titleLanguage) }
+                    remember(shown, listed, language) {
+                        shown.rows { resultRow(it, listed?.get(it.id)?.values, language) }
                     }
                 SearchContent.Results(text, rows)
             }
@@ -110,13 +113,13 @@ fun BrowseRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSignIn: () -> Unit,
 ) {
-    val browse = viewModel { BrowseViewModel(key.list, graph.search, graph.connection) { graph.showAdultInSearch } }
+    val browse = viewModel { BrowseViewModel(key.list, graph.search, graph.connection, graph.showAdultInSearch) }
     CountAsShown(browse.shown)
     val results by browse.state.collectAsScreenState()
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     val listed by listedEntries(graph)
     val editor = editSheetViewModel(graph, messages)
-    val language = graph.titleLanguage
+    val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
     val rows =
         remember(results, listed, language) {
             results.rows { resultRow(it.item, listed?.get(it.item.id)?.values, language, it.position) }

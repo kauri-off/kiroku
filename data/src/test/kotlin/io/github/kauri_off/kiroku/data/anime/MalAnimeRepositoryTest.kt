@@ -40,6 +40,7 @@ import org.robolectric.RobolectricTestRunner
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 // The titles of section 7.1 over the store and the client, with recorded pages behind a local server.
 @RunWith(RobolectricTestRunner::class)
@@ -282,10 +283,43 @@ class MalAnimeRepositoryTest {
                         .url
                         .queryParameter("nsfw"),
                 )
-                assertEquals(if (adult) on.details else off.details, s.titles.observeDetails(title).first())
+                val stored = s.titles.observeDetails(title).first()!!
+                assertEquals((if (adult) on.details else off.details).copy(recommendationsIncludeAdult = adult), stored)
+                assertEquals(stored.recommendations, stored.recommendationsFor(adult))
+                assertNull(stored.recommendationsFor(!adult))
+                assertEquals(off.details.related, stored.related)
                 assertEquals(off.anime, s.titles.observeAnime(title).first())
             }
-            assertEquals(listOf(false, true, false), s.adult)
+            assertEquals(listOf(false, false, true, true, false, false), s.adult)
+        }
+
+    @Test
+    fun `an outstanding opted-in response cannot replace the safe recommendations after opting out`() =
+        runTest {
+            val showAdult = AtomicBoolean(false)
+            val s = subject(showAdult::get)
+            val off = recordedTitle("title_adult_nsfw_unset")
+            val title = off.anime.id
+            serve("title_adult_nsfw_unset")
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(title))
+
+            showAdult.set(true)
+            val recorded = RecordedAnswers.named("title_adult_nsfw_true")
+            val arrived = CountDownLatch(1)
+            val optedOut = CountDownLatch(1)
+            network.answers {
+                arrived.countDown()
+                optedOut.await(5, TimeUnit.SECONDS)
+                answer(recorded.status, recorded.body, "application/json; charset=UTF-8")
+            }
+            val refresh = async { s.titles.refresh(title) }
+            runCurrent()
+            assertTrue(arrived.await(5, TimeUnit.SECONDS))
+            showAdult.set(false)
+            optedOut.countDown()
+
+            assertEquals(Outcome.Success(Unit), refresh.await())
+            assertEquals(off.details, s.titles.observeDetails(title).first())
         }
 
     @Test

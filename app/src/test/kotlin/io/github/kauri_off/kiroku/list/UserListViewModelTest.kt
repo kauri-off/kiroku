@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -74,7 +75,7 @@ class UserListViewModelTest {
         graph.session,
         graph.connection,
         graph.clock,
-        TitleLanguage.Romaji,
+        graph.titleLanguage,
         saved,
         { failed += it },
         graph.background,
@@ -87,6 +88,29 @@ class UserListViewModelTest {
             .getValue(status)
             .rows
             .map { it.id }
+
+    @Test
+    fun `changing title language reorders and relabels the open public list without a new download`() =
+        runTest(dispatcher) {
+            val app = app()
+            val list = app.list()
+            showing(list.state, list.shown)
+            advanceUntilIdle()
+            list.onEvent(ListEvent.SelectSort(ListSort.Title))
+            advanceUntilIdle()
+            val before = list.tabs.pages.getValue(ListStatus.Watching)
+            app.graph.preferences.setTitleLanguage(TitleLanguage.English)
+            advanceUntilIdle()
+            val after = list.tabs.pages.getValue(ListStatus.Watching)
+            val expected =
+                order(fixtures.otherUserList.filter { it.status == ListStatus.Watching }, ListSort.Title, { null }) {
+                    it.anime.titles.preferred(TitleLanguage.English)
+                }
+            assertEquals(expected.map { it.anime.id }, after.rows.map { it.id })
+            assertEquals(expected.map { it.anime.titles.preferred(TitleLanguage.English) }, after.rows.map { it.title })
+            assertEquals(wholeRead, app.requests.size)
+            assertEquals(before.ordering, after.ordering)
+        }
 
     @Test
     fun `opened after the profile read the list, it asks for nothing and shows the whole list`() =
@@ -196,7 +220,7 @@ class UserListViewModelTest {
                     app.graph.session,
                     app.graph.connection,
                     app.graph.clock,
-                    TitleLanguage.Romaji,
+                    flowOf(TitleLanguage.Romaji),
                     SavedStateHandle(),
                     {},
                     app.graph.background,

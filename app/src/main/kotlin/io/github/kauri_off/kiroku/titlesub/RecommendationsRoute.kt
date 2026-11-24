@@ -51,6 +51,7 @@ fun RecommendationsRoute(
                 graph.clock,
                 graph.titleLanguage,
                 key.opened,
+                includeAdult = graph.showAdultInSearch,
                 onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
             )
         }
@@ -63,8 +64,8 @@ fun RecommendationsRoute(
             when (event) {
                 RecommendationsEvent.Back -> onBack()
                 RecommendationsEvent.SignIn -> onSignIn()
-                is RecommendationsEvent.Open -> onOpenTitle(event.id, recommendations.summaryOf(event.id))
-                is RecommendationsEvent.Edit -> editor.open(event.id, recommendations.summaryOf(event.id)?.anime)
+                is RecommendationsEvent.Open -> recommendations.summaryOf(event.id)?.let { onOpenTitle(event.id, it) }
+                is RecommendationsEvent.Edit -> recommendations.summaryOf(event.id)?.let { editor.open(event.id, it.anime) }
                 RecommendationsEvent.Reload -> recommendations.onEvent(event)
             }
         },

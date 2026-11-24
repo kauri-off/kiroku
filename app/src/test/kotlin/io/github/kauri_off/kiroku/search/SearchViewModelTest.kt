@@ -15,10 +15,15 @@ import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -108,6 +113,74 @@ class SearchViewModelTest {
             assertNull(model.state.value.nextOffset)
         }
 
+    @Test
+    fun `changing the adult filter starts a fresh search and rejects a late page from the previous filter`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val server = ScriptedSearch(demo.search, delayedOffset = 10)
+            val adult = MutableStateFlow(true)
+            val model = SearchViewModel(server, demo.connection, SavedStateHandle(), adult)
+            showing(model.state)
+            model.type("kag")
+            advanceTimeBy(301)
+            val first = FixtureAnime.exactToWatch
+            val safe = FixtureAnime.exactCaughtUp
+            server.respond(Outcome.Success(Page(listOf(first), 10)))
+            runCurrent()
+            model.loadMore()
+            runCurrent()
+            val stale = server.requests.last()
+            adult.value = false
+            runCurrent()
+            assertTrue(
+                model.state.value.titles
+                    .isEmpty(),
+            )
+            assertEquals(listOf(0 to true, 10 to true, 0 to false), server.requests.map { it.key.second to it.adult })
+            server.respond(Outcome.Success(Page(listOf(safe), 20)))
+            runCurrent()
+            stale.answer.complete(Outcome.Success(Page(listOf(first), 99)))
+            runCurrent()
+            assertEquals(listOf(safe), model.state.value.titles)
+            assertEquals(20, model.state.value.nextOffset)
+        }
+
+    @Test
+    fun `resuming search waits for the saved filter before restarting an interrupted page`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val server = ScriptedSearch(demo.search)
+            val adult = MutableStateFlow(true)
+            val stored = CompletableDeferred<Unit>()
+            var reads = 0
+            val choice =
+                flow {
+                    if (++reads > 1) stored.await()
+                    emitAll(adult)
+                }
+            val model = SearchViewModel(server, demo.connection, SavedStateHandle(), choice)
+            val shown = showing(model.state)
+            model.type("kag")
+            advanceTimeBy(301)
+            server.respond(Outcome.Success(Page(listOf(FixtureAnime.exactToWatch), 10)))
+            runCurrent()
+            model.loadMore()
+            runCurrent()
+            shown.cancel()
+            runCurrent()
+            adult.value = false
+
+            showing(model.state)
+            runCurrent()
+            assertEquals(listOf(0 to true, 10 to true), server.requests.map { it.key.second to it.adult })
+            stored.complete(Unit)
+            runCurrent()
+            assertEquals(listOf(0 to true, 10 to true, 0 to false), server.requests.map { it.key.second to it.adult })
+            server.respond(Outcome.Success(Page(listOf(FixtureAnime.exactCaughtUp), null)))
+            runCurrent()
+            assertEquals(listOf(FixtureAnime.exactCaughtUp), model.state.value.titles)
+        }
+
     private fun SearchViewModel.type(text: String) {
         query.setTextAndPlaceCursorAtEnd(text)
         Snapshot.sendApplyNotifications()
@@ -116,9 +189,11 @@ class SearchViewModelTest {
 
 private class ScriptedSearch(
     delegate: SearchRepository,
+    private val delayedOffset: Int? = null,
 ) : SearchRepository by delegate {
     class Request(
         val key: Pair<String, Int>,
+        val adult: Boolean,
         val answer: CompletableDeferred<Outcome<Page<Anime>>> = CompletableDeferred(),
     )
 
@@ -134,8 +209,8 @@ private class ScriptedSearch(
         offset: Int,
         includeAdult: Boolean,
     ): Outcome<Page<Anime>> {
-        val request = Request(query to offset)
+        val request = Request(query to offset, includeAdult)
         requests += request
-        return request.answer.await()
+        return if (offset == delayedOffset) withContext(NonCancellable) { request.answer.await() } else request.answer.await()
     }
 }

@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.edit.EditSheetState
+import io.github.kauri_off.kiroku.hasOtherRecommendations
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.readAgainOnRetry
 import io.github.kauri_off.kiroku.shell.ShellMessage
@@ -31,14 +32,19 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.stale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -54,10 +60,11 @@ class TitleViewModel(
     session: SessionRepository,
     connection: Connection,
     private val clock: Clock,
-    private val titleLanguage: TitleLanguage,
+    titleLanguage: Flow<TitleLanguage>,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
     private val opened: TitleSummary? = null,
+    private val includeAdult: Flow<Boolean> = flowOf(false),
 ) : ViewModel() {
     private class Sources(
         val anime: Anime?,
@@ -141,19 +148,28 @@ class TitleViewModel(
             Sources(stored.anime, stored.details, around.list, around.airing, session, stored.failure, chain = stored.chain)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
+    private var previousFilter: Boolean? = null
+
     val state: StateFlow<TitleState> =
-        combine(sources.filterNotNull(), moment, failure, combine(waitShown, chainWaitShown, ::Pair), refreshing) {
+        combine(
+            sources.filterNotNull(),
+            moment,
+            failure,
+            combine(waitShown, chainWaitShown, ::Pair),
+            combine(refreshing, titleLanguage, includeAdult.onEach(::filterChanged), ::Triple),
+        ) {
             sources,
             moment,
             failure,
             (waitShown, chainWaitShown),
-            refreshing,
+            (refreshing, language, adult),
             ->
-            build(sources, moment, failure, waitShown, refreshing, chainWaitShown)
+            build(sources, moment, failure, waitShown, refreshing, chainWaitShown, language, adult)
         }.stateIn(
             viewModelScope,
             WhileShown,
-            sources.value?.let { build(it, moment.value, null, false, false, false) } ?: TitleState.Loading(null),
+            sources.value?.let { build(it, moment.value, null, false, false, false, TitleLanguage.Romaji, false) }
+                ?: TitleState.Loading(null),
         )
 
     // A failure shown in place is tried again as a Retry would be; any other load runs as on opening.
@@ -166,6 +182,12 @@ class TitleViewModel(
             hidden = ::hidden,
             shownAgain = ::shownAgain,
         )
+
+    private fun filterChanged(enabled: Boolean) {
+        val previous = previousFilter
+        previousFilter = enabled
+        if (previous != null && previous != enabled && loads.isShowing) refresh(Asked.Filter)
+    }
 
     // Collected while the page is shown; showing it refreshes stale details.
     val shown: StateFlow<Unit> get() = loads.shown
@@ -180,6 +202,9 @@ class TitleViewModel(
     // Shown again past the stop timeout, the page goes on through refreshIfStale, after its own page if that is stale.
     private fun shownAgain() {
         if (cut && load?.isActive != true) walkIfOwed()
+        viewModelScope.launch {
+            if (anime.hasOtherRecommendations(id, includeAdult.first()) && loads.isShowing && load?.isActive != true) refresh(Asked.Filter)
+        }
     }
 
     // What the page shows of [id], itself or a related title, for the screen it opens.
@@ -229,10 +254,15 @@ class TitleViewModel(
         waitShown: Boolean,
         refreshing: Boolean,
         chainWaitShown: Boolean,
+        language: TitleLanguage,
+        adult: Boolean,
     ): TitleState {
         val entry = sources.list.entries[id]
         val anime = animeOf(sources)
-        val details = sources.details
+        val details =
+            sources.details?.let { page ->
+                if (page.recommendationsIncludeAdult == adult) page else page.copy(recommendations = emptyList())
+            }
         val session = sources.session
         val readFailure = sources.list.failure ?: sources.storeFailure
         return when {
@@ -246,7 +276,7 @@ class TitleViewModel(
                         sources.airing[id],
                         details,
                         sources.list.entries.mapValues { it.value.status },
-                        titleLanguage,
+                        language,
                         clock,
                         pageRead = details != null || sources.pageRead,
                         chainPages = sources.chain,
@@ -269,10 +299,12 @@ class TitleViewModel(
     // A load that started while the store was read stands; a fresh page walks its chain if it has not.
     private suspend fun refreshIfStale() {
         val stale = anime.stale(id, opened?.anime, clock.instant())
+        val otherRecommendations = !stale && anime.hasOtherRecommendations(id, includeAdult.first())
         if (load?.isActive == true) return
         if (stale) {
             refresh(Asked.Shown)
         } else {
+            if (otherRecommendations) refresh(Asked.Filter)
             walkIfOwed()
             viewModelScope.launch { (knownTitle() ?: storedTitle())?.let { askAiring(it, Asked.Shown) } }
         }
@@ -300,7 +332,7 @@ class TitleViewModel(
     // A wait the person asked for shows at once; one the page started only after a second.
     private fun refresh(asked: Asked) {
         load?.cancel()
-        walking?.cancel()
+        if (asked != Asked.Filter) walking?.cancel()
         failure.value = null
         waitShown.value = asked == Asked.Retry
         refreshing.value = asked == Asked.Pull
@@ -309,7 +341,7 @@ class TitleViewModel(
             viewModelScope.launch {
                 // The airing beside the details, or once they are stored when the title is not known before.
                 val known = knownTitle()
-                if (known != null) askAiring(known, asked)
+                if (known != null && asked != Asked.Filter) askAiring(known, asked)
                 if (loadDetails(asked) && known == null) storedTitle()?.let { askAiring(it, asked) }
             }
     }
@@ -327,6 +359,7 @@ class TitleViewModel(
                     null
                 }
             val result = anime.refresh(id)
+            currentCoroutineContext().ensureActive()
             wait?.cancel()
             waitShown.value = false
             refreshing.value = false
@@ -413,7 +446,7 @@ class TitleViewModel(
         }
     }
 
-    private enum class Asked { Shown, Retry, Pull }
+    private enum class Asked { Shown, Retry, Pull, Filter }
 
     private companion object {
         val EXPANDED = notShown("synopsisExpanded")

@@ -15,6 +15,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
 import io.github.kauri_off.kiroku.core.model.sameAsWritten
@@ -390,6 +391,14 @@ interface UserRepository :
 
 // The person's choices, kept across restarts. A choice that cannot be read counts as never made, and is reported.
 interface PreferencesRepository {
+    fun observeTitleLanguage(): Flow<TitleLanguage>
+
+    fun observeAdultInSearch(): Flow<Boolean>
+
+    suspend fun setTitleLanguage(language: TitleLanguage): Outcome<Unit>
+
+    suspend fun setAdultInSearch(show: Boolean): Outcome<Unit>
+
     // Every tab of the user's own list with its sort: the one chosen, or the tab's default.
     fun observeListSorts(): Flow<Map<ListStatus, TabSort>>
 

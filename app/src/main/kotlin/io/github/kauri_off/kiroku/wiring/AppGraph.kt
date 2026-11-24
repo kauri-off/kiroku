@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import okhttp3.Call
 import java.time.Clock
 
@@ -49,9 +50,8 @@ interface AppGraph {
 
     suspend fun signOut(expected: Session) = session.signOut()
 
-    // The "Title language" setting, Romaji until Settings exist.
-    val titleLanguage: TitleLanguage get() = TitleLanguage.Romaji
-    val showAdultInSearch: Boolean get() = false
+    val titleLanguage: Flow<TitleLanguage> get() = preferences.observeTitleLanguage()
+    val showAdultInSearch: Flow<Boolean> get() = preferences.observeAdultInSearch()
 
     // The notification settings, what comes next and what was sent.
     val notifications: NotificationsRepository
