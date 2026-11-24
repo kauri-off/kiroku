@@ -1,0 +1,1 @@
+-keepnames class io.github.kauri_off.kiroku.** implements androidx.navigation3.runtime.NavKey

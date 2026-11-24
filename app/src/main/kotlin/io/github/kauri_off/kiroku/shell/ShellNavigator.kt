@@ -7,11 +7,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.runtime.setValue
+import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.serialization.NavBackStackSerializer
+import androidx.navigation3.runtime.serialization.NavKeySerializer
 import io.github.kauri_off.kiroku.notShown
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.encoding.Decoder
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
 class ShellNavigator(
@@ -115,15 +121,49 @@ data class OpenedPage(
 // Survives recreation and process death: the stacks are saved with their keys, the selection by name, the restarts by count.
 @Composable
 fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator {
-    fun over(destination: Destination) = listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray()
-    val list = rememberNavBackStack(Destination.List.root, *over(Destination.List))
-    val search = rememberNavBackStack(Destination.Search.root, *over(Destination.Search))
-    val profile = rememberNavBackStack(Destination.Profile.root, *over(Destination.Profile))
-    val selected = rememberSaveable { mutableStateOf(start?.destination ?: Destination.List) }
-    val restarts = rememberSaveable { mutableIntStateOf(0) }
+    fun initial(destination: Destination) =
+        NavBackStack(destination.root, *listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray())
+    val list = rememberSerializable(serializer = StackSerializer(ListRoot)) { initial(Destination.List) }
+    val search = rememberSerializable(serializer = StackSerializer(SearchRoot)) { initial(Destination.Search) }
+    val profile = rememberSerializable(serializer = StackSerializer(ProfileRoot)) { initial(Destination.Profile) }
+    val selected = rememberSaveable(saver = destinationSaver) { mutableStateOf(start?.destination ?: Destination.List) }
+    val restarts = rememberSaveable(saver = restartSaver) { mutableIntStateOf(0) }
     return remember(list, search, profile, selected, restarts) {
         val stacks = mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile)
         stacks.values.forEach { stack -> stack.removeAll { it is NotBuiltKey } }
         ShellNavigator(stacks, selected, restarts)
     }
+}
+
+private val destinationSaver =
+    Saver<MutableState<Destination>, Any>(
+        save = { it.value.name },
+        restore = { saved ->
+            val value = if (saved is MutableState<*>) saved.value else saved
+            Destination.entries.firstOrNull { it.name == value || it == value }?.let { mutableStateOf(it) }
+        },
+    )
+
+private val restartSaver =
+    Saver<MutableIntState, Any>(
+        save = { it.intValue },
+        restore = { saved ->
+            val value = if (saved is MutableIntState) saved.intValue else saved as? Int
+            value?.let { mutableIntStateOf(it) }
+        },
+    )
+
+private val navSerializer = NavBackStackSerializer(NavKeySerializer<NavKey>())
+
+private class StackSerializer(
+    private val root: NavKey,
+) : KSerializer<NavBackStack<NavKey>> by navSerializer {
+    override fun deserialize(decoder: Decoder): NavBackStack<NavKey> =
+        try {
+            navSerializer.deserialize(decoder).takeIf { it.firstOrNull() == root } ?: NavBackStack(root)
+        } catch (_: Exception) {
+            NavBackStack(root)
+        } catch (_: LinkageError) {
+            NavBackStack(root)
+        }
 }

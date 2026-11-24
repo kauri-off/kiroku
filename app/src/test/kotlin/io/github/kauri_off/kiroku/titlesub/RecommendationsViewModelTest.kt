@@ -139,10 +139,11 @@ class RecommendationsViewModelTest {
         }
 
     @Test
-    fun `a restored stale cache reports an immediate failure once after rows arrive`() =
+    fun `a restored stale cache reports both failures if reconnect fails before rows arrive`() =
         runTest(dispatcher) {
             val scope = foregroundScope()
             val graph = TestGraph.over(scope)
+            graph.connectionSays.value = false
             val release = CompletableDeferred<Unit>()
             val errors = mutableListOf<DataError>()
             val loads = mutableListOf<AnimeId>()
@@ -154,7 +155,7 @@ class RecommendationsViewModelTest {
 
                     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
                         loads += id
-                        return Outcome.Failure(DataError.ServerError)
+                        return Outcome.Failure(if (loads.size == 1) DataError.NoConnection else DataError.ServerError)
                     }
                 }
             val list =
@@ -166,16 +167,22 @@ class RecommendationsViewModelTest {
             runCurrent()
             assertEquals(listOf(anime.id), loads)
             assertEquals(RecommendationsContent.Loading, vm.state.value.content)
-            assertTrue(errors.isEmpty())
+            assertEquals(listOf(DataError.NoConnection), errors)
+
+            graph.connectionSays.value = true
+            runCurrent()
+            assertEquals(listOf(anime.id, anime.id), loads)
+            assertEquals(RecommendationsContent.Loading, vm.state.value.content)
+            assertEquals(listOf(DataError.NoConnection, DataError.ServerError), errors)
 
             release.complete(Unit)
             runCurrent()
             assertEquals(details.recommendations.map { it.id }, shown(vm).rows.map { it.id })
-            assertEquals(listOf(DataError.ServerError), errors)
+            assertEquals(listOf(DataError.NoConnection, DataError.ServerError), errors)
 
             graph.list.write(ListWrite.MarkNextWatched(recommended))
             runCurrent()
-            assertEquals(listOf(DataError.ServerError), errors)
+            assertEquals(listOf(DataError.NoConnection, DataError.ServerError), errors)
             scope.cancel()
         }
 

@@ -1,9 +1,16 @@
 package io.github.kauri_off.kiroku.routes
 
 import android.content.Context
+import android.os.BadParcelableException
+import android.os.Bundle
+import android.os.Parcel
+import android.os.Parcelable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -43,7 +50,9 @@ import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.NotBuilt
 import io.github.kauri_off.kiroku.shell.NotBuiltKey
+import io.github.kauri_off.kiroku.shell.SearchRoot
 import io.github.kauri_off.kiroku.shell.ShellNavigator
+import io.github.kauri_off.kiroku.shell.discardUnreadableComposeState
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.text.named
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -54,6 +63,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -112,6 +122,126 @@ class ProcessDeathTest {
             showApp = true
         }
         compose.onNodeWithContentDescription("Episodes watched").assertExists()
+    }
+
+    @Test
+    fun `an incompatible serialized type on an inactive stack resets only that stack`() {
+        val restoration = StateRestorationTester(compose)
+        val title = TitleKey(FixtureAnime.exactToWatch.id.value)
+        val searchTitle = TitleKey(FixtureAnime.prequel.id.value)
+        lateinit var navigator: ShellNavigator
+        var registry = SaveableStateRegistry(restoredValues = null) { true }
+        restoration.setContent {
+            CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                navigator = rememberShellNavigator()
+            }
+        }
+        val saved =
+            compose.runOnIdle {
+                navigator.restart()
+                navigator.select(Destination.Search)
+                navigator.open(searchTitle)
+                navigator.select(Destination.List)
+                navigator.open(title)
+                registry.performSave()
+            }
+        val searchStack =
+            saved.values.flatten().filterIsInstance<Bundle>().single {
+                it.getBundle("0")?.getString("type") == SearchRoot::class.java.name
+            }
+        val incompatible = checkNotNull(searchStack.getBundle("1"))
+        assertEquals(TitleKey::class.java.name, incompatible.getString("type"))
+        incompatible.putString("type", "incompatible.PreviewTitle")
+        val selected =
+            saved.values
+                .flatten()
+                .filterIsInstance<MutableState<*>>()
+                .single { it.value == "List" }
+        assertEquals("List", selected.value)
+        val legacySelected =
+            saved.mapValues { (_, values) ->
+                values.map {
+                    when (it) {
+                        "List" -> mutableStateOf(Destination.Profile)
+                        1 -> mutableIntStateOf(7)
+                        else -> it
+                    }
+                }
+            }
+        registry = SaveableStateRegistry(legacySelected) { true }
+
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle {
+            assertEquals(Destination.Profile, navigator.current)
+            assertEquals(7, navigator.restarts)
+            assertEquals(listOf(Destination.List.root, title), navigator.stackOf(Destination.List))
+            assertEquals(listOf(Destination.Search.root), navigator.stackOf(Destination.Search))
+            navigator.select(Destination.Search)
+            navigator.open(searchTitle)
+            assertEquals(listOf(Destination.Search.root, searchTitle), navigator.stack)
+        }
+    }
+
+    @Test
+    fun `unparcelable selection does not prevent restoring other activity state`() {
+        val registryKey = "androidx.lifecycle.BundlableSavedStateRegistry.key"
+        val providerKey = "SaveableStateRegistry:-1"
+        val state =
+            Bundle().apply {
+                putBundle(
+                    registryKey,
+                    Bundle().apply {
+                        putBundle(
+                            providerKey,
+                            Bundle().apply {
+                                putParcelableArrayList("selection", arrayListOf(UnreadableSelection()))
+                                putParcelableArrayList("readable", arrayListOf(Bundle().apply { putInt("id", 95) }))
+                            },
+                        )
+                        putBundle("another-provider", Bundle().apply { putBoolean("kept", true) })
+                    },
+                )
+            }
+        val restored =
+            Parcel.obtain().let { parcel ->
+                try {
+                    parcel.writeBundle(state)
+                    parcel.setDataPosition(0)
+                    checkNotNull(parcel.readBundle(javaClass.classLoader))
+                } finally {
+                    parcel.recycle()
+                }
+            }
+
+        discardUnreadableComposeState(restored)
+
+        val registry = checkNotNull(restored.getBundle(registryKey))
+        assertEquals(true, registry.getBundle("another-provider")?.getBoolean("kept"))
+        val composeState = registry.getBundle(providerKey)
+        assertFalse(composeState?.containsKey("selection") == true)
+        if (composeState != null) {
+            val values = composeState.getParcelableArrayList("readable", Bundle::class.java)
+            assertEquals(95, values?.single()?.getInt("id"))
+        }
+    }
+
+    class UnreadableSelection : Parcelable {
+        override fun describeContents() = 0
+
+        override fun writeToParcel(
+            dest: Parcel,
+            flags: Int,
+        ) = Unit
+
+        companion object {
+            @JvmField
+            val CREATOR =
+                object : Parcelable.Creator<UnreadableSelection> {
+                    override fun createFromParcel(source: Parcel): UnreadableSelection = throw BadParcelableException("Old selection")
+
+                    override fun newArray(size: Int): Array<UnreadableSelection?> = arrayOfNulls(size)
+                }
+        }
     }
 
     @Test

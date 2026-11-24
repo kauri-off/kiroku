@@ -17,10 +17,14 @@ import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.title.entriesOf
 import io.github.kauri_off.kiroku.title.knownEntries
 import io.github.kauri_off.kiroku.title.withRead
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import java.time.Clock
 
 internal class RecommendationsViewModel(
@@ -46,8 +50,11 @@ internal class RecommendationsViewModel(
         val recommendations: List<Anime> get() = title.details?.recommendations.orEmpty()
     }
 
+    private val titles = title.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Title))
+
     private val sources =
-        title
+        titles
+            .filterNotNull()
             .withRead({
                 it.details
                     ?.recommendations
@@ -59,18 +66,24 @@ internal class RecommendationsViewModel(
             }.map { (title, list) -> Sources(title, list) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let { Sources(Title(it), ListRead(it.knownEntries())) })
 
-    private var reportedFailure: RefreshFailure? = null
+    private val pendingFailures = MutableStateFlow(emptyList<DataError>())
 
     val state =
-        combine(sources, refreshing) { source, refreshing ->
+        combine(sources, refreshing, titles, pendingFailures) { source, refreshing, title, failures ->
             val state = build(source, refreshing)
-            val failure = source?.title?.refreshFailure
-            if (state.content is RecommendationsContent.Shown && failure != null && failure !== reportedFailure) {
-                reportedFailure = failure
-                onRefreshFailed(failure.error)
+            if (failures.isNotEmpty()) {
+                if (title?.details != null && title.storeFailure == null) {
+                    pendingFailures.getAndUpdate { emptyList() }.forEach(onRefreshFailed)
+                } else if (state.content is RecommendationsContent.Failed) {
+                    pendingFailures.value = emptyList()
+                }
             }
             state
         }.stateIn(viewModelScope, WhileShown, build(sources.value, false))
+
+    override fun refreshFailed(error: DataError) {
+        pendingFailures.update { it + error }
+    }
 
     fun onEvent(event: RecommendationsEvent) {
         if (event == RecommendationsEvent.Reload) retry()
