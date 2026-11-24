@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -188,9 +189,9 @@ private class CountedList(
     private val syncs: AtomicInteger,
     private val reads: ListReads,
 ) : ListRepository by inner {
-    override suspend fun sync(): Outcome<Unit> {
+    override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> {
         syncs.incrementAndGet()
-        return inner.sync()
+        return inner.sync(expectedOwner)
     }
 
     override fun observeEntries(): Flow<List<ListEntry>> = readers.of(inner.observeEntries()).onStart { reads.whole.incrementAndGet() }

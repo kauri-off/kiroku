@@ -323,6 +323,7 @@ Not to forget:
 - [x] About screen.
 - [x] Clear image caches on sign-out (S9).
 - [x] Restore the idle top bar after a canceled pull-to-refresh.
+- [x] Retry offline own Profile reads on reconnect.
 
 ---
 

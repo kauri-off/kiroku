@@ -17,10 +17,13 @@ import kotlin.time.Duration
 // What MAL does for the user's list. A failure is an outcome, never an exception.
 interface RemoteList {
     // The whole list, or a failure; a list read in pages can miss a title that is still on it.
-    suspend fun fetch(): Outcome<List<ListEntry>>
+    suspend fun fetch(expectedOwner: SignInId? = null): Outcome<List<ListEntry>>
 
     // The title's entry as MAL has it now; null when it is not on the list.
-    suspend fun fetchEntry(id: AnimeId): Outcome<ListEntry?>
+    suspend fun fetchEntry(
+        id: AnimeId,
+        expectedOwner: SignInId? = null,
+    ): Outcome<ListEntry?>
 
     // Sets the title's values, or removes it for null, and answers with the entry as MAL has it afterwards.
     suspend fun put(

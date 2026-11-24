@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.wiring
 
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.user.RemoteUserLists
@@ -51,7 +52,7 @@ internal class LiveUser(
 
     override fun observeOwnProfileFetchedAt(): Flow<Instant?> = flow { emitAll(own().observeOwnProfileFetchedAt()) }
 
-    override suspend fun refreshOwnProfile() = own().refreshOwnProfile()
+    override suspend fun refreshOwnProfile(expectedOwner: SignInId?) = own().refreshOwnProfile(expectedOwner)
 
     override fun observeList(name: String): Flow<UserListState> = keeper.observeList(name)
 

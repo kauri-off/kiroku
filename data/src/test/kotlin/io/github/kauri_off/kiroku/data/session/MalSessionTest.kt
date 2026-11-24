@@ -11,7 +11,15 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.RoomAiringStore
+import io.github.kauri_off.kiroku.data.db.RoomProfileStore
 import io.github.kauri_off.kiroku.data.db.transaction
+import io.github.kauri_off.kiroku.data.profile.MalOwnProfile
+import io.github.kauri_off.kiroku.data.profile.MalProfiles
+import io.github.kauri_off.kiroku.data.sandbox.SandboxClient
+import io.github.kauri_off.kiroku.data.sandbox.SandboxList
+import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
+import io.github.kauri_off.kiroku.data.sandbox.SandboxTokens
+import io.github.kauri_off.kiroku.data.sandbox.sandboxTitles
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +38,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -99,6 +108,65 @@ class MalSessionTest {
             assertTrue(session.signOutIfCurrent(checkNotNull(current?.owner)) { retired = true })
             assertTrue(retired)
             assertEquals(Session.SignedOut, session.currentSession())
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun anOwnerReadWaitingAtTheTokenGateDoesNotSendWithReplacementTokens() =
+        runTest {
+            val clock = fixture.clock
+            val tokens = SandboxTokens(clock)
+            val mal = SandboxMal(SandboxList(sandboxTitles, clock, starting = { emptyMap() }), tokens)
+            val client = SandboxClient(mal, io = StandardTestDispatcher(testScheduler), inline = true)
+            val store = TokenStore(fixture.file, fixture.format(), backgroundScope)
+            val endpoint = TokenEndpoint { error("No token request expected") }
+            val session = MalSession(store, endpoint, clock, backgroundScope, { throw it })
+            val context = RuntimeEnvironment.getApplication()
+            val name = "profile-token-gate.db"
+            val database = KirokuDatabase.open(context, name)
+            try {
+                val profile =
+                    MalOwnProfile(
+                        MalProfiles(client.http, session),
+                        RoomProfileStore(database, Dispatchers.IO) { throw it },
+                        session.observeSession(),
+                        clock,
+                    ) { throw it }
+                val (access, refresh) = tokens.granted()
+                assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant(access, refresh)))
+                val owner = checkNotNull(session.now().owner)
+                val release = CompletableDeferred<Unit>()
+                val held = CompletableDeferred<Unit>()
+                val holding =
+                    async {
+                        session.whileOwner(owner) {
+                            held.complete(Unit)
+                            release.await()
+                            true
+                        }
+                    }
+                held.await()
+                val replacement =
+                    async {
+                        val (nextAccess, nextRefresh) = tokens.granted()
+                        session.signIn(TokenGrant(nextAccess, nextRefresh))
+                    }
+                runCurrent()
+                assertFalse(replacement.isCompleted)
+                val read = async { profile.refreshOwnProfile(owner) }
+                runCurrent()
+                assertFalse(read.isCompleted)
+                assertEquals(owner, session.now().owner)
+                release.complete(Unit)
+
+                assertTrue(holding.await())
+                assertEquals(Outcome.Success(Unit), replacement.await())
+                assertEquals(Outcome.Failure(DataError.ListEnded), read.await())
+                assertTrue(mal.asked.isEmpty())
+            } finally {
+                database.close()
+                context.deleteDatabase(name)
+            }
         }
 
     @Test

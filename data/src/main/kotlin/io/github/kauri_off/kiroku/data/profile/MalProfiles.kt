@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.data.profile
 
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.StatedFigures
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.data.anime.Repairs
@@ -31,9 +32,9 @@ class MalProfiles(
     private val api by http.api(ProfileApi::class)
 
     // An answer read with values left out is reported; one without the user's name cannot be used.
-    internal suspend fun own(): Outcome<UserProfile> {
+    internal suspend fun own(expectedOwner: SignInId? = null): Outcome<UserProfile> {
         val answer =
-            session.authorised(http) { authorization ->
+            session.authorised(http, expectedOwner) { authorization ->
                 val repairs = Repairs()
                 api.own(MalFields.PROFILE, authorization).toProfile(repairs) to repairs
             }

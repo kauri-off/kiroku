@@ -259,7 +259,7 @@ interface ListSource {
     // When the whole list was last downloaded; null when it never was, or when a sync is owed (W5).
     fun observeSyncedAt(): Flow<Instant?>
 
-    suspend fun sync(): Outcome<Unit>
+    suspend fun sync(expectedOwner: SignInId? = null): Outcome<Unit>
 }
 
 interface ListRepository : ListSource {
@@ -369,7 +369,7 @@ interface OwnProfile {
     // When the profile shown was read; none while none is shown.
     fun observeOwnProfileFetchedAt(): Flow<Instant?>
 
-    suspend fun refreshOwnProfile(): Outcome<Unit>
+    suspend fun refreshOwnProfile(expectedOwner: SignInId? = null): Outcome<Unit>
 }
 
 // Other users' lists as a screen sees them; whose list it is, is the name the person gave.

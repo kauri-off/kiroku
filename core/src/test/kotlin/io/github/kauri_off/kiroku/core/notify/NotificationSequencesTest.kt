@@ -102,7 +102,7 @@ class NotificationSequencesTest {
 
                 override fun observeSyncedAt() = error(UNUSED)
 
-                override suspend fun sync() = error(UNUSED)
+                override suspend fun sync(expectedOwner: SignInId?) = error(UNUSED)
             }
 
         private val airing =

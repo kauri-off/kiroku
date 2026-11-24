@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.notify.NotificationEngine
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.data.anilist.AniListRecordings.idsOf
@@ -72,7 +73,7 @@ class AniListEngineTest {
 
         override fun observeSyncedAt(): Flow<Instant?> = flowOf(null)
 
-        override suspend fun sync(): Outcome<Unit> = Outcome.Success(Unit)
+        override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> = Outcome.Success(Unit)
     }
 
     private val store = InMemoryAiringStore()

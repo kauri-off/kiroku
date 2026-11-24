@@ -98,9 +98,12 @@ class ListEngine(
     // MAL's client throwing fails the one call: an IOException as no connection, not signed in as expired, else reported.
     private val mal =
         object : RemoteList {
-            override suspend fun fetch() = remoteCall { remote.fetch() }
+            override suspend fun fetch(expectedOwner: SignInId?) = remoteCall { remote.fetch(expectedOwner) }
 
-            override suspend fun fetchEntry(id: AnimeId) = remoteCall { remote.fetchEntry(id) }.about(id)
+            override suspend fun fetchEntry(
+                id: AnimeId,
+                expectedOwner: SignInId?,
+            ) = remoteCall { remote.fetchEntry(id, expectedOwner) }.about(id)
 
             override suspend fun put(
                 anime: Anime,
@@ -187,9 +190,12 @@ class ListEngine(
     private var restored = false
     private var stopped = false
 
-    private val syncs = Any()
-    private var running: Deferred<Outcome<Unit>>? = null
-    private var following: Deferred<Outcome<Unit>>? = null
+    private class Sync(
+        val owner: SignInId,
+        val job: Deferred<Outcome<Unit>>,
+    )
+
+    private val syncs = ArrayDeque<Sync>()
 
     // One lane: W1's order and N9's read before its write both rely on no other answer coming between.
     private val queue = Channel<Request>(Channel.UNLIMITED)
@@ -343,25 +349,24 @@ class ListEngine(
         }
     }
 
-    // W6: one download at a time; calls made while one runs share the one that follows it.
-    override suspend fun sync(): Outcome<Unit> {
-        if (session() !is Session.SignedIn) return Outcome.Failure(DataError.SessionExpired)
+    // W6: one download at a time; calls from the same sign-in share its queued download.
+    override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> {
+        val owner = (session() as? Session.SignedIn)?.signIn ?: return expired
+        if (expectedOwner != null && owner != expectedOwner) return Outcome.Failure(DataError.ListEnded)
         val sync =
             synchronized(syncs) {
-                following ?: run {
-                    val previous = running
+                val previous = syncs.lastOrNull()
+                if (syncs.size > 1 && previous?.owner == owner) {
+                    previous.job
+                } else {
                     val started =
                         scope.async(start = CoroutineStart.LAZY) {
-                            previous?.join()
-                            download()
+                            previous?.job?.join()
+                            download(owner)
                         }
-                    if (previous == null) running = started else following = started
-                    started.invokeOnCompletion {
-                        synchronized(syncs) {
-                            if (running === started) running = following.also { following = null }
-                            if (following === started) following = null
-                        }
-                    }
+                    val queued = Sync(owner, started)
+                    syncs.addLast(queued)
+                    started.invokeOnCompletion { synchronized(syncs) { syncs.remove(queued) } }
                     started.start()
                     started
                 }
@@ -483,10 +488,11 @@ class ListEngine(
     }
 
     // W4: a title edited since the download began keeps its values; every other one becomes what MAL has.
-    private suspend fun download(): Outcome<Unit> =
+    private suspend fun download(owner: SignInId): Outcome<Unit> =
         try {
-            val (since, began) = locked { if (settled is Session.SignedIn) changes to list else null } ?: return expired
-            when (val outcome = mal.fetch()) {
+            val (since, began) =
+                locked { if (settled == Session.SignedIn(owner)) changes to list else null } ?: return expired
+            when (val outcome = mal.fetch(owner)) {
                 is Outcome.Failure -> outcome
                 is Outcome.Success -> {
                     val fetched = outcome.value.associateByTo(mutableMapOf()) { it.anime.id }
@@ -495,7 +501,7 @@ class ListEngine(
                             if (list != began) return@locked emptySet()
                             local.readAll().keys - fetched.keys - pending.keys - touched.filterValues { it > since }.keys
                         }
-                    val kept = missing - checked(missing, fetched, began)
+                    val kept = missing - checked(missing, fetched, began, owner)
                     locked {
                         if (settled !is Session.SignedIn || list != began) return@locked expired
                         val stored = local.readAll()
@@ -523,6 +529,7 @@ class ListEngine(
         missing: Set<AnimeId>,
         fetched: MutableMap<AnimeId, ListEntry>,
         began: Int,
+        owner: SignInId,
     ): Set<AnimeId> {
         val failed =
             mutex.withLock {
@@ -538,7 +545,7 @@ class ListEngine(
             if (mutex.withLock { list != began }) break
             val entry =
                 try {
-                    mal.fetchEntry(id)
+                    mal.fetchEntry(id, owner)
                 } catch (e: IllegalStateException) {
                     unexpected(e)
                     Outcome.Failure(DataError.ServerError)
@@ -877,6 +884,6 @@ class ListEngine(
         private const val FAILED_IN_A_ROW = 2
 
         // Answers that say MAL will not answer the next check either.
-        private val ENDS_CHECKS = setOf(DataError.Refused, DataError.NoConnection, DataError.SessionExpired)
+        private val ENDS_CHECKS = setOf(DataError.Refused, DataError.NoConnection, DataError.SessionExpired, DataError.ListEnded)
     }
 }

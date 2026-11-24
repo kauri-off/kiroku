@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -35,6 +36,7 @@ class ShownLoads(
     hidden: () -> Unit = {},
     // The screen is shown again within its stop timeout, as after a rotation, when [whenShown] does not run.
     shownAgain: () -> Unit = {},
+    trackOutagesWhileShown: Boolean = false,
 ) {
     private val watchers = MutableStateFlow(Unit)
     private val owed = MutableStateFlow(false)
@@ -78,20 +80,18 @@ class ShownLoads(
         }
         scope.launch {
             val showing = watchers.subscriptionCount.map { it > 0 }.distinctUntilChanged()
-            combine(showing, owed) { showing, owed -> showing && owed }
-                .distinctUntilChanged()
-                .collectLatest { waiting ->
-                    if (!waiting) return@collectLatest
-                    connection.observeOnline().collect { online ->
-                        if (!online) {
-                            spent = false
-                        } else if (!spent) {
-                            spent = true
-                            owed.value = false
-                            again()
-                        }
+            val waiting = if (trackOutagesWhileShown) showing else combine(showing, owed) { shown, owed -> shown && owed }
+            waiting.distinctUntilChanged().collectLatest { watching ->
+                if (!watching) return@collectLatest
+                val online = connection.observeOnline().onEach { if (!it) spent = false }
+                combine(online, owed) { online, owed -> online && owed }.collect { ready ->
+                    if (ready && owed.value && isShowing && !spent) {
+                        spent = true
+                        owed.value = false
+                        again()
                     }
                 }
+            }
         }
     }
 
