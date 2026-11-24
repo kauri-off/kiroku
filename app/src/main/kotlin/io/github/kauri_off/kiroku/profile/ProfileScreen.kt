@@ -24,7 +24,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -56,6 +55,7 @@ import io.github.kauri_off.kiroku.design.component.BarTitle
 import io.github.kauri_off.kiroku.design.component.ListReadProgress
 import io.github.kauri_off.kiroku.design.component.PageBlock
 import io.github.kauri_off.kiroku.design.component.RefreshBox
+import io.github.kauri_off.kiroku.design.component.ScreenScaffold
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -91,41 +91,39 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    Scaffold(
+    ScreenScaffold(
         modifier = modifier,
         topBar = {
-            Column {
-                when (val owner = state.owner) {
-                    ProfileOwner.Me ->
-                        TopAppBar(
-                            // The own name is in the header.
-                            title = {},
-                            actions = {
-                                IconButton(onClick = { onEvent(ProfileEvent.OpenSettings) }) {
-                                    Icon(
-                                        painterResource(R.drawable.ic_settings),
-                                        contentDescription = stringResource(R.string.profile_settings),
-                                    )
-                                }
-                            },
-                            scrollBehavior = scrollBehavior,
-                        )
-                    is ProfileOwner.Other ->
-                        TopAppBar(
-                            title = { BarTitle(owner.name) },
-                            navigationIcon = {
-                                IconButton(onClick = { onEvent(ProfileEvent.Back) }) {
-                                    Icon(
-                                        painterResource(R.drawable.ic_arrow_back),
-                                        contentDescription = stringResource(R.string.common_back),
-                                    )
-                                }
-                            },
-                            scrollBehavior = scrollBehavior,
-                        )
-                }
-                if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ProfileEvent.SignIn) })
+            when (val owner = state.owner) {
+                ProfileOwner.Me ->
+                    TopAppBar(
+                        // The own name is in the header.
+                        title = {},
+                        actions = {
+                            IconButton(onClick = { onEvent(ProfileEvent.OpenSettings) }) {
+                                Icon(
+                                    painterResource(R.drawable.ic_settings),
+                                    contentDescription = stringResource(R.string.profile_settings),
+                                )
+                            }
+                        },
+                        scrollBehavior = scrollBehavior,
+                    )
+                is ProfileOwner.Other ->
+                    TopAppBar(
+                        title = { BarTitle(owner.name) },
+                        navigationIcon = {
+                            IconButton(onClick = { onEvent(ProfileEvent.Back) }) {
+                                Icon(
+                                    painterResource(R.drawable.ic_arrow_back),
+                                    contentDescription = stringResource(R.string.common_back),
+                                )
+                            }
+                        },
+                        scrollBehavior = scrollBehavior,
+                    )
             }
+            if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ProfileEvent.SignIn) })
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->

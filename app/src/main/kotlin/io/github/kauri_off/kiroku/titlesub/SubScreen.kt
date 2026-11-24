@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.titlesub
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -13,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -28,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.design.component.RefreshBox
+import io.github.kauri_off.kiroku.design.component.ScreenScaffold
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
@@ -62,21 +61,19 @@ internal fun SubScreen(
     modifier: Modifier = Modifier,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    Scaffold(
+    ScreenScaffold(
         modifier = modifier,
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text(title) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
-                        }
-                    },
-                    scrollBehavior = scrollBehavior,
-                )
-                if (sessionExpired) SessionBanner(onSignIn = onSignIn)
-            }
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
+                    }
+                },
+                scrollBehavior = scrollBehavior,
+            )
+            if (sessionExpired) SessionBanner(onSignIn = onSignIn)
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
