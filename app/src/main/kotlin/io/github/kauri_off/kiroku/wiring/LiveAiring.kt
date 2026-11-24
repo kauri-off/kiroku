@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.wiring
 
 import io.github.kauri_off.kiroku.core.airing.Airing
+import io.github.kauri_off.kiroku.core.airing.AiringAnswers
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.AiringSource
 import io.github.kauri_off.kiroku.core.airing.AiringStore
@@ -13,6 +14,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.data.db.RoomAiringStore
@@ -118,18 +121,35 @@ internal class SignedInSource(
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since, emptySet()) {}
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
         pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> =
-        session
-            .map { it == Session.SignedOut }
-            .distinctUntilChanged()
-            .transformLatest { signedOut -> emit(if (signedOut) null else source.fetch(titles, since, pulled, whole)) }
-            .first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetchAnswers(titles, since, pulled, coming = false) { whole(it.results) }.results
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override suspend fun fetchAnswers(
+        titles: Collection<Anime>,
+        since: Instant,
+        pulled: Set<AnimeId>,
+        coming: Boolean,
+        whole: suspend (AiringAnswers) -> Unit,
+    ): AiringAnswers {
+        val owner = session.first().owner ?: return AiringAnswers(titles.associate { it.id to Outcome.Failure(DataError.ListEnded) })
+        val results =
+            session
+                .map { it.owner }
+                .distinctUntilChanged()
+                .transformLatest { current ->
+                    if (current == owner) {
+                        emit(source.fetch(titles, since, pulled) { if (!coming) whole(AiringAnswers(it, owner)) })
+                    } else {
+                        emit(null)
+                    }
+                }.first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
+        return AiringAnswers(results, owner)
+    }
 }
 
 // Stores nothing while nobody is signed in; forgetting goes on.
@@ -148,10 +168,20 @@ internal class SignedInStore(
 
     override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
         writes.withLock {
-            val kept = if (session.first() == Session.SignedOut) titles.filterValues { it == null } else titles
-            if (kept.isNotEmpty()) store.write(kept)
+            val removed = titles.filterValues { it == null }
+            if (removed.isNotEmpty()) store.write(removed)
         }
     }
+
+    override suspend fun writeAnswers(
+        titles: Map<AnimeId, StoredAiring>,
+        owner: SignInId?,
+    ): Boolean =
+        writes.withLock {
+            if (owner == null || session.first().owner != owner) return@withLock false
+            store.write(titles)
+            true
+        }
 
     // Empties the store while nobody is signed in, and only then.
     suspend fun forget() {

@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.tracked
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.airingStale
@@ -73,6 +74,11 @@ class AiringEngine(
             override suspend fun read() = stores.reading { store.read() }
 
             override suspend fun write(titles: Map<AnimeId, StoredAiring?>) = stores.writing { store.write(titles) }
+
+            override suspend fun writeAnswers(
+                titles: Map<AnimeId, StoredAiring>,
+                owner: SignInId?,
+            ) = stores.writing { store.writeAnswers(titles, owner) }
         }
 
     // Held for every change to the store and to the fields below it, never while the source is asked.
@@ -361,7 +367,7 @@ class AiringEngine(
             val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
             val answers =
                 fetch(titles, since, pulled, coming) { part ->
-                    val ids = part.keys.filterTo(mutableSetOf()) { it in titles && it !in told }
+                    val ids = part.results.keys.filterTo(mutableSetOf()) { it in titles && it !in told }
                     if (ids.isNotEmpty()) tell(ids, keep(ids, part, began, since, coming))
                 }
             val rest = titles.keys - told
@@ -381,21 +387,21 @@ class AiringEngine(
         since: Instant,
         pulled: Set<AnimeId>,
         coming: Boolean,
-        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
-    ): Map<AnimeId, Outcome<FetchedAiring?>> =
+        whole: suspend (AiringAnswers) -> Unit,
+    ): AiringAnswers =
         try {
-            if (coming) source.fetchComing(titles.values, since) else source.fetch(titles.values, since, pulled, whole)
+            source.fetchAnswers(titles.values, since, pulled, coming, whole)
         } catch (e: Exception) {
             stores.ended(e)
             val error = if (e is IOException) DataError.NoConnection else DataError.ServerError.also { unexpected(e) }
-            titles.keys.associateWith { Outcome.Failure(error) }
+            AiringAnswers(titles.keys.associateWith { Outcome.Failure(error) })
         }
 
     // An answer goes to the store for a title the list tracks when it arrives, to memory for a page's, else nowhere.
     // N3: a re-check's answer from after [since] goes over what is stored, which it leaves as old as it was, and over nothing else.
     private suspend fun keep(
         ids: Set<AnimeId>,
-        answers: Map<AnimeId, Outcome<FetchedAiring?>>,
+        answers: AiringAnswers,
         began: Instant,
         since: Instant,
         coming: Boolean,
@@ -404,7 +410,7 @@ class AiringEngine(
         val fetched = mutableMapOf<AnimeId, FetchedAiring?>()
         var broken: String? = null
         for (id in ids) {
-            val answer = answers[id]
+            val answer = answers.results[id]
             val from = (answer as? Outcome.Success)?.value?.completeFrom
             when {
                 answer == null -> errors[id] = DataError.ServerError.also { broken = UNANSWERED }
@@ -426,7 +432,7 @@ class AiringEngine(
             if (stored.isNotEmpty()) {
                 try {
                     val before = local.read()
-                    val written = mutableMapOf<AnimeId, StoredAiring?>()
+                    val written = mutableMapOf<AnimeId, StoredAiring>()
                     for ((id, airing) in stored) {
                         val was = before[id]
                         val schedule = was?.schedule
@@ -437,9 +443,14 @@ class AiringEngine(
                             else -> written[id] = StoredAiring(later.over(schedule), was.fetchedAt)
                         }
                     }
-                    if (written.isNotEmpty()) local.write(written)
-                    held -= written.keys
-                    pagesAsked -= written.keys
+                    if (written.isNotEmpty()) {
+                        if (local.writeAnswers(written, answers.owner)) {
+                            held -= written.keys
+                            pagesAsked -= written.keys
+                        } else {
+                            for (id in written.keys) errors[id] = DataError.ListEnded
+                        }
+                    }
                 } catch (_: StoreFailure) {
                     for (id in stored.keys) errors[id] = DataError.StorageError
                 }
