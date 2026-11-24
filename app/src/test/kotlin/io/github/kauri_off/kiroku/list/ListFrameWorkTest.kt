@@ -118,11 +118,15 @@ class ListFrameWorkTest {
     private fun frame(): Map<String, Int> {
         counts.clear()
         counting = true
+        advanceFrame()
+        counting = false
+        return counts.toMap()
+    }
+
+    private fun advanceFrame() {
         main.scheduler.runCurrent()
         compose.mainClock.advanceTimeByFrame()
         main.scheduler.runCurrent()
-        counting = false
-        return counts.toMap()
     }
 
     // The composables a frame composed that belong to a page: its rows or the page itself.
@@ -396,10 +400,19 @@ class ListFrameWorkTest {
         val input = counts.toMap()
         counting = false
 
-        val frames = List(FIRST_FRAMES) { frame() to position() }
-        assertEquals("the fling settles at the top", 0f, frames.last().second, 0f)
-        val landing = frames.indexOfFirst { it.second == 0f }
-        assertTrue("the released fling must travel before landing: ${frames.map { it.second }}", landing > 0)
+        val samples =
+            List(FIRST_FRAMES) {
+                counts.clear()
+                counting = true
+                advanceFrame()
+                val offset = position()
+                counting = false
+                counts.toMap() to offset
+            }
+        val offsets = samples.map { it.second }
+        assertEquals("the fling settles at the top", 0f, offsets.last(), 0f)
+        val landing = offsets.indexOf(0f)
+        assertTrue("the released fling must travel before landing: $offsets", offsets.take(landing).any { it > 0f && it < beforeRelease })
         val pageScopes =
             setOf(
                 PAGE,
@@ -407,7 +420,7 @@ class ListFrameWorkTest {
                 "io.github.kauri_off.kiroku.list.Pages",
                 "io.github.kauri_off.kiroku.list.ListScreen",
             )
-        val work = listOf(input) + frames.map { it.first }
+        val work = listOf(input) + samples.map { it.first }
         work.forEachIndexed { index, sample ->
             assertEquals("page work in sample $index", emptyMap<String, Int>(), sample.filterKeys { it in pageScopes })
         }
