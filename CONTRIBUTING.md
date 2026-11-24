@@ -1,7 +1,8 @@
 # Contributing to Kiroku
 
-Start with the [Demo build](README.md#building). If you configure the SDK through the project instead of the
-environment, set `sdk.dir` to its absolute path in the checkout's untracked `local.properties`.
+Start with the [Demo build](README.md#building). Gradle also accepts `sdk.dir` in the checkout's untracked
+`local.properties`. If you leave `ANDROID_HOME` unset, set `sdk.dir` to the absolute SDK path and use that path
+in place of `$ANDROID_HOME` in the README's `sdkmanager` commands.
 
 Before changing code, read the relevant entries in the [roadmap](ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
 Follow the conventions in [CLAUDE.md](CLAUDE.md), including Conventional Commits for pull request titles.
@@ -25,6 +26,11 @@ To render changed screens, pass one `--tests '*<Screen>Screenshots*'` per screen
 For data instrumentation tests, start an Android emulator or connect a test device, then run
 `./gradlew :data:connectedDebugAndroidTest`.
 
+[CI](.github/workflows/ci.yml) skips Markdown-only changes. For code pull requests it runs formatting, lint, tests,
+screenshot renders and Debug builds, including the instrumentation APK. Run connected tests locally. Full Release
+and Preview assembly runs after qualifying pushes to `main`. The
+[pull request title check](.github/workflows/pr-title.yml) also runs for Markdown-only changes.
+
 ## MyAnimeList sign-in in a fork
 
 1. Set your own base `applicationId` in [app/build.gradle.kts](app/build.gradle.kts). Keep the `.debug` and
@@ -41,6 +47,8 @@ For data instrumentation tests, start an Android emulator or connect a test devi
    user-level `~/.gradle/gradle.properties`) or set `MAL_CLIENT_ID` in the build environment. A nonblank property
    takes precedence. The client ID is embedded in the APK. Keep it out of version control.
 
-Rebuild with the wrapper. Debug and Preview default to Account with a client ID and Demo without one, unless
-you previously chose a data source on that install. Release requires a client ID to start OAuth. See the
+For an installable sign-in build, use `./gradlew :app:assembleDebug` or `./gradlew :app:assemblePreview`. Both
+default to Account with a client ID and Demo without one, unless you previously chose a data source on that
+install. `:app:assembleRelease` produces an unsigned APK. Sign it separately before installing it and provide
+a client ID at build time to enable Release sign-in. See the
 [sign-in design](docs/ARCHITECTURE.md#3-sign-in-with-mal) for the upstream configuration.
