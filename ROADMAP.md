@@ -330,6 +330,7 @@ Not to forget:
 - A changed setting reaches the screens that are open: title language and adult content are read where they are
   shown, not copied when a view model is made.
 - [x] Clear image caches on sign-out (S9).
+- [x] Restore the idle top bar after a canceled pull-to-refresh.
 
 ---
 

@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -91,7 +92,7 @@ fun ProfileScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier,
         topBar = {
             Column {
                 when (val owner = state.owner) {
@@ -142,7 +143,7 @@ fun ProfileScreen(
                 )
             ProfileContent.ListLoading -> state.reading?.let { ListReadProgress(it.loaded, it.total, body) }
             is ProfileContent.Failed -> ScreenState(failedState(content.error, state.owner, onEvent), body)
-            is ProfileContent.Shown -> Shown(content, state, onEvent, padding)
+            is ProfileContent.Shown -> Shown(content, state, onEvent, padding, scrollBehavior.nestedScrollConnection)
         }
     }
     state.openProfile?.let { OpenProfileDialog(it, onEvent) }
@@ -175,6 +176,7 @@ private fun Shown(
     state: ProfileState,
     onEvent: (ProfileEvent) -> Unit,
     padding: PaddingValues,
+    barScroll: NestedScrollConnection,
 ) {
     val direction = LocalLayoutDirection.current
     val heading = headingRoom()
@@ -192,7 +194,12 @@ private fun Shown(
         contentAlignment = Alignment.TopCenter,
     ) {
         LazyColumn(
-            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize().testTag(ProfileTags.page),
+            modifier =
+                Modifier
+                    .widthIn(max = Sizes.contentMaxWidth)
+                    .fillMaxSize()
+                    .nestedScroll(barScroll)
+                    .testTag(ProfileTags.page),
             contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
             pageBlocks(blocks(content, state.owner, heading, onEvent))

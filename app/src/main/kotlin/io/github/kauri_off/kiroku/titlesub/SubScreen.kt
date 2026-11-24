@@ -63,7 +63,7 @@ internal fun SubScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier,
         topBar = {
             Column {
                 TopAppBar(
@@ -82,7 +82,7 @@ internal fun SubScreen(
     ) { padding ->
         when (body) {
             is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))
-            is SubScreenBody.List -> SubScreenList(body, padding)
+            is SubScreenBody.List -> SubScreenList(body, padding, Modifier.nestedScroll(scrollBehavior.nestedScrollConnection))
         }
     }
 }
@@ -91,10 +91,11 @@ internal fun SubScreen(
 private fun SubScreenList(
     body: SubScreenBody.List,
     padding: PaddingValues,
+    listModifier: Modifier,
 ) {
     val onRefresh = body.onRefresh
     if (onRefresh == null) {
-        CentredList(padding, body.content)
+        CentredList(padding, listModifier, body.content)
     } else {
         val direction = LocalLayoutDirection.current
         RefreshBox(body.refreshing, onRefresh, Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
@@ -104,6 +105,7 @@ private fun SubScreenList(
                     end = padding.calculateEndPadding(direction),
                     bottom = padding.calculateBottomPadding(),
                 ),
+                listModifier,
                 body.content,
             )
         }
@@ -113,6 +115,7 @@ private fun SubScreenList(
 @Composable
 private fun CentredList(
     padding: PaddingValues,
+    modifier: Modifier,
     content: LazyListScope.() -> Unit,
 ) {
     val direction = LocalLayoutDirection.current
@@ -123,7 +126,7 @@ private fun CentredList(
         contentAlignment = Alignment.TopCenter,
     ) {
         LazyColumn(
-            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
+            modifier = modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
             contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + Spacing.s),
             content = content,
         )

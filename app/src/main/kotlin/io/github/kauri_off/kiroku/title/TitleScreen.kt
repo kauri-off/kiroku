@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -119,7 +120,7 @@ fun TitleScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier,
         topBar = {
             Column {
                 TitleTopBar(menu = state is TitleState.Shown, onEvent = onEvent, scrollBehavior = scrollBehavior)
@@ -135,7 +136,7 @@ fun TitleScreen(
                     ScreenState.Error(stringResource(state.error.message()), onRetry = { onEvent(TitleEvent.Retry) }),
                     Modifier.padding(padding),
                 )
-            is TitleState.Shown -> TitleContent(state, onEvent, padding)
+            is TitleState.Shown -> TitleContent(state, onEvent, padding, scrollBehavior.nestedScrollConnection)
         }
     }
 }
@@ -189,6 +190,7 @@ private fun TitleContent(
     state: TitleState.Shown,
     onEvent: (TitleEvent) -> Unit,
     padding: PaddingValues,
+    barScroll: NestedScrollConnection,
 ) {
     val page = state.page
     val direction = LocalLayoutDirection.current
@@ -211,7 +213,7 @@ private fun TitleContent(
         contentAlignment = Alignment.TopCenter,
     ) {
         LazyColumn(
-            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
+            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize().nestedScroll(barScroll),
             contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
             item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(page) } }
