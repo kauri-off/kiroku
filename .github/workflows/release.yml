@@ -1,0 +1,227 @@
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.created && !github.event.deleted
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      apk-sha256: ${{ steps.stage.outputs.apk-sha256 }}
+      mapping-sha256: ${{ steps.stage.outputs.mapping-sha256 }}
+      certificate: ${{ steps.stage.outputs.certificate }}
+      commit: ${{ steps.stage.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify tag and source
+        shell: bash
+        run: |
+          [[ $GITHUB_REF_NAME =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ $(git rev-parse HEAD) == "$GITHUB_SHA" ]]
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install the SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
+
+      - name: Build the release APK and mapping
+        shell: bash
+        env:
+          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+        run: |
+          [[ $MAL_CLIENT_ID =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::Missing or invalid MAL client ID"; exit 1; }
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Stage and sign with a disposable key
+        id: stage
+        shell: bash
+        run: |
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          input=app/build/outputs/apk/release/app-release-unsigned.apk
+          mapping=app/build/outputs/mapping/release/mapping.txt
+          test -s "$input"
+          test -s "$mapping"
+          package=$("$tools/aapt" dump badging "$input" | sed -n '/^package: /p')
+          if [[ ! $package =~ ^"package: name='io.github.kauri_off.kiroku' versionCode='"[1-9][0-9]*"'" ]] ||
+             [[ $package != *" versionName='${GITHUB_REF_NAME#v}' "* ]]; then
+            echo "::error::The release APK package or version does not match the tag"
+            exit 1
+          fi
+
+          umask 077
+          scratch=$(mktemp -d "$RUNNER_TEMP/build-key.XXXXXX")
+          trap 'rm -rf -- "$scratch"' EXIT
+          dir="$RUNNER_TEMP/release-input"
+          mkdir "$dir"
+          key="$scratch/build.p12"
+          export BUILD_KEY_PASSWORD
+          BUILD_KEY_PASSWORD=$(openssl rand -hex 24)
+          keytool -genkeypair -keystore "$key" -storetype PKCS12 -alias build-key \
+            -storepass:env BUILD_KEY_PASSWORD -keyalg RSA -keysize 2048 -validity 7 -dname "CN=Kiroku tag build"
+          certificate=$(keytool -exportcert -keystore "$key" -alias build-key -storepass:env BUILD_KEY_PASSWORD | sha256sum)
+          "$tools/zipalign" -P 16 -f 4 "$input" "$scratch/aligned.apk"
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias build-key --ks-pass env:BUILD_KEY_PASSWORD \
+            --key-pass env:BUILD_KEY_PASSWORD --v4-signing-enabled false --out "$dir/kiroku.apk" "$scratch/aligned.apk"
+          cp "$mapping" "$dir/mapping.txt"
+          apk_digest=$(sha256sum "$dir/kiroku.apk")
+          mapping_digest=$(sha256sum "$dir/mapping.txt")
+          {
+            echo "apk-sha256=${apk_digest%% *}"
+            echo "mapping-sha256=${mapping_digest%% *}"
+            echo "certificate=${certificate%% *}"
+            echo "commit=$GITHUB_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Keep the build APK and matching R8 mapping
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kiroku-release-input-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-input/
+          if-no-files-found: error
+          retention-days: 14
+
+  sign:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions: {}
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      apk-sha256: ${{ steps.resign.outputs.apk-sha256 }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          digest-mismatch: error
+          merge-multiple: true
+          path: ${{ runner.temp }}/release-input
+
+      - name: Verify the build artifact
+        shell: bash
+        env:
+          BUILD_COMMIT: ${{ needs.build.outputs.commit }}
+          APK_SHA256: ${{ needs.build.outputs.apk-sha256 }}
+          MAPPING_SHA256: ${{ needs.build.outputs.mapping-sha256 }}
+          BUILD_CERT_SHA256: ${{ needs.build.outputs.certificate }}
+        run: |
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          cd "$RUNNER_TEMP/release-input"
+          [[ $BUILD_COMMIT == "$GITHUB_SHA" ]] || { echo "::error::Build commit does not match the tag commit"; exit 1; }
+          [[ $APK_SHA256 =~ ^[a-f0-9]{64}$ && $MAPPING_SHA256 =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  kiroku.apk\n%s  mapping.txt\n' "$APK_SHA256" "$MAPPING_SHA256" | sha256sum --check --strict
+          "$tools/zipalign" -c -P 16 4 kiroku.apk
+          verified=$("$tools/apksigner" verify -Werr --verbose --print-certs kiroku.apk)
+          if ! grep -Fxq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$verified" ||
+             ! grep -Fxq 'Number of signers: 1' <<< "$verified" ||
+             ! grep -Fxq "Signer #1 certificate SHA-256 digest: $BUILD_CERT_SHA256" <<< "$verified"; then
+            echo "::error::The APK does not have the disposable build signer"
+            exit 1
+          fi
+
+      - name: Re-sign and verify the release APK
+        id: resign
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.KIROKU_ANDROID_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.KIROKU_ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KIROKU_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KIROKU_ANDROID_KEY_PASSWORD }}
+          RELEASE_CERT_SHA256: ${{ vars.KIROKU_ANDROID_CERT_SHA256 }}
+          BUILD_CERT_SHA256: ${{ needs.build.outputs.certificate }}
+        run: |
+          for input in KEYSTORE_B64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD RELEASE_CERT_SHA256; do
+            [[ -n ${!input} ]] || { echo "::error::Required signing input is missing ($input)"; exit 1; }
+          done
+          expected=${RELEASE_CERT_SHA256,,}
+          if [[ ! $expected =~ ^[a-f0-9]{64}$ || $expected == "$BUILD_CERT_SHA256" ]]; then
+            echo "::error::Invalid release certificate fingerprint"
+            exit 1
+          fi
+          umask 077
+          scratch=$(mktemp -d "$RUNNER_TEMP/release-key.XXXXXX")
+          trap 'rm -rf -- "$scratch"' EXIT
+          base64 --decode > "$scratch/keystore" <<< "$KEYSTORE_B64"
+          unset KEYSTORE_B64
+
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          if ! "$tools/apksigner" sign --ks "$scratch/keystore" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD --v4-signing-enabled false \
+            --out "$scratch/kiroku.apk" "$RUNNER_TEMP/release-input/kiroku.apk" > /dev/null 2>&1; then
+            echo "::error::APK re-signing failed"
+            exit 1
+          fi
+          unset STORE_PASSWORD KEY_ALIAS KEY_PASSWORD
+          rm "$scratch/keystore"
+
+          "$tools/zipalign" -c -P 16 4 "$scratch/kiroku.apk"
+          verified=$("$tools/apksigner" verify -Werr --verbose --print-certs "$scratch/kiroku.apk")
+          if ! grep -Fxq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$verified" ||
+             ! grep -Fxq 'Number of signers: 1' <<< "$verified" ||
+             ! grep -Fxq "Signer #1 certificate SHA-256 digest: $expected" <<< "$verified"; then
+            echo "::error::The APK does not have the expected release signer"
+            exit 1
+          fi
+          digest=$(sha256sum "$scratch/kiroku.apk")
+          mkdir "$RUNNER_TEMP/release-signed"
+          mv "$scratch/kiroku.apk" "$RUNNER_TEMP/release-signed/kiroku.apk"
+          echo "apk-sha256=${digest%% *}" >> "$GITHUB_OUTPUT"
+
+      - name: Transfer the verified release APK
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kiroku-release-signed-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-signed/kiroku.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact-id }}
+          digest-mismatch: error
+          merge-multiple: true
+          path: ${{ runner.temp }}/release-signed
+
+      - name: Attach the signed APK to a GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APK_SHA256: ${{ needs.sign.outputs.apk-sha256 }}
+        run: |
+          cd "$RUNNER_TEMP/release-signed"
+          [[ $APK_SHA256 =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  kiroku.apk\n' "$APK_SHA256" | sha256sum --check --strict
+          tag_commit=$(gh api "repos/$GH_REPO/commits/tags/$GITHUB_REF_NAME" --jq '.sha')
+          [[ $tag_commit == "$GITHUB_SHA" ]] || { echo "::error::The release tag no longer points to the build commit"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" kiroku.apk --verify-tag --generate-notes --title "Kiroku $GITHUB_REF_NAME"

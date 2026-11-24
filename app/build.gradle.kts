@@ -64,8 +64,13 @@ android {
             libs.versions.sdk.target
                 .get()
                 .toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode =
+            libs.versions.app.code
+                .get()
+                .toInt()
+        versionName =
+            libs.versions.app.name
+                .get()
         manifestPlaceholders["appLabel"] = "@string/app_name"
         testInstrumentationRunner = "io.github.kauri_off.kiroku.notify.RecordedRunsRunner"
         buildConfigField("String", "MAL_CLIENT_ID", "\"$malClientId\"")
