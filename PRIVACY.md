@@ -6,8 +6,9 @@ reporting. [App wiring][KirokuApplication.kt] · [Dependencies][gradle/libs.vers
 ## Network requests
 
 - **MyAnimeList API (`api.myanimelist.net`).** Requests can include search text, title IDs, ranking or season
-  parameters, page parameters, the adult-content flag for search, browse or recommendations, and the username
-  of a public list you open. Live Search sends nonempty text after a pause in typing, even without submitting. Kiroku can also sync your list with MAL and refresh your access
+  parameters, page parameters, and the username of a public list you open. The adult-content preference controls
+  the flag on search, browse and title-detail requests, where it changes recommendations. List reads request
+  adult entries independently. Live Search sends nonempty text after a pause in typing, even without submitting. Kiroku can also sync your list with MAL and refresh your access
   token in the background. Public requests use the build's MAL
   client ID. Reads of your own list and profile and writes to your list use a bearer access token. List changes
   send the title ID and updated fields such as status, score, watched episodes, or dates. Removing an entry sends

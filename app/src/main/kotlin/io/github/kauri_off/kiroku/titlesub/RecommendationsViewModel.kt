@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListSource
@@ -37,9 +38,9 @@ internal class RecommendationsViewModel(
     clock: Clock,
     titleLanguage: Flow<TitleLanguage>,
     opened: TitleSummary?,
-    includeAdult: Flow<Boolean> = flowOf(false),
+    adultSearchChoice: Flow<AdultSearchChoice> = flowOf(AdultSearchChoice()),
     private val onRefreshFailed: (DataError) -> Unit,
-) : SubScreenViewModel(id, anime, session, connection, clock, opened, includeAdult) {
+) : SubScreenViewModel(id, anime, session, connection, clock, opened, adultSearchChoice) {
     private class ListRead(
         val entries: Map<AnimeId, ListEntry> = emptyMap(),
         val failure: DataError? = null,
@@ -67,10 +68,20 @@ internal class RecommendationsViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let { Sources(Title(it), ListRead(it.knownEntries())) })
 
     private val pendingFailures = MutableStateFlow(emptyList<DataError>())
-    private val presentation = combine(refreshing, titleLanguage, includeAdult.onEach(::filterChanged), ::Triple)
+    private val presentation =
+        combine(
+            refreshing,
+            titleLanguage,
+            adultSearchChoice.onEach { choice ->
+                if (recommendationFilter != null && recommendationFilter != choice) pendingFailures.value = emptyList()
+                filterChanged(choice)
+            },
+            ::Triple,
+        )
 
     val state =
-        combine(sources, presentation, titles, pendingFailures) { source, (refreshing, language, adult), title, failures ->
+        combine(sources, presentation, titles, pendingFailures) { source, (refreshing, language, choice), title, failures ->
+            val adult = choice.enabled
             val state = build(source, refreshing, language, adult)
             if (failures.isNotEmpty()) {
                 if (title?.details?.recommendationsFor(adult) != null && title.storeFailure == null) {
@@ -96,7 +107,7 @@ internal class RecommendationsViewModel(
 
     fun summaryOf(id: AnimeId): TitleSummary? {
         val source = sources.value ?: return null
-        val enabled = recommendationFilter ?: false
+        val enabled = recommendationFilter?.enabled ?: false
         val anime =
             source.title.details
                 ?.recommendationsFor(enabled)

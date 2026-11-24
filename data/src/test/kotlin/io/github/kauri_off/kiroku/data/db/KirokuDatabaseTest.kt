@@ -623,7 +623,7 @@ class KirokuDatabaseTest {
                 4 to "7e5f8a37c34960ccc7f6550ea8aae3f2",
                 5 to "2ec16b4ab274d6bfa0ed4f5d94531644",
                 6 to "0225027f282ee667b6e073930642ad78",
-                7 to "7e05db17dd4fe919c6f60243b7fbace7",
+                7 to "821cd60397be73230eb12dd46d857650",
             )
     }
 }

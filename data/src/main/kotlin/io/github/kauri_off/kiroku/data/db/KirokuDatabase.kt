@@ -97,7 +97,7 @@ abstract class KirokuDatabase : RoomDatabase() {
                     }
                 },
                 migration(6, 7) {
-                    execSQL("ALTER TABLE `title_details` ADD COLUMN `recommendations_include_adult` INTEGER NOT NULL DEFAULT 0")
+                    execSQL("ALTER TABLE `title_details` ADD COLUMN `recommendations_include_adult` INTEGER DEFAULT 0")
                 },
             )
 

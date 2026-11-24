@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.anime.MalAnimeRepository
 import io.github.kauri_off.kiroku.data.anime.MalTitles
 import io.github.kauri_off.kiroku.data.db.TitleStore
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -17,16 +18,16 @@ import java.time.Instant
 // The titles of a live source: its database's, refreshed from MAL's pages.
 internal fun liveTitles(
     parts: LiveParts,
-    adult: suspend () -> Boolean = { false },
-    build: (LiveParts) -> AnimeRepository = { titlesOf(it, adult) },
+    preferences: () -> StoredPreferences = { livePreferences(parts) },
+    build: (LiveParts) -> AnimeRepository = { titlesOf(it, preferences()) },
 ): AnimeRepository = TitlesOnFirstUse(parts.scope) { build(parts) }
 
 private fun titlesOf(
     parts: LiveParts,
-    adult: suspend () -> Boolean,
+    preferences: StoredPreferences,
 ): AnimeRepository {
     val store = TitleStore(parts.database, Dispatchers.IO, parts.unexpected)
-    return MalAnimeRepository(MalTitles(parts.http), store, parts.clock, adult, parts.unexpected)
+    return MalAnimeRepository(MalTitles(parts.http), store, parts.clock, preferences, parts.unexpected)
 }
 
 // The repository and the database under it are built at its first call, off the main thread.

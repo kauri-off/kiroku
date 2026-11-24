@@ -20,10 +20,16 @@ import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -141,6 +147,47 @@ class StoredPreferencesTest {
             }
         }
         assertEquals(2, reports.size)
+    }
+
+    @Test
+    fun `the same settings observers recover after a read error and a successful write`() {
+        written(stringPreferencesKey("title_language") to "japanese", booleanPreferencesKey("adult_in_search") to true)
+        readsFail = true
+        process { settings ->
+            coroutineScope {
+                val changes = Channel<Pair<TitleLanguage, Boolean>>(Channel.UNLIMITED)
+                val observed =
+                    launch {
+                        combine(settings.observeTitleLanguage(), settings.observeAdultInSearch(), ::Pair).collect { changes.send(it) }
+                    }
+                try {
+                    withTimeout(5_000) {
+                        assertEquals(TitleLanguage.Romaji to false, changes.receive())
+                        readsFail = false
+                        assertEquals(Outcome.Success(Unit), settings.setTitleLanguage(TitleLanguage.English))
+                        while (changes.receive() != (TitleLanguage.English to true)) Unit
+                    }
+                } finally {
+                    observed.cancelAndJoin()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `two outstanding toggle operations advance the choice twice`() {
+        process { settings ->
+            coroutineScope {
+                val first = async { settings.changeAdultInSearch { !it } }
+                val second = async { settings.changeAdultInSearch { !it } }
+                assertEquals(Outcome.Success(Unit), first.await())
+                assertEquals(Outcome.Success(Unit), second.await())
+                val current = settings.observeAdultSearchChoice().first()
+                assertFalse(current.enabled)
+                assertEquals(2L, current.revision)
+            }
+        }
+        process { assertEquals(2L, it.observeAdultSearchChoice().first().revision) }
     }
 
     private val opened = stringPreferencesKey("opened_profiles")

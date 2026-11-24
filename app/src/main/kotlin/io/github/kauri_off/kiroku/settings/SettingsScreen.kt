@@ -50,9 +50,7 @@ sealed interface SettingsEvent {
         val language: TitleLanguage,
     ) : SettingsEvent
 
-    data class SetAdultInSearch(
-        val show: Boolean,
-    ) : SettingsEvent
+    data object ToggleAdultInSearch : SettingsEvent
 }
 
 @Composable
@@ -96,7 +94,7 @@ fun SettingsScreen(
                                 value = checked == true,
                                 enabled = checked != null,
                                 role = Role.Switch,
-                                onValueChange = { onEvent(SettingsEvent.SetAdultInSearch(it)) },
+                                onValueChange = { onEvent(SettingsEvent.ToggleAdultInSearch) },
                             ),
                         trailingContent = { Switch(checked = checked == true, onCheckedChange = null, enabled = checked != null) },
                         content = { Text(stringResource(R.string.settings_adult_in_search)) },

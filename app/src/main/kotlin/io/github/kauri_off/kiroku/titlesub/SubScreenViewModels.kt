@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -20,8 +21,8 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.ScoreDistribution
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
-import io.github.kauri_off.kiroku.hasOtherRecommendations
 import io.github.kauri_off.kiroku.readAgainOnRetry
+import io.github.kauri_off.kiroku.recommendationsNeedRefresh
 import io.github.kauri_off.kiroku.stale
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.title.airingOf
@@ -54,7 +55,7 @@ abstract class SubScreenViewModel(
     connection: Connection,
     private val clock: Clock,
     private val opened: TitleSummary?,
-    private val includeAdult: Flow<Boolean>? = null,
+    private val adultSearchChoice: Flow<AdultSearchChoice>? = null,
 ) : ViewModel() {
     protected class Title(
         val anime: Anime?,
@@ -76,6 +77,7 @@ abstract class SubScreenViewModel(
     private val failure = MutableStateFlow<DataError?>(null)
     protected val refreshing = MutableStateFlow(false)
     private var load: Job? = null
+    private var replaceObsolete = false
 
     // Retry reads again what could not be read.
     protected val retries = MutableStateFlow(0)
@@ -100,30 +102,35 @@ abstract class SubScreenViewModel(
         )
 
     private fun shownAgain() {
-        if (includeAdult == null) return
+        if (adultSearchChoice == null) return
         viewModelScope.launch {
-            if (hasOtherRecommendations() && loads.isShowing && load?.isActive != true) refresh()
+            val needed = replaceObsolete || recommendationsNeedRefresh()
+            if (needed && loads.isShowing && load?.isActive != true) refresh()
         }
     }
 
-    protected var recommendationFilter: Boolean? = null
+    protected var recommendationFilter: AdultSearchChoice? = null
         private set
 
-    protected fun filterChanged(enabled: Boolean) {
+    protected fun filterChanged(choice: AdultSearchChoice) {
         val previous = recommendationFilter
-        recommendationFilter = enabled
-        if (previous != null && previous != enabled && loads.isShowing) refresh()
+        recommendationFilter = choice
+        if (previous != null && previous != choice) {
+            failure.value = null
+            if (loads.isShowing) refresh()
+        }
     }
 
     // Collected while the screen is shown; showing it refreshes stale details.
     val shown: StateFlow<Unit> get() = loads.shown
 
     private suspend fun refreshIfStale() {
-        val stale = anime.stale(id, opened?.anime, clock.instant()) || hasOtherRecommendations()
+        val stale = anime.stale(id, opened?.anime, clock.instant()) || replaceObsolete || recommendationsNeedRefresh()
         if (stale && load?.isActive != true) refresh()
     }
 
-    private suspend fun hasOtherRecommendations(): Boolean = includeAdult?.first()?.let { anime.hasOtherRecommendations(id, it) } == true
+    private suspend fun recommendationsNeedRefresh(): Boolean =
+        adultSearchChoice?.first()?.let { anime.recommendationsNeedRefresh(id, it.enabled) } == true
 
     protected fun retry() {
         retries.update { it + 1 }
@@ -135,16 +142,26 @@ abstract class SubScreenViewModel(
     // A newer load replaces an older one, so the older one's end never stands for the screen.
     private fun refresh() {
         load?.cancel()
+        replaceObsolete = false
         failure.value = null
         refreshing.value = true
         loads.started()
         load =
             viewModelScope.launch {
+                val choice = adultSearchChoice?.first()
                 val result = anime.refresh(id)
+                if (choice != adultSearchChoice?.first()) {
+                    currentCoroutineContext().ensureActive()
+                    refreshing.value = false
+                    if ((result as? Outcome.Failure)?.error != DataError.ListEnded) {
+                        if (loads.isShowing) refresh() else replaceObsolete = true
+                    }
+                    return@launch
+                }
                 val error =
                     when (result) {
                         is Outcome.Failure -> result.error
-                        is Outcome.Success -> DataError.ServerError.takeIf { hasOtherRecommendations() }
+                        is Outcome.Success -> DataError.ServerError.takeIf { recommendationsNeedRefresh() }
                     }
                 currentCoroutineContext().ensureActive()
                 failure.value = error

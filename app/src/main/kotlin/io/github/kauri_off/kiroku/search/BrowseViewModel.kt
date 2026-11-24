@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -32,6 +33,8 @@ internal class BrowseViewModel(
     private val pages = MutableStateFlow(BrowseResults())
     private var adult: Boolean? = null
     private var pending: Job? = null
+    private var validated = false
+    private var reconnect = false
 
     private val loads =
         ShownLoads(
@@ -39,22 +42,30 @@ internal class BrowseViewModel(
             connection,
             whenShown = ::loadFirst,
             shownAgain = ::loadFirst,
-            again = ::retry,
+            again = {
+                if (validated) retry() else reconnect = true
+            },
         )
 
     val shown get() = loads.shown
     val state =
         includeAdult
             .flatMapLatest { enabled ->
+                validated = true
                 if (adult != enabled) {
                     adult = enabled
                     pending?.cancel()
                     pages.value = BrowseResults()
                     loads.started()
-                    if (loads.isShowing) loadFirst()
+                    reconnect = false
+                }
+                if (loads.isShowing) {
+                    if (reconnect) retry() else loadFirst()
+                    reconnect = false
                 }
                 pages
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), BrowseResults())
+            }.onCompletion { validated = false }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), BrowseResults())
 
     private fun loadFirst() {
         if (pages.value.nextOffset == 0) loadMore()
@@ -65,6 +76,7 @@ internal class BrowseViewModel(
     fun retry() = load(retry = true)
 
     private fun load(retry: Boolean) {
+        if (!validated) return
         val enabled = adult ?: return
         val page = pages.value
         val offset = page.nextOffset ?: return

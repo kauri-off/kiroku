@@ -4,6 +4,7 @@ import android.content.Context
 import coil3.ImageLoader
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -52,6 +53,7 @@ interface AppGraph {
 
     val titleLanguage: Flow<TitleLanguage> get() = preferences.observeTitleLanguage()
     val showAdultInSearch: Flow<Boolean> get() = preferences.observeAdultInSearch()
+    val adultSearchChoice: Flow<AdultSearchChoice> get() = preferences.observeAdultSearchChoice()
 
     // The notification settings, what comes next and what was sent.
     val notifications: NotificationsRepository

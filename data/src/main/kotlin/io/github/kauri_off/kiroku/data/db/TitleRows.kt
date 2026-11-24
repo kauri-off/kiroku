@@ -143,7 +143,7 @@ internal data class TitleDetailsRow(
     val rating: String?,
     @Embedded(prefix = "statistics_") val statistics: StatisticsColumns?,
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
-    @ColumnInfo(name = "recommendations_include_adult", defaultValue = "0") val recommendationsIncludeAdult: Boolean = false,
+    @ColumnInfo(name = "recommendations_include_adult", defaultValue = "0") val recommendationsIncludeAdult: Boolean? = false,
 ) {
     // The same rule as a summary's; the season's year and name are one value.
     fun mergedWith(

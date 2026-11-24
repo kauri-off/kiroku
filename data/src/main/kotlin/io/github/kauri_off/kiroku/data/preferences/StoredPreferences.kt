@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.PreferencesFileSerializer
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -23,17 +24,25 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.data.db.Codes
 import io.github.kauri_off.kiroku.data.db.listStatuses
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.IOException
 
@@ -73,27 +82,63 @@ class StoredPreferences internal constructor(
     // The stored values already reported as unreadable, each once per process.
     private val reported = mutableSetOf<Pair<String, Any?>>()
 
+    private val writes = MutableStateFlow(0L)
+    private val adultWrites = Mutex()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val settings = writes.flatMapLatest { data }
+
+    internal suspend fun <T> withAdultChoice(block: suspend (AdultSearchChoice?) -> T): T =
+        adultWrites.withLock {
+            val choice =
+                try {
+                    adultChoice(store.data.first())
+                } catch (e: IOException) {
+                    unexpected(PreferencesFailure(e))
+                    null
+                }
+            block(choice)
+        }
+
     override fun observeTitleLanguage(): Flow<TitleLanguage> =
-        data
+        settings
             .map { choiceOf(it, TITLE_LANGUAGE, TitleLanguage.Romaji) { value -> (value as? String)?.let(languages.values::get) } }
             .distinctUntilChanged()
 
-    override fun observeAdultInSearch(): Flow<Boolean> =
-        data.map { choiceOf(it, ADULT_IN_SEARCH, false) { value -> value as? Boolean } }.distinctUntilChanged()
+    override fun observeAdultSearchChoice(): Flow<AdultSearchChoice> = settings.map(::adultChoice).distinctUntilChanged()
+
+    private fun adultChoice(stored: Preferences) = AdultSearchChoice(adultIn(stored), stored.asMap()[ADULT_REVISION] as? Long ?: 0L)
+
+    private fun adultIn(stored: Preferences): Boolean = choiceOf(stored, ADULT_IN_SEARCH, false) { it as? Boolean }
 
     override suspend fun setTitleLanguage(language: TitleLanguage): Outcome<Unit> =
         save { it[TITLE_LANGUAGE] = languages.toColumn(language) }
 
-    override suspend fun setAdultInSearch(show: Boolean): Outcome<Unit> = save { it[ADULT_IN_SEARCH] = show }
+    override suspend fun changeAdultInSearch(change: (Boolean) -> Boolean): Outcome<Unit> =
+        adultWrites.withLock {
+            save {
+                val before = adultChoice(it)
+                val after = change(before.enabled)
+                if (before.enabled != after) {
+                    it[ADULT_IN_SEARCH] = after
+                    it[ADULT_REVISION] = before.revision + 1
+                }
+            }
+        }
 
     private suspend fun save(change: (MutablePreferences) -> Unit): Outcome<Unit> =
         try {
-            store.edit { change(it) }
+            edit(change)
             Outcome.Success(Unit)
         } catch (e: IOException) {
             unexpected(PreferencesFailure(e))
             Outcome.Failure(DataError.StorageError)
         }
+
+    private suspend fun edit(change: (MutablePreferences) -> Unit) {
+        store.edit { change(it) }
+        writes.update { it + 1 }
+    }
 
     override fun observeListSorts(): Flow<Map<ListStatus, TabSort>> =
         data.map { stored -> ListStatus.entries.associateWith { sortOf(stored, it) } }.distinctUntilChanged()
@@ -103,7 +148,7 @@ class StoredPreferences internal constructor(
         sort: TabSort,
     ) {
         try {
-            store.edit { stored ->
+            edit { stored ->
                 stored[sortKey(status)] = sorts.toColumn(sort.sort)
                 val key = directionKey(status)
                 val direction = sort.direction
@@ -118,7 +163,7 @@ class StoredPreferences internal constructor(
 
     override suspend fun updateOpenedProfiles(change: (List<String>) -> List<String>) {
         try {
-            store.edit { stored ->
+            edit { stored ->
                 val names = change(openedOf(stored))
                 if (names.isEmpty()) stored.remove(OPENED) else stored[OPENED] = names.joinToString(NAMES_APART)
             }
@@ -131,7 +176,7 @@ class StoredPreferences internal constructor(
     // that fails this throws.
     suspend fun forgetUsersChoices() {
         try {
-            store.edit { stored ->
+            edit { stored ->
                 stored
                     .asMap()
                     .keys
@@ -158,7 +203,7 @@ class StoredPreferences internal constructor(
     // All three at once; a disk that fails this throws.
     suspend fun writeNotificationSettings(settings: NotificationSettings) {
         try {
-            store.edit { stored ->
+            edit { stored ->
                 stored[NOTIFY_ON] = settings.on
                 stored[NOTIFY_ALSO_PLANNED] = settings.alsoPlanned
                 stored[NOTIFY_DELAY] = delays.toColumn(settings.delay)
@@ -230,6 +275,7 @@ class StoredPreferences internal constructor(
 
         val TITLE_LANGUAGE = stringPreferencesKey("title_language")
         val ADULT_IN_SEARCH = booleanPreferencesKey("adult_in_search")
+        val ADULT_REVISION = longPreferencesKey("adult_search_revision")
         val languages =
             Codes(TitleLanguage.entries) {
                 when (it) {

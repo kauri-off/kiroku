@@ -11,7 +11,7 @@ data class AnimeDetails(
     val statistics: TitleStatistics?,
     val related: List<RelatedAnime>,
     val recommendations: List<Anime>,
-    val recommendationsIncludeAdult: Boolean = false,
+    val recommendationsIncludeAdult: Boolean? = false,
 ) {
     fun recommendationsFor(includeAdult: Boolean): List<Anime>? = recommendations.takeIf { includeAdult == recommendationsIncludeAdult }
 

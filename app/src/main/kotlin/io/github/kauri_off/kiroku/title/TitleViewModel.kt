@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.chainWalk
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -24,9 +25,9 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.edit.EditSheetState
-import io.github.kauri_off.kiroku.hasOtherRecommendations
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.readAgainOnRetry
+import io.github.kauri_off.kiroku.recommendationsNeedRefresh
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.stale
@@ -64,7 +65,7 @@ class TitleViewModel(
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
     private val opened: TitleSummary? = null,
-    private val includeAdult: Flow<Boolean> = flowOf(false),
+    private val adultSearchChoice: Flow<AdultSearchChoice> = flowOf(AdultSearchChoice()),
 ) : ViewModel() {
     private class Sources(
         val anime: Anime?,
@@ -124,6 +125,7 @@ class TitleViewModel(
     // Section 6.2: the page's airing is a part of it, read again at its next pull or Retry when it could not be read.
     private val airingReads = MutableStateFlow(0)
     private var load: Job? = null
+    private var replaceObsolete = false
 
     // The page's own airing ask, apart from its load: AniList's pace never holds the page's indicator or its walk.
     private var airingAsk: Job? = null
@@ -148,7 +150,7 @@ class TitleViewModel(
             Sources(stored.anime, stored.details, around.list, around.airing, session, stored.failure, chain = stored.chain)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let(::Sources))
 
-    private var previousFilter: Boolean? = null
+    private var previousFilter: AdultSearchChoice? = null
 
     val state: StateFlow<TitleState> =
         combine(
@@ -156,7 +158,7 @@ class TitleViewModel(
             moment,
             failure,
             combine(waitShown, chainWaitShown, ::Pair),
-            combine(refreshing, titleLanguage, includeAdult.onEach(::filterChanged), ::Triple),
+            combine(refreshing, titleLanguage, adultSearchChoice.onEach(::filterChanged), ::Triple),
         ) {
             sources,
             moment,
@@ -164,7 +166,7 @@ class TitleViewModel(
             (waitShown, chainWaitShown),
             (refreshing, language, adult),
             ->
-            build(sources, moment, failure, waitShown, refreshing, chainWaitShown, language, adult)
+            build(sources, moment, failure, waitShown, refreshing, chainWaitShown, language, adult.enabled)
         }.stateIn(
             viewModelScope,
             WhileShown,
@@ -183,10 +185,13 @@ class TitleViewModel(
             shownAgain = ::shownAgain,
         )
 
-    private fun filterChanged(enabled: Boolean) {
+    private fun filterChanged(choice: AdultSearchChoice) {
         val previous = previousFilter
-        previousFilter = enabled
-        if (previous != null && previous != enabled && loads.isShowing) refresh(Asked.Filter)
+        previousFilter = choice
+        if (previous != null && previous != choice) {
+            failure.value = null
+            if (loads.isShowing) refresh(Asked.Filter)
+        }
     }
 
     // Collected while the page is shown; showing it refreshes stale details.
@@ -203,7 +208,8 @@ class TitleViewModel(
     private fun shownAgain() {
         if (cut && load?.isActive != true) walkIfOwed()
         viewModelScope.launch {
-            if (anime.hasOtherRecommendations(id, includeAdult.first()) && loads.isShowing && load?.isActive != true) refresh(Asked.Filter)
+            val needed = replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled)
+            if (needed && loads.isShowing && load?.isActive != true) refresh(Asked.Filter)
         }
     }
 
@@ -299,7 +305,8 @@ class TitleViewModel(
     // A load that started while the store was read stands; a fresh page walks its chain if it has not.
     private suspend fun refreshIfStale() {
         val stale = anime.stale(id, opened?.anime, clock.instant())
-        val otherRecommendations = !stale && anime.hasOtherRecommendations(id, includeAdult.first())
+        val otherRecommendations =
+            !stale && (replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled))
         if (load?.isActive == true) return
         if (stale) {
             refresh(Asked.Shown)
@@ -332,6 +339,7 @@ class TitleViewModel(
     // A wait the person asked for shows at once; one the page started only after a second.
     private fun refresh(asked: Asked) {
         load?.cancel()
+        replaceObsolete = false
         if (asked != Asked.Filter) walking?.cancel()
         failure.value = null
         waitShown.value = asked == Asked.Retry
@@ -358,9 +366,19 @@ class TitleViewModel(
                 } else {
                     null
                 }
+            val choice = adultSearchChoice.first()
             val result = anime.refresh(id)
+            val obsolete = adultSearchChoice.first() != choice
             currentCoroutineContext().ensureActive()
             wait?.cancel()
+            if (obsolete) {
+                waitShown.value = false
+                refreshing.value = false
+                if ((result as? Outcome.Failure)?.error != DataError.ListEnded) {
+                    if (loads.isShowing) refresh(Asked.Filter) else replaceObsolete = true
+                }
+                return@coroutineScope false
+            }
             waitShown.value = false
             refreshing.value = false
             loads.ended((result as? Outcome.Failure)?.error)

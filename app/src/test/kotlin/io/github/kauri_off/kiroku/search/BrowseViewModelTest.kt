@@ -17,6 +17,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
@@ -122,6 +124,57 @@ class BrowseViewModelTest {
             runCurrent()
             assertEquals(listOf(safe), model.state.value.titles)
             assertEquals(25, model.state.value.nextOffset)
+        }
+
+    @Test
+    fun `returning online validates the filter before resuming an offline continuation`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val mode = MutableStateFlow(true)
+            val saved = CompletableDeferred<Unit>()
+            var reads = 0
+            val filter =
+                flow {
+                    if (++reads > 1) saved.await()
+                    emitAll(mode)
+                }
+            val calls = mutableListOf<Pair<Int, Boolean>>()
+            val previous = Ranked(1, FixtureAnime.exactToWatch)
+            val current = Ranked(1, FixtureAnime.exactCaughtUp)
+            val repo =
+                object : SearchRepository by demo.search {
+                    override fun openBrowse(list: BrowseList) =
+                        BrowseSession { offset, adult ->
+                            calls += offset to adult
+                            when {
+                                offset != 0 -> Outcome.Failure(DataError.NoConnection)
+                                adult -> Outcome.Success(Page(listOf(previous), 20))
+                                else -> Outcome.Success(Page(listOf(current), null))
+                            }
+                        }
+                }
+            val model = BrowseViewModel(BrowseList.TopRated, repo, demo.connection, filter)
+            val showing = showing(model.state, model.shown)
+            runCurrent()
+            demo.server.offline.value = true
+            model.loadMore()
+            runCurrent()
+            assertEquals(DataError.NoConnection, model.state.value.error)
+            showing.cancel()
+            runCurrent()
+            mode.value = false
+            demo.server.offline.value = false
+            showing(model.state, model.shown)
+            runCurrent()
+            assertEquals(listOf(0 to true, 20 to true), calls)
+            assertTrue(
+                model.state.value.titles
+                    .isEmpty(),
+            )
+            saved.complete(Unit)
+            runCurrent()
+            assertEquals(listOf(0 to true, 20 to true, 0 to false), calls)
+            assertEquals(listOf(current), model.state.value.titles)
         }
 
     private class BrowseRequests(

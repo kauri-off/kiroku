@@ -12,8 +12,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -23,7 +25,9 @@ import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
+import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.TestGraph
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -105,6 +109,41 @@ class SettingsRouteTest {
         val intent = shadowOf(compose.activity).nextStartedActivity
         assertEquals(Settings.ACTION_APP_LOCALE_SETTINGS, intent.action)
         assertEquals("package:${app.packageName}", intent.dataString)
+    }
+
+    @Test
+    fun `two switch taps before the first write returns are both applied`() {
+        val release = CompletableDeferred<Unit>()
+        var toggles = 0
+        val source =
+            object : AppGraph by graph {
+                override val preferences =
+                    object : PreferencesRepository by graph.preferences {
+                        override suspend fun changeAdultInSearch(change: (Boolean) -> Boolean): Outcome<Unit> {
+                            toggles++
+                            release.await()
+                            return graph.preferences.changeAdultInSearch(change)
+                        }
+                    }
+            }
+        restoration.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SettingsRoute(source, ShellMessages(scope, graph.list), SnackbarHostState(), {}, {})
+            }
+        }
+        val adult = compose.onNodeWithText("Show adult content in search")
+        adult.assertIsOff()
+        try {
+            adult.performClick().assertIsOff()
+            adult.performClick().assertIsOff()
+            compose.waitForIdle()
+            assertEquals(2, toggles)
+        } finally {
+            release.complete(Unit)
+        }
+        compose.waitForIdle()
+        adult.assertIsOff()
+        assertEquals(2L, runBlocking { graph.adultSearchChoice.first() }.revision)
     }
 
     @Test

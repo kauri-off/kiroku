@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 7,
-    "identityHash": "7e05db17dd4fe919c6f60243b7fbace7",
+    "identityHash": "821cd60397be73230eb12dd46d857650",
     "entities": [
       {
         "tableName": "title",
@@ -107,7 +107,7 @@
       },
       {
         "tableName": "title_details",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `synopsis` TEXT, `end_date` TEXT, `season_year` INTEGER, `season` TEXT, `source` TEXT, `studios` TEXT NOT NULL, `rating` TEXT, `fetched_at` INTEGER NOT NULL, `recommendations_include_adult` INTEGER NOT NULL DEFAULT 0, `statistics_watching` INTEGER, `statistics_completed` INTEGER, `statistics_on_hold` INTEGER, `statistics_dropped` INTEGER, `statistics_planned` INTEGER, `statistics_members` INTEGER, PRIMARY KEY(`title_id`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `synopsis` TEXT, `end_date` TEXT, `season_year` INTEGER, `season` TEXT, `source` TEXT, `studios` TEXT NOT NULL, `rating` TEXT, `fetched_at` INTEGER NOT NULL, `recommendations_include_adult` INTEGER DEFAULT 0, `statistics_watching` INTEGER, `statistics_completed` INTEGER, `statistics_on_hold` INTEGER, `statistics_dropped` INTEGER, `statistics_planned` INTEGER, `statistics_members` INTEGER, PRIMARY KEY(`title_id`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "titleId",
@@ -161,7 +161,6 @@
             "fieldPath": "recommendationsIncludeAdult",
             "columnName": "recommendations_include_adult",
             "affinity": "INTEGER",
-            "notNull": true,
             "defaultValue": "0"
           },
           {
@@ -807,7 +806,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7e05db17dd4fe919c6f60243b7fbace7')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '821cd60397be73230eb12dd46d857650')"
     ]
   }
 }

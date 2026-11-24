@@ -297,6 +297,63 @@ class RecommendationsViewModelTest {
             scope.cancel()
         }
 
+    @Test
+    fun `an obsolete failure on return is replaced once and valid empty results stay cached`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            graph.preferences.setAdultInSearch(true)
+            val cache = MutableStateFlow(details.copy(recommendationsIncludeAdult = true))
+            val responses = mutableListOf<CompletableDeferred<Outcome<Unit>>>()
+            val errors = mutableListOf<DataError>()
+            val repository =
+                object : AnimeRepository by graph.anime {
+                    override fun observeDetails(id: AnimeId) = cache
+
+                    override fun observeRefreshedAt(id: AnimeId) = flowOf(graph.clock.instant())
+
+                    override suspend fun refresh(id: AnimeId): Outcome<Unit> =
+                        CompletableDeferred<Outcome<Unit>>().also { responses += it }.await()
+                }
+            val vm = recommendations(graph, repository = repository, onRefreshFailed = errors::add)
+            showing(vm.state)
+            var screen = showing(vm.shown)
+            runCurrent()
+            assertFalse(shown(vm).rows.isEmpty())
+            vm.onEvent(RecommendationsEvent.Reload)
+            runCurrent()
+            screen.cancel()
+            runCurrent()
+            graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            screen = showing(vm.shown)
+            runCurrent()
+            responses.single().complete(Outcome.Failure(DataError.Refused))
+            runCurrent()
+            assertEquals(2, responses.size)
+            assertEquals(RecommendationsContent.Loading, vm.state.value.content)
+            assertTrue(errors.isEmpty())
+            responses.last().complete(Outcome.Failure(DataError.ServerError))
+            runCurrent()
+            assertEquals(2, responses.size)
+            assertEquals(RecommendationsContent.Failed(DataError.ServerError), vm.state.value.content)
+            assertTrue(errors.isEmpty())
+
+            vm.onEvent(RecommendationsEvent.Reload)
+            runCurrent()
+            cache.value = details.copy(recommendations = emptyList())
+            responses.last().complete(Outcome.Success(Unit))
+            runCurrent()
+            assertEquals(RecommendationsContent.Shown(emptyList()), vm.state.value.content)
+            screen.cancel()
+            runCurrent()
+            showing(vm.shown)
+            runCurrent()
+            assertEquals(3, responses.size)
+            assertEquals(RecommendationsContent.Shown(emptyList()), vm.state.value.content)
+            scope.cancel()
+        }
+
     private fun shown(vm: RecommendationsViewModel): RecommendationsContent.Shown = vm.state.value.content as RecommendationsContent.Shown
 
     private fun recommendations(
@@ -315,7 +372,7 @@ class RecommendationsViewModelTest {
         graph.clock,
         graph.titleLanguage,
         opened,
-        includeAdult = graph.showAdultInSearch,
+        adultSearchChoice = graph.adultSearchChoice,
         onRefreshFailed = onRefreshFailed,
     )
 }

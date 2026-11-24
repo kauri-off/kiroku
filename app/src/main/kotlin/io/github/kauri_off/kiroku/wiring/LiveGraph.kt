@@ -153,7 +153,7 @@ internal class LiveGraph(
     }
 
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
-    override val anime by lazy { liveTitles(parts, adult = { showAdultInSearch.first() }) }
+    override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, account::whileOwner, airingOf) }
     override val scores by lazy { parts.scores }
     override val search by lazy { MalSearch(parts.http, parts.clock) }

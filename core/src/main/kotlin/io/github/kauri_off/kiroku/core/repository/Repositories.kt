@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.core.notify.NotificationSettings
 import io.github.kauri_off.kiroku.core.notify.SentNotification
 import io.github.kauri_off.kiroku.core.user.UserListState
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
@@ -390,14 +391,23 @@ interface UserRepository :
     UserLists
 
 // The person's choices, kept across restarts. A choice that cannot be read counts as never made, and is reported.
+data class AdultSearchChoice(
+    val enabled: Boolean = false,
+    val revision: Long = 0,
+)
+
 interface PreferencesRepository {
     fun observeTitleLanguage(): Flow<TitleLanguage>
 
-    fun observeAdultInSearch(): Flow<Boolean>
+    fun observeAdultInSearch(): Flow<Boolean> = observeAdultSearchChoice().map { it.enabled }.distinctUntilChanged()
+
+    fun observeAdultSearchChoice(): Flow<AdultSearchChoice>
 
     suspend fun setTitleLanguage(language: TitleLanguage): Outcome<Unit>
 
-    suspend fun setAdultInSearch(show: Boolean): Outcome<Unit>
+    suspend fun setAdultInSearch(show: Boolean): Outcome<Unit> = changeAdultInSearch { show }
+
+    suspend fun changeAdultInSearch(change: (Boolean) -> Boolean): Outcome<Unit>
 
     // Every tab of the user's own list with its sort: the one chosen, or the tab's default.
     fun observeListSorts(): Flow<Map<ListStatus, TabSort>>

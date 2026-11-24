@@ -96,9 +96,10 @@ internal class DemoAnimeRepository(
     override fun observePagesRead(): Flow<Set<AnimeId>> = cached.map { it.keys }.distinctUntilChanged()
 
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+        val includeAdult = choices.observeAdultInSearch().first()
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
         val details = fixtures.details[id] ?: madeUp[id]?.let { bare(it.id) } ?: return Outcome.Failure(DataError.NotFound)
-        cached.value += id to Fetched(details.copy(recommendationsIncludeAdult = choices.observeAdultInSearch().first()), clock.instant())
+        cached.value += id to Fetched(details.copy(recommendationsIncludeAdult = includeAdult), clock.instant())
         return Outcome.Success(Unit)
     }
 

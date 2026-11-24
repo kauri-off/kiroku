@@ -53,9 +53,9 @@ fun SettingsRoute(
                     scope.launch {
                         save(messages) { graph.preferences.setTitleLanguage(event.language) }
                     }
-                is SettingsEvent.SetAdultInSearch ->
+                SettingsEvent.ToggleAdultInSearch ->
                     scope.launch {
-                        save(messages) { graph.preferences.setAdultInSearch(event.show) }
+                        save(messages) { graph.preferences.changeAdultInSearch { !it } }
                     }
             }
         },

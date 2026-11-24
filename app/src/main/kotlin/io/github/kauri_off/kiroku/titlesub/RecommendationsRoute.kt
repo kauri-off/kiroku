@@ -51,7 +51,7 @@ fun RecommendationsRoute(
                 graph.clock,
                 graph.titleLanguage,
                 key.opened,
-                includeAdult = graph.showAdultInSearch,
+                adultSearchChoice = graph.adultSearchChoice,
                 onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
             )
         }

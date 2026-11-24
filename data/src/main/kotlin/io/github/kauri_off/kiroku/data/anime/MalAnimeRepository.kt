@@ -10,13 +10,16 @@ import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.db.Unread
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
+import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.time.Instant
 
@@ -26,10 +29,11 @@ class MalAnimeRepository(
     private val store: TitleStore,
     private val clock: Clock,
     // The setting "Show adult content in search", which inside a title changes only its recommendations.
-    private val adult: suspend () -> Boolean,
+    private val preferences: StoredPreferences,
     private val unexpected: (Throwable) -> Unit,
 ) : AnimeRepository {
-    private val publishing = Mutex()
+    private var sequence = 0L
+    private val published = mutableMapOf<AnimeId, Long>()
 
     override fun observeAnime(id: AnimeId): Flow<Anime?> = store.observeAnime(id).readable()
 
@@ -59,8 +63,8 @@ class MalAnimeRepository(
                 is Outcome.Failure -> return held
                 is Outcome.Success -> held.value
             }
-        val includeAdult = adult()
-        val answer = titles.title(id, includeAdult)
+        val (choice, order) = preferences.withAdultChoice { it to ++sequence }
+        val answer = titles.title(id, choice?.enabled == true)
         if (answer !is Outcome.Success) return answer as Outcome.Failure
         val (anime, details, unread) = answer.value
         // A page of another title is not the one asked for, which would otherwise never get its details.
@@ -70,17 +74,21 @@ class MalAnimeRepository(
         }
         val stored =
             stored {
-                publishing.withLock {
-                    if (includeAdult == adult()) {
-                        store.refresh(anime, details.copy(recommendationsIncludeAdult = includeAdult), clock.instant(), unread, begun)
-                    } else {
-                        store.refresh(
-                            anime,
-                            details.copy(recommendations = emptyList()),
-                            clock.instant(),
-                            unread + Unread.Recommendations,
-                            begun,
-                        )
+                preferences.withAdultChoice { current ->
+                    if (order < published.getOrDefault(id, 0L)) return@withAdultChoice store.holder() == begun
+                    val accepted = choice?.takeIf { it == current && Unread.Recommendations !in unread }
+                    val kept =
+                        if (accepted != null) {
+                            details.copy(recommendationsIncludeAdult = accepted.enabled)
+                        } else {
+                            details.copy(recommendations = emptyList(), recommendationsIncludeAdult = null)
+                        }
+                    val missing = if (accepted != null) unread else unread + Unread.Recommendations
+                    currentCoroutineContext().ensureActive()
+                    withContext(NonCancellable) {
+                        store.refresh(anime, kept, clock.instant(), missing, begun).also { written ->
+                            if (written) published[id] = order
+                        }
                     }
                 }
             }

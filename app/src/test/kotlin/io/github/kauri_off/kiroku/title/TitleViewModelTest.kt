@@ -174,6 +174,43 @@ class TitleViewModelTest {
         }
 
     @Test
+    fun `returning to an open title replaces a held refresh from the former recommendation mode`() =
+        test { s ->
+            s.graph.preferences.setAdultInSearch(true)
+            advanceUntilIdle()
+            val before = s.shown.page
+            val requests = s.graph.requested.size
+            s.graph.demo.server.latency = 100.milliseconds
+            s.title.onEvent(TitleEvent.Refresh)
+            runCurrent()
+            s.screen.cancel()
+            runCurrent()
+            s.graph.preferences.setAdultInSearch(false)
+            runCurrent()
+            s.screen = showing(s.title.state, s.title.shown)
+            runCurrent()
+            assertTrue(
+                s.shown.page.details!!
+                    .recommendations
+                    .isEmpty(),
+            )
+            assertEquals(before.related, s.shown.page.related)
+            advanceTimeBy(101)
+            assertEquals(requests + 2, s.graph.requested.size)
+            advanceUntilIdle()
+            assertEquals(
+                before.details!!.recommendations,
+                s.shown.page.details!!
+                    .recommendations,
+            )
+            assertEquals(
+                false,
+                s.shown.page.details!!
+                    .recommendationsIncludeAdult,
+            )
+        }
+
+    @Test
     fun `SetWatched writes the count at once and shows no snackbar below the total`() =
         test { s ->
             s.title.onEvent(TitleEvent.SetWatched(13))
@@ -1474,7 +1511,7 @@ class TitleViewModelTest {
         saved,
         messages,
         opened,
-        includeAdult = graph.showAdultInSearch,
+        adultSearchChoice = graph.adultSearchChoice,
     )
 
     private class CountedClock(
