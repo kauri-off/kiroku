@@ -1,0 +1,395 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 31519,
+                "title": "Anitore! EX",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/3/77048.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/3/77048l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Ani Tore! EX"
+                    ],
+                    "en": "Anime de Training! Ex",
+                    "ja": "あにトレ！ＥＸ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2015-10-13",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "01:11"
+                },
+                "mean": 5.39,
+                "rank": 13873,
+                "genres": [
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 240
+            }
+        },
+        {
+            "node": {
+                "id": 33746,
+                "title": "Anitore! XX: Hitotsu Yane no Shita de",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/82252.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/82252l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Ani Tore! XX"
+                    ],
+                    "en": "Anime de Training! Xx",
+                    "ja": "あにトレ! XX~ひとつ屋根の下で~"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2016-10-05",
+                "broadcast": {
+                    "day_of_the_week": "wednesday",
+                    "start_time": "22:43"
+                },
+                "mean": 5.57,
+                "rank": 13270,
+                "genres": [
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 240
+            }
+        },
+        {
+            "node": {
+                "id": 63827,
+                "title": "AnimeJapan Awards 2026",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1542/156417.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1542/156417l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "AnimeJapan Awards 2026",
+                    "ja": "AnimeJapan 新人クリエイター大賞 2026"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 7,
+                "start_date": "2026-03-28",
+                "mean": 6.2,
+                "rank": 9952,
+                "genres": [
+                    {
+                        "id": 46,
+                        "name": "Award Winning"
+                    }
+                ],
+                "average_episode_duration": 300
+            }
+        },
+        {
+            "node": {
+                "id": 42514,
+                "title": "Anime Kapibara-san",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1819/109679.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1819/109679l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Animation Kapibara-san"
+                    ],
+                    "en": "Anime Kapibarasan",
+                    "ja": "アニメ カピバラさん"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 24,
+                "start_date": "2020-10-09",
+                "broadcast": {
+                    "day_of_the_week": "friday",
+                    "start_time": "07:30"
+                },
+                "mean": 6.66,
+                "rank": 7038,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 15,
+                        "name": "Kids"
+                    }
+                ],
+                "average_episode_duration": 80
+            }
+        },
+        {
+            "node": {
+                "id": 35427,
+                "title": "Animegataris",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/89686.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/89686l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Anime-Gataris",
+                    "ja": "アニメガタリズ"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2017-10-08",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "22:00"
+                },
+                "mean": 6.38,
+                "rank": 8864,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 69,
+                        "name": "Otaku Culture"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    }
+                ],
+                "average_episode_duration": 1420
+            }
+        },
+        {
+            "node": {
+                "id": 37290,
+                "title": "Ani x Para: Anata no Hero wa Dare desu ka",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1336/102231.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1336/102231l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Anime x Parasport"
+                    ],
+                    "en": "Animation × Paralympic: Who Is Your Hero?",
+                    "ja": "アニ×パラ〜あなたのヒーローは誰ですか〜"
+                },
+                "media_type": "tv_special",
+                "status": "currently_airing",
+                "num_episodes": 0,
+                "start_date": "2017-11-10",
+                "mean": 6.51,
+                "rank": 8029,
+                "genres": [
+                    {
+                        "id": 56,
+                        "name": "Educational"
+                    },
+                    {
+                        "id": 30,
+                        "name": "Sports"
+                    }
+                ],
+                "average_episode_duration": 300
+            }
+        },
+        {
+            "node": {
+                "id": 59683,
+                "title": "Animal Maru",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1773/159540.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1773/159540l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Animal Circles"
+                    ],
+                    "en": "Animal Circle",
+                    "ja": "アニマルま～る"
+                },
+                "media_type": "music",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2024-08-25",
+                "genres": [
+                    {
+                        "id": 19,
+                        "name": "Music"
+                    },
+                    {
+                        "id": 71,
+                        "name": "Pets"
+                    }
+                ],
+                "average_episode_duration": 217
+            }
+        },
+        {
+            "node": {
+                "id": 62076,
+                "title": "Super no Ura de Yani Suu Futari",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1768/156339.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1768/156339l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Behind the Supermarket, Smoking with You.",
+                        "Super no Ura de Yani Suu Hanashi, A Story About Smoking at the Back of the Supermarket",
+                        "YaniSuu"
+                    ],
+                    "en": "Smoking Behind the Supermarket with You",
+                    "ja": "スーパーの裏でヤニ吸うふたり"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 12,
+                "start_date": "2026-07-10",
+                "broadcast": {
+                    "day_of_the_week": "thursday",
+                    "start_time": "23:56"
+                },
+                "mean": 8.17,
+                "rank": 513,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 74,
+                        "name": "Love Status Quo"
+                    },
+                    {
+                        "id": 22,
+                        "name": "Romance"
+                    },
+                    {
+                        "id": 42,
+                        "name": "Seinen"
+                    }
+                ],
+                "average_episode_duration": 1432
+            }
+        },
+        {
+            "node": {
+                "id": 1797,
+                "title": "Animation Seisaku Shinkou Kuromi-chan",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1/1797.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1/1797l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Animation Runner Kuromi",
+                    "ja": "アニメーション制作進行くろみちゃん"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2001-03-30",
+                "mean": 6.92,
+                "rank": 5323,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 69,
+                        "name": "Otaku Culture"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 48,
+                        "name": "Workplace"
+                    }
+                ],
+                "average_episode_duration": 2240
+            }
+        },
+        {
+            "node": {
+                "id": 1798,
+                "title": "Animation Seisaku Shinkou Kuromi-chan 2",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1/1798.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1/1798l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Animation Runner Kuromi 2",
+                    "ja": "アニメーション制作進行くろみちゃん 2"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2004-01-28",
+                "mean": 6.96,
+                "rank": 5121,
+                "genres": [
+                    {
+                        "id": 50,
+                        "name": "Adult Cast"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 8,
+                        "name": "Drama"
+                    },
+                    {
+                        "id": 69,
+                        "name": "Otaku Culture"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 48,
+                        "name": "Workplace"
+                    }
+                ],
+                "average_episode_duration": 2729
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/anime?offset=10&q=ani&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    }
+}

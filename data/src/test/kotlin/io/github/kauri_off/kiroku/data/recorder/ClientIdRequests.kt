@@ -28,6 +28,11 @@ internal val ClientIdRequests: List<Ask> =
         Ask("ranking_airing", "anime/ranking?ranking_type=airing&limit=10&fields=$SUMMARY"),
         Ask("ranking_upcoming", "anime/ranking?ranking_type=upcoming&limit=10&fields=$SUMMARY"),
         Ask("search_adult", "anime?q=bible%20black&nsfw=true&limit=10&fields=$SUMMARY"),
+        Ask("search_one_char", "anime?q=a&offset=0&limit=10&fields=$SUMMARY"),
+        Ask("search_two_chars", "anime?q=an&offset=0&limit=10&fields=$SUMMARY"),
+        Ask("search_three_chars", "anime?q=ani&offset=0&limit=10&fields=$SUMMARY"),
+        Ask("search_first_page", "anime?q=naruto&offset=0&limit=10&fields=$SUMMARY"),
+        Ask("search_second_page", "anime?q=naruto&offset=10&limit=10&fields=$SUMMARY"),
         // M2-14: titles.
         Ask("title_airing", "anime/61987?fields=$DETAILS"),
         Ask("title_finished", "anime/1?fields=$DETAILS"),

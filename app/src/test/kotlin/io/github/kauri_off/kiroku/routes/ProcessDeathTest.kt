@@ -51,6 +51,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -118,6 +119,25 @@ class ProcessDeathTest {
         compose.waitForIdle()
         compose.onNode(hasSetTextAction() and hasText("17")).assertExists()
         compose.onNode(hasText("Completed") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)).assertIsSelected()
+    }
+
+    @Test
+    fun `the typed search comes back with a fresh view model after process death`() {
+        var owner = Owner()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) }
+            }
+        }
+        compose.onNode(hasText("Search") and hasClickAction()).performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("kagetosho")
+        compose.waitForIdle()
+        owner.viewModelStore.clear()
+        owner = Owner()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        assertTrue(compose.onAllNodes(hasSetTextAction() and hasText("kagetosho")).fetchSemanticsNodes().isNotEmpty())
     }
 
     @Test
