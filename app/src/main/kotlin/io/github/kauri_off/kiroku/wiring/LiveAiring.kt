@@ -13,6 +13,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.data.db.RoomAiringStore
@@ -46,12 +48,13 @@ internal class LiveAiring(
     private val parts: LiveParts,
     session: Flow<Session>,
     list: () -> ListSource,
+    guard: AiringWriteGuard,
     build: AiringOf = ::listAiring,
 ) : AiringRepository {
     private val store =
         lazy {
             val room = RoomAiringStore(parts.database, Dispatchers.IO, parts.unexpected)
-            SignedInStore(room, session, room::clear)
+            SignedInStore(room, session, guard, room::clear)
         }
     private val built = lazy { build(parts, SignedInSource(parts.aniList, session), store.value, list()) }
     private val opening = Mutex()
@@ -113,29 +116,48 @@ internal class SignedInSource(
     private val source: AiringSource,
     private val session: Flow<Session>,
 ) : AiringSource {
+    override suspend fun isCurrent(owner: SignInId?): Boolean = session.first().owner == owner
+
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since, emptySet()) {}
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun fetch(
         titles: Collection<Anime>,
         since: Instant,
         pulled: Set<AnimeId>,
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = fetchAnswers(session.first().owner, titles, since, pulled, coming = false, whole)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override suspend fun fetchAnswers(
+        owner: SignInId?,
+        titles: Collection<Anime>,
+        since: Instant,
+        pulled: Set<AnimeId>,
+        coming: Boolean,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         session
-            .map { it == Session.SignedOut }
+            .map { it.owner }
             .distinctUntilChanged()
-            .transformLatest { signedOut -> emit(if (signedOut) null else source.fetch(titles, since, pulled, whole)) }
-            .first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
+            .transformLatest { current ->
+                if (owner != null && current == owner) {
+                    emit(source.fetch(titles, since, pulled) { if (!coming) whole(it) })
+                } else {
+                    emit(null)
+                }
+            }.first() ?: titles.associate { it.id to Outcome.Failure(DataError.ListEnded) }
 }
+
+internal typealias AiringWriteGuard = suspend (SignInId?, suspend () -> Boolean) -> Boolean
 
 // Stores nothing while nobody is signed in; forgetting goes on.
 internal class SignedInStore(
     private val store: AiringStore,
     private val session: Flow<Session>,
+    private val guard: AiringWriteGuard,
     // Forgets every title, also one the store cannot read.
     private val clear: suspend () -> Unit,
 ) : AiringStore {
@@ -147,11 +169,20 @@ internal class SignedInStore(
     override suspend fun read(): Map<AnimeId, StoredAiring> = store.read()
 
     override suspend fun write(titles: Map<AnimeId, StoredAiring?>) {
-        writes.withLock {
-            val kept = if (session.first() == Session.SignedOut) titles.filterValues { it == null } else titles
-            if (kept.isNotEmpty()) store.write(kept)
-        }
+        writeAnswers(titles.filterValues { it == null }, session.first().owner)
     }
+
+    override suspend fun writeAnswers(
+        titles: Map<AnimeId, StoredAiring?>,
+        owner: SignInId?,
+    ): Boolean =
+        guard(owner) {
+            writes.withLock {
+                if (session.first().owner != owner || (owner == null && titles.values.any { it != null })) return@withLock false
+                if (titles.isNotEmpty()) store.write(titles)
+                true
+            }
+        }
 
     // Empties the store while nobody is signed in, and only then.
     suspend fun forget() {

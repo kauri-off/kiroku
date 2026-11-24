@@ -2,14 +2,21 @@ package io.github.kauri_off.kiroku.data.session
 
 import androidx.datastore.core.Serializer
 import app.cash.turbine.test
+import io.github.kauri_off.kiroku.core.airing.StoredAiring
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.data.db.KirokuDatabase
+import io.github.kauri_off.kiroku.data.db.RoomAiringStore
+import io.github.kauri_off.kiroku.data.db.transaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -22,6 +29,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -36,9 +45,11 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -342,6 +353,58 @@ class MalSessionTest {
             assertEquals(Session.Expired(other), third.now())
             third.signIn(TokenGrant("access-3", "refresh-3"))
             assertNotEquals(other, (third.now() as Session.SignedIn).signIn)
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun aReplacementSignInWaitsForAnAdmittedAiringTransaction() =
+        runTest {
+            val a = SignInId(SIGN_IN)
+            val tokens = TokenStore(fixture.file, fixture.format(), backgroundScope)
+            assertNull(tokens.write(Stored.Expired(SIGN_IN)))
+            val endpoint = TokenEndpoint { error("No token request expected") }
+            val session = MalSession(tokens, endpoint, fixture.clock, backgroundScope, { throw it })
+            assertEquals(Session.Expired(a), session.now())
+
+            val database = KirokuDatabase.open(RuntimeEnvironment.getApplication(), "reauth-airing.db")
+            try {
+                val airing = RoomAiringStore(database, Dispatchers.IO) { throw it }
+                val rows = mapOf(AnimeId(1) to StoredAiring(null, Instant.EPOCH))
+                val inside = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val ownerBeforeCommit = CompletableDeferred<Session>()
+                val writing =
+                    async {
+                        session.whileOwner(a) {
+                            database.transaction {
+                                airing.write(rows)
+                                inside.complete(Unit)
+                                release.await()
+                                ownerBeforeCommit.complete(session.now())
+                            }
+                            true
+                        }
+                    }
+                inside.await()
+                val signingIn = async { session.signIn(TokenGrant("access-2", "refresh-2")) }
+                runCurrent()
+                val pendingWhileHeld = !signingIn.isCompleted
+                val ownerWhileHeld = session.now()
+                release.complete(Unit)
+
+                assertTrue(writing.await())
+                assertTrue(pendingWhileHeld)
+                assertEquals(Session.Expired(a), ownerWhileHeld)
+                assertEquals(Session.Expired(a), ownerBeforeCommit.await())
+                assertEquals(Outcome.Success(Unit), signingIn.await())
+                val b = (session.now() as Session.SignedIn).signIn
+                assertNotEquals(a, b)
+                assertEquals(rows, airing.read())
+                assertFalse(session.whileOwner(a) { error("A cannot enter after B") })
+                assertTrue(session.whileOwner(b) { true })
+            } finally {
+                database.close()
+            }
         }
 
     @Test

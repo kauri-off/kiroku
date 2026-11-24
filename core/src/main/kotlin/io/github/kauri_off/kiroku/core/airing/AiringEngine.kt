@@ -10,9 +10,10 @@ import io.github.kauri_off.kiroku.core.error.retriedOverStore
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
-import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.tracked
 import io.github.kauri_off.kiroku.core.repository.ListSource
+import io.github.kauri_off.kiroku.core.repository.OwnedEntries
 import io.github.kauri_off.kiroku.core.repository.airingStale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -60,19 +61,29 @@ class AiringEngine(
 ) {
     // The list as airing reads it: the tracked titles, and those in a tracked status that MAL has marked finished.
     private data class Tracking(
+        val owner: SignInId?,
         val tracked: Map<AnimeId, Anime>,
         val finished: Set<AnimeId>,
+    )
+
+    private data class Batch(
+        val owner: SignInId?,
+        val titles: Map<AnimeId, Anime>,
+        val pulled: Set<AnimeId>,
     )
 
     private val stores = StoreCalls(scope, unexpected)
 
     private val local =
-        object : AiringStore {
-            override fun observe() = stores.observing(store.observe())
+        object {
+            fun observe() = stores.observing(store.observe())
 
-            override suspend fun read() = stores.reading { store.read() }
+            suspend fun read() = stores.reading { store.read() }
 
-            override suspend fun write(titles: Map<AnimeId, StoredAiring?>) = stores.writing { store.write(titles) }
+            suspend fun writeAnswers(
+                titles: Map<AnimeId, StoredAiring?>,
+                owner: SignInId?,
+            ) = stores.writing { store.writeAnswers(titles, owner) }
         }
 
     // Held for every change to the store and to the fields below it, never while the source is asked.
@@ -117,20 +128,13 @@ class AiringEngine(
                 for (signal in wake) {
                     while (true) {
                         // A re-check goes before every whole schedule still waiting.
-                        val coming = mutex.withLock { comingWaiting.toMap().also { comingWaiting.clear() } }
-                        if (coming.isNotEmpty()) {
-                            answer(coming, emptySet(), coming = true)
+                        val coming = mutex.withLock { take(comingWaiting, emptySet()) }
+                        if (coming != null) {
+                            answer(coming, coming = true)
                             continue
                         }
-                        val (titles, byPull) =
-                            mutex.withLock {
-                                (waiting.toMap() to pulled.toSet()).also {
-                                    waiting.clear()
-                                    pulled.clear()
-                                }
-                            }
-                        if (titles.isEmpty()) break
-                        answer(titles, byPull, coming = false)
+                        val whole = mutex.withLock { take(waiting, pulled).also { pulled.clear() } } ?: break
+                        answer(whole, coming = false)
                     }
                 }
             } finally {
@@ -148,6 +152,14 @@ class AiringEngine(
             }
         }
         follow()
+    }
+
+    private fun take(
+        waiting: MutableMap<AnimeId, Anime>,
+        pulled: Set<AnimeId>,
+    ): Batch? {
+        if (waiting.isEmpty()) return null
+        return Batch(settled?.owner, waiting.toMap(), pulled.toSet()).also { waiting.clear() }
     }
 
     // The schedules of the stored titles, after every change to one; a title the source does not know has none.
@@ -217,7 +229,7 @@ class AiringEngine(
                 scope.launch(start = CoroutineStart.LAZY) {
                     try {
                         coroutineScope {
-                            launch { list.observeEntries().collect { entries -> guarded { settle(tracking(entries)) } } }
+                            launch { list.observeOwnedEntries().collect { entries -> guarded { settle(tracking(entries)) } } }
                             // A sync that ends while the list is followed; the time of an earlier one says nothing new.
                             launch {
                                 list
@@ -241,22 +253,37 @@ class AiringEngine(
         repeat(StoreCalls.ATTEMPTS) { attempt ->
             if (attempt > 0) delay(StoreCalls.RETRY)
             try {
-                mutex.withLock { if (tracking != settled || owed) reconcile(tracking) }
+                mutex.withLock {
+                    if ((tracking != settled || owed) && source.isCurrent(tracking.owner)) reconcile(tracking)
+                }
                 return
             } catch (_: StoreFailure) {
             }
         }
     }
 
-    private fun tracking(entries: List<ListEntry>): Tracking {
-        val (tracked, others) = entries.filter { it.status.tracked }.partition { it.tracked }
-        return Tracking(tracked.associate { it.anime.id to it.anime }, others.mapTo(mutableSetOf()) { it.anime.id })
+    private fun tracking(snapshot: OwnedEntries): Tracking {
+        val (tracked, others) = snapshot.entries.filter { it.status.tracked }.partition { it.tracked }
+        return Tracking(snapshot.owner, tracked.associate { it.anime.id to it.anime }, others.mapTo(mutableSetOf()) { it.anime.id })
     }
 
     // The store holds the tracked titles and A13's finales alone (S9); one new to the set is asked for at once (A11).
     private suspend fun reconcile(tracking: Tracking): Map<AnimeId, StoredAiring> {
         // The list as first read enters nothing: what is not stored of it is stale, which a refresh asks for.
-        settled?.let { arrived += tracking.tracked.keys - it.tracked.keys }
+        if (tracking.owner != settled?.owner) {
+            (asked.values + comingAsked.values).forEach { it.complete(DataError.ListEnded) }
+            asked.clear()
+            comingAsked.clear()
+            waiting.clear()
+            comingWaiting.clear()
+            pulled.clear()
+            arrived.clear()
+            forPages.clear()
+            pages.value = emptyMap()
+            pagesAsked.clear()
+        } else {
+            settled?.let { arrived += tracking.tracked.keys - it.tracked.keys }
+        }
         arrived.retainAll(tracking.tracked.keys)
         settled = tracking
         owed = true
@@ -266,7 +293,7 @@ class AiringEngine(
         arrived.clear()
         val forgotten =
             stored.filterNot { (id, airing) -> id in tracking.tracked || (id in tracking.finished && airing.announceable(now)) }.keys
-        if (forgotten.isNotEmpty()) local.write(forgotten.associateWith { null })
+        if (forgotten.isNotEmpty()) local.writeAnswers(forgotten.associateWith { null }, tracking.owner)
         owed = false
         return stored - forgotten
     }
@@ -288,7 +315,8 @@ class AiringEngine(
             try {
                 mutex.withLock {
                     // Read under the lock, so that no list older than one already settled is settled after it.
-                    val tracking = tracking(list.observeEntries().first())
+                    val tracking = tracking(list.observeOwnedEntries().first())
+                    if (!source.isCurrent(tracking.owner)) return Outcome.Failure(DataError.ListEnded)
                     want(titles(tracking, reconcile(tracking)), pull, coming)
                 }
             } catch (e: DataException) {
@@ -338,10 +366,10 @@ class AiringEngine(
 
     // One call to the source. A10: a title is stored only when its answer is whole, as soon as it is; any other stays as it was.
     private suspend fun answer(
-        titles: Map<AnimeId, Anime>,
-        pulled: Set<AnimeId>,
+        batch: Batch,
         coming: Boolean,
     ) {
+        val (owner, titles, pulled) = batch
         val told = mutableSetOf<AnimeId>()
 
         // Answers [ids], each with its error in [errors] or none.
@@ -350,8 +378,10 @@ class AiringEngine(
             errors: Map<AnimeId, DataError?>,
         ) {
             mutex.withLock {
-                if (!coming) forPages -= ids
-                for (id in ids) (if (coming) comingAsked else asked).remove(id)?.complete(errors[id])
+                if (settled?.owner == owner) {
+                    if (!coming) forPages -= ids
+                    for (id in ids) (if (coming) comingAsked else asked).remove(id)?.complete(errors[id])
+                }
             }
             told += ids
         }
@@ -360,12 +390,12 @@ class AiringEngine(
             // A9: what a notification can still need, so an episode moved earlier is not lost; in whole seconds, rounded down.
             val since = (began - announceableFor.toJavaDuration()).truncatedTo(ChronoUnit.SECONDS)
             val answers =
-                fetch(titles, since, pulled, coming) { part ->
+                fetch(owner, titles, since, pulled, coming) { part ->
                     val ids = part.keys.filterTo(mutableSetOf()) { it in titles && it !in told }
-                    if (ids.isNotEmpty()) tell(ids, keep(ids, part, began, since, coming))
+                    if (ids.isNotEmpty()) tell(ids, keep(owner, ids, part, began, since, coming))
                 }
             val rest = titles.keys - told
-            tell(rest, keep(rest, answers, began, since, coming))
+            if (rest.isNotEmpty()) tell(rest, keep(owner, rest, answers, began, since, coming))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -377,6 +407,7 @@ class AiringEngine(
 
     // The source throwing fails every title of the call not answered yet: an IOException as no connection, anything else reported.
     private suspend fun fetch(
+        owner: SignInId?,
         titles: Map<AnimeId, Anime>,
         since: Instant,
         pulled: Set<AnimeId>,
@@ -384,7 +415,7 @@ class AiringEngine(
         whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
     ): Map<AnimeId, Outcome<FetchedAiring?>> =
         try {
-            if (coming) source.fetchComing(titles.values, since) else source.fetch(titles.values, since, pulled, whole)
+            source.fetchAnswers(owner, titles.values, since, pulled, coming, whole)
         } catch (e: Exception) {
             stores.ended(e)
             val error = if (e is IOException) DataError.NoConnection else DataError.ServerError.also { unexpected(e) }
@@ -394,6 +425,7 @@ class AiringEngine(
     // An answer goes to the store for a title the list tracks when it arrives, to memory for a page's, else nowhere.
     // N3: a re-check's answer from after [since] goes over what is stored, which it leaves as old as it was, and over nothing else.
     private suspend fun keep(
+        owner: SignInId?,
         ids: Set<AnimeId>,
         answers: Map<AnimeId, Outcome<FetchedAiring?>>,
         began: Instant,
@@ -415,6 +447,7 @@ class AiringEngine(
         }
         broken?.let { unexpected(IllegalStateException(it)) }
         mutex.withLock {
+            if (settled?.owner != owner || !source.isCurrent(owner)) return ids.associateWith { DataError.ListEnded }
             val tracked = settled?.tracked.orEmpty()
             val stored = fetched.filterKeys { it in tracked }
             var held = pages.value
@@ -426,7 +459,7 @@ class AiringEngine(
             if (stored.isNotEmpty()) {
                 try {
                     val before = local.read()
-                    val written = mutableMapOf<AnimeId, StoredAiring?>()
+                    val written = mutableMapOf<AnimeId, StoredAiring>()
                     for ((id, airing) in stored) {
                         val was = before[id]
                         val schedule = was?.schedule
@@ -437,9 +470,14 @@ class AiringEngine(
                             else -> written[id] = StoredAiring(later.over(schedule), was.fetchedAt)
                         }
                     }
-                    if (written.isNotEmpty()) local.write(written)
-                    held -= written.keys
-                    pagesAsked -= written.keys
+                    if (written.isNotEmpty()) {
+                        if (local.writeAnswers(written, owner)) {
+                            held -= written.keys
+                            pagesAsked -= written.keys
+                        } else {
+                            for (id in written.keys) errors[id] = DataError.ListEnded
+                        }
+                    }
                 } catch (_: StoreFailure) {
                     for (id in stored.keys) errors[id] = DataError.StorageError
                 }

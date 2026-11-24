@@ -22,6 +22,7 @@ import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.OwnedEntries
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -185,8 +186,8 @@ abstract class AiringEngineContract {
         @Volatile
         var afterRead: (suspend () -> Unit)? = null
 
-        override fun observeEntries(): Flow<List<ListEntry>> =
-            combine(inner.observeEntries(), unreadable) { entries, unreadable ->
+        override fun observeOwnedEntries(): Flow<OwnedEntries> =
+            combine(inner.observeOwnedEntries(), unreadable) { entries, unreadable ->
                 if (unreadable) throw DataException(DataError.StorageError)
                 afterRead?.let {
                     afterRead = null

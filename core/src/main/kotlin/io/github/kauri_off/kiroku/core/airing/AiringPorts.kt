@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.core.airing
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
@@ -28,6 +29,17 @@ interface AiringSource {
         titles: Collection<Anime>,
         since: Instant,
     ): Map<AnimeId, Outcome<FetchedAiring?>> = fetch(titles, since)
+
+    suspend fun isCurrent(owner: SignInId?): Boolean = true
+
+    suspend fun fetchAnswers(
+        owner: SignInId?,
+        titles: Collection<Anime>,
+        since: Instant,
+        pulled: Set<AnimeId>,
+        coming: Boolean,
+        whole: suspend (Map<AnimeId, Outcome<FetchedAiring?>>) -> Unit,
+    ): Map<AnimeId, Outcome<FetchedAiring?>> = if (coming) fetchComing(titles, since) else fetch(titles, since, pulled, whole)
 }
 
 // A title the source knows, with no episode time too; null stands only for a title it has no record of.
@@ -53,4 +65,12 @@ interface AiringStore {
 
     // Stores every title given and forgets one given as null, all or none.
     suspend fun write(titles: Map<AnimeId, StoredAiring?>)
+
+    suspend fun writeAnswers(
+        titles: Map<AnimeId, StoredAiring?>,
+        owner: SignInId?,
+    ): Boolean {
+        write(titles)
+        return true
+    }
 }
