@@ -171,7 +171,7 @@ internal class DemoSearchRepository(
     ): Outcome<Page<Anime>> {
         server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
         val text = query.trim()
-        if (text.length < MIN_QUERY || offset < 0) return Outcome.Failure(DataError.InvalidRequest)
+        if (text.isEmpty() || offset < 0) return Outcome.Failure(DataError.InvalidRequest)
         val found =
             fixtures.anime.filter { anime ->
                 with(anime.titles) { (listOfNotNull(romaji, english, japanese) + synonyms).any { it.contains(text, ignoreCase = true) } }
@@ -212,7 +212,6 @@ internal class DemoSearchRepository(
 
     private companion object {
         const val PAGE_SIZE = 20
-        const val MIN_QUERY = 3
     }
 }
 

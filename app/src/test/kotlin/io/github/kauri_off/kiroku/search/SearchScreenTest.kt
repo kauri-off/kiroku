@@ -139,33 +139,33 @@ class SearchScreenTest {
     @Test
     fun `a further page is asked for when the end of the results comes into view, and once`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
-        show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Ready)))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Ready(20))))
         compose.waitForIdle()
         assertEquals(listOf(SearchEvent.LoadMore), events)
     }
 
     @Test
-    fun `a page that arrives with another after it asks again while the end stays in view`() {
+    fun `an advanced offset asks again when a page adds no new rows`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
-        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready)))
-        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(2), More.Ready)))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready(20))))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready(40))))
         assertEquals(listOf(SearchEvent.LoadMore, SearchEvent.LoadMore), events)
     }
 
     @Test
     fun `a new query that ends on the same row asks for its own next page`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
-        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready)))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready(20))))
         // A shorter query whose first page is the same title.
-        show(results(SearchFixtureStates.query.take(5), Paged.Shown(rows.take(1), More.Ready)))
+        show(results(SearchFixtureStates.query.take(5), Paged.Shown(rows.take(1), More.Ready(20))))
         assertEquals(listOf(SearchEvent.LoadMore, SearchEvent.LoadMore), events)
     }
 
     @Test
     fun `the same page shown again asks for nothing more`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query).take(1)
-        show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Ready)))
-        show(results(SearchFixtureStates.query, Paged.Shown(rows.toList(), More.Ready)))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows, More.Ready(20))))
+        show(results(SearchFixtureStates.query, Paged.Shown(rows.toList(), More.Ready(20))))
         assertEquals(listOf(SearchEvent.LoadMore), events)
     }
 

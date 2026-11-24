@@ -134,7 +134,7 @@ internal data class SearchResults(
             when {
                 loading -> More.Loading
                 error != null -> More.Failed(error)
-                nextOffset != null -> More.Ready
+                nextOffset != null -> More.Ready(nextOffset)
                 else -> More.None
             }
         return Paged.Shown(titles.map(map), more)

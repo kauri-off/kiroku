@@ -62,7 +62,9 @@ sealed interface More {
     data object None : More
 
     // Another page exists; it is asked for when the end of the list comes into view.
-    data object Ready : More
+    data class Ready(
+        val offset: Int,
+    ) : More
 
     data object Loading : More
 
