@@ -1,4 +1,6 @@
 [versions]
+app-name = "0.1.0"
+app-code = "1"
 sdk-compile = "37"
 sdk-compileMinor = "2"
 sdk-min = "26"

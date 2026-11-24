@@ -324,9 +324,8 @@ Not to forget:
   with ARCHITECTURE sections 2.3 and 7.2.
 - [x] Contributor build guide, fork setup and privacy statement.
 - The system's per-app language screen lists English and Russian.
-- The release key exists and its four secrets (`KIROKU_ANDROID_KEYSTORE_B64`, `KIROKU_ANDROID_STORE_PASSWORD`,
-  `KIROKU_ANDROID_KEY_ALIAS`, `KIROKU_ANDROID_KEY_PASSWORD`) are in the `release` environment; the release
-  workflow is built as ARCHITECTURE section 12 describes. A release never falls back to another key.
+- [x] Version-tag release workflow.
+- [ ] Configure the release key in the restricted `release` environment.
 - A changed setting reaches the screens that are open: title language and adult content are read where they are
   shown, not copied when a view model is made.
 - [x] Clear image caches on sign-out (S9).
