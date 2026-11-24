@@ -117,7 +117,14 @@ fun SearchScreen(
         // While the view is open, its own host shows the messages.
         snackbarHost = { if (bar.currentValue != SearchBarValue.Expanded) ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        Body(state.content, state.editable, events, padding, ListItemDefaults.colors())
+        Body(
+            state.content,
+            state.editable,
+            events,
+            padding,
+            ListItemDefaults.colors(),
+            autoLoadMore = bar.currentValue != SearchBarValue.Expanded && bar.targetValue != SearchBarValue.Expanded,
+        )
     }
     // The field itself moves from the bar into the view, whose own container fades in behind it.
     ExpandedFullScreenContainedSearchBar(state = bar, inputField = field, colors = colors) {
@@ -126,7 +133,7 @@ fun SearchScreen(
         if (state.sessionExpired) SessionBanner(onSignIn = { events(SearchEvent.SignIn) })
         // The view already keeps its content clear of the navigation bar and the keyboard.
         Box(Modifier.fillMaxSize()) {
-            Body(state.content, state.editable, events, PaddingValues(), viewRows(colors))
+            Body(state.content, state.editable, events, PaddingValues(), viewRows(colors), autoLoadMore = true)
             WindowSnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter))
         }
     }
@@ -188,24 +195,27 @@ private fun Body(
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
     rows: ListItemColors,
+    autoLoadMore: Boolean,
 ) {
     when (content) {
-        is SearchContent.Start -> CentredList(padding) { start(content.recent, onEvent, rows) }
-        is SearchContent.Results -> Results(content, editable, onEvent, padding, rows)
+        is SearchContent.Start -> CentredList(padding) { start(content, onEvent, rows) }
+        is SearchContent.Results -> Results(content, editable, onEvent, padding, rows, autoLoadMore)
     }
 }
 
 private fun LazyListScope.start(
-    recent: List<String>,
+    content: SearchContent.Start,
     onEvent: (SearchEvent) -> Unit,
     rows: ListItemColors,
 ) {
+    val recent = content.recent
     if (recent.isNotEmpty()) {
         item(key = RECENT, contentType = HEADER) { SectionHeader(stringResource(R.string.search_recent)) }
         items(recent, key = { it }, contentType = { LINK }) { query ->
             ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
         }
     }
+    if (!content.showBrowse) return
     item(key = BROWSE, contentType = HEADER) {
         val gap = if (recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
         SectionHeader(stringResource(R.string.search_browse), gap)
@@ -224,10 +234,11 @@ private fun Results(
     onEvent: (SearchEvent) -> Unit,
     padding: PaddingValues,
     rows: ListItemColors,
+    autoLoadMore: Boolean,
 ) {
     val openId = content.openId
     val results = content.results
-    if (results is Paged.Shown && results.items.isNotEmpty()) {
+    if (results is Paged.Shown && (results.items.isNotEmpty() || results.more != More.None)) {
         CentredList(padding) {
             if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent, rows) }
             pagedRows(
@@ -240,6 +251,7 @@ private fun Results(
                 onLoadMore = { onEvent(SearchEvent.LoadMore) },
                 onRetry = { onEvent(SearchEvent.Retry) },
                 colors = rows,
+                autoLoadMore = autoLoadMore,
             )
         }
         return

@@ -20,6 +20,7 @@ sealed interface SearchContent {
     // Before a query: the recent searches, newest first, then the browse lists.
     data class Start(
         val recent: List<String>,
+        val showBrowse: Boolean = true,
     ) : SearchContent {
         init {
             require(recent.size <= MAX_RECENT_SEARCHES)
@@ -61,7 +62,9 @@ sealed interface More {
     data object None : More
 
     // Another page exists; it is asked for when the end of the list comes into view.
-    data object Ready : More
+    data class Ready(
+        val offset: Int,
+    ) : More
 
     data object Loading : More
 

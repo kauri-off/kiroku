@@ -108,7 +108,12 @@ const val MESSAGE_TIME_SOURCE = "app/src/main/kotlin/io/github/kauri_off/kiroku/
 const val MESSAGE_TIME_WAIT = "delay(millis)"
 
 private val allowances =
-    mapOf(PAGE_MOTION_SOURCE to pageMotion, PATIENCE_SOURCE to listOf(PATIENCE_WAIT), MESSAGE_TIME_SOURCE to listOf(MESSAGE_TIME_WAIT))
+    mapOf(
+        PAGE_MOTION_SOURCE to pageMotion,
+        PATIENCE_SOURCE to listOf(PATIENCE_WAIT),
+        MESSAGE_TIME_SOURCE to listOf(MESSAGE_TIME_WAIT),
+        "app/src/main/kotlin/io/github/kauri_off/kiroku/search/SearchViewModel.kt" to listOf("delay(TYPING_PAUSE)"),
+    )
 
 fun motionLiteralProblems(
     name: String,

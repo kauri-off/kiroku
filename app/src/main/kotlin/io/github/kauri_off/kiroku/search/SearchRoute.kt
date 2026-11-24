@@ -1,7 +1,6 @@
 package io.github.kauri_off.kiroku.search
 
 import androidx.compose.foundation.text.input.clearText
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -13,12 +12,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -33,12 +36,9 @@ data class BrowseKey(
     val list: BrowseList,
 ) : NavKey
 
-// Search over the stand-in's titles until its data layer exists: no view model and no network. The field's text is
-// held here and changed only by the field and inside an event. A long press opens the edit sheet; "Change" is left to
-// the title's page.
 @Composable
 fun SearchRoute(
-    standIn: SearchStandIn,
+    standIn: SearchStandIn?,
     graph: AppGraph,
     messages: ShellMessages,
     snackbars: SnackbarHostState,
@@ -46,18 +46,28 @@ fun SearchRoute(
     onBrowse: (BrowseList) -> Unit,
     onSignIn: () -> Unit,
 ) {
-    val query = rememberTextFieldState()
-    var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(standIn.recent.take(MAX_RECENT_SEARCHES)) }
+    val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle()) }
+    CountAsShown(search.shown)
+    val query = search.query
+    var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(standIn?.recent.orEmpty().take(MAX_RECENT_SEARCHES)) }
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     val listed by listedEntries(graph)
     val editor = editSheetViewModel(graph, messages)
-    val text = query.text.toString().trim()
-    val hits = remember(standIn, text) { if (text.isEmpty()) emptyList() else standIn.search(text) }
+    val text = search.text
+    val resultState = if (LocalOnTop.current) search.state else search.cachedState
+    val results by resultState.collectAsScreenState()
+    val shown = results.takeIf { it.query == text }
     val content =
-        if (text.isEmpty()) {
-            SearchContent.Start(recent)
-        } else {
-            SearchContent.Results(text, Paged.Shown(hits.map { resultRow(it.anime, it.entryIn(listed)?.values, graph.titleLanguage) }))
+        when {
+            text.isEmpty() -> SearchContent.Start(recent, showBrowse = standIn != null)
+            shown == null -> SearchContent.Results(text, Paged.Loading)
+            else -> {
+                val rows =
+                    remember(shown, listed, graph.titleLanguage) {
+                        shown.rows { resultRow(it, listed?.get(it.id)?.values, graph.titleLanguage) }
+                    }
+                SearchContent.Results(text, rows)
+            }
         }
 
     fun keep(searched: String) {
@@ -67,7 +77,7 @@ fun SearchRoute(
         SearchState(query, expanded = false, content, sessionExpired = session is Session.Expired, editable = session.hasList()),
         onEvent = { event ->
             when (event) {
-                SearchEvent.Submit -> keep(text)
+                SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.SearchAgain -> {
                     query.setTextAndPlaceCursorAtEnd(event.query)
@@ -76,11 +86,12 @@ fun SearchRoute(
                 is SearchEvent.Browse -> onBrowse(event.list)
                 is SearchEvent.Open -> {
                     keep(text)
-                    val hit = hits.firstOrNull { it.anime.id == event.id }
-                    onOpenTitle(event.id, hit?.let { TitleSummary(it.anime, it.entryIn(listed), airing = null, session = session) })
+                    val anime = shown?.titles?.firstOrNull { it.id == event.id }
+                    onOpenTitle(event.id, anime?.let { TitleSummary(it, listed?.get(it.id), airing = null, session = session) })
                 }
-                is SearchEvent.Edit -> editor.open(event.id, hits.firstOrNull { it.anime.id == event.id }?.anime)
-                SearchEvent.LoadMore, SearchEvent.Retry -> Unit
+                is SearchEvent.Edit -> editor.open(event.id, shown?.titles?.firstOrNull { it.id == event.id })
+                SearchEvent.LoadMore -> search.loadMore()
+                SearchEvent.Retry -> search.retry()
                 SearchEvent.SignIn -> onSignIn()
             }
         },

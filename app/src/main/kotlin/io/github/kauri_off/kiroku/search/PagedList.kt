@@ -36,6 +36,7 @@ internal fun LazyListScope.pagedRows(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     colors: ListItemColors? = null,
+    autoLoadMore: Boolean = true,
 ) {
     items(rows, key = { it.id.value }, contentType = { ROW }) { row ->
         ResultAnimeRow(
@@ -47,13 +48,13 @@ internal fun LazyListScope.pagedRows(
     }
     when (more) {
         More.None -> Unit
-        More.Ready, More.Loading ->
+        is More.Ready, More.Loading ->
             item(key = MORE, contentType = MORE) {
                 LoadingMore()
                 // Asks for the next page when the end comes into view, and again with each page or list that ends there.
-                if (more == More.Ready) {
+                if (more is More.Ready && autoLoadMore) {
                     val load by rememberUpdatedState(onLoadMore)
-                    LaunchedEffect(list, rows.lastOrNull()?.id) { load() }
+                    LaunchedEffect(list, more.offset) { load() }
                 }
             }
         is More.Failed ->

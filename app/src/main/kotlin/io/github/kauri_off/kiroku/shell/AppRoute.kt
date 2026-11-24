@@ -10,7 +10,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
-import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
@@ -137,11 +136,15 @@ fun appEntries(
             )
         }
         entry<SearchRoot> {
-            if (standIn == null) {
-                NotBuiltDestination(graph, Destination.Search, signIn, snackbars)
-            } else {
-                SearchRoute(standIn, graph, messages, snackbars, openTitle, onBrowse = { navigator.open(BrowseKey(it)) }, onSignIn = signIn)
-            }
+            SearchRoute(
+                standIn,
+                graph,
+                messages,
+                snackbars,
+                openTitle,
+                onBrowse = { navigator.open(BrowseKey(it)) },
+                onSignIn = signIn,
+            )
         }
         entry<BrowseKey> { key ->
             standIn?.let {
@@ -207,16 +210,4 @@ fun appEntries(
             SignInRoute(graph, snackbars, onBack = { back() }, onBrowse = { navigator.browse() }, onSignedIn = { navigator.signedIn() })
         }
     }
-}
-
-// Search in a release until its milestone: the placeholder, with the banner of S6.
-@Composable
-private fun NotBuiltDestination(
-    graph: AppGraph,
-    destination: Destination,
-    onSignIn: () -> Unit,
-    snackbars: SnackbarHostState,
-) {
-    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
-    PlaceholderScreen(PlaceholderState(destination, sessionExpired = session is Session.Expired), { onSignIn() }, snackbars)
 }

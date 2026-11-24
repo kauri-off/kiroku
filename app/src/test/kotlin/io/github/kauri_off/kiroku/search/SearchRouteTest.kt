@@ -37,6 +37,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
@@ -55,7 +56,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// The app's Search on the fixture titles: typed text reaches the field and the results with nothing else running.
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-w411dp-h891dp")
@@ -80,15 +80,15 @@ class SearchRouteTest {
 
     private fun inView(text: String) = hasText(text) and hasAnyAncestor(isDialog())
 
-    private fun search() {
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+    private fun search(source: AppGraph = graph) {
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(source) } }
         settle()
         compose.onNodeWithText("Search").performClick()
         settle()
     }
 
     @Test
-    fun `each keystroke shows in the field and its results before any view model coroutine runs`() {
+    fun `the field shows keystrokes immediately and results follow after the typing pause`() {
         search()
         compose.onNode(hasSetTextAction() and !hasAnyAncestor(isDialog())).performClick()
         settle()
@@ -99,6 +99,8 @@ class SearchRouteTest {
         }
         compose.waitForIdle()
         compose.onNode(typing and hasText("shi")).assertExists()
+        compose.onNode(inView(FixtureAnime.exactCaughtUp.titles.romaji)).assertDoesNotExist()
+        settle()
         compose.onNode(inView(FixtureAnime.exactCaughtUp.titles.romaji)).assertExists()
         compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertDoesNotExist()
     }
@@ -137,6 +139,36 @@ class SearchRouteTest {
         scope.launch { graph.list.write(ListWrite.Remove(FixtureAnime.exactToWatch)) }
         settle()
         compose.onNode(inView(watching)).assertDoesNotExist()
+        compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertExists()
+    }
+
+    @Test
+    fun `search without fixtures opens a result with its title and the current list status`() {
+        val anime = FixtureAnime.exactToWatch
+        graph.titlesUnstored.value = true
+        graph.refreshFails.value = setOf(anime.id)
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+            }
+        search(source)
+        compose.onNodeWithText("Top airing").assertDoesNotExist()
+        typeKag()
+        compose.onNode(inView(watching)).assertExists()
+        compose.onNode(inView(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        compose.onNodeWithText(anime.titles.romaji).assertExists()
+    }
+
+    @Test
+    fun `a search that starts offline retries when the connection returns`() {
+        graph.demo.server.offline.value = true
+        search()
+        typeKag()
+        compose.onNode(inView("No connection")).assertExists()
+        compose.onNode(inView("Retry")).assertExists()
+        graph.demo.server.offline.value = false
+        settle()
         compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertExists()
     }
 
@@ -243,9 +275,9 @@ class SearchRouteTest {
 
     @Test
     fun `a save that fails from the open view offers Retry over the view`() {
-        graph.demo.server.offline.value = true
         search()
         typeKag()
+        graph.demo.server.offline.value = true
         longPress(FixtureAnime.exactToWatch.titles.romaji)
         compose.onNode(status("On hold")).performClick()
         compose.onNodeWithText("Save").performClick()

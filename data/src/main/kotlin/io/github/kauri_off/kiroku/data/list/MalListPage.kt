@@ -11,14 +11,13 @@ import io.github.kauri_off.kiroku.data.anime.given
 import io.github.kauri_off.kiroku.data.anime.toAnime
 import io.github.kauri_off.kiroku.data.db.listStatuses
 import io.github.kauri_off.kiroku.data.network.MalJson
+import io.github.kauri_off.kiroku.data.network.nextOffset
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
@@ -49,7 +48,7 @@ internal val NEVER_UPDATED: Instant = Instant.EPOCH
 internal fun JsonObject.toListPage(repairs: Repairs): ListPage {
     val page = MalJson.decodeFromJsonElement(PageNode.serializer(), this)
     val entries = page.data.map { listEntryOf(it.node, it.values, repairs) }
-    return ListPage(entries, nextOf(page.paging), repairs.fields.toSet())
+    return ListPage(entries, nextOffset(page.paging), repairs.fields.toSet())
 }
 
 // A score of 0, or any value missing or unreadable, is absent, an unreadable one noted; only a missing list status fails.
@@ -93,16 +92,6 @@ private fun statusOf(
 ): EntryStatus {
     requireNotNull(code) { "No list status" }
     return listStatuses.of(code).also { if (it is EntryStatus.Unrecognized) noted.note("status") }
-}
-
-// No next link is the last page; of a link only its offset is used, and one without an offset fails.
-private fun nextOf(paging: JsonElement?): Int? {
-    if (paging == null || paging is JsonNull) return null
-    check(paging is JsonObject) { "Paging is not an object" }
-    val next = paging["next"]
-    if (next == null || next is JsonNull) return null
-    val url = (next as? JsonPrimitive)?.takeIf { it.isString }?.content?.toHttpUrlOrNull()
-    return checkNotNull(url?.queryParameter("offset")?.toIntOrNull()?.takeIf { it >= 0 }) { "No next offset" }
 }
 
 private fun JsonObject.text(key: String): String? =

@@ -449,6 +449,8 @@ class DemoTest {
             val found = (demo.search.search("kagetosho", 0, false) as Outcome.Success).value
             assertEquals(listOf(FixtureAnime.exactToWatch), found.items)
             assertNull(found.nextOffset)
+            val short = (demo.search.search("ka", 0, false) as Outcome.Success).value
+            assertTrue(FixtureAnime.exactToWatch in short.items)
 
             val first = (demo.search.browse(BrowseList.TopRated, 0, false) as Outcome.Success).value
             val second =
@@ -460,10 +462,10 @@ class DemoTest {
         }
 
     @Test
-    fun `a query shorter than three characters or a negative offset is refused as invalid`() =
+    fun `a blank query or a negative offset is refused as invalid`() =
         runTest {
             val demo = demo()
-            for (query in listOf("", "   ", "ka", " ka ")) {
+            for (query in listOf("", "   ")) {
                 assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.search(query, 0, false))
             }
             assertEquals(Outcome.Failure(DataError.InvalidRequest), demo.search.search("kagetosho", -1, false))

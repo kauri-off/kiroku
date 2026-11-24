@@ -1,0 +1,433 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 936,
+                "title": "Naruto Movie 2: Dai Gekitotsu! Maboroshi no Chiteiiseki Dattebayo!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1114/134485.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1114/134485l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto THE Movie vol.2",
+                        "Naruto Movie 2",
+                        "Gekijouban Naruto"
+                    ],
+                    "en": "Naruto the Movie 2: Legend of the Stone of Gelel",
+                    "ja": "劇場版　NARUTO　大激突！幻の地底遺跡だってばよ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2005-08-06",
+                "mean": 6.88,
+                "rank": 5603,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5820
+            }
+        },
+        {
+            "node": {
+                "id": 2144,
+                "title": "Naruto Movie 3: Dai Koufun! Mikazuki-jima no Animal Panic Dattebayo!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1918/134487.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1918/134487l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Movie Volume 3",
+                        "Naruto: Gekijouban Naruto: Dai Koufun! Mikazuki-jima no Animal Panic Datte ba yo!"
+                    ],
+                    "en": "Naruto the Movie 3: Guardians of the Crescent Moon Kingdom",
+                    "ja": "劇場版 NARUTO -ナルト- 大興奮!みかづき島のアニマル騒動だってばよ"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2006-08-05",
+                "mean": 6.93,
+                "rank": 5292,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5640
+            }
+        },
+        {
+            "node": {
+                "id": 6325,
+                "title": "Naruto: Shippuuden Movie 3 - Hi no Ishi wo Tsugu Mono",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1493/116732.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/1493/116732l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Shippuuden: Gekijouban Naruto Shippuuden: Hi no Ishi o Tsugu Mono",
+                        "Naruto Shippuuden Movie 3",
+                        "Naruto Movie 6",
+                        "Naruto Shippuuden 3: Inheritors of Will of Fire"
+                    ],
+                    "en": "Naruto Shippuden the Movie 3: The Will of Fire",
+                    "ja": "ナルト- 疾風伝 火の意志を継ぐ者"
+                },
+                "media_type": "movie",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2009-08-01",
+                "mean": 7.34,
+                "rank": 2992,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 5700
+            }
+        },
+        {
+            "node": {
+                "id": 32365,
+                "title": "Boruto: Naruto the Movie - Naruto ga Hokage ni Natta Hi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/6/77678.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/6/77678l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Day Naruto Became Hokage"
+                    ],
+                    "en": "Boruto: Naruto the Movie - The Day Naruto Became Hokage",
+                    "ja": "BORUTO -NARUTO THE MOVIE- ナルトが火影になった日"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2016-07-06",
+                "mean": 7.31,
+                "rank": 3121,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 628
+            }
+        },
+        {
+            "node": {
+                "id": 1074,
+                "title": "Naruto Narutimate Hero 3: Tsuini Gekitotsu! Jounin vs. Genin!! Musabetsu Dairansen Taikai Kaisai!!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/10/11244.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/10/11244l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Narutimate Hero 3 OVA"
+                    ],
+                    "en": "Naruto: Finally a Clash!! Jounin vs. Genin!",
+                    "ja": "NARUTO ナルティメットヒーロー3 ついに激突! 上忍VS下忍!! 無差別大乱戦大会開催!!"
+                },
+                "media_type": "ova",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2005-12-22",
+                "mean": 6.77,
+                "rank": 6322,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1570
+            }
+        },
+        {
+            "node": {
+                "id": 34566,
+                "title": "Boruto: Naruto Next Generations",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1091/99847.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1091/99847l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Boruto: Naruto Next Generations",
+                    "ja": "BORUTO -NARUTO NEXT GENERATIONS-"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 293,
+                "start_date": "2017-04-05",
+                "broadcast": {
+                    "day_of_the_week": "sunday",
+                    "start_time": "17:30"
+                },
+                "mean": 5.97,
+                "rank": 11255,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1430
+            }
+        },
+        {
+            "node": {
+                "id": 4134,
+                "title": "Naruto: Shippuuden - Shippuu! \"Konoha Gakuen\" Den",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/5/51895.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/5/51895l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "NARUTO Shippu Konoha Gakuen Den Special",
+                        "Konoha High"
+                    ],
+                    "en": "Naruto Shippuden: Konoha Gakuen - Special",
+                    "ja": "NARUTO 疾風伝「疾風! \"木ノ葉学園\"伝」"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2008-02-06",
+                "mean": 7.12,
+                "rank": 4309,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 17,
+                        "name": "Martial Arts"
+                    },
+                    {
+                        "id": 23,
+                        "name": "School"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 480
+            }
+        },
+        {
+            "node": {
+                "id": 12979,
+                "title": "Naruto SD: Rock Lee no Seishun Full-Power Ninden",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/13/36475.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/13/36475l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Naruto Spin-Off: Rock Lee & His Ninja Pals",
+                    "ja": "ナルトSD ロック・リーの青春フルパワー忍伝"
+                },
+                "media_type": "tv",
+                "status": "finished_airing",
+                "num_episodes": 51,
+                "start_date": "2012-04-03",
+                "broadcast": {
+                    "day_of_the_week": "tuesday",
+                    "start_time": "18:00"
+                },
+                "mean": 7.18,
+                "rank": 3942,
+                "genres": [
+                    {
+                        "id": 1,
+                        "name": "Action"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 20,
+                        "name": "Parody"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1440
+            }
+        },
+        {
+            "node": {
+                "id": 761,
+                "title": "Naruto: Akaki Yotsuba no Clover wo Sagase",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/12/11240.webp",
+                    "large": "https://cdn.myanimelist.net/images/anime/12/11240l.webp"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Find the Crimson Four Leaf Clover!",
+                        "Naruto: Jump Festa 2003"
+                    ],
+                    "en": "Naruto: Find the Crimson Four-leaf Clover!",
+                    "ja": "ナルト 紅き四つ葉のクローバーを探せ"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2003-05-24",
+                "mean": 6.58,
+                "rank": 7617,
+                "genres": [
+                    {
+                        "id": 2,
+                        "name": "Adventure"
+                    },
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 1020
+            }
+        },
+        {
+            "node": {
+                "id": 19511,
+                "title": "Naruto: Shippuuden - Sunny Side Battle",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/anime/1047/91638.jpg",
+                    "large": "https://cdn.myanimelist.net/images/anime/1047/91638l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Shippuuden - Jump Festa 2013 Special",
+                        "Naruto: Shippuuden - Jump Super Anime Tour 2013 Special"
+                    ],
+                    "en": "Naruto Shippuden: Sunny Side Battle",
+                    "ja": "ナルト-NARUTO-疾風伝 サニー・サイド・バトル"
+                },
+                "media_type": "special",
+                "status": "finished_airing",
+                "num_episodes": 1,
+                "start_date": "2013-10-06",
+                "mean": 7.59,
+                "rank": 1852,
+                "genres": [
+                    {
+                        "id": 4,
+                        "name": "Comedy"
+                    },
+                    {
+                        "id": 10,
+                        "name": "Fantasy"
+                    },
+                    {
+                        "id": 47,
+                        "name": "Gourmet"
+                    },
+                    {
+                        "id": 27,
+                        "name": "Shounen"
+                    }
+                ],
+                "average_episode_duration": 660
+            }
+        }
+    ],
+    "paging": {
+        "previous": "https://api.myanimelist.net/v2/anime?offset=0&q=naruto&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration",
+        "next": "https://api.myanimelist.net/v2/anime?offset=20&q=naruto&limit=10&fields=id%2Ctitle%2Cmain_picture%2Calternative_titles%2Cmedia_type%2Cstatus%2Cnum_episodes%2Cstart_date%2Cbroadcast%2Cmean%2Crank%2Cgenres%2Caverage_episode_duration"
+    }
+}

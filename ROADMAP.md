@@ -244,12 +244,12 @@ each browse list opens and loads further pages; a query of digits offers "Open t
 
 Not to forget:
 
-- Searches of one, two and three characters are recorded, to learn the shortest query MAL accepts (item 2 of
-  section 13).
 - Typing does not send a request per keystroke.
 - Results that arrive page by page are held as a `StateFlow` of the pages loaded.
 
 - [x] **M5-01 Search screen.**
+
+- [x] **M5-02 Live title search.**
 
 ## M6. Profiles and statistics
 
