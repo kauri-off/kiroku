@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureUser
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.UserProfile
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Freshness
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
@@ -82,12 +83,13 @@ class ProfileViewModelTest {
         owner: ProfileOwner,
         saved: SavedStateHandle = SavedStateHandle(),
         user: UserRepository = graph.user,
+        connection: Connection = graph.connection,
     ) = ProfileViewModel(
         owner,
         graph.session,
         graph.list,
         user,
-        graph.connection,
+        connection,
         graph.clock,
         graph.background,
         saved,
@@ -267,6 +269,35 @@ class ProfileViewModelTest {
             advanceUntilIdle()
             assertEquals(statisticsOf(fixtures.otherUserList), other.shownContent().statistics)
             assertNull(app.messages.current.value)
+        }
+
+    @Test
+    fun `Retry succeeds when the network is back before the connection observer reports it`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val reportedOnline = MutableStateFlow(false)
+            val connection =
+                object : Connection {
+                    override fun observeOnline(): Flow<Boolean> = reportedOnline
+                }
+            app.graph.demo.server.offline.value = true
+            val other = app.profile(ProfileOwner.Other(otherName), connection = connection)
+            showing(other.state, other.shown)
+            advanceUntilIdle()
+            assertEquals(ProfileContent.Failed(DataError.NoConnection), other.state.value.content)
+            assertEquals(1, app.requests.size)
+
+            app.graph.demo.server.offline.value = false
+            advanceUntilIdle()
+            assertEquals(1, app.requests.size)
+            other.onEvent(ProfileEvent.Retry)
+            advanceUntilIdle()
+            assertEquals(statisticsOf(fixtures.otherUserList), other.shownContent().statistics)
+            assertEquals(1 + wholeRead, app.requests.size)
+
+            reportedOnline.value = true
+            advanceUntilIdle()
+            assertEquals(1 + wholeRead, app.requests.size)
         }
 
     @Test
