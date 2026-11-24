@@ -51,14 +51,20 @@ abstract class SubScreenViewModel(
     private val clock: Clock,
     private val opened: TitleSummary?,
 ) : ViewModel() {
+    protected class RefreshFailure(
+        val error: DataError,
+    )
+
     protected class Title(
         val anime: Anime?,
         val details: AnimeDetails?,
         val session: Session?,
-        val failure: DataError?,
+        val refreshFailure: RefreshFailure?,
         // The title's own store could not be read.
         val storeFailure: DataError? = null,
     ) {
+        val failure: DataError? get() = refreshFailure?.error
+
         constructor(opened: TitleSummary) : this(opened.anime, opened.page?.details, opened.session, null)
     }
 
@@ -68,7 +74,7 @@ abstract class SubScreenViewModel(
         val failure: DataError? = null,
     )
 
-    private val failure = MutableStateFlow<DataError?>(null)
+    private val failure = MutableStateFlow<RefreshFailure?>(null)
     protected val refreshing = MutableStateFlow(false)
     private var load: Job? = null
 
@@ -99,8 +105,6 @@ abstract class SubScreenViewModel(
         refresh()
     }
 
-    protected open fun refreshFailed(error: DataError) = Unit
-
     // A newer load replaces an older one, so the older one's end never stands for the screen.
     private fun refresh() {
         load?.cancel()
@@ -111,9 +115,8 @@ abstract class SubScreenViewModel(
             viewModelScope.launch {
                 val result = anime.refresh(id)
                 val error = (result as? Outcome.Failure)?.error
-                failure.value = error
+                failure.value = error?.let(::RefreshFailure)
                 refreshing.value = false
-                if (error != null) refreshFailed(error)
                 loads.ended(error)
             }
     }

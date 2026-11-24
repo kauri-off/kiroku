@@ -10,7 +10,10 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.text.TextLayoutResult
 import io.github.kauri_off.kiroku.core.airing.AiringSchedule
 import io.github.kauri_off.kiroku.core.airing.airingAt
@@ -50,6 +53,21 @@ class SubScreenTest {
     private val snackbars = SnackbarHostState()
 
     private fun show(content: @Composable () -> Unit) = compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { content() } }
+
+    @Test
+    fun `pulling down over empty recommendations requests refresh`() {
+        val events = mutableListOf<RecommendationsEvent>()
+        show {
+            RecommendationsScreen(
+                RecommendationsState(RecommendationsContent.Shown(emptyList())),
+                onEvent = { events += it },
+                snackbars = snackbars,
+            )
+        }
+        compose.onNodeWithText("No recommendations").assertIsDisplayed()
+        compose.onRoot().performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        compose.runOnIdle { assertEquals(listOf(RecommendationsEvent.Reload), events) }
+    }
 
     @Test
     fun aLongEnglishTitleLeavesTheJapaneseTitleAndSynonymsShown() {

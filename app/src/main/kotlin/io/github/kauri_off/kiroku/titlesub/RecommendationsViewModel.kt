@@ -59,17 +59,21 @@ internal class RecommendationsViewModel(
             }.map { (title, list) -> Sources(title, list) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let { Sources(Title(it), ListRead(it.knownEntries())) })
 
+    private var reportedFailure: RefreshFailure? = null
+
     val state =
-        combine(sources, refreshing, ::build)
-            .stateIn(viewModelScope, WhileShown, build(sources.value, false))
+        combine(sources, refreshing) { source, refreshing ->
+            val state = build(source, refreshing)
+            val failure = source?.title?.refreshFailure
+            if (state.content is RecommendationsContent.Shown && failure != null && failure !== reportedFailure) {
+                reportedFailure = failure
+                onRefreshFailed(failure.error)
+            }
+            state
+        }.stateIn(viewModelScope, WhileShown, build(sources.value, false))
 
     fun onEvent(event: RecommendationsEvent) {
         if (event == RecommendationsEvent.Reload) retry()
-    }
-
-    override fun refreshFailed(error: DataError) {
-        val content = state.value.content
-        if (content is RecommendationsContent.Shown && content.rows.isNotEmpty()) onRefreshFailed(error)
     }
 
     fun summaryOf(id: AnimeId): TitleSummary? {
@@ -85,10 +89,11 @@ internal class RecommendationsViewModel(
         val title = sources?.title
         val session = title?.session
         val error = title?.storeFailure ?: sources?.list?.failure
+        val failure = title?.failure
         val content =
             when {
                 error != null -> RecommendationsContent.Failed(error)
-                title?.details != null && sources.recommendations.isNotEmpty() ->
+                title?.details != null ->
                     RecommendationsContent.Shown(
                         sources.recommendations.distinctBy { it.id }.map {
                             resultRow(
@@ -99,8 +104,7 @@ internal class RecommendationsViewModel(
                         },
                         refreshing,
                     )
-                title?.failure != null -> RecommendationsContent.Failed(title.failure)
-                title?.details != null -> RecommendationsContent.Shown(emptyList(), refreshing)
+                failure != null -> RecommendationsContent.Failed(failure)
                 else -> RecommendationsContent.Loading
             }
         return RecommendationsState(content, session)

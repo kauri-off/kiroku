@@ -122,10 +122,8 @@ fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator {
     val selected = rememberSaveable { mutableStateOf(start?.destination ?: Destination.List) }
     val restarts = rememberSaveable { mutableIntStateOf(0) }
     return remember(list, search, profile, selected, restarts) {
-        ShellNavigator(
-            mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
-            selected,
-            restarts,
-        )
+        val stacks = mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile)
+        stacks.values.forEach { stack -> stack.removeAll { it is NotBuiltKey } }
+        ShellNavigator(stacks, selected, restarts)
     }
 }

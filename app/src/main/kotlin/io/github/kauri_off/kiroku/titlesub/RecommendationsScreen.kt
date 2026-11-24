@@ -62,10 +62,15 @@ internal fun RecommendationsScreen(
             RecommendationsContent.Loading -> SubScreenBody.State(ScreenState.Loading)
             is RecommendationsContent.Failed -> SubScreenBody.State(errorState(content.error, reload))
             is RecommendationsContent.Shown ->
-                if (content.rows.isEmpty()) {
-                    SubScreenBody.State(ScreenState.Empty(stringResource(R.string.title_recommendations_empty)))
-                } else {
-                    SubScreenBody.List(refreshing = content.refreshing, onRefresh = reload) {
+                SubScreenBody.List(refreshing = content.refreshing, onRefresh = reload) {
+                    if (content.rows.isEmpty()) {
+                        item {
+                            ScreenState(
+                                ScreenState.Empty(stringResource(R.string.title_recommendations_empty)),
+                                Modifier.fillParentMaxSize(),
+                            )
+                        }
+                    } else {
                         items(content.rows, key = { it.id.value }) { row ->
                             ResultAnimeRow(
                                 row,

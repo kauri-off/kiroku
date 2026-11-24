@@ -41,9 +41,12 @@ import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.NotBuilt
+import io.github.kauri_off.kiroku.shell.NotBuiltKey
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.text.named
+import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +78,40 @@ class ProcessDeathTest {
 
     private class Owner : ViewModelStoreOwner {
         override val viewModelStore = ViewModelStore()
+    }
+
+    @Test
+    fun `restoring legacy recommendation placeholders leaves their titles usable`() {
+        val restoration = StateRestorationTester(compose)
+        val title = TitleKey(FixtureAnime.exactToWatch.id.value)
+        val searchTitle = TitleKey(FixtureAnime.prequel.id.value)
+        val legacy = NotBuiltKey(NotBuilt.Recommendations)
+        assertEquals("io.github.kauri_off.kiroku.shell.NotBuiltKey", legacy.javaClass.name)
+        assertEquals("Recommendations", legacy.screen.name)
+        lateinit var navigator: ShellNavigator
+        var showApp by mutableStateOf(false)
+        restoration.setContent {
+            navigator = rememberShellNavigator()
+            if (showApp) {
+                KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph, navigator) }
+            }
+        }
+        compose.runOnIdle {
+            navigator.select(Destination.Search)
+            navigator.open(searchTitle)
+            navigator.open(legacy)
+            navigator.select(Destination.List)
+            navigator.open(title)
+            navigator.open(legacy)
+        }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(listOf(Destination.List.root, title), navigator.stack)
+            assertEquals(listOf(Destination.Search.root, searchTitle), navigator.stackOf(Destination.Search))
+            showApp = true
+        }
+        compose.onNodeWithContentDescription("Episodes watched").assertExists()
     }
 
     @Test
