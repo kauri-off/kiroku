@@ -6,25 +6,30 @@ reporting. [App wiring][KirokuApplication.kt] · [Dependencies][gradle/libs.vers
 ## Network requests
 
 - **MyAnimeList API (`api.myanimelist.net`).** Requests can include search text, title IDs, ranking or season
-  parameters, page parameters, and the username of a public list you open. Public requests use the build's MAL
+  parameters, page parameters, and the username of a public list you open. Live Search sends nonempty text after
+  a pause in typing, even without submitting. Kiroku can also sync your list with MAL and refresh your access
+  token in the background. Public requests use the build's MAL
   client ID. Reads of your own list and profile and writes to your list use a bearer access token. List changes
   send the title ID and updated fields such as status, score, watched episodes, or dates. Removing an entry sends
   its title ID. [API host][MalHosts.kt] · [Client ID header][SendRules.kt] · [Search and browse][MalSearch.kt] ·
-  [Lists][MalLists.kt] · [Profile][MalProfiles.kt] · [List writes][MalRemoteList.kt]
+  [Live search][SearchViewModel.kt] · [Background sync][PeriodicWork.kt] · [Lists][MalLists.kt] · [Profile][MalProfiles.kt] · [List writes][MalRemoteList.kt]
 - **MyAnimeList sign-in (`myanimelist.net`).** Your browser opens MAL's OAuth page with the client ID, redirect URI,
   state and plain PKCE challenge. Kiroku sends the client ID and either the authorization code, verifier and
-  redirect URI or the refresh token to MAL's token endpoint. Opening a title on MAL hands its page URL to your
-  browser. [Authorization][MalSignIn.kt] · [Token endpoint][SessionOverHttp.kt] · [Refresh][MalSession.kt] ·
+  redirect URI or the refresh token to MAL's token endpoint. Opening a title on MAL gives its page URL to Android's link
+  handler. Sharing passes the same URL to the app you select in Android's chooser. [Authorization][MalSignIn.kt] · [Token endpoint][SessionOverHttp.kt] · [Refresh][MalSession.kt] ·
   [Title link][TitleRoute.kt]
 - **AniList (`graphql.anilist.co`).** For episode schedules Kiroku sends MAL IDs of tracked, unfinished titles
-  and of airing titles whose pages you open, with the GraphQL query and pagination fields. AniList receives no MAL
-  account credentials. [Schedule requests][AniListSchedule.kt] · [Schedule selection][AiringEngine.kt] ·
-  [AniList client][AniListAiring.kt]
-- **Tenrai (`api.tenrai.org`).** Opening a title's score distribution sends its MAL title ID. Tenrai receives no
+  on your Watching, Planned and On hold lists, including in background schedule refreshes. Opening a title that
+  MAL has yet to mark Finished can also send its ID, even if it is outside your list. These lookups require an
+  existing MAL session, including an expired session. AniList receives the IDs, GraphQL query and pagination
+  fields without MAL account credentials. [Schedule requests][AniListSchedule.kt] · [Schedule selection][AiringEngine.kt] ·
+  [Session check][LiveAiring.kt] · [AniList client][AniListAiring.kt]
+- **Tenrai (`api.tenrai.org`).** To fetch a title's score distribution, Kiroku sends its MAL title ID. Tenrai receives no
   MAL account credentials. [Score screen][SubScreenViewModels.kt] · [Statistics URL][TenraiStatistics.kt] ·
   [Tenrai client][TenraiScores.kt]
 - **Image hosts.** Kiroku requests posters and your profile avatar from HTTPS URLs supplied by MyAnimeList.
-  The hosts receive the image requests through Kiroku's shared HTTP client. [Image loader][Images.kt] ·
+  Image hosts receive the requested URL and Kiroku's user agent. Image requests omit the account access token.
+  The MAL client-ID header is restricted to the MAL API origin. [Image loader][Images.kt] ·
   [Title data][MalTitles.kt] · [Profile data][MalProfiles.kt]
 
 Services and image hosts can see the connection's IP address. Requests from Kiroku's shared HTTP client
@@ -37,42 +42,54 @@ identify the app and version in the `User-Agent` header. [HTTP client][MalHttp.k
   and history. [Database][KirokuDatabase.kt] · [Profile fields][ProfileRows.kt]
 - App-private files store list sort choices, recently opened profile names, notification preferences, and retry
   timers. While sign-in is pending, a separate private file holds the OAuth state, verifier and start time.
-  The token file stores a local sign-in ID alongside the token data, which is encrypted with a key in Android
-  Keystore. A pending **Mark watched** notification action is stored as a WorkManager job. [Preferences][StoredPreferences.kt] ·
-  [Service stores][LiveGraph.kt] · [Pending sign-in][PendingSignIn.kt] · [Token file][TokenStore.kt] ·
+  A matching callback consumes the pending sign-in state. Its ten-minute acceptance window does not schedule
+  file deletion. Android Keystore protects the key used to encrypt access and refresh tokens. A queued
+  **Mark watched** notification action is stored locally. [Preferences][StoredPreferences.kt] ·
+  [Service stores][LiveGraph.kt] · [Pending sign-in][PendingSignIn.kt] · [Callback][MalSignIn.kt] · [Token file][TokenStore.kt] ·
   [Encryption][TokenCipher.kt] · [Pending actions][MarkWatchedWork.kt]
 - Search and browse results, other users' fetched public lists and computed statistics, and schedules fetched
   just for a title page are held in memory. Score distributions are cached for the life of the app process.
-  Coil caches images in memory and on disk. [Search and browse][MalSearch.kt] · [Public lists][LiveUser.kt] ·
+  Android's saved screen state can restore the current search text and recent searches after the app process
+  is recreated. Images are cached in memory and on disk. [Search input][SearchViewModel.kt] ·
+  [Recent searches][SearchRoute.kt] · [Search and browse][MalSearch.kt] · [Public lists][LiveUser.kt] ·
   [Title schedules][AiringEngine.kt] · [Score cache][ScoreDistribution.kt] · [Image cache][Images.kt]
 - Kiroku disables Android backup and excludes its app data from device transfer. [Manifest][app/src/main/AndroidManifest.xml] ·
   [Extraction rules][data_extraction_rules.xml]
 
 ## Sign-out
 
-Signing out clears the local session and its tokens and returns the app to signed-out navigation. Sign-out
-also cancels pending **Mark watched** jobs and clears account list, title and profile data, tracked airing
-data, notification tracking and history, cached public lists, list sorts and recently opened profile names.
-Notification preferences stay.
-Coil's memory and disk image caches are outside sign-out cleanup, so posters and avatars can remain cached.
-In-memory score distributions can last until the process ends. [Cleanup][LiveGraph.kt] · [List store][RoomLocalList.kt] ·
-[Preferences][StoredPreferences.kt] · [Navigation][SignOutTurns.kt] · [Image loader][KirokuApplication.kt] ·
-[Score cache][ScoreDistribution.kt]
+Debug and Preview offer **Sign out** in the debug menu. It clears the local session and tokens, resets
+navigation, cancels queued **Mark watched** jobs and clears account list, title and profile data, tracked
+airing data, notification tracking and history, cached public lists, list sorts and recently opened profile
+names. Notification preferences stay. Posters and avatars can remain in the image cache. In-memory score
+distributions and title-page schedules can last until the process ends. [Sign-out action][SignOutSection.kt] ·
+[Cleanup][LiveGraph.kt] · [List store][RoomLocalList.kt] · [Preferences][StoredPreferences.kt] ·
+[Navigation][SignOutTurns.kt] · [Image cache][Images.kt] · [Score cache][ScoreDistribution.kt] ·
+[Title schedules][AiringEngine.kt]
+
+In Release, use **Clear storage** for Kiroku in Android settings to remove local app data. This leaves
+your MyAnimeList account and list on MyAnimeList. [Release wiring][DebugTools.kt] · [MAL list writes][MalRemoteList.kt]
 
 ## Diagnostics and test data
 
 Release can log exception types and stack frames locally. Debug and Preview also keep bounded exception reports
 and notification-run diagnostics on the device, and log request metadata and sign-in failure reasons locally.
 Request logs omit headers, bodies and query values. URL paths can include title IDs or public-list usernames.
+Notification run diagnostics can include titles and episode numbers from your list. Sign-out clears the prior
+notification run log. Exception reports and Android log entries remain subject to their own retention.
 [Release wiring][app/src/release/kotlin/io/github/kauri_off/kiroku/wiring/GraphFactory.kt] · [Error logging][Reports.kt] ·
 [Debug reports][ReportLog.kt] · [Notification run log][RunLog.kt] · [Request logging][RequestLog.kt] ·
 [Sign-in diagnostics][LiveSignIn.kt]
 
-Debug and Preview have an opt-in recorder for signed-in MAL requests. After confirmation, it reads your profile
-and list, makes test changes to a title absent from your list, and attempts to remove that entry again. It keeps
-a private recovery journal and saves MAL responses, which can contain profile and list data, in app-specific
-external storage or the app's internal files directory if external storage is unavailable. The recorder writes
-these files locally. [Recorder UI][RecorderSection.kt] · [Recorded requests][SignedInRecorder.kt] ·
+Debug and Preview have an opt-in recorder for signed-in MAL requests. **Check title** sends the chosen title
+ID to MAL before recording is confirmed. After confirmation, the recorder reads your profile and list, makes
+test changes to a title absent from your list, and attempts to remove that entry. If a run leaves the entry
+behind, the recorder can retry removal for the same account when it starts again or when you select
+**Remove now**. Sign-out leaves the private recovery journal and recorded or staged responses on the device.
+Saved responses can include real profile and list data. The recorder removes the access token and client ID
+from saved response bodies. It writes the files to app-specific external storage or the app's internal files
+directory if external storage is unavailable. [Recorder UI][RecorderSection.kt] ·
+[Recovery and saved requests][SignedInRecorder.kt] ·
 [Output directories][app/src/debug/kotlin/io/github/kauri_off/kiroku/wiring/LiveRecorder.kt]
 
 Demo uses in-memory fixtures, and Sandbox answers its service requests on the device. [Debug source wiring][app/src/debug/kotlin/io/github/kauri_off/kiroku/wiring/GraphFactory.kt] ·
@@ -124,3 +141,10 @@ Demo uses in-memory fixtures, and Sandbox answers its service requests on the de
 [SandboxGraph.kt]: app/src/debug/kotlin/io/github/kauri_off/kiroku/sandbox/SandboxGraph.kt
 [AniListAiring.kt]: data/src/main/kotlin/io/github/kauri_off/kiroku/data/anilist/AniListAiring.kt
 [TenraiScores.kt]: data/src/main/kotlin/io/github/kauri_off/kiroku/data/tenrai/TenraiScores.kt
+
+[SearchViewModel.kt]: app/src/main/kotlin/io/github/kauri_off/kiroku/search/SearchViewModel.kt
+[SearchRoute.kt]: app/src/main/kotlin/io/github/kauri_off/kiroku/search/SearchRoute.kt
+[PeriodicWork.kt]: app/src/main/kotlin/io/github/kauri_off/kiroku/notify/PeriodicWork.kt
+[LiveAiring.kt]: app/src/main/kotlin/io/github/kauri_off/kiroku/wiring/LiveAiring.kt
+[SignOutSection.kt]: app/src/debug/kotlin/io/github/kauri_off/kiroku/signout/SignOutSection.kt
+[DebugTools.kt]: app/src/release/kotlin/io/github/kauri_off/kiroku/wiring/DebugTools.kt
