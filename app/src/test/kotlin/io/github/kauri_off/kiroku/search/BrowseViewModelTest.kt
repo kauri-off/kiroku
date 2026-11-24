@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
@@ -53,6 +54,7 @@ class BrowseViewModelTest {
             showing(model.shown)
             runCurrent()
             assertEquals(listOf(0, 0), search.offsets)
+            assertEquals(1, search.sessions)
             assertEquals(Paged.Shown(emptyList<ResultRow>()), model.state.value.rows { error("Empty response") })
         }
 
@@ -76,6 +78,7 @@ class BrowseViewModelTest {
             runCurrent()
 
             assertEquals(listOf(0, 19), search.offsets)
+            assertEquals(1, search.sessions)
             assertEquals(listOf(first, second), model.state.value.titles)
         }
 
@@ -84,14 +87,15 @@ class BrowseViewModelTest {
         private val respond: (Int) -> Outcome<Page<Ranked<Anime>>>,
     ) : SearchRepository by delegate {
         val offsets = mutableListOf<Int>()
+        var sessions = 0
+            private set
 
-        override suspend fun browse(
-            list: BrowseList,
-            offset: Int,
-            includeAdult: Boolean,
-        ): Outcome<Page<Ranked<Anime>>> {
-            offsets += offset
-            return respond(offset)
+        override fun openBrowse(list: BrowseList): BrowseSession {
+            sessions++
+            return BrowseSession { offset, _ ->
+                offsets += offset
+                respond(offset)
+            }
         }
     }
 }

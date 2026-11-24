@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.OwnProfile
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -179,28 +180,25 @@ internal class DemoSearchRepository(
         return Outcome.Success(found.page(offset))
     }
 
-    override suspend fun browse(
-        list: BrowseList,
-        offset: Int,
-        includeAdult: Boolean,
-    ): Outcome<Page<Ranked<Anime>>> {
-        server.load(needsSignIn = false)?.let { return Outcome.Failure(it) }
-        if (offset < 0) return Outcome.Failure(DataError.InvalidRequest)
-        val ranked =
-            when (list) {
-                BrowseList.ThisSeason ->
-                    fixtures.anime.filter { it.airingStatus != AiringStatus.Finished }.map { Ranked(null, it) }
-                BrowseList.TopAiring ->
-                    byRank(fixtures.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
-                        .mapIndexed { index, it -> Ranked(index + 1, it) }
-                BrowseList.TopRated -> byRank(fixtures.anime).map { Ranked(it.rank, it) }
-                BrowseList.MostPopular ->
-                    fixtures.anime
-                        .sortedByDescending { fixtures.details[it.id]?.statistics?.members ?: 0 }
-                        .mapIndexed { index, anime -> Ranked(index + 1, anime) }
-            }
-        return Outcome.Success(ranked.page(offset))
-    }
+    override fun openBrowse(list: BrowseList): BrowseSession =
+        BrowseSession { offset, _ ->
+            server.load(needsSignIn = false)?.let { return@BrowseSession Outcome.Failure(it) }
+            if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
+            val ranked =
+                when (list) {
+                    BrowseList.ThisSeason ->
+                        fixtures.anime.filter { it.airingStatus != AiringStatus.Finished }.map { Ranked(null, it) }
+                    BrowseList.TopAiring ->
+                        byRank(fixtures.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
+                            .mapIndexed { index, it -> Ranked(index + 1, it) }
+                    BrowseList.TopRated -> byRank(fixtures.anime).mapIndexed { index, anime -> Ranked(index + 1, anime) }
+                    BrowseList.MostPopular ->
+                        fixtures.anime
+                            .sortedByDescending { fixtures.details[it.id]?.statistics?.members ?: 0 }
+                            .mapIndexed { index, anime -> Ranked(index + 1, anime) }
+                }
+            Outcome.Success(ranked.page(offset))
+        }
 
     private fun byRank(anime: List<Anime>): List<Anime> = anime.filter { it.rank != null }.sortedBy { it.rank }
 

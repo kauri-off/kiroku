@@ -31,9 +31,9 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
-import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
@@ -252,19 +252,16 @@ class SearchRouteTest {
                 override val showAdultInSearch = true
                 override val search =
                     object : SearchRepository by graph.search {
-                        override suspend fun browse(
-                            list: BrowseList,
-                            offset: Int,
-                            includeAdult: Boolean,
-                        ): Outcome<Page<Ranked<Anime>>> {
-                            requests += Triple(list, offset, includeAdult)
-                            return when (requests.size) {
-                                1 -> Outcome.Failure(DataError.ServerError)
-                                2 -> Outcome.Success(Page(listOf(Ranked(4, anime)), 17))
-                                3 -> Outcome.Failure(DataError.ServerError)
-                                else -> Outcome.Success(Page(listOf(Ranked(18, FixtureAnime.film)), null))
+                        override fun openBrowse(list: BrowseList): BrowseSession =
+                            BrowseSession { offset, includeAdult ->
+                                requests += Triple(list, offset, includeAdult)
+                                when (requests.size) {
+                                    1 -> Outcome.Failure(DataError.ServerError)
+                                    2 -> Outcome.Success(Page(listOf(Ranked(4, anime)), 17))
+                                    3 -> Outcome.Failure(DataError.ServerError)
+                                    else -> Outcome.Success(Page(listOf(Ranked(18, FixtureAnime.film)), null))
+                                }
                             }
-                        }
                     }
             }
         search(source)

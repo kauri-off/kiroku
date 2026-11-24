@@ -17,11 +17,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 internal class BrowseViewModel(
-    private val list: BrowseList,
-    private val search: SearchRepository,
+    list: BrowseList,
+    search: SearchRepository,
     connection: Connection,
     private val includeAdult: () -> Boolean,
 ) : ViewModel() {
+    private val browse by lazy { search.openBrowse(list) }
     private val pages = MutableStateFlow(BrowseResults())
     private val loads =
         ShownLoads(
@@ -45,7 +46,7 @@ internal class BrowseViewModel(
         pages.value = page.copy(loading = true, error = null)
         loads.started()
         viewModelScope.launch {
-            val answer = search.browse(list, offset, includeAdult())
+            val answer = browse.load(offset, includeAdult())
             currentCoroutineContext().ensureActive()
             pages.value =
                 when (answer) {

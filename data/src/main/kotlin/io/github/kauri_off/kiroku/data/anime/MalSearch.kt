@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
@@ -44,32 +45,40 @@ class MalSearch(
         return answer.clientIdOutcome()
     }
 
-    override suspend fun browse(
-        list: BrowseList,
-        offset: Int,
-        includeAdult: Boolean,
-    ): Outcome<Page<Ranked<Anime>>> {
-        if (offset < 0) return Outcome.Failure(DataError.InvalidRequest)
-        val nsfw = true.takeIf { includeAdult }
-        return http
-            .call {
-                val page =
-                    when (list) {
-                        BrowseList.ThisSeason -> {
-                            val today = LocalDate.now(clock)
-                            val season = SEASONS[(today.monthValue - 1) / 3]
-                            api.season(today.year, season, offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
-                        }
-                        BrowseList.TopAiring -> api.ranking("airing", offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
-                        BrowseList.TopRated -> api.ranking("all", offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
-                        BrowseList.MostPopular -> api.ranking("bypopularity", offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
-                    }
-                page.mapPage(offset) { hit, repairs ->
-                    val position = if (list == BrowseList.ThisSeason) null else hit.position(repairs)
-                    Ranked(position, hit.node.toAnime(repairs.within("node")))
+    override fun openBrowse(list: BrowseList): BrowseSession =
+        when (list) {
+            BrowseList.ThisSeason -> {
+                val today = LocalDate.now(clock)
+                val season = SEASONS[(today.monthValue - 1) / 3]
+                browseSession(ranked = false) { offset, nsfw ->
+                    api.season(today.year, season, offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
                 }
-            }.clientIdOutcome()
-    }
+            }
+            BrowseList.TopAiring -> ranking("airing")
+            BrowseList.TopRated -> ranking("all")
+            BrowseList.MostPopular -> ranking("bypopularity")
+        }
+
+    private fun ranking(type: String): BrowseSession =
+        browseSession(ranked = true) { offset, nsfw ->
+            api.ranking(type, offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
+        }
+
+    private fun browseSession(
+        ranked: Boolean,
+        fetch: suspend (Int, Boolean?) -> SearchPageNode,
+    ): BrowseSession =
+        BrowseSession { offset, includeAdult ->
+            if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
+            http
+                .call {
+                    val page = fetch(offset, if (includeAdult) true else null)
+                    page.mapPage(offset) { hit, repairs ->
+                        val position = if (ranked) hit.position(repairs) else null
+                        Ranked(position, hit.node.toAnime(repairs.within("node")))
+                    }
+                }.clientIdOutcome()
+        }
 
     private fun <T> SearchPageNode.mapPage(
         offset: Int,

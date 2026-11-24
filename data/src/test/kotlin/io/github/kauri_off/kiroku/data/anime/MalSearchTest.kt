@@ -14,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import java.time.Instant
 
 class MalSearchTest {
     @get:Rule
@@ -93,7 +94,7 @@ class MalSearchTest {
         for ((list, type, ids) in rankings) {
             enqueue("ranking_$type")
 
-            val page = (runBlocking { search.browse(list, offset = 0, includeAdult = false) } as Outcome.Success).value
+            val page = (runBlocking { search.openBrowse(list).load(offset = 0, includeAdult = false) } as Outcome.Success).value
 
             assertEquals(ids.map(::AnimeId), page.items.map { it.item.id })
             assertEquals((1..10).toList(), page.items.map { it.position })
@@ -110,14 +111,24 @@ class MalSearchTest {
     }
 
     @Test
-    fun `the current season is unranked and pages with the adult option`() {
+    fun `a seasonal session stays unranked and retries its continuation across a quarter boundary`() {
+        network.repeatReadsAfter = emptyList()
+        network.clock.now = Instant.parse("2026-12-31T23:59:59Z")
         enqueue("season_fall_2026")
+        network.api.enqueue(answer(503, body = ""))
+        network.api.enqueue(answer(503, body = ""))
         enqueue("season_fall_2026_next")
         val search = MalSearch(network.http, network.clock)
 
-        val first = (runBlocking { search.browse(BrowseList.ThisSeason, 0, includeAdult = false) } as Outcome.Success).value
+        val fall = search.openBrowse(BrowseList.ThisSeason)
+        val first = (runBlocking { fall.load(0, includeAdult = false) } as Outcome.Success).value
         val next = checkNotNull(first.nextOffset)
-        val second = (runBlocking { search.browse(BrowseList.ThisSeason, next, includeAdult = true) } as Outcome.Success).value
+
+        network.clock.now = Instant.parse("2027-01-01T00:00:00Z")
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { fall.load(next, includeAdult = true) })
+        val winter = search.openBrowse(BrowseList.ThisSeason)
+        assertEquals(Outcome.Failure(DataError.ServerError), runBlocking { winter.load(0, includeAdult = false) })
+        val second = (runBlocking { fall.load(next, includeAdult = true) } as Outcome.Success).value
 
         assertEquals(
             listOf(61469L, 61967, 21, 61987, 61607, 64534, 61603, 62582, 235, 61323).map(::AnimeId),
@@ -130,9 +141,16 @@ class MalSearchTest {
         (first.items + second.items).forEach { assertNull(it.position) }
         assertEquals(10, next)
         assertEquals(20, second.nextOffset)
-        for ((offset, nsfw) in listOf("0" to null, "10" to "true")) {
+        val requests =
+            listOf(
+                Triple("2026/fall", "0", null),
+                Triple("2026/fall", "10", "true"),
+                Triple("2027/winter", "0", null),
+                Triple("2026/fall", "10", "true"),
+            )
+        for ((period, offset, nsfw) in requests) {
             val request = network.api.received()
-            assertEquals("/v2/anime/season/2026/fall", request.url.encodedPath)
+            assertEquals("/v2/anime/season/$period", request.url.encodedPath)
             assertEquals(offset, request.url.queryParameter("offset"))
             assertEquals("10", request.url.queryParameter("limit"))
             assertEquals(MalFields.SUMMARY, request.url.queryParameter("fields"))
@@ -145,7 +163,7 @@ class MalSearchTest {
     fun `an adult ranking page requests adult results at its own offset`() {
         enqueue("ranking_bypopularity")
         val search = MalSearch(network.http, network.clock)
-        runBlocking { search.browse(BrowseList.MostPopular, 5, includeAdult = true) }
+        runBlocking { search.openBrowse(BrowseList.MostPopular).load(5, includeAdult = true) }
         val request = network.api.received()
         assertEquals("bypopularity", request.url.queryParameter("ranking_type"))
         assertEquals("5", request.url.queryParameter("offset"))
