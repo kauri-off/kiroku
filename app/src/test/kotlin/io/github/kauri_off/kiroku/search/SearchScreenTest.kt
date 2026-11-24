@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.search
 
+import android.content.res.Configuration
 import androidx.compose.animation.core.snap
 import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SnackbarHostState
@@ -10,9 +11,11 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -20,6 +23,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -27,10 +31,14 @@ import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.screenshots.Shot
 import io.github.kauri_off.kiroku.screenshots.SystemBars
 import io.github.kauri_off.kiroku.screenshots.Variant
+import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.ShellScreen
+import io.github.kauri_off.kiroku.shell.ShellState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -171,6 +179,18 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `only the dialog requests the next page while search is expanded`() {
+        val query = SearchFixtureStates.query
+        val rows = SearchFixtureStates.rows(query).take(1)
+        val state = results(query, Paged.Shown(rows))
+        show(state)
+        compose.onNode(hasSetTextAction()).performClick()
+        compose.onNode(hasSetTextAction() and hasAnyAncestor(isDialog())).assertIsFocused()
+        show(results(query, Paged.Shown(rows, More.Ready(20))))
+        assertEquals(listOf(SearchEvent.LoadMore), events)
+    }
+
+    @Test
     fun `an advanced offset asks again when a page adds no new rows`() {
         val rows = SearchFixtureStates.rows(SearchFixtureStates.query)
         show(results(SearchFixtureStates.query, Paged.Shown(rows.take(1), More.Ready(20))))
@@ -306,6 +326,51 @@ class SearchScreenWideTest {
 
     @get:Rule
     val rule: TestRule = registered(compose)
+
+    private val inView = hasAnyAncestor(isDialog())
+    private val field = hasSetTextAction()
+    private val result = hasText(FixtureAnime.exactToWatch.titles.romaji) and hasClickAction()
+
+    private fun openSearch() {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                ShellScreen(ShellState(Destination.Search), {}) {
+                    SearchScreen(SearchFixtureStates.results, {}, SnackbarHostState())
+                }
+            }
+        }
+        val collapsed = compose.onNode(field and !inView)
+        val profile = compose.onNodeWithText("Profile").getUnclippedBoundsInRoot()
+        assertTrue(profile.right < collapsed.getUnclippedBoundsInRoot().left)
+        collapsed.performClick()
+    }
+
+    @Test
+    fun `the expanded field shares the centred width of the results`() {
+        openSearch()
+        val expanded = compose.onNode(field and inView).assertIsFocused().getUnclippedBoundsInRoot()
+        val row = compose.onNode(result and inView).getUnclippedBoundsInRoot()
+        assertEquals(Configuration.ORIENTATION_LANDSCAPE, compose.activity.resources.configuration.orientation)
+        assertEquals("expanded field and row bounds: $expanded and $row", row.left + Spacing.l, expanded.left)
+        assertEquals(row.right - Spacing.l, expanded.right)
+        assertEquals(Sizes.contentMaxWidth, row.right - row.left)
+        assertEquals(840.dp, row.left + row.right)
+    }
+
+    @Test
+    @Config(qualifiers = "en-w600dp-h960dp")
+    fun `a narrower expanded field uses the stock width and Back keeps the query`() {
+        openSearch()
+        val query = hasText(SearchFixtureStates.query)
+        val expanded = compose.onNode(field and inView and query).assertIsFocused().getUnclippedBoundsInRoot()
+        val row = compose.onNode(result and inView).getUnclippedBoundsInRoot()
+        assertEquals(600.dp, row.right - row.left)
+        assertEquals(row.left + Spacing.s, expanded.left)
+        assertEquals(row.right - Spacing.s, expanded.right)
+        compose.onNode(hasContentDescription("Back") and inView).performClick()
+        compose.onNode(field and inView).assertDoesNotExist()
+        compose.onNode(field and !inView and query).assertExists()
+    }
 
     @Test
     fun `the search bar's edges are the rows' content edges`() {
