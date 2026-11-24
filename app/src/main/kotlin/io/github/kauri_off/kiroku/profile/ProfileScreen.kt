@@ -211,10 +211,16 @@ private fun blocks(
         val statistics = content.statistics
         // Another user's name is in the bar.
         val header = content.header?.takeIf { own }
-        header?.let { add(PageBlock(Section.Header, Spacing.xl) { Header(it) }) }
         // Beside the own header the numbers keep to its start; with the name in the bar they are centred.
         val alignment = if (own) Alignment.Start else Alignment.CenterHorizontally
-        add(PageBlock(Section.Numbers, Spacing.l) { Numbers(statistics, alignment) })
+        add(
+            PageBlock(Section.Numbers, Spacing.l) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.l)) {
+                    header?.let { Header(it) }
+                    Numbers(statistics, alignment)
+                }
+            },
+        )
         if (!own) {
             add(
                 PageBlock(Section.List, Spacing.xl) {
@@ -452,7 +458,7 @@ internal object ProfileTags {
     val nameField = notShown("profile-name-field")
 }
 
-private enum class Section { Header, Numbers, List, Statuses, Nothing, Rows, Another }
+private enum class Section { Numbers, List, Statuses, Nothing, Rows, Another }
 
 // The genres a row names.
 private const val LEADING = 3

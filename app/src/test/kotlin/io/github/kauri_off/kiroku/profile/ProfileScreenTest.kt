@@ -5,8 +5,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
@@ -25,6 +27,7 @@ import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.title.roundedHalfUp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -82,6 +85,27 @@ class ProfileScreenTest {
         compose.onNodeWithText("View list").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").assertDoesNotExist()
         assertEquals(listOf(ProfileEvent.OpenSettings, ProfileEvent.StartOpenProfile()), events)
+    }
+
+    @Test
+    @Config(qualifiers = "en-w411dp-h640dp-xhdpi")
+    fun theOwnHeaderAppearsAtTheTopWhenItArrivesAfterTheStatistics() {
+        var state by mutableStateOf(fixtures.me(ProfileContent.Shown(null, fixtures.set.userStatistics)))
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                ProfileScreen(state, { events += it }, SnackbarHostState())
+            }
+        }
+        compose.onNodeWithText("Days watched").assertIsDisplayed()
+        compose.onNodeWithText("kiroku_demo").assertDoesNotExist()
+
+        compose.runOnIdle { state = fixtures.me() }
+
+        compose.onNodeWithText("kiroku_demo").assertIsDisplayed()
+        compose.onNodeWithText("Joined\u00A02019").assertIsDisplayed()
+        val page = compose.onNodeWithTag(ProfileTags.page).getUnclippedBoundsInRoot()
+        val avatar = compose.onNodeWithTag(ProfileTags.avatar, useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertEquals(page.top + Spacing.s, avatar.top)
     }
 
     @Test
