@@ -291,15 +291,7 @@ M6 are fixed.
 
 - [x] **M6-14 Another user's list in the app.**
 
-- [ ] **M6-15 [O] Emulator run.** The orchestrator runs the preview build once on the emulator against the
-  sandbox, signed in: the own profile shows the counts of the sandbox's list; the user with several thousand
-  entries is opened by name, and the longest part of their list is scrolled to its end; with the app stopped and
-  its links allowed, a link opens that profile and Back reaches the List; the private user and a mistyped name each
-  say what they are; with the network off the own profile still shows, and another user's offers Retry, which works
-  once the network is back; the preview build installed over a build without M6-05's migration keeps its list, its
-  airing data and what else that build stored.
-  **Needs:** M6-06, M6-10, M6-12, M6-13, M6-14.
-  **Check:** each observation, with its screenshot; a difference is filed as a task.
+- [x] **M6-15 [O] Emulator run.**
 
 - [ ] **M6-16 [O] The owner's check.** With the preview build on his account, the owner compares the Profile's
   completed count and mean score with his profile page on MAL; opens, by name and then by a link from another app
