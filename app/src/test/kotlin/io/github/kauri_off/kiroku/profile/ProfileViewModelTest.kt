@@ -28,6 +28,7 @@ import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import io.github.kauri_off.kiroku.wiring.foregroundScope
 import io.github.kauri_off.kiroku.wiring.showing
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -836,6 +837,52 @@ class ProfileViewModelTest {
             advanceUntilIdle()
             assertEquals(afterFirstRecovery + 2, app.graph.syncs)
             assertEquals(2, user.refreshes)
+        }
+
+    @Test
+    fun `a new show during list reconnect still refreshes the stale profile`() =
+        runTest(dispatcher) {
+            val app = opened()
+            val releaseList = CompletableDeferred<Unit>()
+            var syncs = 0
+            val list =
+                object : ListSource by app.graph.list {
+                    override fun observeSyncedAt(): Flow<Instant?> = flowOf(fixtures.now)
+
+                    override suspend fun sync(expectedOwner: SignInId?): Outcome<Unit> {
+                        syncs++
+                        if (syncs == 1) return Outcome.Failure(DataError.NoConnection)
+                        releaseList.await()
+                        return Outcome.Success(Unit)
+                    }
+                }
+            val user = OwnStore(app.graph.user, stored = fixtures.user, answer = Outcome.Failure(DataError.ServerError))
+            val me = app.profile(ProfileOwner.Me, list = list, user = user)
+            val screen = showing(me.state, me.shown)
+            runCurrent()
+            app.graph.connectionSays.value = false
+            runCurrent()
+            me.onEvent(ProfileEvent.Refresh)
+            runCurrent()
+            assertEquals(1, syncs)
+            assertEquals(1, user.refreshes)
+
+            user.fetched.value = fixtures.now - Freshness.ownProfile.toJavaDuration()
+            app.graph.connectionSays.value = true
+            runCurrent()
+            assertEquals(2, syncs)
+            assertEquals(1, user.refreshes)
+
+            screen.cancel()
+            advanceTimeBy(STOPPED_AFTER)
+            runCurrent()
+            showing(me.state, me.shown)
+            runCurrent()
+            assertEquals(1, user.refreshes)
+            releaseList.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(2, user.refreshes)
+            assertEquals(2, syncs)
         }
 
     @Test

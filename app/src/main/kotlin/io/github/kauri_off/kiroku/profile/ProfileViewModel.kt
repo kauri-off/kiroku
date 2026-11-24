@@ -96,6 +96,8 @@ class ProfileViewModel(
     private val fetchedOwn = MutableStateFlow<Fetched?>(null)
     private var load: Job? = null
     private var offlineReads: OfflineReads? = null
+    private var reconnectingOwner: SignInId? = null
+    private var shownAfterReconnect = false
     private var learning: Job? = null
 
     // The signed-in user's name as last read, to tell the own name from another.
@@ -261,16 +263,24 @@ class ProfileViewModel(
         counted?.takeIf { it.first === entries }?.second ?: statisticsOf(entries).also { counted = entries to it }
 
     // A refresh with content shown that fails is a message; a Retry fails where it was tapped (section 7.2).
-    private fun refresh(asked: Asked) {
-        if (load?.isActive == true) return
+    private fun refresh(
+        asked: Asked,
+        shownOwner: SignInId? = null,
+    ) {
+        if (load?.isActive == true) {
+            if (asked == Asked.Shown && reconnectingOwner != null) shownAfterReconnect = true
+            return
+        }
+        val reconnectOwner = if (asked == Asked.Reconnect && isOwn.value) offlineReads?.owner else null
+        reconnectingOwner = reconnectOwner
         val held = state.value.content is ProfileContent.Shown
         load =
             viewModelScope.launch {
                 pulling.value = asked == Asked.Pull
                 loads.started()
                 val error =
-                    if (isOwn.value) {
-                        refreshOwn(asked)
+                    if (isOwn.value || shownOwner != null) {
+                        refreshOwn(asked, shownOwner)
                     } else {
                         offlineReads = null
                         refreshList()
@@ -280,11 +290,23 @@ class ProfileViewModel(
                 if (error != null && held && asked != Asked.Retry && !error.ofUser && error != DataError.SessionExpired) {
                     messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(error)))
                 }
+                reconnectingOwner = null
+                if (shownAfterReconnect) {
+                    shownAfterReconnect = false
+                    if (reconnectOwner != null && loads.isShowing && isOwn.value) {
+                        load = null
+                        refresh(Asked.Shown, reconnectOwner)
+                    }
+                }
             }
     }
 
-    private suspend fun refreshOwn(asked: Asked): DataError? {
+    private suspend fun refreshOwn(
+        asked: Asked,
+        shownOwner: SignInId?,
+    ): DataError? {
         val owner = sessions.first().owner
+        if (shownOwner != null && (shownOwner != owner || !loads.isShowing || !isOwn.value)) return null
         val previous = offlineReads?.takeIf { it.owner == owner }
         offlineReads = null
         if (owner == null) return null
