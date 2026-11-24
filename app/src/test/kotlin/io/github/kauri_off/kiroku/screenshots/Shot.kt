@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.autofill.ContentDataType
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -308,6 +309,20 @@ class Shot private constructor(
             ?.descendants()
             ?.drop(1)
             ?.maxOfOrNull { it.boundsInWindow.bottom } ?: 0f
+
+    fun visibleTextBounds(text: String): Rect {
+        settle()
+        return windows()
+            .flatMap { it.composeRoots() }
+            .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
+            .single {
+                it.config.getOrNull(SemanticsProperties.Text)?.any { label -> label.text == text } == true &&
+                    !it.boundsInWindow.isEmpty
+            }.let {
+                check(it.boundsInWindow.height == it.size.height.toFloat()) { "Clipped text: $text" }
+                it.boundsInWindow
+            }
+    }
 
     val windowHeightPx: Int get() = activity.window.decorView.height
 

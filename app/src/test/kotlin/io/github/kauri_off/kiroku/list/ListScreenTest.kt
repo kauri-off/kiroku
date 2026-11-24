@@ -67,6 +67,9 @@ import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Sizes
+import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.ShellScreen
+import io.github.kauri_off.kiroku.shell.ShellState
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -328,6 +331,43 @@ class ListScreenTest {
         val shown = messages.fetchSemanticsNodes().indices.count { runCatching { messages[it].assertIsDisplayed() }.isSuccess }
         assertEquals(1, shown)
         assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned)), events)
+    }
+
+    @Test
+    fun `the empty filter message moves with its page during a held swipe`() {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(userListNoMatches) }
+            }
+        }
+        val messages = compose.onAllNodesWithText("No titles match the filter", useUnmergedTree = true)
+        val message =
+            messages
+                .fetchSemanticsNodes()
+                .indices
+                .single { runCatching { messages[it].assertIsDisplayed() }.isSuccess }
+                .let { messages[it].fetchSemanticsNode() }
+        val page = generateSequence(message.parent) { it.parent }.first { SemanticsProperties.VerticalScrollAxisRange in it.config }
+        val messageNode = compose.onNode(SemanticsMatcher("outgoing message") { it.id == message.id }, useUnmergedTree = true)
+        val pageNode = compose.onNode(SemanticsMatcher("outgoing page") { it.id == page.id }, useUnmergedTree = true)
+        val restingPage = pageNode.getUnclippedBoundsInRoot()
+        val restingMessage = messageNode.getUnclippedBoundsInRoot()
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(-width * 0.3f, 0f))
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val swipingPage = pageNode.getUnclippedBoundsInRoot()
+        val swipingMessage = messageNode.getUnclippedBoundsInRoot()
+        compose.onRoot().performTouchInput { cancel() }
+        val travel = (restingPage.left - swipingPage.left) / (restingPage.right - restingPage.left)
+        assertTrue("Outgoing page travelled $travel of its width", travel in 0.15f..0.35f)
+        assertEquals(
+            (restingMessage.left - restingPage.left).value,
+            (swipingMessage.left - swipingPage.left).value,
+            1f,
+        )
+        assertEquals(restingMessage.top, swipingMessage.top)
     }
 
     @Test

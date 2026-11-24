@@ -3,10 +3,14 @@ package io.github.kauri_off.kiroku.list
 import androidx.compose.runtime.Composable
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
+import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.ShellScreen
+import io.github.kauri_off.kiroku.shell.ShellState
 
 class UserListScreenshots : ScreenshotRegistry() {
     private val states = UserListFixtureStates
@@ -28,6 +32,10 @@ class UserListScreenshots : ScreenshotRegistry() {
             case("by-score", content = screen(states.byScore)),
             case("sort-sheet", content = screen(states.sortSheet)),
             case("filtering", keyboard = true, content = screen(states.filtering)),
+            case("filter-no-matches-wide", window = WindowSize(840, 600), keyboard = true, content = screen(userListNoMatches)),
+            case("filter-no-matches-compact", window = WindowSize(411, 550), keyboard = true) {
+                ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(userListNoMatches) }
+            },
             case("unknown-status", content = screen(states.unknownStatus)),
             case("reading", content = screen(states.reading)),
             case("reading-with-total", content = screen(states.readingWithTotal)),
