@@ -33,24 +33,31 @@ and aims to do it more cleanly:
 
 The interface is built from standard Material 3 components.
 
-Data comes from the official MyAnimeList API and, for airing times, from the AniList API. To get airing times, the app
-sends AniList the MyAnimeList ids of the unfinished titles on your list and of an airing title whose page you open,
-and nothing else about you. The app has no server of its own, scrapes no web pages, and contains no analytics, ads
-or closed-source components.
+See the [privacy statement](PRIVACY.md) for what Kiroku sends and stores.
 
 The first release is a starting point. Manga, a deeper title page, a weekly schedule and read-only forums are planned
 after it; the roadmap lists what is planned and what is not built.
 
 ## Building
 
-A debug build needs JDK 17 and the Android SDK, and runs on demo data without any account or API key. Signing in to
-MyAnimeList needs your own MAL API client id, which is never committed to this repository; `docs/ARCHITECTURE.md`,
-section 3.3, explains how to supply it.
+Set `JAVA_HOME` to your JDK 17 installation and `ANDROID_HOME` to your Android SDK directory, with the SDK
+command-line tools in `cmdline-tools/latest`. The Gradle wrapper downloads Gradle.
+
+```sh
+git clone https://github.com/kauri-off/kiroku.git
+cd kiroku
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
+./gradlew :app:assembleDebug
+```
+
+Install `app/build/outputs/apk/debug/app-debug.apk` on Android 8.0 or later. A fresh Debug install built without a
+MyAnimeList client ID opens in Demo mode without an account.
 
 ## Contributing
 
-The code is written mostly by AI coding agents under review, following [CLAUDE.md](CLAUDE.md). Issues and pull requests
-from people are welcome. Commits follow the Conventional Commits format and pull requests are squash-merged.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and fork setup, including
+MyAnimeList sign-in.
 
 ## Licence
 
