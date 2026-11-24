@@ -323,14 +323,18 @@ class ProfileViewModel(
                 Asked.Reconnect -> previous?.profile == true
                 Asked.Pull, Asked.Retry -> true
             }
+
+        fun canDispatch() = shownOwner == null || (loads.isShowing && isOwn.value)
         return coroutineScope {
-            val synced = async { if (syncList) list.sync(owner) as? Outcome.Failure else null }
-            val profile = async { if (readProfile) user.refreshOwnProfile(owner) as? Outcome.Failure else null }
-            val listError = synced.await()?.error
-            val profileError = profile.await()?.error
+            val synced = async { if (syncList && canDispatch()) list.sync(owner) else null }
+            val profile = async { if (readProfile && canDispatch()) user.refreshOwnProfile(owner) else null }
+            val listResult = synced.await()
+            val profileResult = profile.await()
             if (sessions.first().owner != owner) return@coroutineScope null
-            val listOffline = if (syncList) listError == DataError.NoConnection else previous?.list == true
-            val profileOffline = if (readProfile) profileError == DataError.NoConnection else previous?.profile == true
+            val listError = (listResult as? Outcome.Failure)?.error
+            val profileError = (profileResult as? Outcome.Failure)?.error
+            val listOffline = if (listResult == null) previous?.list == true else listError == DataError.NoConnection
+            val profileOffline = if (profileResult == null) previous?.profile == true else profileError == DataError.NoConnection
             if (listOffline || profileOffline) offlineReads = OfflineReads(owner, listOffline, profileOffline)
             listError ?: profileError
         }

@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -840,10 +841,17 @@ class ProfileViewModelTest {
         }
 
     @Test
-    fun `a new show during list reconnect still refreshes the stale profile`() =
+    fun `a new show during list reconnect still refreshes the stale profile`() = deferredShow(hideBeforeRead = false)
+
+    @Test
+    fun `a deferred show starts no read if hidden while checking freshness`() = deferredShow(hideBeforeRead = true)
+
+    private fun deferredShow(hideBeforeRead: Boolean) =
         runTest(dispatcher) {
             val app = opened()
             val releaseList = CompletableDeferred<Unit>()
+            val checkingFreshness = CompletableDeferred<Unit>()
+            val releaseFreshness = CompletableDeferred<Unit>()
             var syncs = 0
             val list =
                 object : ListSource by app.graph.list {
@@ -857,7 +865,18 @@ class ProfileViewModelTest {
                     }
                 }
             val user = OwnStore(app.graph.user, stored = fixtures.user, answer = Outcome.Failure(DataError.ServerError))
-            val me = app.profile(ProfileOwner.Me, list = list, user = user)
+            val gatedUser =
+                object : UserRepository by user {
+                    override fun observeOwnProfileFetchedAt(): Flow<Instant?> =
+                        flow {
+                            if (syncs == 2) {
+                                checkingFreshness.complete(Unit)
+                                releaseFreshness.await()
+                            }
+                            emit(user.fetched.value)
+                        }
+                }
+            val me = app.profile(ProfileOwner.Me, list = list, user = gatedUser)
             val screen = showing(me.state, me.shown)
             runCurrent()
             app.graph.connectionSays.value = false
@@ -876,12 +895,19 @@ class ProfileViewModelTest {
             screen.cancel()
             advanceTimeBy(STOPPED_AFTER)
             runCurrent()
-            showing(me.state, me.shown)
+            val shownAgain = showing(me.state, me.shown)
             runCurrent()
             assertEquals(1, user.refreshes)
             releaseList.complete(Unit)
+            runCurrent()
+            assertTrue(checkingFreshness.isCompleted)
+            if (hideBeforeRead) {
+                shownAgain.cancel()
+                runCurrent()
+            }
+            releaseFreshness.complete(Unit)
             advanceUntilIdle()
-            assertEquals(2, user.refreshes)
+            assertEquals(if (hideBeforeRead) 1 else 2, user.refreshes)
             assertEquals(2, syncs)
         }
 
