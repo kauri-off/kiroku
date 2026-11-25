@@ -55,7 +55,7 @@ fun readLink(address: String): Link? {
     }
     val path = uri.rawPath ?: return null
     titlePage.matchEntire(path)?.let { page ->
-        if (!titlePage.matches(uri.path)) return null
+        if (path.contains("%2F", ignoreCase = true) || !titlePage.matches(uri.path)) return null
         val id = page.groupValues[2].toLongOrNull() ?: return null
         return if (page.groupValues[1] == "manga") Link.MangaTitle(MangaId(id)) else Link.Title(AnimeId(id))
     }

@@ -34,11 +34,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
-class StartedByMangaLinkApplication :
+open class StartedByMangaLinkApplication :
     Application(),
     AppGraphOwner,
     LinksOwner {
-    private val test by lazy { TestGraph(Demo(Fixtures.reference, CoroutineScope(SupervisorJob() + Dispatchers.Main))) }
+    protected val test by lazy { TestGraph(Demo(Fixtures.reference, CoroutineScope(SupervisorJob() + Dispatchers.Main))) }
     override val links = AppLinks()
     val reads = mutableListOf<MangaId>()
 
@@ -63,6 +63,10 @@ class StartedByMangaLinkApplication :
         super.onCreate()
         links.opened(checkNotNull(readLink("https://myanimelist.net/manga/${mangaFixture.id.value}/Paper_Observatory")))
     }
+}
+
+class StartedByUnavailableMangaLinkApplication : StartedByMangaLinkApplication() {
+    override val graph: AppGraph get() = test
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -103,6 +107,13 @@ class MangaTitleLinkRouteTest {
         assertEquals(listOf(mangaFixture.id, mangaFixture.id), app.reads)
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("My list").assertExists()
+    }
+
+    @Test
+    @Config(application = StartedByUnavailableMangaLinkApplication::class)
+    fun `a Demo manga link has no retry action`() {
+        compose.onNodeWithText("Manga pages are unavailable in this mode").assertExists()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
     }
 
     private fun showsManga() {

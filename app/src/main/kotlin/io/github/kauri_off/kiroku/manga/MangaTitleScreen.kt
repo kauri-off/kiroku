@@ -84,7 +84,11 @@ internal fun MangaTitleScreen(
                 MangaTitleContent.Loading -> SubScreenBody.State(ScreenState.Loading)
                 is MangaTitleContent.Failed ->
                     SubScreenBody.State(
-                        ScreenState.Error(stringResource(content.problem.message()), onRetry = { onEvent(MangaTitleEvent.Retry) }),
+                        when (val problem = content.problem) {
+                            MangaTitleProblem.Unavailable -> ScreenState.Empty(stringResource(R.string.manga_unavailable))
+                            is MangaTitleProblem.ReadFailed ->
+                                ScreenState.Error(stringResource(problem.error.message()), onRetry = { onEvent(MangaTitleEvent.Retry) })
+                        },
                     )
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
@@ -155,12 +159,6 @@ private fun MangaHeader(content: MangaTitleContent.Shown) {
         }
     }
 }
-
-private fun MangaTitleProblem.message(): Int =
-    when (this) {
-        MangaTitleProblem.Unavailable -> R.string.manga_unavailable
-        is MangaTitleProblem.ReadFailed -> error.message()
-    }
 
 @Composable
 private fun MangaFormat.label(): String =
