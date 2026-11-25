@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -509,10 +510,77 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `a full re-show refreshes stale cache after the recovery was spent`() =
+        fullShowAfterSpentRecovery(StoredManga(mangaFixture, now.minusSeconds(172_800)))
+
+    @Test
+    fun `a full re-show reads a missing title before a delayed connectivity observation`() = fullShowAfterSpentRecovery(null)
+
+    private fun fullShowAfterSpentRecovery(cached: StoredManga?) =
+        runTest(dispatcher) {
+            val observeAgain = CompletableDeferred<Unit>()
+            var subscriptions = 0
+            var lookups = 0
+            val viewModel =
+                title(
+                    lookup = {
+                        lookups++
+                        cached
+                    },
+                    connection =
+                        object : Connection {
+                            override fun observeOnline() =
+                                flow {
+                                    if (++subscriptions == 2) observeAgain.await()
+                                    online.collect { emit(it) }
+                                }
+                        },
+                )
+            try {
+                val first = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+
+                first.cancel()
+                runCurrent()
+                advanceTimeBy(5_001)
+                val before = lookups
+                val updated = cached?.copy(details = mangaFixture.copy(chapters = 184), fetchedAt = now)
+                if (updated != null) answer = CompletableDeferred(Outcome.Success(updated))
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(before + 1, lookups)
+                assertEquals(3, reads)
+
+                observeAgain.complete(Unit)
+                runCurrent()
+                assertEquals(3, reads)
+                if (updated != null) {
+                    assertEquals(updated.details, shown(viewModel).details)
+                } else {
+                    assertEquals(
+                        MangaTitleContent.Failed(MangaTitleProblem.ReadFailed(DataError.NoConnection)),
+                        viewModel.state.value.content,
+                    )
+                }
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },
         preflight: suspend () -> Unit = {},
+        connection: Connection =
+            object : Connection {
+                override fun observeOnline() = online
+            },
     ): MangaTitleViewModel =
         MangaTitleViewModel(
             mangaFixture.id,
@@ -536,9 +604,7 @@ class MangaTitleViewModelTest {
                 }
             },
             Clock.fixed(now, ZoneOffset.UTC),
-            object : Connection {
-                override fun observeOnline() = online
-            },
+            connection,
             flowOf(TitleLanguage.Romaji),
             flowOf(Session.SignedOut),
             { failures.add(it) },

@@ -61,6 +61,7 @@ internal class MangaTitleViewModel(
     private var retryOwed = false
     private var spentRecovery: Long? = null
     private var resumeForce: Boolean? = null
+    private var resumeFullShow = false
     private val loads =
         ShownLoads(
             viewModelScope,
@@ -68,7 +69,7 @@ internal class MangaTitleViewModel(
             whenShown = {
                 watchConnection()
                 watchOwner()
-                load(force = false)
+                load(force = false, fullShow = true)
             },
             again = {},
             hidden = {
@@ -120,6 +121,7 @@ internal class MangaTitleViewModel(
                 retryOwed = false
                 spentRecovery = null
                 resumeForce = false
+                resumeFullShow = false
                 page.value = Page()
                 load(force = false)
             }
@@ -139,7 +141,10 @@ internal class MangaTitleViewModel(
 
     private fun availableRecovery(): Long? = observed.value.takeIf { it.online && it.recovery != spentRecovery }?.recovery
 
-    private fun load(force: Boolean) {
+    private fun load(
+        force: Boolean,
+        fullShow: Boolean = false,
+    ) {
         if (!loads.isShowing || load?.isActive == true) return
         val source = manga
         if (source == null) {
@@ -148,8 +153,10 @@ internal class MangaTitleViewModel(
         }
         val owner = owner ?: return
         val manual = force || resumeForce == true
-        if (!manual && retryOwed && availableRecovery() == null) return
+        val checkOnShow = fullShow || resumeFullShow
+        if (!manual && !checkOnShow && retryOwed && availableRecovery() == null) return
         resumeForce = null
+        resumeFullShow = false
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
                 val before = page.value
@@ -168,11 +175,13 @@ internal class MangaTitleViewModel(
                 page.value = before.copy(cached = cached)
                 if (!loads.isShowing) {
                     resumeForce = manual
+                    resumeFullShow = checkOnShow
                     return@launch
                 }
                 val owed = retryOwed
-                val recovery = if (owed && !manual) availableRecovery() ?: return@launch else null
-                if (!manual && !owed && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
+                val recovery = if (owed && !manual) availableRecovery() else null
+                val stale = mangaStale(cached?.fetchedAt, clock.instant())
+                if (!manual && recovery == null && (!stale || (owed && !checkOnShow))) return@launch
                 val previouslySpent = spentRecovery
                 if (recovery != null) spentRecovery = recovery
                 retryOwed = false
@@ -186,6 +195,7 @@ internal class MangaTitleViewModel(
                 if (answer == null) {
                     page.value = before.copy(cached = cached)
                     resumeForce = manual
+                    resumeFullShow = checkOnShow
                     retryOwed = owed
                     spentRecovery = previouslySpent
                     load(force = false)
