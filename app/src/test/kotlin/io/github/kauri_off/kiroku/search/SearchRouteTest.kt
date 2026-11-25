@@ -450,7 +450,7 @@ class SearchRouteTest {
     }
 
     @Test
-    fun `Change opens the same-owner editor after the Suggestions branch is popped`() {
+    fun `Change opens the fallback editor until the Suggestions sign-in changes`() {
         val active = MutableStateFlow<Session>(Fixtures.reference.session)
         openAddedSuggestion(active)
         compose.onNodeWithText("Search").performClick()
@@ -459,6 +459,11 @@ class SearchRouteTest {
         compose.onNodeWithText("Change").performClick()
         settle()
         compose.onNodeWithText("Save").assertExists()
+
+        active.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNodeWithText("Top rated").assertExists()
     }
 
     @Test
