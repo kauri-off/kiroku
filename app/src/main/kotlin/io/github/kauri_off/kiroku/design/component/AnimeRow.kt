@@ -82,6 +82,7 @@ fun AnimeRow(
     trailing: RowTrailing? = null,
     longPress: RowLongPress? = null,
     colors: ListItemColors = ListItemDefaults.colors(),
+    overline: String? = null,
 ) {
     require(lines.size <= MAX_SUPPORTING_LINES)
     // With large text the score leaves the trailing slot for the end of the first line, so the title keeps its width.
@@ -90,6 +91,7 @@ fun AnimeRow(
         onClick = onClick,
         modifier = modifier,
         leadingContent = { Poster(posterUrl, PosterSize.Row) },
+        overlineContent = overline?.let { { Text(it) } },
         trailingContent = trailing?.takeIf { scoreBelow == null }?.let { { Trailing(it) } },
         supportingContent =
             if (scoreBelow != null) {

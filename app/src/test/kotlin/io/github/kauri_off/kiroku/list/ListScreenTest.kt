@@ -2,17 +2,25 @@ package io.github.kauri_off.kiroku.list
 
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsActions
@@ -32,6 +40,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
@@ -53,9 +62,11 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import io.github.kauri_off.kiroku.core.airing.AiredCount
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
@@ -63,16 +74,18 @@ import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.Sizes
-import io.github.kauri_off.kiroku.shell.Destination
-import io.github.kauri_off.kiroku.shell.ShellScreen
-import io.github.kauri_off.kiroku.shell.ShellState
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
+import io.github.kauri_off.kiroku.shell.show
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -324,50 +337,33 @@ class ListScreenTest {
     }
 
     @Test
-    fun `a swipe while filtering shows the next tab filtered`() {
-        showFollowing(ListFixtureStates.filtering)
-        swipe(left = true)
-        val messages = compose.onAllNodesWithText("No titles match the filter")
-        val shown = messages.fetchSemanticsNodes().indices.count { runCatching { messages[it].assertIsDisplayed() }.isSuccess }
-        assertEquals(1, shown)
-        assertEquals(listOf(ListEvent.SelectTab(ListStatus.Planned)), events)
+    fun `filter results have statuses and actions in one list without a horizontal pager`() {
+        val watching = FixtureAnime.exactToWatch.titles.romaji
+        val planned = FixtureAnime.premiereYear.titles.romaji
+        show(ListFixtureStates.filtering)
+        compose.onAllNodes(isSelectable()).assertCountEquals(0)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.PageRight)).assertCountEquals(0)
+        compose.onNode(hasText(watching) and hasText("Watching")).assertIsDisplayed()
+        compose.onNode(hasText(planned) and hasText("Planned")).assertIsDisplayed()
+        compose.onNode(hasText(watching)).assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+        compose.onNodeWithContentDescription(plusOne).performClick()
+        compose.onNode(hasText(planned)).performClick()
+        assertEquals(listOf(ListEvent.PlusOne(FixtureAnime.exactToWatch.id), ListEvent.Open(FixtureAnime.premiereYear.id)), events)
     }
 
     @Test
-    fun `the empty filter message moves with its page during a held swipe`() {
-        compose.setContent {
-            KirokuTheme(dark = false, dynamicColor = false) {
-                ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(userListNoMatches) }
-            }
-        }
-        val messages = compose.onAllNodesWithText("No titles match the filter", useUnmergedTree = true)
-        val message =
-            messages
-                .fetchSemanticsNodes()
-                .indices
-                .single { runCatching { messages[it].assertIsDisplayed() }.isSuccess }
-                .let { messages[it].fetchSemanticsNode() }
-        val page = generateSequence(message.parent) { it.parent }.first { SemanticsProperties.VerticalScrollAxisRange in it.config }
-        val messageNode = compose.onNode(SemanticsMatcher("outgoing message") { it.id == message.id }, useUnmergedTree = true)
-        val pageNode = compose.onNode(SemanticsMatcher("outgoing page") { it.id == page.id }, useUnmergedTree = true)
-        val restingPage = pageNode.getUnclippedBoundsInRoot()
-        val restingMessage = messageNode.getUnclippedBoundsInRoot()
+    fun `an unmatched query stays put on a horizontal swipe`() {
+        show(userListNoMatches)
+        val message = compose.onNodeWithText("No titles match the filter")
+        val resting = message.getUnclippedBoundsInRoot()
         compose.onRoot().performTouchInput {
             down(center)
             moveBy(Offset(-width * 0.3f, 0f))
         }
         compose.mainClock.advanceTimeByFrame()
-        val swipingPage = pageNode.getUnclippedBoundsInRoot()
-        val swipingMessage = messageNode.getUnclippedBoundsInRoot()
+        assertEquals(resting, message.getUnclippedBoundsInRoot())
         compose.onRoot().performTouchInput { cancel() }
-        val travel = (restingPage.left - swipingPage.left) / (restingPage.right - restingPage.left)
-        assertTrue("Outgoing page travelled $travel of its width", travel in 0.15f..0.35f)
-        assertEquals(
-            (restingMessage.left - restingPage.left).value,
-            (swipingMessage.left - swipingPage.left).value,
-            1f,
-        )
-        assertEquals(restingMessage.top, swipingMessage.top)
+        assertTrue(events.isEmpty())
     }
 
     @Test
@@ -534,18 +530,136 @@ class ListScreenTest {
     @Test
     fun `starting and ending the filter keep the unfiltered list where it was`() {
         showFollowing(ListFixtureStates.watching)
-        compose.onRoot().performTouchInput { swipeUp() }
+        scrollWatchingTo(3)
         compose.waitForIdle()
-        val title = lastWatching()
+        val title =
+            ListFixtureStates.watching.page!!
+                .rows[3]
+                .title
         val top = compose.onNodeWithText(title).getUnclippedBoundsInRoot().top
-        shown = shown?.copy(filter = "")
+        shown = shown?.withFilter("")
         compose.waitForIdle()
-        assertEquals(top, compose.onNodeWithText(title).getUnclippedBoundsInRoot().top)
+        compose.onAllNodes(isSelectable()).assertCountEquals(0)
         shown = ListFixtureStates.filtering
         compose.waitForIdle()
         shown = ListFixtureStates.watching
         compose.waitForIdle()
         assertEquals(top, compose.onNodeWithText(title).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun `closing the filter restores the first visible title after an earlier row leaves the tab`() {
+        val initial = ListFixtureStates.watching
+        val row = initial.page!!.rows[3]
+        show(initial)
+        scrollWatchingTo(3)
+        val before = compose.onNodeWithText(row.title).getUnclippedBoundsInRoot().top
+
+        show(initial.withFilter(""))
+        val tabs = initial.content as ListContent.Tabs
+        val updated =
+            initial.copy(
+                content =
+                    ListContent.Tabs(
+                        tabs.pages + (initial.tab to initial.page!!.copy(rows = initial.page!!.rows.drop(1))),
+                    ),
+            )
+        show(updated.withFilter(""))
+        show(updated)
+        assertEquals(before, compose.onNodeWithText(row.title).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun `closing the filter falls back to the saved index when the first visible title is gone`() {
+        val initial = ListFixtureStates.watching
+        val page = initial.page!!
+        show(initial)
+        scrollWatchingTo(3)
+        val before = compose.onNodeWithText(page.rows[3].title).getUnclippedBoundsInRoot().top
+
+        show(initial.withFilter(""))
+        val rows = page.rows.filterIndexed { index, _ -> index != 3 }
+        val tabs = initial.content as ListContent.Tabs
+        show(initial.copy(content = ListContent.Tabs(tabs.pages + (initial.tab to page.copy(rows = rows)))))
+        assertEquals(before, compose.onNodeWithText(rows[3].title).getUnclippedBoundsInRoot().top)
+    }
+
+    private fun scrollWatchingTo(index: Int) {
+        val first =
+            ListFixtureStates.watching.page!!
+                .rows
+                .first()
+                .title
+        val scroller =
+            SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex) and
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and hasAnyDescendant(hasText(first))
+        compose.onNode(scroller).performScrollToIndex(index)
+    }
+
+    @Test
+    fun `the visibility timer waits while Undo is covered and starts when it has room`() {
+        val host = SnackbarHostState()
+        val obstructed = mutableStateOf(true)
+        val ime =
+            object : WindowInsets by WindowInsets() {
+                override fun getBottom(density: Density): Int = if (obstructed.value) 1_800 else 0
+            }
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                Scaffold(snackbarHost = { ScreenSnackbarHost(host, ime) }) { padding ->
+                    Box(Modifier.padding(padding))
+                }
+                LaunchedEffect(host) { host.show("Moved to Completed", "Undo") }
+            }
+        }
+        compose.mainClock.advanceTimeBy(11_000)
+        compose.runOnIdle { assertNotNull(host.currentSnackbarData) }
+        compose.runOnIdle { obstructed.value = false }
+        compose.onNodeWithText("Undo").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(9_000)
+        compose.runOnIdle { assertNotNull(host.currentSnackbarData) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.runOnIdle { assertNull(host.currentSnackbarData) }
+    }
+
+    @Test
+    fun `filter has a loading indicator on the first frame before matches are applied`() {
+        val initial = ListFixtureStates.watching
+        show(initial)
+        show(initial.copy(typed = ListState.Typed("", session = 1)))
+        compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
+        compose.onAllNodes(isSelectable()).assertCountEquals(0)
+
+        show(ListFixtureStates.filtering.copy(typed = ListState.Typed("", session = 1)))
+        compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertDoesNotExist()
+    }
+
+    @Test
+    fun `typing after a fast reopen never shows a previous session's results or actions`() {
+        val stale = ListFixtureStates.filtering.copy(filterSession = 1)
+        val oldTitle = FixtureAnime.exactToWatch.titles.romaji
+        show(stale)
+        compose.onNodeWithText(oldTitle).assertIsDisplayed()
+        show(stale.copy(typed = ListState.Typed(null, session = 1)))
+        show(stale.copy(typed = ListState.Typed("", session = 2)))
+        val newQuery = FixtureAnime.premiereYear.titles.romaji
+        show(stale.copy(typed = ListState.Typed(newQuery, session = 2)))
+        compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
+        compose.onNodeWithText(oldTitle).assertDoesNotExist()
+        compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
+
+        show(stale.withFilter(newQuery).copy(filterSession = 2))
+        compose.onNode(hasText(newQuery) and hasClickAction() and !hasSetTextAction()).assertIsDisplayed()
+    }
+
+    @Test
+    fun `an unmatched public query shows loading until the first read finishes`() {
+        show(userListNoMatches.copy(reading = UserListProgress(40, 100)))
+        compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
+        compose.onNodeWithText("No titles match the filter").assertDoesNotExist()
+        show(userListNoMatches)
+        compose.onNodeWithText("No titles match the filter").assertIsDisplayed()
     }
 
     @Test
@@ -628,7 +742,7 @@ class ListMotionTest {
 
     private fun complete() = set(ListFixtureStates.completedSnackbar)
 
-    private fun ListState.titles(): List<String> = page!!.rows.map { it.title }
+    private fun ListState.titles(): List<String> = (matches ?: page!!.rows).map { it.title }
 
     private fun exists(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
 
@@ -718,6 +832,104 @@ class ListMotionTest {
     }
 
     @Test
+    fun `a retained match that shrinks on completion guards the next actions while settling`() {
+        val titles =
+            ListFixtureStates.watching
+                .withFilter("")
+                .matches!!
+                .filter { it.plusOne }
+                .take(3)
+        val first =
+            titles.first().copy(
+                title = FixtureAnime.longTitle.titles.romaji + " Special",
+                line2 = Line2.Progress(11, 12),
+                line3 = Line3.ToWatch(AiredCount.Exact(1)),
+            )
+        val initial = ListFixtureStates.watching.copy(filter = "", matches = listOf(first) + titles.drop(1))
+        val finished = first.copy(status = ListStatus.Completed, plusOne = false, line2 = Line2.Score(9), line3 = null)
+        val events = mutableListOf<ListEvent>()
+        compose.mainClock.autoAdvance = false
+        state = initial
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    FixtureListScreen(state) { event ->
+                        events += event
+                        if (event == ListEvent.PlusOne(first.id)) state = initial.copy(matches = listOf(finished) + titles.drop(1))
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        val following = titles[1]
+        val previousTop = plusOneOf(following.title).y
+        tap(plusOneOf(first.title), ORDINARY_PACE_MS)
+        val newAction = plusOneOf(following.title)
+        assertTrue("Second action should move up by completion", newAction.y < previousTop)
+        tap(newAction, TAP_GAP_MS)
+        assertEquals(listOf(ListEvent.PlusOne(first.id)), events)
+        SystemClock.sleep(SETTLED)
+        tap(newAction, TAP_GAP_MS)
+        assertEquals(listOf(ListEvent.PlusOne(first.id), ListEvent.PlusOne(following.id)), events)
+    }
+
+    @Test
+    fun `losing the to-watch line guards moved actions in filter results`() = losingToWatchLine(filtering = true)
+
+    @Test
+    fun `losing the to-watch line guards moved actions in the Watching tab`() = losingToWatchLine(filtering = false)
+
+    private fun losingToWatchLine(filtering: Boolean) {
+        val template = ListFixtureStates.watching
+        val titles =
+            template.page!!
+                .rows
+                .filter { it.plusOne }
+                .take(3)
+        val first =
+            titles.first().copy(
+                title = FixtureAnime.longTitle.titles.romaji + " Special",
+                line2 = Line2.Progress(11, 24),
+                line3 = Line3.ToWatch(AiredCount.Exact(1)),
+            )
+
+        fun withRows(rows: List<ListRow>): ListState =
+            if (filtering) {
+                template.copy(filter = "", matches = rows)
+            } else {
+                template.copy(content = ListFixtureStates.tabs(override = ListFixtureStates.watchingPage(rows)))
+            }
+
+        val initial = withRows(listOf(first) + titles.drop(1))
+        val watched = first.copy(line2 = Line2.Progress(12, 24), line3 = null)
+        val events = mutableListOf<ListEvent>()
+        compose.mainClock.autoAdvance = false
+        state = initial
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    FixtureListScreen(state) { event ->
+                        events += event
+                        if (event == ListEvent.PlusOne(first.id)) state = withRows(listOf(watched) + titles.drop(1))
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        val following = titles[1]
+        val oldAction = plusOneOf(following.title)
+        tap(plusOneOf(first.title), ORDINARY_PACE_MS)
+        val moved = plusOneOf(following.title)
+        assertTrue("Second action should move up after the line disappears", moved.y < oldAction.y)
+        tap(moved, TAP_GAP_MS)
+        tap(plusOneOf(first.title), TAP_GAP_MS)
+        assertEquals(List(2) { ListEvent.PlusOne(first.id) }, events)
+        SystemClock.sleep(SETTLED)
+        tap(moved, TAP_GAP_MS)
+        assertEquals(List(2) { ListEvent.PlusOne(first.id) } + ListEvent.PlusOne(following.id), events)
+    }
+
+    @Test
     fun `a window resized as a completed row leaves still keeps a quick tap from the row below`() {
         val anime = FixtureAnime.oneShortOfTotal
         val events = mutableListOf<ListEvent>()
@@ -779,7 +991,7 @@ class ListMotionTest {
 
     @Test
     fun `typing in the filter does not animate`() {
-        assertInstant(ListFixtureStates.watching.copy(filter = ""), ListFixtureStates.filtering)
+        assertInstant(ListFixtureStates.watching.withFilter(""), ListFixtureStates.filtering)
     }
 
     @Test

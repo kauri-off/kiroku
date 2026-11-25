@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.ShellMessage
 
 // The List's states over the fixture set, at the fixtures' moment, for previews and screenshots.
@@ -49,16 +50,13 @@ object ListFixtureStates {
     fun tabs(
         entries: List<ListEntry> = set.entries,
         readOnly: Boolean = false,
-        filter: String? = null,
         override: Map<ListStatus, ListPage> = emptyMap(),
     ): ListContent.Tabs =
         ListContent.Tabs(
             tabOrder(entries.map { it.status }).associateWith { status ->
                 val sort = defaultSort(status, withAiring = !readOnly)
-                val page =
-                    override[status]
-                        ?: ListPage(sort, sortsFor(status, withAiring = !readOnly), rows(status, sort, entries, readOnly = readOnly))
-                page.copy(rows = page.rows.filter { filter == null || it.title.contains(filter, ignoreCase = true) })
+                override[status]
+                    ?: ListPage(sort, sortsFor(status, withAiring = !readOnly), rows(status, sort, entries, readOnly = readOnly))
             },
         )
 
@@ -206,12 +204,7 @@ object ListFixtureStates {
 
     val completedByStartDate = sorted(ListStatus.Completed, ListSort.StartDate)
 
-    // "Kaze", in two Watching titles and in no other.
-    private val query =
-        FixtureAnime.estimatedCaughtUp.titles.romaji
-            .substringBefore(' ')
-
-    val filtering = watching.copy(filter = query, content = tabs(filter = query))
+    val filtering = watching.withFilter(notShown("Kagerou"))
 
     val refreshing = watching.copy(refreshing = true)
 
@@ -273,3 +266,5 @@ object ListFixtureStates {
 
     val sessionExpired = watching.copy(sessionExpired = true)
 }
+
+internal fun ListState.withFilter(query: String) = copy(filter = query, matches = ListFilter().rows(content, query))

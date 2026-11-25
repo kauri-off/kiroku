@@ -11,6 +11,8 @@ class PlusOneGuard(
     var moveMillis: Long,
 ) {
     private var shown = emptyList<AnimeId>()
+    private var eligible: Set<AnimeId>? = null
+    private var thirdLines: Set<AnimeId> = emptySet()
     private var until = Long.MIN_VALUE
 
     // Rows at or below this place moved up.
@@ -20,11 +22,34 @@ class PlusOneGuard(
     fun shown(
         ids: List<AnimeId>,
         at: Long,
+        eligible: Set<AnimeId>? = null,
+        thirdLines: Set<AnimeId> = emptySet(),
     ) {
-        val left = shown.indices.firstOrNull { shown[it] !in ids }
+        val left =
+            if (shown == ids) {
+                -1
+            } else {
+                val present = ids.toHashSet()
+                shown.indexOfFirst { it !in present }
+            }
+        val previous = this.eligible.orEmpty()
+        val previousThirdLines = this.thirdLines
+        val shrank =
+            if (previous == eligible.orEmpty() && previousThirdLines == thirdLines) {
+                -1
+            } else {
+                ids.indexOfFirst { (it in previous && it !in eligible.orEmpty()) || (it in previousThirdLines && it !in thirdLines) }
+            }
         shown = ids
-        if (left == null) return
-        from = if (at < until) minOf(from, left) else left
+        this.eligible = eligible
+        this.thirdLines = thirdLines
+        val moved =
+            minOf(
+                if (left >= 0) left else Int.MAX_VALUE,
+                if (shrank >= 0 && shrank < ids.lastIndex) shrank + 1 else Int.MAX_VALUE,
+            )
+        if (moved == Int.MAX_VALUE) return
+        from = if (at < until) minOf(from, moved) else moved
         until = at + moveMillis + PLUS_ONE_SETTLE_MILLIS
     }
 
@@ -33,5 +58,5 @@ class PlusOneGuard(
         id: AnimeId,
         ids: List<AnimeId>,
         at: Long,
-    ): Boolean = id in ids && !(at < until && ids.indexOf(id) >= from)
+    ): Boolean = id in ids && eligible?.contains(id) != false && !(at < until && ids.indexOf(id) >= from)
 }

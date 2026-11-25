@@ -23,7 +23,6 @@ data class ListState(
     val content: ListContent,
     val tab: EntryStatus = ListStatus.Watching,
     val sortSheetOpen: Boolean = false,
-    // The text that filters every tab's rows; null when the list is not being filtered.
     val filter: String? = null,
     val refreshing: Boolean = false,
     val sessionExpired: Boolean = false,
@@ -37,6 +36,8 @@ data class ListState(
     val readingAgain: Boolean = false,
     // How many titles another user's whole list has, when one is held.
     val listSize: Int? = null,
+    val matches: List<ListRow>? = null,
+    val filterSession: Int = 0,
 ) {
     init {
         require(reading == null || owner is ListOwner.Other)
@@ -49,10 +50,14 @@ data class ListState(
     // What the filter field shows; null while it is closed.
     val filterText: String? get() = if (typed != null) typed.text else filter
 
-    @JvmInline
-    value class Typed(
+    val activeFilterSession: Int get() = typed?.session ?: filterSession
+
+    data class Typed(
         val text: String?,
-    )
+        val session: Int = 0,
+    ) {
+        fun withText(next: String?): Typed = Typed(next, if (text == null && next != null) session + 1 else session)
+    }
 }
 
 sealed interface ListOwner {
@@ -100,7 +105,6 @@ internal fun tabOf(saved: String): EntryStatus =
 
 private val UNRECOGNIZED_TAB = notShown("?")
 
-// One tab: its rows, filtered when a filter is typed, in the order last computed for [sort] and [direction].
 data class ListPage(
     val sort: ListSort,
     val sorts: List<ListSort>,
@@ -120,6 +124,7 @@ data class ListRow(
     val line2: Line2,
     val line3: Line3?,
     val plusOne: Boolean,
+    val status: EntryStatus,
     val sortedBy: SortedBy? = null,
 )
 
@@ -243,6 +248,7 @@ fun listRow(
         line2 = line2,
         line3 = line3,
         plusOne = !readOnly && entry.status == ListStatus.Watching,
+        status = entry.status,
         sortedBy = sortedBy,
     )
 }
