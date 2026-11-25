@@ -1,12 +1,27 @@
 # Contributing to Kiroku
 
-Start with the [Demo build](README.md#building). Gradle also accepts `sdk.dir` in the checkout's untracked
-`local.properties`. If you leave `ANDROID_HOME` unset, set `sdk.dir` to the absolute SDK path and use that path
-in place of `$ANDROID_HOME` in the README's `sdkmanager` commands.
-
 Before changing code, read the relevant entries in the [roadmap](ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
 Follow the conventions in [AGENTS.md](AGENTS.md), including Conventional Commits for pull request titles.
 Pull requests are squash-merged. For data fixtures, follow the [recording rules](docs/ARCHITECTURE.md#111-tests-and-recorded-responses).
+
+## Demo build
+
+Set `JAVA_HOME` to your JDK 17 installation and `ANDROID_HOME` to your Android SDK directory, with the SDK
+command-line tools in `cmdline-tools/latest`. The Gradle wrapper downloads Gradle.
+
+```sh
+git clone https://github.com/kauri-off/kiroku.git
+cd kiroku
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
+./gradlew :app:assembleDebug
+```
+
+Gradle also accepts `sdk.dir` in the checkout's untracked `local.properties`. If you leave `ANDROID_HOME` unset,
+set `sdk.dir` to the absolute SDK path and use that path in the `sdkmanager` commands.
+
+Install `app/build/outputs/apk/debug/app-debug.apk` on Android 8.0 or later. A fresh Debug install built without a
+MyAnimeList client ID opens in Demo mode without an account.
 
 ## Checks
 
