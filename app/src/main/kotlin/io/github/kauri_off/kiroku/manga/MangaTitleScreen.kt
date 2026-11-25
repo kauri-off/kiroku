@@ -54,6 +54,7 @@ internal sealed interface MangaTitleContent {
         val title: String,
         val refreshing: Boolean = false,
         val coverAttempt: Int = 0,
+        val detailsError: DataError? = null,
     ) : MangaTitleContent
 }
 
@@ -93,6 +94,11 @@ internal fun MangaTitleScreen(
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
                         item { MangaHeader(content) }
+                        content.detailsError?.let { error ->
+                            item {
+                                ScreenState(ScreenState.Error(stringResource(error.message())) { onEvent(MangaTitleEvent.Retry) })
+                            }
+                        }
                         content.details.synopsis?.let { synopsis ->
                             item {
                                 Column(Modifier.padding(top = Spacing.l)) {

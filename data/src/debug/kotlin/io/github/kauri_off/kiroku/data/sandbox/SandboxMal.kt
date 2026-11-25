@@ -45,6 +45,8 @@ class SandboxMal(
     @Volatile
     var rejecting = false
 
+    internal fun acceptsAccess(bearer: String): Boolean = !rejecting && tokens.accepts(bearer)
+
     @Volatile
     var delayMillis = 0L
 
@@ -109,7 +111,7 @@ class SandboxMal(
         if (url.encodedPath == SIGN_IN_PATH + "token" && request.method == "POST") return token(form(request))
         val path = url.encodedPath.removePrefix(API_PATH).takeIf { url.encodedPath.startsWith(API_PATH) } ?: return NOT_FOUND
         val bearer = request.header("Authorization")?.removePrefix("Bearer ")
-        val signedIn = bearer != null && !rejecting && tokens.accepts(bearer)
+        val signedIn = bearer != null && acceptsAccess(bearer)
         if (bearer != null && !signedIn) return INVALID_TOKEN
         val parts = path.split('/')
         val fields = fieldsOf(url.queryParameter("fields"))

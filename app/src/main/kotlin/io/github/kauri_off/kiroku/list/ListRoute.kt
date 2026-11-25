@@ -24,6 +24,7 @@ fun ListRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSearch: () -> Unit,
     onSignIn: () -> Unit,
+    onOpenManga: () -> Unit = {},
 ) {
     val list =
         viewModel {
@@ -46,13 +47,14 @@ fun ListRoute(
     CountAsShown(list.shown)
     if (state.content == ListContent.Loading) KeepSplash()
     ListScreen(
-        state = state.copy(typed = list.filterInput),
+        state = state.copy(typed = list.filterInput, mangaAvailable = graph.mangaList != null),
         onEvent = { event ->
             when (event) {
                 is ListEvent.Open -> onOpenTitle(event.id, list.summaryOf(event.id))
                 is ListEvent.Edit -> editor.open(event.id)
                 ListEvent.Search -> onSearch()
                 ListEvent.SignIn -> onSignIn()
+                ListEvent.OpenManga -> onOpenManga()
                 else -> list.onEvent(event)
             }
         },

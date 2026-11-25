@@ -1,0 +1,1007 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 9,
+    "identityHash": "81a82b9f70d2c5bbe7b24416c50468a9",
+    "entities": [
+      {
+        "tableName": "title",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster_url` TEXT, `large_poster_url` TEXT, `media_type` TEXT, `airing_status` TEXT NOT NULL, `episodes` INTEGER, `start_date` TEXT, `broadcast_day` INTEGER, `broadcast_time` TEXT, `mean_score` REAL, `rank` INTEGER, `genres` TEXT, `episode_duration` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "romaji",
+            "columnName": "romaji",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "english",
+            "columnName": "english",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "japanese",
+            "columnName": "japanese",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "synonyms",
+            "columnName": "synonyms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "posterUrl",
+            "columnName": "poster_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "largePosterUrl",
+            "columnName": "large_poster_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mediaType",
+            "columnName": "media_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "airingStatus",
+            "columnName": "airing_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodes",
+            "columnName": "episodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "start_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "broadcastDay",
+            "columnName": "broadcast_day",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "broadcastTime",
+            "columnName": "broadcast_time",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "meanScore",
+            "columnName": "mean_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rank",
+            "columnName": "rank",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "genres",
+            "columnName": "genres",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "episodeDuration",
+            "columnName": "episode_duration",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "manga",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `poster` TEXT, `large_poster` TEXT, `synopsis` TEXT, `format` TEXT, `publication` TEXT, `volumes` INTEGER, `chapters` INTEGER, `mean_score` REAL, `fetched_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "romaji",
+            "columnName": "romaji",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "english",
+            "columnName": "english",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "japanese",
+            "columnName": "japanese",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "poster",
+            "columnName": "poster",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "largePoster",
+            "columnName": "large_poster",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "synopsis",
+            "columnName": "synopsis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "format",
+            "columnName": "format",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "publication",
+            "columnName": "publication",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "volumes",
+            "columnName": "volumes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "chapters",
+            "columnName": "chapters",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "meanScore",
+            "columnName": "mean_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetched_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "manga_list_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner` TEXT NOT NULL, `synced_at` INTEGER NOT NULL, PRIMARY KEY(`owner`))",
+        "fields": [
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncedAt",
+            "columnName": "synced_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "owner"
+          ]
+        }
+      },
+      {
+        "tableName": "manga_list_entry",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner` TEXT NOT NULL, `manga_id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster` TEXT, `status` TEXT NOT NULL, `chapters_read` INTEGER, `volumes_read` INTEGER, `score` INTEGER, `updated_at` INTEGER, PRIMARY KEY(`owner`, `manga_id`), FOREIGN KEY(`owner`) REFERENCES `manga_list_state`(`owner`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mangaId",
+            "columnName": "manga_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "romaji",
+            "columnName": "romaji",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "english",
+            "columnName": "english",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "japanese",
+            "columnName": "japanese",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "synonyms",
+            "columnName": "synonyms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "poster",
+            "columnName": "poster",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chaptersRead",
+            "columnName": "chapters_read",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "volumesRead",
+            "columnName": "volumes_read",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "score",
+            "columnName": "score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "owner",
+            "manga_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "manga_list_state",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "owner"
+            ],
+            "referencedColumns": [
+              "owner"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "title_details",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `synopsis` TEXT, `end_date` TEXT, `season_year` INTEGER, `season` TEXT, `source` TEXT, `studios` TEXT NOT NULL, `rating` TEXT, `fetched_at` INTEGER NOT NULL, `recommendations_include_adult` INTEGER DEFAULT 0, `statistics_watching` INTEGER, `statistics_completed` INTEGER, `statistics_on_hold` INTEGER, `statistics_dropped` INTEGER, `statistics_planned` INTEGER, `statistics_members` INTEGER, PRIMARY KEY(`title_id`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "synopsis",
+            "columnName": "synopsis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "end_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seasonYear",
+            "columnName": "season_year",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "studios",
+            "columnName": "studios",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetched_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recommendationsIncludeAdult",
+            "columnName": "recommendations_include_adult",
+            "affinity": "INTEGER",
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "statistics.watching",
+            "columnName": "statistics_watching",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.completed",
+            "columnName": "statistics_completed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.onHold",
+            "columnName": "statistics_on_hold",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.dropped",
+            "columnName": "statistics_dropped",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.planned",
+            "columnName": "statistics_planned",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "statistics.members",
+            "columnName": "statistics_members",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "title_relation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `related_id` INTEGER NOT NULL, `relation` TEXT NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`related_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relatedId",
+            "columnName": "related_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relation",
+            "columnName": "relation",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_title_relation_related_id",
+            "unique": false,
+            "columnNames": [
+              "related_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_title_relation_related_id` ON `${TABLE_NAME}` (`related_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "title",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "related_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "title_recommendation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `recommended_id` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `position`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`recommended_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recommendedId",
+            "columnName": "recommended_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_title_recommendation_recommended_id",
+            "unique": false,
+            "columnNames": [
+              "recommended_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_title_recommendation_recommended_id` ON `${TABLE_NAME}` (`recommended_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "title",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recommended_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "list_entry",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `unconfirmed` INTEGER NOT NULL, `shown_status` TEXT, `shown_watched` INTEGER, `shown_score` INTEGER, `shown_start_date` TEXT, `shown_finish_date` TEXT, `shown_updated_at` INTEGER, `shown_times_rewatched` INTEGER, `confirmed_status` TEXT, `confirmed_watched` INTEGER, `confirmed_score` INTEGER, `confirmed_start_date` TEXT, `confirmed_finish_date` TEXT, `confirmed_updated_at` INTEGER, `confirmed_times_rewatched` INTEGER, PRIMARY KEY(`title_id`), FOREIGN KEY(`title_id`) REFERENCES `title`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unconfirmed",
+            "columnName": "unconfirmed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shown.status",
+            "columnName": "shown_status",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shown.watched",
+            "columnName": "shown_watched",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "shown.score",
+            "columnName": "shown_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "shown.startDate",
+            "columnName": "shown_start_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shown.finishDate",
+            "columnName": "shown_finish_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shown.updatedAt",
+            "columnName": "shown_updated_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "shown.timesRewatched",
+            "columnName": "shown_times_rewatched",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.status",
+            "columnName": "confirmed_status",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confirmed.watched",
+            "columnName": "confirmed_watched",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.score",
+            "columnName": "confirmed_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.startDate",
+            "columnName": "confirmed_start_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confirmed.finishDate",
+            "columnName": "confirmed_finish_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confirmed.updatedAt",
+            "columnName": "confirmed_updated_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "confirmed.timesRewatched",
+            "columnName": "confirmed_times_rewatched",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "title",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "list_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `owner` TEXT, `synced_at` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "syncedAt",
+            "columnName": "synced_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "airing",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `fetched_at` INTEGER NOT NULL, `known` INTEGER NOT NULL, `total_episodes` INTEGER, `doubted_over` INTEGER, PRIMARY KEY(`title_id`))",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetched_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "known",
+            "columnName": "known",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalEpisodes",
+            "columnName": "total_episodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "doubtedOver",
+            "columnName": "doubted_over",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id"
+          ]
+        }
+      },
+      {
+        "tableName": "airing_episode",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `number` INTEGER NOT NULL, `airs_at` INTEGER NOT NULL, PRIMARY KEY(`title_id`, `number`), FOREIGN KEY(`title_id`) REFERENCES `airing`(`title_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "number",
+            "columnName": "number",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "airsAt",
+            "columnName": "airs_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id",
+            "number"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "airing",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "title_id"
+            ],
+            "referencedColumns": [
+              "title_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "own_profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner` TEXT NOT NULL, `name` TEXT NOT NULL, `picture` TEXT, `joined` TEXT, `fetched_at` INTEGER NOT NULL, `stated_watching` INTEGER, `stated_completed` INTEGER, `stated_on_hold` INTEGER, `stated_dropped` INTEGER, `stated_planned` INTEGER, `stated_entries` INTEGER, `stated_episodes` INTEGER, `stated_rewatched` INTEGER, `stated_days_watched` REAL, `stated_mean_score` REAL, PRIMARY KEY(`owner`))",
+        "fields": [
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "picture",
+            "columnName": "picture",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "joined",
+            "columnName": "joined",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetched_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stated.watching",
+            "columnName": "stated_watching",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.completed",
+            "columnName": "stated_completed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.onHold",
+            "columnName": "stated_on_hold",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.dropped",
+            "columnName": "stated_dropped",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.planned",
+            "columnName": "stated_planned",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.entries",
+            "columnName": "stated_entries",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.episodes",
+            "columnName": "stated_episodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.rewatched",
+            "columnName": "stated_rewatched",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stated.daysWatched",
+            "columnName": "stated_days_watched",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "stated.meanScore",
+            "columnName": "stated_mean_score",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "owner"
+          ]
+        }
+      },
+      {
+        "tableName": "notification_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `owner` TEXT, `since` INTEGER, `planned_since` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "since",
+            "columnName": "since",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "plannedSince",
+            "columnName": "planned_since",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "notification_title",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title_id` INTEGER NOT NULL, `followed_status` TEXT, `followed_since` INTEGER, `announced_episode` INTEGER, `announced_aired_at` INTEGER, `taken_back_to` INTEGER, `standing` INTEGER NOT NULL, PRIMARY KEY(`title_id`))",
+        "fields": [
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "followedStatus",
+            "columnName": "followed_status",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "followedSince",
+            "columnName": "followed_since",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "announcedEpisode",
+            "columnName": "announced_episode",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "announcedAiredAt",
+            "columnName": "announced_aired_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "takenBackTo",
+            "columnName": "taken_back_to",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "standing",
+            "columnName": "standing",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "title_id"
+          ]
+        }
+      },
+      {
+        "tableName": "notification_sent",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title_id` INTEGER NOT NULL, `episode` INTEGER NOT NULL, `aired_at` INTEGER NOT NULL, `notify_at` INTEGER NOT NULL, `posted_at` INTEGER NOT NULL, `recheck` TEXT NOT NULL, `shown` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titleId",
+            "columnName": "title_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episode",
+            "columnName": "episode",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "airedAt",
+            "columnName": "aired_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyAt",
+            "columnName": "notify_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "postedAt",
+            "columnName": "posted_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recheck",
+            "columnName": "recheck",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shown",
+            "columnName": "shown",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '81a82b9f70d2c5bbe7b24416c50468a9')"
+    ]
+  }
+}

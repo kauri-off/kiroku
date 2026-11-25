@@ -25,6 +25,8 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
+            case("opened-with-summary") { Screen(openingSummary) },
+            case("opened-with-summary-offline") { Screen(openingSummary.copy(detailsError = DataError.NoConnection)) },
             case("unavailable") { Screen(MangaTitleContent.Failed(MangaTitleProblem.Unavailable)) },
             case("from-catalogue") { Screen(mangaFixture.copy(synopsis = null).shown()) },
             case("wide", window = WindowSize(840, 600)) { Screen(mangaFixture.shown()) },
@@ -62,6 +64,11 @@ internal val mangaFixture =
         chapters = 162,
         meanScore = 9.16,
     )
+
+private val openingSummary =
+    mangaFixture
+        .copy(synopsis = null, format = null, publication = null, volumes = null, chapters = null, meanScore = null)
+        .shown()
 
 private fun MangaDetails.shown() = MangaTitleContent.Shown(this, titles.romaji)
 

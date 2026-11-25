@@ -23,6 +23,7 @@ class SourceRulesTest {
                 "BrowseViewModel.kt",
                 "EditSheetViewModel.kt",
                 "ListViewModel.kt",
+                "MangaListViewModel.kt",
                 "MangaTitleViewModel.kt",
                 "NotifySettingsViewModel.kt",
                 "OpenedProfiles.kt",

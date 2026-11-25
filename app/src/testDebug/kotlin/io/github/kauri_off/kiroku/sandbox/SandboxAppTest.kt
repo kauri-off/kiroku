@@ -664,11 +664,14 @@ class SandboxAppTest {
         assertEquals(UserListState.None(DataError.UnknownUser), readList("kiroku-no-user-0"))
         graph.scenarios.set(Scenario())
 
-        val reads = {
-            graph.sandbox.mal.asked
-                .count { it == "GET sandbox.invalid/v2/users/${SandboxUsers.PUBLIC}/animelist" }
+        fun readsOf(name: String): Int {
+            val request = "GET sandbox.invalid/v2/users/$name/animelist"
+            val asked = graph.sandbox.mal.asked
+            return asked.count { it == request }
         }
-        val before = reads()
+
+        val publicReads = readsOf(SandboxUsers.PUBLIC)
+        val privateReads = readsOf(SandboxUsers.PRIVATE)
         waited { graph.session.signOut() }
         assertEquals(0L, rows("sandbox.db", "own_profile"))
         shows("Sign in with MyAnimeList to see your list here")
@@ -677,10 +680,11 @@ class SandboxAppTest {
         compose.onNode(hasText("Open another profile") and hasClickAction()).performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput(SandboxUsers.PUBLIC)
         compose.onNode(hasText("Open") and hasClickAction()).performClick()
-        until { reads() > before }
+        until { readsOf(SandboxUsers.PUBLIC) > publicReads }
         shows(count(statisticsOf(whole.entries).statuses.completed))
         assertEquals(whole.entries, (readList(SandboxUsers.PUBLIC) as UserListState.Whole).entries)
-        assertEquals(UserListState.Reading(emptyList(), null, null), state { graph.user.observeList(SandboxUsers.PRIVATE).first() })
+        assertEquals(UserListState.None(DataError.PrivateList), readList(SandboxUsers.PRIVATE))
+        assertEquals(privateReads + 1, readsOf(SandboxUsers.PRIVATE))
         assertEquals(emptyList<URI>(), connections.asked)
     }
 

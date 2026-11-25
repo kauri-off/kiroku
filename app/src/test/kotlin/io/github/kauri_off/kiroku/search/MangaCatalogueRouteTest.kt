@@ -26,6 +26,7 @@ import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.Titles
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -44,7 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -259,7 +260,7 @@ class MangaCatalogueRouteTest {
 
                 override val manga =
                     object : MangaRepository {
-                        override fun observeOwner() = flowOf(SessionOwner(null))
+                        override fun observeOwner() = demo.session.observeSession().map { SessionOwner(it.owner) }
 
                         override suspend fun stored(
                             id: MangaId,

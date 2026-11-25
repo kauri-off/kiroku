@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -32,6 +33,7 @@ internal data class MangaTitleKey(
 internal data class MangaTitleSummary(
     val details: MangaDetails,
     val language: TitleLanguage,
+    val owner: SignInId? = null,
 )
 
 @Composable

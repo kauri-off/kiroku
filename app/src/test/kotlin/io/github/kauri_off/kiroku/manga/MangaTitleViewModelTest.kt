@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -304,21 +305,27 @@ class MangaTitleViewModelTest {
     fun `a replacement owner loads on a brief re-show without reading for the retired owner again`() =
         runTest(dispatcher) {
             val original = owners.value
-            val replacement = SessionOwner(SignInId("replacement"))
+            val nextSignIn = SignInId("replacement")
+            val replacement = SessionOwner(nextSignIn)
+            val account = MutableStateFlow<Session>(Session.SignedOut)
             val old = StoredManga(mangaFixture, now)
             val updated = old.copy(details = old.details.copy(chapters = 183))
             val lookups = mutableListOf<SessionOwner>()
             val viewModel =
-                title(lookup = {
-                    lookups += it
-                    if (it === original) old else null
-                })
+                title(
+                    account = account,
+                    lookup = {
+                        lookups += it
+                        if (it === original) old else null
+                    },
+                )
             try {
                 val first = showing(viewModel.state, viewModel.shown)
                 runCurrent()
                 assertEquals(old.details, shown(viewModel).details)
                 first.cancel()
                 runCurrent()
+                account.value = Session.SignedIn(nextSignIn)
                 owners.value = replacement
                 runCurrent()
                 assertEquals(listOf(original), lookups)
@@ -654,10 +661,49 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `the row summary lasts through a held cold read only for its opening owner`() =
+        runTest(dispatcher) {
+            val owner = SignInId("opening-owner")
+            val account = MutableStateFlow<Session>(Session.SignedIn(owner))
+            owners.value = SessionOwner(owner)
+            val preview = mangaFixture.copy(synopsis = null, volumes = null, chapters = null, meanScore = null)
+            val viewModel = title(account = account, opened = MangaTitleSummary(preview, TitleLanguage.Romaji, owner))
+            try {
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(preview, shown(viewModel).details)
+
+                answer.complete(Outcome.Success(StoredManga(mangaFixture, now)))
+                runCurrent()
+                assertEquals(mangaFixture, shown(viewModel).details)
+
+                val next = SignInId("next-owner")
+                answer = CompletableDeferred()
+                account.value = Session.SignedIn(next)
+                runCurrent()
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+                assertEquals(1, reads)
+
+                owners.value = SessionOwner(next)
+                runCurrent()
+                assertEquals(2, reads)
+                val updated = mangaFixture.copy(chapters = 180)
+                answer.complete(Outcome.Success(StoredManga(updated, now)))
+                runCurrent()
+                assertEquals(updated, shown(viewModel).details)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },
         preflight: suspend () -> Unit = {},
+        account: Flow<Session> = flowOf(Session.SignedOut),
         connection: Connection =
             object : Connection {
                 override fun observeOnline() = online
@@ -688,7 +734,7 @@ class MangaTitleViewModelTest {
             Clock.fixed(now, ZoneOffset.UTC),
             connection,
             flowOf(TitleLanguage.Romaji),
-            flowOf(Session.SignedOut),
+            account,
             onRefreshFailed = { failures.add(it) },
             opened = opened,
         )

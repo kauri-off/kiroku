@@ -109,7 +109,8 @@ internal class LiveParts(
     fun file(kind: String): File = File(context.noBackupFilesDir, notShown("${source.name}.$kind"))
 
     // The source's own database, named after it; built on its first use, which is off the main thread.
-    val database by lazy { KirokuDatabase.open(context, notShown("${source.name}.db")) }
+    val databaseName = notShown("${source.name}.db")
+    val database by lazy { KirokuDatabase.open(context, databaseName) }
 
     private companion object {
         val ANILIST_BLOCK = notShown("anilist.block")
@@ -130,7 +131,7 @@ internal class LiveGraph(
     SignInOwner {
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
-    private val account by built
+    internal val account by built
     override val images = parts.http.callFactory
     private val imageCache =
         LiveImages(parts.context, parts.source.name, { parts.file(notShown("retired-images")) }, images, parts.scope, imageFiles) { owner ->

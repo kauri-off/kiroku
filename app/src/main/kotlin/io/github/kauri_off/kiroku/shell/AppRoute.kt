@@ -19,6 +19,8 @@ import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.list.UserListRoute
+import io.github.kauri_off.kiroku.manga.MangaListKey
+import io.github.kauri_off.kiroku.manga.MangaListRoute
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.MangaTitleRoute
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
@@ -174,6 +176,7 @@ fun appEntries(
                 snackbars,
                 onOpenTitle = openTitle,
                 onSearch = { navigator.select(Destination.Search) },
+                onOpenManga = { navigator.open(MangaListKey) },
                 onSignIn = signIn,
             )
         }
@@ -245,6 +248,9 @@ fun appEntries(
             NotifySettingsRoute(graph, messages, snackbars, onBack = { back() }, onOpenTitle = { openTitle(it, null) }, onSignIn = signIn)
         }
         entry<AboutKey> { AboutRoute(snackbars, onBack = { back() }) }
+        entry<MangaListKey> {
+            MangaListRoute(graph, messages, snackbars, onBack = { back() }, onSignIn = signIn, onOpen = navigator::open)
+        }
         entry<MangaTitleKey> { key -> MangaTitleRoute(key, graph, messages, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<TitleKey> { key ->
             TitleRoute(
