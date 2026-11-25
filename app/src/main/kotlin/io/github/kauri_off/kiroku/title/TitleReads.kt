@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.chainWalk
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -23,8 +24,19 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 
 // The list entries of [ids] alone, in one read; a change to another title's entry is not heard.
-fun ListSource.entriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
-    if (ids.isEmpty()) flowOf(emptyMap()) else observeEntriesOf(ids).distinctUntilChanged()
+fun ListSource.entriesOf(
+    ids: Set<AnimeId>,
+    owner: SignInId? = null,
+): Flow<Map<AnimeId, ListEntry>> =
+    when {
+        ids.isEmpty() -> flowOf(emptyMap())
+        owner == null -> observeEntriesOf(ids).distinctUntilChanged()
+        else ->
+            observeOwnedEntriesOf(ids)
+                .map { owned ->
+                    if (owned.owner != owner) emptyMap() else owned.entries.associateBy { it.anime.id }
+                }.distinctUntilChanged()
+    }
 
 // The airing of [ids] alone, with [page]'s own result when given (A12); it ends when the list or the airing cannot be read.
 fun AiringRepository.airingOf(

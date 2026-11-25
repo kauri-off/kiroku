@@ -66,26 +66,31 @@ class MalRemoteList(
     override suspend fun put(
         anime: Anime,
         values: SentValues?,
+        expectedOwner: SignInId?,
     ): Outcome<ListEntry?> =
         when {
             notMal(anime.id) -> if (values == null) Outcome.Success(null) else Outcome.Failure(DataError.NotFound)
-            values == null -> remove(anime.id)
-            else -> set(anime, values)
+            values == null -> remove(anime.id, expectedOwner)
+            else -> set(anime, values, expectedOwner)
         }
 
     // MAL answers a change with the entry's values afterwards, the same as a read of it gives.
     private suspend fun set(
         anime: Anime,
         values: SentValues,
+        expectedOwner: SignInId?,
     ): Outcome<ListEntry?> {
         val form = values.form()
-        return read { repairs, token -> listEntryOf(anime, api.set(anime.id.value, form, token), repairs) }
+        return read(expectedOwner) { repairs, token -> listEntryOf(anime, api.set(anime.id.value, form, token), repairs) }
     }
 
     // MAL answers a removal with an empty array, also for a title not on the list; a 404 for that is a removal too.
     // Any other answer, a page a redirect led to included, is not a removal.
-    private suspend fun remove(id: AnimeId): Outcome<ListEntry?> =
-        when (val answer = session.authorised(http) { check(api.remove(id.value, it) == REMOVED) { "Not a removal" } }) {
+    private suspend fun remove(
+        id: AnimeId,
+        expectedOwner: SignInId?,
+    ): Outcome<ListEntry?> =
+        when (val answer = session.authorised(http, expectedOwner) { check(api.remove(id.value, it) == REMOVED) { "Not a removal" } }) {
             is Outcome.Success -> Outcome.Success(null)
             is Outcome.Failure -> if (answer.error == DataError.NotFound) Outcome.Success(null) else answer
         }

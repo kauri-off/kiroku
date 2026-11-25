@@ -26,6 +26,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import mockwebserver3.MockResponse
 import okhttp3.Dispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -136,6 +137,36 @@ class MalSuggestionsTest {
             }
             assertEquals(Outcome.Failure(DataError.ListEnded), pending.await())
             assertEquals(1, network.api.requestCount)
+        }
+
+    @Test
+    fun `a redirected suggestions GET cannot send after its admitted exchange loses the owner`() =
+        runBlocking {
+            network.repeatReadsAfter = listOf(10.milliseconds)
+            val release = CountDownLatch(1)
+            network.answers { request ->
+                if (request.url.encodedPath == "/v2/anime/suggestions") {
+                    check(release.await(5, TimeUnit.SECONDS))
+                    MockResponse
+                        .Builder()
+                        .code(307)
+                        .setHeader("Location", "/v2/elsewhere")
+                        .build()
+                } else {
+                    answer(503, body = "")
+                }
+            }
+            val owner = signIn()
+            val pending = async(Dispatchers.Default) { search.openSuggestions(owner).load(17, false) }
+            try {
+                assertRequest(17, "access")
+                signIn("replacement")
+            } finally {
+                release.countDown()
+            }
+            val result = pending.await()
+            assertEquals(1, network.api.requestCount)
+            assertEquals(Outcome.Failure(DataError.ListEnded), result)
         }
 
     @Test

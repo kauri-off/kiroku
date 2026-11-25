@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.about.AboutRoute
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
@@ -69,7 +70,22 @@ fun AppRoute(
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
     val edit by messages.editRequest.collectAsScreenState()
     LaunchedEffect(edit) {
-        edit?.let { navigator.showEditorOf(it) }
+        edit?.let { request ->
+            val owner = request.owner
+            if (owner != null) {
+                val origin =
+                    navigator.stackOf(Destination.Search).filterIsInstance<BrowseKey>().lastOrNull {
+                        it.list ==
+                            BrowseList.Suggestions
+                    }
+                if (origin?.owner != owner.value) {
+                    messages.editTaken(request)
+                    return@let
+                }
+                if (navigator.current != Destination.Search) navigator.select(Destination.Search)
+            }
+            navigator.showEditorOf(request.id)
+        }
     }
     SignInTurns(graph, navigator)
     val session = SignOutTurns(graph, navigator, messages)

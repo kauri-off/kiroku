@@ -79,6 +79,7 @@ class ListEngine(
         val named: Set<ListField>?,
         val epoch: Int,
         override val list: Int,
+        val owner: SignInId?,
     ) : Request {
         override val id: AnimeId get() = anime.id
     }
@@ -108,7 +109,8 @@ class ListEngine(
             override suspend fun put(
                 anime: Anime,
                 values: SentValues?,
-            ) = remoteCall { remote.put(anime, values) }.about(anime.id)
+                expectedOwner: SignInId?,
+            ) = remoteCall { remote.put(anime, values, expectedOwner) }.about(anime.id)
 
             // A refusal that cannot be asked about is none: the sync is made.
             override suspend fun refusedFor(): Duration =
@@ -272,6 +274,11 @@ class ListEngine(
     override fun observeOwnedEntries(): Flow<OwnedEntries> =
         shown(OwnedEntries(null, emptyList())) { session -> local.observeEntries().map { OwnedEntries(session.owner, it) } }
 
+    override fun observeOwnedEntriesOf(ids: Set<AnimeId>): Flow<OwnedEntries> =
+        shown(OwnedEntries(null, emptyList())) { session ->
+            local.observeEntriesOf(ids).map { OwnedEntries(session.owner, it.values.toList()) }
+        }
+
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = shown(null) { local.observeEntry(id) }
 
     override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> = shown(emptyMap()) { local.observeEntriesOf(ids) }
@@ -412,7 +419,7 @@ class ListEngine(
         return change
     }
 
-    // An Undo or a Retry of another sign-in's list is for no list at all; any other write needs a signed-in session.
+    // A bound write needs its initiating sign-in.
     private fun refusal(
         write: ListWrite,
         session: Session,
@@ -451,7 +458,7 @@ class ListEngine(
         touch(id)
         if (stored == null) local.add(anime, entry) else local.write(mapOf(id to entry))
         pending[id] = (pending[id] ?: 0) + 1
-        accept(Put(anime, values, from, named, epochs[id] ?: 0, list))
+        accept(Put(anime, values, from, named, epochs[id] ?: 0, list, write.list))
         return ListChange(current, next, plain.steps, checkNotNull(settled?.owner))
     }
 
@@ -583,7 +590,7 @@ class ListEngine(
                 !signedIn -> expired
                 put.values == null && confirmed == null -> Outcome.Success(null)
                 put.values != null && sent == null -> Outcome.Success(confirmed)
-                else -> mal.put(put.anime, sent).recorded()
+                else -> mal.put(put.anime, sent, put.owner).recorded()
             }
         val failure =
             locked {
@@ -674,7 +681,7 @@ class ListEngine(
         val id = direct.id
         if (!current(direct)) return expired
         val confirmed =
-            when (val outcome = mal.fetchEntry(id)) {
+            when (val outcome = mal.fetchEntry(id, direct.write.list)) {
                 is Outcome.Failure -> return outcome
                 is Outcome.Success -> outcome.value
             }
@@ -695,7 +702,7 @@ class ListEngine(
             } else {
                 if (!current(direct)) return expired
                 direct.made = true
-                when (val outcome = mal.put(confirmed?.anime ?: write.anime, sent)) {
+                when (val outcome = mal.put(confirmed?.anime ?: write.anime, sent, direct.write.list)) {
                     is Outcome.Failure -> return outcome.also { failedUnseen(direct, it.error) }
                     is Outcome.Success -> outcome.value
                 }

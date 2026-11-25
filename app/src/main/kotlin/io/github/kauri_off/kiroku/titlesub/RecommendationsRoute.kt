@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
+import io.github.kauri_off.kiroku.shell.LocalSuggestionsOwner
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.title.TitleSummary
@@ -40,6 +41,7 @@ fun RecommendationsRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSignIn: () -> Unit,
 ) {
+    val owner = LocalSuggestionsOwner.current
     val recommendations =
         viewModel {
             RecommendationsViewModel(
@@ -52,6 +54,7 @@ fun RecommendationsRoute(
                 graph.titleLanguage,
                 key.opened,
                 adultSearchChoice = graph.adultSearchChoice,
+                owner = owner,
                 onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
             )
         }

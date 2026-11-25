@@ -5,6 +5,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -16,10 +17,15 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import coil3.ImageLoader
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.component.LocalRouteImages
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.search.BrowseKey
+
+internal val LocalSuggestionsOwner = staticCompositionLocalOf<SignInId?> { null }
 
 // What each key shows. Every screen gets the shell's one snackbar host and draws it in its own scaffold.
 typealias ShellEntries = EntryProviderScope<NavKey>.(navigator: ShellNavigator, snackbars: SnackbarHostState) -> Unit
@@ -58,12 +64,12 @@ fun ShellRoute(
     val provider = entryProvider { entries(navigator, snackbars) }
     val decorated =
         Destination.entries.associateWith { destination ->
+            var suggestionsOwner: SignInId? = null
             val stack =
-                navigator.stackOf(destination).mapIndexed {
-                    depth,
-                    key,
-                    ->
-                    provider(key).scopedTo(key, destination, depth, navigator, images)
+                navigator.stackOf(destination).mapIndexed { depth, key ->
+                    val entry = provider(key).scopedTo(key, destination, depth, navigator, images, suggestionsOwner)
+                    if (key is BrowseKey && key.list == BrowseList.Suggestions) suggestionsOwner = key.owner?.let(::SignInId)
+                    entry
                 }
             rememberDecoratedNavEntries(stack, decorators)
         }
@@ -94,12 +100,19 @@ private fun NavEntry<NavKey>.scopedTo(
     depth: Int,
     navigator: ShellNavigator,
     images: ImageLoader?,
+    suggestionsOwner: SignInId?,
 ): NavEntry<NavKey> {
     val entry = this
-    return NavEntry(key, notShown("${navigator.restarts}/${destination.name}/$depth/$contentKey"), metadata) {
+    val scopedKey = notShown("${navigator.restarts}/${destination.name}/$depth/$contentKey")
+    val identity = suggestionsOwner?.let { notShown("$scopedKey/${it.value}") } ?: scopedKey
+    return NavEntry(key, identity, metadata) {
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
         val inStack = destination in navigator.visible && navigator.stackOf(destination).getOrNull(depth) == key
-        CompositionLocalProvider(LocalOnTop provides onTop, LocalRouteImages provides images) {
+        CompositionLocalProvider(
+            LocalOnTop provides onTop,
+            LocalRouteImages provides images,
+            LocalSuggestionsOwner provides suggestionsOwner,
+        ) {
             NoInputWhileLeaving(inStack) { entry.Content() }
         }
     }

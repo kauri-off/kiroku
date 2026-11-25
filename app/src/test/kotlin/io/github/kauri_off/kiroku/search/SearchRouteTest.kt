@@ -29,16 +29,23 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.demo.DemoStore
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.ListEngine
+import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.list.StoredEntry
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
+import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.NoSignIn
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -56,12 +63,14 @@ import io.github.kauri_off.kiroku.signin.SignInOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -438,6 +447,120 @@ class SearchRouteTest {
         compose.onNodeWithText(FixtureAnime.film.titles.romaji).assertExists()
         compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertDoesNotExist()
         assertEquals(listOf(owner, owner, replacement, replacement), requests)
+    }
+
+    @Test
+    fun `a suggestions title Save waiting for list admission cannot edit the replacement list`() {
+        val anime = FixtureAnime.exactToWatch
+        val a = Fixtures.reference.session
+        val b = Session.SignedIn(SignInId("replacement"))
+        val active = MutableStateFlow<Session>(a)
+        val original = DemoStore(Fixtures.reference.entries, a.signIn)
+        val replacement = DemoStore(Fixtures.reference.entries, b.signIn)
+        val remote = graph.demo.server
+        val values = remote.entry(anime.id)?.values
+        val holding = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var holdNextRead = false
+        val mutations = mutableListOf<AnimeId>()
+        val store =
+            object : LocalList by original {
+                private var current: LocalList = original
+
+                override suspend fun state() = current.state()
+
+                override fun observeEntries() = current.observeEntries()
+
+                override fun observeEntriesOf(ids: Set<AnimeId>) = current.observeEntriesOf(ids)
+
+                override suspend fun read(id: AnimeId) = current.read(id)
+
+                override suspend fun clear(owner: SignInId?) {
+                    current = replacement
+                }
+
+                override suspend fun readAll(): Map<AnimeId, StoredEntry> {
+                    if (holdNextRead) {
+                        holdNextRead = false
+                        holding.complete(Unit)
+                        release.await()
+                    }
+                    return current.readAll()
+                }
+
+                override suspend fun write(entries: Map<AnimeId, StoredEntry?>) {
+                    mutations += entries.keys
+                    current.write(entries)
+                }
+
+                override suspend fun add(
+                    anime: Anime,
+                    entry: StoredEntry,
+                ) {
+                    mutations += anime.id
+                    current.add(anime, entry)
+                }
+            }
+        val engine = ListEngine(remote, store, active, graph.clock, scope) { throw it }
+        val writes = mutableListOf<ListWrite>()
+        val source =
+            object : AppGraph by graph {
+                override val list =
+                    object : ListRepository by engine {
+                        override suspend fun write(write: ListWrite) = engine.write(write.also { writes += it })
+                    }
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = active
+                    }
+            }
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNode(hasText(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        compose.onNode(hasText("Watching") and hasClickAction()).performClick()
+        settle()
+        compose.onNode(status("On hold")).performClick()
+        holdNextRead = true
+        scope.launch { engine.sync(a.signIn) }
+        settle()
+        assertTrue(holding.isCompleted)
+        try {
+            compose.onNodeWithText("Save").performClick()
+            settle()
+            assertEquals(a.signIn, writes.single().list)
+            assertTrue(mutations.isEmpty())
+            active.value = b
+            settle()
+        } finally {
+            release.complete(Unit)
+        }
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        assertTrue(mutations.isEmpty())
+        assertTrue(remote.requests.isEmpty())
+        assertEquals(values, remote.entry(anime.id)?.values)
+        assertEquals(
+            values,
+            runBlocking {
+                original
+                    .read(anime.id)
+                    ?.entry
+                    ?.shown
+                    ?.values
+            },
+        )
+        assertEquals(
+            values,
+            runBlocking {
+                replacement
+                    .read(anime.id)
+                    ?.entry
+                    ?.shown
+                    ?.values
+            },
+        )
     }
 
     @Test

@@ -198,6 +198,7 @@ class DemoServer(
     override suspend fun put(
         anime: Anime,
         values: SentValues?,
+        expectedOwner: SignInId?,
     ): Outcome<ListEntry?> {
         sending.update { it + 1 }
         try {

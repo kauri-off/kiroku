@@ -387,6 +387,19 @@ class MalRemoteListTest {
     }
 
     @Test
+    fun `owner-bound edits cannot acquire replacement credentials for PATCH or DELETE`() =
+        runBlocking {
+            val session = sessions.open()
+            val list = MalRemoteList(network.http, session)
+            session.signIn(TokenGrant(ACCESS, REFRESH))
+            val owner = (session.currentSession() as Session.SignedIn).signIn
+            session.signIn(TokenGrant("replacement", REFRESH))
+            assertEquals(Outcome.Failure(DataError.ListEnded), list.put(anime, values.sent, owner))
+            assertEquals(Outcome.Failure(DataError.ListEnded), list.put(anime.copy(id = listed), null, owner))
+            assertTrue(requests.isEmpty())
+        }
+
+    @Test
     fun `a write whose token MAL rejects is sent once more after one refresh, with the new token`() {
         sessions.answer = { granted(ACCESS, "refresh-2") }
         val session = sessions.open()

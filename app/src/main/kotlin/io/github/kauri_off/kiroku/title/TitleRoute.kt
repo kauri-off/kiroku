@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.shell.LocalSuggestionsOwner
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
@@ -56,6 +57,7 @@ fun TitleRoute(
     links: TitleLinks,
 ) {
     val id = AnimeId(key.id)
+    val owner = LocalSuggestionsOwner.current
     val title =
         viewModel {
             TitleViewModel(
@@ -71,6 +73,7 @@ fun TitleRoute(
                 messages,
                 key.opened,
                 adultSearchChoice = graph.adultSearchChoice,
+                owner = owner,
             )
         }
     val editor = editSheetViewModel(graph, messages)

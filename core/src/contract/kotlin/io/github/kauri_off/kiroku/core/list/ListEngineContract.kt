@@ -194,10 +194,11 @@ abstract class ListEngineContract {
         override suspend fun put(
             anime: Anime,
             values: SentValues?,
+            expectedOwner: SignInId?,
         ): Outcome<ListEntry?> {
             putsUnder += session()
             fault()
-            val answer = inner.put(anime, values).also { afterPut() }
+            val answer = inner.put(anime, values, expectedOwner).also { afterPut() }
             if (unreadAnswers > 0) {
                 unreadAnswers--
                 return Outcome.Failure(unreadAs)

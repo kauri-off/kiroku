@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
@@ -186,6 +187,7 @@ class RelatedViewModel(
     private val clock: Clock,
     titleLanguage: Flow<TitleLanguage>,
     opened: TitleSummary? = null,
+    owner: SignInId? = null,
 ) : SubScreenViewModel(id, anime, session, connection, clock, opened) {
     private class ListRead(
         val entries: Map<AnimeId, ListEntry> = emptyMap(),
@@ -211,7 +213,7 @@ class RelatedViewModel(
                     .toSet()
             }) { ids ->
                 combine(
-                    list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
+                    list.entriesOf(ids, owner).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) },
                     airing.airingOf(ids).readAgainOnRetry(retries) { emptyMap() },
                     ::Pair,
                 )
