@@ -451,6 +451,30 @@ class ListViewModelTest {
         }
 
     @Test
+    fun `a conflated close and reopen gets a new session and fresh filter ordering`() =
+        test { s ->
+            val title = FixtureAnime.oneShortOfTotal
+            s.list.onEvent(ListEvent.StartFilter)
+            val old = s.state
+            s.list.onEvent(ListEvent.PlusOne(title.id))
+            advanceUntilIdle()
+            val changed = s.state
+            val freshOrder = ListFilter().rows(changed.content, "")!!.map { it.id }
+            assertTrue(changed.matches!!.map { it.id } != freshOrder)
+
+            s.list.onEvent(ListEvent.EndFilter)
+            s.list.onEvent(ListEvent.StartFilter)
+            s.list.onEvent(ListEvent.FilterChanged("no"))
+            assertEquals(old.filterSession, s.list.state.value.filterSession)
+            assertTrue(s.list.filterInput.session != old.filterSession)
+            assertEquals("no", s.list.filterInput.text)
+            s.list.onEvent(ListEvent.FilterChanged(""))
+            val reopened = s.state
+            assertEquals(s.list.filterInput.session, reopened.filterSession)
+            assertEquals(freshOrder, reopened.matches!!.map { it.id })
+        }
+
+    @Test
     fun `a matched title completing and undoing keeps its result position and updates its status and action`() =
         test { s ->
             val title = FixtureAnime.oneShortOfTotal

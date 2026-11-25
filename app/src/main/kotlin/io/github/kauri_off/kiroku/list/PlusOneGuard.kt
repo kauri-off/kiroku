@@ -12,6 +12,7 @@ class PlusOneGuard(
 ) {
     private var shown = emptyList<AnimeId>()
     private var eligible: Set<AnimeId>? = null
+    private var thirdLines: Set<AnimeId> = emptySet()
     private var until = Long.MIN_VALUE
 
     // Rows at or below this place moved up.
@@ -22,6 +23,7 @@ class PlusOneGuard(
         ids: List<AnimeId>,
         at: Long,
         eligible: Set<AnimeId>? = null,
+        thirdLines: Set<AnimeId> = emptySet(),
     ) {
         val left =
             if (shown == ids) {
@@ -30,15 +32,17 @@ class PlusOneGuard(
                 val present = ids.toHashSet()
                 shown.indexOfFirst { it !in present }
             }
-        val previous = this.eligible
+        val previous = this.eligible.orEmpty()
+        val previousThirdLines = this.thirdLines
         val shrank =
-            if (previous != null && eligible != null && previous != eligible) {
-                ids.indexOfFirst { it in previous && it !in eligible }
-            } else {
+            if (previous == eligible.orEmpty() && previousThirdLines == thirdLines) {
                 -1
+            } else {
+                ids.indexOfFirst { (it in previous && it !in eligible.orEmpty()) || (it in previousThirdLines && it !in thirdLines) }
             }
         shown = ids
         this.eligible = eligible
+        this.thirdLines = thirdLines
         val moved =
             minOf(
                 if (left >= 0) left else Int.MAX_VALUE,

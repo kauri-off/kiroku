@@ -105,7 +105,7 @@ class ListViewModel(
 
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
     private val listFilter = ListFilter()
-    private val typed = mutableStateOf(saved.get<String>(FILTER))
+    private val typed = mutableStateOf(ListState.Typed(saved.get<String>(FILTER), saved.get<Int>(FILTER_SESSION) ?: 0))
     private val retries = MutableStateFlow(0)
 
     // Section 6.2: airing is a part of the rows, read again at the next pull or Retry when it could not be read.
@@ -167,7 +167,9 @@ class ListViewModel(
     private var rows: Map<AnimeId, BuiltRow> = emptyMap()
 
     // The filter field's text, held as Compose state so the field reads each keystroke in the same frame.
-    val filter: String? get() = typed.value
+    val filterInput: ListState.Typed get() = typed.value
+
+    val filter: String? get() = filterInput.text
 
     val state: StateFlow<ListState> =
         flow {
@@ -188,7 +190,7 @@ class ListViewModel(
             .stateIn(
                 viewModelScope,
                 WhileShown,
-                ListState(ListOwner.Me, ListContent.Loading, model.value.tab, filter = typed.value, now = clock.instant()),
+                ListState(ListOwner.Me, ListContent.Loading, model.value.tab, filter = typed.value.text, now = clock.instant()),
             )
 
     private val loads = ShownLoads(viewModelScope, connection, ::syncIfStale, ::syncUnlessSyncing)
@@ -399,7 +401,7 @@ class ListViewModel(
 
     private fun build(
         model: Model,
-        filter: String?,
+        input: ListState.Typed,
     ): ListState {
         val session = model.session
         val shown =
@@ -426,11 +428,12 @@ class ListViewModel(
             content = pages.content,
             tab = model.tab,
             sortSheetOpen = model.sortSheetOpen,
-            filter = filter,
+            filter = input.text,
+            filterSession = input.session,
             refreshing = model.refreshing,
             sessionExpired = session is Session.Expired,
             now = pages.now,
-            matches = listFilter.rows(pages.content, filter),
+            matches = listFilter.rows(pages.content, input.text, input.session),
         )
     }
 
@@ -571,8 +574,9 @@ class ListViewModel(
     }
 
     private fun filterBy(text: String?) {
-        typed.value = text
+        typed.value = typed.value.withText(text)
         saved[FILTER] = text
+        saved[FILTER_SESSION] = typed.value.session
     }
 
     // The message and its Undo come from what this write changed, so each Undo takes back its own step (W3).
@@ -694,6 +698,7 @@ class ListViewModel(
 
         val TAB = notShown("tab")
         val FILTER = notShown("filter")
+        val FILTER_SESSION = notShown("filterSession")
         val NOBODY_YET = Any()
 
         val Session.owner: SignInId?

@@ -7,11 +7,13 @@ internal class ListFilter {
     private var source: ListContent.Tabs? = null
     private var ordered = emptyList<ListRow>()
     private var query: String? = null
+    private var session = 0
     private var matches = emptyList<ListRow>()
 
     fun rows(
         content: ListContent,
         text: String?,
+        session: Int = 0,
     ): List<ListRow>? {
         if (text == null || content !is ListContent.Tabs) {
             positions.clear()
@@ -20,6 +22,11 @@ internal class ListFilter {
             query = null
             matches = emptyList()
             return null
+        }
+        if (this.session != session) {
+            positions.clear()
+            source = null
+            this.session = session
         }
         if (source !== content) {
             val byId = content.statuses.flatMap { content.pages.getValue(it).rows }.associateBy { it.id }

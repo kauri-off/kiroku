@@ -20,6 +20,12 @@ class UserListScreenshots : ScreenshotRegistry() {
         message: ShellMessage? = null,
     ) = @Composable { FixtureListScreen(state, message) }
 
+    private val filterUndo: @Composable () -> Unit = {
+        ShellScreen(ShellState(Destination.Profile), {}) {
+            FixtureListScreen(states.filtering, ListFixtureStates.completedMessage)
+        }
+    }
+
     override val content = contentCase("watching", content = screen(states.watching))
     override val loading = shown(screen(states.loading))
     override val empty = shown(screen(states.empty))
@@ -38,6 +44,8 @@ class UserListScreenshots : ScreenshotRegistry() {
             case("filtering-wide-portrait", window = WindowSize(600, 960), keyboard = true) {
                 ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(states.filtering) }
             },
+            case("filtering-undo-compact", window = WindowSize(411, 550), keyboard = true, content = filterUndo),
+            case("filtering-undo-wide", window = WindowSize(840, 600), keyboard = true, content = filterUndo),
             case("filter-no-matches-wide", window = WindowSize(840, 600), keyboard = true, content = screen(userListNoMatches)),
             case("filter-no-matches-compact", window = WindowSize(411, 550), keyboard = true) {
                 ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(userListNoMatches) }

@@ -37,6 +37,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
@@ -620,13 +621,31 @@ class ListScreenTest {
     fun `filter has a loading indicator on the first frame before matches are applied`() {
         val initial = ListFixtureStates.watching
         show(initial)
-        show(initial.copy(typed = ListState.Typed("")))
+        show(initial.copy(typed = ListState.Typed("", session = 1)))
         compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
         compose.onAllNodes(isSelectable()).assertCountEquals(0)
 
-        show(ListFixtureStates.filtering.copy(typed = ListState.Typed("")))
+        show(ListFixtureStates.filtering.copy(typed = ListState.Typed("", session = 1)))
         compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
         compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertDoesNotExist()
+    }
+
+    @Test
+    fun `typing after a fast reopen never shows a previous session's results or actions`() {
+        val stale = ListFixtureStates.filtering.copy(filterSession = 1)
+        val oldTitle = FixtureAnime.exactToWatch.titles.romaji
+        show(stale)
+        compose.onNodeWithText(oldTitle).assertIsDisplayed()
+        show(stale.copy(typed = ListState.Typed(null, session = 1)))
+        show(stale.copy(typed = ListState.Typed("", session = 2)))
+        val newQuery = FixtureAnime.premiereYear.titles.romaji
+        show(stale.copy(typed = ListState.Typed(newQuery, session = 2)))
+        compose.onNodeWithContentDescription("Loading").assertIsDisplayed()
+        compose.onNodeWithText(oldTitle).assertDoesNotExist()
+        compose.onAllNodesWithContentDescription(plusOne).assertCountEquals(0)
+
+        show(stale.withFilter(newQuery).copy(filterSession = 2))
+        compose.onNode(hasText(newQuery) and hasClickAction() and !hasSetTextAction()).assertIsDisplayed()
     }
 
     @Test
@@ -847,6 +866,62 @@ class ListMotionTest {
         SystemClock.sleep(SETTLED)
         tap(newAction, TAP_GAP_MS)
         assertEquals(listOf(ListEvent.PlusOne(first.id), ListEvent.PlusOne(following.id)), events)
+    }
+
+    @Test
+    fun `losing the to-watch line guards moved actions in filter results`() = losingToWatchLine(filtering = true)
+
+    @Test
+    fun `losing the to-watch line guards moved actions in the Watching tab`() = losingToWatchLine(filtering = false)
+
+    private fun losingToWatchLine(filtering: Boolean) {
+        val template = ListFixtureStates.watching
+        val titles =
+            template.page!!
+                .rows
+                .filter { it.plusOne }
+                .take(3)
+        val first =
+            titles.first().copy(
+                title = FixtureAnime.longTitle.titles.romaji + " Special",
+                line2 = Line2.Progress(11, 24),
+                line3 = Line3.ToWatch(AiredCount.Exact(1)),
+            )
+
+        fun withRows(rows: List<ListRow>): ListState =
+            if (filtering) {
+                template.copy(filter = "", matches = rows)
+            } else {
+                template.copy(content = ListFixtureStates.tabs(override = ListFixtureStates.watchingPage(rows)))
+            }
+
+        val initial = withRows(listOf(first) + titles.drop(1))
+        val watched = first.copy(line2 = Line2.Progress(12, 24), line3 = null)
+        val events = mutableListOf<ListEvent>()
+        compose.mainClock.autoAdvance = false
+        state = initial
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    FixtureListScreen(state) { event ->
+                        events += event
+                        if (event == ListEvent.PlusOne(first.id)) state = withRows(listOf(watched) + titles.drop(1))
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(SETTLED)
+        val following = titles[1]
+        val oldAction = plusOneOf(following.title)
+        tap(plusOneOf(first.title), ORDINARY_PACE_MS)
+        val moved = plusOneOf(following.title)
+        assertTrue("Second action should move up after the line disappears", moved.y < oldAction.y)
+        tap(moved, TAP_GAP_MS)
+        tap(plusOneOf(first.title), TAP_GAP_MS)
+        assertEquals(List(2) { ListEvent.PlusOne(first.id) }, events)
+        SystemClock.sleep(SETTLED)
+        tap(moved, TAP_GAP_MS)
+        assertEquals(List(2) { ListEvent.PlusOne(first.id) } + ListEvent.PlusOne(following.id), events)
     }
 
     @Test

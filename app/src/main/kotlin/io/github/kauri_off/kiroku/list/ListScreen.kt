@@ -137,11 +137,13 @@ fun ListScreen(
     ScreenScaffold(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
-            TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
+            key(state.activeFilterSession) {
+                TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
+            }
             if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent)
             if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
         },
-        snackbarHost = { ScreenSnackbarHost(snackbars, ime = WindowInsets.ime.takeIf { state.owner == ListOwner.Me }) },
+        snackbarHost = { ScreenSnackbarHost(snackbars, ime = WindowInsets.ime) },
     ) { padding ->
         val body = Modifier.belowBars(padding)
         when (val content = state.content) {
@@ -167,9 +169,9 @@ fun ListScreen(
                             Pages(content.statuses, state.tab, Shown(content, state.owner, state.now), motion, bottomPadding, onEvent)
                         }
                     } else {
-                        val matches = state.matches.takeUnless { state.filterText == "" && state.filter != "" }
+                        val matches = state.matches.takeIf { state.activeFilterSession == state.filterSession }
                         val waitingForMatches = matches.isNullOrEmpty() && state.reading != null && !state.readingAgain
-                        key(state.filter) {
+                        key(state.activeFilterSession, state.filter) {
                             FilterResults(matches.takeUnless { waitingForMatches }, state.owner, state.now, bottomPadding, onEvent)
                         }
                     }
@@ -526,10 +528,11 @@ private fun Rows(
     val ids =
         if (guard != null) {
             remember(rows) { rows.map { it.id } }.also { ids ->
-                val eligible = if (showStatus) remember(rows) { rows.filter { it.plusOne }.mapTo(hashSetOf()) { it.id } } else null
+                val eligible = remember(rows) { buildSet { rows.forEach { if (it.plusOne) add(it.id) } } }
+                val thirdLines = remember(rows) { buildSet { rows.forEach { if (it.line3 != null) add(it.id) } } }
                 SideEffect {
                     guard.moveMillis = moveMillis
-                    guard.shown(ids, SystemClock.uptimeMillis(), eligible)
+                    guard.shown(ids, SystemClock.uptimeMillis(), eligible, thirdLines)
                 }
             }
         } else {

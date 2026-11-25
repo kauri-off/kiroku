@@ -37,6 +37,7 @@ data class ListState(
     // How many titles another user's whole list has, when one is held.
     val listSize: Int? = null,
     val matches: List<ListRow>? = null,
+    val filterSession: Int = 0,
 ) {
     init {
         require(reading == null || owner is ListOwner.Other)
@@ -49,10 +50,14 @@ data class ListState(
     // What the filter field shows; null while it is closed.
     val filterText: String? get() = if (typed != null) typed.text else filter
 
-    @JvmInline
-    value class Typed(
+    val activeFilterSession: Int get() = typed?.session ?: filterSession
+
+    data class Typed(
         val text: String?,
-    )
+        val session: Int = 0,
+    ) {
+        fun withText(next: String?): Typed = Typed(next, if (text == null && next != null) session + 1 else session)
+    }
 }
 
 sealed interface ListOwner {

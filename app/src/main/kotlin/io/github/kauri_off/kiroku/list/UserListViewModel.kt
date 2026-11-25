@@ -90,7 +90,7 @@ class UserListViewModel(
 
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
     private val listFilter = ListFilter()
-    private val typed = mutableStateOf(saved.get<String>(FILTER))
+    private val typed = mutableStateOf(ListState.Typed(saved.get<String>(FILTER), saved.get<Int>(FILTER_SESSION) ?: 0))
     private val lane = background.limitedParallelism(1)
     private var load: Job? = null
     private var reading: Job? = null
@@ -105,7 +105,9 @@ class UserListViewModel(
     @Volatile private var own: Map<AnimeId, ListEntry>? = null
 
     // The filter field's text, held as Compose state so the field reads each keystroke in the same frame.
-    val filter: String? get() = typed.value
+    val filterInput: ListState.Typed get() = typed.value
+
+    val filter: String? get() = filterInput.text
 
     private val loads = ShownLoads(viewModelScope, connection, whenShown = { startReading() }, again = { refresh(Asked.Again) })
 
@@ -197,7 +199,7 @@ class UserListViewModel(
 
     private fun build(
         model: Model,
-        filter: String?,
+        input: ListState.Typed,
     ): ListState {
         val read = model.read
         val entries =
@@ -218,7 +220,8 @@ class UserListViewModel(
             content = content,
             tab = model.tab.takeIf { statuses == null || it in statuses } ?: ListStatus.Watching,
             sortSheetOpen = model.sortSheetOpen,
-            filter = filter,
+            filter = input.text,
+            filterSession = input.session,
             sessionExpired = model.session is Session.Expired,
             now = now,
             reading =
@@ -229,7 +232,7 @@ class UserListViewModel(
                 },
             readingAgain = read is UserListState.Whole && read.again != null,
             listSize = (read as? UserListState.Whole)?.entries?.size,
-            matches = listFilter.rows(content, filter),
+            matches = listFilter.rows(content, input.text, input.session),
         )
     }
 
@@ -368,8 +371,9 @@ class UserListViewModel(
     }
 
     private fun filterBy(text: String?) {
-        typed.value = text
+        typed.value = typed.value.withText(text)
         saved[FILTER] = text
+        saved[FILTER_SESSION] = typed.value.session
     }
 
     // A tab of a status the app does not know is not kept: after a new process it may not be there yet.
@@ -382,5 +386,6 @@ class UserListViewModel(
     private companion object {
         val TAB = notShown("userListTab")
         val FILTER = notShown("userListFilter")
+        val FILTER_SESSION = notShown("userListFilterSession")
     }
 }
