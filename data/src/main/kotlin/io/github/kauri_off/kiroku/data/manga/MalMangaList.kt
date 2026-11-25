@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.MalJson
+import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.authorised
 import kotlinx.serialization.json.JsonArray
@@ -35,13 +36,16 @@ internal class MalMangaList(
 ) {
     private val api by http.api(MangaListApi::class)
 
-    suspend fun fetch(expectedOwner: SignInId): Outcome<MangaListDownload> {
+    suspend fun fetch(
+        expectedOwner: SignInId,
+        firstRead: (() -> ReadAdmission)? = null,
+    ): Outcome<MangaListDownload> {
         val entries = mutableListOf<MangaListRow>()
         val ids = mutableSetOf<MangaId>()
         var offset = 0
         while (true) {
             val page =
-                when (val answer = page(offset, expectedOwner)) {
+                when (val answer = page(offset, expectedOwner, firstRead.takeIf { offset == 0 })) {
                     is Outcome.Failure -> return answer
                     is Outcome.Success -> answer.value
                 }
@@ -75,8 +79,9 @@ internal class MalMangaList(
     private suspend fun page(
         offset: Int,
         expectedOwner: SignInId,
+        firstRead: (() -> ReadAdmission)?,
     ): Outcome<Page> =
-        request(expectedOwner) { authorization ->
+        request(expectedOwner, firstRead) { authorization ->
             val response = api.page(Asked + ("offset" to offset.toString()), authorization)
             response.checkUnredirectedSuccess()
             val json =
@@ -96,9 +101,10 @@ internal class MalMangaList(
 
     private suspend fun <T> request(
         expectedOwner: SignInId,
+        firstRead: (() -> ReadAdmission)? = null,
         send: suspend (String) -> T,
     ): Outcome<T> {
-        val answer = session.authorised(http, expectedOwner, send)
+        val answer = session.authorised(http, expectedOwner, firstRead, send)
         val current = session.currentSession()
         return if (current != null && current.owner != expectedOwner) Outcome.Failure(DataError.ListEnded) else answer
     }

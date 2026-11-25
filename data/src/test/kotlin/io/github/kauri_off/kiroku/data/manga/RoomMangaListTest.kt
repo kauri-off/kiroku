@@ -54,7 +54,7 @@ class RoomMangaListTest {
         context.deleteDatabase(name)
     }
 
-    private fun repository() = RoomMangaList(database, session, { response(it) }, clock) { reported += it }
+    private fun repository() = RoomMangaList({ database }, session, { owner, _ -> response(owner) }, clock) { reported += it }
 
     private suspend fun signIn(name: String): SignInId {
         assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant(name, "refresh-$name")))
@@ -247,6 +247,24 @@ class RoomMangaListTest {
             assertTrue(admitted.await() is Outcome.Success)
             assertNull(queued.await())
             assertEquals(1, calls)
+        }
+
+    @Test
+    fun `an expiry before send admission keeps the snapshot and reports session expired`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            response = { Outcome.Success(listOf(entry())) }
+            val cached = list.refresh(owner)
+
+            sessions.answer = { TokenReply.Answer(400, "") }
+            response = {
+                assertEquals(Outcome.Failure(DataError.SessionExpired), session.authorised<Unit> { Attempt.Rejected })
+                Outcome.Failure(DataError.ListEnded)
+            }
+
+            assertEquals(Outcome.Failure(DataError.SessionExpired), list.refresh(owner))
+            assertEquals(cached, list.stored(owner))
         }
 
     @Test

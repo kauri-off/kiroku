@@ -13,17 +13,22 @@ internal object OwnerRecordings {
     fun named(name: String): RecordedAnswer {
         val file = folder.listFiles().orEmpty().singleOrNull { it.name.substringBefore('.') == name }
         assumeTrue("Skipped: no $name.<status>.json in $folder, where a signed-in recording is pulled (section 11.1)", file != null)
-        return RecordedAnswer(status = file!!.name.split('.')[1].toInt(), body = file.readText())
+        return read(name) {
+            check(!insideACheckout(file!!))
+            RecordedAnswer(status = file.name.split('.')[1].toInt(), body = file.readText())
+        }
     }
 
     // What [read] makes of the answer [name]; a failure names the answer and never a value of it.
-    fun <T> read(
+    inline fun <T> read(
         name: String,
         read: () -> T,
     ): T =
         try {
             read()
         } catch (_: Exception) {
+            throw AssertionError("$name could not be read")
+        } catch (_: AssertionError) {
             throw AssertionError("$name could not be read")
         }
 }

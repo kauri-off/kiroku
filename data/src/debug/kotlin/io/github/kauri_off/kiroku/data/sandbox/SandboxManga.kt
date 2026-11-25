@@ -36,7 +36,7 @@ class SandboxManga(
     MangaRepository {
     private val entries = Entries.map { it.copy(posterUrl = poster(it.id.value)) }
     private val list by lazy {
-        RoomMangaList(database(), session, ::readList, clock, unexpected)
+        RoomMangaList(database, session, { owner, _ -> readList(owner) }, clock, unexpected)
     }
 
     override suspend fun stored(owner: SignInId) = withContext(Dispatchers.IO) { list.stored(owner) }
@@ -45,8 +45,6 @@ class SandboxManga(
         owner: SignInId,
         canDispatch: () -> Boolean,
     ) = withContext(Dispatchers.IO) { list.refresh(owner, canDispatch) }
-
-    suspend fun forgetRetired(owner: SignInId?) = withContext(Dispatchers.IO) { list.forgetRetired(owner) }
 
     private suspend fun readList(owner: SignInId): Outcome<List<MangaListEntry>> =
         session.authorised(owner) { bearer ->

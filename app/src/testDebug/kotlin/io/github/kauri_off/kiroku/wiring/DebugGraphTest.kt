@@ -85,7 +85,7 @@ class DebugGraphTest {
         runTest {
             val first = started("0123abcd")
             assertTrue(first is LiveGraph)
-            assertNull(first.mangaList)
+            assertNotNull(first.mangaList)
             assertNotNull(first.mangaCatalogue)
             assertEquals(Session.SignedOut, first.session.observeSession().first())
             assertEquals(emptyList<ListEntry>(), first.list.observeEntries().first())

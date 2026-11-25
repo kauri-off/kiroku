@@ -47,7 +47,7 @@ class ListScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
-            case("sandbox-manga", largeText = true, content = screen(ListFixtureStates.watching.copy(mangaAvailable = true))),
+            case("manga", largeText = true, content = screen(ListFixtureStates.watching.copy(mangaAvailable = true))),
             case("planned", content = screen(ListFixtureStates.planned)),
             case("completed", content = screen(ListFixtureStates.completed)),
             case("on-hold", content = screen(ListFixtureStates.onHold)),

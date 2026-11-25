@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.data.network.ReadDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -302,6 +303,7 @@ class MalSession internal constructor(
         try {
             block()
         } catch (e: Exception) {
+            if (e is ReadDeferred) throw e
             if (e is CancellationException) currentCoroutineContext().ensureActive()
             unexpected(SessionFailure(e))
             otherwise

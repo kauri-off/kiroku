@@ -1,10 +1,13 @@
 package io.github.kauri_off.kiroku.wiring
 
+import android.database.DatabaseUtils
+import android.database.sqlite.SQLiteDatabase
 import androidx.lifecycle.SavedStateHandle
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.StoredEntry
@@ -16,6 +19,7 @@ import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInStep
@@ -33,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
@@ -40,6 +45,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -153,6 +159,99 @@ class LiveListTest {
             .toSet()
 
     private fun TestScope.store(parts: LiveParts) = RoomLocalList(parts.database, backgroundScope, Dispatchers.IO) {}
+
+    @Test
+    fun `the live manga reader retains a failed snapshot and clears it on replacement and sign-out`() =
+        runBlocking {
+            mal.manga = ServedMal.answer(200, mangaPage)
+            val parts = parts(process())
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+            val reader = graph.mangaList
+            assertTrue(mangaRequests().isEmpty())
+            graph.signInOnce()
+            val first = (graph.account.currentSession() as Session.SignedIn).signIn
+            assertEquals(Outcome.Success(null), reader.stored(first))
+            assertTrue(mangaRequests().isEmpty())
+            val saved = reader.refresh(first) as Outcome.Success
+            assertEquals(
+                "Test Manga",
+                saved.value.entries
+                    .single()
+                    .titles.romaji,
+            )
+
+            mal.manga = ServedMal.answer(400, "")
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), reader.refresh(first))
+            assertEquals(saved, reader.stored(first))
+
+            graph.signInOnce()
+            val second = (graph.account.currentSession() as Session.SignedIn).signIn
+            assertEquals(Outcome.Failure(DataError.ListEnded), reader.stored(first))
+            assertEquals(Outcome.Success(null), reader.stored(second))
+            withTimeout(5_000) {
+                while (mangaRows(parts) != 0L) delay(10)
+            }
+
+            mal.manga = ServedMal.answer(200, mangaPage)
+            assertTrue(reader.refresh(second) is Outcome.Success)
+            assertEquals(1L, mangaRows(parts))
+            graph.session.signOut()
+            assertEquals(Session.SignedOut, graph.account.currentSession())
+            assertEquals(0L, mangaRows(parts))
+            assertEquals(Outcome.Failure(DataError.ListEnded), reader.stored(second))
+            val requests = mangaRequests()
+            assertEquals(3, requests.size)
+            assertTrue(requests.all { it.startsWith("GET ") })
+            assertTrue(unexpected.isEmpty())
+        }
+
+    @Test
+    fun `startup removes retired manga rows and keeps the expired owner's cache`() =
+        runBlocking {
+            val parts = parts(process())
+            val owner = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
+            parts.tokenFile.writeBytes(byteArrayOf(0) + owner.value.encodeToByteArray())
+            liveTitles(parts).observeAnime(AnimeId(1)).first()
+            val file = context.getDatabasePath(parts.databaseName).path
+            SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                db.execSQL("INSERT INTO manga_list_state (owner, synced_at) VALUES (?, 0), ('retired', 0)", arrayOf(owner.value))
+                db.execSQL(
+                    "INSERT INTO manga_list_entry (owner, manga_id, romaji, synonyms, status) " +
+                        "VALUES (?, 1, 'Retained', '[]', 'reading'), ('retired', 2, 'Retired', '[]', 'reading')",
+                    arrayOf(owner.value),
+                )
+            }
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+            assertEquals(Session.Expired(owner), graph.session.observeSession().first())
+            withTimeout(5_000) {
+                while (mangaRows(parts) != 1L) delay(10)
+            }
+            val cached = graph.mangaList.stored(owner) as Outcome.Success
+            assertEquals(
+                "Retained",
+                cached.value
+                    ?.entries
+                    ?.single()
+                    ?.titles
+                    ?.romaji,
+            )
+            assertEquals(Outcome.Failure(DataError.SessionExpired), graph.mangaList.refresh(owner))
+            assertEquals(emptyList<String>(), mal.asked)
+
+            graph.signOut(Session.Expired(owner))
+            assertEquals(0L, mangaRows(parts))
+            assertTrue(unexpected.isEmpty())
+        }
+
+    private fun mangaRequests() = mal.asked.filter { "/v2/users/@me/mangalist?" in it }
+
+    private fun mangaRows(parts: LiveParts): Long =
+        SQLiteDatabase
+            .openDatabase(context.getDatabasePath(parts.databaseName).path, null, SQLiteDatabase.OPEN_READONLY)
+            .use { DatabaseUtils.queryNumEntries(it, "manga_list_entry") }
+
+    private val mangaPage =
+        """{"data":[{"node":{"id":1,"title":"Test Manga"},"list_status":{"status":"reading"}}],"paging":{}}"""
 
     @Test
     fun `a sign-in and its download fill the list with MAL's pages, and nothing is written`() =

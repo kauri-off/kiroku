@@ -103,7 +103,7 @@ private fun JsonObject.text(key: String): String? =
 // A number MAL gives in quotes is read as the number.
 private fun JsonObject.number(key: String): Int? = (get(key) as? JsonPrimitive)?.intOrNull
 
-private fun updatedAtOf(text: String): Instant? =
+internal fun updatedAtOf(text: String): Instant? =
     try {
         OffsetDateTime.parse(text).toInstant()
     } catch (_: DateTimeParseException) {

@@ -8,25 +8,33 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
+import io.github.kauri_off.kiroku.data.network.CLIENT_ID_HEADER
+import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.received
+import io.github.kauri_off.kiroku.data.recorder.OwnerRecordings
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import mockwebserver3.MockResponse
+import okhttp3.Dispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -36,8 +44,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.time.OffsetDateTime
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MalMangaListTest {
     @get:Rule
@@ -49,6 +59,7 @@ class MalMangaListTest {
     private val sessions by lazy { SessionFixture(folder.newFolder()) }
     private val session by lazy { sessions.open() }
     private val list by lazy { MalMangaList(network.http, session) }
+    private val source by lazy { MalMangaListSource(network.http, session) }
     private val id = MangaId(1)
 
     @After
@@ -68,6 +79,145 @@ class MalMangaListTest {
             .code(303)
             .addHeader("Location", path)
             .build()
+
+    @Test
+    fun `private replay errors omit exception and assertion values`() {
+        for (failure in listOf(IllegalStateException("private exception"), AssertionError("private assertion"))) {
+            val redacted =
+                assertThrows(AssertionError::class.java) {
+                    OwnerRecordings.read("personal manga list") { throw failure }
+                }
+            assertEquals("personal manga list could not be read", redacted.message)
+            assertNull(redacted.cause)
+            assertTrue(redacted.suppressed.isEmpty())
+        }
+    }
+
+    @Test
+    fun `recorded manga pages map in order with an authenticated GET at each offset`() =
+        runBlocking {
+            val names = (1..5).map { "manga_list_$it" }
+            val pages = names.map(OwnerRecordings::named)
+            OwnerRecordings.read("personal manga list") {
+                network.clientId = ""
+                val owner = signIn("replay")
+                val expected =
+                    pages.flatMap {
+                        check(it.status == 200)
+                        network.api.enqueue(answer(it.status, it.body))
+                        MalJson
+                            .parseToJsonElement(it.body)
+                            .jsonObject
+                            .getValue("data")
+                            .jsonArray
+                    }
+                val result = source.fetch(owner) { true }
+                check(result is Outcome.Success)
+                check(result.value.size == expected.size && expected.size == 10)
+                for ((entry, wire) in result.value.zip(expected)) {
+                    val node = wire.jsonObject.getValue("node").jsonObject
+                    val values = wire.jsonObject.getValue("list_status").jsonObject
+                    val alternative = node.getValue("alternative_titles").jsonObject
+                    check(entry.id.value == node.getValue("id").jsonPrimitive.long)
+                    check(entry.titles.romaji == node.getValue("title").jsonPrimitive.content)
+                    check(entry.titles.english == alternative["en"]?.jsonPrimitive?.content?.takeUnless(String::isBlank))
+                    check(entry.titles.japanese == alternative["ja"]?.jsonPrimitive?.content?.takeUnless(String::isBlank))
+                    check(entry.titles.synonyms == alternative.getValue("synonyms").jsonArray.map { it.jsonPrimitive.content })
+                    check(
+                        entry.posterUrl ==
+                            node
+                                .getValue("main_picture")
+                                .jsonObject
+                                .getValue("medium")
+                                .jsonPrimitive.content,
+                    )
+                    check(entry.status.code == values.getValue("status").jsonPrimitive.content)
+                    check(entry.chaptersRead == values.getValue("num_chapters_read").jsonPrimitive.int)
+                    check(entry.volumesRead == values.getValue("num_volumes_read").jsonPrimitive.int)
+                    check(
+                        entry.score ==
+                            values
+                                .getValue("score")
+                                .jsonPrimitive.int
+                                .takeIf { it > 0 },
+                    )
+                    check(entry.updatedAt == OffsetDateTime.parse(values.getValue("updated_at").jsonPrimitive.content).toInstant())
+                }
+                check(network.api.requestCount == pages.size)
+                for (offset in listOf(0, 2, 4, 6, 8)) {
+                    val request = network.api.received()
+                    check(request.method == "GET" && request.url.encodedPath == "/v2/users/@me/mangalist")
+                    check(request.url.queryParameter("offset") == offset.toString())
+                    check(request.url.queryParameter("nsfw") == "true" && request.url.queryParameter("status") == null)
+                    check(request.headers[AUTHORIZATION] == "Bearer replay" && request.headers[CLIENT_ID_HEADER] == null)
+                }
+                check(network.unexpected.isEmpty())
+            }
+        }
+
+    @Test
+    fun `a queued first GET checks visibility and owner when OkHttp can send it`() =
+        runBlocking {
+            val dispatcher = Dispatcher().apply { maxRequests = 1 }
+            network.calls = dispatcher
+            network.repeatReadsAfter = emptyList()
+            for (replaceOwner in listOf(false, true)) {
+                val visible = AtomicBoolean(true)
+                val owner = signIn("first")
+                val release = CountDownLatch(1)
+                network.answers {
+                    check(release.await(5, TimeUnit.SECONDS))
+                    answer(503, "")
+                }
+                val occupying = async(Dispatchers.Default) { network.http.call { network.things.value.read() } }
+                val pending =
+                    try {
+                        assertEquals(
+                            "/v2/thing",
+                            network.api
+                                .received()
+                                .url.encodedPath,
+                        )
+                        val queued = async(Dispatchers.Default) { source.fetch(owner, visible::get) }
+                        withTimeout(5_000) {
+                            while (dispatcher.queuedCallsCount() == 0) delay(1)
+                        }
+                        if (replaceOwner) signIn("replacement") else visible.set(false)
+                        queued
+                    } finally {
+                        release.countDown()
+                    }
+                occupying.await()
+                val result = pending.await()
+                if (replaceOwner) assertEquals(Outcome.Failure(DataError.ListEnded), result) else assertNull(result)
+            }
+            assertEquals(2, network.api.requestCount)
+            assertTrue(network.unexpected.isEmpty())
+        }
+
+    @Test
+    fun `an admitted first GET can renew and read later pages after the route is covered`() =
+        runBlocking {
+            val owner = signIn("first")
+            sessions.answer = { granted("renewed", "renewed-refresh") }
+            val visible = AtomicBoolean(true)
+            network.answers { request ->
+                when {
+                    request.headers[AUTHORIZATION] == "Bearer first" -> {
+                        visible.set(false)
+                        answer(401, "")
+                    }
+                    request.url.queryParameter("offset") == "0" -> envelope(1)
+                    request.url.queryParameter("offset") == "10" -> envelope(2)
+                    else -> envelope(3)
+                }
+            }
+            val result = source.fetch(owner, visible::get)
+            assertTrue(result is Outcome.Success)
+            assertEquals(4, network.api.requestCount)
+            assertEquals("Bearer first", network.api.received().headers[AUTHORIZATION])
+            repeat(3) { assertEquals("Bearer renewed", network.api.received().headers[AUTHORIZATION]) }
+        }
 
     @Test
     fun `the entire list is collected using only the next offset from each recorded envelope`() =
