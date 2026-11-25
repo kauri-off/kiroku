@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.data.manga
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
@@ -14,6 +15,7 @@ import io.github.kauri_off.kiroku.data.db.instantOf
 import io.github.kauri_off.kiroku.data.db.toColumn
 import io.github.kauri_off.kiroku.data.db.toRow
 import io.github.kauri_off.kiroku.data.db.transaction
+import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -52,7 +54,7 @@ internal class RoomMangaList(
             if (current.owner != owner) return@withLock Outcome.Failure(DataError.ListEnded)
             if (current is Session.Expired) return@withLock Outcome.Failure(DataError.SessionExpired)
             val entries =
-                when (val answer = source.fetch(owner)) {
+                when (val answer = fetch(owner)) {
                     is Outcome.Failure -> return@withLock whileOwner(owner) { answer }
                     is Outcome.Success -> answer.value.sortedBy { it.id.value }
                 }
@@ -75,6 +77,18 @@ internal class RoomMangaList(
         whileOwner(currentOwner) {
             database.transaction { dao.deleteAllBut(currentOwner?.value) }
             Outcome.Success(Unit)
+        }
+
+    private suspend fun fetch(owner: SignInId): Outcome<List<MangaListEntry>> =
+        try {
+            source.fetch(owner)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: DataException) {
+            Outcome.Failure(e.error)
+        } catch (e: Exception) {
+            unexpected(UnusableAnswer(e))
+            Outcome.Failure(DataError.ServerError)
         }
 
     private suspend fun <T> whileOwner(

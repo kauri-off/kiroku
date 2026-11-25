@@ -131,6 +131,22 @@ class RoomMangaListTest {
         }
 
     @Test
+    fun `a thrown source failure preserves the snapshot and reports no answer contents`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            response = { Outcome.Success(listOf(entry())) }
+            val saved = list.refresh(owner)
+
+            clock.now = clock.now.plusSeconds(60)
+            response = { error("private response") }
+            assertEquals(Outcome.Failure(DataError.ServerError), list.refresh(owner))
+            assertEquals(saved, list.stored(owner))
+            assertEquals(IllegalStateException::class.java.name, reported.single().message)
+            assertNull(reported.single().cause)
+        }
+
+    @Test
     fun `a retired download and cleanup cannot replace the new owner's same manga`() =
         runBlocking {
             val a = signIn("a")
