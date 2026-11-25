@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.NotSentAgain
 import io.github.kauri_off.kiroku.data.network.ReadOwnerEnded
 import io.github.kauri_off.kiroku.data.network.Sends
 import io.github.kauri_off.kiroku.data.network.bearer
@@ -179,19 +180,22 @@ fun signedInRecorder(
     http: MalHttp,
     journal: () -> File,
     folders: () -> RecorderFolders,
+    privateReads: () -> File,
     scope: CoroutineScope,
-): SignedInRecorder = SignedInRecorder(session, http, journal, folders, scope)
+): SignedInRecorder = SignedInRecorder(session, http, journal, folders, privateReads, scope)
 
 class SignedInRecorder internal constructor(
     private val session: Lazy<MalSession>,
     private val http: MalHttp,
     journalFile: () -> File,
     folders: () -> RecorderFolders,
+    privateReads: () -> File,
     scope: CoroutineScope,
     private val pause: suspend () -> Unit = { delay(PAUSE_MILLIS) },
 ) {
     private val journal by lazy { Journal(journalFile()) }
     private val files by lazy(folders)
+    private val privateRoot by lazy(privateReads)
     private val work = scope + Dispatchers.IO
     private val busy = Mutex()
     private val shown = MutableStateFlow<Recording>(Recording.Idle)
@@ -273,7 +277,7 @@ class SignedInRecorder internal constructor(
         val owner = session.value.observeOwner().first()
         if (owner.id != signIn.signIn) return Recording.NotStarted(Halt.AnotherAccount)
         begin(null)
-        val directory = File(files.recorded.parentFile, "${files.recorded.name}.${capture.key}")
+        val directory = File(privateRoot, capture.key)
         val pending = File(directory, "run")
         return try {
             if (!emptied(pending)) throw Halted(Halt.Storage, RUN)
@@ -302,7 +306,7 @@ class SignedInRecorder internal constructor(
             val answer = send(name, get("${capture.request}&offset=$offset"), owner)
             store(name, answer.kept, pending)
             expect(name, answer.status, ::ok)
-            val next = nextReadOffset(name, answer, offset) ?: return
+            val next = nextReadOffset(capture, name, answer, offset) ?: return
             if (index == capture.pages - 1) {
                 if (capture == ReadCapture.Suggestions) return
                 throw Halted(Halt.Unexpected(answer.status), name)
@@ -312,14 +316,19 @@ class SignedInRecorder internal constructor(
     }
 
     private fun nextReadOffset(
+        capture: ReadCapture,
         name: String,
         answer: Answer,
         offset: Int,
     ): Int? {
         val invalid = Halted(Halt.Unexpected(answer.status), name)
         val page = answer.json() ?: throw invalid
-        if (page["data"] !is JsonArray) throw invalid
-        val paging = page["paging"]?.takeUnless { it is JsonNull } ?: return null
+        val entries = page["data"] as? JsonArray ?: throw invalid
+        val paging = page["paging"]?.takeUnless { it is JsonNull }
+        if (paging == null) {
+            if (capture == ReadCapture.MangaList) throw invalid
+            return null
+        }
         val next = (paging as? JsonObject ?: throw invalid)["next"]?.takeUnless { it is JsonNull } ?: return null
         return (next as? JsonPrimitive)
             ?.takeIf { it.isString }
@@ -328,7 +337,7 @@ class SignedInRecorder internal constructor(
             ?.queryParameterValues("offset")
             ?.singleOrNull()
             ?.toIntOrNull()
-            ?.takeIf { it > offset } ?: throw invalid
+            ?.takeIf { it > offset && (capture != ReadCapture.MangaList || it - offset == entries.size) } ?: throw invalid
     }
 
     private suspend fun ran(checked: RecordedTitle): Recording {
@@ -578,28 +587,45 @@ class SignedInRecorder internal constructor(
         val outcome =
             session.value.authorised(owner?.id) { accessToken ->
                 try {
-                    if (owner != null) request.tag(Sends::class.java, Sends(1, maySendRead = { session.value.isCurrentOwner(owner) }))
-                    http.callFactory.newCall(request.header(AUTHORIZATION, bearer(accessToken)).build()).execute().use { response ->
+                    request.header(AUTHORIZATION, bearer(accessToken))
+                    val call =
+                        if (owner == null) {
+                            http.callFactory.newCall(request.build())
+                        } else {
+                            request.tag(Sends::class.java, Sends(1, maySendRead = { session.value.isCurrentOwner(owner) }))
+                            http.newCallWithoutRedirects(request.build())
+                        }
+                    call.execute().use { response ->
                         if (owner != null && !session.value.isCurrentOwner(owner)) {
                             return@use Attempt.Answered(Outcome.Failure(DataError.ListEnded))
                         }
-                        if (owner != null) {
-                            val redirect = generateSequence(response.priorResponse) { it.priorResponse }.firstOrNull { it.isRedirect }
-                            if (redirect != null) {
-                                val kept = Kept("$name.${redirect.code}.txt", "${redirect.code}\n")
-                                return@use Attempt.Answered(Outcome.Success(Answer(redirect.code, "", kept)))
-                            }
-                        }
+                        if (owner != null && response.code in 300..399) return@use statusOnly(name, response.code)
                         if (response.code == UNAUTHORIZED) return@use Attempt.Rejected
-                        val body = response.body.string()
-                        // Section 11.1: the answer as MAL sent it, never the token or the client id it was asked with.
+                        val body =
+                            try {
+                                response.body.string()
+                            } catch (unread: IOException) {
+                                if (owner == null) throw unread
+                                return@use statusOnly(name, response.code)
+                            }
                         val sanitiser = Sanitiser(mapOf(accessToken to "access-token", http.clientId to "client-id"))
-                        val kept = sanitiser.asSent(name, response.code, body)
-                        val safe = if (owner != null && kept.file.endsWith(".txt")) Kept(kept.file, "${response.code}\n") else kept
-                        Attempt.Answered(Outcome.Success(Answer(response.code, body, safe)))
+                        val kept =
+                            if (owner == null) {
+                                sanitiser.asSent(name, response.code, body)
+                            } else {
+                                sanitiser.privateAnswer(name, response.code, body)
+                            }
+                        Attempt.Answered(Outcome.Success(Answer(response.code, body, kept)))
                     }
                 } catch (_: ReadOwnerEnded) {
                     Attempt.Answered(Outcome.Failure(DataError.ListEnded))
+                } catch (limited: NotSentAgain) {
+                    val status = limited.status
+                    if (owner != null && status != null) {
+                        statusOnly(name, status)
+                    } else {
+                        Attempt.Answered(Outcome.Failure(DataError.NoConnection))
+                    }
                 } catch (_: IOException) {
                     Attempt.Answered(Outcome.Failure(DataError.NoConnection))
                 }
@@ -618,6 +644,11 @@ class SignedInRecorder internal constructor(
                 )
         }
     }
+
+    private fun statusOnly(
+        name: String,
+        status: Int,
+    ): Attempt<Answer> = Attempt.Answered(Outcome.Success(Answer(status, "", Kept("$name.$status.txt", "$status\n"))))
 
     private fun store(
         name: String,

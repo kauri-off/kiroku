@@ -79,18 +79,73 @@ internal class Sanitiser(
     // An answer as it was sent, without the secrets.
     fun asSent(body: String): String = withoutSecrets(body)
 
+    fun privateAnswer(
+        name: String,
+        status: Int,
+        body: String,
+    ): Kept {
+        val answer =
+            try {
+                Json.parseToJsonElement(body)
+            } catch (_: SerializationException) {
+                null
+            }
+        return when (answer) {
+            is JsonObject, is JsonArray -> Kept("$name.$status.json", withoutPrivateSecrets(answer).toString())
+            else -> Kept("$name.$status.txt", "$status\n")
+        }
+    }
+
+    private val encodedSecrets by lazy {
+        standIns.map { (secret, standIn) ->
+            val pattern =
+                secret.codePoints().toArray().joinToString("") { codePoint ->
+                    val character = String(Character.toChars(codePoint))
+                    val encoded = character.encodeToByteArray().joinToString("") { "%%(?:25)*%02x".format(it) }
+                    "(?:${Regex.escape(character)}|$encoded)"
+                }
+            Regex(pattern, RegexOption.IGNORE_CASE) to standIn
+        }
+    }
+
+    private fun withoutPrivateSecrets(element: JsonElement): JsonElement =
+        when (element) {
+            is JsonObject ->
+                JsonObject(
+                    buildMap {
+                        for ((name, value) in element) {
+                            val clean = withoutSecrets(name, encoded = true)
+                            var key = clean
+                            var suffix = 1
+                            while (clean != name && (key in element || key in this)) key = "$clean-${++suffix}"
+                            put(key, withoutPrivateSecrets(value))
+                        }
+                    },
+                )
+            is JsonArray -> JsonArray(element.map(::withoutPrivateSecrets))
+            is JsonPrimitive -> if (element.isString) JsonPrimitive(withoutSecrets(element.content, encoded = true)) else element
+        }
+
     private fun unnamed(text: String): String =
         inAddress.fold(withoutSecrets(text)) { cleaned, (name, standIn) -> name.replace(cleaned) { standIn } }
 
     // Secrets that overlap or touch are replaced as one, by the stand-in of the one that starts them.
-    private fun withoutSecrets(text: String): String {
+    private fun withoutSecrets(
+        text: String,
+        encoded: Boolean = false,
+    ): String {
         val found =
-            standIns
-                .flatMap { (secret, standIn) -> starts(text, secret).map { Found(it, it + secret.length, standIn) } }
-                .sortedWith(compareBy<Found> { it.start }.thenByDescending { it.end })
+            if (encoded && '%' in text) {
+                encodedSecrets.flatMap { (pattern, standIn) ->
+                    generateSequence(pattern.find(text)) { pattern.find(text, it.range.first + 1) }
+                        .map { Found(it.range.first, it.range.last + 1, standIn) }
+                }
+            } else {
+                standIns.flatMap { (secret, standIn) -> starts(text, secret).map { Found(it, it + secret.length, standIn) } }
+            }
         val cleaned = StringBuilder()
         var end = 0
-        for ((index, range) in found.withIndex()) {
+        for ((index, range) in found.sortedWith(compareBy<Found> { it.start }.thenByDescending { it.end }).withIndex()) {
             if (index > 0 && range.start <= end) {
                 end = maxOf(end, range.end)
             } else {

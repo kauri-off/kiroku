@@ -7,7 +7,7 @@ enum class ReadCapture(
     internal val request: String,
     internal val pages: Int,
 ) {
-    Suggestions("suggestions", "anime/suggestions?fields=${MalFields.SUMMARY},nsfw&limit=10", 2),
+    Suggestions("suggestions", "anime/suggestions?fields=${MalFields.SUGGESTIONS}&limit=10", 2),
     MangaList(
         "manga_list",
         "users/@me/mangalist?fields=id,title,main_picture,alternative_titles,media_type,status,num_chapters,num_volumes," +

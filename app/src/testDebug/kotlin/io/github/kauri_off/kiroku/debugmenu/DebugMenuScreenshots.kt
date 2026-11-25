@@ -102,7 +102,11 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Reading))
             },
             case("recorder-read-finished") {
-                val output = File(RUN.parentFile, "account.recorded.suggestions/capture-00000000-0000-0000-0000-000000000000")
+                val output =
+                    File(
+                        "/data/user/0/io.github.kauri_off.kiroku.debug/no_backup/" +
+                            "account.private-reads/suggestions/capture-00000000-0000-0000-0000-000000000000",
+                    )
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.ReadRecorded(2, output)))
             },
             case("recorder-running") {
