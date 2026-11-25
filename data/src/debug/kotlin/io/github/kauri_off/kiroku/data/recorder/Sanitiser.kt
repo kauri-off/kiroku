@@ -25,6 +25,22 @@ internal const val FREE_TEXT_LIMIT = 60
 
 internal val FreeTexts = setOf("synopsis", "background")
 
+private val JsonNumber = Regex("""-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?""")
+
+internal fun privateReadJson(body: String): JsonElement? =
+    try {
+        Json.parseToJsonElement(body).takeIf { (it is JsonObject || it is JsonArray) && it.hasValidValues() }
+    } catch (_: SerializationException) {
+        null
+    }
+
+private fun JsonElement.hasValidValues(): Boolean =
+    when (this) {
+        is JsonObject -> values.all { it.hasValidValues() }
+        is JsonArray -> all { it.hasValidValues() }
+        is JsonPrimitive -> isString || this is JsonNull || content == "true" || content == "false" || JsonNumber.matches(content)
+    }
+
 // The longest line that says whose a free text is.
 internal const val SOURCE_LIMIT = 100
 
@@ -82,19 +98,13 @@ internal class Sanitiser(
     fun privateAnswer(
         name: String,
         status: Int,
-        body: String,
-    ): Kept {
-        val answer =
-            try {
-                Json.parseToJsonElement(body)
-            } catch (_: SerializationException) {
-                null
-            }
-        return when (answer) {
-            is JsonObject, is JsonArray -> Kept("$name.$status.json", withoutPrivateSecrets(answer).toString())
-            else -> Kept("$name.$status.txt", "$status\n")
+        answer: JsonElement?,
+    ): Kept =
+        if (answer == null) {
+            Kept("$name.$status.txt", "$status\n")
+        } else {
+            Kept("$name.$status.json", withoutPrivateSecrets(answer).toString())
         }
-    }
 
     private class TextLayer(
         val text: String,
@@ -152,7 +162,10 @@ internal class Sanitiser(
                     },
                 )
             is JsonArray -> JsonArray(element.map(::withoutPrivateSecrets))
-            is JsonPrimitive -> if (element.isString) JsonPrimitive(withoutSecrets(element.content, encoded = true)) else element
+            is JsonPrimitive -> {
+                val cleaned = withoutSecrets(element.content, encoded = element.isString)
+                if (cleaned == element.content) element else JsonPrimitive(cleaned)
+            }
         }
 
     private fun unnamed(text: String): String =

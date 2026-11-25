@@ -951,6 +951,22 @@ class SignedInRecorderTest {
     }
 
     @Test
+    fun `an invalid JSON value stops the capture and saves only the HTTP status`() {
+        answerPages(
+            """{"data":[{"value":invalid}],"paging":{"next":"https://example.invalid/?offset=10"}}""",
+            pagingBody(),
+        )
+
+        val failed = recorder(signedIn()).captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertEquals("suggestions_first", failed.at)
+        assertEquals(Halt.Unexpected(200), failed.halt)
+        assertEquals(1, failed.answers)
+        assertEquals(mapOf("suggestions_first.200.txt" to "200\n"), failed.folder.texts())
+        assertEquals(1, network.api.requestCount)
+    }
+
+    @Test
     fun `a capture holds the same sign-in through a token refresh`() {
         val first = pagingBody("https://example.invalid/?offset=10")
         val renewed = "renewed-test-access"

@@ -331,7 +331,7 @@ class SignedInRecorder internal constructor(
         offset: Int,
     ): Int? {
         val invalid = Halted(Halt.Unexpected(answer.status), name)
-        val page = answer.json() ?: throw invalid
+        val page = answer.page ?: throw invalid
         val entries = page["data"] as? JsonArray ?: throw invalid
         val paging = page["paging"]?.takeUnless { it is JsonNull }
         if (paging == null) {
@@ -420,7 +420,7 @@ class SignedInRecorder internal constructor(
         id: Long,
         at: String,
     ) {
-        val title = read.json()
+        val title = read.page
         if (read.status == NOT_FOUND && title?.text("error") == UNKNOWN_TITLE) return
         if (read.status != OK || title?.number("id") != id) throw Halted(Halt.Unexpected(read.status), at)
         if (title["my_list_status"].holdsValues) throw Halted(Halt.StillOnTheList, at)
@@ -439,7 +439,7 @@ class SignedInRecorder internal constructor(
     }
 
     private fun userOf(answer: Answer): String? =
-        (answer.json()?.get("id") as? JsonPrimitive)?.content?.let { id ->
+        (answer.page?.get("id") as? JsonPrimitive)?.content?.let { id ->
             MessageDigest.getInstance("SHA-256").digest(id.toByteArray()).joinToString("") { "%02x".format(it) }
         }
 
@@ -460,7 +460,7 @@ class SignedInRecorder internal constructor(
         var offset = 0L
         repeat(MOST_PAGES) {
             val answer = ask(COUNT, get("users/@me/animelist?nsfw=true&limit=$LARGEST_PAGE&offset=$offset"), kept = false)
-            val page = answer.json()
+            val page = answer.page
             val entries = page?.get("data") as? JsonArray ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
             entries.mapTo(titles) { entry ->
                 ((entry as? JsonObject)?.get("node") as? JsonObject)?.number("id") ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
@@ -506,7 +506,7 @@ class SignedInRecorder internal constructor(
         id: Long,
     ): RecordedTitle {
         if (answer.status == NOT_FOUND) throw Halted(Halt.NoSuchTitle, ABSENT)
-        val title = answer.json()
+        val title = answer.page
         val name = title?.text("title")
         val episodes = title?.number("num_episodes")
         if (title?.number("id") != id || name == null || episodes == null) throw Halted(Halt.Unexpected(answer.status), ABSENT)
@@ -552,11 +552,9 @@ class SignedInRecorder internal constructor(
 
     private class Answer(
         val status: Int,
-        val body: String,
         val kept: Kept,
-    ) {
-        fun json(): JsonObject? = json(body)
-    }
+        val page: JsonObject? = null,
+    )
 
     // The run ends here, at the request [at].
     private class Halted(
@@ -618,13 +616,14 @@ class SignedInRecorder internal constructor(
                                 return@use statusOnly(name, response.code)
                             }
                         val sanitiser = Sanitiser(mapOf(accessToken to "access-token", http.clientId to "client-id"))
-                        val kept =
+                        val answer =
                             if (owner == null) {
-                                sanitiser.asSent(name, response.code, body)
+                                Answer(response.code, sanitiser.asSent(name, response.code, body), json(body))
                             } else {
-                                sanitiser.privateAnswer(name, response.code, body)
+                                val content = privateReadJson(body)
+                                Answer(response.code, sanitiser.privateAnswer(name, response.code, content), content as? JsonObject)
                             }
-                        Attempt.Answered(Outcome.Success(Answer(response.code, body, kept)))
+                        Attempt.Answered(Outcome.Success(answer))
                     }
                 } catch (_: ReadOwnerEnded) {
                     Attempt.Answered(Outcome.Failure(DataError.ListEnded))
@@ -657,7 +656,7 @@ class SignedInRecorder internal constructor(
     private fun statusOnly(
         name: String,
         status: Int,
-    ): Attempt<Answer> = Attempt.Answered(Outcome.Success(Answer(status, "", Kept("$name.$status.txt", "$status\n"))))
+    ): Attempt<Answer> = Attempt.Answered(Outcome.Success(Answer(status, Kept("$name.$status.txt", "$status\n"))))
 
     private fun store(
         name: String,
