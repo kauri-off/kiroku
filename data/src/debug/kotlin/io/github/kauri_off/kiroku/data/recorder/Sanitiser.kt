@@ -96,15 +96,44 @@ internal class Sanitiser(
         }
     }
 
-    private val encodedSecrets by lazy {
-        standIns.map { (secret, standIn) ->
-            val pattern =
-                secret.codePoints().toArray().joinToString("") { codePoint ->
-                    val character = String(Character.toChars(codePoint))
-                    val encoded = character.encodeToByteArray().joinToString("") { "%%(?:25)*%02x".format(it) }
-                    "(?:${Regex.escape(character)}|$encoded)"
+    private class TextLayer(
+        val text: String,
+        private val offsets: IntArray? = null,
+    ) {
+        fun source(index: Int): Int = offsets?.get(index) ?: index
+
+        fun decode(): TextLayer? {
+            val escapes = PercentCharacter.findAll(text).iterator()
+            if (!escapes.hasNext()) return null
+            val decoded = StringBuilder()
+            val positions = IntArray(text.length + 1)
+            var end = 0
+
+            fun copy(until: Int) {
+                while (end < until) {
+                    decoded.append(text[end++])
+                    positions[decoded.length] = source(end)
                 }
-            Regex(pattern, RegexOption.IGNORE_CASE) to standIn
+            }
+            while (escapes.hasNext()) {
+                val escape = escapes.next()
+                copy(escape.range.first)
+                val bytes =
+                    ByteArray(escape.value.length / 3) { index ->
+                        escape.value
+                            .substring(index * 3 + 1, index * 3 + 3)
+                            .toInt(16)
+                            .toByte()
+                    }
+                val character = bytes.decodeToString()
+                end = escape.range.last + 1
+                for (unit in character) {
+                    decoded.append(unit)
+                    positions[decoded.length] = source(end)
+                }
+            }
+            copy(text.length)
+            return TextLayer(decoded.toString(), positions)
         }
     }
 
@@ -134,14 +163,12 @@ internal class Sanitiser(
         text: String,
         encoded: Boolean = false,
     ): String {
+        val layers = if (encoded) generateSequence(TextLayer(text), TextLayer::decode) else sequenceOf(TextLayer(text))
         val found =
-            if (encoded && '%' in text) {
-                encodedSecrets.flatMap { (pattern, standIn) ->
-                    generateSequence(pattern.find(text)) { pattern.find(text, it.range.first + 1) }
-                        .map { Found(it.range.first, it.range.last + 1, standIn) }
+            layers.flatMap { layer ->
+                standIns.asSequence().flatMap { (secret, standIn) ->
+                    starts(layer.text, secret).map { Found(layer.source(it), layer.source(it + secret.length), standIn) }
                 }
-            } else {
-                standIns.flatMap { (secret, standIn) -> starts(text, secret).map { Found(it, it + secret.length, standIn) } }
             }
         val cleaned = StringBuilder()
         var end = 0
@@ -305,6 +332,12 @@ internal class Sanitiser(
     private val JsonElement.text get() = (this as JsonPrimitive).content
 
     private companion object {
+        const val CONTINUATION_BYTE = "(?:%[89ab][0-9a-f])"
+        val PercentCharacter =
+            Regex(
+                "%[0-7][0-9a-f]|%[cd][0-9a-f]$CONTINUATION_BYTE|%e[0-9a-f]${CONTINUATION_BYTE}{2}|%f[0-4]${CONTINUATION_BYTE}{3}",
+                RegexOption.IGNORE_CASE,
+            )
         const val ENTRIES = "data"
         const val LINKS = "paging"
         const val START = "start_date"

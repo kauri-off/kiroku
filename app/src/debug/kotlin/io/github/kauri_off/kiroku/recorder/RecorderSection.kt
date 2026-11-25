@@ -260,11 +260,11 @@ private fun report(recording: Recording): List<Line> =
                 Line(stringResource(R.string.recorder_folder, recording.folder.path)),
             )
         is Recording.ReadStopped ->
-            listOf(
+            listOfNotNull(
                 Line(stringResource(R.string.recorder_stopped, recording.at), alarming = true),
                 Line(recording.halt.text(), alarming = true),
                 Line(stringResource(R.string.recorder_stopped_answers, recording.answers)),
-                Line(stringResource(R.string.recorder_folder, recording.folder.path)),
+                recording.folder?.let { Line(stringResource(R.string.recorder_folder, it.path)) },
             )
         is Recording.Recorded ->
             listOf(

@@ -109,6 +109,9 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     )
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.ReadRecorded(2, output)))
             },
+            case("recorder-read-storage-failed") {
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.ReadStopped("files", Halt.Storage, 0, null)))
+            },
             case("recorder-running") {
                 Menu(
                     ScenarioState.Unavailable,

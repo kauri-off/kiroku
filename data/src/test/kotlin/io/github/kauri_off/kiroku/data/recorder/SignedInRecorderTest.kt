@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -47,6 +48,8 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.io.IOException
+import java.net.URLDecoder
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -93,13 +96,14 @@ class SignedInRecorderTest {
     private fun recorder(
         session: MalSession,
         scope: CoroutineScope = scope(),
+        writePrivateFile: (File, String) -> Unit = { file, text -> file.writeText(text) },
         pause: suspend () -> Unit = { events += "pause" },
     ): SignedInRecorder =
         SignedInRecorder(lazyOf(session), network.http, {
             journal
         }, { files.also { foldersAsked.incrementAndGet() } }, {
             privateReads.also { privateReadsAsked.incrementAndGet() }
-        }, scope, pause).also { runBlocking { it.started.join() } }
+        }, scope, pause, writePrivateFile = writePrivateFile).also { runBlocking { it.started.join() } }
 
     private fun SignedInRecorder.checked(id: Long = TITLE): Recording =
         runBlocking {
@@ -113,7 +117,7 @@ class SignedInRecorderTest {
             state.value
         }
 
-    private fun File.texts(): Map<String, String> = listFiles().orEmpty().associate { it.name to it.readText() }
+    private fun File?.texts(): Map<String, String> = checkNotNull(this).listFiles().orEmpty().associate { it.name to it.readText() }
 
     private fun folders(): Map<String, String> = files.recorded.texts()
 
@@ -765,12 +769,13 @@ class SignedInRecorderTest {
     @Test
     fun `private JSON redacts escaped keys and encoded URLs while retaining page contents`() {
         val client = NetworkFixture.CLIENT_ID
-        val encodedClient = "%74${client.drop(1)}"
+        val encodedClient = "%25%37%34${client.drop(1)}"
         val encodedAccess = ACCESS.replace("-", "%2D")
         val first = pagingBody("https://example.invalid/$encodedClient?offset=17&$encodedClient=$encodedAccess&label=a%26b")
         val escapedAccess = "\\u0070${ACCESS.drop(1)}"
+        val nestedAccess = "%25%37%30${ACCESS.drop(1)}"
         val second =
-            """{"data":[{"$escapedAccess":"$escapedAccess","access-token":"kept","value":"%2570${ACCESS.drop(1)}"}],"paging":{}}"""
+            """{"data":[{"$escapedAccess":"$escapedAccess","access-token":"kept","$nestedAccess":"$nestedAccess"}],"paging":{}}"""
         answerPages(first, second)
 
         val end = recorder(signedIn()).captured(ReadCapture.Suggestions) as Recording.ReadRecorded
@@ -796,10 +801,12 @@ class SignedInRecorderTest {
             mapOf(
                 "access-token-2" to JsonPrimitive("access-token"),
                 "access-token" to JsonPrimitive("kept"),
-                "value" to JsonPrimitive("access-token"),
+                "access-token-3" to JsonPrimitive("access-token"),
             ),
             entry,
         )
+        val decodedTwice = URLDecoder.decode(URLDecoder.decode(storedSecond.toString(), "UTF-8"), "UTF-8")
+        assertFalse(ACCESS in decodedTwice)
         network.api.received()
         val secondRequest = network.api.received()
         assertEquals("17", secondRequest.url.queryParameter("offset"))
@@ -857,10 +864,64 @@ class SignedInRecorderTest {
         assertEquals("suggestions_next", failed.at)
         assertEquals(Halt.Refused(429), failed.halt)
         assertEquals(2, failed.answers)
-        assertEquals(File(privateReads, "suggestions/run"), failed.folder)
+        assertEquals(File(privateReads, "suggestions"), failed.folder?.parentFile)
         assertEquals(mapOf("suggestions_first.200.json" to first, "suggestions_next.429.txt" to "429\n"), failed.folder.texts())
         assertEquals(3, network.api.requestCount)
         assertTrue(mal.writes.isEmpty())
+    }
+
+    @Test
+    fun `a stopped path stays bound to its capture after a replacement sign-in`() {
+        val session = signedIn()
+        val recorder = recorder(session)
+        mal.instead = { answer(429, "") }
+        val first = recorder.captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        runBlocking { session.signIn(TokenGrant("replacement-test-access", "replacement-test-refresh")) }
+        mal.instead = { answer(503, "") }
+        val second = recorder.captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertTrue(first.folder != second.folder)
+        assertEquals(mapOf("suggestions_first.429.txt" to "429\n"), first.folder.texts())
+        assertEquals(mapOf("suggestions_first.503.txt" to "503\n"), second.folder.texts())
+    }
+
+    @Test
+    fun `a write that stops partway leaves only the earlier atomically saved page`() {
+        val session = signedIn()
+        val first = pagingBody("https://example.invalid/?offset=17")
+        answerPages(first, pagingBody())
+        var writes = 0
+        val recorder =
+            recorder(session, writePrivateFile = { file, text ->
+                file.writeText(if (++writes == 2) text.take(10) else text)
+                if (writes == 2) throw IOException()
+            })
+
+        val stopped = recorder.captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertEquals(Halt.Storage, stopped.halt)
+        assertEquals("suggestions_next", stopped.at)
+        assertEquals(1, stopped.answers)
+        assertEquals(mapOf("suggestions_first.200.json" to first), stopped.folder.texts())
+        assertEquals(
+            listOf(stopped.folder),
+            stopped.folder
+                ?.parentFile
+                ?.listFiles()
+                ?.toList(),
+        )
+    }
+
+    @Test
+    fun `a staging initialization failure reports no artifact and sends no request`() {
+        check(privateReads.mkdirs())
+        File(privateReads, "suggestions").writeText("unavailable")
+
+        val stopped = recorder(signedIn()).captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertEquals(Recording.ReadStopped("files", Halt.Storage, 0, null), stopped)
+        assertEquals(0, network.api.requestCount)
     }
 
     @Test
@@ -921,6 +982,25 @@ class SignedInRecorderTest {
         assertEquals(1, failed.answers)
         assertEquals(1, network.api.requestCount)
         assertTrue(mal.writes.isEmpty())
+    }
+
+    @Test
+    fun `an action queued before account replacement cannot start under the new sign-in`() {
+        val session = signedIn()
+        val dispatcher = StandardTestDispatcher()
+        val recorder =
+            SignedInRecorder(lazyOf(session), network.http, { journal }, { files }, { privateReads }, scope(), dispatcher = dispatcher)
+        dispatcher.scheduler.runCurrent()
+
+        val action = recorder.recordReads(ReadCapture.Suggestions)
+        assertFalse(action.isCompleted)
+        runBlocking { session.signIn(TokenGrant("replacement-test-access", "replacement-test-refresh")) }
+        dispatcher.scheduler.runCurrent()
+
+        assertTrue(action.isCompleted)
+        assertEquals(Recording.NotStarted(Halt.AnotherAccount), recorder.state.value)
+        assertFalse(privateReads.exists())
+        assertEquals(0, network.api.requestCount)
     }
 
     @Test
@@ -994,7 +1074,8 @@ class SignedInRecorderTest {
         assertEquals(0, failed.answers)
         assertEquals(
             listOf(failed.folder),
-            failed.folder.parentFile
+            failed.folder
+                ?.parentFile
                 ?.listFiles()
                 ?.toList(),
         )

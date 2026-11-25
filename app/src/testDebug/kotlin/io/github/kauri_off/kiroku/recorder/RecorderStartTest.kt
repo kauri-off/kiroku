@@ -140,9 +140,10 @@ class RecorderStartTest {
             val root = parts.file("private-reads")
             assertEquals(context.noBackupFilesDir, root.parentFile)
             assertEquals(root, completed.folder.parentFile?.parentFile)
-            assertEquals(root, stopped.folder.parentFile?.parentFile)
+            val partial = checkNotNull(stopped.folder)
+            assertEquals(root, partial.parentFile?.parentFile)
             assertTrue(completed.folder.resolve("suggestions_first.200.json").isFile)
-            assertTrue(stopped.folder.resolve("manga_list_1.404.json").isFile)
+            assertTrue(partial.resolve("manga_list_1.404.json").isFile)
             val shared = checkNotNull(context.getExternalFilesDir(null))
             assertFalse(shared.walkTopDown().any { it.name.startsWith("suggestions_first.") || it.name.startsWith("manga_list_1.") })
         }

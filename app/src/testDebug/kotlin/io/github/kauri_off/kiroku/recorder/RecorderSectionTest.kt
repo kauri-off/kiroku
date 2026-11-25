@@ -102,6 +102,15 @@ class RecorderSectionTest {
     }
 
     @Test
+    fun `a private run with no artifact reports the storage failure without a path`() {
+        show(Recording.ReadStopped("files", Halt.Storage, 0, null))
+
+        compose.onNodeWithText("The device could not store a file").assertExists()
+        compose.onNodeWithText("Folder:", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Done").assertIsEnabled()
+    }
+
+    @Test
     fun `while the title may still be on the list the section says where to look, removes it at a touch and starts nothing new`() {
         show(Recording.Stopped(title, "score_set", Halt.Refused(429), 31, folder, ListAfter.Left))
 

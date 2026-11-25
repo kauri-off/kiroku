@@ -2,7 +2,6 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
-import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
@@ -13,6 +12,7 @@ import io.github.kauri_off.kiroku.data.network.Sends
 import io.github.kauri_off.kiroku.data.network.bearer
 import io.github.kauri_off.kiroku.data.session.Attempt
 import io.github.kauri_off.kiroku.data.session.MalSession
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,7 +20,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
@@ -136,7 +135,7 @@ sealed interface Recording {
         val at: String,
         val halt: Halt,
         val answers: Int,
-        val folder: File,
+        val folder: File?,
     ) : Recording
 
     data class NotStarted(
@@ -192,11 +191,13 @@ class SignedInRecorder internal constructor(
     privateReads: () -> File,
     scope: CoroutineScope,
     private val pause: suspend () -> Unit = { delay(PAUSE_MILLIS) },
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val writePrivateFile: (File, String) -> Unit = { file, text -> file.writeText(text) },
 ) {
     private val journal by lazy { Journal(journalFile()) }
     private val files by lazy(folders)
     private val privateRoot by lazy(privateReads)
-    private val work = scope + Dispatchers.IO
+    private val work = scope + dispatcher
     private val busy = Mutex()
     private val shown = MutableStateFlow<Recording>(Recording.Idle)
     val state: StateFlow<Recording> = shown.asStateFlow()
@@ -219,17 +220,19 @@ class SignedInRecorder internal constructor(
     // Runs only on the title that was checked last and is still shown for confirmation.
     fun record(title: RecordedTitle): Job = act { if (shown.value == Recording.Checked(title)) shown.value = ran(title) }
 
-    fun recordReads(capture: ReadCapture): Job =
-        act {
+    fun recordReads(capture: ReadCapture): Job {
+        val owner = if (session.isInitialized()) session.value.signedInOwner() else null
+        return act {
             val left = journal.read()
             shown.value =
                 if (left == null) {
                     shown.value = Recording.Reading
-                    readCapture(capture)
+                    readCapture(capture, owner)
                 } else {
                     Recording.Leftover(left.title, ListAfter.Left, null)
                 }
         }
+    }
 
     // One more try at taking off the list what a recording left there.
     fun remove(): Job = act { journal.read()?.let { shown.value = leftover(it) } }
@@ -272,23 +275,29 @@ class SignedInRecorder internal constructor(
             Recording.NotStarted(halted.halt)
         }
 
-    private suspend fun readCapture(capture: ReadCapture): Recording {
-        val signIn = session.value.currentSession() as? Session.SignedIn ?: return Recording.NotStarted(Halt.NotSignedIn)
-        val owner = session.value.observeOwner().first()
-        if (owner.id != signIn.signIn) return Recording.NotStarted(Halt.AnotherAccount)
+    private suspend fun readCapture(
+        capture: ReadCapture,
+        owner: SessionOwner?,
+    ): Recording {
+        if (owner == null) return Recording.NotStarted(Halt.NotSignedIn)
         begin(null)
-        val directory = File(privateRoot, capture.key)
-        val pending = File(directory, "run")
+        val pending =
+            try {
+                session.value.withOwner(owner) {
+                    val directory = Files.createDirectories(File(privateRoot, capture.key).toPath())
+                    Files.createDirectory(directory.resolve("run-${UUID.randomUUID()}")).toFile()
+                } ?: return Recording.NotStarted(Halt.AnotherAccount)
+            } catch (_: IOException) {
+                return Recording.ReadStopped(RUN, Halt.Storage, 0, null)
+            }
         return try {
-            if (!emptied(pending)) throw Halted(Halt.Storage, RUN)
             capturePages(capture, owner, pending)
-            val finished = File(directory, "capture-${UUID.randomUUID()}")
+            val finished = File(pending.parentFile, "capture-${pending.name.removePrefix("run-")}")
             val kept =
-                session.value.whileOwner(signIn.signIn) {
+                session.value.withOwner(owner) {
                     filed(RUN) { Files.move(pending.toPath(), finished.toPath(), StandardCopyOption.ATOMIC_MOVE) }
-                    true
                 }
-            if (!kept) throw Halted(Halt.AnotherAccount, RUN)
+            if (kept == null) throw Halted(Halt.AnotherAccount, RUN)
             Recording.ReadRecorded(stored, finished)
         } catch (halted: Halted) {
             Recording.ReadStopped(halted.at, halted.halt, stored, pending)
@@ -304,7 +313,7 @@ class SignedInRecorder internal constructor(
         repeat(capture.pages) { index ->
             val name = capture.answer(index)
             val answer = send(name, get("${capture.request}&offset=$offset"), owner)
-            store(name, answer.kept, pending)
+            storePrivate(name, answer.kept, pending)
             expect(name, answer.status, ::ok)
             val next = nextReadOffset(capture, name, answer, offset) ?: return
             if (index == capture.pages - 1) {
@@ -653,11 +662,27 @@ class SignedInRecorder internal constructor(
     private fun store(
         name: String,
         kept: Kept,
-        folder: File = files.run,
     ) {
-        filed(name) { File(folder, kept.file).writeText(kept.text) }
+        filed(name) { File(files.run, kept.file).writeText(kept.text) }
         stored++
         running?.let { shown.value = Recording.Running(it, stored, SignedInAnswers.size) }
+    }
+
+    private fun storePrivate(
+        name: String,
+        kept: Kept,
+        pending: File,
+    ) {
+        filed(name) {
+            val temp = Files.createTempFile(pending.toPath().parent, "answer-", ".tmp").toFile()
+            try {
+                writePrivateFile(temp, kept.text)
+                Files.move(temp.toPath(), File(pending, kept.file).toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } finally {
+                temp.delete()
+            }
+        }
+        stored++
     }
 
     private inline fun filed(
