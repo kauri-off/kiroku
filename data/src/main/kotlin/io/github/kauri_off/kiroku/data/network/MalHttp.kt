@@ -112,9 +112,10 @@ class MalHttp(
         // MAL's answers for a private list and an unknown name are then those outcomes, and no reason to back off.
         anotherUsersList: Boolean = false,
         maySendRead: (() -> Boolean)? = null,
+        firstRead: (() -> ReadAdmission)? = null,
         request: suspend () -> T,
     ): MalAnswer<T> {
-        val sends = Sends(limit = 1 + repeatReadsAfter.size, maySendRead = maySendRead)
+        val sends = Sends(limit = 1 + repeatReadsAfter.size, maySendRead = maySendRead, firstRead = firstRead)
         return withContext(io + calling.asContextElement(sends)) { asked(sends, anotherUsersList, request) }
     }
 
@@ -152,6 +153,8 @@ class MalHttp(
         } catch (e: HttpException) {
             val body = if (anotherUsersList || e.code() == 403) e.response()?.errorBody()?.let(::text) else null
             answered(e.code(), e.response()?.headers(), body, anotherUsersList)
+        } catch (e: ReadDeferred) {
+            throw e
         } catch (_: ReadOwnerEnded) {
             Tried(MalAnswer.Failed(DataError.ListEnded))
         } catch (e: NotSentAgain) {

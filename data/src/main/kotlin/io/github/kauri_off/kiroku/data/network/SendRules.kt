@@ -63,7 +63,9 @@ internal class NoClientId : ProtocolException()
 internal class Sends(
     private val limit: Int,
     val maySendRead: (() -> Boolean)? = null,
+    private val firstRead: (() -> ReadAdmission)? = null,
 ) {
+    private var readAdmitted = false
     private val reads = ConcurrentHashMap<HttpUrl, AtomicInteger>()
 
     @Volatile
@@ -71,6 +73,16 @@ internal class Sends(
 
     // No read of these can be sent once more.
     val spent: Boolean get() = reads.values.any { it.get() >= limit }
+
+    @Synchronized
+    fun admitFirstRead() {
+        if (readAdmitted || firstRead == null) return
+        when (firstRead()) {
+            ReadAdmission.Send -> readAdmitted = true
+            ReadAdmission.Defer -> throw ReadDeferred()
+            ReadAdmission.OwnerEnded -> throw ReadOwnerEnded()
+        }
+    }
 
     fun mayRead(url: HttpUrl): Boolean = reads.computeIfAbsent(url) { AtomicInteger() }.incrementAndGet() <= limit
 }
@@ -95,6 +107,10 @@ internal class NotSentAgain(
     val failure: IOException?,
 ) : ProtocolException()
 
+internal enum class ReadAdmission { Send, Defer, OwnerEnded }
+
+internal class ReadDeferred : ProtocolException()
+
 internal class ReadOwnerEnded : ProtocolException()
 
 private fun Request.checkReadOwner() {
@@ -116,8 +132,10 @@ internal object SendLimits : Interceptor {
         val request = chain.request()
         val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
         request.checkReadOwner()
+        val sends = request.tag(Sends::class.java)
+        if (request.isRead) sends?.admitFirstRead()
         val allowed =
-            if (request.isRead) request.tag(Sends::class.java)?.mayRead(request.url) != false else !wire.written.getAndSet(true)
+            if (request.isRead) sends?.mayRead(request.url) != false else !wire.written.getAndSet(true)
         if (!allowed) throw NotSentAgain(wire.status, wire.failure)
         wire.tried = true
         wire.status = null
