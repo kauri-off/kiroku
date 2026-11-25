@@ -2,7 +2,9 @@ package io.github.kauri_off.kiroku.list
 
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
@@ -603,7 +606,9 @@ class ListScreenTest {
             }
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                Scaffold(snackbarHost = { ScreenSnackbarHost(host, ime) }) {}
+                Scaffold(snackbarHost = { ScreenSnackbarHost(host, ime) }) { padding ->
+                    Box(Modifier.padding(padding))
+                }
                 LaunchedEffect(host) { host.show("Moved to Completed", "Undo") }
             }
         }
