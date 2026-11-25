@@ -5,6 +5,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.data.anime.edited
+import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
@@ -17,6 +19,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mockwebserver3.MockResponse
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -50,8 +59,15 @@ class MalMangaListTest {
         return checkNotNull(session.currentSession()?.owner)
     }
 
-    // Public anime recordings exercise only the common MAL paging envelope, with item contents left opaque.
+    // Public anime recordings exercise common MAL paging and membership fields.
     private fun envelope(page: Int) = answer(200, RecordedAnswers.named("list_public_$page").body)
+
+    private fun redirect(path: String) =
+        MockResponse
+            .Builder()
+            .code(303)
+            .addHeader("Location", path)
+            .build()
 
     @Test
     fun `the entire list is collected using only the next offset from each recorded envelope`() =
@@ -60,7 +76,12 @@ class MalMangaListTest {
             for (page in 1..3) network.api.enqueue(envelope(page))
             val result = list.fetch(owner) as Outcome.Success
 
-            assertEquals(30, result.value.size)
+            val download = result.value
+            val ids = download.rows.map { it.id }.toSet()
+            assertEquals(owner, download.owner)
+            assertEquals(30, download.rows.size)
+            assertEquals(30, ids.size)
+            assertTrue(download.rows.any { it.statusCode == "watching" })
             for (offset in listOf("0", "10", "20")) {
                 val request = network.api.received()
                 assertEquals("GET", request.method)
@@ -75,6 +96,129 @@ class MalMangaListTest {
                 assertEquals("Bearer first", request.headers[AUTHORIZATION])
             }
             assertEquals(3, network.api.requestCount)
+        }
+
+    @Test
+    fun `manga list membership rejects absent or invalid ids and statuses`() =
+        runBlocking {
+            val owner = signIn("first")
+            val terminal = recordedJson("list_public_3")
+            val id = listOf("data", "0", "node", "id")
+            val status = listOf("data", "0", "list_status", "status")
+            val broken =
+                listOf(
+                    terminal.edited(listOf("data", "0", "node"), JsonObject(emptyMap())),
+                    terminal.edited(id),
+                    terminal.edited(id, JsonPrimitive(0)),
+                    terminal.edited(id, JsonPrimitive(1.5)),
+                    terminal.edited(id, JsonPrimitive("123")),
+                    terminal.edited(listOf("data", "0", "list_status"), JsonNull),
+                    terminal.edited(status),
+                    terminal.edited(status, JsonPrimitive(" ")),
+                    terminal.edited(status, JsonPrimitive(1)),
+                )
+            for (page in broken) {
+                network.api.enqueue(answer(200, page.toString()))
+                assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+            }
+        }
+
+    @Test
+    fun `an id repeated on a page or on a later page rejects the entire download`() =
+        runBlocking {
+            val owner = signIn("first")
+            val terminal = recordedJson("list_public_3")
+            val rows = terminal.getValue("data").jsonArray
+            val row = rows.first().jsonObject
+            val id = listOf("data", "1", "node", "id")
+            val repeated = terminal.edited(id, row.getValue("node").jsonObject.getValue("id"))
+            network.api.enqueue(answer(200, repeated.toString()))
+            assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+
+            val first = recordedJson("list_public_1")
+            val second = recordedJson("list_public_2")
+            val firstRows = first.getValue("data").jsonArray
+            val firstRow = firstRows.first().jsonObject
+            val acrossPages = second.edited(id, firstRow.getValue("node").jsonObject.getValue("id"))
+            network.api.enqueue(envelope(1))
+            network.api.enqueue(answer(200, acrossPages.toString()))
+            assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+            assertEquals(3, network.api.requestCount)
+        }
+
+    @Test
+    fun `a direct terminal page can be empty but partial content cannot end the download`() =
+        runBlocking {
+            val owner = signIn("first")
+            val terminal = recordedJson("list_public_3").edited(listOf("data"), JsonArray(emptyList()))
+            network.api.enqueue(answer(200, terminal.toString()))
+            val result = list.fetch(owner) as Outcome.Success
+            assertTrue(result.value.rows.isEmpty())
+
+            network.api.enqueue(answer(206, terminal.toString()))
+            assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+        }
+
+    @Test
+    fun `a gap or an ambiguous offset rejects the page before any follow up`() =
+        runBlocking {
+            val owner = signIn("first")
+            val first = recordedJson("list_public_1")
+            val paging = first.getValue("paging").jsonObject
+            val link = paging.getValue("next").jsonPrimitive.content
+            for (next in listOf(link.replace("offset=10", "offset=11"), "$link&offset=200")) {
+                val page = first.edited(listOf("paging", "next"), JsonPrimitive(next))
+                network.api.enqueue(answer(200, page.toString()))
+                assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+            }
+            assertEquals(2, network.api.requestCount)
+        }
+
+    @Test
+    fun `a redirect to a valid terminal envelope cannot supply the snapshot`() =
+        runBlocking {
+            val owner = signIn("first")
+            network.api.enqueue(envelope(1))
+            network.api.enqueue(redirect("/v2/users/other/mangalist?status=reading"))
+            network.api.enqueue(envelope(3))
+
+            assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+            assertEquals(3, network.api.requestCount)
+        }
+
+    @Test
+    fun `a redirected unauthorized answer cannot renew the bearer`() =
+        runBlocking {
+            val owner = signIn("first")
+            network.api.enqueue(redirect("/v2/other"))
+            network.api.enqueue(answer(401, ""))
+
+            assertEquals(Outcome.Failure(DataError.ServerError), list.fetch(owner))
+            assertEquals(2, network.api.requestCount)
+            assertTrue(sessions.grants.isEmpty())
+            assertEquals(owner, session.currentSession()?.owner)
+        }
+
+    @Test
+    fun `a same route HTTP retry can still supply the snapshot`() =
+        runBlocking {
+            val owner = signIn("first")
+            network.api.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(503)
+                    .setHeader("Retry-After", "0")
+                    .build(),
+            )
+            network.api.enqueue(envelope(3))
+
+            val result = list.fetch(owner) as Outcome.Success
+            assertEquals(10, result.value.rows.size)
+            assertEquals(2, network.api.requestCount)
+            val first = network.api.received()
+            val retry = network.api.received()
+            assertEquals(first.url, retry.url)
+            assertEquals("Bearer first", retry.headers[AUTHORIZATION])
         }
 
     @Test
@@ -244,6 +388,7 @@ class MalMangaListTest {
             val result = list.delete(id, owner) as Outcome.Success
             assertEquals(204, result.value.status)
             assertNull(result.value.body)
+            assertEquals("application/json; charset=utf-8", result.value.mediaType)
         }
 
     @Test
@@ -256,13 +401,7 @@ class MalMangaListTest {
             assertEquals(Outcome.Failure(DataError.ServerError), list.delete(id, owner))
             assertEquals(2, network.api.requestCount)
 
-            val redirect =
-                MockResponse
-                    .Builder()
-                    .code(303)
-                    .addHeader("Location", "/read")
-                    .build()
-            network.api.enqueue(redirect)
+            network.api.enqueue(redirect("/read"))
             network.api.enqueue(answer(204, ""))
             assertEquals(Outcome.Failure(DataError.ServerError), list.delete(id, owner))
         }
