@@ -117,6 +117,44 @@ class SearchScreenTest {
     }
 
     @Test
+    fun `anime links and recognizable fragments identify only positive MAL anime ids`() {
+        for (query in listOf(
+            "https://myanimelist.net/anime/5114/Fullmetal_Alchemist_Brotherhood",
+            "www.myanimelist.net/anime/5114",
+            "/anime/5114/",
+            "anime/5114/Fullmetal_Al",
+            "anime/5114?ref=https://example.com#top",
+            "5114/Fullmetal_Al#top",
+            "//myanimelist.net/anime/5114",
+            "http://www.myanimelist.net/anime/5114",
+        )) {
+            assertEquals(query, AnimeId(5114), animeSearchLink(query))
+        }
+        for (query in listOf(
+            "https://example.com/anime/5114/Fullmetal_Al",
+            "//example.com/anime/5114",
+            "example.com/anime/5114",
+            "myanimelist.net.example.com/anime/5114",
+            "https://myanimelist.net@example.com/anime/5114",
+            "https://example.com@myanimelist.net/anime/5114",
+            "www.myanimelist.net/manga/5114",
+            "www.myanimelist.net/profile/sample_viewer",
+            "/anime/0",
+            "/anime/-1",
+            "anime/5114abc",
+            "anime/999999999999999999999",
+            "/anime/5114/Fullmetal_Al/characters",
+            "/anime/5114/a%2Fb",
+            "Steins;Gate 0",
+            "86/Eighty-Six",
+            "Anime 5114",
+            "5114",
+        )) {
+            assertNull(query, animeSearchLink(query))
+        }
+    }
+
+    @Test
     fun `a query of digits has the row that opens its title above the results, in every state of them`() {
         val id = FixtureAnime.notOnListAiring.id
         val digits = id.value.toString()

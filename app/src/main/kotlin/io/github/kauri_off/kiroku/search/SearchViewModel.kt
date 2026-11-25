@@ -38,7 +38,7 @@ internal fun SearchViewModel(
     connection: Connection,
     saved: SavedStateHandle,
     includeAdult: Flow<Boolean> = flowOf(false),
-): SearchViewModel<Anime> = SearchViewModel(search::search, Anime::id, connection, saved, includeAdult)
+): SearchViewModel<Anime> = SearchViewModel(search::search, Anime::id, connection, saved, includeAdult, openAnimeLinks = true)
 
 internal class SearchViewModel<T>(
     private val search: suspend (String, Int, Boolean) -> Outcome<Page<T>>,
@@ -46,6 +46,7 @@ internal class SearchViewModel<T>(
     connection: Connection,
     saved: SavedStateHandle,
     includeAdult: Flow<Boolean> = flowOf(false),
+    private val openAnimeLinks: Boolean = false,
 ) : ViewModel() {
     val query =
         saved
@@ -64,6 +65,8 @@ internal class SearchViewModel<T>(
             }
 
     val text: String get() = query.text.toString().trim()
+
+    val linkId get() = linkId(text)
 
     private val results = MutableStateFlow(SearchResults<T>())
     private val request = MutableStateFlow<Load?>(null)
@@ -108,13 +111,16 @@ internal class SearchViewModel<T>(
         if (!queryChanged && adult == enabled) return
         adult = enabled
         loads.started()
-        results.value = SearchResults(query, nextOffset = 0, loading = query.isNotEmpty(), adult = enabled)
-        request.value = if (query.isEmpty()) null else Load(query, offset = 0, enabled, waitForTyping = queryChanged)
+        val searchesText = query.isNotEmpty() && linkId(query) == null
+        results.value = SearchResults(query, nextOffset = 0.takeIf { searchesText }, loading = searchesText, adult = enabled)
+        request.value = if (searchesText) Load(query, offset = 0, enabled, waitForTyping = queryChanged) else null
     }
+
+    private fun linkId(query: String) = if (openAnimeLinks) animeSearchLink(query) else null
 
     private fun ask(retry: Boolean) {
         val shown = results.value
-        if (shown.query != text || shown.query.isEmpty() || shown.loading || (shown.error != null) != retry) return
+        if (shown.query != text || shown.loading || (shown.error != null) != retry) return
         val enabled = adult ?: return
         val offset = shown.nextOffset ?: return
         results.value = shown.copy(loading = true, error = null)
@@ -123,6 +129,7 @@ internal class SearchViewModel<T>(
 
     private suspend fun read(load: Load) {
         if (load.waitForTyping) delay(TYPING_PAUSE)
+        if (load !== request.value || load.query != text) return
         loads.started()
         val answer = search(load.query, load.offset, load.adult)
         currentCoroutineContext().ensureActive()

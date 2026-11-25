@@ -39,6 +39,10 @@ import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxDefaults
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.rememberContainedSearchBarState
@@ -46,16 +50,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -245,6 +253,10 @@ private fun Body(
     when (content) {
         is SearchContent.Start -> CentredList(padding) { start(content, onEvent, rows) }
         is SearchContent.Results -> AnimeResults(content, editable, onEvent, padding, rows, autoLoadMore)
+        is SearchContent.AnimeLink ->
+            CentredList(padding) {
+                item(key = OPEN_ID, contentType = LINK) { OpenIdRow(content.id, onEvent, rows) }
+            }
         is SearchContent.MangaStart ->
             CentredList(padding) {
                 recentRows(content.recent, onEvent, rows)
@@ -304,9 +316,56 @@ private fun LazyListScope.recentRows(
 ) {
     if (recent.isNotEmpty()) {
         item(key = RECENT, contentType = HEADER) { SectionHeader(stringResource(R.string.search_recent)) }
-        items(recent, key = { it }, contentType = { LINK }) { query ->
-            ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
+        items(recent, key = { it }, contentType = { RECENT_QUERY }) { query ->
+            RecentSearchRow(query, rows, onEvent)
         }
+    }
+}
+
+@Composable
+private fun RecentSearchRow(
+    query: String,
+    rows: ListItemColors,
+    onEvent: (SearchEvent) -> Unit,
+) {
+    val threshold = SwipeToDismissBoxDefaults.positionalThreshold
+    val swipe = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, threshold) }
+    val removeLabel = stringResource(R.string.search_remove_recent)
+    val remove = { onEvent(SearchEvent.RemoveRecent(query)) }
+    SwipeToDismissBox(
+        state = swipe,
+        modifier = Modifier.clipToBounds(),
+        onDismiss = { remove() },
+        backgroundContent = {
+            val direction = swipe.dismissDirection
+            if (direction != SwipeToDismissBoxValue.Settled) {
+                Surface(color = MaterialTheme.colorScheme.errorContainer) {
+                    Box(
+                        Modifier.fillMaxSize().padding(horizontal = Spacing.l),
+                        contentAlignment =
+                            if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
+                    ) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = null)
+                    }
+                }
+            }
+        },
+    ) {
+        ListItem(
+            onClick = { onEvent(SearchEvent.SearchAgain(query)) },
+            modifier =
+                Modifier.semantics {
+                    customActions =
+                        listOf(
+                            CustomAccessibilityAction(removeLabel) {
+                                remove()
+                                true
+                            },
+                        )
+                },
+            colors = rows,
+            content = { Text(query) },
+        )
     }
 }
 
@@ -443,3 +502,4 @@ private const val OPEN_ID = 2
 private const val MANGA = 3
 private const val HEADER = 0
 private const val LINK = 1
+private const val RECENT_QUERY = 2

@@ -38,6 +38,10 @@ sealed interface SearchContent {
         val openId: AnimeId? get() = queriedId(query)
     }
 
+    data class AnimeLink(
+        val id: AnimeId,
+    ) : SearchContent
+
     data class MangaStart(
         val recent: List<String>,
     ) : SearchContent
@@ -101,6 +105,10 @@ sealed interface SearchEvent {
     ) : SearchEvent
 
     data class SearchAgain(
+        val query: String,
+    ) : SearchEvent
+
+    data class RemoveRecent(
         val query: String,
     ) : SearchEvent
 

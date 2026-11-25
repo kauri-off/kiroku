@@ -9,7 +9,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.createSavedStateHandle
@@ -64,6 +64,7 @@ fun SearchRoute(
     val results by resultState.collectAsScreenState()
     val adult by remember(graph) { graph.showAdultInSearch }.collectAsScreenState(initial = null)
     val shown = results.takeIf { it.query == text && it.adult == adult }
+    val linkId = search.linkId
     val content =
         when {
             text.isEmpty() ->
@@ -73,6 +74,7 @@ fun SearchRoute(
                     mangaAvailable =
                         graph.mangaCatalogue != null,
                 )
+            linkId != null -> SearchContent.AnimeLink(linkId)
             shown == null -> SearchContent.Results(text, Paged.Loading)
             else -> {
                 val rows =
@@ -92,6 +94,7 @@ fun SearchRoute(
             when (event) {
                 SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
+                is SearchEvent.RemoveRecent -> recent = recent - event.query
                 is SearchEvent.SearchAgain -> {
                     query.setTextAndPlaceCursorAtEnd(event.query)
                     keep(event.query)
@@ -211,4 +214,5 @@ private fun listedEntries(
             .catch { emit(null) }
     }.collectAsScreenState(initial = null)
 
-internal val recentSaver = listSaver<MutableState<List<String>>, String>(save = { it.value }, restore = { mutableStateOf(it) })
+internal val recentSaver =
+    Saver<MutableState<List<String>>, ArrayList<String>>(save = { ArrayList(it.value) }, restore = { mutableStateOf(it) })

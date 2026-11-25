@@ -328,6 +328,8 @@ Not to forget:
 - [x] Filter the own and public anime lists by title across statuses.
 - [x] Manga title pages from MyAnimeList links.
 - [x] Manga search and ranking.
+- [x] Delete individual recent searches.
+- [x] Open anime from MyAnimeList links pasted in Search.
 
 ---
 

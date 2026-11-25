@@ -1,9 +1,11 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -11,11 +13,15 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.text.AnnotatedString
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.demo.Demo
@@ -69,7 +75,7 @@ class MangaCatalogueRouteTest {
     val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose) { scope.cancel() })
 
     private val demo = TestGraph(Demo(Fixtures.reference, scope))
-    private val searchOffsets = mutableListOf<Int>()
+    private val searchRequests = mutableListOf<Pair<String, Int>>()
     private val rankingAttempts = mutableListOf<Int>()
     private val rankingOffsets = mutableListOf<Int>()
     private val detailIds = mutableListOf<MangaId>()
@@ -108,7 +114,7 @@ class MangaCatalogueRouteTest {
         compose.onNode(hasSetTextAction() and hasText("paper") and !inDialog).assertExists()
         compose.onNodeWithText(title).assertIsDisplayed()
         compose.onNodeWithText(firstPage.first().titles.romaji).assertDoesNotExist()
-        assertEquals(listOf(0, 0, 20), searchOffsets)
+        assertEquals(listOf("paper" to 0, "paper" to 0, "paper" to 20), searchRequests)
         assertTrue(rankingOffsets.isEmpty())
     }
 
@@ -137,7 +143,7 @@ class MangaCatalogueRouteTest {
         settle()
         compose.onNodeWithText(rankedTitle).assertIsDisplayed()
         assertEquals(listOf(0, 20, 20), rankingOffsets)
-        assertTrue(searchOffsets.isEmpty())
+        assertTrue(searchRequests.isEmpty())
     }
 
     @Test
@@ -196,7 +202,67 @@ class MangaCatalogueRouteTest {
         }
         compose.onNode(hasContentDescription("Clear search") and inDialog).performClick()
         compose.onNode(hasText("paper") and hasClickAction() and inDialog).assertExists()
-        assertTrue(searchOffsets.isEmpty())
+        assertTrue(searchRequests.isEmpty())
+    }
+
+    @Test
+    @Config(qualifiers = "ru-w411dp-h891dp")
+    fun `manga history keeps its own swipe removals across restoration and retains textual search for anime paths`() {
+        val restore = StateRestorationTester(compose)
+        val pasted = "anime/5114/Fullmetal_Al"
+        catalogue(restore = restore, openManga = false, additionalQueries = setOf("first", pasted))
+        val activity = compose.activity
+        val back = activity.getString(R.string.common_back)
+        val clear = hasContentDescription(activity.getString(R.string.search_clear)) and inDialog
+        val typing = hasSetTextAction() and isFocused() and inDialog
+
+        fun typeAndKeep(text: String) {
+            compose.onNode(typing).performTextInput(text)
+            compose.onNode(typing).performImeAction()
+            settle()
+            compose.onNode(clear).performClick()
+            settle()
+        }
+
+        compose.onNode(hasSetTextAction() and !inDialog).performClick()
+        settle()
+        typeAndKeep("paper")
+        compose.onNode(hasContentDescription(back) and inDialog).performClick()
+        settle()
+        compose.onNodeWithText(activity.getString(R.string.manga_catalogue)).performClick()
+        settle()
+        assertTrue(searchRequests.isEmpty())
+        compose.onNodeWithText("paper").assertDoesNotExist()
+
+        compose.onNode(hasSetTextAction() and !inDialog).performClick()
+        settle()
+        typeAndKeep("first")
+        typeAndKeep("paper")
+        typeAndKeep(pasted)
+        assertTrue((pasted to 0) in searchRequests)
+        val row = { text: String -> compose.onNode(hasText(text) and hasClickAction() and inDialog) }
+        row("paper").performTouchInput { swipeRight() }
+        row("paper").assertDoesNotExist()
+        restore.emulateSavedInstanceStateRestore()
+        settle()
+        row("paper").assertDoesNotExist()
+        assertTrue(row(pasted).getUnclippedBoundsInRoot().top < row("first").getUnclippedBoundsInRoot().top)
+        row("first").performClick()
+        compose.onNode(typing and hasText("first")).assertExists()
+        compose.onNode(clear).performClick()
+        for (query in listOf("first", pasted)) {
+            val action = row(query).fetchSemanticsNode().config[SemanticsActions.CustomActions].single()
+            assertEquals("Удалить из недавних запросов", action.label)
+            compose.runOnIdle { assertTrue(action.action()) }
+        }
+        restore.emulateSavedInstanceStateRestore()
+        settle()
+        compose.onNode(hasText(activity.getString(R.string.search_recent)) and inDialog).assertDoesNotExist()
+        compose.onNode(hasContentDescription(back) and inDialog).performClick()
+        settle()
+        compose.onNode(hasContentDescription(back) and !inDialog).performClick()
+        settle()
+        compose.onNode(hasText("paper") and hasClickAction()).assertExists()
     }
 
     @Test
@@ -221,6 +287,9 @@ class MangaCatalogueRouteTest {
     private fun catalogue(
         stored: StoredManga? = null,
         beforeRankingRetry: CompletableDeferred<Unit>? = null,
+        restore: StateRestorationTester? = null,
+        openManga: Boolean = true,
+        additionalQueries: Set<String> = emptySet(),
     ) {
         val graph =
             object : AppGraph by demo {
@@ -232,10 +301,10 @@ class MangaCatalogueRouteTest {
                             offset: Int,
                             includeAdult: Boolean,
                         ): Outcome<Page<MangaDetails>> {
-                            assertEquals("paper", query)
-                            searchOffsets += offset
+                            assertTrue(query, query == "paper" || query in additionalQueries)
+                            searchRequests += query to offset
                             return when {
-                                searchOffsets.size == 1 -> Outcome.Failure(DataError.ServerError)
+                                searchRequests.size == 1 -> Outcome.Failure(DataError.ServerError)
                                 offset == 0 -> Outcome.Success(Page(firstPage, 20))
                                 else -> Outcome.Success(Page(secondPage, null))
                             }
@@ -278,15 +347,18 @@ class MangaCatalogueRouteTest {
                         }
                     }
             }
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        val content = @Composable { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        if (restore == null) compose.setContent(content) else restore.setContent(content)
         settle()
         val activity = compose.activity
         compose.onNodeWithText(activity.getString(R.string.shell_search)).performClick()
         settle()
         compose.onNodeWithText(activity.getString(R.string.search_suggestions)).assertExists()
-        compose.onNodeWithText(activity.getString(R.string.manga_catalogue)).performClick()
-        settle()
-        assertTrue(searchOffsets.isEmpty())
+        if (openManga) {
+            compose.onNodeWithText(activity.getString(R.string.manga_catalogue)).performClick()
+            settle()
+        }
+        assertTrue(searchRequests.isEmpty())
         assertTrue(rankingOffsets.isEmpty())
     }
 
