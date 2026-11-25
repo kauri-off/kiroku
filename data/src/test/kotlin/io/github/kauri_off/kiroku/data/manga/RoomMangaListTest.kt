@@ -19,6 +19,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -167,22 +168,21 @@ class RoomMangaListTest {
             try {
                 session.signOut()
                 val b = signIn("b")
-                val other = repository()
                 assertEquals(Outcome.Failure(DataError.ListEnded), list.stored(a))
-                assertEquals(Outcome.Success(null), other.stored(b))
+                assertEquals(Outcome.Success(null), list.stored(b))
                 val bEntry = entry().copy(score = 9)
                 response = { Outcome.Success(listOf(bEntry)) }
                 val bSnapshot = MangaListSnapshot(b, listOf(bEntry), clock.now)
-                assertEquals(Outcome.Success(bSnapshot), other.refresh(b))
+                assertEquals(Outcome.Success(bSnapshot), withTimeout(5_000) { list.refresh(b) })
                 release.complete(Unit)
                 assertEquals(Outcome.Failure(DataError.ListEnded), stale.await())
                 assertEquals(Outcome.Failure(DataError.ListEnded), list.forgetRetired(a))
-                assertEquals(Outcome.Success(bSnapshot), other.stored(b))
+                assertEquals(Outcome.Success(bSnapshot), list.stored(b))
                 assertNull(database.mangaList().state(a.value))
                 assertTrue(database.mangaList().entries(a.value).isEmpty())
 
                 session.signOut()
-                assertEquals(Outcome.Success(Unit), other.forgetRetired(null))
+                assertEquals(Outcome.Success(Unit), list.forgetRetired(null))
                 assertNull(database.mangaList().state(b.value))
                 assertTrue(database.mangaList().entries(b.value).isEmpty())
             } finally {

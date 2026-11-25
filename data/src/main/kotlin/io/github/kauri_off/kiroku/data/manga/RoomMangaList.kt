@@ -35,7 +35,13 @@ internal class RoomMangaList(
     private val unexpected: (Throwable) -> Unit,
 ) {
     private val dao = database.mangaList()
-    private val syncing = Mutex()
+
+    private data class RefreshQueue(
+        val owner: SignInId,
+        val lock: Mutex = Mutex(),
+    )
+
+    private var syncing: RefreshQueue? = null
 
     suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> =
         whileOwner(owner) {
@@ -48,8 +54,18 @@ internal class RoomMangaList(
             Outcome.Success(snapshot)
         }
 
-    suspend fun refresh(owner: SignInId): Outcome<MangaListSnapshot> =
-        syncing.withLock {
+    suspend fun refresh(owner: SignInId): Outcome<MangaListSnapshot> {
+        val queue =
+            whileOwner(owner) {
+                val current = syncing?.takeIf { it.owner == owner } ?: RefreshQueue(owner).also { syncing = it }
+                Outcome.Success(current)
+            }
+        val lock =
+            when (queue) {
+                is Outcome.Failure -> return queue
+                is Outcome.Success -> queue.value.lock
+            }
+        return lock.withLock {
             val current = session.currentSession() ?: return@withLock Outcome.Failure(DataError.StorageError)
             if (current.owner != owner) return@withLock Outcome.Failure(DataError.ListEnded)
             if (current is Session.Expired) return@withLock Outcome.Failure(DataError.SessionExpired)
@@ -72,6 +88,7 @@ internal class RoomMangaList(
                 Outcome.Success(MangaListSnapshot(owner, entries, at))
             }
         }
+    }
 
     suspend fun forgetRetired(currentOwner: SignInId?): Outcome<Unit> =
         whileOwner(currentOwner) {
