@@ -89,7 +89,8 @@ class UserListViewModel(
     )
 
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
-    private val typed = mutableStateOf(saved.get<String>(FILTER))
+    private val listFilter = ListFilter()
+    private val typed = mutableStateOf(ListState.Typed(saved.get<String>(FILTER), saved.get<Int>(FILTER_SESSION) ?: 0))
     private val lane = background.limitedParallelism(1)
     private var load: Job? = null
     private var reading: Job? = null
@@ -104,7 +105,9 @@ class UserListViewModel(
     @Volatile private var own: Map<AnimeId, ListEntry>? = null
 
     // The filter field's text, held as Compose state so the field reads each keystroke in the same frame.
-    val filter: String? get() = typed.value
+    val filterInput: ListState.Typed get() = typed.value
+
+    val filter: String? get() = filterInput.text
 
     private val loads = ShownLoads(viewModelScope, connection, whenShown = { startReading() }, again = { refresh(Asked.Again) })
 
@@ -196,7 +199,7 @@ class UserListViewModel(
 
     private fun build(
         model: Model,
-        filter: String?,
+        input: ListState.Typed,
     ): ListState {
         val read = model.read
         val entries =
@@ -209,7 +212,7 @@ class UserListViewModel(
             when {
                 read is UserListState.None -> ListContent.Failed(read.error.toListFailure())
                 entries == null -> ListContent.Loading
-                else -> tabs(model, entries, read is UserListState.Whole, filter)
+                else -> tabs(model, entries, read is UserListState.Whole)
             }.also { built = it }
         val statuses = (content as? ListContent.Tabs)?.statuses
         return ListState(
@@ -217,7 +220,8 @@ class UserListViewModel(
             content = content,
             tab = model.tab.takeIf { statuses == null || it in statuses } ?: ListStatus.Watching,
             sortSheetOpen = model.sortSheetOpen,
-            filter = filter,
+            filter = input.text,
+            filterSession = input.session,
             sessionExpired = model.session is Session.Expired,
             now = now,
             reading =
@@ -228,6 +232,7 @@ class UserListViewModel(
                 },
             readingAgain = read is UserListState.Whole && read.again != null,
             listSize = (read as? UserListState.Whole)?.entries?.size,
+            matches = listFilter.rows(content, input.text, input.session),
         )
     }
 
@@ -236,21 +241,26 @@ class UserListViewModel(
         model: Model,
         entries: List<ListEntry>,
         whole: Boolean,
-        filter: String?,
     ): ListContent.Tabs {
+        val previousOrder = orders
+        val order = ordered(model, entries, whole)
+        val previous = built as? ListContent.Tabs
+        if (order === previousOrder &&
+            previous != null &&
+            previous.pages.all { (status, page) -> page.ordering == (model.orderings[status] ?: 0) }
+        ) {
+            return previous
+        }
         val byId = entries.associateBy { it.anime.id }
-        val ids = ordered(model, entries, whole).ids
         val before = rows
         val after = HashMap<AnimeId, BuiltRow>(entries.size)
-        val shown = (built as? ListContent.Tabs)?.pages
         val content =
             ListContent.Tabs(
-                ids.mapValues { (status, tab) ->
+                order.ids.mapValues { (status, tab) ->
                     val sort = sortOf(model, status)
-                    val all = tab.map { id -> row(byId.getValue(id), sort, model.language, before, after) }
-                    val rows = if (filter.isNullOrEmpty()) all else all.filter { it.title.contains(filter, ignoreCase = true) }
+                    val rows = tab.map { id -> row(byId.getValue(id), sort, model.language, before, after) }
                     val page = ListPage(sort.sort, sortsFor(status, withAiring = false), rows, model.orderings[status] ?: 0, sort.direction)
-                    shown?.get(status)?.takeIf { it == page } ?: page
+                    previous?.pages?.get(status)?.takeIf { it == page } ?: page
                 },
             )
         rows = after
@@ -265,7 +275,12 @@ class UserListViewModel(
         whole: Boolean,
     ): Orders {
         val last = orders
-        val statuses = tabOrder(entries.map { it.status }.toSet())
+        val statuses =
+            last
+                ?.ids
+                ?.keys
+                ?.toList()
+                ?.takeIf { last.over === entries } ?: tabOrder(entries.map { it.status }.toSet())
         val sorts = statuses.associateWith { sortOf(model, it) }
         if (last != null &&
             last.over === entries &&
@@ -356,8 +371,9 @@ class UserListViewModel(
     }
 
     private fun filterBy(text: String?) {
-        typed.value = text
+        typed.value = typed.value.withText(text)
         saved[FILTER] = text
+        saved[FILTER_SESSION] = typed.value.session
     }
 
     // A tab of a status the app does not know is not kept: after a new process it may not be there yet.
@@ -370,5 +386,6 @@ class UserListViewModel(
     private companion object {
         val TAB = notShown("userListTab")
         val FILTER = notShown("userListFilter")
+        val FILTER_SESSION = notShown("userListFilterSession")
     }
 }

@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.Demo
@@ -37,6 +38,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -488,6 +490,36 @@ class UserListViewModelTest {
             advanceUntilIdle()
             assertTrue(app.requests.isEmpty())
             assertEquals(ListContent.Loading, list.state.value.content)
+        }
+
+    @Test
+    fun `all matching public entries keep their owner status without another request`() =
+        runTest(dispatcher) {
+            val app = app()
+            val list = app.list()
+            showing(list.state, list.shown)
+            advanceUntilIdle()
+            val before = list.tabs
+            val requests = app.requests.toList()
+            val airing =
+                app.graph.demo.airingSource.requests
+                    .toList()
+            list.onEvent(ListEvent.FilterChanged("kagerou"))
+            Snapshot.sendApplyNotifications()
+            advanceUntilIdle()
+            val matches = list.state.value.matches!!
+            val expected =
+                fixtures.otherUserList
+                    .filter {
+                        it.anime.titles.romaji
+                            .contains("kagerou", ignoreCase = true)
+                    }.associate { it.anime.id to it.status }
+            assertTrue(expected.values.toSet().size > 1)
+            assertEquals(expected, matches.associate { it.id to it.status })
+            assertTrue(matches.none { it.plusOne || it.line3 != null })
+            assertSame(before, list.tabs)
+            assertEquals(requests, app.requests)
+            assertEquals(airing, app.graph.demo.airingSource.requests)
         }
 
     @Test

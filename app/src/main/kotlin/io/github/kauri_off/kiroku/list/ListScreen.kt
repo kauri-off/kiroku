@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
@@ -49,8 +50,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +78,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
@@ -95,11 +100,13 @@ import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
+import io.github.kauri_off.kiroku.design.component.WaitIndicator
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
+import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.statusName
 import io.github.kauri_off.kiroku.title.countText
 import kotlinx.coroutines.flow.first
@@ -115,20 +122,28 @@ fun ListScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(enabled = state.filterText != null) { onEvent(ListEvent.EndFilter) }
+    val filtering = state.filterText != null
+    BackHandler(enabled = filtering) { onEvent(ListEvent.EndFilter) }
     val tabs = state.content as? ListContent.Tabs
     // Before the tabs are known, a tab of a status the app does not know stands where it will be.
     val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
-    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
-    val motion = rememberListTabMotion(pager)
+    val motion =
+        if (!filtering) {
+            rememberListTabMotion(rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size })
+        } else {
+            null
+        }
+    val positions = rememberSaveableStateHolder()
     ScreenScaffold(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
-            TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
-            if (tabs != null) ListTabs(motion, tabs.statuses, onEvent)
+            key(state.activeFilterSession) {
+                TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
+            }
+            if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent)
             if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
         },
-        snackbarHost = { ScreenSnackbarHost(snackbars) },
+        snackbarHost = { ScreenSnackbarHost(snackbars, ime = WindowInsets.ime) },
     ) { padding ->
         val body = Modifier.belowBars(padding)
         when (val content = state.content) {
@@ -148,26 +163,29 @@ fun ListScreen(
                     onRefresh = { onEvent(ListEvent.Refresh) },
                     modifier = body.fillMaxSize(),
                 ) {
-                    Pages(
-                        content.statuses,
-                        state.tab,
-                        Shown(content, state.filter.orEmpty(), state.owner, state.now),
-                        motion,
-                        PaddingValues(bottom = padding.calculateBottomPadding()),
-                        onEvent,
-                    )
+                    val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
+                    if (motion != null) {
+                        positions.SaveableStateProvider(TAB_POSITIONS) {
+                            Pages(content.statuses, state.tab, Shown(content, state.owner, state.now), motion, bottomPadding, onEvent)
+                        }
+                    } else {
+                        val matches = state.matches.takeIf { state.activeFilterSession == state.filterSession }
+                        val waitingForMatches = matches.isNullOrEmpty() && state.reading != null && !state.readingAgain
+                        key(state.activeFilterSession, state.filter) {
+                            FilterResults(matches.takeUnless { waitingForMatches }, state.owner, state.now, bottomPadding, onEvent)
+                        }
+                    }
                 }
         }
     }
     val page = state.page
-    if (state.sortSheetOpen && page != null) SortSheet(page, onEvent)
+    if (!filtering && state.sortSheetOpen && page != null) SortSheet(page, onEvent)
 }
 
 // What every page shows besides its own rows; a tab switch changes none of it, so no page or row is composed again.
 @Immutable
 private data class Shown(
     val tabs: ListContent.Tabs,
-    val filter: String,
     val owner: ListOwner,
     val now: Instant,
 )
@@ -199,22 +217,11 @@ private fun Pages(
         lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
         motion.composeAhead()
     }
-    val belowPager = remember { mutableIntStateOf(0) }
-    val belowPagerInsets =
-        remember {
-            object : WindowInsets by WindowInsets() {
-                override fun getBottom(density: Density): Int = belowPager.intValue
-            }
-        }
     HorizontalPager(
         pager,
         Modifier
             .fillMaxSize()
-            .onGloballyPositioned { coordinates ->
-                val bottom = coordinates.positionInRoot().y.roundToInt() + coordinates.size.height
-                val windowBottom = coordinates.findRootCoordinates().size.height
-                belowPager.intValue = (windowBottom - bottom).coerceAtLeast(0)
-            }.pointerInput(motion) {
+            .pointerInput(motion) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     motion.composeAll()
@@ -240,11 +247,9 @@ private fun Pages(
         Page(
             statuses[index],
             shown.tabs.pages.getValue(statuses[index]),
-            shown.filter,
             shown.owner,
             shown.now,
             padding,
-            belowPagerInsets,
             onEvent,
         )
     }
@@ -291,64 +296,79 @@ private fun Modifier.withoutTravelledTaps(): Modifier =
         }
     }
 
-// The unfiltered rows and the filtered ones keep separate scroll positions, so ending the filter returns the user
-// to where they were. A new order or filter text replaces the rows at once, from the top; only rows leaving or
-// returning within one order animate (ListScreenTest).
 @Composable
 private fun Page(
     status: EntryStatus,
     page: ListPage,
-    filter: String,
     owner: ListOwner,
     now: Instant,
     padding: PaddingValues,
-    belowPagerInsets: WindowInsets,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val positions = rememberSaveableStateHolder()
-    // Keyed by whether the rows are unfiltered.
-    positions.SaveableStateProvider(filter.isEmpty()) {
-        key(page.sort, page.ordering, filter) {
-            if (page.rows.isEmpty()) {
-                // A list, so that an empty tab can be pulled to refresh too.
-                val empty = emptyState(filter, owner, status, onEvent)
-                LazyColumn(Modifier.fillMaxSize()) {
-                    item {
-                        val viewport = Modifier.fillParentMaxSize()
-                        val inViewport =
-                            if (filter.isEmpty()) {
-                                viewport
-                            } else {
-                                val overlap = WindowInsets.ime.only(WindowInsetsSides.Bottom).exclude(belowPagerInsets)
-                                viewport.padding(overlap.asPaddingValues())
-                            }
-                        ScreenState(empty, inViewport)
-                    }
-                }
-            } else {
-                Rows(page.rows, owner, now, padding, onEvent)
-            }
+    key(page.sort, page.ordering) {
+        if (page.rows.isEmpty()) {
+            val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
+            val empty = ScreenState.Empty(stringResource(R.string.list_empty, statusName(status)), search.takeIf { owner == ListOwner.Me })
+            EmptyRows(empty)
+        } else {
+            Rows(page.rows, owner, now, padding, onEvent)
         }
     }
-    LaunchedEffect(filter.isEmpty()) { if (filter.isEmpty()) positions.removeState(false) }
 }
 
 @Composable
-private fun emptyState(
-    filter: String,
+private fun FilterResults(
+    matches: List<ListRow>?,
     owner: ListOwner,
-    status: EntryStatus,
+    now: Instant,
+    padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
-): ScreenState =
-    if (filter.isEmpty()) {
-        val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
-        ScreenState.Empty(
-            stringResource(R.string.list_empty, statusName(status)),
-            search.takeIf { owner == ListOwner.Me },
-        )
-    } else {
-        ScreenState.Empty(stringResource(R.string.list_no_matches))
+) {
+    val belowResults = remember { mutableIntStateOf(0) }
+    val insets =
+        remember {
+            object : WindowInsets by WindowInsets() {
+                override fun getBottom(density: Density): Int = belowResults.intValue
+            }
+        }
+    val overlap = WindowInsets.ime.only(WindowInsetsSides.Bottom).exclude(insets)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                val bottom = coordinates.positionInRoot().y.roundToInt() + coordinates.size.height
+                val windowBottom = coordinates.findRootCoordinates().size.height
+                belowResults.intValue = (windowBottom - bottom).coerceAtLeast(0)
+            },
+    ) {
+        val keyboardPadding = overlap.asPaddingValues()
+        when {
+            matches == null -> {
+                val loading = stringResource(R.string.design_loading)
+                Box(Modifier.fillMaxSize().padding(keyboardPadding), contentAlignment = Alignment.Center) {
+                    WaitIndicator(Modifier.semantics { contentDescription = loading })
+                }
+            }
+            matches.isEmpty() -> EmptyRows(ScreenState.Empty(stringResource(R.string.list_no_matches)), keyboardPadding)
+            else -> {
+                val bottom = WindowInsets(bottom = padding.calculateBottomPadding()).exclude(overlap).asPaddingValues()
+                Box(Modifier.padding(keyboardPadding)) {
+                    Rows(matches, owner, now, bottom, onEvent, showStatus = true)
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun EmptyRows(
+    state: ScreenState,
+    padding: PaddingValues = PaddingValues(),
+) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item { ScreenState(state, Modifier.fillParentMaxSize().padding(padding)) }
+    }
+}
 
 // Another user's own answer about their list is no failure to retry.
 @Composable
@@ -476,7 +496,13 @@ private fun FilterField(
             ),
         modifier = Modifier.withoutAutofill().fillMaxWidth().focusRequester(focus),
     )
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val focusedOnce = rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!focusedOnce.value) {
+            focus.requestFocus()
+            focusedOnce.value = true
+        }
+    }
 }
 
 @Composable
@@ -486,6 +512,7 @@ private fun Rows(
     now: Instant,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
+    showStatus: Boolean = false,
 ) {
     val context = LocalContext.current
     val text = remember(context, now) { ListText(context, now) }
@@ -497,30 +524,40 @@ private fun Rows(
             LocalWindowInfo.current.containerSize.height
                 .toFloat(),
         )
-    val guard = remember { PlusOneGuard(moveMillis) }
-    SideEffect {
-        guard.moveMillis = moveMillis
-        guard.shown(rows.map { it.id }, SystemClock.uptimeMillis())
-    }
-    val shownRows = rememberUpdatedState(rows)
+    val guard = if (owner == ListOwner.Me) remember { PlusOneGuard(moveMillis) } else null
+    val ids =
+        if (guard != null) {
+            remember(rows) { rows.map { it.id } }.also { ids ->
+                val eligible = remember(rows) { buildSet { rows.forEach { if (it.plusOne) add(it.id) } } }
+                val thirdLines = remember(rows) { buildSet { rows.forEach { if (it.line3 != null) add(it.id) } } }
+                SideEffect {
+                    guard.moveMillis = moveMillis
+                    guard.shown(ids, SystemClock.uptimeMillis(), eligible, thirdLines)
+                }
+            }
+        } else {
+            emptyList()
+        }
+    val shownIds = rememberUpdatedState(ids)
+    val scroll = rememberSaveable(saver = rowScrollSaver(rows)) { LazyListState() }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
+        LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), state = scroll, contentPadding = padding) {
             // Reusing a row for another form crashes the screenshot render (RectList), so rows are reused by form.
             items(rows, key = { it.id.value }, contentType = { Triple(it.line3 != null, it.line3 is Line3.ToWatch, it.plusOne) }) { row ->
                 AnimeRow(
                     title = row.title,
                     posterUrl = row.posterUrl,
                     onClick = { onEvent(ListEvent.Open(row.id)) },
+                    overline = if (showStatus) statusName(row.status) else null,
                     lines =
                         listOfNotNull(
                             text.line2(row.line2, row.sortedBy),
                             row.line3?.let { RowLine(text.line3(it), highlighted = it is Line3.ToWatch) },
                         ),
                     trailing =
-                        if (row.plusOne) {
+                        if (row.plusOne && guard != null) {
                             RowTrailing.PlusOne(prominent = row.line3 is Line3.ToWatch) {
-                                val ids = shownRows.value.map { it.id }
-                                if (guard.accept(row.id, ids, SystemClock.uptimeMillis())) onEvent(ListEvent.PlusOne(row.id))
+                                if (guard.accept(row.id, shownIds.value, SystemClock.uptimeMillis())) onEvent(ListEvent.PlusOne(row.id))
                             }
                         } else {
                             null
@@ -537,6 +574,24 @@ private fun Rows(
         }
     }
 }
+
+private fun rowScrollSaver(rows: List<ListRow>) =
+    listSaver<LazyListState, Long>(
+        save = { state ->
+            val first = state.firstVisibleItemIndex
+            val title =
+                state.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == first }
+                    ?.key as? Long
+            listOfNotNull(first.toLong(), state.firstVisibleItemScrollOffset.toLong(), title)
+        },
+        restore = { saved ->
+            val title = saved.getOrNull(2)
+            val index = title?.let { id -> rows.indexOfFirst { it.id.value == id } } ?: -1
+            val fallback = saved[0].toInt().coerceAtMost(rows.lastIndex)
+            LazyListState(if (index >= 0) index else fallback, saved[1].toInt())
+        },
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -599,3 +654,5 @@ private fun SortChoices(
 
 // The share of a page's width a released drag must pass to turn the page; the stock half asks for a long drag.
 private const val PAGE_TURN = 0.3f
+
+private val TAB_POSITIONS = notShown("list.tabPositions")

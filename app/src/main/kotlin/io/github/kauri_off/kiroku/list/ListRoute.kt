@@ -46,7 +46,7 @@ fun ListRoute(
     CountAsShown(list.shown)
     if (state.content == ListContent.Loading) KeepSplash()
     ListScreen(
-        state = state.copy(typed = ListState.Typed(list.filter)),
+        state = state.copy(typed = list.filterInput),
         onEvent = { event ->
             when (event) {
                 is ListEvent.Open -> onOpenTitle(event.id, list.summaryOf(event.id))
