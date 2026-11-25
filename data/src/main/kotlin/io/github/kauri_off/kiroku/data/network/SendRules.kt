@@ -62,6 +62,7 @@ internal class NoClientId : ProtocolException()
 // What the requests of one [MalHttp.call] put on the network, over all its tries.
 internal class Sends(
     private val limit: Int,
+    val maySendRead: (() -> Boolean)? = null,
 ) {
     private val reads = ConcurrentHashMap<HttpUrl, AtomicInteger>()
 
@@ -94,9 +95,16 @@ internal class NotSentAgain(
     val failure: IOException?,
 ) : ProtocolException()
 
+internal class ReadOwnerEnded : ProtocolException()
+
+private fun Request.checkReadOwner() {
+    if (isRead && tag(Sends::class.java)?.maySendRead?.invoke() == false) throw ReadOwnerEnded()
+}
+
 internal object MarkSends : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        request.checkReadOwner()
         if (!request.isRead) request.tag(Sends::class.java)?.wrote = true
         return chain.proceed(request.newBuilder().tag(Wire::class.java, Wire()).build())
     }
@@ -107,6 +115,7 @@ internal object SendLimits : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
+        request.checkReadOwner()
         val allowed =
             if (request.isRead) request.tag(Sends::class.java)?.mayRead(request.url) != false else !wire.written.getAndSet(true)
         if (!allowed) throw NotSentAgain(wire.status, wire.failure)

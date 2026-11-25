@@ -112,6 +112,7 @@ internal class NetworkFixture : ExternalResource() {
     val clock = TestClock()
     val log = CopyOnWriteArrayList<String>()
     val unexpected = CopyOnWriteArrayList<Throwable>()
+    var calls: okhttp3.Dispatcher? = null
     var online = true
     var clientId = CLIENT_ID
     var repeatReadsAfter = listOf(1.milliseconds, 1.milliseconds)
@@ -142,6 +143,7 @@ internal class NetworkFixture : ExternalResource() {
             unexpected = unexpected::add,
             log = log::add,
             repeatReadsAfter = repeatReadsAfter,
+            calls = calls,
         )
 
     val things by lazy { http.api(Things::class) }
