@@ -421,21 +421,55 @@ class ListViewModelTest {
         }
 
     @Test
-    fun `the filter starts empty, filters every tab as typed, keeps the order and ends`() =
+    fun `the title filter matches across statuses without rebuilding the tabs or requesting data`() =
         test { s ->
+            s.list.onEvent(ListEvent.SelectTab(ListStatus.Dropped))
+            val before = s.state.content as ListContent.Tabs
+            val downloads = s.graph.demo.server.listDownloads
+            val airing = s.graph.demo.airingSource.requests.size
             s.list.onEvent(ListEvent.StartFilter)
             assertEquals("", s.state.filter)
-            assertEquals(upNext(), s.ids())
-            s.list.onEvent(ListEvent.FilterChanged("kaze"))
-            assertEquals("kaze", s.state.filter)
-            assertTrue(s.page().rows.isNotEmpty())
-            ListStatus.entries.forEach { status ->
-                assertTrue(s.page(status).rows.all { it.title.contains("kaze", ignoreCase = true) })
-                assertEquals(0, s.page(status).ordering)
-            }
+            assertEquals(set.entries.size, s.state.matches!!.size)
+            s.list.onEvent(ListEvent.FilterChanged("kAgErOu"))
+            val state = s.state
+            val expected =
+                set.entries
+                    .filter {
+                        it.anime.titles.romaji
+                            .contains("kagerou", ignoreCase = true)
+                    }.associate { it.anime.id to it.status }
+            assertTrue(expected.values.toSet().size > 1)
+            assertEquals(expected, state.matches!!.associate { it.id to it.status })
+            assertSame(before, state.content)
+            assertEquals(ListStatus.Dropped, state.tab)
             s.list.onEvent(ListEvent.EndFilter)
             assertNull(s.state.filter)
-            assertEquals(upNext(), s.ids())
+            assertNull(s.state.matches)
+            assertSame(before, s.state.content)
+            assertEquals(downloads, s.graph.demo.server.listDownloads)
+            assertEquals(airing, s.graph.demo.airingSource.requests.size)
+        }
+
+    @Test
+    fun `a matched title completing and undoing keeps its result position and updates its status and action`() =
+        test { s ->
+            val title = FixtureAnime.oneShortOfTotal
+            val query = title.titles.romaji.substringBefore(' ')
+            s.list.onEvent(ListEvent.FilterChanged(query))
+            val before = s.state.matches!!
+            val watched = before.single { it.id == title.id }
+            assertEquals(ListStatus.Watching, watched.status)
+            assertTrue(watched.plusOne)
+            s.list.onEvent(ListEvent.PlusOne(title.id))
+            advanceUntilIdle()
+            val after = s.state.matches!!
+            assertEquals(before.map { it.id }, after.map { it.id })
+            val completed = after.single { it.id == title.id }
+            assertEquals(ListStatus.Completed, completed.status)
+            assertFalse(completed.plusOne)
+            s.tapAction()
+            advanceUntilIdle()
+            assertEquals(before, s.state.matches)
         }
 
     @Test

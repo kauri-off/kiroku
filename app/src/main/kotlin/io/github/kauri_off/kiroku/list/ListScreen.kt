@@ -49,8 +49,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +102,7 @@ import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
+import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.statusName
 import io.github.kauri_off.kiroku.title.countText
 import kotlinx.coroutines.flow.first
@@ -115,17 +118,23 @@ fun ListScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(enabled = state.filterText != null) { onEvent(ListEvent.EndFilter) }
+    val filtering = state.filterText != null
+    BackHandler(enabled = filtering) { onEvent(ListEvent.EndFilter) }
     val tabs = state.content as? ListContent.Tabs
     // Before the tabs are known, a tab of a status the app does not know stands where it will be.
     val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
-    val pager = rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size }
-    val motion = rememberListTabMotion(pager)
+    val motion =
+        if (!filtering) {
+            rememberListTabMotion(rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size })
+        } else {
+            null
+        }
+    val positions = rememberSaveableStateHolder()
     ScreenScaffold(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
             TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
-            if (tabs != null) ListTabs(motion, tabs.statuses, onEvent)
+            if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent)
             if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
@@ -148,26 +157,28 @@ fun ListScreen(
                     onRefresh = { onEvent(ListEvent.Refresh) },
                     modifier = body.fillMaxSize(),
                 ) {
-                    Pages(
-                        content.statuses,
-                        state.tab,
-                        Shown(content, state.filter.orEmpty(), state.owner, state.now),
-                        motion,
-                        PaddingValues(bottom = padding.calculateBottomPadding()),
-                        onEvent,
-                    )
+                    val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
+                    if (motion != null) {
+                        positions.SaveableStateProvider(TAB_POSITIONS) {
+                            Pages(content.statuses, state.tab, Shown(content, state.owner, state.now), motion, bottomPadding, onEvent)
+                        }
+                    } else {
+                        val matches = state.matches
+                        if (matches != null) {
+                            key(state.filter) { FilterResults(matches, state.owner, state.now, bottomPadding, onEvent) }
+                        }
+                    }
                 }
         }
     }
     val page = state.page
-    if (state.sortSheetOpen && page != null) SortSheet(page, onEvent)
+    if (!filtering && state.sortSheetOpen && page != null) SortSheet(page, onEvent)
 }
 
 // What every page shows besides its own rows; a tab switch changes none of it, so no page or row is composed again.
 @Immutable
 private data class Shown(
     val tabs: ListContent.Tabs,
-    val filter: String,
     val owner: ListOwner,
     val now: Instant,
 )
@@ -199,22 +210,11 @@ private fun Pages(
         lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
         motion.composeAhead()
     }
-    val belowPager = remember { mutableIntStateOf(0) }
-    val belowPagerInsets =
-        remember {
-            object : WindowInsets by WindowInsets() {
-                override fun getBottom(density: Density): Int = belowPager.intValue
-            }
-        }
     HorizontalPager(
         pager,
         Modifier
             .fillMaxSize()
-            .onGloballyPositioned { coordinates ->
-                val bottom = coordinates.positionInRoot().y.roundToInt() + coordinates.size.height
-                val windowBottom = coordinates.findRootCoordinates().size.height
-                belowPager.intValue = (windowBottom - bottom).coerceAtLeast(0)
-            }.pointerInput(motion) {
+            .pointerInput(motion) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     motion.composeAll()
@@ -240,11 +240,9 @@ private fun Pages(
         Page(
             statuses[index],
             shown.tabs.pages.getValue(statuses[index]),
-            shown.filter,
             shown.owner,
             shown.now,
             padding,
-            belowPagerInsets,
             onEvent,
         )
     }
@@ -291,64 +289,72 @@ private fun Modifier.withoutTravelledTaps(): Modifier =
         }
     }
 
-// The unfiltered rows and the filtered ones keep separate scroll positions, so ending the filter returns the user
-// to where they were. A new order or filter text replaces the rows at once, from the top; only rows leaving or
-// returning within one order animate (ListScreenTest).
 @Composable
 private fun Page(
     status: EntryStatus,
     page: ListPage,
-    filter: String,
     owner: ListOwner,
     now: Instant,
     padding: PaddingValues,
-    belowPagerInsets: WindowInsets,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val positions = rememberSaveableStateHolder()
-    // Keyed by whether the rows are unfiltered.
-    positions.SaveableStateProvider(filter.isEmpty()) {
-        key(page.sort, page.ordering, filter) {
-            if (page.rows.isEmpty()) {
-                // A list, so that an empty tab can be pulled to refresh too.
-                val empty = emptyState(filter, owner, status, onEvent)
-                LazyColumn(Modifier.fillMaxSize()) {
-                    item {
-                        val viewport = Modifier.fillParentMaxSize()
-                        val inViewport =
-                            if (filter.isEmpty()) {
-                                viewport
-                            } else {
-                                val overlap = WindowInsets.ime.only(WindowInsetsSides.Bottom).exclude(belowPagerInsets)
-                                viewport.padding(overlap.asPaddingValues())
-                            }
-                        ScreenState(empty, inViewport)
-                    }
-                }
-            } else {
-                Rows(page.rows, owner, now, padding, onEvent)
-            }
+    key(page.sort, page.ordering) {
+        if (page.rows.isEmpty()) {
+            val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
+            val empty = ScreenState.Empty(stringResource(R.string.list_empty, statusName(status)), search.takeIf { owner == ListOwner.Me })
+            EmptyRows(empty)
+        } else {
+            Rows(page.rows, owner, now, padding, onEvent)
         }
     }
-    LaunchedEffect(filter.isEmpty()) { if (filter.isEmpty()) positions.removeState(false) }
 }
 
 @Composable
-private fun emptyState(
-    filter: String,
+private fun FilterResults(
+    matches: List<ListRow>,
     owner: ListOwner,
-    status: EntryStatus,
+    now: Instant,
+    padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
-): ScreenState =
-    if (filter.isEmpty()) {
-        val search = StateAction(stringResource(R.string.list_empty_action)) { onEvent(ListEvent.Search) }
-        ScreenState.Empty(
-            stringResource(R.string.list_empty, statusName(status)),
-            search.takeIf { owner == ListOwner.Me },
-        )
-    } else {
-        ScreenState.Empty(stringResource(R.string.list_no_matches))
+) {
+    val belowResults = remember { mutableIntStateOf(0) }
+    val insets =
+        remember {
+            object : WindowInsets by WindowInsets() {
+                override fun getBottom(density: Density): Int = belowResults.intValue
+            }
+        }
+    val overlap = WindowInsets.ime.only(WindowInsetsSides.Bottom).exclude(insets)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                val bottom = coordinates.positionInRoot().y.roundToInt() + coordinates.size.height
+                val windowBottom = coordinates.findRootCoordinates().size.height
+                belowResults.intValue = (windowBottom - bottom).coerceAtLeast(0)
+            },
+    ) {
+        val keyboardPadding = overlap.asPaddingValues()
+        if (matches.isEmpty()) {
+            EmptyRows(ScreenState.Empty(stringResource(R.string.list_no_matches)), keyboardPadding)
+        } else {
+            val bottom = WindowInsets(bottom = padding.calculateBottomPadding()).exclude(overlap).asPaddingValues()
+            Box(Modifier.padding(keyboardPadding)) {
+                Rows(matches, owner, now, bottom, onEvent, showStatus = true)
+            }
+        }
     }
+}
+
+@Composable
+private fun EmptyRows(
+    state: ScreenState,
+    padding: PaddingValues = PaddingValues(),
+) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item { ScreenState(state, Modifier.fillParentMaxSize().padding(padding)) }
+    }
+}
 
 // Another user's own answer about their list is no failure to retry.
 @Composable
@@ -476,7 +482,13 @@ private fun FilterField(
             ),
         modifier = Modifier.withoutAutofill().fillMaxWidth().focusRequester(focus),
     )
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val focusedOnce = rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!focusedOnce.value) {
+            focus.requestFocus()
+            focusedOnce.value = true
+        }
+    }
 }
 
 @Composable
@@ -486,6 +498,7 @@ private fun Rows(
     now: Instant,
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
+    showStatus: Boolean = false,
 ) {
     val context = LocalContext.current
     val text = remember(context, now) { ListText(context, now) }
@@ -498,11 +511,12 @@ private fun Rows(
                 .toFloat(),
         )
     val guard = remember { PlusOneGuard(moveMillis) }
+    val ids = remember(rows) { rows.map { it.id } }
     SideEffect {
         guard.moveMillis = moveMillis
-        guard.shown(rows.map { it.id }, SystemClock.uptimeMillis())
+        guard.shown(ids, SystemClock.uptimeMillis())
     }
-    val shownRows = rememberUpdatedState(rows)
+    val shownIds = rememberUpdatedState(ids)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(), contentPadding = padding) {
             // Reusing a row for another form crashes the screenshot render (RectList), so rows are reused by form.
@@ -511,6 +525,7 @@ private fun Rows(
                     title = row.title,
                     posterUrl = row.posterUrl,
                     onClick = { onEvent(ListEvent.Open(row.id)) },
+                    overline = if (showStatus) statusName(row.status) else null,
                     lines =
                         listOfNotNull(
                             text.line2(row.line2, row.sortedBy),
@@ -519,8 +534,7 @@ private fun Rows(
                     trailing =
                         if (row.plusOne) {
                             RowTrailing.PlusOne(prominent = row.line3 is Line3.ToWatch) {
-                                val ids = shownRows.value.map { it.id }
-                                if (guard.accept(row.id, ids, SystemClock.uptimeMillis())) onEvent(ListEvent.PlusOne(row.id))
+                                if (guard.accept(row.id, shownIds.value, SystemClock.uptimeMillis())) onEvent(ListEvent.PlusOne(row.id))
                             }
                         } else {
                             null
@@ -599,3 +613,5 @@ private fun SortChoices(
 
 // The share of a page's width a released drag must pass to turn the page; the stock half asks for a long drag.
 private const val PAGE_TURN = 0.3f
+
+private val TAB_POSITIONS = notShown("list.tabPositions")

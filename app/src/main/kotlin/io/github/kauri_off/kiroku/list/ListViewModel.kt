@@ -104,6 +104,7 @@ class ListViewModel(
     )
 
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
+    private val listFilter = ListFilter()
     private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val retries = MutableStateFlow(0)
 
@@ -139,7 +140,6 @@ class ListViewModel(
         val sorts: Map<EntryStatus, TabSort>?,
         val failure: ListFailure?,
         val signedOut: Boolean,
-        val filter: String?,
         val refreshes: Int,
     )
 
@@ -412,7 +412,6 @@ class ListViewModel(
                 model.sorts,
                 model.failure,
                 session == Session.SignedOut,
-                filter,
                 model.refreshes,
             )
         val instant = clock.instant()
@@ -420,8 +419,8 @@ class ListViewModel(
             built?.takeIf { instant >= it.now && instant < it.until && it.zone == clock.zone && it.shown.refreshes == shown.refreshes }
         val pages =
             current?.takeIf { it.shown == shown }
-                ?: current?.let { built(model, filter, shown, it.now) }?.takeIf { instant < it.until }
-                ?: built(model, filter, shown, instant)
+                ?: current?.let { built(model, shown, it.now) }?.takeIf { instant < it.until }
+                ?: built(model, shown, instant)
         return ListState(
             owner = ListOwner.Me,
             content = pages.content,
@@ -431,12 +430,12 @@ class ListViewModel(
             refreshing = model.refreshing,
             sessionExpired = session is Session.Expired,
             now = pages.now,
+            matches = listFilter.rows(pages.content, filter),
         )
     }
 
     private fun built(
         model: Model,
-        filter: String?,
         shown: Shown,
         now: Instant,
     ): Built {
@@ -445,10 +444,7 @@ class ListViewModel(
         val rowsBefore = rows
         val rowsNow = HashMap<AnimeId, BuiltRow>(rowsBefore.size)
         val content =
-            content(
-                model,
-                filter,
-            ) { entry, sort -> row(entry, model.airing[entry.anime.id], now, sort, model.language, rowsBefore, rowsNow) }
+            content(model) { entry, sort -> row(entry, model.airing[entry.anime.id], now, sort, model.language, rowsBefore, rowsNow) }
         rows = rowsNow
         return Built(shown, content.sharing(built?.content), now, until, clock.zone).also { built = it }
     }
@@ -488,7 +484,6 @@ class ListViewModel(
 
     private fun content(
         model: Model,
-        filter: String?,
         row: (ListEntry, ListSort) -> ListRow,
     ): ListContent {
         val orders = model.orders
@@ -497,14 +492,13 @@ class ListViewModel(
             model.session == Session.SignedOut -> ListContent.SignedOut
             orders == null || sorts == null -> model.failure?.let(ListContent::Failed) ?: ListContent.Loading
             else ->
-                ListContent.Tabs(orders.mapValues { (status, ids) -> page(model, sorts.of(status), filter, status, ids, row) })
+                ListContent.Tabs(orders.mapValues { (status, ids) -> page(model, sorts.of(status), status, ids, row) })
         }
     }
 
     private fun page(
         model: Model,
         sort: TabSort,
-        text: String?,
         status: EntryStatus,
         ids: List<AnimeId>,
         row: (ListEntry, ListSort) -> ListRow,
@@ -513,7 +507,6 @@ class ListViewModel(
             ids
                 .mapNotNull { id -> model.entries[id]?.takeIf { it.status == status } }
                 .map { row(it, sort.sort) }
-                .filter { text.isNullOrEmpty() || it.title.contains(text, ignoreCase = true) }
         return ListPage(sort.sort, sortsFor(status, withAiring = true), rows, model.orderings[status] ?: 0, sort.direction)
     }
 

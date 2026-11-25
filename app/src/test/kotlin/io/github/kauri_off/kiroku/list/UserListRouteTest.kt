@@ -1,15 +1,24 @@
 package io.github.kauri_off.kiroku.list
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import io.github.kauri_off.kiroku.core.demo.Demo
@@ -118,5 +127,49 @@ class UserListRouteTest {
         compose.waitForIdle()
         compose.onNodeWithText("Add to list").assertExists()
         compose.onNodeWithText(madeUp.titles.romaji).assertExists()
+    }
+
+    @Test
+    fun `title back restores query and result scroll, and ending filter restores the original public tab and scroll`() {
+        profile()
+        viewList()
+        val completed = compose.onNode(hasText("Completed") and isSelectable())
+        completed.performClick()
+        compose.waitForIdle()
+
+        val tabs = ListFixtureStates.tabs(fixtures.otherUserList, readOnly = true)
+        val originalPage = tabs.pages.getValue(ListStatus.Completed)
+        val originalIndex = 30
+        val originalRow = compose.onNodeWithText(originalPage.rows[originalIndex].title)
+        val scrollable =
+            SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex) and
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
+        compose.onNode(scrollable and hasAnyDescendant(hasText(originalPage.rows.first().title))).performScrollToIndex(originalIndex)
+        val originalTop = originalRow.getUnclippedBoundsInRoot().top
+
+        val query = "Toshokan"
+        compose.onNodeWithContentDescription("Filter by title").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput(query)
+        val results = ListFilter().rows(tabs, query)!!
+        val resultIndex = 20
+        val resultTitle = results[resultIndex].title
+        val resultRow = compose.onNode(hasText(resultTitle) and hasClickAction() and !hasSetTextAction())
+        compose.onNode(scrollable).performScrollToIndex(resultIndex)
+        val resultTop = resultRow.getUnclippedBoundsInRoot().top
+        val read = requests
+        resultRow.performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText(query)).assertDoesNotExist()
+
+        compose.runOnUiThread { navigator.back() }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction() and hasText(query)).assertIsDisplayed()
+        resultRow.assertIsDisplayed()
+        assertEquals(resultTop, resultRow.getUnclippedBoundsInRoot().top)
+        assertEquals(read, requests)
+
+        compose.onNodeWithContentDescription("Clear").performClick()
+        completed.assertIsSelected()
+        assertEquals(originalTop, originalRow.getUnclippedBoundsInRoot().top)
     }
 }

@@ -17,7 +17,10 @@ import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
+import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellMessage
+import io.github.kauri_off.kiroku.shell.ShellScreen
+import io.github.kauri_off.kiroku.shell.ShellState
 
 // The page and the indicator on it end within a component's entrance.
 private const val TAB_SWITCH = MotionBounds.ENTER
@@ -61,6 +64,12 @@ class ListScreenshots : ScreenshotRegistry() {
             case("completed-by-score", content = screen(ListFixtureStates.completedByScore)),
             case("completed-by-start-date", content = screen(ListFixtureStates.completedByStartDate)),
             case("filtering", keyboard = true, content = screen(ListFixtureStates.filtering)),
+            case("filtering-wide", window = WindowSize(840, 600), keyboard = true) {
+                ShellScreen(ShellState(Destination.List), {}) { FixtureListScreen(ListFixtureStates.filtering) }
+            },
+            case("filtering-wide-portrait", window = WindowSize(600, 960), keyboard = true) {
+                ShellScreen(ShellState(Destination.List), {}) { FixtureListScreen(ListFixtureStates.filtering) }
+            },
             case("refreshing", content = screen(ListFixtureStates.refreshing)),
             case("undo-snackbar", content = screen(ListFixtureStates.undoSnackbar, ListFixtureStates.undoMessage)),
             case("completed-snackbar", content = screen(ListFixtureStates.completedSnackbar, ListFixtureStates.completedMessage)),

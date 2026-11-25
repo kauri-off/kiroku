@@ -57,4 +57,21 @@ class ListFilterKeyboardTest {
                 assertTrue("Message $message overlaps the keyboard at $keyboardTop px", message.bottom <= keyboardTop)
             }
     }
+
+    @Test
+    fun everyMatchCanScrollClearOfTheKeyboardInACompactShellAndAWideWindow() {
+        val state = ListFixtureStates.filtering
+        val last = state.matches!!.last().title
+        for ((width, height) in listOf(411 to 550, 840 to 600)) {
+            Shot
+                .launch(Variant.RuLight, heightDp = height, widthDp = width, keyboard = true) {
+                    ShellScreen(ShellState(Destination.List), {}) { FixtureListScreen(state) }
+                }.use { shot ->
+                    shot.scrollRangeDp()
+                    val keyboardTop = shot.windowHeightPx - shot.dpToPx(SystemBars.KEYBOARD_DP)
+                    assertTrue(shot.visibleTextBounds(last).bottom <= keyboardTop)
+                    assertTrue(shot.scrolledContentBottomPx() <= keyboardTop)
+                }
+        }
+    }
 }

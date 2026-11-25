@@ -32,6 +32,12 @@ class UserListScreenshots : ScreenshotRegistry() {
             case("by-score", content = screen(states.byScore)),
             case("sort-sheet", content = screen(states.sortSheet)),
             case("filtering", keyboard = true, content = screen(states.filtering)),
+            case("filtering-wide", window = WindowSize(840, 600), keyboard = true) {
+                ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(states.filtering) }
+            },
+            case("filtering-wide-portrait", window = WindowSize(600, 960), keyboard = true) {
+                ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(states.filtering) }
+            },
             case("filter-no-matches-wide", window = WindowSize(840, 600), keyboard = true, content = screen(userListNoMatches)),
             case("filter-no-matches-compact", window = WindowSize(411, 550), keyboard = true) {
                 ShellScreen(ShellState(Destination.Profile), {}) { FixtureListScreen(userListNoMatches) }

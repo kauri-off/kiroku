@@ -89,6 +89,7 @@ class UserListViewModel(
     )
 
     private val model = MutableStateFlow(Model(tab = saved.get<String>(TAB)?.let(::tabOf) ?: ListStatus.Watching))
+    private val listFilter = ListFilter()
     private val typed = mutableStateOf(saved.get<String>(FILTER))
     private val lane = background.limitedParallelism(1)
     private var load: Job? = null
@@ -209,7 +210,7 @@ class UserListViewModel(
             when {
                 read is UserListState.None -> ListContent.Failed(read.error.toListFailure())
                 entries == null -> ListContent.Loading
-                else -> tabs(model, entries, read is UserListState.Whole, filter)
+                else -> tabs(model, entries, read is UserListState.Whole)
             }.also { built = it }
         val statuses = (content as? ListContent.Tabs)?.statuses
         return ListState(
@@ -228,6 +229,7 @@ class UserListViewModel(
                 },
             readingAgain = read is UserListState.Whole && read.again != null,
             listSize = (read as? UserListState.Whole)?.entries?.size,
+            matches = listFilter.rows(content, filter),
         )
     }
 
@@ -236,21 +238,26 @@ class UserListViewModel(
         model: Model,
         entries: List<ListEntry>,
         whole: Boolean,
-        filter: String?,
     ): ListContent.Tabs {
+        val previousOrder = orders
+        val order = ordered(model, entries, whole)
+        val previous = built as? ListContent.Tabs
+        if (order === previousOrder &&
+            previous != null &&
+            previous.pages.all { (status, page) -> page.ordering == (model.orderings[status] ?: 0) }
+        ) {
+            return previous
+        }
         val byId = entries.associateBy { it.anime.id }
-        val ids = ordered(model, entries, whole).ids
         val before = rows
         val after = HashMap<AnimeId, BuiltRow>(entries.size)
-        val shown = (built as? ListContent.Tabs)?.pages
         val content =
             ListContent.Tabs(
-                ids.mapValues { (status, tab) ->
+                order.ids.mapValues { (status, tab) ->
                     val sort = sortOf(model, status)
-                    val all = tab.map { id -> row(byId.getValue(id), sort, model.language, before, after) }
-                    val rows = if (filter.isNullOrEmpty()) all else all.filter { it.title.contains(filter, ignoreCase = true) }
+                    val rows = tab.map { id -> row(byId.getValue(id), sort, model.language, before, after) }
                     val page = ListPage(sort.sort, sortsFor(status, withAiring = false), rows, model.orderings[status] ?: 0, sort.direction)
-                    shown?.get(status)?.takeIf { it == page } ?: page
+                    previous?.pages?.get(status)?.takeIf { it == page } ?: page
                 },
             )
         rows = after
@@ -265,7 +272,12 @@ class UserListViewModel(
         whole: Boolean,
     ): Orders {
         val last = orders
-        val statuses = tabOrder(entries.map { it.status }.toSet())
+        val statuses =
+            last
+                ?.ids
+                ?.keys
+                ?.toList()
+                ?.takeIf { last.over === entries } ?: tabOrder(entries.map { it.status }.toSet())
         val sorts = statuses.associateWith { sortOf(model, it) }
         if (last != null &&
             last.over === entries &&

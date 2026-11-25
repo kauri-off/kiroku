@@ -21,7 +21,9 @@ class PlusOneGuard(
         ids: List<AnimeId>,
         at: Long,
     ) {
-        val left = shown.indices.firstOrNull { shown[it] !in ids }
+        if (shown == ids) return
+        val present = ids.toHashSet()
+        val left = shown.indices.firstOrNull { shown[it] !in present }
         shown = ids
         if (left == null) return
         from = if (at < until) minOf(from, left) else left

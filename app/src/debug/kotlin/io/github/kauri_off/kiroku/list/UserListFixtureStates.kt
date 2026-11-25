@@ -79,20 +79,7 @@ object UserListFixtureStates {
             Fixtures.unknownListStatus,
         )
 
-    val filtering =
-        watching.copy(
-            filter =
-                FixtureAnime.longTitle.titles.romaji
-                    .substringBefore(' '),
-            content =
-                ListFixtureStates.tabs(
-                    set.otherUserEntries,
-                    readOnly = true,
-                    filter =
-                        FixtureAnime.longTitle.titles.romaji
-                            .substringBefore(' '),
-                ),
-        )
+    val filtering = watching.withFilter(notShown("Kagerou"))
 
     val sessionExpired = watching.copy(sessionExpired = true)
 
