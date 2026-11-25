@@ -1,64 +1,37 @@
-# Kiroku
+<p align="center">
+  <img src="docs/assets/readme-banner.png" alt="Kiroku" width="900">
+</p>
 
-An unofficial Android client for [MyAnimeList](https://myanimelist.net), built with Kotlin, Jetpack Compose and
-Material 3.
+<p align="center">Your MyAnimeList anime list on Android.</p>
 
-**Kiroku is not affiliated with, endorsed by or sponsored by MyAnimeList Co., Ltd. or AniList.** "MyAnimeList" is a
-trademark. The name Kiroku (記録) is Japanese for "record".
+<p align="center">
+  <a href="https://github.com/kauri-off/kiroku/releases/latest/download/kiroku.apk"><strong>Download APK</strong></a>
+  · <a href="https://github.com/kauri-off/kiroku/releases/latest">Latest release</a>
+  · <a href="README.ru.md">По-русски</a>
+</p>
 
-[Русская версия](README.ru.md)
+## What you can do
 
-## Status
+- **Track what you watch.** Mark an episode watched in one tap and update your statuses and scores in MyAnimeList.
+- **Keep up with airing anime.** See how many episodes have aired and how many you have left to watch. Get notified
+  when a new episode of a show you're watching airs.
+- **Find your next anime.** Search by title, browse this season's anime and rankings, and explore related anime and
+  recommendations.
+- **Explore profiles.** View your watching statistics and open other users' public lists.
 
-The project is in early development and has no release yet. These documents say what is being built; the code and
-its tests say how:
+The app is available in English and Russian.
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the decisions and their reasons, and what must hold
-- [ROADMAP.md](ROADMAP.md): the milestones, and what comes after the first release
-- [docs/GLOSSARY.md](docs/GLOSSARY.md): the English and Russian terms used in the app
+## Get started
 
-## What it will be
+1. Download and open `kiroku.apk` on Android 8.0 or later. If Android asks, allow app installation from the app you used
+   to open the APK.
+2. Open Kiroku and sign in to MyAnimeList to sync your list. You can also browse anime without signing in.
+3. Allow notifications if you'd like alerts for new episodes. You can adjust the timing in Kiroku's notification settings.
 
-Kiroku is a rewrite, from scratch, of the idea behind the Flutter app
-[dailyAL](https://github.com/JICA98/DailyAL), which is no longer maintained. The first release does less than dailyAL
-and aims to do it more cleanly:
+You can get updates through [GitHub Releases](https://github.com/kauri-off/kiroku/releases) or add the repository to
+Obtainium.
 
-- your anime list, with quick episode updates;
-- search, and a title page with related titles and statistics;
-- for airing shows: how many episodes have aired, how many there are in total, and how many of the aired ones you
-  have yet to watch;
-- your profile and statistics, and other users' public lists and statistics;
-- a notification when a new episode of a show you watch has aired, and no notification for anything else;
-- Russian and English.
+[Privacy](PRIVACY.md) · [Roadmap](ROADMAP.md) · [Report an issue](https://github.com/kauri-off/kiroku/issues) ·
+[Contributing](CONTRIBUTING.md) · [GPL-3.0-or-later](LICENSE)
 
-The interface is built from standard Material 3 components.
-
-See the [privacy statement](PRIVACY.md) for what Kiroku sends and stores.
-
-The first release is a starting point. Manga, a deeper title page, a weekly schedule and read-only forums are planned
-after it; the roadmap lists what is planned and what is not built.
-
-## Building
-
-Set `JAVA_HOME` to your JDK 17 installation and `ANDROID_HOME` to your Android SDK directory, with the SDK
-command-line tools in `cmdline-tools/latest`. The Gradle wrapper downloads Gradle.
-
-```sh
-git clone https://github.com/kauri-off/kiroku.git
-cd kiroku
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.2"
-./gradlew :app:assembleDebug
-```
-
-Install `app/build/outputs/apk/debug/app-debug.apk` on Android 8.0 or later. A fresh Debug install built without a
-MyAnimeList client ID opens in Demo mode without an account.
-
-## Contributing
-
-Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and fork setup, including
-MyAnimeList sign-in.
-
-## Licence
-
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+Kiroku is an unofficial client. It is not affiliated with or endorsed by MyAnimeList or AniList.

@@ -57,10 +57,10 @@ English, light and dark, on demo data. No MAL client id is needed.
 
 Goal: sign in and use a real list and live title pages (ARCHITECTURE sections 3 and 7).
 
-Acceptance: over three days of use, every list change made in the app is on the website and the reverse; no
-unexpected sign-out occurs; three title pages match myanimelist.net for related titles and
-statistics; a `myanimelist.net/anime/{id}` link, once allowed in Android's settings, opens the title page with the
-List beneath it; issues found in the Russian strings are fixed.
+Acceptance: every list change syncs between the app and the website in both directions. No unexpected sign-out occurs.
+Three title pages match myanimelist.net for related titles and statistics. A `myanimelist.net/anime/{id}` link,
+once allowed in Android's settings, opens the title page with the List beneath it. Issues found in the Russian
+strings are fixed.
 
 - [x] **M2-01 [O] Client id on the machine.**
 
@@ -140,7 +140,7 @@ List beneath it; issues found in the Russian strings are fixed.
   **Check:** all screenshots rendered before and after, and the differences named in the pull request.
 
 - [ ] **M2-33 [O] Milestone check.** The orchestrator runs the app once on the emulator against the sandbox and
-  measures a list of 3000 entries on the phone. Use the preview build for three days and review the Russian strings.
+  measures a list of 3000 entries on the phone. Check the preview build and review the Russian strings.
   **Needs:** M2-18, M2-20, M2-21, M2-23, M2-25, M2-26, M2-28, M2-29, M2-31.
   **Check:** the acceptance of M2; file findings as tasks and fix the Russian string issues.
 
@@ -149,9 +149,8 @@ List beneath it; issues found in the Russian strings are fixed.
 Goal: the List and the title page show aired counts, "to watch" and next episodes, and Watching is ordered "Up
 next" (ARCHITECTURE section 4).
 
-Acceptance: at the start, the aired counts of three airing titles, one of them on a break, agree with a source
-other than AniList (the broadcaster's or a streaming service's schedule). Over seven days, verify there are no incorrect
-"aired" or "to watch" values on a title with an exact count.
+Acceptance: the aired counts of three airing titles, including one on a break, match broadcaster or streaming
+schedules. Verify that "aired" and "to watch" values are correct for titles with exact counts.
 
 - [x] **M3-01 Recorded answers of AniList.**
 
@@ -177,9 +176,9 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 - [x] **M3-12 [O] Emulator run.**
 
-- [ ] **M3-13 [O] Seven-day airing check.** Compare aired counts for three titles on the test list,
-  including one on a break, against broadcaster or streaming schedules. Use the preview build for seven days,
-  then use the M3-10 counts from the phone to resolve item 3 of section 13.
+- [ ] **M3-13 [O] Airing check.** In the preview build, compare aired counts for three titles on the test list,
+  including one on a break, against broadcaster or streaming schedules. Use the M3-10 counts from the phone to
+  resolve item 3 of section 13.
   **Needs:** M3-12.
   **Check:** the acceptance of M3; item 3 of section 13 holds the counts; a wrong value is filed as a task with
   its reason from M3-10.
@@ -188,9 +187,9 @@ other than AniList (the broadcaster's or a streaming service's schedule). Over s
 
 Goal: the notifications of ARCHITECTURE section 5 and their settings.
 
-Acceptance: over seven days with notifications on, every entry of "Recently sent" matches an episode that had aired
-by AniList's schedule for a title in Watching; no episode of a watched title with an exact count is
-missing from it; there are no duplicates.
+Acceptance: with notifications on, every entry of "Recently sent" matches an episode that had aired by
+AniList's schedule for a title in Watching. No episode of a watched title with an exact count is missing,
+and there are no duplicates.
 
 - [x] **M4-01 [A] What is notifiable.**
 
@@ -224,8 +223,8 @@ missing from it; there are no duplicates.
 
 - [x] **M4-16 [O] Emulator run.**
 
-- [ ] **M4-17 [O] Seven-day notification check.** Use the preview build for seven days with notifications
-  enabled during normal phone use. Compare the sent notifications with AniList's schedule for titles in Watching.
+- [ ] **M4-17 [O] Notification check.** Use the preview build with notifications enabled during normal phone
+  use. Compare the sent notifications with AniList's schedule for titles in Watching.
   **Needs:** M4-16, M3-13.
   **Check:** the acceptance of M4; a missing, a duplicate or a wrong notification is filed as a task with its lines
   of M4-15's log and the states the notification settings showed.
@@ -304,8 +303,8 @@ Goal: the Settings and About screens, every screen on wide windows and with a sc
 release.
 
 Acceptance: a tag `v0.9.0` produces a signed APK on a GitHub Release that installs next to the debug build and signs
-in. After two weeks of daily use of `v0.9.x`, "Recently sent" meets the acceptance of M4 and no list change was
-lost; the Russian strings of M7 are reviewed; then the orchestrator tags `v1.0.0`.
+in. On `v0.9.x`, "Recently sent" meets the acceptance of M4 and no list change is lost. The Russian strings
+of M7 are reviewed. The orchestrator then tags `v1.0.0`.
 
 Not to forget:
 
