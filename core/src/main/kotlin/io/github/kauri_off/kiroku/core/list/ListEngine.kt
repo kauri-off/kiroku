@@ -86,6 +86,7 @@ class ListEngine(
 
     private class Direct(
         val write: ListWrite,
+        val owner: SignInId,
         val result: CompletableDeferred<Outcome<Unit>>,
         override val list: Int,
     ) : Request {
@@ -271,12 +272,24 @@ class ListEngine(
 
     override fun observeEntries(): Flow<List<ListEntry>> = shown(emptyList()) { local.observeEntries() }
 
-    override fun observeOwnedEntries(): Flow<OwnedEntries> =
-        shown(OwnedEntries(null, emptyList())) { session -> local.observeEntries().map { OwnedEntries(session.owner, it) } }
+    override fun observeOwnedEntries(): Flow<OwnedEntries> = ownedEntries { local.observeEntries() }
 
     override fun observeOwnedEntriesOf(ids: Set<AnimeId>): Flow<OwnedEntries> =
+        ownedEntries { local.observeEntriesOf(ids).map { it.values.toList() } }
+
+    private fun ownedEntries(rows: () -> Flow<List<ListEntry>>): Flow<OwnedEntries> =
         shown(OwnedEntries(null, emptyList())) { session ->
-            local.observeEntriesOf(ids).map { OwnedEntries(session.owner, it.values.toList()) }
+            flow {
+                val generation = locked { list.takeIf { local.state().owner == session.owner } } ?: return@flow
+                rows().collect { entries ->
+                    val snapshot =
+                        locked {
+                            val owner = local.state().owner
+                            if (generation == list && owner == session.owner) OwnedEntries(owner, entries) else null
+                        }
+                    if (snapshot != null) emit(snapshot)
+                }
+            }
         }
 
     override fun observeEntry(id: AnimeId): Flow<ListEntry?> = shown(null) { local.observeEntry(id) }
@@ -467,7 +480,10 @@ class ListEngine(
         val result = CompletableDeferred<Outcome<Unit>>()
         val refusal =
             try {
-                locked { refusal(write, checkNotNull(settled)) ?: null.also { accept(Direct(write, result, list)) } }
+                locked {
+                    val active = checkNotNull(settled)
+                    refusal(write, active) ?: null.also { accept(Direct(write, checkNotNull(active.owner), result, list)) }
+                }
             } catch (_: StoreFailure) {
                 DataError.StorageError
             }
@@ -481,7 +497,7 @@ class ListEngine(
     }
 
     // A sync nobody asked for waits for the end of MAL's refusal (section 2.3), and is left when a download came meanwhile.
-    private fun syncUnasked() {
+    private fun syncUnasked(owner: SignInId) {
         scope.launch {
             var waited = false
             while (true) {
@@ -490,7 +506,7 @@ class ListEngine(
                 waited = true
                 delay(wait)
             }
-            if (!waited || syncedAt.value == null) sync()
+            if (!waited || syncedAt.value == null) sync(owner)
         }
     }
 
@@ -620,7 +636,7 @@ class ListEngine(
             }
         if (failure != null) {
             hold(failure)
-            if (failure.error.unsure) syncUnasked()
+            if (failure.error.unsure) failure.list?.let(::syncUnasked)
         }
     }
 
@@ -673,7 +689,7 @@ class ListEngine(
             }
         val retry = last.values?.let { ListWrite.Save(last.anime, it, only) } ?: ListWrite.Remove(last.anime)
         hold(WriteFailure(error, retry, owner, untouched))
-        syncUnasked()
+        owner?.let(::syncUnasked)
     }
 
     // N9: the write is applied to the entry as MAL has it now, and nothing is sent when that changes nothing.
@@ -747,7 +763,7 @@ class ListEngine(
                 unexpected(e)
                 true
             }
-        if (owes) syncUnasked()
+        if (owes) syncUnasked(direct.owner)
     }
 
     private fun Outcome<ListEntry?>.recorded(): Outcome<ListRecord?> =
@@ -790,7 +806,7 @@ class ListEngine(
             forget(owner)
         } else {
             syncedAt.value = state.syncedAt
-            restore()
+            restore(checkNotNull(owner))
         }
         settled = session
     }
@@ -810,11 +826,11 @@ class ListEngine(
     }
 
     // W5: an edit whose request died with an earlier process returns to the confirmed values, and the list is synced.
-    private suspend fun restore() {
+    private suspend fun restore(owner: SignInId) {
         if (restored) return
         val returned = returnToConfirmed()
         restored = true
-        if (returned) syncUnasked()
+        if (returned) syncUnasked(owner)
     }
 
     // The requests of these titles were cut off, so what MAL has of them is not known: a sync is owed.

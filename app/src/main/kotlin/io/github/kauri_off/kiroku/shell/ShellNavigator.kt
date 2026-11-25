@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.search.BrowseKey
+import io.github.kauri_off.kiroku.title.TitleKey
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
 class ShellNavigator(
@@ -73,7 +74,11 @@ class ShellNavigator(
         val search = stacks.getValue(Destination.Search)
         val retired =
             search.indexOfFirst { key ->
-                key is BrowseKey && key.list == BrowseList.Suggestions && (owner == null || key.owner != owner.value)
+                when {
+                    key is BrowseKey && key.list == BrowseList.Suggestions -> owner == null || key.owner != owner.value
+                    key is TitleKey && key.suggestionsOwner != null -> key.suggestionsOwner != owner?.value
+                    else -> false
+                }
             }
         if (retired < 0) return
         if (current == Destination.Search) way = Way.Up

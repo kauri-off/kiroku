@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.design.component.LocalRouteImages
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.search.BrowseKey
+import io.github.kauri_off.kiroku.title.TitleKey
 
 internal val LocalSuggestionsOwner = staticCompositionLocalOf<SignInId?> { null }
 
@@ -67,6 +68,7 @@ fun ShellRoute(
             var suggestionsOwner: SignInId? = null
             val stack =
                 navigator.stackOf(destination).mapIndexed { depth, key ->
+                    if (key is TitleKey && key.suggestionsOwner != null) suggestionsOwner = SignInId(key.suggestionsOwner)
                     val entry = provider(key).scopedTo(key, destination, depth, navigator, images, suggestionsOwner)
                     if (key is BrowseKey && key.list == BrowseList.Suggestions) suggestionsOwner = key.owner?.let(::SignInId)
                     entry

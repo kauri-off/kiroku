@@ -191,8 +191,8 @@ class SearchRouteTest {
         graph.demo.server.offline.value = true
         search()
         typeKag()
-        compose.onNode(inView("No connection")).assertExists()
-        compose.onNode(inView("Retry")).assertExists()
+        assertTrue(compose.onAllNodes(inView("No connection")).fetchSemanticsNodes().isNotEmpty())
+        compose.onNode(inView("Retry") and hasClickAction()).assertExists()
         graph.demo.server.offline.value = false
         settle()
         compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertExists()
@@ -447,6 +447,66 @@ class SearchRouteTest {
         compose.onNodeWithText(FixtureAnime.film.titles.romaji).assertExists()
         compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertDoesNotExist()
         assertEquals(listOf(owner, owner, replacement, replacement), requests)
+    }
+
+    @Test
+    fun `Change opens the same-owner editor after the Suggestions branch is popped`() {
+        val active = MutableStateFlow<Session>(Fixtures.reference.session)
+        openAddedSuggestion(active)
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+    }
+
+    @Test
+    fun `Change returns to the Suggestions editor from another tab`() {
+        val active = MutableStateFlow<Session>(Fixtures.reference.session)
+        openAddedSuggestion(active)
+        compose.onNodeWithText("Profile").performClick()
+        settle()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+    }
+
+    @Test
+    fun `Change from a retired Suggestions sign-in cannot open an editor`() {
+        val active = MutableStateFlow<Session>(Fixtures.reference.session)
+        openAddedSuggestion(active)
+        active.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNodeWithText("Top rated").assertExists()
+    }
+
+    private fun openAddedSuggestion(active: MutableStateFlow<Session>) {
+        val anime = FixtureAnime.notOnListAiring
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = active
+                    }
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId) =
+                            BrowseSession { _, _ -> Outcome.Success(Page(listOf(Ranked(null, anime)), null)) }
+                    }
+            }
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNode(hasText(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        compose.onNodeWithText("Add to list").performClick()
+        settle()
+        compose.onNodeWithText("Change").assertExists()
     }
 
     @Test

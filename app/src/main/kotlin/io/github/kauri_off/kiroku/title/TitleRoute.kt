@@ -26,6 +26,7 @@ import kotlinx.serialization.Transient
 @Serializable
 data class TitleKey(
     val id: Long,
+    val suggestionsOwner: String? = null,
 ) : NavKey {
     // Not saved: a page restored after process death starts from the store.
     @Transient
