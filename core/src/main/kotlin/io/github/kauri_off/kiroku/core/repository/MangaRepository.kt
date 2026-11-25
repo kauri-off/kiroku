@@ -20,8 +20,10 @@ interface MangaRepository {
         owner: SessionOwner,
     ): Outcome<StoredManga?>
 
+    // Null when the check at the first dispatch deferred the request.
     suspend fun refresh(
         id: MangaId,
         owner: SessionOwner,
-    ): Outcome<StoredManga>
+        canDispatch: () -> Boolean,
+    ): Outcome<StoredManga>?
 }

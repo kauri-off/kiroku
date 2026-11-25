@@ -22,6 +22,9 @@ import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -57,15 +60,32 @@ class MalMangaRepository(
     override suspend fun refresh(
         id: MangaId,
         owner: SessionOwner,
-    ): Outcome<StoredManga> {
+        canDispatch: () -> Boolean,
+    ): Outcome<StoredManga>? {
         val ready = storage { inSettledOwner(owner) {} }
-        if (ready is Outcome.Failure) return ready
+        if (ready is Outcome.Failure) return ready.takeIf { canDispatch() }
         val repaired = mutableSetOf<String>()
+        var dispatched = false
+        var deferred = false
         val answer =
-            http
-                .call {
-                    api.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
-                }.clientIdOutcome()
+            try {
+                http
+                    .call {
+                        val service = api
+                        if (!dispatched && !canDispatch()) {
+                            deferred = true
+                            val context = currentCoroutineContext()
+                            context.cancel()
+                            context.ensureActive()
+                        }
+                        dispatched = true
+                        service.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
+                    }.clientIdOutcome()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                if (deferred) return null
+                throw e
+            }
         if (answer is Outcome.Failure) {
             return session.withOwner(owner) { answer } ?: Outcome.Failure(DataError.ListEnded)
         }

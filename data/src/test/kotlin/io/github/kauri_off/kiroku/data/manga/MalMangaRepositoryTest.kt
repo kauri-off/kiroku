@@ -48,6 +48,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 class MalMangaRepositoryTest {
@@ -242,7 +243,7 @@ class MalMangaRepositoryTest {
                 val id = MangaId(1)
                 val repository = repository(db)
                 val before = repository.observeOwner().first()
-                val request = async(Dispatchers.Default) { repository.refresh(id, before) }
+                val request = async(Dispatchers.Default) { repository.refresh(id, before) { true } }
                 try {
                     assertEquals(
                         "/v2/manga/1",
@@ -263,6 +264,37 @@ class MalMangaRepositoryTest {
         }
     }
 
+    @Test
+    fun `refresh leaving a held preflight defers while hidden without sending to MAL`() {
+        serve("manga_completed")
+        KirokuDatabase.builder(context, null).build().withDatabase { db ->
+            runBlocking {
+                val entered = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val repository =
+                    MalMangaRepository(network.http, {
+                        entered.complete(Unit)
+                        release.await()
+                        db
+                    }, clock, session) {}
+                val id = MangaId(1)
+                val owner = repository.observeOwner().first()
+                val visible = AtomicBoolean(true)
+                val pending = async { repository.refresh(id, owner, visible::get) }
+                withTimeout(5_000) { entered.await() }
+                visible.set(false)
+                release.complete(Unit)
+                assertNull(pending.await())
+                assertEquals(0, network.api.requestCount)
+                assertTrue(network.unexpected.isEmpty())
+
+                visible.set(true)
+                assertTrue(repository.refresh(id, owner, visible::get) is Outcome.Success)
+                assertEquals(1, network.api.requestCount)
+            }
+        }
+    }
+
     private fun repository(
         db: KirokuDatabase,
         awaitList: suspend () -> Unit = {},
@@ -270,7 +302,7 @@ class MalMangaRepositoryTest {
 
     private suspend fun MangaRepository.stored(id: MangaId) = stored(id, observeOwner().first())
 
-    private suspend fun MangaRepository.refresh(id: MangaId) = refresh(id, observeOwner().first())
+    private suspend fun MangaRepository.refresh(id: MangaId) = refresh(id, observeOwner().first()) { true }
 
     private fun <T> KirokuDatabase.withDatabase(block: (KirokuDatabase) -> T): T =
         try {

@@ -46,7 +46,7 @@ internal class MangaTitleViewModel(
     private var owner: SessionOwner? = null
     private var watchingOwner = false
     private var reconnectPending = false
-    private var resumeCheck = false
+    private var resumeForce: Boolean? = null
     private val loads =
         ShownLoads(
             viewModelScope,
@@ -59,7 +59,7 @@ internal class MangaTitleViewModel(
                 reconnectPending = true
                 load(force = false)
             },
-            shownAgain = { if (resumeCheck || reconnectPending) load(force = false) },
+            shownAgain = { if (resumeForce != null || reconnectPending) load(force = false) },
             trackOutagesWhileShown = manga != null,
         )
     val shown = loads.shown
@@ -100,7 +100,7 @@ internal class MangaTitleViewModel(
                 load?.cancel()
                 load = null
                 reconnectPending = false
-                resumeCheck = false
+                resumeForce = false
                 loads.started()
                 page.value = Page()
                 load(force = false)
@@ -116,7 +116,8 @@ internal class MangaTitleViewModel(
             return
         }
         val owner = owner ?: return
-        resumeCheck = false
+        val manual = force || resumeForce == true
+        resumeForce = null
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
                 val before = page.value
@@ -133,16 +134,24 @@ internal class MangaTitleViewModel(
                     }
                 page.value = before.copy(cached = cached)
                 if (!loads.isShowing) {
-                    resumeCheck = true
+                    resumeForce = manual
                     return@launch
                 }
-                if (!force && !reconnectPending && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
+                if (!manual && !reconnectPending && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
+                val reconnect = reconnectPending
                 reconnectPending = false
                 loads.started()
-                page.value = page.value.copy(problem = null, refreshing = force)
-                val answer = source.refresh(id, owner)
+                page.value = page.value.copy(problem = null, refreshing = manual)
+                val answer = source.refresh(id, owner) { loads.isShowing }
                 ensureActive()
                 load = null
+                if (answer == null) {
+                    page.value = before.copy(cached = cached)
+                    resumeForce = manual
+                    reconnectPending = reconnectPending || reconnect
+                    load(force = false)
+                    return@launch
+                }
                 when (answer) {
                     is Outcome.Success -> {
                         page.value = Page(cached = answer.value, coverAttempt = before.coverAttempt + 1)

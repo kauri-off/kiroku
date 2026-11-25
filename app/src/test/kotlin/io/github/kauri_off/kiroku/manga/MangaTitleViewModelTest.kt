@@ -232,9 +232,111 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `a pull deferred during cache lookup still refreshes a fresh row on return`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val held = CompletableDeferred<StoredManga>()
+            var lookups = 0
+            val viewModel = title(lookup = { if (lookups++ == 0) saved else held.await() })
+            try {
+                val screen = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                runCurrent()
+                assertEquals(2, lookups)
+                screen.cancel()
+                runCurrent()
+                held.complete(saved)
+                runCurrent()
+                assertEquals(0, reads)
+
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(true, shown(viewModel).refreshing)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a pull deferred during repository preflight sends once after return and survives hiding after dispatch`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val held = CompletableDeferred<Unit>()
+            var preflights = 0
+            val viewModel =
+                title(saved, preflight = {
+                    preflights++
+                    held.await()
+                })
+            try {
+                val first = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                runCurrent()
+                assertEquals(1, preflights)
+                first.cancel()
+                runCurrent()
+                held.complete(Unit)
+                runCurrent()
+                assertEquals(0, reads)
+
+                val second = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+                second.cancel()
+                runCurrent()
+                answer.complete(Outcome.Success(saved))
+                runCurrent()
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(1, shown(viewModel).coverAttempt)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a replacement owner loads on a brief re-show without reading for the retired owner again`() =
+        runTest(dispatcher) {
+            val original = owners.value
+            val replacement = SessionOwner(SignInId("replacement"))
+            val old = StoredManga(mangaFixture, now)
+            val updated = old.copy(details = old.details.copy(chapters = 183))
+            val lookups = mutableListOf<SessionOwner>()
+            val viewModel =
+                title(lookup = {
+                    lookups += it
+                    if (it === original) old else null
+                })
+            try {
+                val first = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(old.details, shown(viewModel).details)
+                first.cancel()
+                runCurrent()
+                owners.value = replacement
+                runCurrent()
+                assertEquals(listOf(original), lookups)
+
+                answer.complete(Outcome.Success(updated))
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(listOf(original, replacement), lookups)
+                assertEquals(1, reads)
+                assertEquals(updated.details, shown(viewModel).details)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },
+        preflight: suspend () -> Unit = {},
     ): MangaTitleViewModel =
         MangaTitleViewModel(
             mangaFixture.id,
@@ -249,7 +351,10 @@ class MangaTitleViewModelTest {
                 override suspend fun refresh(
                     id: MangaId,
                     owner: SessionOwner,
-                ): Outcome<StoredManga> {
+                    canDispatch: () -> Boolean,
+                ): Outcome<StoredManga>? {
+                    preflight()
+                    if (!canDispatch()) return null
                     reads++
                     return answer.await()
                 }

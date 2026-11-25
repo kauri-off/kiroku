@@ -60,7 +60,9 @@ open class StartedByMangaLinkApplication :
                     override suspend fun refresh(
                         id: MangaId,
                         owner: SessionOwner,
-                    ): Outcome<StoredManga> {
+                        canDispatch: () -> Boolean,
+                    ): Outcome<StoredManga>? {
+                        if (!canDispatch()) return null
                         reads += id
                         if (reads.size == 1) return Outcome.Failure(DataError.NotFound)
                         return Outcome.Success(StoredManga(mangaFixture, clock.instant()).also { stored = it })
