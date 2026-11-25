@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
+import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
@@ -23,6 +24,7 @@ import io.github.kauri_off.kiroku.data.sandbox.Sandbox
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
+import io.github.kauri_off.kiroku.data.sandbox.SandboxManga
 import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notificationlog.RunLog
@@ -69,8 +71,24 @@ class SandboxGraph internal constructor(
 
     override val madeUp = true
 
-    override val manga: MangaRepository? get() = null
     override val mangaCatalogue: MangaCatalogue? get() = null
+
+    private val mangaFixtures by lazy {
+        SandboxManga(
+            { parts.database },
+            live.account,
+            clock,
+            device,
+            { sandbox.mal.delayMillis },
+            poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
+            unexpected = parts.unexpected,
+            scope = parts.scope,
+        )
+    }
+
+    override val manga: MangaRepository get() = mangaFixtures
+
+    override val mangaList: MangaListReader get() = mangaFixtures
 
     override val search: SearchRepository by lazy {
         val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))

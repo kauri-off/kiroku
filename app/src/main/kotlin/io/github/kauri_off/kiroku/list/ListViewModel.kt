@@ -226,7 +226,7 @@ class ListViewModel(
                     viewModelScope.launch { if (noAiringStored()) orderedAtStart(owners, stale = true) }
                 }
             }
-            is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
+            is ListEvent.Open, is ListEvent.Edit, ListEvent.Search, ListEvent.SignIn, ListEvent.Back, ListEvent.OpenManga -> Unit
         }
     }
 

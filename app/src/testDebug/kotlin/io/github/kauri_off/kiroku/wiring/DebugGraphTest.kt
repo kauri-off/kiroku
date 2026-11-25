@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -58,6 +59,7 @@ class DebugGraphTest {
                 val graph = started(id)
                 assertTrue(graph is DemoGraph)
                 assertNull(graph.manga)
+                assertNull(graph.mangaList)
                 assertEquals(Fixtures.at(device).entries, graph.list.observeEntries().first())
                 assertEquals(Fixtures.at(device).now, graph.clock.instant())
             }
@@ -83,6 +85,8 @@ class DebugGraphTest {
         runTest {
             val first = started("0123abcd")
             assertTrue(first is LiveGraph)
+            assertNull(first.mangaList)
+            assertNotNull(first.mangaCatalogue)
             assertEquals(Session.SignedOut, first.session.observeSession().first())
             assertEquals(emptyList<ListEntry>(), first.list.observeEntries().first())
 
@@ -102,7 +106,8 @@ class DebugGraphTest {
                 val process = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext.job))
                 val graph = createGraph(context, id, device, process, live = { error("The sandbox started the real account") })
                 assertTrue(graph is SandboxGraph)
-                assertNull(graph.manga)
+                assertTrue(graph.manga != null && graph.mangaList != null)
+                assertNull(graph.mangaCatalogue)
                 assertEquals(emptyList<String>(), (graph as SandboxGraph).sandbox.mal.asked)
                 assertEquals(Session.SignedOut, graph.session.observeSession().first())
                 assertTrue(graph.signIn.canStart)

@@ -130,7 +130,7 @@ internal class LiveGraph(
     SignInOwner {
     override val clock: Clock = parts.clock
     private val built = lazy { liveSession(parts) }
-    private val account by built
+    internal val account by built
     override val images = parts.http.callFactory
     private val imageCache =
         LiveImages(parts.context, parts.source.name, { parts.file(notShown("retired-images")) }, images, parts.scope, imageFiles) { owner ->

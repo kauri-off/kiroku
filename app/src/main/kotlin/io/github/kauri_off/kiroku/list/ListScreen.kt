@@ -40,6 +40,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -138,7 +139,14 @@ fun ListScreen(
         modifier = modifier.withoutTravelledTaps(),
         topBar = {
             key(state.activeFilterSession) {
-                TopBar(state.filterText, state.owner, subtitleOf(state), showActions = tabs != null, onEvent = onEvent)
+                TopBar(
+                    state.filterText,
+                    state.owner,
+                    subtitleOf(state),
+                    showActions = tabs != null,
+                    mangaAvailable = state.mangaAvailable,
+                    onEvent = onEvent,
+                )
             }
             if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent)
             if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
@@ -424,6 +432,7 @@ private fun TopBar(
     owner: ListOwner,
     subtitle: String?,
     showActions: Boolean,
+    mangaAvailable: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
     val title: @Composable () -> Unit = {
@@ -440,6 +449,9 @@ private fun TopBar(
         }
     }
     val actions: @Composable RowScope.() -> Unit = {
+        if (mangaAvailable && filter == null) {
+            TextButton(onClick = { onEvent(ListEvent.OpenManga) }) { Text(stringResource(R.string.manga_list_open)) }
+        }
         if (showActions && filter == null) {
             IconButton(onClick = { onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
                 Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))

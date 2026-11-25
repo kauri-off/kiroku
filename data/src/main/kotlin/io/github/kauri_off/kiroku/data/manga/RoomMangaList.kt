@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.MangaListStateRow
 import io.github.kauri_off.kiroku.data.db.UnreadableRow
@@ -33,7 +34,7 @@ internal class RoomMangaList(
     private val source: MangaListSource,
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
-) {
+) : MangaListReader {
     private val dao = database.mangaList()
 
     private data class RefreshQueue(
@@ -43,7 +44,7 @@ internal class RoomMangaList(
 
     private var syncing: RefreshQueue? = null
 
-    suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> =
+    override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> =
         whileOwner(owner) {
             val snapshot =
                 database.transaction {
@@ -54,7 +55,7 @@ internal class RoomMangaList(
             Outcome.Success(snapshot)
         }
 
-    suspend fun refresh(owner: SignInId): Outcome<MangaListSnapshot> {
+    override suspend fun refresh(owner: SignInId): Outcome<MangaListSnapshot> {
         val queue =
             whileOwner(owner) {
                 val current = syncing?.takeIf { it.owner == owner } ?: RefreshQueue(owner).also { syncing = it }

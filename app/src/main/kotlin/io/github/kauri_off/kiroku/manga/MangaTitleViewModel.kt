@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
@@ -85,6 +86,8 @@ internal class MangaTitleViewModel(
         )
     val shown = loads.shown
 
+    private val initialSummary = opened?.takeIf { it.owner == null }
+
     val state =
         combine(
             page,
@@ -92,7 +95,7 @@ internal class MangaTitleViewModel(
             session,
         ) { current, titleLanguage, session ->
             val summary =
-                opened?.details?.takeUnless {
+                opened?.takeIf { it.owner == null || it.owner == session.owner }?.details?.takeUnless {
                     current.problem == MangaTitleProblem.ReadFailed(DataError.ListEnded) || current.problem == MangaTitleProblem.Unavailable
                 }
             val cached = current.cached?.details
@@ -117,7 +120,7 @@ internal class MangaTitleViewModel(
             SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
             MangaTitleState(
                 content =
-                    opened?.let { MangaTitleContent.Shown(it.details, it.details.titles.preferred(it.language)) }
+                    initialSummary?.let { MangaTitleContent.Shown(it.details, it.details.titles.preferred(it.language)) }
                         ?: MangaTitleContent.Loading,
             ),
         )
@@ -227,7 +230,8 @@ internal class MangaTitleViewModel(
                         val problem = MangaTitleProblem.ReadFailed(answer.error)
                         val stillCached = cached.takeUnless { answer.error == DataError.ListEnded }
                         page.value = Page(stillCached, problem, coverAttempt = before.coverAttempt + 1)
-                        if (stillCached != null || (opened != null && answer.error != DataError.ListEnded)) onRefreshFailed(answer.error)
+                        val hasSummary = opened != null && (opened.owner == null || opened.owner == owner.id)
+                        if (stillCached != null || (hasSummary && answer.error != DataError.ListEnded)) onRefreshFailed(answer.error)
                         retryOwed = answer.error == DataError.NoConnection
                         if (retryOwed) load(force = false)
                     }

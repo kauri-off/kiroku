@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_list_open">Манга</string>
+    <string name="manga_list_title">Мой список манги</string>
+    <string name="manga_list_signed_out">Войдите, чтобы увидеть свой список манги</string>
+    <string name="manga_list_empty">Ваш список манги пока пуст</string>
+    <string name="manga_list_reading">Читаю</string>
+    <string name="manga_list_completed">Прочитано</string>
+    <string name="manga_list_on_hold">Отложено</string>
+    <string name="manga_list_dropped">Брошено</string>
+    <string name="manga_list_planned">Запланировано</string>
+</resources>
