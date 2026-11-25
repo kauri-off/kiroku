@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -30,7 +29,7 @@ internal class MangaTitleViewModel(
     private val id: MangaId,
     private val manga: MangaRepository?,
     private val clock: Clock,
-    connection: Connection,
+    private val connection: Connection,
     language: Flow<TitleLanguage>,
     session: Flow<Session>,
     private val onRefreshFailed: (DataError) -> Unit,
@@ -42,29 +41,44 @@ internal class MangaTitleViewModel(
         val coverAttempt: Int = 0,
     )
 
-    private val online = connection.observeOnline().stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private data class ConnectionObservation(
+        val lastOnline: Boolean? = null,
+        val recovery: Long = 0,
+        val observing: Boolean = false,
+    ) {
+        val online: Boolean get() = observing && lastOnline == true
+
+        fun next(online: Boolean): ConnectionObservation =
+            ConnectionObservation(online, recovery + if (online && lastOnline == false) 1 else 0, observing = true)
+    }
+
+    private val observed = MutableStateFlow(ConnectionObservation())
     private val page = MutableStateFlow(Page())
     private var load: Job? = null
     private var owner: SessionOwner? = null
     private var watchingOwner = false
-    private var reconnectPending = false
-    private var reconnectWait: Job? = null
+    private var connectionWatch: Job? = null
+    private var retryOwed = false
+    private var spentRecovery: Long? = null
     private var resumeForce: Boolean? = null
     private val loads =
         ShownLoads(
             viewModelScope,
             connection,
             whenShown = {
+                watchConnection()
                 watchOwner()
                 load(force = false)
             },
-            again = {
-                reconnectPending = true
-                load(force = false)
+            again = {},
+            hidden = {
+                connectionWatch?.cancel()
+                observed.value = observed.value.copy(observing = false)
             },
-            hidden = { reconnectWait?.cancel() },
-            shownAgain = { if (resumeForce != null || reconnectPending) load(force = false) },
-            trackOutagesWhileShown = manga != null,
+            shownAgain = {
+                watchConnection()
+                if (resumeForce != null || retryOwed) load(force = false)
+            },
         )
     val shown = loads.shown
 
@@ -103,29 +117,29 @@ internal class MangaTitleViewModel(
                 owner = current
                 load?.cancel()
                 load = null
-                reconnectPending = false
-                reconnectWait?.cancel()
+                retryOwed = false
+                spentRecovery = null
                 resumeForce = false
-                loads.started()
                 page.value = Page()
                 load(force = false)
             }
         }
     }
 
-    private fun waitForReconnect() {
-        if (reconnectWait?.isActive == true) return
-        reconnectWait =
+    private fun watchConnection() {
+        if (manga == null || !loads.isShowing || connectionWatch?.isActive == true) return
+        connectionWatch =
             viewModelScope.launch {
-                online.first { it }
-                load(force = false, reconnectReady = true)
+                connection.observeOnline().collect { online ->
+                    observed.value = observed.value.next(online)
+                    if (retryOwed) load(force = false)
+                }
             }
     }
 
-    private fun load(
-        force: Boolean,
-        reconnectReady: Boolean = false,
-    ) {
+    private fun availableRecovery(): Long? = observed.value.takeIf { it.online && it.recovery != spentRecovery }?.recovery
+
+    private fun load(force: Boolean) {
         if (!loads.isShowing || load?.isActive == true) return
         val source = manga
         if (source == null) {
@@ -134,11 +148,7 @@ internal class MangaTitleViewModel(
         }
         val owner = owner ?: return
         val manual = force || resumeForce == true
-        if (reconnectPending && !manual && !reconnectReady) {
-            waitForReconnect()
-            return
-        }
-        if (manual) reconnectWait?.cancel()
+        if (!manual && retryOwed && availableRecovery() == null) return
         resumeForce = null
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
@@ -146,6 +156,7 @@ internal class MangaTitleViewModel(
                 val stored = source.stored(id, owner)
                 ensureActive()
                 if (stored is Outcome.Failure && stored.error == DataError.ListEnded) {
+                    retryOwed = false
                     page.value = Page(problem = MangaTitleProblem.ReadFailed(stored.error))
                     return@launch
                 }
@@ -159,38 +170,38 @@ internal class MangaTitleViewModel(
                     resumeForce = manual
                     return@launch
                 }
-                if (reconnectPending && !manual && !reconnectReady) {
-                    load = null
-                    waitForReconnect()
-                    return@launch
-                }
-                if (!manual && !reconnectPending && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
-                val reconnect = reconnectPending
-                reconnectPending = false
-                val automaticRetry = reconnect && !manual
-                loads.started(reconnect = automaticRetry)
+                val owed = retryOwed
+                val recovery = if (owed && !manual) availableRecovery() ?: return@launch else null
+                if (!manual && !owed && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
+                val previouslySpent = spentRecovery
+                if (recovery != null) spentRecovery = recovery
+                retryOwed = false
                 page.value = page.value.copy(problem = null, refreshing = manual)
-                val answer = source.refresh(id, owner) { loads.isShowing && (!automaticRetry || online.value) }
+                val answer =
+                    source.refresh(id, owner) {
+                        loads.isShowing && (recovery == null || observed.value.let { it.online && it.recovery == recovery })
+                    }
                 ensureActive()
                 load = null
                 if (answer == null) {
                     page.value = before.copy(cached = cached)
                     resumeForce = manual
-                    reconnectPending = reconnectPending || reconnect
+                    retryOwed = owed
+                    spentRecovery = previouslySpent
                     load(force = false)
                     return@launch
                 }
                 when (answer) {
                     is Outcome.Success -> {
                         page.value = Page(cached = answer.value, coverAttempt = before.coverAttempt + 1)
-                        loads.ended(null)
                     }
                     is Outcome.Failure -> {
                         val problem = MangaTitleProblem.ReadFailed(answer.error)
                         val stillCached = cached.takeUnless { answer.error == DataError.ListEnded }
                         page.value = Page(stillCached, problem, coverAttempt = before.coverAttempt + 1)
                         if (stillCached != null) onRefreshFailed(answer.error)
-                        loads.ended(answer.error)
+                        retryOwed = answer.error == DataError.NoConnection
+                        if (retryOwed) load(force = false)
                     }
                 }
             }

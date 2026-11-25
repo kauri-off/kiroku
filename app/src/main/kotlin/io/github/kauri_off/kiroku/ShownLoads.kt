@@ -96,8 +96,7 @@ class ShownLoads(
     }
 
     // Each load of the screen, the person's own included, starts and ends here; the error is null when it succeeded.
-    fun started(reconnect: Boolean = false) {
-        if (reconnect) spent = true
+    fun started() {
         owed.value = false
     }
 

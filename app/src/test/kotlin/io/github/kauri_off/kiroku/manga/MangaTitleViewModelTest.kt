@@ -416,6 +416,99 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `a second recovery before admission takes over the queued retry and is spent once`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val held = CompletableDeferred<Unit>()
+            var preflights = 0
+            val viewModel = title(saved, preflight = { if (++preflights == 2) held.await() })
+            try {
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(2, preflights)
+                assertEquals(1, reads)
+
+                online.value = false
+                runCurrent()
+                online.value = true
+                runCurrent()
+                held.complete(Unit)
+                runCurrent()
+                assertEquals(3, preflights)
+                assertEquals(2, reads)
+                assertEquals(List(2) { DataError.NoConnection }, failures)
+
+                answer = CompletableDeferred(Outcome.Success(saved))
+                online.value = false
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(3, reads)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a second recovery after admission remains available for a late failure`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val viewModel = title(saved)
+            try {
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+
+                val admitted = CompletableDeferred<Outcome<StoredManga>>()
+                answer = admitted
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+                online.value = false
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+
+                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                admitted.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                assertEquals(3, reads)
+                assertEquals(List(3) { DataError.NoConnection }, failures)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `only a shown manga card observes connectivity and observes it once`() =
+        runTest(dispatcher) {
+            val viewModel = title(StoredManga(mangaFixture, now))
+            try {
+                runCurrent()
+                assertEquals(0, online.subscriptionCount.value)
+                val first = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, online.subscriptionCount.value)
+                first.cancel()
+                runCurrent()
+                assertEquals(0, online.subscriptionCount.value)
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, online.subscriptionCount.value)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },
