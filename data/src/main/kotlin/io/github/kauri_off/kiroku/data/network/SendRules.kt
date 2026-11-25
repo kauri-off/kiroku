@@ -62,7 +62,10 @@ internal class NoClientId : ProtocolException()
 // What the requests of one [MalHttp.call] put on the network, over all its tries.
 internal class Sends(
     private val limit: Int,
+    val maySendRead: (() -> Boolean)? = null,
+    private val firstRead: (() -> ReadAdmission)? = null,
 ) {
+    private var readAdmitted = false
     private val reads = ConcurrentHashMap<HttpUrl, AtomicInteger>()
 
     @Volatile
@@ -70,6 +73,16 @@ internal class Sends(
 
     // No read of these can be sent once more.
     val spent: Boolean get() = reads.values.any { it.get() >= limit }
+
+    @Synchronized
+    fun checkFirstRead(admit: Boolean) {
+        if (readAdmitted || firstRead == null) return
+        when (firstRead()) {
+            ReadAdmission.Send -> readAdmitted = admit
+            ReadAdmission.Defer -> throw ReadDeferred()
+            ReadAdmission.OwnerEnded -> throw ReadOwnerEnded()
+        }
+    }
 
     fun mayRead(url: HttpUrl): Boolean = reads.computeIfAbsent(url) { AtomicInteger() }.incrementAndGet() <= limit
 }
@@ -94,10 +107,22 @@ internal class NotSentAgain(
     val failure: IOException?,
 ) : ProtocolException()
 
+internal enum class ReadAdmission { Send, Defer, OwnerEnded }
+
+internal class ReadDeferred : ProtocolException()
+
+internal class ReadOwnerEnded : ProtocolException()
+
+private fun Request.checkReadOwner() {
+    if (isRead && tag(Sends::class.java)?.maySendRead?.invoke() == false) throw ReadOwnerEnded()
+}
+
 internal object MarkSends : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (!request.isRead) request.tag(Sends::class.java)?.wrote = true
+        request.checkReadOwner()
+        val sends = request.tag(Sends::class.java)
+        if (request.isRead) sends?.checkFirstRead(admit = false) else sends?.wrote = true
         return chain.proceed(request.newBuilder().tag(Wire::class.java, Wire()).build())
     }
 }
@@ -107,8 +132,11 @@ internal object SendLimits : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
+        request.checkReadOwner()
+        val sends = request.tag(Sends::class.java)
+        if (request.isRead) sends?.checkFirstRead(admit = true)
         val allowed =
-            if (request.isRead) request.tag(Sends::class.java)?.mayRead(request.url) != false else !wire.written.getAndSet(true)
+            if (request.isRead) sends?.mayRead(request.url) != false else !wire.written.getAndSet(true)
         if (!allowed) throw NotSentAgain(wire.status, wire.failure)
         wire.tried = true
         wire.status = null

@@ -15,6 +15,7 @@ import androidx.sqlite.execSQL
 @Database(
     entities = [
         TitleRow::class,
+        MangaRow::class,
         TitleDetailsRow::class,
         TitleRelationRow::class,
         TitleRecommendationRow::class,
@@ -32,6 +33,8 @@ import androidx.sqlite.execSQL
 abstract class KirokuDatabase : RoomDatabase() {
     internal abstract fun titles(): TitleDao
 
+    internal abstract fun manga(): MangaDao
+
     internal abstract fun list(): ListDao
 
     internal abstract fun airing(): AiringDao
@@ -42,7 +45,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 7
+        const val VERSION = 8
 
         val migrations: List<Migration> =
             listOf(
@@ -98,6 +101,14 @@ abstract class KirokuDatabase : RoomDatabase() {
                 },
                 migration(6, 7) {
                     execSQL("ALTER TABLE `title_details` ADD COLUMN `recommendations_include_adult` INTEGER DEFAULT 0")
+                },
+                migration(7, 8) {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `manga` (`id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, " +
+                            "`english` TEXT, `japanese` TEXT, `poster` TEXT, `large_poster` TEXT, `synopsis` TEXT, " +
+                            "`format` TEXT, `publication` TEXT, `volumes` INTEGER, `chapters` INTEGER, " +
+                            "`mean_score` REAL, `fetched_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                    )
                 },
             )
 

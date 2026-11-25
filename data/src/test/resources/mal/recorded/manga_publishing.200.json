@@ -1,0 +1,19 @@
+{
+    "id": 13,
+    "title": "One Piece",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/manga/2/253146.jpg",
+        "large": "https://cdn.myanimelist.net/images/manga/2/253146l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [],
+        "en": "One Piece",
+        "ja": "ONE PIECE"
+    },
+    "synopsis": "Gol D. Roger, a man referred to as the King of the…\n\nTwenty-two years later, a young man by the name of Monkey…\n\n[Written by MAL Rewrite]",
+    "media_type": "manga",
+    "status": "currently_publishing",
+    "num_volumes": 0,
+    "num_chapters": 0,
+    "mean": 9.2
+}

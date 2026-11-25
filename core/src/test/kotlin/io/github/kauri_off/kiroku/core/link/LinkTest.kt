@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.core.link
 import io.github.kauri_off.kiroku.core.fixtures.Links
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class LinkTest {
@@ -10,6 +11,12 @@ class LinkTest {
     fun `ten forms of a title's link name its title`() {
         assertEquals(10, Links.titles.size)
         assertEquals(Links.titles, Links.titles.keys.associateWith(::readLink))
+    }
+
+    @Test
+    fun `manga has its own link even when the numeric ID is also an anime ID`() {
+        assertEquals(Links.manga, Links.manga.keys.associateWith(::readLink))
+        assertNotEquals(readLink("https://myanimelist.net/anime/1"), readLink("https://myanimelist.net/manga/1"))
     }
 
     @Test

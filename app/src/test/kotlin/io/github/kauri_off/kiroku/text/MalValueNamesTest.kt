@@ -220,7 +220,10 @@ private class RecordedCodes(
             }
 
             val folder = File(checkNotNull(RecordedCodes::class.java.getResource("/recorded")).toURI())
-            folder.listFiles { file -> file.extension == "json" }.orEmpty().forEach { walk(JSONTokener(it.readText()).nextValue(), null) }
+            folder
+                .listFiles { file -> file.extension == "json" && !file.name.startsWith("manga_") }
+                .orEmpty()
+                .forEach { walk(JSONTokener(it.readText()).nextValue(), null) }
             return RecordedCodes(codes, genres)
         }
 

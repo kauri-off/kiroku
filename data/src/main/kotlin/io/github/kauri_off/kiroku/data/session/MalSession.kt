@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.session
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -110,6 +111,7 @@ class MalSession internal constructor(
 
     // Null until the token file was read: a file that cannot be read signs nobody out.
     private val state = MutableStateFlow<Stored?>(null)
+    private val owners = MutableStateFlow<SessionOwner?>(null)
 
     // Held by every change of the tokens, a refresh's request to MAL included.
     private val gate = Mutex()
@@ -138,7 +140,7 @@ class MalSession internal constructor(
                 }
             }
         if (first) unread?.let { unexpected(TokensNotRead(it)) }
-        return stored?.also { state.value = it }
+        return stored?.also(::publish)
     }
 
     // Until the file was read, or a sign-in or a sign-out took its place.
@@ -165,6 +167,29 @@ class MalSession internal constructor(
         guarded(Unit) {
             change { kept(Stored.SignedOut) }
         }
+    }
+
+    internal fun observeOwner(): Flow<SessionOwner> =
+        flow {
+            read.await()
+            emitAll(owners.filterNotNull())
+        }
+
+    internal fun isCurrentOwner(owner: SessionOwner): Boolean = owners.value === owner
+
+    internal suspend fun <T : Any> withOwner(
+        owner: SessionOwner,
+        run: suspend () -> T,
+    ): T? {
+        read.await()
+        return gate.withLock { if (isCurrentOwner(owner)) run() else null }
+    }
+
+    private fun publish(value: Stored) {
+        val id = value.session.owner
+        val current = owners.value
+        if (current == null || current.id != id) owners.value = SessionOwner(id)
+        state.value = value
     }
 
     suspend fun whileOwner(
@@ -204,7 +229,7 @@ class MalSession internal constructor(
                 val signedIn = Stored.SignedIn(Tokens(UUID.randomUUID().toString(), grant.access, grant.refresh, now(), grant.lifetime))
                 if (written(signedIn)) {
                     owed = null
-                    state.value = signedIn
+                    publish(signedIn)
                     Outcome.Success(Unit)
                 } else {
                     Outcome.Failure(DataError.StorageError)
@@ -293,7 +318,7 @@ class MalSession internal constructor(
     ) {
         owed = value.takeUnless { written(it) }
         if (owed != null) onWriteFailure()
-        state.value = value
+        publish(value)
         if (owed != null) scope.launch { writeAgain(value) }
     }
 

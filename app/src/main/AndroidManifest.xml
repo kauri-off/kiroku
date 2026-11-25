@@ -105,6 +105,10 @@
                 <data android:pathAdvancedPattern="/anime/[1-9][0-9]*/" />
                 <data android:pathAdvancedPattern="/anime/[1-9][0-9]*/[^/]+" />
                 <data android:pathAdvancedPattern="/anime/[1-9][0-9]*/[^/]+/" />
+                <data android:pathAdvancedPattern="/manga/[1-9][0-9]*" />
+                <data android:pathAdvancedPattern="/manga/[1-9][0-9]*/" />
+                <data android:pathAdvancedPattern="/manga/[1-9][0-9]*/[^/]+" />
+                <data android:pathAdvancedPattern="/manga/[1-9][0-9]*/[^/]+/" />
                 <data android:pathAdvancedPattern="/profile/[^/]+" />
                 <data android:pathAdvancedPattern="/profile/[^/]+/" />
             </intent-filter>

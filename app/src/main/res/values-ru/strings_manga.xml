@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_unavailable">В этом режиме страницы манги недоступны</string>
+    <string name="manga_format_manga">Манга</string>
+    <string name="manga_format_novel">Роман</string>
+    <string name="manga_format_light_novel">Ранобэ</string>
+    <string name="manga_format_one_shot">Ваншот</string>
+    <string name="manga_format_doujinshi">Додзинси</string>
+    <string name="manga_format_manhwa">Манхва</string>
+    <string name="manga_format_manhua">Маньхуа</string>
+    <string name="manga_format_oel">Англоязычная манга</string>
+    <string name="manga_publication_finished">Издание завершено</string>
+    <string name="manga_publication_publishing">Выходит</string>
+    <string name="manga_publication_upcoming">Ещё не вышла</string>
+    <string name="manga_publication_on_hiatus">На паузе</string>
+    <string name="manga_publication_discontinued">Издание прекращено</string>
+    <plurals name="manga_volumes">
+        <item quantity="one">%1$s\u00A0том</item>
+        <item quantity="few">%1$s\u00A0тома</item>
+        <item quantity="many">%1$s\u00A0томов</item>
+        <item quantity="other">%1$s\u00A0тома</item>
+    </plurals>
+    <plurals name="manga_chapters">
+        <item quantity="one">%1$s\u00A0глава</item>
+        <item quantity="few">%1$s\u00A0главы</item>
+        <item quantity="many">%1$s\u00A0глав</item>
+        <item quantity="other">%1$s\u00A0главы</item>
+    </plurals>
+</resources>

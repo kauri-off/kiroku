@@ -680,7 +680,9 @@ object RedirectRule {
             mapOf("host" to "myanimelist.net"),
             mapOf("host" to "www.myanimelist.net"),
         ) +
-            listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*$it") } +
+            listOf("anime", "manga").flatMap { medium ->
+                listOf("", "/", "/[^/]+", "/[^/]+/").map { mapOf("pathAdvancedPattern" to "/$medium/[1-9][0-9]*$it") }
+            } +
             listOf("", "/").map { mapOf("pathAdvancedPattern" to "/profile/[^/]+$it") }
 
     // An intent filter: actions, categories, each data element's attributes, other children, and its own attributes.
@@ -866,7 +868,8 @@ abstract class VerifyRedirectRule : DefaultTask() {
                     { own(it).setAttributeNS(android, "android:permission", "android.permission.BIND_JOB_SERVICE") },
                 "there is no redirect activity" to { own(it).let { activity -> activity.parentNode.removeChild(activity) } },
                 // The link activity claims more of MAL's site, or claims it where a filter cannot match a page exactly.
-                "the link takes a manga's page" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/manga/[1-9][0-9]*")) },
+                "the link takes a manga's sub-pages" to
+                    { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/manga/[1-9][0-9]*/[^/]+/.*")) },
                 "the link takes a title's sub-pages" to
                     { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/[1-9][0-9]*/[^/]+/.*")) },
                 "the link takes an id that is no number" to { linkFilter(it).addData(mapOf("pathAdvancedPattern" to "/anime/.*")) },

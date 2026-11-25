@@ -11,6 +11,8 @@ object MalFields {
         "$SUMMARY,end_date,synopsis,start_season,source,studios,rating,statistics," +
             "related_anime{$SUMMARY},recommendations{$SUMMARY}"
 
+    const val MANGA_DETAILS = "id,title,alternative_titles,main_picture,synopsis,media_type,status,num_volumes,num_chapters,mean"
+
     internal const val LIST_VALUES = "status,score,num_episodes_watched,start_date,finish_date,updated_at,num_times_rewatched"
 
     const val LIST_ENTRY = "$SUMMARY,list_status{$LIST_VALUES}"

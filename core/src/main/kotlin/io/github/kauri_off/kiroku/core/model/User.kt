@@ -2,6 +2,10 @@ package io.github.kauri_off.kiroku.core.model
 
 import java.time.LocalDate
 
+class SessionOwner(
+    val id: SignInId?,
+)
+
 sealed interface Session {
     data object SignedOut : Session
 
