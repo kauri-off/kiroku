@@ -106,8 +106,15 @@ class SandboxMangaRouteTest {
         graph.scenarios.set(Scenario())
         shows("Paper Observatory")
         val before = waited { manga.stored(account.signIn) }
+        graph.scenarios.set(Scenario(offline = true))
         compose.onNodeWithText("Paper Observatory").performClick()
         compose.onNode(isHeading() and hasText("Paper Observatory")).assertExists()
+        shows("No connection")
+        compose.onNodeWithText("Manga\u00A0· Finished").assertDoesNotExist()
+        graph.scenarios.set(Scenario())
+        shows("Manga\u00A0· Finished")
+        compose.activityRule.scenario.recreate()
+        shows("Manga\u00A0· Finished")
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         shows("My manga list")
         shows("Paper Observatory")
@@ -119,6 +126,8 @@ class SandboxMangaRouteTest {
         shows("No connection")
         shows("Paper Observatory")
         assertEquals(before, waited { manga.stored(account.signIn) })
+        compose.onNodeWithText("Paper Observatory").performClick()
+        shows("Manga\u00A0· Finished")
         graph.scenarios.set(Scenario())
         assertEquals(emptyList<Any>(), connections.asked)
     }
@@ -143,6 +152,23 @@ class SandboxMangaRouteTest {
         val after = (waited { manga.stored(next.signIn) } as Outcome.Success).value
         assertEquals(next.owner, after?.owner)
         assertEquals(before?.entries, after?.entries)
+        assertEquals(emptyList<Any>(), connections.asked)
+    }
+
+    @Test
+    fun `the expiry scenario expires a manga read but keeps its cached snapshot`() {
+        val account = signIn()
+        openList()
+        shows("Paper Observatory")
+        val before = waited { manga.stored(account.signIn) }
+
+        graph.scenarios.set(Scenario(sessionExpired = true))
+        val list = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("The Lantern District")))
+        list.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        shows("Session expired")
+        assertEquals(Session.Expired(account.signIn), waited { graph.session.observeSession().first() })
+        assertEquals(before, waited { manga.stored(account.signIn) })
+        shows("Paper Observatory")
         assertEquals(emptyList<Any>(), connections.asked)
     }
 

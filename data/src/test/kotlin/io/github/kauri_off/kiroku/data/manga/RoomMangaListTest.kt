@@ -31,6 +31,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 class RoomMangaListTest {
@@ -220,6 +221,32 @@ class RoomMangaListTest {
             assertEquals(MangaId(1), firstSnapshot.entries.single().id)
             assertEquals(MangaId(2), secondSnapshot.entries.single().id)
             assertEquals(Outcome.Success(secondSnapshot), list.stored(owner))
+        }
+
+    @Test
+    fun `the source checks visibility after waiting for the refresh queue`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val inSource = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            var calls = 0
+            response = {
+                calls++
+                inSource.complete(Unit)
+                release.await()
+                Outcome.Success(listOf(entry()))
+            }
+            val visible = AtomicBoolean(true)
+            val admitted = async { list.refresh(owner, visible::get) }
+            inSource.await()
+            val queued = async(start = CoroutineStart.UNDISPATCHED) { list.refresh(owner, visible::get) }
+            visible.set(false)
+            release.complete(Unit)
+
+            assertTrue(admitted.await() is Outcome.Success)
+            assertNull(queued.await())
+            assertEquals(1, calls)
         }
 
     @Test

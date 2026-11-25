@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -42,6 +43,7 @@ internal class MangaListViewModel(
     private val session = MutableStateFlow<Session?>(null)
     private var load: Job? = null
     private var watch: Job? = null
+    private var refreshPending = false
     private val loads =
         ShownLoads(
             viewModelScope,
@@ -81,6 +83,7 @@ internal class MangaListViewModel(
                     if (previous?.owner != next.owner) {
                         load?.cancel()
                         load = null
+                        refreshPending = false
                         loads.started()
                         page.value = Page()
                     }
@@ -91,6 +94,7 @@ internal class MangaListViewModel(
     }
 
     private fun read(force: Boolean = false) {
+        refreshPending = refreshPending || force
         if (!loads.isShowing || load?.isActive == true) return
         val owner = session.value?.owner ?: return
         load =
@@ -112,13 +116,21 @@ internal class MangaListViewModel(
                     if (snapshot == null) page.value = Page(error = DataError.SessionExpired)
                     return@launch
                 }
-                if (!force && !listStale(snapshot?.syncedAt, clock.instant())) return@launch
-                loads.started()
+                val forced = refreshPending
+                if (!forced && !listStale(snapshot?.syncedAt, clock.instant())) return@launch
+                refreshPending = false
                 page.value = Page(snapshot, refreshing = true)
-                val result = lists.refresh(owner)
+                val result = lists.refresh(owner) { loads.isShowing }
                 ensureActive()
-                if (session.value?.owner != owner) return@launch
+                if (sessions.first().owner != owner || session.value?.owner != owner) return@launch
                 load = null
+                if (result == null) {
+                    refreshPending = refreshPending || forced
+                    page.value = Page(snapshot)
+                    read()
+                    return@launch
+                }
+                refreshPending = false
                 when (result) {
                     is Outcome.Success -> {
                         val updated = result.value.takeIf { it.owner == owner }
@@ -128,7 +140,7 @@ internal class MangaListViewModel(
                     is Outcome.Failure -> {
                         val kept = snapshot.takeUnless { result.error == DataError.ListEnded }
                         page.value = Page(kept, result.error)
-                        if (kept != null && loads.isShowing) onRefreshFailed(result.error)
+                        if (kept != null) onRefreshFailed(result.error)
                         loads.ended(result.error)
                     }
                 }

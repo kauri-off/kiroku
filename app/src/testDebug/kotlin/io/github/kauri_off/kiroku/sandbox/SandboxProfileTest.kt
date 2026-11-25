@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.sandbox
 
+import android.database.DatabaseUtils
+import android.database.sqlite.SQLiteDatabase
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.source.DataSource
@@ -91,6 +94,33 @@ class SandboxProfileTest {
         assertEquals(emptyList<URI>(), connections.asked)
         assertEquals(emptyList<Throwable>(), reports)
     }
+
+    @Test
+    fun `sign-out after restart removes both manga tables without opening the list`() {
+        val a =
+            process { graph ->
+                graph.signIn.start { error("The sandbox opened a browser") }
+                assertEquals(SignInStep.SignedIn, graph.signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
+                val account = graph.session.observeSession().first { it is Session.SignedIn } as Session.SignedIn
+                check(graph.mangaList.refresh(account.signIn) is Outcome.Success)
+                account
+            }
+
+        process { graph ->
+            assertEquals(a, graph.session.observeSession().first())
+            assertEquals(listOf(1L, 4L), mangaRows())
+            graph.signOut(a)
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(listOf(0L, 0L), mangaRows())
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    private fun mangaRows(): List<Long> =
+        SQLiteDatabase.openDatabase(context.getDatabasePath("sandbox.db").path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            listOf("manga_list_state", "manga_list_entry").map { DatabaseUtils.queryNumEntries(db, it) }
+        }
 
     private companion object {
         const val WAIT = 20_000L

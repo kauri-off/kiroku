@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.manga.RoomMangaList
 import io.github.kauri_off.kiroku.data.network.Device
+import io.github.kauri_off.kiroku.data.session.Attempt
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,7 @@ class SandboxManga(
     private val session: MalSession,
     private val clock: Clock,
     private val device: Device,
-    private val waitMillis: () -> Long,
+    private val mal: SandboxMal,
     poster: (Long) -> String,
     unexpected: (Throwable) -> Unit,
     scope: CoroutineScope,
@@ -39,14 +40,32 @@ class SandboxManga(
     MangaRepository {
     private val entries = Entries.map { it.copy(posterUrl = poster(it.id.value)) }
     private val list by lazy {
-        RoomMangaList(database(), session, { answer(entries) }, clock, unexpected).also { repository ->
+        RoomMangaList(database(), session, ::readList, clock, unexpected).also { repository ->
             scope.launch { session.observeSession().collect { repository.forgetRetired(it.owner) } }
         }
     }
 
     override suspend fun stored(owner: SignInId) = withContext(Dispatchers.IO) { list.stored(owner) }
 
-    override suspend fun refresh(owner: SignInId) = withContext(Dispatchers.IO) { list.refresh(owner) }
+    override suspend fun refresh(
+        owner: SignInId,
+        canDispatch: () -> Boolean,
+    ) = withContext(Dispatchers.IO) { list.refresh(owner, canDispatch) }
+
+    suspend fun forgetRetired(owner: SignInId?) = withContext(Dispatchers.IO) { list.forgetRetired(owner) }
+
+    private suspend fun readList(owner: SignInId): Outcome<List<MangaListEntry>> =
+        session.authorised(owner) { bearer ->
+            delay(mal.delayMillis)
+            when {
+                !device.isOnline() -> Attempt.Answered(Outcome.Failure(DataError.NoConnection))
+                !mal.acceptsAccess(bearer) -> Attempt.Rejected
+                else -> Attempt.Answered(Outcome.Success(entries))
+            }
+        }
+
+    private var cardOwner: SessionOwner? = null
+    private val cards = mutableMapOf<MangaId, StoredManga>()
 
     override fun observeOwner() = session.observeOwner()
 
@@ -54,7 +73,7 @@ class SandboxManga(
         id: MangaId,
         owner: SessionOwner,
     ): Outcome<StoredManga?> =
-        session.withOwner(owner) { Outcome.Success(details[id]?.let { StoredManga(it, clock.instant()) }) }
+        session.withOwner(owner) { Outcome.Success(cards[id].takeIf { cardOwner === owner }) }
             ?: Outcome.Failure(DataError.ListEnded)
 
     override suspend fun refresh(
@@ -64,13 +83,17 @@ class SandboxManga(
     ): Outcome<StoredManga>? {
         if (!canDispatch()) return null
         val title = details[id] ?: return Outcome.Failure(DataError.NotFound)
-        val outcome = answer(StoredManga(title, clock.instant()))
-        return session.withOwner(owner) { outcome } ?: Outcome.Failure(DataError.ListEnded)
-    }
-
-    private suspend fun <T> answer(value: T): Outcome<T> {
-        delay(waitMillis())
-        return if (device.isOnline()) Outcome.Success(value) else Outcome.Failure(DataError.NoConnection)
+        delay(mal.delayMillis)
+        return session.withOwner(owner) {
+            if (!device.isOnline()) return@withOwner Outcome.Failure(DataError.NoConnection)
+            if (cardOwner !== owner) {
+                cards.clear()
+                cardOwner = owner
+            }
+            val stored = StoredManga(title, clock.instant())
+            cards[id] = stored
+            Outcome.Success(stored)
+        } ?: Outcome.Failure(DataError.ListEnded)
     }
 
     private val details =

@@ -1,0 +1,164 @@
+package io.github.kauri_off.kiroku.manga
+
+import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.core.repository.MangaListReader
+import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
+import io.github.kauri_off.kiroku.wiring.showing
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MangaListViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+    private val owner = SignInId("first")
+    private val now = Instant.parse("2026-11-25T12:00:00Z")
+    private val snapshot = MangaListSnapshot(owner, listOf(mangaEntry), now)
+    private val online = MutableStateFlow(false)
+    private val sessions = MutableStateFlow<Session>(Session.SignedIn(owner))
+    private val failures = mutableListOf<DataError>()
+    private var cache = CompletableDeferred(Unit)
+    private var admission = CompletableDeferred(Unit)
+    private var answer = CompletableDeferred<Outcome<MangaListSnapshot>>(Outcome.Failure(DataError.NoConnection))
+    private var cachedReads = 0
+    private var fetches = 0
+
+    @get:Rule
+    val main = MainDispatcherRule(dispatcher)
+
+    private fun model() =
+        MangaListViewModel(
+            object : MangaListReader {
+                override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
+                    cachedReads++
+                    cache.await()
+                    return Outcome.Success(snapshot.takeIf { it.owner == owner })
+                }
+
+                override suspend fun refresh(
+                    owner: SignInId,
+                    canDispatch: () -> Boolean,
+                ): Outcome<MangaListSnapshot>? {
+                    admission.await()
+                    if (!canDispatch()) return null
+                    fetches++
+                    return withContext(NonCancellable) { answer.await() }
+                }
+            },
+            Clock.fixed(now, ZoneOffset.UTC),
+            object : Connection {
+                override fun observeOnline() = online
+            },
+            sessions,
+            flowOf(TitleLanguage.Romaji),
+            failures::add,
+        )
+
+    @Test
+    fun `reconnect retains its refresh while a fresh cache lookup is suspended`() =
+        runTest(dispatcher) {
+            val vm = model()
+            try {
+                val firstShow = showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(0, fetches)
+                vm.refresh()
+                runCurrent()
+                assertEquals(1, fetches)
+                firstShow.cancel()
+                runCurrent()
+
+                val previousReads = cachedReads
+                cache = CompletableDeferred()
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(previousReads + 1, cachedReads)
+                answer = CompletableDeferred(Outcome.Success(snapshot))
+                online.value = true
+                runCurrent()
+                assertEquals(1, fetches)
+                cache.complete(Unit)
+                runCurrent()
+                assertEquals(2, fetches)
+                assertEquals(listOf(DataError.NoConnection), failures)
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a queued refresh waits for visibility at admission and resumes after Back`() =
+        runTest(dispatcher) {
+            val vm = model()
+            try {
+                val firstShow = showing(vm.shown, vm.state)
+                runCurrent()
+                admission = CompletableDeferred()
+                answer = CompletableDeferred(Outcome.Success(snapshot))
+                vm.refresh()
+                runCurrent()
+                firstShow.cancel()
+                runCurrent()
+                admission.complete(Unit)
+                runCurrent()
+                assertEquals(0, fetches)
+
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(1, fetches)
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `an admitted cached refresh posts its failure behind a title only for the current owner`() =
+        runTest(dispatcher) {
+            for (retired in listOf(false, true)) {
+                sessions.value = Session.SignedIn(owner)
+                failures.clear()
+                answer = CompletableDeferred()
+                val vm = model()
+                try {
+                    val screen = showing(vm.shown, vm.state)
+                    runCurrent()
+                    vm.refresh()
+                    runCurrent()
+                    screen.cancel()
+                    runCurrent()
+                    if (retired) {
+                        sessions.value = Session.SignedIn(SignInId("replacement"))
+                        runCurrent()
+                    }
+                    answer.complete(Outcome.Failure(DataError.NoConnection))
+                    runCurrent()
+
+                    assertEquals(if (retired) emptyList() else listOf(DataError.NoConnection), failures)
+                } finally {
+                    answer.complete(Outcome.Failure(DataError.NoConnection))
+                    vm.viewModelScope.cancel()
+                    runCurrent()
+                }
+            }
+        }
+}

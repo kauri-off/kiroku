@@ -55,7 +55,10 @@ internal class RoomMangaList(
             Outcome.Success(snapshot)
         }
 
-    override suspend fun refresh(owner: SignInId): Outcome<MangaListSnapshot> {
+    override suspend fun refresh(
+        owner: SignInId,
+        canDispatch: () -> Boolean,
+    ): Outcome<MangaListSnapshot>? {
         val queue =
             whileOwner(owner) {
                 val current = syncing?.takeIf { it.owner == owner } ?: RefreshQueue(owner).also { syncing = it }
@@ -70,6 +73,7 @@ internal class RoomMangaList(
             val current = session.currentSession() ?: return@withLock Outcome.Failure(DataError.StorageError)
             if (current.owner != owner) return@withLock Outcome.Failure(DataError.ListEnded)
             if (current is Session.Expired) return@withLock Outcome.Failure(DataError.SessionExpired)
+            if (!canDispatch()) return@withLock null
             val entries =
                 when (val answer = fetch(owner)) {
                     is Outcome.Failure -> return@withLock whileOwner(owner) { answer }
