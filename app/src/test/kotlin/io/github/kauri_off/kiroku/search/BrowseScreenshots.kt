@@ -20,6 +20,11 @@ class BrowseScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
+            case("suggestions", content = screen(SearchFixtureStates.browse(BrowseList.Suggestions))),
+            case(
+                "suggestions-expired",
+                content = screen(BrowseState(BrowseList.Suggestions, Paged.Loading, sessionExpired = true, available = false)),
+            ),
             case("this-season", content = screen(SearchFixtureStates.browse(BrowseList.ThisSeason))),
             case("top-rated", content = screen(SearchFixtureStates.browse(BrowseList.TopRated))),
             case("loading-more", content = screen(SearchFixtureStates.browse(BrowseList.MostPopular, More.Loading))),

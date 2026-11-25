@@ -7,6 +7,8 @@ object MalFields {
         "id,title,main_picture,alternative_titles,media_type,status,num_episodes,start_date,broadcast,mean,rank,genres," +
             "average_episode_duration"
 
+    const val SUGGESTIONS = "$SUMMARY,nsfw"
+
     const val DETAILS =
         "$SUMMARY,end_date,synopsis,start_season,source,studios,rating,statistics," +
             "related_anime{$SUMMARY},recommendations{$SUMMARY}"

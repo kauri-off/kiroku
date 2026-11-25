@@ -32,6 +32,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
@@ -39,6 +41,7 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -51,6 +54,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
@@ -299,6 +303,66 @@ class SearchRouteTest {
         compose.onNodeWithContentDescription("Back").performClick()
         settle()
         compose.onNode(row).assertExists()
+        assertEquals(4, requests.size)
+    }
+
+    @Test
+    fun `suggestions appear only for a signed-in session and belong to the sign-in that opened them`() {
+        val current = MutableStateFlow<Session>(Session.SignedOut)
+        val anime = FixtureAnime.exactToWatch
+        val title = anime.titles.romaji
+        val requests = mutableListOf<Pair<SignInId, Int>>()
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = current
+                    }
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId): BrowseSession =
+                            BrowseSession { offset, _ ->
+                                requests += owner to offset
+                                when (requests.size) {
+                                    1 -> Outcome.Failure(DataError.ServerError)
+                                    2 -> Outcome.Success(Page(listOf(Ranked(null, anime)), 17))
+                                    3 -> Outcome.Failure(DataError.ServerError)
+                                    else -> Outcome.Success(Page(listOf(Ranked(null, FixtureAnime.film)), null))
+                                }
+                            }
+                    }
+            }
+        val owner = Fixtures.reference.session.signIn
+        search(source)
+        compose.onNodeWithText("Suggestions for you").assertDoesNotExist()
+        compose.onNodeWithText("Top rated").assertExists()
+        current.value = Session.Expired(owner)
+        settle()
+        compose.onNodeWithText("Suggestions for you").assertDoesNotExist()
+        current.value = Session.SignedIn(owner)
+        settle()
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNodeWithText(FixtureAnime.film.titles.romaji).assertExists()
+
+        val row = hasText(title) and hasClickAction()
+        compose.onNode(row and hasText(watching)).assertExists()
+        compose.onNode(row).performClick()
+        settle()
+        compose.onNodeWithText(title).assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNode(row).assertExists()
+        assertEquals(listOf(0, 0, 17, 17).map { owner to it }, requests)
+
+        current.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Suggestions are unavailable for this session").assertExists()
+        compose.onNode(row).assertDoesNotExist()
         assertEquals(4, requests.size)
     }
 

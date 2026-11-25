@@ -4,6 +4,8 @@
     <string name="search_clear">Clear search</string>
     <string name="search_recent">Recent searches</string>
     <string name="search_browse">Browse</string>
+    <string name="search_suggestions">Suggestions for you</string>
+    <string name="search_suggestions_unavailable">Suggestions are unavailable for this session</string>
     <string name="search_this_season">This season</string>
     <string name="search_top_airing">Top airing</string>
     <string name="search_top_rated">Top rated</string>

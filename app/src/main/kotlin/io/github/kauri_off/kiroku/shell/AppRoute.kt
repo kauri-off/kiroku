@@ -156,7 +156,7 @@ fun appEntries(
                 messages,
                 snackbars,
                 openTitle,
-                onBrowse = { navigator.open(BrowseKey(it)) },
+                onBrowse = { navigator.open(it) },
                 onSignIn = signIn,
             )
         }

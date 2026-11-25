@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
@@ -29,12 +30,14 @@ import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class BrowseKey(
     val list: BrowseList,
+    val owner: String? = null,
 ) : NavKey
 
 @Composable
@@ -44,7 +47,7 @@ fun SearchRoute(
     messages: ShellMessages,
     snackbars: SnackbarHostState,
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
-    onBrowse: (BrowseList) -> Unit,
+    onBrowse: (BrowseKey) -> Unit,
     onSignIn: () -> Unit,
 ) {
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
@@ -62,7 +65,7 @@ fun SearchRoute(
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val content =
         when {
-            text.isEmpty() -> SearchContent.Start(recent)
+            text.isEmpty() -> SearchContent.Start(recent, suggestions = session is Session.SignedIn)
             shown == null -> SearchContent.Results(text, Paged.Loading)
             else -> {
                 val rows =
@@ -86,7 +89,12 @@ fun SearchRoute(
                     query.setTextAndPlaceCursorAtEnd(event.query)
                     keep(event.query)
                 }
-                is SearchEvent.Browse -> onBrowse(event.list)
+                is SearchEvent.Browse ->
+                    if (event.list == BrowseList.Suggestions) {
+                        (session as? Session.SignedIn)?.let { onBrowse(BrowseKey(event.list, it.signIn.value)) }
+                    } else {
+                        onBrowse(BrowseKey(event.list))
+                    }
                 is SearchEvent.Open -> {
                     keep(text)
                     val anime = shown?.titles?.firstOrNull { it.id == event.id }
@@ -113,11 +121,27 @@ fun BrowseRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSignIn: () -> Unit,
 ) {
-    val browse = viewModel { BrowseViewModel(key.list, graph.search, graph.connection, graph.showAdultInSearch) }
+    val suggestions = key.list == BrowseList.Suggestions
+    val owner = key.owner?.let(::SignInId).takeIf { suggestions }
+    val sessionFlow = remember(graph) { graph.session.observeSession() }
+    val session by sessionFlow.collectAsScreenState(initial = null)
+    val belongsToSession = !suggestions || (owner != null && session == Session.SignedIn(owner))
+    val browse =
+        viewModel {
+            val filter =
+                if (suggestions) {
+                    combine(graph.showAdultInSearch, sessionFlow) { adult, current ->
+                        adult.takeIf { owner != null && current == Session.SignedIn(owner) }
+                    }
+                } else {
+                    graph.showAdultInSearch
+                }
+            BrowseViewModel(key.list, graph.search, graph.connection, filter, owner)
+        }
     CountAsShown(browse.shown)
-    val results by browse.state.collectAsScreenState()
-    val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
-    val listed by listedEntries(graph)
+    val loaded by browse.state.collectAsScreenState()
+    val results = if (belongsToSession) loaded else BrowseResults()
+    val listed by listedEntries(graph, owner)
     val editor = editSheetViewModel(graph, messages)
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
     val rows =
@@ -125,15 +149,24 @@ fun BrowseRoute(
             results.rows { resultRow(it.item, listed?.get(it.item.id)?.values, language, it.position) }
         }
     BrowseScreen(
-        BrowseState(key.list, rows, sessionExpired = session is Session.Expired, editable = session.hasList()),
+        BrowseState(
+            key.list,
+            rows,
+            sessionExpired = session is Session.Expired,
+            editable = belongsToSession && session.hasList(),
+            available = belongsToSession || session == null,
+        ),
         onEvent = { event ->
             when (event) {
                 BrowseEvent.Back -> onBack()
                 is BrowseEvent.Open -> {
-                    val anime = results.titles.firstOrNull { it.item.id == event.id }?.item
-                    onOpenTitle(event.id, anime?.let { TitleSummary(it, listed?.get(event.id), airing = null, session = session) })
+                    val anime = results.titles.firstOrNull { it.item.id == event.id }?.item ?: return@BrowseScreen
+                    onOpenTitle(event.id, TitleSummary(anime, listed?.get(event.id), airing = null, session = session))
                 }
-                is BrowseEvent.Edit -> editor.open(event.id, results.titles.firstOrNull { it.item.id == event.id }?.item)
+                is BrowseEvent.Edit -> {
+                    val anime = results.titles.firstOrNull { it.item.id == event.id }?.item ?: return@BrowseScreen
+                    editor.open(event.id, anime)
+                }
                 BrowseEvent.LoadMore -> browse.loadMore()
                 BrowseEvent.Retry -> browse.retry()
                 BrowseEvent.SignIn -> onSignIn()
@@ -142,7 +175,7 @@ fun BrowseRoute(
         snackbars = snackbars,
         autoLoadMore = LocalOnTop.current,
     )
-    EditSheetRoute(editor, messages, takes = { false })
+    if (belongsToSession) EditSheetRoute(editor, messages, takes = { false })
 }
 
 // A signed-in or expired session has a list to edit; signed out there is none, and nothing a save could reach.
@@ -150,10 +183,20 @@ private fun Session?.hasList(): Boolean = this is Session.SignedIn || this is Se
 
 // The user's list as it is now, so a status changed elsewhere in the app shows here; null until it is read.
 @Composable
-private fun listedEntries(graph: AppGraph): State<Map<AnimeId, ListEntry>?> =
-    remember(graph) {
-        graph.list
-            .observeEntries()
+private fun listedEntries(
+    graph: AppGraph,
+    owner: SignInId? = null,
+): State<Map<AnimeId, ListEntry>?> =
+    remember(graph, owner) {
+        val entries =
+            if (owner == null) {
+                graph.list.observeEntries()
+            } else {
+                graph.list.observeOwnedEntries().map { owned ->
+                    owned.entries.takeIf { owned.owner == owner }.orEmpty()
+                }
+            }
+        entries
             .map<List<ListEntry>, Map<AnimeId, ListEntry>?> { entries -> entries.associateBy { it.anime.id } }
             .catch { emit(null) }
     }.collectAsScreenState(initial = null)

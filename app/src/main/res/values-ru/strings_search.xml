@@ -4,6 +4,8 @@
     <string name="search_clear">Очистить поиск</string>
     <string name="search_recent">Недавние запросы</string>
     <string name="search_browse">Подборки</string>
+    <string name="search_suggestions">Для вас</string>
+    <string name="search_suggestions_unavailable">Подборка недоступна в этом сеансе</string>
     <string name="search_this_season">Текущий сезон</string>
     <string name="search_top_airing">Лучшие из выходящих</string>
     <string name="search_top_rated">Лучшие по оценке</string>

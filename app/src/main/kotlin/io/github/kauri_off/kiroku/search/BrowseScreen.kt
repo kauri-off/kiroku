@@ -18,6 +18,7 @@ data class BrowseState(
     val sessionExpired: Boolean = false,
     // Whether a row's long press opens its edit sheet: only while there is a list to edit.
     val editable: Boolean = false,
+    val available: Boolean = true,
 )
 
 sealed interface BrowseEvent {
@@ -48,30 +49,34 @@ fun BrowseScreen(
     autoLoadMore: Boolean = true,
 ) {
     val body =
-        when (val rows = state.rows) {
-            Paged.Loading -> SubScreenBody.State(ScreenState.Loading)
-            is Paged.Failed ->
-                SubScreenBody.State(
-                    ScreenState.Error(stringResource(rows.error.message(R.string.search_browse_failed))) { onEvent(BrowseEvent.Retry) },
-                )
-            is Paged.Shown ->
-                if (rows.items.isEmpty() && rows.more == More.None) {
-                    SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_browse_empty)))
-                } else {
-                    SubScreenBody.List {
-                        pagedRows(
-                            state.list,
-                            rows.items,
-                            rows.more,
-                            R.string.search_browse_failed,
-                            onOpen = { onEvent(BrowseEvent.Open(it)) },
-                            onEdit = if (state.editable) ({ onEvent(BrowseEvent.Edit(it)) }) else null,
-                            onLoadMore = { onEvent(BrowseEvent.LoadMore) },
-                            onRetry = { onEvent(BrowseEvent.Retry) },
-                            autoLoadMore = autoLoadMore,
-                        )
+        if (!state.available) {
+            SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_suggestions_unavailable)))
+        } else {
+            when (val rows = state.rows) {
+                Paged.Loading -> SubScreenBody.State(ScreenState.Loading)
+                is Paged.Failed ->
+                    SubScreenBody.State(
+                        ScreenState.Error(stringResource(rows.error.message(R.string.search_browse_failed))) { onEvent(BrowseEvent.Retry) },
+                    )
+                is Paged.Shown ->
+                    if (rows.items.isEmpty() && rows.more == More.None) {
+                        SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_browse_empty)))
+                    } else {
+                        SubScreenBody.List {
+                            pagedRows(
+                                state.list,
+                                rows.items,
+                                rows.more,
+                                R.string.search_browse_failed,
+                                onOpen = { onEvent(BrowseEvent.Open(it)) },
+                                onEdit = if (state.editable) ({ onEvent(BrowseEvent.Edit(it)) }) else null,
+                                onLoadMore = { onEvent(BrowseEvent.LoadMore) },
+                                onRetry = { onEvent(BrowseEvent.Retry) },
+                                autoLoadMore = autoLoadMore,
+                            )
+                        }
                     }
-                }
+            }
         }
     SubScreen(
         title = browseName(state.list),

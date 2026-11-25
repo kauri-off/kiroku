@@ -163,7 +163,7 @@ internal class LiveGraph(
     }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, account::whileOwner, airingOf) }
     override val scores by lazy { parts.scores }
-    override val search by lazy { MalSearch(parts.http, parts.clock) }
+    override val search by lazy { MalSearch(parts.http, parts.clock) { account } }
     override val user: LiveUser by lazy { liveUser(parts, account, ownProfile) }
     override val connection by lazy { liveConnection(parts) }
     override val preferences by lazy { livePreferences(parts) }

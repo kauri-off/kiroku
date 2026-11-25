@@ -334,7 +334,7 @@ interface NotificationsRepository {
     fun observeSent(): Flow<List<SentNotification>>
 }
 
-enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular }
+enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular, Suggestions }
 
 data class Page<out T>(
     val items: List<T>,
@@ -354,6 +354,8 @@ interface SearchRepository {
     ): Outcome<Page<Anime>>
 
     fun openBrowse(list: BrowseList): BrowseSession
+
+    fun openSuggestions(owner: SignInId): BrowseSession
 }
 
 fun interface BrowseSession {

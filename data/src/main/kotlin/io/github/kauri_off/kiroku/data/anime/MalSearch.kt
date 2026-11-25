@@ -3,22 +3,28 @@ package io.github.kauri_off.kiroku.data.anime
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
+import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
 import io.github.kauri_off.kiroku.data.network.nextOffset
+import io.github.kauri_off.kiroku.data.session.MalSession
+import io.github.kauri_off.kiroku.data.session.authorised
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.time.Clock
@@ -27,6 +33,7 @@ import java.time.LocalDate
 class MalSearch(
     private val http: MalHttp,
     private val clock: Clock,
+    private val account: () -> MalSession,
 ) : SearchRepository {
     private val api by http.api(SearchApi::class)
 
@@ -57,6 +64,26 @@ class MalSearch(
             BrowseList.TopAiring -> ranking("airing")
             BrowseList.TopRated -> ranking("all")
             BrowseList.MostPopular -> ranking("bypopularity")
+            BrowseList.Suggestions -> BrowseSession { _, _ -> Outcome.Failure(DataError.SessionExpired) }
+        }
+
+    override fun openSuggestions(owner: SignInId): BrowseSession =
+        BrowseSession { offset, includeAdult ->
+            if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
+            val session = account()
+            val result =
+                session.authorised(http, expectedOwner = owner) { authorization ->
+                    api
+                        .suggestions(authorization, offset, PAGE_SIZE, MalFields.SUGGESTIONS)
+                        .mapPage(offset, keep = { includeAdult || it.node.nsfw == JsonPrimitive("white") }) { hit, repairs ->
+                            Ranked(null, hit.node.toAnime(repairs.within("node")))
+                        }
+                }
+            if (result is Outcome.Success && session.currentSession() != Session.SignedIn(owner)) {
+                Outcome.Failure(DataError.ListEnded)
+            } else {
+                result
+            }
         }
 
     private fun ranking(type: String): BrowseSession =
@@ -82,12 +109,13 @@ class MalSearch(
 
     private fun <T> SearchPageNode.mapPage(
         offset: Int,
+        keep: (SearchHitNode) -> Boolean = { true },
         map: (SearchHitNode, Repairs) -> T,
     ): Page<T> {
         val next = nextOffset(paging)
         check(next == null || next > offset) { "The next page is not after this one" }
         val repairs = Repairs()
-        val items = data.map { map(it, repairs) }
+        val items = data.filter(keep).map { map(it, repairs) }
         if (repairs.fields.isNotEmpty()) http.unexpected(RepairedAnswer(repairs.fields))
         return Page(items, next)
     }
@@ -123,6 +151,14 @@ private interface SearchApi {
         @Query("limit") limit: Int,
         @Query("fields") fields: String,
         @Query("nsfw") nsfw: Boolean?,
+    ): SearchPageNode
+
+    @GET("anime/suggestions")
+    suspend fun suggestions(
+        @Header(AUTHORIZATION) authorization: String,
+        @Query("offset") offset: Int,
+        @Query("limit") limit: Int,
+        @Query("fields") fields: String,
     ): SearchPageNode
 
     @GET("anime/season/{year}/{season}")

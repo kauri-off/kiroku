@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
@@ -77,6 +78,8 @@ class SandboxGraph internal constructor(
                 offset: Int,
                 includeAdult: Boolean,
             ) = Outcome.Success(Page(fixtures.search(query).drop(offset).map { it.anime }, nextOffset = null))
+
+            override fun openSuggestions(owner: SignInId): BrowseSession = openBrowse(BrowseList.Suggestions)
 
             override fun openBrowse(list: BrowseList): BrowseSession =
                 BrowseSession { offset, _ ->

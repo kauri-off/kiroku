@@ -20,6 +20,7 @@ sealed interface SearchContent {
     // Before a query: the recent searches, newest first, then the browse lists.
     data class Start(
         val recent: List<String>,
+        val suggestions: Boolean = false,
     ) : SearchContent {
         init {
             require(recent.size <= MAX_RECENT_SEARCHES)
