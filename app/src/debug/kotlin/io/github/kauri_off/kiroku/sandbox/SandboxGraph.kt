@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
+import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
@@ -69,6 +70,7 @@ class SandboxGraph internal constructor(
     override val madeUp = true
 
     override val manga: MangaRepository? get() = null
+    override val mangaCatalogue: MangaCatalogue? get() = null
 
     override val search: SearchRepository by lazy {
         val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))

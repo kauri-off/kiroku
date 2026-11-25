@@ -79,7 +79,7 @@ class MalMangaRepository(
                             else -> ReadAdmission.Send
                         }
                     }) {
-                        api.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
+                        api.details(id.value, MalFields.MANGA_DETAILS).toManga(id, repaired).toRow(clock.instant().toColumn())
                     }.clientIdOutcome()
             } catch (_: ReadDeferred) {
                 currentCoroutineContext().ensureActive()
@@ -137,11 +137,10 @@ private interface MangaApi {
     ): JsonObject
 }
 
-internal fun JsonObject.toRow(
+internal fun JsonObject.toManga(
     id: MangaId,
-    fetchedAt: Long,
     repaired: MutableSet<String>,
-): MangaRow {
+): MangaDetails {
     check((get("id") as? JsonPrimitive)?.longOrNull == id.value)
 
     fun <T : Any> field(
@@ -159,22 +158,41 @@ internal fun JsonObject.toRow(
     fun count(key: String) = field(key) { (it as? JsonPrimitive)?.intOrNull?.takeIf { n -> n >= 0 } }?.takeIf { it > 0 }
     val picture = field("main_picture") { it as? JsonObject }
     val alternatives = field("alternative_titles") { it as? JsonObject }
-    return MangaRow(
-        id = id.value,
-        romaji = requireNotNull(text("title")?.takeUnless(String::isBlank)),
-        english = alternatives?.let { field("en", it, "alternative_titles.en", ::stringValue) }?.takeUnless(String::isBlank),
-        japanese = alternatives?.let { field("ja", it, "alternative_titles.ja", ::stringValue) }?.takeUnless(String::isBlank),
-        poster = picture?.let { field("medium", it, "main_picture.medium", ::stringValue) }?.takeUnless(String::isBlank),
-        largePoster = picture?.let { field("large", it, "main_picture.large", ::stringValue) }?.takeUnless(String::isBlank),
+    return MangaDetails(
+        id = id,
+        titles =
+            Titles(
+                requireNotNull(text("title")?.takeUnless(String::isBlank)),
+                alternatives?.let { field("en", it, "alternative_titles.en", ::stringValue) }?.takeUnless(String::isBlank),
+                alternatives?.let { field("ja", it, "alternative_titles.ja", ::stringValue) }?.takeUnless(String::isBlank),
+            ),
+        posterUrl = picture?.let { field("medium", it, "main_picture.medium", ::stringValue) }?.takeUnless(String::isBlank),
+        largePosterUrl = picture?.let { field("large", it, "main_picture.large", ::stringValue) }?.takeUnless(String::isBlank),
         synopsis = text("synopsis")?.trim()?.takeUnless(String::isEmpty),
-        format = text("media_type")?.takeUnless(String::isBlank),
-        publication = text("status")?.takeUnless(String::isBlank),
+        format = formatOf(text("media_type")?.takeUnless(String::isBlank)),
+        publication = publicationOf(text("status")?.takeUnless(String::isBlank)),
         volumes = count("num_volumes"),
         chapters = count("num_chapters"),
         meanScore = field("mean") { (it as? JsonPrimitive)?.doubleOrNull?.takeIf { score -> score in 0.0..10.0 } }?.takeIf { it > 0 },
-        fetchedAt = fetchedAt,
     )
 }
+
+internal fun MangaDetails.toRow(fetchedAt: Long): MangaRow =
+    MangaRow(
+        id.value,
+        titles.romaji,
+        titles.english,
+        titles.japanese,
+        posterUrl,
+        largePosterUrl,
+        synopsis,
+        (format as? MangaFormat.Unrecognized)?.code ?: formats.entries.firstOrNull { it.value == format }?.key,
+        (publication as? MangaPublication.Unrecognized)?.code ?: publications.entries.firstOrNull { it.value == publication }?.key,
+        volumes,
+        chapters,
+        meanScore,
+        fetchedAt,
+    )
 
 private fun stringValue(value: JsonElement): String? = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
 
@@ -186,14 +204,18 @@ internal fun MangaRow.toStored(): StoredManga =
             poster,
             largePoster,
             synopsis,
-            format?.let { formats[it] ?: MangaFormat.Unrecognized(it) },
-            publication?.let { publications[it] ?: MangaPublication.Unrecognized(it) },
+            formatOf(format),
+            publicationOf(publication),
             volumes,
             chapters,
             meanScore,
         ),
         instantOf(fetchedAt),
     )
+
+private fun formatOf(code: String?): MangaFormat? = code?.let { formats[it] ?: MangaFormat.Unrecognized(it) }
+
+private fun publicationOf(code: String?): MangaPublication? = code?.let { publications[it] ?: MangaPublication.Unrecognized(it) }
 
 private val formats =
     mapOf(

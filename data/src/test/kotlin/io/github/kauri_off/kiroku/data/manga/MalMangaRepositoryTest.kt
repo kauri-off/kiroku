@@ -213,7 +213,7 @@ class MalMangaRepositoryTest {
             runBlocking {
                 val oldOwner = SignInId("retired")
                 db.list().setState { it.copy(owner = oldOwner.value) }
-                db.manga().save(recordedJson("manga_completed").toRow(id, 1, mutableSetOf()))
+                db.manga().save(recordedJson("manga_completed").toManga(id, mutableSetOf()).toRow(1))
                 val cleanupStarted = CompletableDeferred<Unit>()
                 val cleanupFinished = CompletableDeferred<Unit>()
                 val guarded =

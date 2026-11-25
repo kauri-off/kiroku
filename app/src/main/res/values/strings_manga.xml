@@ -22,4 +22,7 @@
         <item quantity="one">%1$s\u00A0chapter</item>
         <item quantity="other">%1$s\u00A0chapters</item>
     </plurals>
+    <string name="manga_catalogue">Manga</string>
+    <string name="manga_search_placeholder">Search manga</string>
+    <string name="manga_ranking">Manga ranking</string>
 </resources>

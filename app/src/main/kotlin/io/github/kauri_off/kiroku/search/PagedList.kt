@@ -38,7 +38,7 @@ internal fun LazyListScope.pagedRows(
     colors: ListItemColors? = null,
     autoLoadMore: Boolean = true,
 ) {
-    items(rows, key = { it.id.value }, contentType = { ROW }) { row ->
+    pagedItems(list, rows, { it.id.value }, more, failed, onLoadMore, onRetry, autoLoadMore) { row ->
         ResultAnimeRow(
             row,
             onClick = { onOpen(row.id) },
@@ -46,6 +46,20 @@ internal fun LazyListScope.pagedRows(
             colors = colors ?: ListItemDefaults.colors(),
         )
     }
+}
+
+internal fun <T> LazyListScope.pagedItems(
+    list: Any,
+    rows: List<T>,
+    rowKey: (T) -> Long,
+    more: More,
+    @StringRes failed: Int,
+    onLoadMore: () -> Unit,
+    onRetry: () -> Unit,
+    autoLoadMore: Boolean,
+    rowContent: @Composable (T) -> Unit,
+) {
+    items(rows, key = { rowKey(it) }, contentType = { ROW }) { row -> rowContent(row) }
     when (more) {
         More.None -> Unit
         is More.Ready, More.Loading ->

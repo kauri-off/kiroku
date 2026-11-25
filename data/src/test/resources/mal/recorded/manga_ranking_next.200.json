@@ -1,0 +1,250 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 70345,
+                "title": "Grand Blue",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/166124.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/166124l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Grand Blue Dreaming",
+                    "ja": "ぐらんぶる"
+                },
+                "media_type": "manga",
+                "status": "currently_publishing",
+                "num_volumes": 0,
+                "num_chapters": 0,
+                "mean": 9.05
+            },
+            "ranking": {
+                "rank": 11
+            }
+        },
+        {
+            "node": {
+                "id": 143441,
+                "title": "Omniscient Reader's Viewpoint",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/265768.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/265768l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Jeonjijeok Dokja Sijeom"
+                    ],
+                    "en": "Omniscient Reader's Viewpoint",
+                    "ja": "전지적 독자 시점"
+                },
+                "media_type": "novel",
+                "status": "finished",
+                "num_volumes": 20,
+                "num_chapters": 105,
+                "mean": 9.03
+            },
+            "ranking": {
+                "rank": 12
+            }
+        },
+        {
+            "node": {
+                "id": 130826,
+                "title": "Tian Guan Cifu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/258775.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/258775l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "TGCF"
+                    ],
+                    "en": "Heaven Official's Blessing: Tian Guan Ci Fu",
+                    "ja": "天官赐福"
+                },
+                "media_type": "novel",
+                "status": "finished",
+                "num_volumes": 6,
+                "num_chapters": 0,
+                "mean": 9.02
+            },
+            "ranking": {
+                "rank": 13
+            }
+        },
+        {
+            "node": {
+                "id": 16765,
+                "title": "Kingdom",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/171872.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/171872l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Kingdom",
+                    "ja": "キングダム"
+                },
+                "media_type": "manga",
+                "status": "currently_publishing",
+                "num_volumes": 0,
+                "num_chapters": 0,
+                "mean": 9.02
+            },
+            "ranking": {
+                "rank": 14
+            }
+        },
+        {
+            "node": {
+                "id": 44489,
+                "title": "Houseki no Kuni",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/115443.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/115443l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Land of the Lustrous",
+                    "ja": "宝石の国"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 13,
+                "num_chapters": 108,
+                "mean": 9.01
+            },
+            "ranking": {
+                "rank": 15
+            }
+        },
+        {
+            "node": {
+                "id": 133431,
+                "title": "Uma Musume Cinderella Gray",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/240780.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/240780l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "UmaMusu Cinderella Gray",
+                        "Uma Musume Cinderella Gray Gaiden: The Mermaid Left Behind"
+                    ],
+                    "en": "",
+                    "ja": "ウマ娘 シンデレラグレイ"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 23,
+                "num_chapters": 211,
+                "mean": 9
+            },
+            "ranking": {
+                "rank": 16
+            }
+        },
+        {
+            "node": {
+                "id": 657,
+                "title": "Real",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/115969.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/115969l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Real",
+                    "ja": "リアル"
+                },
+                "media_type": "manga",
+                "status": "currently_publishing",
+                "num_volumes": 0,
+                "num_chapters": 0,
+                "mean": 8.98
+            },
+            "ranking": {
+                "rank": 17
+            }
+        },
+        {
+            "node": {
+                "id": 4632,
+                "title": "Oyasumi Punpun",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/266834.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/266834l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Goodnight Punpun",
+                    "ja": "おやすみプンプン"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 13,
+                "num_chapters": 147,
+                "mean": 8.97
+            },
+            "ranking": {
+                "rank": 18
+            }
+        },
+        {
+            "node": {
+                "id": 34053,
+                "title": "Umineko no Naku Koro ni Chiru - Episode 8: Twilight of the Golden Witch",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/206205.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/206205l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "When Seagulls Cry Episode 8: Twilight of the Golden Witch"
+                    ],
+                    "en": "Umineko When They Cry Episode 8: Twilight of the Golden Witch",
+                    "ja": "うみねこのなく頃に散 - Episode 8: Twilight of the Golden Witch"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 9,
+                "num_chapters": 42,
+                "mean": 8.97
+            },
+            "ranking": {
+                "rank": 19
+            }
+        },
+        {
+            "node": {
+                "id": 1303,
+                "title": "Ashita no Joe",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/268827.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/268827l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Rocky Joe",
+                        "Tomorrow's Joe"
+                    ],
+                    "en": "Ashita no Joe: Fighting for Tomorrow",
+                    "ja": "あしたのジョー"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 20,
+                "num_chapters": 171,
+                "mean": 8.95
+            },
+            "ranking": {
+                "rank": 20
+            }
+        }
+    ],
+    "paging": {
+        "previous": "https://api.myanimelist.net/v2/manga/ranking?offset=0&ranking_type=all&limit=10&fields=id%2Ctitle%2Calternative_titles%2Cmain_picture%2Cmedia_type%2Cstatus%2Cnum_volumes%2Cnum_chapters%2Cmean",
+        "next": "https://api.myanimelist.net/v2/manga/ranking?offset=20&ranking_type=all&limit=10&fields=id%2Ctitle%2Calternative_titles%2Cmain_picture%2Cmedia_type%2Cstatus%2Cnum_volumes%2Cnum_chapters%2Cmean"
+    }
+}

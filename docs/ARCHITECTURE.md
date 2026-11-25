@@ -22,11 +22,11 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 
 - Sign in with a MAL account; browse without an account.
 - The user's anime list: read, change status, change watched episodes, score, dates, remove.
-- Anime title pages with related titles and statistics, and manga title pages opened from MyAnimeList links.
+- Anime title pages with related titles and statistics, and manga title pages.
 - For titles that are still airing: episodes aired so far, total episodes, and how many aired episodes the user has
   yet to watch ("to watch").
 - Reliable notifications when a new episode of a title on the user's list has aired.
-- Search for anime, public browse lists and personalised anime suggestions.
+- Search for anime and manga, public browse lists and manga ranking, and personalised anime suggestions.
 - The user's profile and statistics; another user's list and statistics by user name.
 - Russian and English user interface.
 

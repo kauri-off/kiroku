@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +45,7 @@ internal sealed interface SubScreenBody {
     data class List(
         val refreshing: Boolean = false,
         val onRefresh: (() -> Unit)? = null,
+        val scroll: LazyListState? = null,
         val content: LazyListScope.() -> Unit,
     ) : SubScreenBody
 }
@@ -92,7 +95,7 @@ private fun SubScreenList(
 ) {
     val onRefresh = body.onRefresh
     if (onRefresh == null) {
-        CentredList(padding, listModifier, body.content)
+        CentredList(padding, listModifier, body.scroll, body.content)
     } else {
         val direction = LocalLayoutDirection.current
         RefreshBox(body.refreshing, onRefresh, Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
@@ -103,6 +106,7 @@ private fun SubScreenList(
                     bottom = padding.calculateBottomPadding(),
                 ),
                 listModifier,
+                body.scroll,
                 body.content,
             )
         }
@@ -113,6 +117,7 @@ private fun SubScreenList(
 private fun CentredList(
     padding: PaddingValues,
     modifier: Modifier,
+    scroll: LazyListState?,
     content: LazyListScope.() -> Unit,
 ) {
     val direction = LocalLayoutDirection.current
@@ -123,6 +128,7 @@ private fun CentredList(
         contentAlignment = Alignment.TopCenter,
     ) {
         LazyColumn(
+            state = scroll ?: rememberLazyListState(),
             modifier = modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
             contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + Spacing.s),
             content = content,

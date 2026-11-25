@@ -181,7 +181,7 @@ class SearchViewModelTest {
             assertEquals(listOf(FixtureAnime.exactCaughtUp), model.state.value.titles)
         }
 
-    private fun SearchViewModel.type(text: String) {
+    private fun SearchViewModel<Anime>.type(text: String) {
         query.setTextAndPlaceCursorAtEnd(text)
         Snapshot.sendApplyNotifications()
     }

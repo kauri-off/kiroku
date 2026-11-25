@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,16 +24,25 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalCoroutinesApi::class)
-internal class BrowseViewModel(
+internal fun BrowseViewModel(
     list: BrowseList,
     search: SearchRepository,
     connection: Connection,
     includeAdult: Flow<Boolean?>,
     owner: SignInId? = null,
+): BrowseViewModel<Anime> {
+    val browse by lazy { owner?.let(search::openSuggestions) ?: search.openBrowse(list) }
+    return BrowseViewModel({ offset, adult -> browse.load(offset, adult) }, Anime::id, connection, includeAdult)
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal class BrowseViewModel<T>(
+    private val read: suspend (Int, Boolean) -> Outcome<Page<Ranked<T>>>,
+    private val idOf: (T) -> Any,
+    connection: Connection,
+    includeAdult: Flow<Boolean?>,
 ) : ViewModel() {
-    private val browse by lazy { owner?.let(search::openSuggestions) ?: search.openBrowse(list) }
-    private val pages = MutableStateFlow(BrowseResults())
+    private val pages = MutableStateFlow(BrowseResults<T>())
     private var adult: Boolean? = null
     private var pending: Job? = null
     private var validated = false
@@ -87,13 +97,13 @@ internal class BrowseViewModel(
         loads.started()
         pending =
             viewModelScope.launch {
-                val answer = browse.load(offset, enabled)
+                val answer = read(offset, enabled)
                 currentCoroutineContext().ensureActive()
                 pages.value =
                     when (answer) {
                         is Outcome.Success ->
                             BrowseResults(
-                                titles = (page.titles + answer.value.items).distinctBy { it.item.id },
+                                titles = (page.titles + answer.value.items).distinctBy { idOf(it.item) },
                                 nextOffset = answer.value.nextOffset,
                             )
                         is Outcome.Failure -> page.copy(error = answer.error, loading = false)
@@ -103,13 +113,13 @@ internal class BrowseViewModel(
     }
 }
 
-internal data class BrowseResults(
-    val titles: List<Ranked<Anime>> = emptyList(),
+internal data class BrowseResults<T>(
+    val titles: List<Ranked<T>> = emptyList(),
     val nextOffset: Int? = 0,
     val loading: Boolean = false,
     val error: DataError? = null,
 ) {
-    fun rows(map: (Ranked<Anime>) -> ResultRow): Paged<ResultRow> {
+    fun <R> rows(map: (Ranked<T>) -> R): Paged<R> {
         if (nextOffset == 0) return error?.let { Paged.Failed(it) } ?: Paged.Loading
         val more =
             when {

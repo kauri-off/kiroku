@@ -26,4 +26,7 @@
         <item quantity="many">%1$s\u00A0глав</item>
         <item quantity="other">%1$s\u00A0главы</item>
     </plurals>
+    <string name="manga_catalogue">Манга</string>
+    <string name="manga_search_placeholder">Поиск манги</string>
+    <string name="manga_ranking">Рейтинг манги</string>
 </resources>
