@@ -38,12 +38,14 @@ interface SessionRepository {
 
 sealed interface ListWrite {
     val anime: Anime
+    val madeIn: SignInId? get() = null
 
     // Sets [only] these values over the entry as it is when sent, or all of them.
     data class Save(
         override val anime: Anime,
         val values: ListValues,
         val only: Set<ListField>? = null,
+        override val madeIn: SignInId? = null,
     ) : ListWrite {
         init {
             require(only == null || only.isNotEmpty())
@@ -55,13 +57,14 @@ sealed interface ListWrite {
 
     data class Remove(
         override val anime: Anime,
+        override val madeIn: SignInId? = null,
     ) : ListWrite
 
     data class MarkWatched(
         override val anime: Anime,
         val episode: Int,
         // A notification's action marks in the list it was made in alone; a screen's, in the list it shows.
-        val madeIn: SignInId? = null,
+        override val madeIn: SignInId? = null,
     ) : ListWrite {
         init {
             require(episode > 0)
@@ -70,12 +73,14 @@ sealed interface ListWrite {
 
     data class MarkNextWatched(
         override val anime: Anime,
+        override val madeIn: SignInId? = null,
     ) : ListWrite
 
     // A count the user typed, applied to the entry's other values as they are when sent (W7, W9).
     data class SetWatched(
         override val anime: Anime,
         val watched: Int,
+        override val madeIn: SignInId? = null,
     ) : ListWrite {
         init {
             require(watched >= 0)
@@ -86,6 +91,7 @@ sealed interface ListWrite {
     data class StepWatched(
         override val anime: Anime,
         val by: Int,
+        override val madeIn: SignInId? = null,
     ) : ListWrite
 
     // W3: takes back [change] alone, from the entry's values as they are when sent.
@@ -106,16 +112,15 @@ sealed interface ListWrite {
     val steps: Boolean
         get() = this is MarkWatched || this is MarkNextWatched || this is StepWatched || (this is Retry && failure.write.steps)
 
-    // An Undo, a Retry and a notification's "Mark watched" belong to the list they were made in, and no other list takes them.
-    val bound: Boolean get() = this is Undo || this is Retry || (this is MarkWatched && madeIn != null)
+    // An owner-bound write belongs to the list that initiated it.
+    val bound: Boolean get() = this is Undo || this is Retry || madeIn != null
 
     val list: SignInId?
         get() =
             when (this) {
                 is Undo -> change.list
                 is Retry -> failure.list
-                is MarkWatched -> madeIn
-                else -> null
+                else -> madeIn
             }
 
     fun applyTo(
@@ -248,6 +253,9 @@ data class OwnedEntries(
 interface ListSource {
     fun observeOwnedEntries(): Flow<OwnedEntries> = observeEntries().map { OwnedEntries(null, it) }
 
+    fun observeOwnedEntriesOf(ids: Set<AnimeId>): Flow<OwnedEntries> =
+        observeOwnedEntries().map { owned -> owned.copy(entries = owned.entries.filter { it.anime.id in ids }) }
+
     // Ends with a DataException when the list cannot be read; a new collection tries again.
     fun observeEntries(): Flow<List<ListEntry>>
 
@@ -267,7 +275,7 @@ interface ListRepository : ListSource {
     fun observeWriteFailures(): Flow<WriteFailure>
 
     // Applies the write locally, whole even when its caller is cancelled; null when it changed nothing or was refused.
-    // A refusal is a write failure: `SessionExpired`, or `ListEnded` for an Undo or a Retry of another list.
+    // A refusal is a write failure: `SessionExpired`, or `ListEnded` for a write bound to another list.
     suspend fun write(write: ListWrite): ListChange?
 
     suspend fun send(write: ListWrite): Outcome<Unit>
@@ -334,7 +342,7 @@ interface NotificationsRepository {
     fun observeSent(): Flow<List<SentNotification>>
 }
 
-enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular }
+enum class BrowseList { ThisSeason, TopAiring, TopRated, MostPopular, Suggestions }
 
 data class Page<out T>(
     val items: List<T>,
@@ -354,6 +362,8 @@ interface SearchRepository {
     ): Outcome<Page<Anime>>
 
     fun openBrowse(list: BrowseList): BrowseSession
+
+    fun openSuggestions(owner: SignInId): BrowseSession
 }
 
 fun interface BrowseSession {

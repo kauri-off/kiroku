@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -39,6 +40,7 @@ internal class RecommendationsViewModel(
     titleLanguage: Flow<TitleLanguage>,
     opened: TitleSummary?,
     adultSearchChoice: Flow<AdultSearchChoice> = flowOf(AdultSearchChoice()),
+    owner: SignInId? = null,
     private val onRefreshFailed: (DataError) -> Unit,
 ) : SubScreenViewModel(id, anime, session, connection, clock, opened, adultSearchChoice) {
     private class ListRead(
@@ -63,7 +65,7 @@ internal class RecommendationsViewModel(
                     .map { anime -> anime.id }
                     .toSet()
             }) { ids ->
-                list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) }
+                list.entriesOf(ids, owner).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) }
             }.map { (title, list) -> Sources(title, list) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), opened?.let { Sources(Title(it), ListRead(it.knownEntries())) })
 

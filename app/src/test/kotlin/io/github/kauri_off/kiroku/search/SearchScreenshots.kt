@@ -33,6 +33,7 @@ class SearchScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
+            case("start-signed-in", largeText = true, content = screen(SearchFixtureStates.startSignedIn)),
             case("start-no-recent", content = screen(SearchFixtureStates.startNoRecent)),
             case("search-view", content = screen(SearchFixtureStates.searchView)),
             case("typing", keyboard = true, content = screen(SearchFixtureStates.typing)),

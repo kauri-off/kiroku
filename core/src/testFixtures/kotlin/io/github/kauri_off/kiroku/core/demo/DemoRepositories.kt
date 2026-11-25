@@ -167,6 +167,7 @@ class DemoAiringSource internal constructor(
 internal class DemoSearchRepository(
     private val fixtures: FixtureSet,
     private val server: DemoServer,
+    private val signIn: MutableStateFlow<SignInId?>,
 ) : SearchRepository {
     override suspend fun search(
         query: String,
@@ -189,6 +190,7 @@ internal class DemoSearchRepository(
             if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
             val ranked =
                 when (list) {
+                    BrowseList.Suggestions -> return@BrowseSession Outcome.Failure(DataError.SessionExpired)
                     BrowseList.ThisSeason ->
                         fixtures.anime.filter { it.airingStatus != AiringStatus.Finished }.map { Ranked(null, it) }
                     BrowseList.TopAiring ->
@@ -201,6 +203,14 @@ internal class DemoSearchRepository(
                             .mapIndexed { index, anime -> Ranked(index + 1, anime) }
                 }
             Outcome.Success(ranked.page(offset))
+        }
+
+    override fun openSuggestions(owner: SignInId): BrowseSession =
+        BrowseSession { offset, _ ->
+            if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
+            server.load(needsSignIn = true)?.let { return@BrowseSession Outcome.Failure(it) }
+            if (signIn.value != owner) return@BrowseSession Outcome.Failure(DataError.ListEnded)
+            Outcome.Success(fixtures.anime.map { Ranked(null, it) }.page(offset))
         }
 
     private fun byRank(anime: List<Anime>): List<Anime> = anime.filter { it.rank != null }.sortedBy { it.rank }

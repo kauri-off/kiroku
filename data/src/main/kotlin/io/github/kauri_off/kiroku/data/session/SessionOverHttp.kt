@@ -33,7 +33,8 @@ internal suspend fun <T> MalSession.authorised(
     request: suspend (authorization: String) -> T,
 ): Outcome<T> =
     authorised(expectedOwner) { accessToken ->
-        when (val answer = http.call { request(bearer(accessToken)) }) {
+        val maySendRead = expectedOwner?.let { owner -> { isSignedInAs(owner) } }
+        when (val answer = http.call(maySendRead = maySendRead) { request(bearer(accessToken)) }) {
             is MalAnswer.Success -> Attempt.Answered(Outcome.Success(answer.value))
             is MalAnswer.Failed -> Attempt.Answered(Outcome.Failure(answer.error))
             MalAnswer.Rejected -> Attempt.Rejected

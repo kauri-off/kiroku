@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -175,6 +176,49 @@ class BrowseViewModelTest {
             runCurrent()
             assertEquals(listOf(0 to true, 20 to true, 0 to false), calls)
             assertEquals(listOf(current), model.state.value.titles)
+        }
+
+    @Test
+    fun `losing the suggestions owner drops loaded pages and a late continuation`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val filter = MutableStateFlow<Boolean?>(null)
+            val owner = SignInId("first")
+            val requests = mutableListOf<Pair<SignInId, Int>>()
+            val first = Ranked(null, FixtureAnime.exactToWatch)
+            val late = CompletableDeferred<Outcome<Page<Ranked<Anime>>>>()
+            val search =
+                object : SearchRepository by demo.search {
+                    override fun openSuggestions(owner: SignInId) =
+                        BrowseSession { offset, _ ->
+                            requests += owner to offset
+                            if (offset == 0) Outcome.Success(Page(listOf(first), 17)) else withContext(NonCancellable) { late.await() }
+                        }
+                }
+
+            val model = BrowseViewModel(BrowseList.Suggestions, search, demo.connection, filter, owner)
+            showing(model.state, model.shown)
+            runCurrent()
+            assertTrue(requests.isEmpty())
+            filter.value = false
+            runCurrent()
+            assertEquals(listOf(first), model.state.value.titles)
+            model.loadMore()
+            runCurrent()
+            filter.value = null
+            runCurrent()
+            assertTrue(
+                model.state.value.titles
+                    .isEmpty(),
+            )
+            late.complete(Outcome.Success(Page(listOf(Ranked(null, FixtureAnime.film)), null)))
+            model.retry()
+            runCurrent()
+            assertTrue(
+                model.state.value.titles
+                    .isEmpty(),
+            )
+            assertEquals(listOf(owner to 0, owner to 17), requests)
         }
 
     private class BrowseRequests(

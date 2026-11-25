@@ -404,7 +404,7 @@ class TitleViewModelTest {
                 s.message,
             )
             s.tapAction()
-            assertEquals(FixtureAnime.notOnListAiring.id, s.messages.editRequest.value)
+            assertEquals(ShellMessage.Action.Change(FixtureAnime.notOnListAiring.id), s.messages.editRequest.value)
             assertEquals(ListStatus.Planned, s.values()?.status)
         }
 

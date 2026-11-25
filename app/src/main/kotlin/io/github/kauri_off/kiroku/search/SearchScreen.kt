@@ -230,6 +230,11 @@ private fun LazyListScope.start(
         val gap = if (recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
         SectionHeader(stringResource(R.string.search_browse), gap)
     }
+    if (content.suggestions) {
+        item(key = BrowseList.Suggestions, contentType = LINK) {
+            LinkRow(browseName(BrowseList.Suggestions), rows) { onEvent(SearchEvent.Browse(BrowseList.Suggestions)) }
+        }
+    }
     items(browseLists, key = { it }, contentType = { LINK }) { list ->
         LinkRow(browseName(list), rows) { onEvent(SearchEvent.Browse(list)) }
     }
@@ -308,6 +313,7 @@ private fun LinkRow(
 @Composable
 internal fun browseName(list: BrowseList): String =
     when (list) {
+        BrowseList.Suggestions -> stringResource(R.string.search_suggestions)
         BrowseList.ThisSeason -> stringResource(R.string.search_this_season)
         BrowseList.TopAiring -> stringResource(R.string.search_top_airing)
         BrowseList.TopRated -> stringResource(R.string.search_top_rated)

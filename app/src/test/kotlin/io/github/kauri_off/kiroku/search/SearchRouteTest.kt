@@ -13,6 +13,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -24,34 +25,52 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.demo.DemoStore
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.ListEngine
+import io.github.kauri_off.kiroku.core.list.LocalList
+import io.github.kauri_off.kiroku.core.list.StoredEntry
+import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
+import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.NoSignIn
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.repository.SignIn
+import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.signin.SignInOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -172,8 +191,8 @@ class SearchRouteTest {
         graph.demo.server.offline.value = true
         search()
         typeKag()
-        compose.onNode(inView("No connection")).assertExists()
-        compose.onNode(inView("Retry")).assertExists()
+        assertTrue(compose.onAllNodes(inView("No connection")).fetchSemanticsNodes().isNotEmpty())
+        compose.onNode(inView("Retry") and hasClickAction()).assertExists()
         graph.demo.server.offline.value = false
         settle()
         compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertExists()
@@ -300,6 +319,350 @@ class SearchRouteTest {
         settle()
         compose.onNode(row).assertExists()
         assertEquals(4, requests.size)
+    }
+
+    @Test
+    fun `suggestions appear only for a signed-in session and belong to the sign-in that opened them`() {
+        val current = MutableStateFlow<Session>(Session.SignedOut)
+        val anime = FixtureAnime.exactToWatch
+        val title = anime.titles.romaji
+        val requests = mutableListOf<Pair<SignInId, Int>>()
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = current
+                    }
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId): BrowseSession =
+                            BrowseSession { offset, _ ->
+                                requests += owner to offset
+                                when (requests.size) {
+                                    1 -> Outcome.Failure(DataError.ServerError)
+                                    2 -> Outcome.Success(Page(listOf(Ranked(null, anime)), 17))
+                                    3 -> Outcome.Failure(DataError.ServerError)
+                                    else -> Outcome.Success(Page(listOf(Ranked(null, FixtureAnime.film)), null))
+                                }
+                            }
+                    }
+            }
+        val owner = Fixtures.reference.session.signIn
+        search(source)
+        compose.onNodeWithText("Suggestions for you").assertDoesNotExist()
+        compose.onNodeWithText("Top rated").assertExists()
+        current.value = Session.Expired(owner)
+        settle()
+        compose.onNodeWithText("Suggestions for you").assertDoesNotExist()
+        current.value = Session.SignedIn(owner)
+        settle()
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNodeWithText(FixtureAnime.film.titles.romaji).assertExists()
+
+        val row = hasText(title) and hasClickAction()
+        compose.onNode(row and hasText(watching)).assertExists()
+        compose.onNode(row).performClick()
+        settle()
+        compose.onNodeWithText(title).assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNode(row).assertExists()
+        assertEquals(listOf(0, 0, 17, 17).map { owner to it }, requests)
+
+        val oldRow = compose.onNode(row)
+        oldRow.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        oldRow.performTouchInput { longClick() }
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        current.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNode(row).assertDoesNotExist()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        assertTrue(
+            graph.demo.server.requests
+                .isEmpty(),
+        )
+        assertEquals(4, requests.size)
+    }
+
+    @Test
+    fun `signing in from expired suggestions returns Search to its root and opens a fresh feed`() {
+        val owner = Fixtures.reference.session.signIn
+        val replacement = SignInId("replacement")
+        val current = MutableStateFlow<Session>(Session.SignedIn(owner))
+        val signInStep = MutableStateFlow<SignInStep>(SignInStep.None)
+        val requests = mutableListOf<SignInId>()
+        val source =
+            object : AppGraph by graph, SignInOwner {
+                override val signIn =
+                    object : SignIn by NoSignIn() {
+                        override val canStart = true
+                        override val step = signInStep
+
+                        override fun acknowledge(step: SignInStep) {
+                            signInStep.compareAndSet(step, SignInStep.None)
+                        }
+                    }
+
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = current
+                    }
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId): BrowseSession =
+                            BrowseSession { offset, _ ->
+                                requests += owner
+                                val anime = if (owner == replacement) FixtureAnime.film else FixtureAnime.exactToWatch
+                                Outcome.Success(if (offset == 0) Page(emptyList(), 17) else Page(listOf(Ranked(null, anime)), null))
+                            }
+                    }
+            }
+
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertExists()
+        current.value = Session.Expired(owner)
+        settle()
+        compose.onNodeWithText("Suggestions are unavailable for this session").assertExists()
+        compose.onNodeWithText("Sign in").performClick()
+        settle()
+        compose.onNodeWithText("Sign in with MyAnimeList").assertExists()
+        current.value = Session.SignedIn(replacement)
+        signInStep.value = SignInStep.SignedIn
+        settle()
+        compose.onNodeWithText("My list").assertExists()
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNodeWithText(FixtureAnime.film.titles.romaji).assertExists()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertDoesNotExist()
+        assertEquals(listOf(owner, owner, replacement, replacement), requests)
+    }
+
+    @Test
+    fun `Change opens the fallback editor until the Suggestions sign-in changes`() {
+        val active = MutableStateFlow<Session>(Fixtures.reference.session)
+        openAddedSuggestion(active)
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+
+        active.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNodeWithText("Top rated").assertExists()
+    }
+
+    @Test
+    fun `Change returns to the Suggestions editor from another tab`() {
+        val active = MutableStateFlow<Session>(Fixtures.reference.session)
+        openAddedSuggestion(active)
+        compose.onNodeWithText("Profile").performClick()
+        settle()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+    }
+
+    @Test
+    fun `Change from a retired Suggestions sign-in cannot open an editor`() {
+        val active = MutableStateFlow<Session>(Fixtures.reference.session)
+        openAddedSuggestion(active)
+        active.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNodeWithText("Top rated").assertExists()
+    }
+
+    private fun openAddedSuggestion(active: MutableStateFlow<Session>) {
+        val anime = FixtureAnime.notOnListAiring
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = active
+                    }
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId) =
+                            BrowseSession { _, _ -> Outcome.Success(Page(listOf(Ranked(null, anime)), null)) }
+                    }
+            }
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNode(hasText(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        compose.onNodeWithText("Add to list").performClick()
+        settle()
+        compose.onNodeWithText("Change").assertExists()
+    }
+
+    @Test
+    fun `a suggestions title Save waiting for list admission cannot edit the replacement list`() {
+        val anime = FixtureAnime.exactToWatch
+        val a = Fixtures.reference.session
+        val b = Session.SignedIn(SignInId("replacement"))
+        val active = MutableStateFlow<Session>(a)
+        val original = DemoStore(Fixtures.reference.entries, a.signIn)
+        val replacement = DemoStore(Fixtures.reference.entries, b.signIn)
+        val remote = graph.demo.server
+        val values = remote.entry(anime.id)?.values
+        val holding = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var holdNextRead = false
+        val mutations = mutableListOf<AnimeId>()
+        val store =
+            object : LocalList by original {
+                private var current: LocalList = original
+
+                override suspend fun state() = current.state()
+
+                override fun observeEntries() = current.observeEntries()
+
+                override fun observeEntriesOf(ids: Set<AnimeId>) = current.observeEntriesOf(ids)
+
+                override suspend fun read(id: AnimeId) = current.read(id)
+
+                override suspend fun clear(owner: SignInId?) {
+                    current = replacement
+                }
+
+                override suspend fun readAll(): Map<AnimeId, StoredEntry> {
+                    if (holdNextRead) {
+                        holdNextRead = false
+                        holding.complete(Unit)
+                        release.await()
+                    }
+                    return current.readAll()
+                }
+
+                override suspend fun write(entries: Map<AnimeId, StoredEntry?>) {
+                    mutations += entries.keys
+                    current.write(entries)
+                }
+
+                override suspend fun add(
+                    anime: Anime,
+                    entry: StoredEntry,
+                ) {
+                    mutations += anime.id
+                    current.add(anime, entry)
+                }
+            }
+        val engine = ListEngine(remote, store, active, graph.clock, scope) { throw it }
+        val writes = mutableListOf<ListWrite>()
+        val source =
+            object : AppGraph by graph {
+                override val list =
+                    object : ListRepository by engine {
+                        override suspend fun write(write: ListWrite) = engine.write(write.also { writes += it })
+                    }
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = active
+                    }
+            }
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNode(hasText(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        compose.onNode(hasText("Watching") and hasClickAction()).performClick()
+        settle()
+        compose.onNode(status("On hold")).performClick()
+        holdNextRead = true
+        scope.launch { engine.sync(a.signIn) }
+        settle()
+        assertTrue(holding.isCompleted)
+        try {
+            compose.onNodeWithText("Save").performClick()
+            settle()
+            assertEquals(a.signIn, writes.single().list)
+            assertTrue(mutations.isEmpty())
+            active.value = b
+            settle()
+        } finally {
+            release.complete(Unit)
+        }
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        assertTrue(mutations.isEmpty())
+        assertTrue(remote.requests.isEmpty())
+        assertEquals(values, remote.entry(anime.id)?.values)
+        assertEquals(
+            values,
+            runBlocking {
+                original
+                    .read(anime.id)
+                    ?.entry
+                    ?.shown
+                    ?.values
+            },
+        )
+        assertEquals(
+            values,
+            runBlocking {
+                replacement
+                    .read(anime.id)
+                    ?.entry
+                    ?.shown
+                    ?.values
+            },
+        )
+    }
+
+    @Test
+    fun `back from a later suggestions page keeps the scrolled anchor and loaded pages`() {
+        val titles =
+            Fixtures.reference.anime
+                .distinctBy { it.titles.romaji }
+                .take(24)
+        val requests = mutableListOf<Int>()
+        val source =
+            object : AppGraph by graph {
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId): BrowseSession =
+                            BrowseSession { offset, _ ->
+                                requests += offset
+                                val items = titles.drop(offset).take(12).map { Ranked(null, it) }
+                                Outcome.Success(Page(items, 12.takeIf { offset == 0 }))
+                            }
+                    }
+            }
+
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(10)
+        settle()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(15)
+        settle()
+        val anchor = compose.onNodeWithText(titles[15].titles.romaji)
+        val top = anchor.getUnclippedBoundsInRoot().top
+        compose.onNodeWithText(titles[16].titles.romaji).performClick()
+        settle()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        assertEquals(top, anchor.getUnclippedBoundsInRoot().top)
+        assertEquals(listOf(0, 12), requests)
     }
 
     @Test

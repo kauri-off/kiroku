@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
@@ -55,6 +56,7 @@ data class ShellMessage(
         // Opens the title's edit sheet on the screen on top.
         data class Change(
             val id: AnimeId,
+            val owner: SignInId? = null,
         ) : Action
     }
 
@@ -85,10 +87,10 @@ class ShellMessages(
     private val shown = MutableStateFlow<Posted?>(null)
     val current: StateFlow<Posted?> = shown.asStateFlow()
 
-    private val requested = MutableStateFlow<AnimeId?>(null)
+    private val requested = MutableStateFlow<ShellMessage.Action.Change?>(null)
 
     // A title whose edit sheet "Change" asked for, until a screen with an edit sheet takes it.
-    val editRequest: StateFlow<AnimeId?> = requested.asStateFlow()
+    val editRequest: StateFlow<ShellMessage.Action.Change?> = requested.asStateFlow()
 
     private class Waiting(
         val posted: Posted,
@@ -175,7 +177,7 @@ class ShellMessages(
             when (val action = posted.message.action) {
                 is ShellMessage.Action.Undo -> write(action.write)
                 is ShellMessage.Action.Retry -> write(action.write)
-                is ShellMessage.Action.Change -> requested.value = action.id
+                is ShellMessage.Action.Change -> requested.value = action
                 null -> Unit
             }
         }
@@ -211,8 +213,8 @@ class ShellMessages(
         }
     }
 
-    fun editTaken(id: AnimeId) {
-        requested.compareAndSet(id, null)
+    fun editTaken(request: ShellMessage.Action.Change) {
+        requested.compareAndSet(request, null)
     }
 
     // No message shown, waiting or asking for an edit sheet, as at a start.

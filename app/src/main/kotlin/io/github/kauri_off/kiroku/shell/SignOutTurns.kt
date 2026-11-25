@@ -35,6 +35,7 @@ fun SignOutTurns(
             navigator.restart()
             messages.clear()
         }
+        navigator.pruneSuggestions(current.owner)
         navigator.hadSession = !signedOut
         navigator.sessionOwner = current.owner
         navigator.restoredNavigation = false

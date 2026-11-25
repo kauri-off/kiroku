@@ -128,7 +128,7 @@ class Demo(
     // Kept for the process as the app keeps them.
     val scores: ScoreDistributionRepository = KeptScoreDistributions(scoreSource)
 
-    val search: SearchRepository = DemoSearchRepository(fixtures, server)
+    val search: SearchRepository = DemoSearchRepository(fixtures, server, signIn)
 
     val userLists = DemoUserLists(fixtures, server)
 

@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.OwnedEntries
 import io.github.kauri_off.kiroku.core.repository.Untouched
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import kotlinx.coroutines.CancellationException
@@ -172,7 +173,12 @@ abstract class ListEngineContract {
         @Volatile
         var unreadAs: DataError = DataError.ServerError
 
-        override suspend fun refusedFor() = inner.refusedFor()
+        var beforeRefusalCheck: suspend () -> Unit = {}
+
+        override suspend fun refusedFor(): Duration {
+            beforeRefusalCheck()
+            return inner.refusedFor()
+        }
 
         override suspend fun fetch(expectedOwner: SignInId?): Outcome<List<ListEntry>> {
             fetchesUnder += session()
@@ -194,10 +200,11 @@ abstract class ListEngineContract {
         override suspend fun put(
             anime: Anime,
             values: SentValues?,
+            expectedOwner: SignInId?,
         ): Outcome<ListEntry?> {
             putsUnder += session()
             fault()
-            val answer = inner.put(anime, values).also { afterPut() }
+            val answer = inner.put(anime, values, expectedOwner).also { afterPut() }
             if (unreadAnswers > 0) {
                 unreadAnswers--
                 return Outcome.Failure(unreadAs)
@@ -260,8 +267,15 @@ abstract class ListEngineContract {
 
         override fun observeEntry(id: AnimeId): Flow<ListEntry?> = query("observeEntry") { inner.observeEntry(id) }
 
+        var beforeOwnedQuery: suspend () -> Unit = {}
+
         override fun observeEntriesOf(ids: Set<AnimeId>): Flow<Map<AnimeId, ListEntry>> =
-            query("observeEntriesOf") { inner.observeEntriesOf(ids) }
+            query("observeEntriesOf") {
+                flow {
+                    beforeOwnedQuery()
+                    emitAll(inner.observeEntriesOf(ids))
+                }
+            }
 
         override suspend fun state(): StoredList = reading("state") { inner.state() }
 
@@ -2663,6 +2677,63 @@ abstract class ListEngineContract {
             s.list.write(failures.single().retry)
             settle()
             assertEquals(1, s.server.requests.size)
+        }
+
+    @Test
+    fun `ambiguous write read-back survives for its owner and drops on replacement`() =
+        runTest {
+            for (replace in listOf(false, true)) {
+                val s = subject()
+                val anime = FixtureAnime.exactToWatch
+                val checking = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                s.mal.beforeRefusalCheck = {
+                    checking.complete(Unit)
+                    release.await()
+                }
+                s.mal.unreadAnswers = 1
+                s.list.write(ListWrite.MarkNextWatched(anime, madeIn = a.signIn))
+                advanceTimeBy(1500.milliseconds)
+                assertTrue(checking.isCompleted)
+                assertEquals(13, s.serverWatched(anime))
+                assertEquals(12, s.shownWatched(anime))
+                if (replace) {
+                    s.session.value = b
+                    runCurrent()
+                    assertEquals(b.signIn, s.store.state().owner)
+                }
+                release.complete(Unit)
+                settle()
+                assertEquals(if (replace) emptyList() else listOf(a), s.mal.fetchesUnder)
+                assertEquals(if (replace) null else 13, s.shownWatched(anime))
+            }
+        }
+
+    @Test
+    fun `a held title query cannot label replacement storage rows with its original owner`() =
+        runTest {
+            val s = subject()
+            val anime = FixtureAnime.exactToWatch
+            val query = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            s.local.beforeOwnedQuery = {
+                query.complete(Unit)
+                release.await()
+            }
+            val seen = mutableListOf<OwnedEntries>()
+            backgroundScope.launch { s.list.observeOwnedEntriesOf(setOf(anime.id)).collect { seen += it } }
+            runCurrent()
+            assertTrue(query.isCompleted)
+            val other = checkNotNull(s.server.entry(anime.id)).let { it.copy(values = it.values.copy(watchedEpisodes = 5)) }
+            s.store.clear(b.signIn)
+            s.store.add(anime, StoredEntry.settled(other.record))
+            release.complete(Unit)
+            settle()
+            assertTrue(seen.isEmpty())
+            s.session.value = b
+            settle()
+            assertEquals(b.signIn, seen.single().owner)
+            assertEquals(listOf(other), seen.single().entries)
         }
 
     @Test

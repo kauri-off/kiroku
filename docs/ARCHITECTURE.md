@@ -26,7 +26,7 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 - For titles that are still airing: episodes aired so far, total episodes, and how many aired episodes the user has
   yet to watch ("to watch").
 - Reliable notifications when a new episode of a title on the user's list has aired.
-- Search for anime, and four browse lists (this season, top airing, top rated, most popular).
+- Search for anime, public browse lists and personalised anime suggestions.
 - The user's profile and statistics; another user's list and statistics by user name.
 - Russian and English user interface.
 
@@ -42,7 +42,7 @@ without affecting its page (section 2.3).
 | Data | Source | Needs sign-in |
 |---|---|---|
 | Titles, search, rankings, seasons, related titles, status statistics, recommendations | MAL API v2 | No (client id only) |
-| The signed-in user's list (read and write), own profile | MAL API v2 | Yes |
+| The signed-in user's list (read and write), own profile, personalised suggestions | MAL API v2 | Yes |
 | Another user's public list | MAL API v2 | No (client id only) |
 | Airing times of episodes | AniList GraphQL, keyed by MAL id | No |
 | A title's score distribution (MAL's votes per score) | Tenrai, keyed by MAL id | No |
@@ -76,7 +76,8 @@ MAL (from its API reference):
 - Dates may be partial ("2017-10-23", "2017-10", "2017").
 - Entries flagged as not safe for work are returned only on request. **The user's own list always requests them,
   so an entry never vanishes from the list** (dailyAL issues #11, #60). Search and browse leave them out unless the
-  setting "Show adult content in search" is on. Inside a title's page the setting changes only its recommendations:
+  setting "Show adult content in search" is on. With the setting off, personalised suggestions show only titles MAL
+  classifies as safe for work. Inside a title's page the setting changes only its recommendations:
   the title and its related titles are served either way.
 
 AniList (from its API documentation and recorded answers):

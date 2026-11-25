@@ -25,7 +25,12 @@ class MalSearchTest {
         val recorded = RecordedAnswers.named("search_adult")
         network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
 
-        val outcome = runBlocking { MalSearch(network.http, network.clock).search(" bible black ", offset = 0, includeAdult = true) }
+        val outcome =
+            runBlocking {
+                MalSearch(network.http, network.clock) {
+                    error("Public reads never use the account")
+                }.search(" bible black ", offset = 0, includeAdult = true)
+            }
         val page = (outcome as Outcome.Success).value
         assertEquals(listOf(368L, 972L, 1401L, 2873L, 5347L, 13223L).map(::AnimeId), page.items.map { it.id })
         val first = page.items.first()
@@ -48,7 +53,7 @@ class MalSearchTest {
             val recorded = RecordedAnswers.named(name)
             network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
         }
-        val search = MalSearch(network.http, network.clock)
+        val search = MalSearch(network.http, network.clock) { error("Public reads never use the account") }
         val first = (runBlocking { search.search("naruto", offset = 0, includeAdult = false) } as Outcome.Success).value
         assertEquals(AnimeId(20), first.items.first().id)
         assertEquals(10, first.nextOffset)
@@ -66,7 +71,7 @@ class MalSearchTest {
 
     @Test
     fun `recorded MAL search refuses one and two characters and accepts three`() {
-        val search = MalSearch(network.http, network.clock)
+        val search = MalSearch(network.http, network.clock) { error("Public reads never use the account") }
         for ((query, name) in listOf("a" to "search_one_char", "an" to "search_two_chars", "ani" to "search_three_chars")) {
             val recorded = RecordedAnswers.named(name)
             network.api.enqueue(answer(recorded.status, recorded.body, "application/json; charset=UTF-8"))
@@ -84,7 +89,7 @@ class MalSearchTest {
 
     @Test
     fun `the three rankings keep the returned order and show the ranking position`() {
-        val search = MalSearch(network.http, network.clock)
+        val search = MalSearch(network.http, network.clock) { error("Public reads never use the account") }
         val rankings =
             listOf(
                 Triple(BrowseList.TopAiring, "airing", listOf(61469L, 61967, 21, 50250, 61987, 55809, 60988, 51039, 64534, 56524)),
@@ -118,7 +123,7 @@ class MalSearchTest {
         network.api.enqueue(answer(503, body = ""))
         network.api.enqueue(answer(503, body = ""))
         enqueue("season_fall_2026_next")
-        val search = MalSearch(network.http, network.clock)
+        val search = MalSearch(network.http, network.clock) { error("Public reads never use the account") }
 
         val fall = search.openBrowse(BrowseList.ThisSeason)
         val first = (runBlocking { fall.load(0, includeAdult = false) } as Outcome.Success).value
@@ -162,7 +167,7 @@ class MalSearchTest {
     @Test
     fun `an adult ranking page requests adult results at its own offset`() {
         enqueue("ranking_bypopularity")
-        val search = MalSearch(network.http, network.clock)
+        val search = MalSearch(network.http, network.clock) { error("Public reads never use the account") }
         runBlocking { search.openBrowse(BrowseList.MostPopular).load(5, includeAdult = true) }
         val request = network.api.received()
         assertEquals("bypopularity", request.url.queryParameter("ranking_type"))

@@ -8,6 +8,7 @@ import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.shell.LocalSuggestionsOwner
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
@@ -53,6 +54,7 @@ fun RelatedRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSignIn: () -> Unit,
 ) {
+    val owner = LocalSuggestionsOwner.current
     val related =
         viewModel {
             RelatedViewModel(
@@ -65,6 +67,7 @@ fun RelatedRoute(
                 graph.clock,
                 graph.titleLanguage,
                 key.opened,
+                owner,
             )
         }
     val state by related.state.collectAsScreenState()

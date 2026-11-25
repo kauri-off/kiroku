@@ -32,6 +32,7 @@ object SearchFixtureStates {
 
             override fun browse(list: BrowseList): List<SearchHit> =
                 when (list) {
+                    BrowseList.Suggestions -> set.anime.map { hit(it) }
                     BrowseList.ThisSeason -> set.anime.filter { it.airingStatus != AiringStatus.Finished }.map { hit(it) }
                     BrowseList.TopAiring ->
                         byRank(set.anime.filter { it.airingStatus.effective == AiringStatus.Airing })
@@ -96,6 +97,8 @@ object SearchFixtureStates {
 
     val start = state("", SearchContent.Start(recent))
 
+    val startSignedIn = state("", SearchContent.Start(recent, suggestions = true))
+
     val startNoRecent = state("", SearchContent.Start(emptyList()))
 
     val searchView = state("", SearchContent.Start(recent), expanded = true)
@@ -121,7 +124,7 @@ object SearchFixtureStates {
     fun browse(
         list: BrowseList,
         more: More = More.None,
-    ) = BrowseState(list, Paged.Shown(browseRows(list), more), editable = true)
+    ) = BrowseState(list, Paged.Shown(browseRows(list), more), editable = list != BrowseList.Suggestions)
 
     val browseLoading = BrowseState(BrowseList.TopAiring, Paged.Loading)
 

@@ -56,6 +56,7 @@ internal class AnimeNode(
     @SerialName("num_episodes") val episodes: JsonElement? = null,
     @SerialName("start_date") val startDate: String? = null,
     val broadcast: MalBroadcast? = null,
+    val nsfw: JsonElement? = null,
     val mean: JsonElement? = null,
     val rank: JsonElement? = null,
     val genres: List<Named>? = null,

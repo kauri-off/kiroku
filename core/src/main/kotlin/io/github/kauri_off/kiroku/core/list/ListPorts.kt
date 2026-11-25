@@ -29,6 +29,7 @@ interface RemoteList {
     suspend fun put(
         anime: Anime,
         values: SentValues?,
+        expectedOwner: SignInId? = null,
     ): Outcome<ListEntry?>
 
     // How long MAL asks to be left alone yet by requests nobody asked for (section 2.3); zero when it may be asked.

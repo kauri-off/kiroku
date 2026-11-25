@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -31,6 +32,7 @@ class EditSheetViewModel(
     private val titleLanguage: Flow<TitleLanguage>,
     private val saved: SavedStateHandle,
     private val messages: ShellMessages,
+    private val owner: SignInId? = null,
 ) : ViewModel() {
     private val shown = mutableStateOf<EditSheetState?>(null)
 
@@ -72,9 +74,15 @@ class EditSheetViewModel(
         when (event) {
             EditSheetEvent.SaveClicked ->
                 if (anime != null && after.closing && !before.closing && (after.hasChanges || after.isNew)) {
-                    messages.write(ListWrite.Save(anime, after.draft, after.set))
+                    messages.write(ListWrite.Save(anime, after.draft, after.set, madeIn = owner))
                 }
-            EditSheetEvent.RemoveConfirmed -> if (anime != null && !before.closing && !after.isNew) messages.write(ListWrite.Remove(anime))
+            EditSheetEvent.RemoveConfirmed ->
+                if (anime != null &&
+                    !before.closing &&
+                    !after.isNew
+                ) {
+                    messages.write(ListWrite.Remove(anime, madeIn = owner))
+                }
             EditSheetEvent.Dismissed -> {
                 sheetRead?.cancel()
                 shown.value = null
@@ -97,7 +105,17 @@ class EditSheetViewModel(
             viewModelScope.launch {
                 val entry =
                     try {
-                        list.observeEntry(id).first()
+                        if (owner == null) {
+                            list.observeEntry(id).first()
+                        } else {
+                            val owned = list.observeOwnedEntriesOf(setOf(id)).first()
+                            if (owned.owner != owner) {
+                                loading = false
+                                forget()
+                                return@launch
+                            }
+                            owned.entries.firstOrNull { it.anime.id == id }
+                        }
                     } catch (_: DataException) {
                         loading = false
                         forget()

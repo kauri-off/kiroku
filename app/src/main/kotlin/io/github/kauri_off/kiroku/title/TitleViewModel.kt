@@ -15,6 +15,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.chainWalk
 import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
@@ -66,6 +67,7 @@ class TitleViewModel(
     private val messages: ShellMessages,
     private val opened: TitleSummary? = null,
     private val adultSearchChoice: Flow<AdultSearchChoice> = flowOf(AdultSearchChoice()),
+    private val owner: SignInId? = null,
 ) : ViewModel() {
     private class Sources(
         val anime: Anime?,
@@ -139,7 +141,7 @@ class TitleViewModel(
     private val around =
         stored
             .withRead({ shownTitles(id, it.details, it.chain) }) { ids ->
-                list.entriesOf(ids).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) }
+                list.entriesOf(ids, owner).map { ListRead(it) }.readAgainOnRetry(retries) { ListRead(failure = it) }
             }.withRead({ (stored, _) -> shownTitles(id, stored.details, stored.chain) to (stored.anime ?: opened?.anime) }) { (ids, page) ->
                 airing.airingOf(ids, page).readAgainOnRetry(airingReads) { emptyMap() }
             }.map { (read, airing) -> read.first to Around(read.second, airing) }
@@ -235,8 +237,8 @@ class TitleViewModel(
     fun onEvent(event: TitleEvent) {
         when (event) {
             TitleEvent.AddToList -> addToList()
-            is TitleEvent.SetWatched -> watched { ListWrite.SetWatched(it, event.watched) }
-            is TitleEvent.StepWatched -> watched { ListWrite.StepWatched(it, event.by) }
+            is TitleEvent.SetWatched -> watched { ListWrite.SetWatched(it, event.watched, madeIn = owner) }
+            is TitleEvent.StepWatched -> watched { ListWrite.StepWatched(it, event.by, madeIn = owner) }
             TitleEvent.Retry -> {
                 retries.update { it + 1 }
                 airingReads.update { it + 1 }
@@ -455,8 +457,8 @@ class TitleViewModel(
     private fun addToList() {
         val page = shownPage() ?: return
         if (page.entry != null) return
-        messages.write(ListWrite.Save(page.anime, EditSheetState.newEntry)) {
-            ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id))
+        messages.write(ListWrite.Save(page.anime, EditSheetState.newEntry, madeIn = owner)) {
+            ShellMessage(ShellMessage.Text.AddedToPlanned, ShellMessage.Action.Change(id, owner))
         }
     }
 

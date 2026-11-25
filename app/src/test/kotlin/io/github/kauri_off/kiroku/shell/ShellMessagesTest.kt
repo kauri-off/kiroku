@@ -272,7 +272,7 @@ class ShellMessagesTest {
             messages.ended(messages.current.value!!, actionPerformed = true)
             listOf(failed(2), moved).forEach(messages::post)
         }
-        assertEquals(anime.id, messages.editRequest.value)
+        assertEquals(ShellMessage.Action.Change(anime.id), messages.editRequest.value)
         assertEquals(failed(2), messages.current.value?.message)
         compose.runOnUiThread { messages.clear() }
         assertNull(messages.current.value)

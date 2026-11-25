@@ -12,6 +12,8 @@ import io.github.kauri_off.kiroku.about.AboutRoute
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
@@ -53,6 +55,7 @@ import io.github.kauri_off.kiroku.titlesub.RelatedRoute
 import io.github.kauri_off.kiroku.titlesub.ScoresKey
 import io.github.kauri_off.kiroku.titlesub.ScoresRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.flow.first
 
 // The app: the shell over the screens built so far, with the messages that outlive the screen that posted them.
 @Composable
@@ -69,7 +72,28 @@ fun AppRoute(
     // "Change" opens the edit sheet on the List or on the title's own page; from elsewhere it goes to that page.
     val edit by messages.editRequest.collectAsScreenState()
     LaunchedEffect(edit) {
-        edit?.let { navigator.showEditorOf(it) }
+        edit?.let { request ->
+            val owner = request.owner
+            if (owner != null) {
+                if (graph.session
+                        .observeSession()
+                        .first()
+                        .owner != owner
+                ) {
+                    messages.editTaken(request)
+                    return@let
+                }
+                val search = navigator.stackOf(Destination.Search)
+                val origin = search.filterIsInstance<BrowseKey>().lastOrNull { it.list == BrowseList.Suggestions }
+                if (navigator.current != Destination.Search) navigator.select(Destination.Search)
+                if (origin?.owner != owner.value) {
+                    val page = TitleKey(request.id.value, suggestionsOwner = owner.value)
+                    if (navigator.stack.last() != page) navigator.open(page)
+                    return@let
+                }
+            }
+            navigator.showEditorOf(request.id)
+        }
     }
     SignInTurns(graph, navigator)
     val session = SignOutTurns(graph, navigator, messages)
@@ -156,7 +180,7 @@ fun appEntries(
                 messages,
                 snackbars,
                 openTitle,
-                onBrowse = { navigator.open(BrowseKey(it)) },
+                onBrowse = { navigator.open(it) },
                 onSignIn = signIn,
             )
         }

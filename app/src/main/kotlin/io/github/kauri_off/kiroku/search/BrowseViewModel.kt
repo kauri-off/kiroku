@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Ranked
@@ -27,9 +28,10 @@ internal class BrowseViewModel(
     list: BrowseList,
     search: SearchRepository,
     connection: Connection,
-    includeAdult: Flow<Boolean>,
+    includeAdult: Flow<Boolean?>,
+    owner: SignInId? = null,
 ) : ViewModel() {
-    private val browse by lazy { search.openBrowse(list) }
+    private val browse by lazy { owner?.let(search::openSuggestions) ?: search.openBrowse(list) }
     private val pages = MutableStateFlow(BrowseResults())
     private var adult: Boolean? = null
     private var pending: Job? = null
