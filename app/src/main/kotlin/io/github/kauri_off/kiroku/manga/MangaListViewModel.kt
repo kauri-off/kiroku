@@ -151,7 +151,7 @@ internal class MangaListViewModel(
                         val kept = snapshot.takeUnless { result.error == DataError.ListEnded }
                         page.value = Page(kept, result.error)
                         if (kept != null) onRefreshFailed(result.error)
-                        loads.ended(result.error)
+                        loads.ended(result.error, retryAfterHiddenFailure = !recovering)
                         if (recoveryPending) read()
                     }
                 }

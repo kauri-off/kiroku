@@ -38,6 +38,7 @@ internal class MangaTitleViewModel(
     private val opened: MangaTitleSummary? = null,
 ) : ViewModel() {
     private data class Page(
+        val owner: SessionOwner? = null,
         val cached: StoredManga? = null,
         val problem: MangaTitleProblem? = null,
         val refreshing: Boolean = false,
@@ -93,7 +94,8 @@ internal class MangaTitleViewModel(
             page,
             language.onStart { emit(opened?.language ?: TitleLanguage.Romaji) },
             session,
-        ) { current, titleLanguage, session ->
+        ) { latest, titleLanguage, session ->
+            val current = latest.takeIf { it.owner == null || it.owner.id == session.owner } ?: Page()
             val summary =
                 opened?.takeIf { it.owner == null || it.owner == session.owner }?.details?.takeUnless {
                     current.problem == MangaTitleProblem.ReadFailed(DataError.ListEnded) || current.problem == MangaTitleProblem.Unavailable
@@ -109,6 +111,7 @@ internal class MangaTitleViewModel(
                                 details.titles.preferred(titleLanguage),
                                 current.refreshing,
                                 current.coverAttempt,
+                                detailsError = (current.problem as? MangaTitleProblem.ReadFailed)?.error.takeIf { cached == null },
                             )
                         current.problem != null -> MangaTitleContent.Failed(current.problem)
                         else -> MangaTitleContent.Loading
@@ -177,13 +180,13 @@ internal class MangaTitleViewModel(
         resumeForce = null
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
-                val before = page.value
+                val before = page.value.copy(owner = owner)
                 val stored = source.stored(id, owner)
                 ensureActive()
                 if (stored is Outcome.Failure && stored.error == DataError.ListEnded) {
                     retryOwed = false
                     resumeFullShow = false
-                    page.value = Page(problem = MangaTitleProblem.ReadFailed(stored.error))
+                    page.value = Page(owner = owner, problem = MangaTitleProblem.ReadFailed(stored.error))
                     return@launch
                 }
                 val cached =
@@ -224,12 +227,12 @@ internal class MangaTitleViewModel(
                 resumeFullShow = false
                 when (answer) {
                     is Outcome.Success -> {
-                        page.value = Page(cached = answer.value, coverAttempt = before.coverAttempt + 1)
+                        page.value = Page(owner = owner, cached = answer.value, coverAttempt = before.coverAttempt + 1)
                     }
                     is Outcome.Failure -> {
                         val problem = MangaTitleProblem.ReadFailed(answer.error)
                         val stillCached = cached.takeUnless { answer.error == DataError.ListEnded }
-                        page.value = Page(stillCached, problem, coverAttempt = before.coverAttempt + 1)
+                        page.value = Page(owner, stillCached, problem, coverAttempt = before.coverAttempt + 1)
                         val hasSummary = opened != null && (opened.owner == null || opened.owner == owner.id)
                         if (stillCached != null || (hasSummary && answer.error != DataError.ListEnded)) onRefreshFailed(answer.error)
                         retryOwed = answer.error == DataError.NoConnection

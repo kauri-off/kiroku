@@ -100,7 +100,11 @@ class ShownLoads(
         owed.value = false
     }
 
-    fun ended(error: DataError?) {
+    fun ended(
+        error: DataError?,
+        retryAfterHiddenFailure: Boolean = false,
+    ) {
+        if (error == DataError.NoConnection && retryAfterHiddenFailure && !isShowing) spent = false
         owed.value = error == DataError.NoConnection
     }
 

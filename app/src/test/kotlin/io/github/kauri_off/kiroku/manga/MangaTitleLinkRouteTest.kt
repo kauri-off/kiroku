@@ -16,6 +16,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.link.readLink
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.link.AppLinks
@@ -26,7 +27,7 @@ import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -48,7 +49,7 @@ open class StartedByMangaLinkApplication :
         object : AppGraph by test {
             override val manga =
                 object : MangaRepository {
-                    override fun observeOwner() = flowOf(SessionOwner(null))
+                    override fun observeOwner() = test.session.observeSession().map { SessionOwner(it.owner) }
 
                     private var stored: StoredManga? = null
 

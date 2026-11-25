@@ -305,21 +305,27 @@ class MangaTitleViewModelTest {
     fun `a replacement owner loads on a brief re-show without reading for the retired owner again`() =
         runTest(dispatcher) {
             val original = owners.value
-            val replacement = SessionOwner(SignInId("replacement"))
+            val nextSignIn = SignInId("replacement")
+            val replacement = SessionOwner(nextSignIn)
+            val account = MutableStateFlow<Session>(Session.SignedOut)
             val old = StoredManga(mangaFixture, now)
             val updated = old.copy(details = old.details.copy(chapters = 183))
             val lookups = mutableListOf<SessionOwner>()
             val viewModel =
-                title(lookup = {
-                    lookups += it
-                    if (it === original) old else null
-                })
+                title(
+                    account = account,
+                    lookup = {
+                        lookups += it
+                        if (it === original) old else null
+                    },
+                )
             try {
                 val first = showing(viewModel.state, viewModel.shown)
                 runCurrent()
                 assertEquals(old.details, shown(viewModel).details)
                 first.cancel()
                 runCurrent()
+                account.value = Session.SignedIn(nextSignIn)
                 owners.value = replacement
                 runCurrent()
                 assertEquals(listOf(original), lookups)
@@ -677,10 +683,17 @@ class MangaTitleViewModelTest {
                 val next = SignInId("next-owner")
                 answer = CompletableDeferred()
                 account.value = Session.SignedIn(next)
+                runCurrent()
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+                assertEquals(1, reads)
+
                 owners.value = SessionOwner(next)
                 runCurrent()
                 assertEquals(2, reads)
-                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+                val updated = mangaFixture.copy(chapters = 180)
+                answer.complete(Outcome.Success(StoredManga(updated, now)))
+                runCurrent()
+                assertEquals(updated, shown(viewModel).details)
             } finally {
                 viewModel.viewModelScope.cancel()
             }

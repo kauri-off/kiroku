@@ -151,6 +151,45 @@ class MangaListViewModelTest {
         }
 
     @Test
+    fun `a second offline pull covered by a title retries once after Back`() =
+        runTest(dispatcher) {
+            val vm = model()
+            val pending = CompletableDeferred<Outcome<MangaListSnapshot>>()
+            try {
+                val firstShow = showing(vm.shown, vm.state)
+                runCurrent()
+                vm.refresh()
+                runCurrent()
+                answer = CompletableDeferred(Outcome.Success(snapshot))
+                online.value = true
+                runCurrent()
+                assertEquals(2, fetches)
+
+                answer = pending
+                vm.refresh()
+                runCurrent()
+                assertEquals(3, fetches)
+                firstShow.cancel()
+                runCurrent()
+                online.value = false
+                pending.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(3, fetches)
+
+                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(4, fetches)
+            } finally {
+                pending.complete(Outcome.Failure(DataError.NoConnection))
+                vm.viewModelScope.cancel()
+                runCurrent()
+            }
+        }
+
+    @Test
     fun `a queued refresh waits for visibility at admission and resumes after Back`() =
         runTest(dispatcher) {
             val vm = model()
