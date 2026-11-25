@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.AppBarWithSearch
 import androidx.compose.material3.ExpandedFullScreenContainedSearchBar
@@ -53,9 +55,12 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -80,17 +85,30 @@ fun SearchScreen(
         rememberContainedSearchBarState(if (state.expanded) SearchBarValue.Expanded else SearchBarValue.Collapsed)
     },
 ) {
-    BackHandler(enabled = state.query.text.isNotEmpty()) { onEvent(SearchEvent.Clear) }
+    val onTop = LocalOnTop.current
+    BackHandler(enabled = onTop && state.query.text.isNotEmpty()) { onEvent(SearchEvent.Clear) }
     // Leaving for another screen closes the view at once: a new, closed bar replaces the open one.
     // Only for events that leave the screen: a new bar learns where the collapsed bar is when Search is laid out again.
     var bars by rememberSaveable { mutableIntStateOf(0) }
     val bar = key(bars) { rememberBar() }
+    val manga = state.content is SearchContent.MangaStart || state.content is SearchContent.MangaResults
+    val mangaQuery = (state.content as? SearchContent.MangaResults)?.query
+    val mangaScroll = mangaQuery?.let { key(it) { rememberLazyListState() } }
+    val expandedMangaScroll = mangaQuery?.let { key(it) { rememberLazyListState() } }
     val events: (SearchEvent) -> Unit = { event ->
-        if (event is SearchEvent.Open || event is SearchEvent.Browse || event is SearchEvent.SignIn) bars++
+        if (event is SearchEvent.OpenManga && bar.currentValue == SearchBarValue.Expanded && expandedMangaScroll != null) {
+            mangaScroll?.requestScrollToItem(expandedMangaScroll.firstVisibleItemIndex, expandedMangaScroll.firstVisibleItemScrollOffset)
+        }
+        when (event) {
+            is SearchEvent.Open, is SearchEvent.Browse, is SearchEvent.OpenManga,
+            SearchEvent.SignIn, SearchEvent.Manga, SearchEvent.BrowseManga,
+            -> bars++
+            else -> Unit
+        }
         onEvent(event)
     }
     val colors = SearchBarDefaults.containedColors(bar)
-    val field = @Composable { SearchField(state.query, bar, colors.inputFieldColors, events) }
+    val field = @Composable { SearchField(state.query, bar, colors.inputFieldColors, events, manga) }
     Scaffold(
         modifier = modifier,
         // The bar's own container is clear; this one hides the rows that scroll under it, up to the screen's top edge.
@@ -124,7 +142,8 @@ fun SearchScreen(
             events,
             padding,
             ListItemDefaults.colors(),
-            autoLoadMore = bar.currentValue != SearchBarValue.Expanded && bar.targetValue != SearchBarValue.Expanded,
+            autoLoadMore = onTop && bar.currentValue != SearchBarValue.Expanded && bar.targetValue != SearchBarValue.Expanded,
+            mangaScroll = mangaScroll,
         )
     }
     // The field itself moves from the bar into the view, whose own container fades in behind it.
@@ -144,7 +163,15 @@ fun SearchScreen(
         if (state.sessionExpired) SessionBanner(onSignIn = { events(SearchEvent.SignIn) })
         // The view already keeps its content clear of the navigation bar and the keyboard.
         Box(Modifier.fillMaxSize()) {
-            Body(state.content, state.editable, events, PaddingValues(), viewRows(colors), autoLoadMore = true)
+            Body(
+                state.content,
+                state.editable,
+                events,
+                PaddingValues(),
+                viewRows(colors),
+                autoLoadMore = onTop,
+                mangaScroll = expandedMangaScroll,
+            )
             WindowSnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter))
         }
     }
@@ -161,9 +188,12 @@ private fun SearchField(
     bar: SearchBarState,
     colors: TextFieldColors,
     onEvent: (SearchEvent) -> Unit,
+    manga: Boolean,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val expanded = bar.currentValue == SearchBarValue.Expanded
+    val label = stringResource(if (manga) R.string.manga_search_placeholder else R.string.search_placeholder)
+    val semantics = if (manga) Modifier.semantics { contentDescription = label } else Modifier
     SearchBarDefaults.InputField(
         textFieldState = query,
         searchBarState = bar,
@@ -172,14 +202,17 @@ private fun SearchField(
             keyboard?.hide()
             onEvent(SearchEvent.Submit)
         },
-        modifier = Modifier.withoutAutofill().fillMaxWidth(),
-        // The field is spoken as "Search" already.
-        placeholder = { Text(stringResource(R.string.search_placeholder), Modifier.clearAndSetSemantics {}) },
+        modifier = Modifier.withoutAutofill().fillMaxWidth().then(semantics),
+        placeholder = { Text(label, Modifier.clearAndSetSemantics {}) },
         leadingIcon = {
             if (expanded) {
                 // The search view's own Back, which closes it as the system's Back does.
                 val back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
                 IconButton(onClick = { back?.onBackPressed() }) {
+                    Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
+                }
+            } else if (manga) {
+                IconButton(onClick = { onEvent(SearchEvent.Back) }) {
                     Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))
                 }
             } else {
@@ -207,10 +240,35 @@ private fun Body(
     padding: PaddingValues,
     rows: ListItemColors,
     autoLoadMore: Boolean,
+    mangaScroll: LazyListState?,
 ) {
     when (content) {
         is SearchContent.Start -> CentredList(padding) { start(content, onEvent, rows) }
-        is SearchContent.Results -> Results(content, editable, onEvent, padding, rows, autoLoadMore)
+        is SearchContent.Results -> AnimeResults(content, editable, onEvent, padding, rows, autoLoadMore)
+        is SearchContent.MangaStart ->
+            CentredList(padding) {
+                recentRows(content.recent, onEvent, rows)
+                item(key = BROWSE, contentType = HEADER) {
+                    val gap = if (content.recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
+                    SectionHeader(stringResource(R.string.search_browse), gap)
+                }
+                item(key = MANGA, contentType = LINK) {
+                    LinkRow(stringResource(R.string.manga_ranking), rows) { onEvent(SearchEvent.BrowseManga) }
+                }
+            }
+        is SearchContent.MangaResults ->
+            Results(content.query, content.results, onEvent, padding, scroll = mangaScroll) { shown ->
+                pagedManga(
+                    content.query,
+                    shown,
+                    R.string.search_failed,
+                    onOpen = { onEvent(SearchEvent.OpenManga(it)) },
+                    onLoadMore = { onEvent(SearchEvent.LoadMore) },
+                    onRetry = { onEvent(SearchEvent.Retry) },
+                    autoLoadMore = autoLoadMore,
+                    colors = rows,
+                )
+            }
     }
 }
 
@@ -219,15 +277,9 @@ private fun LazyListScope.start(
     onEvent: (SearchEvent) -> Unit,
     rows: ListItemColors,
 ) {
-    val recent = content.recent
-    if (recent.isNotEmpty()) {
-        item(key = RECENT, contentType = HEADER) { SectionHeader(stringResource(R.string.search_recent)) }
-        items(recent, key = { it }, contentType = { LINK }) { query ->
-            ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
-        }
-    }
+    recentRows(content.recent, onEvent, rows)
     item(key = BROWSE, contentType = HEADER) {
-        val gap = if (recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
+        val gap = if (content.recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
         SectionHeader(stringResource(R.string.search_browse), gap)
     }
     if (content.suggestions) {
@@ -238,12 +290,30 @@ private fun LazyListScope.start(
     items(browseLists, key = { it }, contentType = { LINK }) { list ->
         LinkRow(browseName(list), rows) { onEvent(SearchEvent.Browse(list)) }
     }
+    if (content.mangaAvailable) {
+        item(key = MANGA, contentType = LINK) {
+            LinkRow(stringResource(R.string.manga_catalogue), rows) { onEvent(SearchEvent.Manga) }
+        }
+    }
+}
+
+private fun LazyListScope.recentRows(
+    recent: List<String>,
+    onEvent: (SearchEvent) -> Unit,
+    rows: ListItemColors,
+) {
+    if (recent.isNotEmpty()) {
+        item(key = RECENT, contentType = HEADER) { SectionHeader(stringResource(R.string.search_recent)) }
+        items(recent, key = { it }, contentType = { LINK }) { query ->
+            ListItem(onClick = { onEvent(SearchEvent.SearchAgain(query)) }, colors = rows, content = { Text(query) })
+        }
+    }
 }
 
 // A query of digits alone has the row that opens the title of that id above its results, and above the state that
 // stands in for them.
 @Composable
-private fun Results(
+private fun AnimeResults(
     content: SearchContent.Results,
     editable: Boolean,
     onEvent: (SearchEvent) -> Unit,
@@ -251,23 +321,37 @@ private fun Results(
     rows: ListItemColors,
     autoLoadMore: Boolean,
 ) {
-    val openId = content.openId
-    val results = content.results
+    val header: (@Composable () -> Unit)? = content.openId?.let { id -> { OpenIdRow(id, onEvent, rows) } }
+    Results(content.query, content.results, onEvent, padding, header) { shown ->
+        pagedRows(
+            content.query,
+            shown.items,
+            shown.more,
+            R.string.search_failed,
+            onOpen = { onEvent(SearchEvent.Open(it)) },
+            onEdit = if (editable) ({ onEvent(SearchEvent.Edit(it)) }) else null,
+            onLoadMore = { onEvent(SearchEvent.LoadMore) },
+            onRetry = { onEvent(SearchEvent.Retry) },
+            colors = rows,
+            autoLoadMore = autoLoadMore,
+        )
+    }
+}
+
+@Composable
+private fun <T> Results(
+    query: String,
+    results: Paged<T>,
+    onEvent: (SearchEvent) -> Unit,
+    padding: PaddingValues,
+    header: (@Composable () -> Unit)? = null,
+    scroll: LazyListState? = null,
+    content: LazyListScope.(Paged.Shown<T>) -> Unit,
+) {
     if (results is Paged.Shown && (results.items.isNotEmpty() || results.more != More.None)) {
-        CentredList(padding) {
-            if (openId != null) item(key = OPEN_ID, contentType = LINK) { OpenIdRow(openId, onEvent, rows) }
-            pagedRows(
-                content.query,
-                results.items,
-                results.more,
-                R.string.search_failed,
-                onOpen = { onEvent(SearchEvent.Open(it)) },
-                onEdit = if (editable) ({ onEvent(SearchEvent.Edit(it)) }) else null,
-                onLoadMore = { onEvent(SearchEvent.LoadMore) },
-                onRetry = { onEvent(SearchEvent.Retry) },
-                colors = rows,
-                autoLoadMore = autoLoadMore,
-            )
+        CentredList(padding, scroll) {
+            if (header != null) item(key = OPEN_ID, contentType = LINK) { header() }
+            content(results)
         }
         return
     }
@@ -278,11 +362,11 @@ private fun Results(
                 ScreenState.Error(
                     stringResource(results.error.message(R.string.search_failed)),
                 ) { onEvent(SearchEvent.Retry) }
-            is Paged.Shown -> ScreenState.Empty(stringResource(R.string.search_no_results, content.query))
+            is Paged.Shown -> ScreenState.Empty(stringResource(R.string.search_no_results, query))
         }
     Centred(padding) {
         Column(Modifier.fillMaxSize()) {
-            if (openId != null) OpenIdRow(openId, onEvent, rows)
+            header?.invoke()
             ScreenState(state, Modifier.weight(1f))
         }
     }
@@ -323,10 +407,12 @@ internal fun browseName(list: BrowseList): String =
 @Composable
 private fun CentredList(
     padding: PaddingValues,
+    scroll: LazyListState? = null,
     content: LazyListScope.() -> Unit,
 ) {
     Centred(PaddingValues(start = padding.start(), end = padding.end())) {
         LazyColumn(
+            state = scroll ?: rememberLazyListState(),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + Spacing.s),
             content = content,
@@ -354,5 +440,6 @@ private fun PaddingValues.end() = calculateEndPadding(LocalLayoutDirection.curre
 private const val RECENT = 0
 private const val BROWSE = 1
 private const val OPEN_ID = 2
+private const val MANGA = 3
 private const val HEADER = 0
 private const val LINK = 1

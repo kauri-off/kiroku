@@ -1,0 +1,236 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 11,
+                "title": "Naruto",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/249658.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/249658l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Naruto",
+                    "ja": "NARUTO―ナルト―"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 72,
+                "num_chapters": 700,
+                "mean": 8.09
+            }
+        },
+        {
+            "node": {
+                "id": 87866,
+                "title": "Naruto Gaiden: Nanadaime Hokage to Akairo no Hanatsuzuki",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/161762.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/161762l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Side Story: The Seventh Hokage and the Scarlet Spring Month"
+                    ],
+                    "en": "Naruto: The Seventh Hokage and the Scarlet Spring",
+                    "ja": "NARUTO外伝 七代目火影と緋色の花つ月"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 10,
+                "mean": 7.16
+            }
+        },
+        {
+            "node": {
+                "id": 90531,
+                "title": "Naruto Shinden Series",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/190847.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/190847l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto True Legend",
+                        "Itachi Shinden",
+                        "Sasuke's Story",
+                        "Koumyou-hen",
+                        "Book of Bright Light",
+                        "Daylight",
+                        "Anya-hen",
+                        "Book of Dark Night",
+                        "Midnight",
+                        "Raikou-hen",
+                        "Book of Sunrise",
+                        "Naruto: Itachi's Story"
+                    ],
+                    "en": "Naruto: Itachi's Story",
+                    "ja": "NARUTO -ナルト- 真伝シリーズ"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 3,
+                "num_chapters": 12,
+                "mean": 8.35
+            }
+        },
+        {
+            "node": {
+                "id": 95210,
+                "title": "Boruto: Naruto Next Generations",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/181968.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/181968l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Gaiden: Michita Tsuki ga Terasu Michi",
+                        "Naruto: The Path Lit by the Full Moon"
+                    ],
+                    "en": "Boruto: Naruto Next Generations",
+                    "ja": "BORUTO-ボルト- -NARUTO NEXT GENERATIONS-"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 20,
+                "num_chapters": 81,
+                "mean": 6.76
+            }
+        },
+        {
+            "node": {
+                "id": 97372,
+                "title": "Naruto Gaiden: Michita Tsuki ga Terasu Michi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/176340.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/176340l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Side Story: The Road Illuminated by the Full Moon"
+                    ],
+                    "en": "Naruto: The Path Lit by the Full Moon",
+                    "ja": "NARUTO-ナルト-外伝 ～満ちた月が照らす道～"
+                },
+                "media_type": "one_shot",
+                "status": "finished",
+                "num_volumes": 0,
+                "num_chapters": 1,
+                "mean": 7.14
+            }
+        },
+        {
+            "node": {
+                "id": 6444,
+                "title": "Naruto",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/125935.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/125935l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Pilot"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO-ナルト-"
+                },
+                "media_type": "one_shot",
+                "status": "finished",
+                "num_volumes": 0,
+                "num_chapters": 1,
+                "mean": 6.5
+            }
+        },
+        {
+            "node": {
+                "id": 151675,
+                "title": "Naruto: Sasuke Retsuden - Uchiha no Matsuei to Tenkyuu no Hoshikuzu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/276114.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/276114l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Sasuke's Story - The Uchiha and the Heavenly Stardust: The Manga"
+                    ],
+                    "en": "Naruto: Sasuke's Story - The Uchiha and the Heavenly Stardust",
+                    "ja": "NARUTO-ナルト-　サスケ烈伝 うちはの末裔と天球の星屑"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 2,
+                "num_chapters": 10,
+                "mean": 7.02
+            }
+        },
+        {
+            "node": {
+                "id": 160710,
+                "title": "Naruto Gaiden: Uzu no Naka no Tsumujikaze",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/285320.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/285320l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Naruto: The Whorl within the Spiral",
+                    "ja": "NARUTO-ナルト-外伝 〜渦の中のつむじ風〜"
+                },
+                "media_type": "one_shot",
+                "status": "finished",
+                "num_volumes": 0,
+                "num_chapters": 1,
+                "mean": 7.88
+            }
+        },
+        {
+            "node": {
+                "id": 6028,
+                "title": "Naruto: Shiro no Douji, Keppu no Kijin",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/261705.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/261705l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Naruto: Innocent Heart, Demonic Blood",
+                    "ja": "NARUTO -白の童子、血風の鬼人-"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 19,
+                "mean": 7.47
+            }
+        },
+        {
+            "node": {
+                "id": 86129,
+                "title": "Naruto Hiden Series",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/175457.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/175457l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Secret Legend",
+                        "Kakashi Hiden Hyouten no Ikazuchi",
+                        "Shikamaru Hiden Yami no Shijima ni Ukabu Kumo",
+                        "Naruto Secret Chronicles"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO秘伝シリーズ"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 6,
+                "num_chapters": 49,
+                "mean": 7.76
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/manga?offset=10&q=naruto&limit=10&fields=id%2Ctitle%2Calternative_titles%2Cmain_picture%2Cmedia_type%2Cstatus%2Cnum_volumes%2Cnum_chapters%2Cmean"
+    }
+}

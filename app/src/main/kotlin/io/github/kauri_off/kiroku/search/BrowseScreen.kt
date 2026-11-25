@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -52,30 +54,18 @@ fun BrowseScreen(
         if (!state.available) {
             SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_suggestions_unavailable)))
         } else {
-            when (val rows = state.rows) {
-                Paged.Loading -> SubScreenBody.State(ScreenState.Loading)
-                is Paged.Failed ->
-                    SubScreenBody.State(
-                        ScreenState.Error(stringResource(rows.error.message(R.string.search_browse_failed))) { onEvent(BrowseEvent.Retry) },
-                    )
-                is Paged.Shown ->
-                    if (rows.items.isEmpty() && rows.more == More.None) {
-                        SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_browse_empty)))
-                    } else {
-                        SubScreenBody.List {
-                            pagedRows(
-                                state.list,
-                                rows.items,
-                                rows.more,
-                                R.string.search_browse_failed,
-                                onOpen = { onEvent(BrowseEvent.Open(it)) },
-                                onEdit = if (state.editable) ({ onEvent(BrowseEvent.Edit(it)) }) else null,
-                                onLoadMore = { onEvent(BrowseEvent.LoadMore) },
-                                onRetry = { onEvent(BrowseEvent.Retry) },
-                                autoLoadMore = autoLoadMore,
-                            )
-                        }
-                    }
+            browseBody(state.rows, onRetry = { onEvent(BrowseEvent.Retry) }) { rows ->
+                pagedRows(
+                    state.list,
+                    rows.items,
+                    rows.more,
+                    R.string.search_browse_failed,
+                    onOpen = { onEvent(BrowseEvent.Open(it)) },
+                    onEdit = if (state.editable) ({ onEvent(BrowseEvent.Edit(it)) }) else null,
+                    onLoadMore = { onEvent(BrowseEvent.LoadMore) },
+                    onRetry = { onEvent(BrowseEvent.Retry) },
+                    autoLoadMore = autoLoadMore,
+                )
             }
         }
     SubScreen(
@@ -88,3 +78,24 @@ fun BrowseScreen(
         modifier = modifier,
     )
 }
+
+@Composable
+internal fun <T> browseBody(
+    rows: Paged<T>,
+    onRetry: () -> Unit,
+    scroll: LazyListState? = null,
+    content: LazyListScope.(Paged.Shown<T>) -> Unit,
+): SubScreenBody =
+    when (rows) {
+        Paged.Loading -> SubScreenBody.State(ScreenState.Loading)
+        is Paged.Failed ->
+            SubScreenBody.State(
+                ScreenState.Error(stringResource(rows.error.message(R.string.search_browse_failed)), onRetry),
+            )
+        is Paged.Shown ->
+            if (rows.items.isEmpty() && rows.more == More.None) {
+                SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_browse_empty)))
+            } else {
+                SubScreenBody.List(scroll = scroll) { content(rows) }
+            }
+    }

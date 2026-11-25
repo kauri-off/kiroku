@@ -7,16 +7,32 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 internal data class MangaTitleKey(
     val id: Long,
-) : NavKey
+) : NavKey {
+    @Transient
+    var opened: MangaTitleSummary? = null
+        private set
+
+    constructor(opened: MangaTitleSummary) : this(opened.details.id.value) {
+        this.opened = opened
+    }
+}
+
+internal data class MangaTitleSummary(
+    val details: MangaDetails,
+    val language: TitleLanguage,
+)
 
 @Composable
 internal fun MangaTitleRoute(
@@ -37,6 +53,7 @@ internal fun MangaTitleRoute(
                 graph.titleLanguage,
                 graph.session.observeSession(),
                 onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                opened = key.opened,
             )
         }
     val state by manga.state.collectAsScreenState()

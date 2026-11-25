@@ -31,6 +31,10 @@ import io.github.kauri_off.kiroku.profile.ProfileNotBuiltScreen
 import io.github.kauri_off.kiroku.profile.ProfileRoute
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.search.BrowseRoute
+import io.github.kauri_off.kiroku.search.MangaRankingKey
+import io.github.kauri_off.kiroku.search.MangaRankingRoute
+import io.github.kauri_off.kiroku.search.MangaSearchKey
+import io.github.kauri_off.kiroku.search.MangaSearchRoute
 import io.github.kauri_off.kiroku.search.SearchRoute
 import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.settings.SettingsKey
@@ -181,6 +185,26 @@ fun appEntries(
                 snackbars,
                 openTitle,
                 onBrowse = { navigator.open(it) },
+                onSignIn = signIn,
+                onManga = { navigator.open(MangaSearchKey) },
+            )
+        }
+        entry<MangaSearchKey> {
+            MangaSearchRoute(
+                graph,
+                snackbars,
+                onBack = { back() },
+                onRanking = { navigator.open(MangaRankingKey) },
+                onOpen = { navigator.open(MangaTitleKey(it)) },
+                onSignIn = signIn,
+            )
+        }
+        entry<MangaRankingKey> {
+            MangaRankingRoute(
+                graph,
+                snackbars,
+                onBack = { back() },
+                onOpen = { navigator.open(MangaTitleKey(it)) },
                 onSignIn = signIn,
             )
         }

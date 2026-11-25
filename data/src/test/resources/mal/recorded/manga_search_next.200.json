@@ -1,0 +1,236 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 153000,
+                "title": "Naruto: Konoha Shinden - Yukemuri Ninpouchou",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/282751.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/282751l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Naruto: Konoha's Story - The Steam Ninja Scrolls: The Manga",
+                    "ja": "NARUTO-ナルト- 木ノ葉新伝 湯煙忍法帖"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 2,
+                "num_chapters": 15,
+                "mean": 6.71
+            }
+        },
+        {
+            "node": {
+                "id": 98462,
+                "title": "Naruto Shinden Series",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/204432.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/204432l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Konoha Shinden - Yukemuri Ninpouchou",
+                        "Naruto Konoha New Legend",
+                        "Naruto's Story: Family Day",
+                        "Sasuke's Story: Star Pupil",
+                        "Shikamaru's Story: Mourning Clouds"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO -ナルト- 新伝シリーズ"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 4,
+                "num_chapters": 28,
+                "mean": 7.31
+            }
+        },
+        {
+            "node": {
+                "id": 57095,
+                "title": "Naruto: Takigakure no Shitou Ore ga Hero dattebayo!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/261417.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/261417l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The Waterfall Village's Fight to the Death I am the Hero!",
+                        "Naruto: Takigakure no Shitou Ore ga Eiyuu dattebayo!"
+                    ],
+                    "en": "Naruto - Mission: Protect the Waterfall Village!",
+                    "ja": "NARUTO 滝隠れの死闘 オレが英雄だってばよ!"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 16,
+                "mean": 6.71
+            }
+        },
+        {
+            "node": {
+                "id": 96769,
+                "title": "Naruto: Blood Prison",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/228889.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/228889l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Hoozuki no Shiro",
+                        "Naruto: Shippuuden the Movie 5: Blood Prison"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO 鬼燈の城〈ブラッド・プリズン〉"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 9,
+                "mean": 7.2
+            }
+        },
+        {
+            "node": {
+                "id": 87714,
+                "title": "Naruto Jinraiden: Okami no Naku Hi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/152723.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/152723l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Jinraiden: The Wolf that Howled at the Sun"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO-ナルト- 迅雷伝 狼の哭く日"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 6,
+                "mean": 7.33
+            }
+        },
+        {
+            "node": {
+                "id": 96762,
+                "title": "Naruto: Dai Katsugeki! Yuki Hime Ninpouchou Datteba yo!!",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/228873.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/228873l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto the Movie: Ninja Clash in the Land of Snow"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO 大活劇!雪姫忍法帖だってばよ!!"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 0,
+                "mean": 6.74
+            }
+        },
+        {
+            "node": {
+                "id": 40225,
+                "title": "Naruto Ninden Series",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/70963.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/70963l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Tale of the Utterly Gutsy Shinobi",
+                        "Naruto Dokonjou Ninden",
+                        "Naruto Dojunjou Ninden",
+                        "The Tale of the Utterly Purehearted Shinobi"
+                    ],
+                    "en": "",
+                    "ja": "NARUTO -ナルト- 忍伝シリーズ"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 2,
+                "num_chapters": 14,
+                "mean": 7.62
+            }
+        },
+        {
+            "node": {
+                "id": 96765,
+                "title": "Gekijouban Naruto: Shippuuden",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/228881.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/228881l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Shippuden the Movie"
+                    ],
+                    "en": "",
+                    "ja": "劇場版NARUTO 疾風伝"
+                },
+                "media_type": "light_novel",
+                "status": "finished",
+                "num_volumes": 1,
+                "num_chapters": 0,
+                "mean": 7.44
+            }
+        },
+        {
+            "node": {
+                "id": 92286,
+                "title": "Boruto: Naruto the Movie Tokubetsu Bangai-hen - Naruto ga Hokage ni Natta Hi",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/171855.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/171855l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto Special Gaiden",
+                        "The Day Naruto Became Hokage"
+                    ],
+                    "en": "",
+                    "ja": "BORUTO -NARUTO THE MOVIE- 特別番外編 ナルトが火影になった日"
+                },
+                "media_type": "one_shot",
+                "status": "finished",
+                "num_volumes": 0,
+                "num_chapters": 1,
+                "mean": 7.05
+            }
+        },
+        {
+            "node": {
+                "id": 40549,
+                "title": "Road to Ninja: Naruto the Movie",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/176822.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/176822l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Naruto: Road to Ninja"
+                    ],
+                    "en": "",
+                    "ja": "ROAD TO NINJA -NARUTO THE MOVIE-"
+                },
+                "media_type": "one_shot",
+                "status": "finished",
+                "num_volumes": 0,
+                "num_chapters": 1,
+                "mean": 7.19
+            }
+        }
+    ],
+    "paging": {
+        "previous": "https://api.myanimelist.net/v2/manga?offset=0&q=naruto&limit=10&fields=id%2Ctitle%2Calternative_titles%2Cmain_picture%2Cmedia_type%2Cstatus%2Cnum_volumes%2Cnum_chapters%2Cmean",
+        "next": "https://api.myanimelist.net/v2/manga?offset=20&q=naruto&limit=10&fields=id%2Ctitle%2Calternative_titles%2Cmain_picture%2Cmedia_type%2Cstatus%2Cnum_volumes%2Cnum_chapters%2Cmean"
+    }
+}

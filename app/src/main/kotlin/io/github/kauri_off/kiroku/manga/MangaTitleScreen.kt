@@ -161,7 +161,7 @@ private fun MangaHeader(content: MangaTitleContent.Shown) {
 }
 
 @Composable
-private fun MangaFormat.label(): String =
+internal fun MangaFormat.label(): String =
     when (this) {
         MangaFormat.Known.Manga -> stringResource(R.string.manga_format_manga)
         MangaFormat.Known.Novel -> stringResource(R.string.manga_format_novel)

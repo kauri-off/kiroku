@@ -1,0 +1,261 @@
+{
+    "data": [
+        {
+            "node": {
+                "id": 2,
+                "title": "Berserk",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/157897.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/157897l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Berserk: The Prototype"
+                    ],
+                    "en": "Berserk",
+                    "ja": "ベルセルク"
+                },
+                "media_type": "manga",
+                "status": "currently_publishing",
+                "num_volumes": 0,
+                "num_chapters": 0,
+                "mean": 9.46
+            },
+            "ranking": {
+                "rank": 1
+            }
+        },
+        {
+            "node": {
+                "id": 1706,
+                "title": "JoJo no Kimyou na Bouken Part 7: Steel Ball Run",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/179882.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/179882l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "JoJo's Bizarre Adventure Part 7: Steel Ball Run",
+                        "SBR"
+                    ],
+                    "en": "JoJo's Bizarre Adventure Part 7: Steel Ball Run",
+                    "ja": "ジョジョの奇妙な冒険 Part7 STEEL BALL RUN"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 24,
+                "num_chapters": 96,
+                "mean": 9.34
+            },
+            "ranking": {
+                "rank": 2
+            }
+        },
+        {
+            "node": {
+                "id": 656,
+                "title": "Vagabond",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/259070.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/259070l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Vagabond",
+                    "ja": "バガボンド"
+                },
+                "media_type": "manga",
+                "status": "on_hiatus",
+                "num_volumes": 37,
+                "num_chapters": 327,
+                "mean": 9.27
+            },
+            "ranking": {
+                "rank": 3
+            }
+        },
+        {
+            "node": {
+                "id": 13,
+                "title": "One Piece",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/253146.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/253146l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "One Piece",
+                    "ja": "ONE PIECE"
+                },
+                "media_type": "manga",
+                "status": "currently_publishing",
+                "num_volumes": 0,
+                "num_chapters": 0,
+                "mean": 9.2
+            },
+            "ranking": {
+                "rank": 4
+            }
+        },
+        {
+            "node": {
+                "id": 162032,
+                "title": "Guimi Zhi Zhu",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/287344.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/287344l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Lord of the Mysteries"
+                    ],
+                    "en": "Lord of Mysteries",
+                    "ja": "诡秘之主"
+                },
+                "media_type": "novel",
+                "status": "finished",
+                "num_volumes": 18,
+                "num_chapters": 366,
+                "mean": 9.19
+            },
+            "ranking": {
+                "rank": 5
+            }
+        },
+        {
+            "node": {
+                "id": 1,
+                "title": "Monster",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/258224.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/258224l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Monster",
+                    "ja": "MONSTER"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 18,
+                "num_chapters": 162,
+                "mean": 9.16
+            },
+            "ranking": {
+                "rank": 6
+            }
+        },
+        {
+            "node": {
+                "id": 147272,
+                "title": "The Greatest Estate Developer",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/1/290131.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/1/290131l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "The World's Best Engineer",
+                        "The Greatest Estate Designer",
+                        "Yeokdaegeup Yeongji Seolgyesa"
+                    ],
+                    "en": "The Greatest Estate Developer",
+                    "ja": "역대급 영지 설계사"
+                },
+                "media_type": "manhwa",
+                "status": "finished",
+                "num_volumes": 0,
+                "num_chapters": 222,
+                "mean": 9.11
+            },
+            "ranking": {
+                "rank": 7
+            }
+        },
+        {
+            "node": {
+                "id": 51,
+                "title": "Slam Dunk",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/258749.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/258749l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [],
+                    "en": "Slam Dunk",
+                    "ja": "SLAM DUNK"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 31,
+                "num_chapters": 276,
+                "mean": 9.09
+            },
+            "ranking": {
+                "rank": 8
+            }
+        },
+        {
+            "node": {
+                "id": 642,
+                "title": "Vinland Saga",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/2/188925.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/2/188925l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Sayounara ga Chikai node",
+                        "For Our Farewell Is Near",
+                        "Because Goodbyes Are Coming Soon",
+                        "\"Assasin's Creed Valhalla\" Collab Bangai-hen",
+                        "Assassin's Creed x Vinland Saga",
+                        "Assassin's Creed Valhalla x Vinland Saga"
+                    ],
+                    "en": "Vinland Saga",
+                    "ja": "ヴィンランド・サガ"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 29,
+                "num_chapters": 224,
+                "mean": 9.09
+            },
+            "ranking": {
+                "rank": 9
+            }
+        },
+        {
+            "node": {
+                "id": 25,
+                "title": "Fullmetal Alchemist",
+                "main_picture": {
+                    "medium": "https://cdn.myanimelist.net/images/manga/3/243675.jpg",
+                    "large": "https://cdn.myanimelist.net/images/manga/3/243675l.jpg"
+                },
+                "alternative_titles": {
+                    "synonyms": [
+                        "Full Metal Alchemist",
+                        "Hagane no Renkinjutsushi",
+                        "FMA",
+                        "HagaRen",
+                        "Fullmetal Alchemist Gaiden"
+                    ],
+                    "en": "Fullmetal Alchemist",
+                    "ja": "鋼の錬金術師"
+                },
+                "media_type": "manga",
+                "status": "finished",
+                "num_volumes": 27,
+                "num_chapters": 116,
+                "mean": 9.05
+            },
+            "ranking": {
+                "rank": 10
+            }
+        }
+    ],
+    "paging": {
+        "next": "https://api.myanimelist.net/v2/manga/ranking?offset=10&ranking_type=all&limit=10&fields=id%2Ctitle%2Calternative_titles%2Cmain_picture%2Cmedia_type%2Cstatus%2Cnum_volumes%2Cnum_chapters%2Cmean"
+    }
+}

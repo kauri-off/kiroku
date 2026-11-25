@@ -49,6 +49,7 @@ fun SearchRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onBrowse: (BrowseKey) -> Unit,
     onSignIn: () -> Unit,
+    onManga: () -> Unit = {},
 ) {
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
     val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle(), graph.showAdultInSearch) }
@@ -65,7 +66,13 @@ fun SearchRoute(
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val content =
         when {
-            text.isEmpty() -> SearchContent.Start(recent, suggestions = session is Session.SignedIn)
+            text.isEmpty() ->
+                SearchContent.Start(
+                    recent,
+                    suggestions = session is Session.SignedIn,
+                    mangaAvailable =
+                        graph.mangaCatalogue != null,
+                )
             shown == null -> SearchContent.Results(text, Paged.Loading)
             else -> {
                 val rows =
@@ -104,6 +111,8 @@ fun SearchRoute(
                 SearchEvent.LoadMore -> search.loadMore()
                 SearchEvent.Retry -> search.retry()
                 SearchEvent.SignIn -> onSignIn()
+                SearchEvent.Manga -> onManga()
+                SearchEvent.Back, SearchEvent.BrowseManga, is SearchEvent.OpenManga -> Unit
             }
         },
         snackbars = snackbars,
@@ -202,4 +211,4 @@ private fun listedEntries(
             .catch { emit(null) }
     }.collectAsScreenState(initial = null)
 
-private val recentSaver = listSaver<MutableState<List<String>>, String>(save = { it.value }, restore = { mutableStateOf(it) })
+internal val recentSaver = listSaver<MutableState<List<String>>, String>(save = { it.value }, restore = { mutableStateOf(it) })

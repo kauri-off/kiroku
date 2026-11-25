@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
@@ -33,6 +34,7 @@ internal class MangaTitleViewModel(
     language: Flow<TitleLanguage>,
     session: Flow<Session>,
     private val onRefreshFailed: (DataError) -> Unit,
+    private val opened: MangaTitleSummary? = null,
 ) : ViewModel() {
     private data class Page(
         val cached: StoredManga? = null,
@@ -86,17 +88,22 @@ internal class MangaTitleViewModel(
     val state =
         combine(
             page,
-            language.onStart { emit(TitleLanguage.Romaji) },
+            language.onStart { emit(opened?.language ?: TitleLanguage.Romaji) },
             session,
         ) { current, titleLanguage, session ->
-            val cached = current.cached
+            val summary =
+                opened?.details?.takeUnless {
+                    current.problem == MangaTitleProblem.ReadFailed(DataError.ListEnded) || current.problem == MangaTitleProblem.Unavailable
+                }
+            val cached = current.cached?.details
+            val details = if (cached != null && summary != null) cached.withSummary(summary) else cached ?: summary
             MangaTitleState(
                 content =
                     when {
-                        cached != null ->
+                        details != null ->
                             MangaTitleContent.Shown(
-                                cached.details,
-                                cached.details.titles.preferred(titleLanguage),
+                                details,
+                                details.titles.preferred(titleLanguage),
                                 current.refreshing,
                                 current.coverAttempt,
                             )
@@ -105,7 +112,15 @@ internal class MangaTitleViewModel(
                     },
                 sessionExpired = session is Session.Expired,
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaTitleState())
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
+            MangaTitleState(
+                content =
+                    opened?.let { MangaTitleContent.Shown(it.details, it.details.titles.preferred(it.language)) }
+                        ?: MangaTitleContent.Loading,
+            ),
+        )
 
     fun refresh() = load(force = true)
 
@@ -212,7 +227,7 @@ internal class MangaTitleViewModel(
                         val problem = MangaTitleProblem.ReadFailed(answer.error)
                         val stillCached = cached.takeUnless { answer.error == DataError.ListEnded }
                         page.value = Page(stillCached, problem, coverAttempt = before.coverAttempt + 1)
-                        if (stillCached != null) onRefreshFailed(answer.error)
+                        if (stillCached != null || (opened != null && answer.error != DataError.ListEnded)) onRefreshFailed(answer.error)
                         retryOwed = answer.error == DataError.NoConnection
                         if (retryOwed) load(force = false)
                     }
@@ -221,3 +236,15 @@ internal class MangaTitleViewModel(
         load?.start()
     }
 }
+
+private fun MangaDetails.withSummary(summary: MangaDetails): MangaDetails =
+    copy(
+        titles = titles.copy(english = titles.english ?: summary.titles.english, japanese = titles.japanese ?: summary.titles.japanese),
+        posterUrl = posterUrl ?: summary.posterUrl,
+        largePosterUrl = largePosterUrl ?: summary.largePosterUrl.takeIf { posterUrl == null || posterUrl == summary.posterUrl },
+        format = format ?: summary.format,
+        publication = publication ?: summary.publication,
+        volumes = volumes ?: summary.volumes,
+        chapters = chapters ?: summary.chapters,
+        meanScore = meanScore ?: summary.meanScore,
+    )

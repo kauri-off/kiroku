@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberContainedSearchBarState
@@ -8,7 +9,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.WindowSize
@@ -30,10 +33,34 @@ class SearchScreenshots : ScreenshotRegistry() {
     override val empty = shown(screen(SearchFixtureStates.noResults))
     override val error = shown(screen(SearchFixtureStates.error))
 
+    private fun mangaResults(
+        results: Paged<MangaResultRow>,
+        expanded: Boolean = false,
+    ) = SearchState(TextFieldState("Paper"), expanded, SearchContent.MangaResults("Paper", results))
+
+    private val mangaRows = listOf(MangaResultRow(mangaFixture, mangaFixture.titles.romaji))
+
     override val cases =
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
             case("start-signed-in", largeText = true, content = screen(SearchFixtureStates.startSignedIn)),
+            case(
+                "with-manga",
+                content =
+                    screen(
+                        SearchFixtureStates.startNoRecent.copy(
+                            content = SearchContent.Start(emptyList(), suggestions = true, mangaAvailable = true),
+                        ),
+                    ),
+            ),
+            case("manga-start", content = screen(SearchState(TextFieldState(), false, SearchContent.MangaStart(emptyList())))),
+            case("manga-results", content = screen(mangaResults(Paged.Shown(mangaRows)))),
+            case("manga-expanded", content = screen(mangaResults(Paged.Shown(mangaRows), expanded = true))),
+            case("manga-typing", keyboard = true, content = screen(mangaResults(Paged.Shown(mangaRows), expanded = true))),
+            case("manga-loading", content = screen(mangaResults(Paged.Loading))),
+            case("manga-empty", content = screen(mangaResults(Paged.Shown(emptyList())))),
+            case("manga-error", content = screen(mangaResults(Paged.Failed(DataError.NoConnection)))),
+            case("manga-more-failed", content = screen(mangaResults(Paged.Shown(mangaRows, More.Failed(DataError.NoConnection))))),
             case("start-no-recent", content = screen(SearchFixtureStates.startNoRecent)),
             case("search-view", content = screen(SearchFixtureStates.searchView)),
             case("typing", keyboard = true, content = screen(SearchFixtureStates.typing)),
@@ -67,6 +94,11 @@ class SearchScreenshots : ScreenshotRegistry() {
                 val bar = rememberContainedSearchBarState(SearchBarValue.Expanded)
                 SearchScreen(SearchFixtureStates.start, onEvent = {}, snackbars = remember { SnackbarHostState() }, rememberBar = { bar })
                 LaunchedEffect(changed) { if (changed) bar.animateToCollapsed() }
+            },
+            Transition("manga-expanded", start = "manga-results", millis = MotionBounds.SCREEN, at = early) { changed ->
+                val bar = rememberContainedSearchBarState(SearchBarValue.Collapsed)
+                SearchScreen(mangaResults(Paged.Shown(mangaRows)), {}, remember { SnackbarHostState() }, rememberBar = { bar })
+                LaunchedEffect(changed) { if (changed) bar.animateToExpanded() }
             },
             Transition("search-view-landscape", start = "results-landscape", millis = MotionBounds.SCREEN, at = early) { changed ->
                 val bar = rememberContainedSearchBarState(SearchBarValue.Collapsed)

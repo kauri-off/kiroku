@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.recorder
 import io.github.kauri_off.kiroku.data.network.MalFields.DETAILS
 import io.github.kauri_off.kiroku.data.network.MalFields.LIST_ENTRY
 import io.github.kauri_off.kiroku.data.network.MalFields.MANGA_DETAILS
+import io.github.kauri_off.kiroku.data.network.MalFields.MANGA_SUMMARY
 import io.github.kauri_off.kiroku.data.network.MalFields.SUMMARY
 
 private const val LIST = "animelist?fields=$LIST_ENTRY&nsfw=true"
@@ -51,6 +52,10 @@ internal val ClientIdRequests: List<Ask> =
         Ask("title_unknown", "anime/2?fields=$DETAILS"),
         Ask("manga_completed", "manga/1?fields=$MANGA_DETAILS"),
         Ask("manga_publishing", "manga/13?fields=$MANGA_DETAILS"),
+        Ask("manga_search", "manga?q=naruto&offset=0&limit=10&fields=$MANGA_SUMMARY"),
+        Ask("manga_search_next", "manga?q=naruto&offset=10&limit=10&fields=$MANGA_SUMMARY"),
+        Ask("manga_ranking", "manga/ranking?ranking_type=all&offset=0&limit=10&fields=$MANGA_SUMMARY"),
+        Ask("manga_ranking_next", "manga/ranking?ranking_type=all&offset=10&limit=10&fields=$MANGA_SUMMARY"),
         // M2-18: one title for each genre and code the titles above lack.
         Ask("codes_ecchi", "anime/11617?fields=$DETAILS"),
         Ask("codes_kids", "anime/527?fields=$DETAILS"),

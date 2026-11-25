@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.search
 import androidx.compose.foundation.text.input.TextFieldState
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 
 data class SearchState(
@@ -21,6 +22,7 @@ sealed interface SearchContent {
     data class Start(
         val recent: List<String>,
         val suggestions: Boolean = false,
+        val mangaAvailable: Boolean = false,
     ) : SearchContent {
         init {
             require(recent.size <= MAX_RECENT_SEARCHES)
@@ -35,6 +37,15 @@ sealed interface SearchContent {
         // The MAL id the query names when it is digits alone.
         val openId: AnimeId? get() = queriedId(query)
     }
+
+    data class MangaStart(
+        val recent: List<String>,
+    ) : SearchContent
+
+    data class MangaResults(
+        val query: String,
+        val results: Paged<MangaResultRow>,
+    ) : SearchContent
 }
 
 const val MAX_RECENT_SEARCHES = 5
@@ -78,6 +89,16 @@ sealed interface SearchEvent {
     data object Submit : SearchEvent
 
     data object Clear : SearchEvent
+
+    data object Back : SearchEvent
+
+    data object Manga : SearchEvent
+
+    data object BrowseManga : SearchEvent
+
+    data class OpenManga(
+        val id: MangaId,
+    ) : SearchEvent
 
     data class SearchAgain(
         val query: String,

@@ -12,6 +12,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CompletableDeferred
@@ -32,8 +33,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
-internal class SearchViewModel(
-    private val search: SearchRepository,
+internal fun SearchViewModel(
+    search: SearchRepository,
+    connection: Connection,
+    saved: SavedStateHandle,
+    includeAdult: Flow<Boolean> = flowOf(false),
+): SearchViewModel<Anime> = SearchViewModel(search::search, Anime::id, connection, saved, includeAdult)
+
+internal class SearchViewModel<T>(
+    private val search: suspend (String, Int, Boolean) -> Outcome<Page<T>>,
+    private val idOf: (T) -> Any,
     connection: Connection,
     saved: SavedStateHandle,
     includeAdult: Flow<Boolean> = flowOf(false),
@@ -56,7 +65,7 @@ internal class SearchViewModel(
 
     val text: String get() = query.text.toString().trim()
 
-    private val results = MutableStateFlow(SearchResults())
+    private val results = MutableStateFlow(SearchResults<T>())
     private val request = MutableStateFlow<Load?>(null)
     private val loads = ShownLoads(viewModelScope, connection, whenShown = {}, again = ::retry)
 
@@ -115,7 +124,7 @@ internal class SearchViewModel(
     private suspend fun read(load: Load) {
         if (load.waitForTyping) delay(TYPING_PAUSE)
         loads.started()
-        val answer = search.search(load.query, load.offset, load.adult)
+        val answer = search(load.query, load.offset, load.adult)
         currentCoroutineContext().ensureActive()
         if (load !== request.value) return
         val shown = results.value
@@ -123,7 +132,7 @@ internal class SearchViewModel(
             when (answer) {
                 is Outcome.Success ->
                     shown.copy(
-                        titles = (shown.titles + answer.value.items).distinctBy { it.id },
+                        titles = (shown.titles + answer.value.items).distinctBy(idOf),
                         nextOffset = answer.value.nextOffset,
                         loading = false,
                     )
@@ -149,15 +158,15 @@ internal class SearchViewModel(
     }
 }
 
-internal data class SearchResults(
+internal data class SearchResults<T>(
     val query: String = "",
-    val titles: List<Anime> = emptyList(),
+    val titles: List<T> = emptyList(),
     val nextOffset: Int? = null,
     val loading: Boolean = false,
     val error: DataError? = null,
     val adult: Boolean? = null,
 ) {
-    fun rows(map: (Anime) -> ResultRow): Paged<ResultRow> {
+    fun <R> rows(map: (T) -> R): Paged<R> {
         if (titles.isEmpty() && loading && nextOffset == 0) return Paged.Loading
         if (titles.isEmpty() && error != null) return Paged.Failed(error)
         val more =
