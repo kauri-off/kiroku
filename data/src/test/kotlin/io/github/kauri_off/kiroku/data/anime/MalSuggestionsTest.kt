@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.CLIENT_ID_HEADER
+import io.github.kauri_off.kiroku.data.network.MalAnswer
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
@@ -17,10 +18,15 @@ import io.github.kauri_off.kiroku.data.recorder.OwnerRecordings
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import okhttp3.Dispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -28,6 +34,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class MalSuggestionsTest {
     @get:Rule
@@ -73,6 +83,62 @@ class MalSuggestionsTest {
         }
 
     @Test
+    fun `a queued suggestions GET is rejected before sending after sign-in replacement`() =
+        runBlocking {
+            val dispatcher = Dispatcher().apply { maxRequests = 1 }
+            network.calls = dispatcher
+            network.repeatReadsAfter = emptyList()
+            val release = CountDownLatch(1)
+            network.answers {
+                check(release.await(5, TimeUnit.SECONDS))
+                answer(503, body = "")
+            }
+            val owner = signIn()
+            val occupying = async(Dispatchers.Default) { network.http.call { network.things.value.read() } }
+            val queued =
+                try {
+                    assertEquals(
+                        "/v2/thing",
+                        network.api
+                            .received()
+                            .url.encodedPath,
+                    )
+                    val pending = async(Dispatchers.Default) { search.openSuggestions(owner).load(0, false) }
+                    withTimeout(5.seconds) {
+                        while (dispatcher.queuedCallsCount() == 0) delay(1.milliseconds)
+                    }
+                    signIn("replacement")
+                    pending
+                } finally {
+                    release.countDown()
+                }
+            assertEquals(MalAnswer.Failed(DataError.ServerError), occupying.await())
+            assertEquals(Outcome.Failure(DataError.ListEnded), queued.await())
+            assertEquals(1, network.api.requestCount)
+        }
+
+    @Test
+    fun `a retryable response from a retired sign-in cannot send another suggestions GET`() =
+        runBlocking {
+            network.repeatReadsAfter = listOf(10.milliseconds)
+            val release = CountDownLatch(1)
+            network.answers {
+                check(release.await(5, TimeUnit.SECONDS))
+                answer(503, body = "")
+            }
+            val owner = signIn()
+            val pending = async(Dispatchers.Default) { search.openSuggestions(owner).load(17, false) }
+            try {
+                assertRequest(17, "access")
+                signIn("replacement")
+            } finally {
+                release.countDown()
+            }
+            assertEquals(Outcome.Failure(DataError.ListEnded), pending.await())
+            assertEquals(1, network.api.requestCount)
+        }
+
+    @Test
     fun `recorded suggestions preserve page order and offsets under the adult filter`() =
         runBlocking {
             val first = OwnerRecordings.named("suggestions_first")
@@ -103,8 +169,8 @@ class MalSuggestionsTest {
             }
         }
 
-    private suspend fun signIn(): SignInId {
-        assertTrue(session.signIn(TokenGrant("access", "refresh")) is Outcome.Success)
+    private suspend fun signIn(access: String = "access"): SignInId {
+        assertTrue(session.signIn(TokenGrant(access, "refresh")) is Outcome.Success)
         return (session.currentSession() as Session.SignedIn).signIn
     }
 

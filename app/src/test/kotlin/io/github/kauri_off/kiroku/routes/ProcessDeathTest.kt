@@ -69,6 +69,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -549,5 +550,46 @@ class ProcessDeathTest {
         compose.waitForIdle()
         assertEquals(Destination.Search, navigator!!.current)
         assertEquals(listOf(Destination.Search.root, browse), navigator!!.stackOf(Destination.Search))
+    }
+
+    @Test
+    fun `restored suggestions retain their opening sign-in and are pruned after replacement`() {
+        val a = Fixtures.reference.session
+        val active = MutableStateFlow<Session>(a)
+        val source =
+            object : AppGraph by graph {
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = active
+                    }
+            }
+        var owner = Owner()
+        lateinit var navigator: ShellNavigator
+        val restoration = StateRestorationTester(compose)
+        val key = BrowseKey(BrowseList.Suggestions, a.signIn.value)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    navigator = rememberShellNavigator()
+                    AppRoute(source, navigator)
+                }
+            }
+        }
+        compose.waitUntil(5_000) { navigator.sessionOwner == a.signIn }
+        compose.runOnIdle {
+            navigator.select(Destination.Search)
+            navigator.open(key)
+        }
+        compose.waitForIdle()
+        owner.viewModelStore.clear()
+        owner = Owner()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitUntil(5_000) { navigator.sessionOwner == a.signIn }
+        assertEquals(listOf(SearchRoot, key), navigator.stack)
+        val replacement = SignInId("replacement")
+        active.value = Session.SignedIn(replacement)
+        compose.waitUntil(5_000) { navigator.sessionOwner == replacement }
+        assertEquals(listOf(SearchRoot), navigator.stackOf(Destination.Search))
+        assertEquals(Destination.Search, navigator.current)
     }
 }

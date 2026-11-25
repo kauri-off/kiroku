@@ -16,7 +16,9 @@ import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.SavedState
 import androidx.savedstate.serialization.encodeToSavedState
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.search.BrowseKey
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
 class ShellNavigator(
@@ -65,6 +67,17 @@ class ShellNavigator(
     fun remove(key: NavKey) {
         if (backStack.last() == key) way = Way.Up
         stacks.values.forEach { stack -> (stack.lastIndex downTo 1).filter { stack[it] == key }.forEach { stack.removeAt(it) } }
+    }
+
+    internal fun pruneSuggestions(owner: SignInId?) {
+        val search = stacks.getValue(Destination.Search)
+        val retired =
+            search.indexOfFirst { key ->
+                key is BrowseKey && key.list == BrowseList.Suggestions && (owner == null || key.owner != owner.value)
+            }
+        if (retired < 0) return
+        if (current == Destination.Search) way = Way.Up
+        search.popTo(retired)
     }
 
     // Shows [destination] with its stack popped to its root.

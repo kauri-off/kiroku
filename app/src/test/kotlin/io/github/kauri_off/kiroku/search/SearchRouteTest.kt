@@ -13,6 +13,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -24,6 +25,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import io.github.kauri_off.kiroku.core.demo.Demo
@@ -38,15 +40,19 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.NoSignIn
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.core.repository.SignIn
+import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.signin.SignInOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -359,11 +365,116 @@ class SearchRouteTest {
         compose.onNode(row).assertExists()
         assertEquals(listOf(0, 0, 17, 17).map { owner to it }, requests)
 
+        val oldRow = compose.onNode(row)
+        oldRow.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        oldRow.performTouchInput { longClick() }
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
         current.value = Session.SignedIn(SignInId("replacement"))
         settle()
-        compose.onNodeWithText("Suggestions are unavailable for this session").assertExists()
+        compose.onNodeWithText("Top rated").assertExists()
         compose.onNode(row).assertDoesNotExist()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        assertTrue(
+            graph.demo.server.requests
+                .isEmpty(),
+        )
         assertEquals(4, requests.size)
+    }
+
+    @Test
+    fun `signing in from expired suggestions returns Search to its root and opens a fresh feed`() {
+        val owner = Fixtures.reference.session.signIn
+        val replacement = SignInId("replacement")
+        val current = MutableStateFlow<Session>(Session.SignedIn(owner))
+        val signInStep = MutableStateFlow<SignInStep>(SignInStep.None)
+        val requests = mutableListOf<SignInId>()
+        val source =
+            object : AppGraph by graph, SignInOwner {
+                override val signIn =
+                    object : SignIn by NoSignIn() {
+                        override val canStart = true
+                        override val step = signInStep
+
+                        override fun acknowledge(step: SignInStep) {
+                            signInStep.compareAndSet(step, SignInStep.None)
+                        }
+                    }
+
+                override val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = current
+                    }
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId): BrowseSession =
+                            BrowseSession { offset, _ ->
+                                requests += owner
+                                val anime = if (owner == replacement) FixtureAnime.film else FixtureAnime.exactToWatch
+                                Outcome.Success(if (offset == 0) Page(emptyList(), 17) else Page(listOf(Ranked(null, anime)), null))
+                            }
+                    }
+            }
+
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertExists()
+        current.value = Session.Expired(owner)
+        settle()
+        compose.onNodeWithText("Suggestions are unavailable for this session").assertExists()
+        compose.onNodeWithText("Sign in").performClick()
+        settle()
+        compose.onNodeWithText("Sign in with MyAnimeList").assertExists()
+        current.value = Session.SignedIn(replacement)
+        signInStep.value = SignInStep.SignedIn
+        settle()
+        compose.onNodeWithText("My list").assertExists()
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        compose.onNodeWithText("Top rated").assertExists()
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNodeWithText(FixtureAnime.film.titles.romaji).assertExists()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertDoesNotExist()
+        assertEquals(listOf(owner, owner, replacement, replacement), requests)
+    }
+
+    @Test
+    fun `back from a later suggestions page keeps the scrolled anchor and loaded pages`() {
+        val titles =
+            Fixtures.reference.anime
+                .distinctBy { it.titles.romaji }
+                .take(24)
+        val requests = mutableListOf<Int>()
+        val source =
+            object : AppGraph by graph {
+                override val search =
+                    object : SearchRepository by graph.search {
+                        override fun openSuggestions(owner: SignInId): BrowseSession =
+                            BrowseSession { offset, _ ->
+                                requests += offset
+                                val items = titles.drop(offset).take(12).map { Ranked(null, it) }
+                                Outcome.Success(Page(items, 12.takeIf { offset == 0 }))
+                            }
+                    }
+            }
+
+        search(source)
+        compose.onNodeWithText("Suggestions for you").performClick()
+        settle()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(10)
+        settle()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(15)
+        settle()
+        val anchor = compose.onNodeWithText(titles[15].titles.romaji)
+        val top = anchor.getUnclippedBoundsInRoot().top
+        compose.onNodeWithText(titles[16].titles.romaji).performClick()
+        settle()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        assertEquals(top, anchor.getUnclippedBoundsInRoot().top)
+        assertEquals(listOf(0, 12), requests)
     }
 
     @Test

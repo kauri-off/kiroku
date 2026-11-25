@@ -142,7 +142,7 @@ fun BrowseRoute(
     val loaded by browse.state.collectAsScreenState()
     val results = if (belongsToSession) loaded else BrowseResults()
     val listed by listedEntries(graph, owner)
-    val editor = editSheetViewModel(graph, messages)
+    val editor = if (suggestions) null else editSheetViewModel(graph, messages)
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
     val rows =
         remember(results, listed, language) {
@@ -153,7 +153,7 @@ fun BrowseRoute(
             key.list,
             rows,
             sessionExpired = session is Session.Expired,
-            editable = belongsToSession && session.hasList(),
+            editable = !suggestions && session.hasList(),
             available = belongsToSession || session == null,
         ),
         onEvent = { event ->
@@ -164,6 +164,7 @@ fun BrowseRoute(
                     onOpenTitle(event.id, TitleSummary(anime, listed?.get(event.id), airing = null, session = session))
                 }
                 is BrowseEvent.Edit -> {
+                    if (editor == null) return@BrowseScreen
                     val anime = results.titles.firstOrNull { it.item.id == event.id }?.item ?: return@BrowseScreen
                     editor.open(event.id, anime)
                 }
@@ -175,7 +176,7 @@ fun BrowseRoute(
         snackbars = snackbars,
         autoLoadMore = LocalOnTop.current,
     )
-    if (belongsToSession) EditSheetRoute(editor, messages, takes = { false })
+    if (editor != null) EditSheetRoute(editor, messages, takes = { false })
 }
 
 // A signed-in or expired session has a list to edit; signed out there is none, and nothing a save could reach.

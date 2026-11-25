@@ -124,7 +124,7 @@ object SearchFixtureStates {
     fun browse(
         list: BrowseList,
         more: More = More.None,
-    ) = BrowseState(list, Paged.Shown(browseRows(list), more), editable = true)
+    ) = BrowseState(list, Paged.Shown(browseRows(list), more), editable = list != BrowseList.Suggestions)
 
     val browseLoading = BrowseState(BrowseList.TopAiring, Paged.Loading)
 
