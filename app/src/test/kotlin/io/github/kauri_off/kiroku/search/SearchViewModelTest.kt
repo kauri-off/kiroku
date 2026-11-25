@@ -75,6 +75,38 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `an anime link cancels an in flight request without starting a search and digits still search`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val server = ScriptedSearch(demo.search, delayedOffset = 0)
+            val model = SearchViewModel(server, demo.connection, SavedStateHandle())
+            showing(model.state)
+            model.type("Steins;Gate 0")
+            advanceTimeBy(301)
+            val pending = server.requests.single()
+            assertEquals("Steins;Gate 0" to 0, pending.key)
+
+            val pasted = "  anime/5114/Fullmetal_Al?ref=share#top  "
+            model.type(pasted)
+            assertEquals(5114L, model.linkId?.value)
+            assertEquals(pasted, model.query.text.toString())
+            runCurrent()
+            pending.answer.complete(Outcome.Success(Page(listOf(FixtureAnime.exactToWatch), 10)))
+            advanceTimeBy(500)
+            model.loadMore()
+            model.retry()
+            runCurrent()
+            assertEquals(listOf(pending), server.requests)
+            assertEquals(Paged.Shown<Anime>(emptyList()), model.state.value.rows { it })
+
+            model.type("5114")
+            advanceTimeBy(301)
+            assertEquals("5114" to 0, server.requests.last().key)
+            server.respond(Outcome.Success(Page(emptyList(), null)))
+            runCurrent()
+        }
+
+    @Test
     fun `retry requests the failed offset and page loading keeps existing results`() =
         runTest(main) {
             val demo = Demo(Fixtures.reference, backgroundScope)

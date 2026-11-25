@@ -26,8 +26,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.swipeLeft
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoStore
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -129,6 +131,27 @@ class SearchRouteTest {
         settle()
         compose.onNode(inView(FixtureAnime.exactCaughtUp.titles.romaji)).assertExists()
         compose.onNode(inView(FixtureAnime.exactToWatch.titles.romaji)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a pasted anime link offers the shortcut before debounce and opens only on tap`() {
+        val opened = mutableListOf<AnimeId>()
+        val messages = ShellMessages(scope, graph.list)
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SearchRoute(null, graph, messages, remember { SnackbarHostState() }, { id, _ -> opened += id }, {}, {})
+            }
+        }
+        compose.onNode(hasSetTextAction() and !hasAnyAncestor(isDialog())).performClick()
+        settle()
+        val raw = "  anime/5114/Fullmetal_Al?ref=share#top  "
+        compose.onNode(typing).performTextInput(raw)
+        compose.onNode(typing and hasText(raw)).assertExists()
+        val shortcut = compose.onNode(inView("Open title #5114"))
+        shortcut.assertExists()
+        assertTrue(opened.isEmpty())
+        shortcut.performClick()
+        assertEquals(listOf(AnimeId(5114)), opened)
     }
 
     @Test
@@ -817,6 +840,43 @@ class SearchRouteRestoreTest {
     private val scope = CoroutineScope(SupervisorJob() + main)
     private val graph = TestGraph(Demo(Fixtures.reference, scope))
     private val messages = ShellMessages(scope, graph.list)
+
+    @Test
+    fun `swiping a recent query keeps the other rows tappable and deletion survives restoration even when empty`() {
+        val restore = StateRestorationTester(compose)
+        val standIn = SearchFixtureStates.standIn(Fixtures.reference)
+        restore.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                SearchRoute(standIn, graph, messages, remember { SnackbarHostState() }, { _, _ -> }, {}, {})
+            }
+        }
+        val recent = SearchFixtureStates.recent
+        val removed = recent[1]
+        val first = recent[0]
+        val third = recent[2]
+        compose.onNodeWithText(removed).performTouchInput { swipeLeft() }
+        compose.onNodeWithText(removed).assertDoesNotExist()
+        restore.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText(removed).assertDoesNotExist()
+        assertTrue(
+            compose.onNodeWithText(first).getUnclippedBoundsInRoot().top < compose.onNodeWithText(third).getUnclippedBoundsInRoot().top,
+        )
+        compose.onNodeWithText(third).performClick()
+        compose.onNode(hasSetTextAction() and hasText(third)).assertExists()
+        compose.onNodeWithContentDescription("Clear search").performClick()
+
+        for (query in recent - removed) {
+            val node = compose.onNodeWithText(query)
+            val action = node.fetchSemanticsNode().config[SemanticsActions.CustomActions].single()
+            assertEquals("Remove from recent searches", action.label)
+            compose.runOnIdle { assertTrue(action.action()) }
+            node.assertDoesNotExist()
+        }
+        restore.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("Recent searches").assertDoesNotExist()
+        recent.forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        compose.onNodeWithText("Browse").assertExists()
+    }
 
     @Test
     fun `the search text and the recent searches are restored`() {

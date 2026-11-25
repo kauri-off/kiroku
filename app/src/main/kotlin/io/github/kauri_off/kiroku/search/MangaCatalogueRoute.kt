@@ -70,6 +70,7 @@ internal fun MangaSearchRoute(
                 SearchEvent.Back -> onBack()
                 SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
+                is SearchEvent.RemoveRecent -> recent = recent - event.query
                 is SearchEvent.SearchAgain -> {
                     query.setTextAndPlaceCursorAtEnd(event.query)
                     keep(event.query)

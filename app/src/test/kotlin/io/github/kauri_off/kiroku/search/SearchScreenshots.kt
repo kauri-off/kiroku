@@ -1,19 +1,33 @@
 package io.github.kauri_off.kiroku.search
 
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.View
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
+import androidx.compose.ui.semantics.getOrNull
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.Variant
 import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
@@ -39,10 +53,16 @@ class SearchScreenshots : ScreenshotRegistry() {
     ) = SearchState(TextFieldState("Paper"), expanded, SearchContent.MangaResults("Paper", results))
 
     private val mangaRows = listOf(MangaResultRow(mangaFixture, mangaFixture.titles.romaji))
+    private val recent = SearchFixtureStates.recent
+    private val dismissed = recent[1]
+    private val afterDismiss = SearchFixtureStates.start.copy(content = SearchContent.Start(recent - dismissed))
+    private val pasted = "anime/5114/Fullmetal_Al"
+    private val animeLink = SearchState(TextFieldState(pasted), true, SearchContent.AnimeLink(AnimeId(5114)))
 
     override val cases =
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
+            case("recent-dismissed", content = screen(afterDismiss)),
             case("start-signed-in", largeText = true, content = screen(SearchFixtureStates.startSignedIn)),
             case(
                 "with-manga",
@@ -53,7 +73,7 @@ class SearchScreenshots : ScreenshotRegistry() {
                         ),
                     ),
             ),
-            case("manga-start", content = screen(SearchState(TextFieldState(), false, SearchContent.MangaStart(emptyList())))),
+            case("manga-start", content = screen(SearchState(TextFieldState(), false, SearchContent.MangaStart(recent.take(2))))),
             case("manga-results", content = screen(mangaResults(Paged.Shown(mangaRows)))),
             case("manga-expanded", content = screen(mangaResults(Paged.Shown(mangaRows), expanded = true))),
             case("manga-typing", keyboard = true, content = screen(mangaResults(Paged.Shown(mangaRows), expanded = true))),
@@ -74,6 +94,7 @@ class SearchScreenshots : ScreenshotRegistry() {
                 WideResults(SearchFixtureStates.results.copy(expanded = true))
             },
             case("digits", content = screen(SearchFixtureStates.digitsQuery)),
+            case("anime-link", content = screen(animeLink)),
             case("loading-more", content = screen(SearchFixtureStates.loadingMore)),
             case("more-failed", content = screen(SearchFixtureStates.moreFailed)),
             case("session-expired", content = screen(SearchFixtureStates.sessionExpired)),
@@ -81,6 +102,27 @@ class SearchScreenshots : ScreenshotRegistry() {
             case("search-view-session-expired", content = screen(SearchFixtureStates.searchView.copy(sessionExpired = true))),
             case("typing-snackbar", keyboard = true) { Screen(SearchFixtureStates.typing, snackbar = true) },
         )
+
+    private fun dismissRecent(variant: Variant): Transition {
+        lateinit var view: View
+        return Transition(
+            "recent-dismissed",
+            start = "start",
+            millis = MotionBounds.SCREEN,
+            variant = variant,
+            at = listOf(16, 48, 112, MotionBounds.SCREEN),
+            change = { swipeRecent(view, dismissed) },
+        ) {
+            val root = LocalView.current
+            SideEffect { view = root }
+            var queries by remember { mutableStateOf(recent) }
+            SearchScreen(
+                SearchFixtureStates.start.copy(content = SearchContent.Start(queries)),
+                onEvent = { if (it is SearchEvent.RemoveRecent) queries = queries - it.query },
+                snackbars = remember { SnackbarHostState() },
+            )
+        }
+    }
 
     // A tap on the bar opens the search view and Back closes it, the stock component's own motion.
     override val transitions =
@@ -107,10 +149,40 @@ class SearchScreenshots : ScreenshotRegistry() {
                 }
                 LaunchedEffect(changed) { if (changed) bar.animateToExpanded() }
             },
-        )
+        ) + listOf(Variant.EnLight, Variant.RuLight).map(::dismissRecent)
 
     // The fast spatial spring has moved the field most of the way within a tenth of a second.
     private val early get() = listOf(EARLY_MILLIS, 2 * EARLY_MILLIS, 4 * EARLY_MILLIS, MotionBounds.SCREEN)
+}
+
+private fun swipeRecent(
+    view: View,
+    query: String,
+) {
+    val bounds =
+        (view as ViewRootForTest)
+            .semanticsOwner
+            .getAllSemanticsNodes(mergingEnabled = true)
+            .single { node -> node.config.getOrNull(SemanticsProperties.Text)?.any { it.text == query } == true }
+            .boundsInRoot
+    val start = SystemClock.uptimeMillis()
+
+    fun touch(
+        action: Int,
+        fraction: Float,
+        elapsed: Long,
+    ) {
+        val event = MotionEvent.obtain(start, start + elapsed, action, bounds.left + bounds.width * fraction, bounds.center.y, 0)
+        try {
+            view.dispatchTouchEvent(event)
+        } finally {
+            event.recycle()
+        }
+    }
+    touch(MotionEvent.ACTION_DOWN, 0.75f, 0)
+    touch(MotionEvent.ACTION_MOVE, 0.65f, 16)
+    touch(MotionEvent.ACTION_MOVE, 0.40f, 32)
+    touch(MotionEvent.ACTION_UP, 0.40f, 48)
 }
 
 @Composable

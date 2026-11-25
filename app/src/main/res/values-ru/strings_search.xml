@@ -3,6 +3,7 @@
     <string name="search_placeholder">Поиск аниме</string>
     <string name="search_clear">Очистить поиск</string>
     <string name="search_recent">Недавние запросы</string>
+    <string name="search_remove_recent">Удалить из недавних запросов</string>
     <string name="search_browse">Подборки</string>
     <string name="search_suggestions">Для вас</string>
     <string name="search_suggestions_unavailable">Подборка недоступна в этом сеансе</string>
