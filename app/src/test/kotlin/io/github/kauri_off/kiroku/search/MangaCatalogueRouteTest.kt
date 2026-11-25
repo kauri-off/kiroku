@@ -74,7 +74,7 @@ class MangaCatalogueRouteTest {
     val rule: TestRule = RuleChain.outerRule(MainDispatcherRule(main)).around(registered(compose) { scope.cancel() })
 
     private val demo = TestGraph(Demo(Fixtures.reference, scope))
-    private val searchOffsets = mutableListOf<Int>()
+    private val searchRequests = mutableListOf<Pair<String, Int>>()
     private val rankingAttempts = mutableListOf<Int>()
     private val rankingOffsets = mutableListOf<Int>()
     private val detailIds = mutableListOf<MangaId>()
@@ -113,7 +113,7 @@ class MangaCatalogueRouteTest {
         compose.onNode(hasSetTextAction() and hasText("paper") and !inDialog).assertExists()
         compose.onNodeWithText(title).assertIsDisplayed()
         compose.onNodeWithText(firstPage.first().titles.romaji).assertDoesNotExist()
-        assertEquals(listOf(0, 0, 20), searchOffsets)
+        assertEquals(listOf("paper" to 0, "paper" to 0, "paper" to 20), searchRequests)
         assertTrue(rankingOffsets.isEmpty())
     }
 
@@ -142,7 +142,7 @@ class MangaCatalogueRouteTest {
         settle()
         compose.onNodeWithText(rankedTitle).assertIsDisplayed()
         assertEquals(listOf(0, 20, 20), rankingOffsets)
-        assertTrue(searchOffsets.isEmpty())
+        assertTrue(searchRequests.isEmpty())
     }
 
     @Test
@@ -201,7 +201,7 @@ class MangaCatalogueRouteTest {
         }
         compose.onNode(hasContentDescription("Clear search") and inDialog).performClick()
         compose.onNode(hasText("paper") and hasClickAction() and inDialog).assertExists()
-        assertTrue(searchOffsets.isEmpty())
+        assertTrue(searchRequests.isEmpty())
     }
 
     @Test
@@ -230,7 +230,7 @@ class MangaCatalogueRouteTest {
         settle()
         compose.onNodeWithText(activity.getString(R.string.manga_catalogue)).performClick()
         settle()
-        assertTrue(searchOffsets.isEmpty())
+        assertTrue(searchRequests.isEmpty())
         compose.onNodeWithText("paper").assertDoesNotExist()
 
         compose.onNode(hasSetTextAction() and !inDialog).performClick()
@@ -238,7 +238,7 @@ class MangaCatalogueRouteTest {
         typeAndKeep("first")
         typeAndKeep("paper")
         typeAndKeep(pasted)
-        assertTrue(searchOffsets.size >= 3)
+        assertTrue((pasted to 0) in searchRequests)
         val row = { text: String -> compose.onNode(hasText(text) and hasClickAction() and inDialog) }
         row("paper").performTouchInput { swipeRight() }
         row("paper").assertDoesNotExist()
@@ -301,9 +301,9 @@ class MangaCatalogueRouteTest {
                             includeAdult: Boolean,
                         ): Outcome<Page<MangaDetails>> {
                             assertTrue(query, query == "paper" || query in additionalQueries)
-                            searchOffsets += offset
+                            searchRequests += query to offset
                             return when {
-                                searchOffsets.size == 1 -> Outcome.Failure(DataError.ServerError)
+                                searchRequests.size == 1 -> Outcome.Failure(DataError.ServerError)
                                 offset == 0 -> Outcome.Success(Page(firstPage, 20))
                                 else -> Outcome.Success(Page(secondPage, null))
                             }
@@ -357,7 +357,7 @@ class MangaCatalogueRouteTest {
             compose.onNodeWithText(activity.getString(R.string.manga_catalogue)).performClick()
             settle()
         }
-        assertTrue(searchOffsets.isEmpty())
+        assertTrue(searchRequests.isEmpty())
         assertTrue(rankingOffsets.isEmpty())
     }
 

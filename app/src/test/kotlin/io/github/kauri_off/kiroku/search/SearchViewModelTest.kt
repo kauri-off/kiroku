@@ -75,6 +75,23 @@ class SearchViewModelTest {
         }
 
     @Test
+    fun `pasting an anime link at the debounce boundary prevents the previous request`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val server = ScriptedSearch(demo.search)
+            val model = SearchViewModel(server, demo.connection, SavedStateHandle())
+            showing(model.state)
+            model.type("Fullmetal")
+            runCurrent()
+            advanceTimeBy(300)
+
+            model.type("/anime/5114/")
+            runCurrent()
+            assertEquals(5114L, model.linkId?.value)
+            assertTrue(server.requests.isEmpty())
+        }
+
+    @Test
     fun `an anime link cancels an in flight request without starting a search and digits still search`() =
         runTest(main) {
             val demo = Demo(Fixtures.reference, backgroundScope)

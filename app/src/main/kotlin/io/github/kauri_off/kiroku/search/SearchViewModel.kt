@@ -129,6 +129,7 @@ internal class SearchViewModel<T>(
 
     private suspend fun read(load: Load) {
         if (load.waitForTyping) delay(TYPING_PAUSE)
+        if (load !== request.value || load.query != text) return
         loads.started()
         val answer = search(load.query, load.offset, load.adult)
         currentCoroutineContext().ensureActive()
