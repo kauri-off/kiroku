@@ -573,6 +573,66 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `full re-show survives a reconnect held before cache lookup completes`() = fullShowDuringReconnect(holdCache = true)
+
+    @Test
+    fun `full re-show survives a reconnect deferred at dispatch`() = fullShowDuringReconnect(holdCache = false)
+
+    private fun fullShowDuringReconnect(holdCache: Boolean) =
+        runTest(dispatcher) {
+            val stale = StoredManga(mangaFixture, now.minusSeconds(172_800))
+            val held = CompletableDeferred<Unit>()
+            val observeAgain = CompletableDeferred<Unit>()
+            var lookups = 0
+            var preflights = 0
+            var subscriptions = 0
+            val viewModel =
+                title(
+                    lookup = {
+                        if (++lookups == 2 && holdCache) held.await()
+                        stale
+                    },
+                    preflight = { if (++preflights == 2 && !holdCache) held.await() },
+                    connection =
+                        object : Connection {
+                            override fun observeOnline() =
+                                flow {
+                                    if (++subscriptions == 2) observeAgain.await()
+                                    online.collect { emit(it) }
+                                }
+                        },
+                )
+            try {
+                val screen = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(2, lookups)
+                assertEquals(1, reads)
+
+                screen.cancel()
+                runCurrent()
+                advanceTimeBy(5_001)
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                val updated = stale.copy(details = mangaFixture.copy(chapters = 184), fetchedAt = now)
+                answer = CompletableDeferred(Outcome.Success(updated))
+                held.complete(Unit)
+                runCurrent()
+                assertEquals(2, reads)
+                assertEquals(updated.details, shown(viewModel).details)
+
+                observeAgain.complete(Unit)
+                runCurrent()
+                assertEquals(2, reads)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },

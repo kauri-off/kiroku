@@ -145,7 +145,9 @@ internal class MangaTitleViewModel(
         force: Boolean,
         fullShow: Boolean = false,
     ) {
-        if (!loads.isShowing || load?.isActive == true) return
+        if (!loads.isShowing) return
+        resumeFullShow = resumeFullShow || fullShow
+        if (load?.isActive == true) return
         val source = manga
         if (source == null) {
             page.value = Page(problem = MangaTitleProblem.Unavailable)
@@ -153,10 +155,8 @@ internal class MangaTitleViewModel(
         }
         val owner = owner ?: return
         val manual = force || resumeForce == true
-        val checkOnShow = fullShow || resumeFullShow
-        if (!manual && !checkOnShow && retryOwed && availableRecovery() == null) return
+        if (!manual && !resumeFullShow && retryOwed && availableRecovery() == null) return
         resumeForce = null
-        resumeFullShow = false
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
                 val before = page.value
@@ -164,6 +164,7 @@ internal class MangaTitleViewModel(
                 ensureActive()
                 if (stored is Outcome.Failure && stored.error == DataError.ListEnded) {
                     retryOwed = false
+                    resumeFullShow = false
                     page.value = Page(problem = MangaTitleProblem.ReadFailed(stored.error))
                     return@launch
                 }
@@ -175,9 +176,10 @@ internal class MangaTitleViewModel(
                 page.value = before.copy(cached = cached)
                 if (!loads.isShowing) {
                     resumeForce = manual
-                    resumeFullShow = checkOnShow
                     return@launch
                 }
+                val checkOnShow = resumeFullShow
+                resumeFullShow = false
                 val owed = retryOwed
                 val recovery = if (owed && !manual) availableRecovery() else null
                 val stale = mangaStale(cached?.fetchedAt, clock.instant())
@@ -195,12 +197,13 @@ internal class MangaTitleViewModel(
                 if (answer == null) {
                     page.value = before.copy(cached = cached)
                     resumeForce = manual
-                    resumeFullShow = checkOnShow
+                    resumeFullShow = resumeFullShow || checkOnShow
                     retryOwed = owed
                     spentRecovery = previouslySpent
                     load(force = false)
                     return@launch
                 }
+                resumeFullShow = false
                 when (answer) {
                     is Outcome.Success -> {
                         page.value = Page(cached = answer.value, coverAttempt = before.coverAttempt + 1)
