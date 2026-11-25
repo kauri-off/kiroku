@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.core.link
 
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.MangaId
 import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
@@ -9,6 +10,10 @@ import java.util.Locale
 sealed interface Link {
     data class Title(
         val id: AnimeId,
+    ) : Link
+
+    data class MangaTitle(
+        val id: MangaId,
     ) : Link
 
     // The user as the link spells them, decoded; only a name `isAcceptedUserName` takes. Whether two names are one
@@ -31,7 +36,7 @@ private val acceptedUserName = Regex("[A-Za-z0-9_-]{1,$USER_NAME_MAX_LENGTH}")
 fun isAcceptedUserName(name: String): Boolean = acceptedUserName.matches(name)
 
 // A title's page: its id, then at most its name, then at most a slash. Sub-pages show what the title page does not.
-private val animePage = Regex("/anime/([1-9][0-9]*)(/[^/]+)?/?")
+private val titlePage = Regex("/(anime|manga)/([1-9][0-9]*)(/[^/]+)?/?")
 
 // A user's profile page: one segment, then at most a slash.
 private val profilePage = Regex("/profile/([^/]+)/?")
@@ -49,10 +54,10 @@ fun readLink(address: String): Link? {
         return null
     }
     val path = uri.rawPath ?: return null
-    animePage.matchEntire(path)?.let { page ->
-        // As written and as decoded: an encoded slash is no part of the page's address.
-        if (!animePage.matches(uri.path)) return null
-        return page.groupValues[1].toLongOrNull()?.let { Link.Title(AnimeId(it)) }
+    titlePage.matchEntire(path)?.let { page ->
+        if (!titlePage.matches(uri.path)) return null
+        val id = page.groupValues[2].toLongOrNull() ?: return null
+        return if (page.groupValues[1] == "manga") Link.MangaTitle(MangaId(id)) else Link.Title(AnimeId(id))
     }
     val name =
         profilePage

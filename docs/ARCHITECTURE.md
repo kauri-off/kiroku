@@ -56,10 +56,10 @@ without affecting its page (section 2.3).
 - **Privacy.** AniList receives the MAL ids of the unfinished titles on the user's list and of an airing title whose
   page is open, and nothing else about the user. Tenrai receives the device's IP address, the app's name and version, and
   the MAL id of each title whose MAL scores are opened. There is no analytics and no crash reporting.
-- Kiroku is a MAL client today and is not bound to stay only that. A title's identity is its MAL id; code outside
-  the clients of `:data` and the link code treats it as an opaque key, and it is persisted only in database
-  columns. `:core` and the state of the screens name roles (the list, the airing source), never a service: a
-  service's wire shape, vocabulary, limits and credentials stay inside its client in `:data`. No abstraction is
+- Kiroku is a MAL client today and is not bound to stay only that. A title's identity is its media category and MAL id.
+  Code outside the clients of `:data` and the link code treats it as an opaque key, and it is persisted only in
+  database columns. `:core` and the state of the screens name roles (the list, the airing source), never a service:
+  a service's wire shape, vocabulary, limits and credentials stay inside its client in `:data`. No abstraction is
   built for a source that does not exist.
 
 ### 2.2 External constraints and their consequences
@@ -376,8 +376,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - The app opens on List, tab Watching. Signed out, the List offers sign-in, and browsing without an account goes
   to Search.
 - Predictive back is on.
-- Deep links, from Android 12 once the user has allowed the app's links in the system's settings: a title's and a
-  user's profile page on `[www.]myanimelist.net`; and the OAuth redirect.
+- Deep links, from Android 12 once the user has allowed the app's links in the system's settings: anime and manga
+  title pages and user profiles on `[www.]myanimelist.net`; and the OAuth redirect.
 
 ### 6.4 Stack, wiring and demo mode
 

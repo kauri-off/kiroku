@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.core.fixtures
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.link.USER_NAME_MAX_LENGTH
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.MangaId
 
 // Addresses of MAL's site: the forms of a title's and a profile's link the app opens, with what each opens, and the ones it refuses.
 object Links {
@@ -36,12 +37,25 @@ object Links {
             "https://myanimelist.net/profile/$longest" to longest,
         ).mapValues { Link.Profile(it.value) }
 
-    val opened: Map<String, Link> = titles + profiles
+    val manga: Map<String, Link.MangaTitle> =
+        listOf(
+            "https://myanimelist.net/manga/1",
+            "https://myanimelist.net/manga/1/",
+            "https://www.myanimelist.net/manga/1/Monster",
+            "https://www.myanimelist.net/manga/1/Monster/?ref=share#top",
+        ).associateWith { Link.MangaTitle(MangaId(1)) }
+
+    val opened: Map<String, Link> = titles + profiles + manga
 
     val refused: List<String> =
         listOf(
             "http://myanimelist.net/anime/1",
-            "https://myanimelist.net/manga/1",
+            "https://myanimelist.net/manga/0",
+            "https://myanimelist.net/manga/01",
+            "https://myanimelist.net/manga/1/Monster/reviews",
+            "https://myanimelist.net/manga/1/a%2Fb",
+            "https://myanimelist.net/mangalist/someone",
+            "http://myanimelist.net/manga/1",
             "https://myanimelist.net/animelist/someone",
             "https://myanimelist.net/anime/1/Cowboy_Bebop/episode",
             "https://myanimelist.net/anime/1/Cowboy_Bebop/episode/1",
@@ -84,6 +98,8 @@ object Links {
     val handedOn: List<String> =
         listOf(
             "https://myanimelist.net/anime/99999999999999999999",
+            "https://myanimelist.net/manga/99999999999999999999",
+            "https://myanimelist.net/manga/%31",
             "https://myanimelist.net:8443/anime/1",
             "https://someone@myanimelist.net/anime/1",
             "https://myanimelist.net/anime%2F1",

@@ -27,7 +27,7 @@ internal fun recordedTitle(name: String): MalTitle = recordedJson(name).toTitle(
 
 // Every title node of every recorded answer, the pages themselves included, each with the answer it came from.
 internal val recordedNodes: List<Pair<String, JsonObject>> by lazy {
-    RecordedAnswers.files.filter { it.name.endsWith(".json") }.flatMap { file ->
+    RecordedAnswers.files.filter { it.extension == "json" && !it.name.startsWith("manga_") }.flatMap { file ->
         val name = file.name.substringBefore('.')
         titleNodesIn(MalJson.parseToJsonElement(file.readText())).map { name to it }
     }

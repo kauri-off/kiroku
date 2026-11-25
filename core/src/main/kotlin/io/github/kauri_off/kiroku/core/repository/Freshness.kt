@@ -36,6 +36,11 @@ fun detailsStale(
     return stale(refreshedAt, now, if (airing) Freshness.airingDetails else Freshness.details)
 }
 
+fun mangaStale(
+    fetchedAt: Instant?,
+    now: Instant,
+): Boolean = stale(fetchedAt, now, Freshness.details)
+
 // A tracked title's airing data, never fetched or fetched too long ago.
 fun airingStale(
     fetchedAt: Instant?,

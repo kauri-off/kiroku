@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_unavailable">Manga pages are unavailable in this mode</string>
+    <string name="manga_format_manga">Manga</string>
+    <string name="manga_format_novel">Novel</string>
+    <string name="manga_format_light_novel">Light novel</string>
+    <string name="manga_format_one_shot">One-shot</string>
+    <string name="manga_format_doujinshi">Doujinshi</string>
+    <string name="manga_format_manhwa">Manhwa</string>
+    <string name="manga_format_manhua">Manhua</string>
+    <string name="manga_format_oel">English-language manga</string>
+    <string name="manga_publication_finished">Finished</string>
+    <string name="manga_publication_publishing">Publishing</string>
+    <string name="manga_publication_upcoming">Not yet published</string>
+    <string name="manga_publication_on_hiatus">On hiatus</string>
+    <string name="manga_publication_discontinued">Discontinued</string>
+    <plurals name="manga_volumes">
+        <item quantity="one">%1$s\u00A0volume</item>
+        <item quantity="other">%1$s\u00A0volumes</item>
+    </plurals>
+    <plurals name="manga_chapters">
+        <item quantity="one">%1$s\u00A0chapter</item>
+        <item quantity="other">%1$s\u00A0chapters</item>
+    </plurals>
+</resources>

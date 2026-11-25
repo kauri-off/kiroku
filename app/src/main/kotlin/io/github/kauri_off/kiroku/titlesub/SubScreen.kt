@@ -52,7 +52,7 @@ internal sealed interface SubScreenBody {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SubScreen(
-    title: String,
+    title: String?,
     sessionExpired: Boolean,
     onBack: () -> Unit,
     onSignIn: () -> Unit,
@@ -65,7 +65,7 @@ internal fun SubScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = { if (title != null) Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.common_back))

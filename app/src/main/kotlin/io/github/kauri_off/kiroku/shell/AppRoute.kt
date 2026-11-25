@@ -17,6 +17,8 @@ import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.list.UserListRoute
+import io.github.kauri_off.kiroku.manga.MangaTitleKey
+import io.github.kauri_off.kiroku.manga.MangaTitleRoute
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
@@ -123,6 +125,7 @@ fun ShellNavigator.openLink(link: Link) {
 fun linkedPage(link: Link): OpenedPage =
     when (link) {
         is Link.Title -> OpenedPage(Destination.List, TitleKey(link.id.value))
+        is Link.MangaTitle -> OpenedPage(Destination.List, MangaTitleKey(link.id.value))
         is Link.Profile -> OpenedPage(Destination.Profile, OtherProfileKey(link.name))
     }
 
@@ -194,6 +197,7 @@ fun appEntries(
             NotifySettingsRoute(graph, messages, snackbars, onBack = { back() }, onOpenTitle = { openTitle(it, null) }, onSignIn = signIn)
         }
         entry<AboutKey> { AboutRoute(snackbars, onBack = { back() }) }
+        entry<MangaTitleKey> { key -> MangaTitleRoute(key, graph, messages, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<TitleKey> { key ->
             TitleRoute(
                 key,

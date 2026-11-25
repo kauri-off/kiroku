@@ -141,7 +141,10 @@ class RoomLocalList(
         transaction {
             val nobodys = owner == null && listDao.state().owner == null && !listDao.hasEntries()
             listDao.deleteAll()
-            if (!nobodys) titleDao.deleteAll()
+            if (!nobodys) {
+                titleDao.deleteAll()
+                database.manga().deleteAll()
+            }
             profileDao.deleteAllBut(owner?.value)
             listDao.setState { it.copy(owner = owner?.value, syncedAt = null) }
         }

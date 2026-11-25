@@ -1,0 +1,19 @@
+{
+    "id": 1,
+    "title": "Monster",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/manga/3/258224.jpg",
+        "large": "https://cdn.myanimelist.net/images/manga/3/258224l.jpg"
+    },
+    "alternative_titles": {
+        "synonyms": [],
+        "en": "Monster",
+        "ja": "MONSTER"
+    },
+    "synopsis": "Kenzou Tenma, a renowned Japanese neurosurgeon working in…\n\nAs a consequence of his actions, hospital director…\n\nNine years later, Tenma is the head of the surgical…\n\n[Written by MAL Rewrite]",
+    "media_type": "manga",
+    "status": "finished",
+    "num_volumes": 18,
+    "num_chapters": 162,
+    "mean": 9.16
+}

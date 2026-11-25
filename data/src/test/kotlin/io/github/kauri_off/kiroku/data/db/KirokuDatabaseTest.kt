@@ -329,7 +329,11 @@ class KirokuDatabaseTest {
             }
         assertTrue(list.keys.containsAll(TABLES))
         assertTrue(list.values.all { it.isNotEmpty() })
-        val fixture = list + airing + profile + record
+        val manga =
+            mapOf(
+                "manga" to listOf(mapOf("id" to anime.id.value, "romaji" to "Paper Observatory", "fetched_at" to fetchedAt.toColumn())),
+            )
+        val fixture = list + airing + profile + record + manga
         for (version in 1..KirokuDatabase.VERSION) {
             context.deleteDatabase(name)
             val written =
@@ -624,6 +628,7 @@ class KirokuDatabaseTest {
                 5 to "2ec16b4ab274d6bfa0ed4f5d94531644",
                 6 to "0225027f282ee667b6e073930642ad78",
                 7 to "821cd60397be73230eb12dd46d857650",
+                8 to "1749ab713302e239be8e5228bb07223b",
             )
     }
 }
