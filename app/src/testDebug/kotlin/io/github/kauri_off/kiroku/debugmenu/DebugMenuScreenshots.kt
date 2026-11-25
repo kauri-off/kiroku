@@ -98,6 +98,20 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 )
             },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
+            case("recorder-read-running") {
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Reading))
+            },
+            case("recorder-read-finished") {
+                val output =
+                    File(
+                        "/data/user/0/io.github.kauri_off.kiroku.debug/no_backup/" +
+                            "account.private-reads/suggestions/capture-00000000-0000-0000-0000-000000000000",
+                    )
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.ReadRecorded(2, output)))
+            },
+            case("recorder-read-storage-failed") {
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.ReadStopped("files", Halt.Storage, 0, null)))
+            },
             case("recorder-running") {
                 Menu(
                     ScenarioState.Unavailable,

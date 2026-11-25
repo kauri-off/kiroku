@@ -239,6 +239,8 @@ class MalSession internal constructor(
 
     internal fun isSignedInAs(owner: SignInId): Boolean = state.value?.session == Session.SignedIn(owner)
 
+    internal fun signedInOwner(): SessionOwner? = owners.value?.takeIf { it.id?.let(::isSignedInAs) == true }
+
     // S5: a rejected token leads to one refresh, shared with every request rejected beside this one, and one retry.
     internal suspend fun <T> authorised(request: AuthorisedRequest<T>): Outcome<T> = authorised(null, request)
 

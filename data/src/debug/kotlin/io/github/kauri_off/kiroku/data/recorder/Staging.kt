@@ -29,7 +29,7 @@ internal fun Sanitiser.kept(
 internal fun cleanedStored(
     file: String,
     text: String,
-): String? = if (file.substringBefore('.') in SignedInAnswers) null else Sanitiser(emptyMap()).json(text)
+): String? = if (isSignedInAnswer(file.substringBefore('.'))) null else Sanitiser(emptyMap()).json(text)
 
 // A signed-in answer as MAL sent it, without [Sanitiser]'s secrets; stored as `.json` when it is JSON.
 internal fun Sanitiser.asSent(

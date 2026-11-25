@@ -99,6 +99,10 @@ class MalHttp(
             client.newCall(if (sends == null) request else request.newBuilder().tag(Sends::class.java, sends).build())
         }
 
+    private val clientWithoutRedirects by lazy { client.newBuilder().followRedirects(false).build() }
+
+    internal fun newCallWithoutRedirects(request: Request): Call = clientWithoutRedirects.newCall(request)
+
     private val apiServices by lazy { services(hosts.api) }
     private val signInServices by lazy { services(hosts.signIn) }
 

@@ -10,8 +10,8 @@ import java.io.File
 private val JOURNAL = notShown("recording")
 private val RECORDED = notShown("recorded")
 private val RUN = notShown("recorded-run")
+private val PRIVATE_READS = notShown("private-reads")
 
-// The recorder of a live source; its answers go where a computer reads them also from a build that is not debuggable.
 internal fun liveRecorder(
     parts: LiveParts,
     session: Lazy<MalSession>,
@@ -25,5 +25,6 @@ internal fun liveRecorder(
             val name = parts.source.name
             RecorderFolders(File(shared, notShown("$name.$RECORDED")), File(shared, notShown("$name.$RUN")))
         },
+        privateReads = { parts.file(PRIVATE_READS) },
         scope = parts.scope,
     )

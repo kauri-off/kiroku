@@ -2,12 +2,17 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.NotSentAgain
+import io.github.kauri_off.kiroku.data.network.ReadOwnerEnded
+import io.github.kauri_off.kiroku.data.network.Sends
 import io.github.kauri_off.kiroku.data.network.bearer
 import io.github.kauri_off.kiroku.data.session.Attempt
 import io.github.kauri_off.kiroku.data.session.MalSession
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,7 +39,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.UUID
 
 // The title a recording is made on, as MAL names it.
 data class RecordedTitle(
@@ -116,7 +124,20 @@ sealed interface Recording {
         val title: RecordedTitle,
     ) : Recording
 
-    // Nothing was asked for but the title, and nothing written.
+    data object Reading : Recording
+
+    data class ReadRecorded(
+        val answers: Int,
+        val folder: File,
+    ) : Recording
+
+    data class ReadStopped(
+        val at: String,
+        val halt: Halt,
+        val answers: Int,
+        val folder: File?,
+    ) : Recording
+
     data class NotStarted(
         val halt: Halt,
     ) : Recording
@@ -158,21 +179,25 @@ fun signedInRecorder(
     http: MalHttp,
     journal: () -> File,
     folders: () -> RecorderFolders,
+    privateReads: () -> File,
     scope: CoroutineScope,
-): SignedInRecorder = SignedInRecorder(session, http, journal, folders, scope)
+): SignedInRecorder = SignedInRecorder(session, http, journal, folders, privateReads, scope)
 
-// Section 11.1: records MAL's answers on a title it adds to the list and removes; what a run left, the next one removes.
 class SignedInRecorder internal constructor(
     private val session: Lazy<MalSession>,
     private val http: MalHttp,
     journalFile: () -> File,
     folders: () -> RecorderFolders,
+    privateReads: () -> File,
     scope: CoroutineScope,
     private val pause: suspend () -> Unit = { delay(PAUSE_MILLIS) },
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val writePrivateFile: (File, String) -> Unit = { file, text -> file.writeText(text) },
 ) {
     private val journal by lazy { Journal(journalFile()) }
     private val files by lazy(folders)
-    private val work = scope + Dispatchers.IO
+    private val privateRoot by lazy(privateReads)
+    private val work = scope + dispatcher
     private val busy = Mutex()
     private val shown = MutableStateFlow<Recording>(Recording.Idle)
     val state: StateFlow<Recording> = shown.asStateFlow()
@@ -195,6 +220,20 @@ class SignedInRecorder internal constructor(
     // Runs only on the title that was checked last and is still shown for confirmation.
     fun record(title: RecordedTitle): Job = act { if (shown.value == Recording.Checked(title)) shown.value = ran(title) }
 
+    fun recordReads(capture: ReadCapture): Job {
+        val owner = if (session.isInitialized()) session.value.signedInOwner() else null
+        return act {
+            val left = journal.read()
+            shown.value =
+                if (left == null) {
+                    shown.value = Recording.Reading
+                    readCapture(capture, owner)
+                } else {
+                    Recording.Leftover(left.title, ListAfter.Left, null)
+                }
+        }
+    }
+
     // One more try at taking off the list what a recording left there.
     fun remove(): Job = act { journal.read()?.let { shown.value = leftover(it) } }
 
@@ -204,7 +243,7 @@ class SignedInRecorder internal constructor(
     private val Recording.settled: Boolean
         get() =
             when (this) {
-                is Recording.Checked, is Recording.NotStarted -> true
+                is Recording.Checked, is Recording.NotStarted, is Recording.ReadRecorded, is Recording.ReadStopped -> true
                 is Recording.Recorded -> list != ListAfter.Left
                 is Recording.Stopped -> list != ListAfter.Left
                 is Recording.Leftover -> list != ListAfter.Left
@@ -235,6 +274,80 @@ class SignedInRecorder internal constructor(
         } catch (halted: Halted) {
             Recording.NotStarted(halted.halt)
         }
+
+    private suspend fun readCapture(
+        capture: ReadCapture,
+        owner: SessionOwner?,
+    ): Recording {
+        if (owner == null) return Recording.NotStarted(Halt.NotSignedIn)
+        begin(null)
+        val pending =
+            try {
+                session.value.withOwner(owner) {
+                    val directory = Files.createDirectories(File(privateRoot, capture.key).toPath())
+                    Files.createDirectory(directory.resolve("run-${UUID.randomUUID()}")).toFile()
+                } ?: return Recording.NotStarted(Halt.AnotherAccount)
+            } catch (_: IOException) {
+                return Recording.ReadStopped(RUN, Halt.Storage, 0, null)
+            }
+        return try {
+            capturePages(capture, owner, pending)
+            val finished = File(pending.parentFile, "capture-${pending.name.removePrefix("run-")}")
+            val kept =
+                session.value.withOwner(owner) {
+                    filed(RUN) { Files.move(pending.toPath(), finished.toPath(), StandardCopyOption.ATOMIC_MOVE) }
+                }
+            if (kept == null) throw Halted(Halt.AnotherAccount, RUN)
+            Recording.ReadRecorded(stored, finished)
+        } catch (halted: Halted) {
+            Recording.ReadStopped(halted.at, halted.halt, stored, pending)
+        }
+    }
+
+    private suspend fun capturePages(
+        capture: ReadCapture,
+        owner: SessionOwner,
+        pending: File,
+    ) {
+        var offset = 0
+        repeat(capture.pages) { index ->
+            val name = capture.answer(index)
+            val answer = send(name, get("${capture.request}&offset=$offset"), owner)
+            storePrivate(name, answer.kept, pending)
+            expect(name, answer.status, ::ok)
+            val next = nextReadOffset(capture, name, answer, offset) ?: return
+            if (index == capture.pages - 1) {
+                if (capture == ReadCapture.Suggestions) return
+                throw Halted(Halt.Unexpected(answer.status), name)
+            }
+            offset = next
+        }
+    }
+
+    private fun nextReadOffset(
+        capture: ReadCapture,
+        name: String,
+        answer: Answer,
+        offset: Int,
+    ): Int? {
+        val invalid = Halted(Halt.Unexpected(answer.status), name)
+        val page = answer.page ?: throw invalid
+        val entries = page["data"] as? JsonArray ?: throw invalid
+        val paging = page["paging"]?.takeUnless { it is JsonNull }
+        if (paging == null) {
+            if (capture == ReadCapture.MangaList) throw invalid
+            return null
+        }
+        val next = (paging as? JsonObject ?: throw invalid)["next"]?.takeUnless { it is JsonNull } ?: return null
+        return (next as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.content
+            ?.toHttpUrlOrNull()
+            ?.queryParameterValues("offset")
+            ?.singleOrNull()
+            ?.toIntOrNull()
+            ?.takeIf { it > offset && (capture != ReadCapture.MangaList || it - offset == entries.size) } ?: throw invalid
+    }
 
     private suspend fun ran(checked: RecordedTitle): Recording {
         begin(checked)
@@ -307,7 +420,7 @@ class SignedInRecorder internal constructor(
         id: Long,
         at: String,
     ) {
-        val title = read.json()
+        val title = read.page
         if (read.status == NOT_FOUND && title?.text("error") == UNKNOWN_TITLE) return
         if (read.status != OK || title?.number("id") != id) throw Halted(Halt.Unexpected(read.status), at)
         if (title["my_list_status"].holdsValues) throw Halted(Halt.StillOnTheList, at)
@@ -326,7 +439,7 @@ class SignedInRecorder internal constructor(
     }
 
     private fun userOf(answer: Answer): String? =
-        (answer.json()?.get("id") as? JsonPrimitive)?.content?.let { id ->
+        (answer.page?.get("id") as? JsonPrimitive)?.content?.let { id ->
             MessageDigest.getInstance("SHA-256").digest(id.toByteArray()).joinToString("") { "%02x".format(it) }
         }
 
@@ -347,7 +460,7 @@ class SignedInRecorder internal constructor(
         var offset = 0L
         repeat(MOST_PAGES) {
             val answer = ask(COUNT, get("users/@me/animelist?nsfw=true&limit=$LARGEST_PAGE&offset=$offset"), kept = false)
-            val page = answer.json()
+            val page = answer.page
             val entries = page?.get("data") as? JsonArray ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
             entries.mapTo(titles) { entry ->
                 ((entry as? JsonObject)?.get("node") as? JsonObject)?.number("id") ?: throw Halted(Halt.Unexpected(answer.status), COUNT)
@@ -393,7 +506,7 @@ class SignedInRecorder internal constructor(
         id: Long,
     ): RecordedTitle {
         if (answer.status == NOT_FOUND) throw Halted(Halt.NoSuchTitle, ABSENT)
-        val title = answer.json()
+        val title = answer.page
         val name = title?.text("title")
         val episodes = title?.number("num_episodes")
         if (title?.number("id") != id || name == null || episodes == null) throw Halted(Halt.Unexpected(answer.status), ABSENT)
@@ -439,11 +552,9 @@ class SignedInRecorder internal constructor(
 
     private class Answer(
         val status: Int,
-        val body: String,
         val kept: Kept,
-    ) {
-        fun json(): JsonObject? = json(body)
-    }
+        val page: JsonObject? = null,
+    )
 
     // The run ends here, at the request [at].
     private class Halted(
@@ -460,26 +571,68 @@ class SignedInRecorder internal constructor(
     ): Answer {
         val answer = send(name, request)
         if (kept) store(name, answer.kept)
-        if (answer.status in REFUSALS) throw Halted(Halt.Refused(answer.status), name)
-        if (!expected(answer.status)) throw Halted(Halt.Unexpected(answer.status), name)
+        expect(name, answer.status, expected)
         return answer
+    }
+
+    private fun expect(
+        name: String,
+        status: Int,
+        expected: (Int) -> Boolean,
+    ) {
+        if (status in REFUSALS) throw Halted(Halt.Refused(status), name)
+        if (!expected(status)) throw Halted(Halt.Unexpected(status), name)
     }
 
     // One request at a time, a pause between two. The session gives the token, and a rejected one goes back to it.
     private suspend fun send(
         name: String,
         request: Request.Builder,
+        owner: SessionOwner? = null,
     ): Answer {
         if (sent++ > 0) pause()
         val outcome =
-            session.value.authorised { accessToken ->
+            session.value.authorised(owner?.id) { accessToken ->
                 try {
-                    http.callFactory.newCall(request.header(AUTHORIZATION, bearer(accessToken)).build()).execute().use { response ->
+                    request.header(AUTHORIZATION, bearer(accessToken))
+                    val call =
+                        if (owner == null) {
+                            http.callFactory.newCall(request.build())
+                        } else {
+                            request.tag(Sends::class.java, Sends(1, maySendRead = { session.value.isCurrentOwner(owner) }))
+                            http.newCallWithoutRedirects(request.build())
+                        }
+                    call.execute().use { response ->
+                        if (owner != null && !session.value.isCurrentOwner(owner)) {
+                            return@use Attempt.Answered(Outcome.Failure(DataError.ListEnded))
+                        }
+                        if (owner != null && response.code in 300..399) return@use statusOnly(name, response.code)
                         if (response.code == UNAUTHORIZED) return@use Attempt.Rejected
-                        val body = response.body.string()
-                        // Section 11.1: the answer as MAL sent it, never the token or the client id it was asked with.
+                        val body =
+                            try {
+                                response.body.string()
+                            } catch (unread: IOException) {
+                                if (owner == null) throw unread
+                                return@use statusOnly(name, response.code)
+                            }
                         val sanitiser = Sanitiser(mapOf(accessToken to "access-token", http.clientId to "client-id"))
-                        Attempt.Answered(Outcome.Success(Answer(response.code, body, sanitiser.asSent(name, response.code, body))))
+                        val answer =
+                            if (owner == null) {
+                                Answer(response.code, sanitiser.asSent(name, response.code, body), json(body))
+                            } else {
+                                val content = privateReadJson(body)
+                                Answer(response.code, sanitiser.privateAnswer(name, response.code, content), content as? JsonObject)
+                            }
+                        Attempt.Answered(Outcome.Success(answer))
+                    }
+                } catch (_: ReadOwnerEnded) {
+                    Attempt.Answered(Outcome.Failure(DataError.ListEnded))
+                } catch (limited: NotSentAgain) {
+                    val status = limited.status
+                    if (owner != null && status != null) {
+                        statusOnly(name, status)
+                    } else {
+                        Attempt.Answered(Outcome.Failure(DataError.NoConnection))
                     }
                 } catch (_: IOException) {
                     Attempt.Answered(Outcome.Failure(DataError.NoConnection))
@@ -492,12 +645,18 @@ class SignedInRecorder internal constructor(
                     when (outcome.error) {
                         DataError.SessionExpired -> Halt.NotSignedIn
                         DataError.StorageError -> Halt.Storage
+                        DataError.ListEnded -> Halt.AnotherAccount
                         else -> Halt.NoAnswer
                     },
                     name,
                 )
         }
     }
+
+    private fun statusOnly(
+        name: String,
+        status: Int,
+    ): Attempt<Answer> = Attempt.Answered(Outcome.Success(Answer(status, Kept("$name.$status.txt", "$status\n"))))
 
     private fun store(
         name: String,
@@ -506,6 +665,23 @@ class SignedInRecorder internal constructor(
         filed(name) { File(files.run, kept.file).writeText(kept.text) }
         stored++
         running?.let { shown.value = Recording.Running(it, stored, SignedInAnswers.size) }
+    }
+
+    private fun storePrivate(
+        name: String,
+        kept: Kept,
+        pending: File,
+    ) {
+        filed(name) {
+            val temp = Files.createTempFile(pending.toPath().parent, "answer-", ".tmp").toFile()
+            try {
+                writePrivateFile(temp, kept.text)
+                Files.move(temp.toPath(), File(pending, kept.file).toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } finally {
+                temp.delete()
+            }
+        }
+        stored++
     }
 
     private inline fun filed(

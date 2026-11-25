@@ -27,6 +27,23 @@ class SanitiserTest {
         Sanitiser(mapOf("the-client-id-0f3a" to "client-id"), names = mapOf("Some_Name-7" to "public-user", "" to "private-user"))
 
     @Test
+    fun `resolving a redacted JSON key collision does not restore the credential`() {
+        val answer =
+            Sanitiser(mapOf("access-token-2" to "access-token"))
+                .privateAnswer("private", 200, privateReadJson("""{"access-token-2":12,"access-token":34}"""))
+
+        assertEquals("""{"access-token-3":12,"access-token":34}""", answer.text)
+    }
+
+    @Test
+    fun `a private capture masks a numeric credential and preserves other JSON values`() {
+        val body = """{"credential":123456,"number":-7.25e+3,"flag":false,"missing":null}"""
+        val answer = Sanitiser(mapOf("123456" to "client-id")).privateAnswer("private", 200, privateReadJson(body))
+
+        assertEquals("""{"credential":"client-id","number":-7.25e+3,"flag":false,"missing":null}""", answer.text)
+    }
+
+    @Test
     fun `a user's name is replaced where it names the user, and the client id wherever an answer repeats it`() {
         val planted =
             """
