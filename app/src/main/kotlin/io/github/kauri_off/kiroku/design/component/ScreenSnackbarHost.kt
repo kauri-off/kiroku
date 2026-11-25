@@ -10,6 +10,10 @@ import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ButtonDefaults
@@ -38,18 +42,23 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.kauri_off.kiroku.design.theme.AtSystemScale
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 
@@ -58,9 +67,31 @@ val LocalOnTop = compositionLocalOf { true }
 
 // The shell's snackbar host in a screen's scaffold, drawn only by the screen on top so a message shows once.
 @Composable
-fun ScreenSnackbarHost(snackbars: SnackbarHostState) {
-    if (LocalOnTop.current) SnackbarHost(snackbars) { SwipeableSnackbar(it) }
+fun ScreenSnackbarHost(
+    snackbars: SnackbarHostState,
+    ime: WindowInsets? = null,
+) {
+    if (!LocalOnTop.current) return
+    if (ime == null) {
+        SnackbarHost(snackbars) { SwipeableSnackbar(it) }
+    } else {
+        val belowHost = remember { mutableIntStateOf(0) }
+        val insets =
+            remember {
+                object : WindowInsets by WindowInsets() {
+                    override fun getBottom(density: Density): Int = belowHost.intValue
+                }
+            }
+        Box(Modifier.onGloballyPositioned { belowHost.intValue = it.spaceBelow() }) {
+            SnackbarHost(snackbars, Modifier.padding(ime.exclude(insets).asPaddingValues())) {
+                SwipeableSnackbar(it, ime)
+            }
+        }
+    }
 }
+
+private fun LayoutCoordinates.spaceBelow(): Int =
+    (findRootCoordinates().size.height - positionInRoot().y - size.height).roundToInt().coerceAtLeast(0)
 
 // A message whose time the host runs itself, so that a finger holding it stops the time; the stock host's would not.
 class TimedMessage(
@@ -76,7 +107,10 @@ private enum class Swiped { No, ToStart, ToEnd }
 
 // Swiped past half its width or flung either way, a message leaves the window and is dismissed as by its timeout.
 @Composable
-private fun SwipeableSnackbar(data: SnackbarData) {
+private fun SwipeableSnackbar(
+    data: SnackbarData,
+    ime: WindowInsets? = null,
+) {
     val state = remember(data) { AnchoredDraggableState(Swiped.No) }
     val system = rememberCoroutineScope().coroutineContext[MotionDurationScale]
     val scheme = MaterialTheme.motionScheme
@@ -90,14 +124,18 @@ private fun SwipeableSnackbar(data: SnackbarData) {
     val held by drags.collectIsDraggedAsState()
     val time = (data.visuals as? TimedMessage)?.time
     val accessibility = LocalAccessibilityManager.current
-    // Let go, the time starts again in full, as after the message was out of sight.
-    LaunchedEffect(data, held) {
-        if (held || time == null || time == SnackbarDuration.Indefinite) return@LaunchedEffect
-        val millis = time.millis(action != null, accessibility)
-        delay(millis)
-        data.dismiss()
-    }
     val density = LocalDensity.current
+    val belowMessage = remember(data) { mutableIntStateOf(-1) }
+    LaunchedEffect(data, held, ime, density, accessibility) {
+        if (held || time == null || time == SnackbarDuration.Indefinite) return@LaunchedEffect
+        snapshotFlow { ime == null || belowMessage.intValue >= ime.getBottom(density) }.collectLatest { visible ->
+            if (visible) {
+                val millis = time.millis(action != null, accessibility)
+                delay(millis)
+                data.dismiss()
+            }
+        }
+    }
     val window = LocalWindowInfo.current
     val direction = LocalLayoutDirection.current
     // Half the message's width, whatever the distance to the window's edge.
@@ -108,6 +146,10 @@ private fun SwipeableSnackbar(data: SnackbarData) {
             Modifier
                 .padding(Spacing.m)
                 .onGloballyPositioned { at ->
+                    if (ime != null) {
+                        belowMessage.intValue =
+                            if (at.size.height > 0 && at.positionInRoot().y >= 0f) at.spaceBelow() else -1
+                    }
                     val start = at.positionInWindow().x
                     val width = at.size.width
                     half.floatValue = width / 2f
