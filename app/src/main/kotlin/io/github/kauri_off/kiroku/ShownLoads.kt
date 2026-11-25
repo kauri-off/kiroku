@@ -38,8 +38,10 @@ class ShownLoads(
     shownAgain: () -> Unit = {},
     trackOutagesWhileShown: Boolean = false,
 ) {
+    private class Recovery
+
     private val watchers = MutableStateFlow(Unit)
-    private val owed = MutableStateFlow(false)
+    private val owed = MutableStateFlow<Recovery?>(null)
 
     // A load was repeated since the connection was last seen gone, so it is not repeated while the connection stays.
     private var spent = false
@@ -80,14 +82,14 @@ class ShownLoads(
         }
         scope.launch {
             val showing = watchers.subscriptionCount.map { it > 0 }.distinctUntilChanged()
-            val waiting = if (trackOutagesWhileShown) showing else combine(showing, owed) { shown, owed -> shown && owed }
+            val waiting = if (trackOutagesWhileShown) showing else combine(showing, owed) { shown, owed -> shown && owed != null }
             waiting.distinctUntilChanged().collectLatest { watching ->
                 if (!watching) return@collectLatest
                 val online = connection.observeOnline().onEach { if (!it) spent = false }
-                combine(online, owed) { online, owed -> online && owed }.collect { ready ->
-                    if (ready && owed.value && isShowing && !spent) {
+                combine(online, owed) { online, owed -> online && owed != null }.collect { ready ->
+                    if (ready && owed.value != null && isShowing && !spent) {
                         spent = true
-                        owed.value = false
+                        owed.value = null
                         again()
                     }
                 }
@@ -97,27 +99,31 @@ class ShownLoads(
 
     // Each load of the screen, the person's own included, starts and ends here; the error is null when it succeeded.
     fun started() {
-        owed.value = false
+        owed.value = null
     }
 
     fun ended(
         error: DataError?,
         retryAfterHiddenFailure: Boolean = false,
     ) {
-        if (error == DataError.NoConnection && retryAfterHiddenFailure && !isShowing) spent = false
-        owed.value = error == DataError.NoConnection
+        if (error != DataError.NoConnection) {
+            owed.value = null
+            return
+        }
+        if (retryAfterHiddenFailure) spent = false
+        if (retryAfterHiddenFailure || owed.value == null) owed.value = Recovery()
     }
 
     // A load another part of the app started is owed and may fail offline: it is repeated once the connection is seen
     // to come back, not while it stays, when that part's own attempt runs.
     fun owedOffline() {
         spent = true
-        owed.value = true
+        owed.value = owed.value ?: Recovery()
     }
 
     // A load another part of the app made succeeded, so nothing is owed.
     fun loadedElsewhere() {
-        owed.value = false
+        owed.value = null
     }
 }
 

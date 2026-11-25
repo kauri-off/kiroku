@@ -45,6 +45,7 @@ internal class MangaListViewModel(
     private var watch: Job? = null
     private var refreshPending = false
     private var recoveryPending = false
+    private var coveredDuringRefresh = false
     private val loads =
         ShownLoads(
             viewModelScope,
@@ -58,6 +59,7 @@ internal class MangaListViewModel(
                 read()
             },
             shownAgain = { read() },
+            hidden = { coveredDuringRefresh = true },
             trackOutagesWhileShown = true,
         )
 
@@ -127,6 +129,7 @@ internal class MangaListViewModel(
                 refreshPending = false
                 recoveryPending = false
                 page.value = Page(snapshot, refreshing = true)
+                coveredDuringRefresh = false
                 val result = lists.refresh(owner) { loads.isShowing }
                 ensureActive()
                 if (sessions.first().owner != owner || session.value?.owner != owner) return@launch
@@ -151,7 +154,10 @@ internal class MangaListViewModel(
                         val kept = snapshot.takeUnless { result.error == DataError.ListEnded }
                         page.value = Page(kept, result.error)
                         if (kept != null) onRefreshFailed(result.error)
-                        loads.ended(result.error, retryAfterHiddenFailure = !recovering)
+                        loads.ended(
+                            result.error.takeUnless { recoveryPending },
+                            retryAfterHiddenFailure = !recovering && (coveredDuringRefresh || !loads.isShowing),
+                        )
                         if (recoveryPending) read()
                     }
                 }

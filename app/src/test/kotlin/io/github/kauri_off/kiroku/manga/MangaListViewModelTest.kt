@@ -17,6 +17,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -39,6 +40,7 @@ class MangaListViewModelTest {
     private val failures = mutableListOf<DataError>()
     private var cache = CompletableDeferred(Unit)
     private var admission = CompletableDeferred(Unit)
+    private var connectionAdmission = CompletableDeferred(Unit)
     private var answer = CompletableDeferred<Outcome<MangaListSnapshot>>(Outcome.Failure(DataError.NoConnection))
     private var cachedReads = 0
     private var fetches = 0
@@ -67,7 +69,7 @@ class MangaListViewModelTest {
             },
             Clock.fixed(now, ZoneOffset.UTC),
             object : Connection {
-                override fun observeOnline() = online
+                override fun observeOnline() = online.onStart { connectionAdmission.await() }
             },
             sessions,
             flowOf(TitleLanguage.Romaji),
@@ -153,37 +155,95 @@ class MangaListViewModelTest {
     @Test
     fun `a second offline pull covered by a title retries once after Back`() =
         runTest(dispatcher) {
+            for ((answerAfterBack, firstRetryFails) in listOf(false to false, true to false, true to true)) {
+                online.value = false
+                fetches = 0
+                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                val vm = model()
+                val pending = CompletableDeferred<Outcome<MangaListSnapshot>>()
+                val firstShow = showing(vm.shown, vm.state)
+                try {
+                    runCurrent()
+                    vm.refresh()
+                    runCurrent()
+                    val firstRecovery = if (firstRetryFails) Outcome.Failure(DataError.NoConnection) else Outcome.Success(snapshot)
+                    answer = CompletableDeferred(firstRecovery)
+                    online.value = true
+                    runCurrent()
+                    assertEquals(2, fetches)
+
+                    answer = pending
+                    vm.refresh()
+                    runCurrent()
+                    assertEquals(3, fetches)
+                    firstShow.cancel()
+                    runCurrent()
+                    online.value = false
+                    runCurrent()
+                    if (!answerAfterBack) pending.complete(Outcome.Failure(DataError.NoConnection))
+                    runCurrent()
+                    online.value = true
+                    runCurrent()
+                    assertEquals(3, fetches)
+
+                    answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                    val returned = showing(vm.shown, vm.state)
+                    try {
+                        runCurrent()
+                        if (answerAfterBack) {
+                            assertEquals(3, fetches)
+                            pending.complete(Outcome.Failure(DataError.NoConnection))
+                            runCurrent()
+                        }
+                        assertEquals(4, fetches)
+                    } finally {
+                        returned.cancel()
+                    }
+                } finally {
+                    pending.complete(Outcome.Failure(DataError.NoConnection))
+                    firstShow.cancel()
+                    vm.viewModelScope.cancel()
+                    runCurrent()
+                }
+            }
+        }
+
+    @Test
+    fun `a queued recovery keeps its single attempt when online is first observed after Back`() =
+        runTest(dispatcher) {
             val vm = model()
-            val pending = CompletableDeferred<Outcome<MangaListSnapshot>>()
+            val manual = CompletableDeferred<Outcome<MangaListSnapshot>>()
+            val automatic = CompletableDeferred<Outcome<MangaListSnapshot>>()
             try {
                 val firstShow = showing(vm.shown, vm.state)
                 runCurrent()
                 vm.refresh()
                 runCurrent()
-                answer = CompletableDeferred(Outcome.Success(snapshot))
+                answer = manual
+                vm.refresh()
+                runCurrent()
+                assertEquals(2, fetches)
                 online.value = true
                 runCurrent()
                 assertEquals(2, fetches)
 
-                answer = pending
-                vm.refresh()
-                runCurrent()
-                assertEquals(3, fetches)
                 firstShow.cancel()
                 runCurrent()
-                online.value = false
-                pending.complete(Outcome.Failure(DataError.NoConnection))
+                manual.complete(Outcome.Failure(DataError.NoConnection))
                 runCurrent()
-                online.value = true
-                runCurrent()
-                assertEquals(3, fetches)
-
-                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                connectionAdmission = CompletableDeferred()
+                answer = automatic
                 showing(vm.shown, vm.state)
                 runCurrent()
-                assertEquals(4, fetches)
+                assertEquals(3, fetches)
+                connectionAdmission.complete(Unit)
+                runCurrent()
+                automatic.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                assertEquals(3, fetches)
             } finally {
-                pending.complete(Outcome.Failure(DataError.NoConnection))
+                manual.complete(Outcome.Failure(DataError.NoConnection))
+                automatic.complete(Outcome.Failure(DataError.NoConnection))
                 vm.viewModelScope.cancel()
                 runCurrent()
             }
